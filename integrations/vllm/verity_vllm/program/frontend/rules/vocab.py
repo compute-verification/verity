@@ -82,7 +82,7 @@ def _int8():
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
-    from verity.ml.definitions.registry import fa2_check_inf as _f2v  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa2_check_inf as _f2v
     return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
@@ -324,12 +324,12 @@ _DNK, _DNN = _dense_kinds()
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
     registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
-    from verity.ml.definitions.registry import moe_pad as _mp  # noqa: PLC0415
+    from verity.ml.definitions.registry import moe_pad as _mp
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
 def _silu_mul_fp8_block_quant(I: int, G: int):
-    from verity.ml.definitions.registry import fp8_moe as _fm  # noqa: PLC0415
+    from verity.ml.definitions.registry import fp8_moe as _fm
     return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
 
 
@@ -338,24 +338,24 @@ def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
     if G is None or KB is None or SWAP is None:
         raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
-    from verity.ml.definitions.registry import fp8_moe_experts as _x  # noqa: PLC0415
+    from verity.ml.definitions.registry import fp8_moe_experts as _x
     return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
 
 
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
-    from verity.ml.definitions.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa2_softcap as _f2s
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
 def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     if MASKED_FROM is None:
         raise TypeError("FA3's split prefill is registered only under FA3's per-iteration Check_inf")
-    from verity.ml.definitions.registry import fa3_split as _f3s  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa3_split as _f3s
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
-# -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
+# -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
@@ -457,7 +457,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # DeepGEMM's `fp8_einsum("bhr,hdr->bhd")` on one token (DeepSeek-V4's wo_a); `rules/vllm_bindings/fp8.py` asks for it
            "deepgemm_fp8_einsum_grouped": lambda H, K, N, G: ir_bind(_deepgemm.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
-           # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           # (`registry/layer_norm.py`, `observe/fold/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
            "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N),
            # the exact-int8 profile (`TargetProfile.int8_exact`, `engine.int8_ops`): `rules/vllm_bindings/int8.py` asks for them
@@ -694,8 +694,8 @@ def profile_records(vocab: Vocabulary) -> dict | None:
     return None
 
 
-# -- profile "dense2-eager-v1" [CB-A 2026-09-18, Gemma-2 head-to-head]: b1-eager-v3 + the generic elementwise / activation / softcap
-# kinds the eager `gen_dense2_gemma2_2b` profile binds. [R15 dense] Those kinds are now part of `b1-eager-v3` itself (`_dense_kinds`):
+# -- profile "dense2-eager-v1" (Gemma-2 head-to-head): b1-eager-v3 + the generic elementwise / activation / softcap
+# kinds the eager `gen_dense2_gemma2_2b` profile binds. Those kinds are now part of `b1-eager-v3` itself (`_dense_kinds`):
 # this name is kept for the R13 head-to-head artifacts and binds exactly the same kinds. --------------------------------------------
 PROFILE_DENSE2_EAGER_V1 = Vocabulary("dense2-eager-v1", "profile", "dense2-eager-v1",
                                      kinds=dict(PROFILE_B1_EAGER_V3.kinds), notes=dict(PROFILE_B1_EAGER_V3.notes))

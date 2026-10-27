@@ -30,8 +30,11 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
   `verifyCmd` forms them; `find?_circuit`: `Tags.circuit`'s name names `Tags.circuit`. With refusal (5)'s name
   equation they give V*'s tags.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
-* `checkFile_ok`, `checkParsed_ok`, `checkParsed_leavesOut`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it
-  passes.
+* `checkFile_ok`, `checkParsed_ok`, `checkParsed_leavesOut`, `checkParsed_v1`, `check_ok`, `checkCircuit_ok`,
+  `checkStmt_ok`: what each check gives when it passes.
+* `checkHolo_ok`, `checkCircuit_holo`, `checkCircuit_plain`: the circuit check pins the parsed circuit's META `holo`
+  (`RecResiduals.holoOf`) to `i`'s holo flag at a part's statement and to `false` elsewhere, so a plain session's
+  circuits are plain.
 * `population_of_setupHidden`: the set-up statement's population (`RecVStar.population`) is the size of the public
   file `loadPublic` reads, drawn or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
 * `setup_of_accepts`: a raw session that passes the statement check sets up a first table, with `circZ I` as its
@@ -231,8 +234,29 @@ theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
         · cases h
         · rename_i h3
           simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true', Array.isEmpty_iff, not_or,
-            Classical.not_not, Bool.not_eq_false] at h1 h2 h3
-          exact ⟨h1.1, h1.2, h2, h3⟩
+            Classical.not_not, Bool.not_eq_false] at h1 h2
+          exact ⟨h1.1, h1.2, h2, Classical.byContradiction fun hne =>
+            h3 (by rw [Bool.or_eq_true]; exact Or.inl (bne_iff_ne.2 hne))⟩
+  · cases h
+
+/-- **The parse check's rows are `sha512/row/v1`'s**: no row port of the circuit is a bit row (`v2`). -/
+theorem checkParsed_v1 {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
+    ∀ p ∈ c.ports.toList, p.v2 = false := by
+  unfold RecVStar.checkParsed at h
+  dsimp only at h
+  split at h
+  · rw [pure_bind] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · rename_i h3
+          intro p hp
+          cases hv : p.v2
+          · rfl
+          · exact absurd (by rw [Bool.or_eq_true]; exact Or.inr (List.any_eq_true.2 ⟨p, hp, hv⟩)) h3
   · cases h
 
 /-- **The parse check's output leaves**: the circuit's output leaves are its unit's output words in order, as V*'s
@@ -339,8 +363,45 @@ theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : 
   obtain ⟨u, hu, h⟩ := ebind_ok h
   obtain ⟨u', hp, h⟩ := ebind_ok h
   obtain ⟨u'', hq, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
   cases h
   exact ⟨hs', hu, hp, hq⟩
+
+/-- **The holo check**: the parsed circuit's META `holo` is V*'s file's (`RecVStar.partHolo`). -/
+theorem checkHolo_ok {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool} (h : RecVStar.checkHolo s c holo = .ok ()) :
+    RecResiduals.holoOf c = .ok (RecVStar.partHolo s holo) := by
+  unfold RecVStar.checkHolo at h
+  obtain ⟨b, hb, h⟩ := ebind_ok h
+  rw [hb]
+  by_cases he : b = RecVStar.partHolo s holo
+  · rw [he]
+  · have hne : (b != RecVStar.partHolo s holo) = true := bne_iff_ne.2 he
+    simp only [hne, ↓reduceIte] at h
+    first | cases h | simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h
+
+/-- **The circuit's META `holo`, as the circuit check pins it**: `i`'s holo flag at a part's statement, `false`
+elsewhere (`RecVStar.partHolo`). -/
+theorem checkCircuit_holo {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
+    {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s) :
+    RecResiduals.holoOf c = .ok (RecVStar.partHolo s i.holo) := by
+  unfold RecVStar.checkCircuit at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, hh, h⟩ := ebind_ok h
+  cases h
+  exact checkHolo_ok hh
+
+/-- **A plain session's circuits are plain**: at an inner session whose holo flag is off, every statement the circuit
+check passes has no META `holo`. -/
+theorem checkCircuit_plain {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
+    {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s)
+    (hi : i.holo = false) : RecResiduals.holoOf c = .ok false := by
+  have h' := checkCircuit_holo h
+  rw [hi] at h'
+  exact h'
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is

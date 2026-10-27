@@ -47,13 +47,12 @@ EXEMPT = {
         "probed",
     ("integrations/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
         "probed",
-    # a conformance row's record of how the 2026-09-07 NaN scan was made; the module has since gone
+    # a conformance row's record of how a NaN scan was made; the module has since gone
     ("integrations/vllm/verity_vllm/program/frontend/conformance.py", "verity_vllm.check.store_nan_scan"): "history",
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tools/research/tests/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
     # a tool declaration the move guards find in a synthetic tree, under its pre-move or post-move path
-    ("tests/test_gate_paths.py", "archive.gkr.gpu.tool:G"): "a stand-in",
     ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
     ("integrations/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
@@ -62,7 +61,7 @@ EXEMPT = {
 #: packages whose modules a `sys.meta_path` finder in the package makes on import, by the names it accepts; importing one to
 #: ask would load torch, so its grammar is restated here (`generic._MODULE_RE`, `dense_generic.role_of_module`) and
 #: `test_the_generated_modules_finder_is_still_there` checks the finder is
-GENERATED = {"verity_vllm.engine.profiles": re.compile(r"(derived_[A-Z0-9_]+?(_tp\d+)?(_ovs)?|dense_[A-Z0-9_]+)")}
+GENERATED = {"verity_vllm.observe.fold.profiles": re.compile(r"(derived_[A-Z0-9_]+?(_tp\d+)?(_ovs)?|dense_[A-Z0-9_]+)")}
 
 _NAME = r"[A-Za-z_][\w]*(?:\.[A-Za-z_]\w*)*"
 #: (kind, pattern with groups `mod` and optionally `attr`)
@@ -245,6 +244,5 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     registry = "tools/research/src/research/store/tools_registry.py"
     assert {(registry, "attr", "tools.verity.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
             ("integrations/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
-            ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.engine.profiles.derived_B0_ovs"),
-            ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register"),
-            ("archive/direct/ligero/cell.sh", "main", "archive.direct.ligero.live")} <= seen
+            ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
+            ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register")} <= seen

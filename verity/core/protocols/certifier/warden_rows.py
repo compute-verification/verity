@@ -1,4 +1,4 @@
-"""The warden's cells as the rows a proof unit reads (design v3: the transfer gates are the cells' bits). Each
+"""The warden's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits). Each
 link-window's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a frame-v3-sha512
 tree. The warden signs a head that names the root and a salted digest of the link-window's wiring with the certifier's
 signer (`certificate.Issuer.sign`, LMS n = 64). A unit opens a cell's row as its output port (the sender's) or its input
@@ -76,7 +76,7 @@ same row, say. A bare sequence of reads binds nothing (the value is the head's a
 it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its unit t reads row t whole, so a
 statement's positions are all it can vary, and Lean's registered reads hold each to its unit's row.
 
-**The wiring is opened to the verifier tonight** (the named gap, whose plan is in PROTOCOL.md): it gives away each
+**The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
 from 0, is q = k + 1, as the active certifier's `Requests` streams it and IO-TIE's map puts advice request k
 (`order[k] + 1`).

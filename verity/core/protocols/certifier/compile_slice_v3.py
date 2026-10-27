@@ -9,9 +9,9 @@ circuit's input gates that are neither ingress nor registered, and `Accepted` co
 check's verdict pins nothing: every witness input of a check-form unit counts toward c. CompileSlice_v2 takes its state
 rows, each step's arrivals, bits, hits, counts, returns and stamps, its pool rows and the map as witness, so its free
 inputs are thousands of bits. Here each of them is a wire the unit computes, and the free inputs are the advice's
-ℓ_w = DA + PW bits. A unit's outputs, committed ones included, are at most 16 bits, and state crosses units by
-registered reads, so the served rows and the state the window leaves are registered rows the unit reads and holds equal
-to the ones it computes.
+ℓ_w = DA + PW bits. A unit's public output is at most 16 bits, and here state crosses units by registered reads, so
+the served rows and the state the window leaves are registered rows the unit reads and holds equal to the ones it
+computes.
 
 **The inputs**, each a field list (elements least significant bit first):
 - ``adv`` (*advice*, the only free input, unpadded since a padding gate would be a free input too): the window's DA
@@ -23,7 +23,7 @@ to the ones it computes.
   the layout maps to the ingress gates of each request's arrival (IO-TIE's N1).
 - ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 ``a_cap``, O being its max_tokens),
   the request Program's end, and ``tok``, each slot's first CU·B token ids (its prompt, then its outputs), the request
-  Program's token at each position (vllm's V3).
+  Program's token at each position (vLLM's V3).
 - ``srv`` (*registered*): the served rows, each step's R rows (valid, request, kind, start, n) in slot order, as
   `compile_slice.rows_bits` packs them, zero on an idle step: CompileSlice_v2's ``srv`` row at G = P, the row
   `served_rows` registers and its consumers read. At AS = 1 they stay in slot order: CompileSlice_v2's witnessed
@@ -66,7 +66,7 @@ CompileSlice_v2's 83,092 and 91,785: dropping the witness checks saves more than
 and holding ``srv`` and ``cout`` to the computed rows is 543 and 572 of them. On corpus-smallkv's first seven steps
 (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12, DA 7) the computing part is 12,477,467 ANDs against
 CompileSlice_v2's 7,984,682, and is its reference on the honest advice (its served rows the fixture's), one step fewer
-and each decision flipped (run r20261025-081855-e60d, with ``srv`` and ``cout`` outputs). There a step makes W + A = 3
+and each decision flipped (with ``srv`` and ``cout`` outputs). There a step makes W + A = 3
 read-only lookups of KL = 25 units (168,368 ANDs each) and as many computes with a KC = 16-unit window (227,862 each,
 masked by admission), where CompileSlice_v2's witness named the R admitted rows, and R + W + A threshold searches
 (1,440 each).

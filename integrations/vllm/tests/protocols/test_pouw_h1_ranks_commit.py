@@ -1,11 +1,11 @@
-"""`protocol_options.pouw_h1_ranks` with ``served`` and ``commit`` (ROOTS1 across tensor-parallel ranks, VLLM-81 item 2): the
+"""`protocol_options.pouw_h1_ranks` with ``served`` and ``commit`` (ROOTS1 across tensor-parallel ranks): the
 Commit runs on every rank, each rank's tap ships what it acquired, and the holder's one `pouw_h1_served.Served` and
 `pouw_h1_commit.CommitTap` register each step's A table of K over both ranks' calls and its AROW over both ranks' sites, so
 core's ROOTS1 steps (`pouw_h1_gpu.core_verdict`, the GPU run's check) tie the window. One rank's call handed other codes
 than its Commit acquired is refused at ``arow``, and a rank whose input ids aren't the first rank's leaves the window
 untied. The ranks are stand-ins: each worker an `acquire.h1_commit.RankCommit` over two linears on the int8 arm with z/y records
-(`test_pouw_h1_commit.Arm`), or a linear and a MoE layer's routed experts (`MoEModel`), its committer the int8 source's
-face (`acquire.h1_commit.source`). On the MoE each rank's expert sites are renamed to the window's names of them
+(`test_pouw_h1_commit.Arm`), or a linear and a MoE layer's routed experts (`MoEModel`), its Commit `acquire.h1_commit.attach`'s
+on the rows-sha512 committer's face (`test_pouw_h1_commit.Committer`), each step's ids at its step-input port. On the MoE each rank's expert sites are renamed to the window's names of them
 (``…experts.0.down@tp1``), so each step's AROW of the experts' K spans both ranks' expert calls."""
 from __future__ import annotations
 
@@ -17,25 +17,27 @@ from types import SimpleNamespace
 import pytest
 
 torch = pytest.importorskip("torch")
-from torch import nn  # noqa: E402
+# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+from torch import nn
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity_vllm.acquire import h1_commit as HC  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import commit as CT  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import ranks as PHR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw.coins import Challenger
+from verity_vllm.acquire import h1_commit as HC
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import ranks as PHR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import pouw_h1_gpu as G  # noqa: E402
-from tests.protocols import pouw_h1_ranks_gpu as RG  # noqa: E402
-from tests.protocols.test_pouw_h1_commit import EMBED, EXPERTS, FIRST, I, K, MOE, PROMPTS, Arm, Linear, MoE, _ids  # noqa: E402
-from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so  # noqa: E402
-from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
+from tests.protocols import pouw_h1_gpu as G
+from tests.protocols import pouw_h1_ranks_gpu as RG
+from tests.protocols.test_pouw_h1_commit import (
+    EXPERTS, FIRST, I, K, MOE, PROMPTS, Arm, Committer, Linear, MoE, _ids, vllm_config)
+from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so
+from tests.protocols.test_pouw_h1_served import _unit
 
 ROWS, STEPS = 32, 3
 KEY = hashlib.sha512(b"key").digest()[:32]
@@ -65,42 +67,13 @@ class MoEModel(nn.Module):
         self.model.layers = nn.ModuleList([Linear(64, seed, Arm(edit)), MoE(seed + 1)])
 
 
-class Committer:
-    """The committer's face the int8 source and the tap use, and what `RankExtension.h1rank_release` finalizes."""
-
-    name = "stand-in"
-
-    def __init__(self, engine):
-        self.engine, self._cur, self.errors, self.src, self.closed = engine, None, [], None, False
-
-    def _acquire(self, name, t, job):
-        pass
-
-    def finalize(self):
-        return SimpleNamespace(run_root=bytes(64), extra={"expected_tensors": 0, "committed_tensors": 0, "errors_n": 0})
-
-    def close(self):
-        self.src.uninstall()
-        self.closed = True
-
-
-def _attach(engine, layers, tap=None, **committer):
-    """`acquire.h1_commit.attach` on the stand-in committer: the int8 source at each linear's site and the rank's tap."""
-    com = Committer(engine)
-    com.src = HC.source(com, engine.model, layers)
-    tap.embed = EMBED
-    tap.tap(com)
-    com.src.install()
-    return com, com.src, tap
-
-
 class Rank(HC.RankCommit):
     """A worker of a TP engine: its (pp, tp) rank and its model's two shards, named as vLLM names them."""
 
     def __init__(self, tp, edit=None, moe=False):
         self.rank, self.model = (0, tp), (MoEModel if moe else Model)(10 * tp + 1, edit)
         self.layers = PHK.layers(self.model, (Linear,))
-        self.model_runner, self.vllm_config = SimpleNamespace(decode_query_len=1), None
+        self.model_runner, self.vllm_config = SimpleNamespace(decode_query_len=1), vllm_config()
 
     def _h1rank_layers(self):
         return self.model, self.layers
@@ -114,7 +87,7 @@ def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None
     is handed of what its arm quantized; ``ids`` the input ids rank tp's Commit acquires at step s of the honest ones;
     ``moe`` serves `MoEModel`'s ranks; ``negative`` (a `pouw_h1_ranks_gpu.KINDS` kind) is the GPU harness's edit on rank
     1 (`pouw_h1_ranks_gpu._w_edit`), the site it zeroed in ``holder.edited``."""
-    monkeypatch.setattr(HC, "attach", _attach)
+    monkeypatch.setattr(HC, "committer", lambda engine, run_id: Committer(engine))
     workers = [Rank(1, edits[1], moe), Rank(0, edits[0], moe)]
     executor = Executor(workers)
     served = served or SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest())
@@ -129,9 +102,12 @@ def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None
         honest, xs = _ids(run, s), [(torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16() for _ in range(2)]
         for w in sorted(workers, key=lambda w: w.rank):
             com = w._h1rank["commit"][0]
+            src, port = com.sources
             com._cur = SimpleNamespace(step=FIRST + s)
-            com.src.on_step_begin()
-            com._acquire(f"{EMBED}/in", torch.tensor(ids(w.rank[1], s, honest)), com._cur)
+            src.on_step_begin()
+            got = ids(w.rank[1], s, honest)
+            com._plan_shape = (len(got), len(set(run.owners[s])))
+            port._pre(None, (torch.tensor(got), torch.arange(len(got))), {})
             for layer, x in zip(w.model.model.layers, xs):
                 layer(x)
             com._cur = None
@@ -173,6 +149,7 @@ def test_each_steps_a_table_spans_both_ranks_and_is_the_commits_arow(monkeypatch
     assert core["tied"] and core["commit_values"] == 2 * STEPS, core
     assert {g["reason"] for g in run.gated().values()} == {PH.IN_PROCESS} and _reasons(run) == {None}
     assert sorted(holder.committed) == [0, 2] and all(w._h1rank is None for w in workers)
+    assert all((c["commit_scheme"], c["run_root"]) == (CT.SCHEME, "00" * CT.ROOT_BYTES) for c in holder.committed.values())
     assert all(w.model.model.layers[0].quant_method.observe.__func__ is Arm.observe for w in workers)
 
 

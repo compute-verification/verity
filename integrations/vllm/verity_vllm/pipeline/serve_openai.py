@@ -2,11 +2,12 @@
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64]
-        [--force-include-usage | --no-force-include-usage]
+        [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1]
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
-        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON]]
+        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
+        [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -15,16 +16,16 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a warden's
-id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the scan's id
-form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
+certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
 other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
-Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
+Sampling parameters are values the request brings: the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
 engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its draw is not a function of the committed values (CIR-87).
+pinned yet, so its draw is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -35,10 +36,10 @@ The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepp
 thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
-Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
-release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends), where each step's
+Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
+certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
-``serve.json``'s ``step_rows``).
+``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -54,14 +55,15 @@ streamed ids, the seed it carried, and where its finish says the stream ends. ``
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
-(one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
-the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
-and `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512
-trees, 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's
-``--required-manifest`` and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots)
-only serves again the recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
-window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. Each
+whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
+body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
+ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
+`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
+64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
+and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -76,8 +78,12 @@ finish, and ``summary.json`` counts the requests and checks, the seals, and the 
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
-(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``; its coins are in-process, so no window
-credits anything yet.
+(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
+``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
+bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -100,13 +106,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_seal as SS
+from verity_vllm.pipeline import serve_h1 as SH, serve_remote as SR, serve_row as RW, serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
-                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
+                                               records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -115,7 +120,7 @@ PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: registers the linears, which is the ``verity_int8`` quantization method a pin's checkpoint may name.
 INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None)}
 TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler runs with a split count the engine does not pin, "
-                 "so a top-p draw is not a function of the committed values (CIR-87). Send top_p 1 (top_k and temperature are "
+                 "so a top-p draw is not a function of the committed values. Send top_p 1 (top_k and temperature are "
                  "served); the refusal lifts once the split count is pinned.")
 
 
@@ -131,10 +136,10 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "warden's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "network certifier's id requests streamed in the scan's id form, raw, and every other request as vllm "
                                 "(serve_protocol.IdsProtocol)")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
-                             help="--protocol ids: each id event's bytes, the warden's cell payload B − 9 (default 503: the scan's "
+                             help="--protocol ids: each id event's bytes, the network certifier's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
@@ -191,8 +196,8 @@ class Options:
                                        "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
                                        "leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy serve.json, requests.jsonl, windows.jsonl and the step traces into this "
-                                              "directory (the run's $OUT) after each window and at the stop")
+                                         help="copy serve.json, requests.jsonl, request_users.jsonl, windows.jsonl and the step "
+                                              "traces into this directory (the run's $OUT) after each window and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
@@ -214,7 +219,7 @@ class Options:
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
     admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the warden's release "
+                        help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
                              "order (x-verity-release), each once every earlier-released one is in")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
                                 help="release-order: skip a missing earlier release once a later request has waited this long")
@@ -222,6 +227,9 @@ class Options:
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
+    gate: SH.GateOptions = group(SH.GateOptions)
+    remote: SR.RemoteOptions = group(SR.RemoteOptions)
+    retention: SS.RetentionOptions = group(SS.RetentionOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -641,11 +649,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts):
         raise UsageError(why)
-    if opts.protocols_config and not opts.protocols:
-        raise UsageError("--protocols-config without --protocols")
-    SH.config_of(opts.protocols_config)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
@@ -653,9 +658,9 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
                          f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")
 
 
-def build(opts: Options) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`) and, with the Commit on, its committer, sized from the engine's envelope, with a
-    `served_record.SamplerInputsSource` attached."""
+def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
+    """The engine (`verity_vllm.LLM`), scheduling as the bench ``row`` declares, and with the Commit on, its committer, sized
+    from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
     engine_env.apply_engine(opts.hf_home)
@@ -664,11 +669,14 @@ def build(opts: Options) -> tuple[Any, Any]:
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
+    kw = engine_options(opts) | RW.engine_args(row)
+    llm = RW.checked(row, LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw)))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
             raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
+    if session is not None:
+        session.built(llm)
     if not opts.commit:
         return llm, None
     return llm, SS.committer(opts, llm)
@@ -678,7 +686,8 @@ def main(opts: Options) -> int:
     preflight(opts)
     out = Path(opts.out)
     out.mkdir(parents=True, exist_ok=True)
-    llm, com = build(opts)
+    session = SR.session_of(opts, out)
+    llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
     reference = getattr(proto, "base", proto)
@@ -693,7 +702,7 @@ def main(opts: Options) -> int:
 
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config))
+                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -703,16 +712,18 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm)
-    loop = EngineLoop(engine, windows, cap=opts.window_requests)
+    if session is not None:
+        session.begin(windows)
+    loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests)
     if windows is not None:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
     order = rows = None
     if opts.admit == "release-order":
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine.handle import model_runner
         from verity_vllm.engine.step_trace import scheduler_of
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
-        rows = keep_scheduler_rows(get_model_runner(llm.vllm), scheduler_of(engine))
+        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)
@@ -732,7 +743,7 @@ def main(opts: Options) -> int:
               "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),
               "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
-              "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
+              "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
@@ -745,12 +756,13 @@ def main(opts: Options) -> int:
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
+              "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None),
+              "required_manifest_path": getattr(com, "required_manifest_path", None), "retain_exclude": opts.retention.retain_exclude or None,
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
-              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of()}
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()
@@ -765,7 +777,8 @@ def main(opts: Options) -> int:
             got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
-                   "mirror_errors": mirror.errors[:10] if mirror else None}
+                   "mirror_errors": mirror.errors[:10] if mirror else None,
+                   "remote_session": session.end() if session is not None else None}
             (out / "summary.json").write_text(json.dumps(got, indent=1))
             if mirror is not None:
                 mirror()
@@ -783,17 +796,5 @@ def main(opts: Options) -> int:
             rows.uninstall()
         if com is not None:
             com.close()
-    return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1
-
-
-def records_mirror(out: Path, dst: str | None) -> Mirror | None:
-    """`serve_commit.Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
-    if not dst or Path(dst).resolve() == Path(out).resolve():
-        return None
-    return Mirror(out, dst)
-
-
-def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
-    """serve.json's disk floor: the filesystem it watches, its floor and what was free at the start."""
-    d = windows.disk if windows is not None else None
-    return None if d is None else {"path": str(d.path), "floor_gb": d.floor / SS.GB, "free_gb_at_start": round(d.free() / SS.GB, 1)}
+    passed = windows is None or windows.summary()["passed"] or not server.served
+    return 0 if loop.error is None and passed and SR.accepted(session) else 1

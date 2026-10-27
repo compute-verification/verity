@@ -1,8 +1,10 @@
-"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or `research queue land` (his ruling,
-3 Oct: a change to what a guarantee says waits on nobody, and he is shown it).
+"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or drive's landing: a change to what a
+guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
-hash), every definition the statements read (its hash, under `reads`), what the shape rule exempts (`shape.frozen`:
+hash), every definition the statements read (its hash, under `reads`), every named assumption no `reads` record holds
+(its `digest` under `assumptions`, of it and the definitions it reads: one that gains a digest is shown as recorded), what
+the shape rule exempts (`shape.frozen`:
 an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
 entry added there is shown). Between the main the push replaced and the one it
 pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
@@ -66,6 +68,14 @@ def _definitions(doc: dict) -> dict[str, tuple[str | None, list[str]]]:
     return out
 
 
+def _assumptions(doc: dict) -> dict[str, str | None]:
+    """{named assumption: its record's `digest`, None without one} for the entries no `reads` record holds as a definition:
+    a premise whose statement and what it reads only its own digest records (one under `reads` shows as a definition)."""
+    a = doc.get("assumptions") or {}
+    held = _definitions(doc)
+    return {n: (r or {}).get("digest") for n, r in a.items() if n not in held} if isinstance(a, dict) else {}
+
+
 def _frozen(doc: dict) -> dict[str, str]:
     """{name: why}: the record's `shape.frozen`, what the shape rule exempts until it fits."""
     f = (doc.get("shape") or {}).get("frozen") or {}
@@ -106,13 +116,15 @@ def _package(path: str) -> str:
 def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) -> list[tuple[str, str, str]]:
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
-    The kinds are `changed`, `removed`, `definition`, `frozen` (an entry added to `shape.frozen`, the guarantees and
+    The kinds are `changed`, `removed`, `definition`, `assumption` (an assumption's digest changed under its name),
+    `recorded` (an assumption listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
     `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
     another package's record under its name, counted in that package's tally. A guarantee under another name with its type
-    hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's changed hash is
-    `rehashed` (text ""), counted in its package's tally."""
+    hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's or an
+    assumption's changed hash is `rehashed` (text ""), counted in its package's tally; a digest an assumption gains is
+    shown all the same, since it records what nothing recorded before."""
     a = {n: (_package(p), r) for p, d in olds.items() for n, r in _guarantees(d).items()}
     b = {n: (_package(p), r) for p, d in news.items() for n, r in _guarantees(d).items()}
     gone = {n: r for n, (_, r) in a.items() if n not in b}
@@ -135,6 +147,22 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
                 shown = ", ".join(f"`{r}`" for r in readers[:READERS_SHOWN])
                 more = f" and {len(readers) - READERS_SHOWN} more" if len(readers) > READERS_SHOWN else ""
                 out.append((_package(p), "definition", f"• definition `{name}` changed; read by {shown or 'no guarantee'}{more}"))
+    aa: dict[str, set] = {}
+    for d in olds.values():
+        for name, h in _assumptions(d).items():
+            aa.setdefault(name, set()).add(h)
+    for p, d in news.items():
+        for name, h1 in sorted(_assumptions(d).items()):
+            before = {h for h in aa.get(name, ()) if h is not None}
+            if h1 is None or name not in aa or h1 in before:
+                continue
+            if not before:
+                out.append((_package(p), "recorded", f"• assumption `{name}` recorded: its statement and the definitions it "
+                                                     f"reads are now digested in its record"))
+            elif not sources:
+                out.append((_package(p), "rehashed", ""))
+            else:
+                out.append((_package(p), "assumption", f"• assumption `{name}` changed: its statement or a definition it reads"))
     fa = {n for d in olds.values() for n in _frozen(d)}
     out += [(_package(p), "frozen", f"• frozen `{n}` (doesn't have the shape yet): {why}")
             for p, d in news.items() for n, why in sorted(_frozen(d).items()) if n not in fa]
@@ -167,12 +195,13 @@ def _tally(kinds: list[str]) -> str:
     g = ", ".join(f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds)
     g = ", ".join(([g] if g else []) + ([f"{kinds.count('moved')} moved here"] if "moved" in kinds else []))
     d = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("definition", "changed"), ("rehashed", "rehashed")) if k in kinds)
+    a = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("assumption", "changed"), ("recorded", "recorded")) if k in kinds)
     f = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("frozen", "frozen"), ("conjecture", "conjectures marked"))
                   if k in kinds)
     f = f"shape: {f}" if f else ""
     v = f"verifier: {kinds.count('compiled')} allowed" if "compiled" in kinds else ""
-    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else []) + ([f] if f else [])
-                     + ([v] if v else []))
+    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else [])
+                     + ([f"assumptions: {a}"] if a else []) + ([f] if f else []) + ([v] if v else []))
 
 
 def web(repo: Path, remote: str) -> str | None:

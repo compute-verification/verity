@@ -4,7 +4,7 @@ import Definitions.Accounting.Guarantees.TS
 # The tensor–scalar model's price lemmas
 
 The certificate's price against the bound, the stars' signs, (RD) in price form and the identity of Theorem D(a)
-(EPS1-SPEC §1.1, §2.2): gap list G1–G6 of note:20261017T0801Z-draft-lean-stmt.
+(EPS1-SPEC §1.1, §2.2).
 -/
 
 namespace Accounting.SecurityProofs.TS

@@ -53,7 +53,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     A request whose prefix was REDUCED from its cap (an EOS stop) with no linkable Match account is a problem: the committer's count alone
     is never sufficient (condition (a)).  With no reduction anywhere (every request ran its cap) a missing account is recorded, not a
     problem -- nothing was placed on the committer's word.  `served_tokens` {r<i>: [the Commit's served ids]}: when given, tokens_equal
-    is the FULL generated_token_ids list equality (rev S-r17-23 (c)); without it, length + last token.  Returns {"ok", "required",
+    is the FULL generated_token_ids list equality; without it, length + last token.  Returns {"ok", "required",
     "problems", "tokens_equal", "g6", ...}."""
     problems: list[str] = []
     reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
@@ -90,7 +90,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                 continue
             c_served = rec.get("served_output_len")
             c_toks = None if served_tokens is None else served_tokens.get(rid)
-            if c_toks is not None:                                                  # rev S-r17-23 (c): the FULL list, not length + last
+            if c_toks is not None:                                                  # The FULL list, not length + last
                 same = [int(t) for t in c_toks] == m_served
                 _first = next((i for i, (a, b) in enumerate(zip(c_toks, m_served)) if int(a) != int(b)), min(len(c_toks), len(m_served)))
             else:
@@ -114,7 +114,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                               "async_scheduling": (tok.get("lag") or {}).get("async_scheduling") if isinstance(tok.get("lag"), dict) else None,
                               "tokens_equal": eq, "tokens_equal_rule": ("full generated_token_ids list" if served_tokens is not None else "length + last token"),
                               "requests_n": len(by_rid),
-                              # a_r AS THE MATCH RECORD SERVED IT, per request (the fact reqval's not-executed class reads; R17-27 (a))
+                              # a_r AS THE MATCH RECORD SERVED IT, per request (the fact reqval's not-executed class reads)
                               "served_by_request": {r: len(e.get("generated_token_ids") or []) for r, e in by_rid.items()},
                               "executed_by_request": {r: e.get("executed_prefix_len") for r, e in by_rid.items()}}
         res["tokens_equal"] = all(v is True for v in eq.values()) if eq else None

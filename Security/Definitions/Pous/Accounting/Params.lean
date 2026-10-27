@@ -25,7 +25,7 @@ def expansion : ℚ := 21 / 20
 def secParam : ℕ := 128
 
 /-- The largest `ε_crypto` a construction may claim: `2^-λ`. **Provisional:** the problem statement names `λ = 128`
-but does not bound `ε_crypto`; waiting on Daniel. -/
+but does not bound `ε_crypto`, so this bound is not yet confirmed. -/
 noncomputable def εMax : ℝ≥0∞ := 2⁻¹ ^ secParam
 
 end Params

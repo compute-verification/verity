@@ -63,8 +63,30 @@ def test_a_changed_definition_names_the_guarantees_that_read_it():
     assert spec.changes(old, moved) == []                                   # same names and hashes in another module
 
 
+def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or_is_first_recorded():
+    """LEAN-60: a premise outside `meaning` has only its own record's digest, so #4641's strengthened
+    `RecDeploy.PlainLeavesAdmitted` reached no DM. A changed digest is shown (tallied as rehashed when no Lean input
+    changed), and so is one first recorded; one a `reads` record holds shows as its definition, and a new entry or an
+    unchanged one shows nothing."""
+    def doc(assumed: dict, defs: dict | None = None) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1)}, defs) | {"assumptions": assumed}
+    old = doc({"P.Leaves": {"owner": "@proofs", "digest": H1}, "P.Bare": {"owner": "@proofs"}, "P.Hyp": {"digest": H1}},
+              {"P.Hyp": H1})
+    new = doc({"P.Leaves": {"owner": "@proofs", "digest": H2}, "P.Bare": {"owner": "@proofs", "digest": H3},
+               "P.Hyp": {"digest": H2}, "P.New": {"digest": H3}}, {"P.Hyp": H2})
+    assert spec.changes(old, new) == [
+        "• definition `P.Hyp` changed; read by `P.t`",
+        "• assumption `P.Bare` recorded: its statement and the definitions it reads are now digested in its record",
+        "• assumption `P.Leaves` changed: its statement or a definition it reads"]
+    assert spec.changes(new, new) == []
+    entries = spec._across({"lean-audit.json": old}, {"lean-audit.json": new}, sources=False)
+    assert [k for _, k, _ in entries] == ["rehashed", "recorded", "rehashed"]
+    assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
+        "definitions: 1 changed; assumptions: 1 changed, 1 recorded"
+
+
 def test_an_entry_added_to_the_frozen_shape_list_is_shown_with_its_reason_and_one_removed_is_not():
-    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change Daniel sees, as he ruled (9 Oct)."""
+    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change, so the DM shows it."""
     base = _doc({"P.t": _g("P.t : A", H1)})
     frozen = base | {"shape": {"frozen": {"P.t": "RESTATE: split the iff."}}}
     assert spec.changes(base, frozen) == ["• frozen `P.t` (doesn't have the shape yet): RESTATE: split the iff."]

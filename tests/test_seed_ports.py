@@ -10,6 +10,7 @@ through that pass, so a position port is declared only where `ALLOWED` names it:
   name), so the Definition it types is a unit, never a seed;
 - `KEY_COUNTS`: a padded unit's key count, a position port with no coin port beside it (no `kind="coin"` in the same
   top-level name), so the Definition it types is never a seed;
+- `WINDOWS`: a shared row's segment index, held as a key count is: no coin port beside it;
 - `TESTS`: tests that build seeds, units or their negatives, by name, with a reason each.
 
 An AST scan of every tracked Python file flags each place that could declare a position port: a `kind="position"` keyword
@@ -54,8 +55,16 @@ KEY_COUNTS = {
         "the population tests' stand-in key count: a position alone, whose population keeps it",
     "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "benchmarks/e2e_h200/e2e_h200/program.py::program":
+    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
+        "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
+    "verity/ml/definitions/registry/torch_attention.py::_POSITION":
+        "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
+    "examples/h200/e2e_h200/program.py::program":
         "the toy's served step: its key count n and position p, run inputs with no coin",
+}
+WINDOWS = {
+    "verity/ml/circuits/ops/boolean/shared_row.py::WINDOW":
+        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
 }
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
@@ -71,7 +80,7 @@ TESTS = {
     "verity/ml/circuits/tests/test_population_ports.py::Seed":
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
 }
-ALLOWED = SEEDS | UNITS | KEY_COUNTS | TESTS
+ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 
 
 def _name(f: ast.AST) -> str:
@@ -133,7 +142,7 @@ def test_only_pouw_mints_a_seed() -> None:
                 offenders.append(f"{path}:{line} ({where}): {what}")
             elif key in UNITS and not sink:
                 offenders.append(f"{path}:{line} ({where}): {what}, with no Out(sink=True) beside it: a seed, not a unit")
-            elif key in KEY_COUNTS and where in coin_holders(source):
+            elif (key in KEY_COUNTS or key in WINDOWS) and where in coin_holders(source):
                 offenders.append(f"{path}:{line} ({where}): {what}, with a kind=\"coin\" port beside it: a seed, not a key count")
             else:
                 used.add(key)

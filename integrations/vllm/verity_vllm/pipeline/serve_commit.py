@@ -53,7 +53,7 @@ from typing import Any
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
-from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
@@ -79,9 +79,14 @@ def advice_trace(out: Path, engine: Any) -> Any:
     return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
 
 
+#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
+#: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
+#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+REQUEST_USERS = "request_users.jsonl"
+
 #: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", "windows.jsonl", "seals.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "pauses.jsonl",
-            "summary.json")
+MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
+            "advice_trace.jsonl", "pauses.jsonl", "summary.json", "remote_session.json", "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -134,6 +139,19 @@ class Mirror:
                 g.write(data)
 
 
+def records_mirror(out: Path, dst: str | None) -> Mirror | None:
+    """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
+    if not dst or Path(dst).resolve() == Path(out).resolve():
+        return None
+    return Mirror(out, dst)
+
+
+def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
+    """serve.json's disk floor: the filesystem it watches, its floor and what was free at the start."""
+    d = windows.disk if windows is not None else None
+    return None if d is None else {"path": str(d.path), "floor_gb": d.floor / GB, "free_gb_at_start": round(d.free() / GB, 1)}
+
+
 def param_of(params: Any, name: str) -> Any:
     """One field of the engine's sampling parameters: vLLM's ``SamplingParams`` or `PlainProtocol`'s dict."""
     return params.get(name) if isinstance(params, Mapping) else getattr(params, name, None)
@@ -174,7 +192,7 @@ class Ledger:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the warden's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network certifier's run, its place in the release order), under --admit release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
@@ -551,6 +569,13 @@ class CommitWindows:
             self._extras[root] = extras_of(com, rc)
         return self._extras[root]
 
+    def read_extras(self) -> None:
+        """`_extras_of` the committer's registered weights, read now rather than at the first seal: before a remote session
+        holds the weights encoded where the engine holds them (`serve_remote`), so each seal carries the bytes committed."""
+        reg = getattr(self.com, "weights", None)
+        if self.seal is not None and reg is not None:
+            self._extras_of(self.com, SimpleNamespace(weight_registration=reg))
+
     def _land(self, rec: Mapping[str, Any], job: tuple[Any, Any, dict[str, Any]], here: tuple[float, float] | None = None) -> None:
         """The window's seal into ``rec["seal"]["row_dir"]`` and then its line in seals.jsonl: on the sealer's thread, in window
         order (the engine loop waits here only while the windows awaiting their seal hold the sealer's bound), else here.
@@ -612,8 +637,9 @@ class CommitWindows:
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
 
     def _check_finished(self, finished: Sequence[Ledger]) -> None:
-        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl."""
-        with open(self.out / "requests.jsonl", "a") as fh:
+        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
+        engine id and ``user`` a line of `REQUEST_USERS`."""
+        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
             for led in finished:
                 eid = led.engine_id
                 rr = self.record.requests.get(eid)
@@ -626,6 +652,7 @@ class CommitWindows:
                     self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
                                          "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
+                fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""

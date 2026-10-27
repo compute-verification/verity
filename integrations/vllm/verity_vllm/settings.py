@@ -55,6 +55,11 @@ def csv(raw: str) -> tuple[str, ...]:
     return tuple(x for x in raw.split(",") if x)
 
 
+def paths(raw: str) -> tuple[str, ...]:
+    """A list of paths separated by ``os.pathsep``, as ``PATH`` is, in order; empty items are dropped."""
+    return tuple(x for x in raw.split(os.pathsep) if x)
+
+
 def stripped(raw: str) -> str:
     return raw.strip()
 
@@ -207,15 +212,17 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
     S("VERITY_WORD_CHECK", str, None, VALUE, "the strict word check's widths, X/W"),
+    S("VERITY_WORKLOADS", paths, (), WHERE, "directories of row files beside workloads/, os.pathsep-separated: a row id resolves to "
+      "the one file of its name among them (`config.row_file`), whose path and sha256 the row's effective config records"),
     S("MATCH_IMPL", str, None, VALUE, "the global match's checker, fast or record (the audit); unset, `global_match`'s default, fast, "
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
-    S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request legs; empty, min(cpu_count, 8)"),
+    S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request parts; empty, min(cpu_count, 8)"),
     S("MATCH_COMPACT", not_zero, True, VALUE, "the match holds operands as run progressions; 0, as runs (the representation's A/B)"),
     S("STOCH_DECLARED_CHRONOLOGY_S", one, False, VALUE, "1: a workload Program composes components derived under stoch's "
-      "experimental per-event S schedule (ruling M-0571 (3)), which it otherwise refuses"),
-    S("X09_PROFILE_OUT", str, None, DEBUG, "the file X-09's decomposition writes its phase profile to; unset or blank, no profile"),
-    S("X09_FORCE_DAG", str, None, VALUE, "1 runs X-09's DAG diagnostic even when the sequence criterion held, adding its fields to "
-      "the record (diagnostic only, never on a row of record)"),
+      "experimental per-event S schedule, which it otherwise refuses"),
+    S("X09_PROFILE_OUT", str, None, DEBUG, "the file the batch decomposition writes its phase profile to; unset or blank, no profile"),
+    S("X09_FORCE_DAG", str, None, VALUE, "1 runs the batch decomposition's DAG diagnostic even when the sequence criterion held, adding "
+      "its fields to the record (diagnostic only, never on a workload of record)"),
     # ---- the hot Commit worker (pipeline/hot.py) and the native builds it keys on
     S("HOT_ROOT", str, "/workspace/cp/hot", WHERE, "the hot workers' directory (`hot --root`)"),
     S("HOT_IDLE", float, 900.0, WHERE, "seconds a hot worker waits idle before it exits (`hot --idle`)"),

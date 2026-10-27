@@ -3,8 +3,7 @@
 The network certifier's measured runs and their zero-knowledge proofs: the certifier in front of a served endpoint
 (`certifier_serve.py`), the network certifier functioning as an active warden (`warden_serve.py`), N2's units proved by C-Flock `--zk` (`n2_zk.py`,
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
-driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
-runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
+driver's docstring says what it runs and what its verifier receives.
 
 ## The demo's load
 
@@ -30,11 +29,34 @@ The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the
 Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
 session [t0, t1) comes after, from a warden session that spans it: `wipe_gate.sh` runs that session through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
-when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
+when asked, and fetches the run's bundle: with `witness/` (the lane's own) into a 0700 directory outside the run dir,
+and to the run's `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
 `wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
 schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. The record is covered only when every one
 of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
 keeps the wipe uncounted otherwise.
+
+## The served session
+
+`served_session.py` is the runbook of NET-83's session of record, the network certifier in front of a served model.
+`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
+the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (the
+class's 1,024 reach the warden late, NET-107), each answered greedily with at most 64 ids, ending at the base model's
+EOS id 128001. It runs at a given UTC time when asked. vllm starts the endpoint by hand (serve-openai directly with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, and posts its
+records as an art without `requests.jsonl`, whose prompt ids stay on the served node, and with `request_users.jsonl`,
+each engine request's `engine_id` and its warden user in `requests.jsonl`'s order (#5303). `chain` rebuilds `requests.jsonl` from that map and the kept warden run's
+certified I/O in a 0700 directory beside the kept fetch, so the endpoint step checks the endpoint's trace against the
+certified I/O. The lane's fetch, with `witness/`, stays in a 0700
+directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs
+the chain's warden path on the kept fetch, and only from a tree with the record's leak guard. `session --gate local`
+is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins
+gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain runs on (vy-nebius-cpu-2),
+which the challenger's coin link reaches through that node's own line of `/etc/vy/coin-ports`. It refuses the served
+node as the draw's peer, since the gate key and the warden run's witness never go on the prover's machine.
+vy-nebius-cpu-2 has its line (ports 7821-7830) since 27 Oct; without the gate's coins the chain draws on the
+verifier's (`--coins verifier`, the default).
 
 ## The chain's run of record
 
@@ -75,6 +97,17 @@ The pieces not yet on `main` change only the commands the job runs. N2's sampled
 A step on a stand-in (the scan on its own synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report
 accepted, and a step that fails or doesn't run says why.
 
+**The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
+each gate sent under `inputs/` to the quarantine once it is unpacked, and on every exit runs the guard on the run dir.
+The guard moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file
+that holds a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an
+aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
+The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
+files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
+`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
+excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
+guard that can't run, withholds `out/`, `inputs/` and the logs whole.
+
 **The warden path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the active warden's own run (the
 gate's `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a network certifier rehearsal's run,
 whose records come through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The
@@ -107,9 +140,9 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
     35bb96cd76;
   - for the scan, a0fbcfe1b3, which adds `scan_zk`'s refusal of a void run by name.
 
-**The legs.**
+**The runs.**
 
-| leg | run | endpoint | verdict |
+| what ran | run | endpoint | verdict |
 |---|---|---|---|
 | network certifier | c20261025T224504Z-2982 | r20261025-205018-6541 (:18097, `--window-requests 4`) | accepted |
 | the network certifier functioning as an active warden | c20261025T230848Z-30ab | 6541 | void: lateness |
@@ -121,9 +154,9 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 | the scan on d951 | r20261026-011909-f489 | | accepted: honest 64 of 64, forged refused |
 | the scan on 6cd9 | r20261026-035637-a739 | | accepted: honest 64 of 64, forged refused |
 
-- The network certifier leg ran `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
+- The network certifier's run was `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
   profile and an LMS key of H = 20. It is stored as art:fc8d4f61ebb0a45ecd47456d818bebcfeb0723ab1a8f00dd98f7983064eed76b.
-- The active-warden legs ran `warden-rehearse --scan --minutes 20 --requests 100`. Their public files are stored as
+- The active-warden runs were `warden-rehearse --scan --minutes 20 --requests 100`. Their public files are stored as
   art:1aa7089c7e11b282335c44f79d07ee6a9278cc49141539d8d559d3af3d074e84 (30ab),
   art:8da6ee13709bab38668a08750095b24f3aa3229584335ff8995921f14ba2da85 (0420) and
   art:af3344f7e9466408d8eb598e1db69625c6d27fbd93c01444929166abc885ac95 (89bf), each labelled `void lateness`.
@@ -177,7 +210,7 @@ and is labelled `do-not-cite`.
     26;
   - 32 of `EgressBucket_v1{B=512,R=16,r=4,NR=4,K=64,IB=17,D=21}`: 77,099 ANDs, k_log 23.
 - Honest: 64 of 64 units drawn on the gate's coins, every proof held by Lean, accepted, and the gate's outcome
-  accepted. An accepting draw of all 64 hides no wrong unit except with probability 2⁻²⁰.
+  accepted. An accepting draw of all 64 hides no faulty proof block except with probability 2⁻²⁰.
 - Forged (the 32 egress units, one of them forged): refused by Lean at the registration ("table row 22 does not open
   warden/egress/0's registered root at position 22").
 - The cost a unit:
@@ -194,7 +227,7 @@ s20261026T040447Z-ffd7) is the record's scan at full traffic. Its run record has
 as art:832cc424a984fc015958d5758350f03978d7e0c792d2b8462cceddaec9a988ff.
 - Its sampling block is link-window 0, with the same 64 units of the same two subcircuits as on d951.
 - Honest: 64 of 64 units drawn on the gate's coins, every proof held by Lean, accepted. An accepting draw of all 64
-  hides no wrong unit except with probability 2⁻²⁰.
+  hides no faulty proof block except with probability 2⁻²⁰.
 - Forged (the 32 egress units, one of them forged): refused by Lean at the registration ("table row 22 does not open
   warden/egress/0's registered root at position 22").
 - The cost a unit:
@@ -205,12 +238,12 @@ as art:832cc424a984fc015958d5758350f03978d7e0c792d2b8462cceddaec9a988ff.
   art:9f4adc70e0fb01ad3fbbee273269b4b0cb3392e5979360aed72893fe827059a6.
 - The job's own rc is 1: its report runs without N2, which this part of the record doesn't run.
 
-**Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
-every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
+**Why the active-warden runs are void.** The gate's traffic is seeded, so all three runs sent the same schedule. On
+every run the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
 abort after the network certifier had failed it. The lateness is between the endpoint's output and the egress
 schedule.
 
-The first two legs:
+The first two runs:
 - Connections 81 and 82 arrive at t ≈ 151.5 s, in a burst of four requests within 1.2 s:
   - 81 has a prompt of 531 ids and 43 tokens;
   - 82 has a prompt of 839 ids and 20 tokens.
@@ -221,11 +254,11 @@ The first two legs:
   - on 30ab, at egress cells 19 and 9;
   - on 0420, at egress cells 19 and 10.
 - 98 of 100 requests ended.
-- The network certifier itself kept time on both legs: 225 of 225 link-windows certified, a peak tick lateness of
+- The network certifier itself kept time on both runs: 225 of 225 link-windows certified, a peak tick lateness of
   2.23 ms and 4.30 ms, and none past the 25 ms slack.
-- `--window-requests 8` didn't change it: both legs fail the same two connections at the same buckets.
+- `--window-requests 8` didn't change it: both runs fail the same two connections at the same buckets.
 
-The third leg, 89bf, capped every output at 16 tokens (`--tokens 16`, the least the gate takes) and failed more:
+The third run, 89bf, capped every output at 16 tokens (`--tokens 16`, the least the gate takes) and failed more:
 - 10 connections failed closed as late: 54, 55, 63, 65, 71, 72, 74, 81, 82 and 83. Each failed at egress cell 0 to 8,
   before any output token reached the network certifier. 90 of 100 requests ended.
 - The network certifier kept time: 225 of 225 link-windows certified, a peak tick lateness of 2.10 ms, none past the
@@ -265,10 +298,13 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   schedule: it enters the compute audit's terms, which go into JointPeriod.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1.
+- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
+  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
+  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,352 bits, and
+- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`, #4326, #4349, #4373, #4370) has no δ term with every unit drawn.
@@ -280,7 +316,7 @@ The scale:
 - Each machine has one network certifier in front of all its compute, serving at the run's rate.
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
-**`prog` as registered today (the record's K)**, bits, and the share of the weights:
+**`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -295,7 +331,7 @@ As registered today, K passes the size of the weights within one machine-week, s
 monitoring period.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)**, bits, and the share of
-the weights:
+the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -315,6 +351,8 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
+- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
+  receiver no more than an idle one.
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
@@ -344,6 +382,11 @@ Pr[window i accepted ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind,
 and the secrets of a covert sender whose every window meets `WindowGood` number at most 2^K, where
 
 K = log2 #S_s + Σ_c log2(cap_c + 1) + Σ_i [#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 D_j].
+
+The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, not met at D_j = 1 until a
+run shows the written buckets tell a receiver no more than an idle one. The warden and the served proxy each hand every
+bucket to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`,
+`warden_serve.py --paced-ms`; `active.Proxy(paced=…)`, `certifier_serve.py --paced-ms`).
 
 `NetTiming.periodLeak_le_sum` (#4324) sums the windows' failures by a union bound:
 

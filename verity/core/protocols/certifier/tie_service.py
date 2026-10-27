@@ -10,7 +10,7 @@ link, ingress and the window), whose root the warden's signed head names (`warde
 that root with the challenger (`IngressTie.registration`, on the head `warden_rows.check_registration` reads off the
 warden's signed registration); the rows and their salts are the prover's, which the warden hands it privately, and
 the challenger and the verifier see the root. A registration is one link-window, its `window` provenance
-`{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof units, unit t
+`{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof blocks, unit t
 bucket row t. Selection is `All`.
 
 **The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one gate naming
@@ -46,9 +46,9 @@ don't, when the stream holds a registration past A's windows or misses one, and 
 isn't the warden's cut of A's prompt lengths (`framing`) or names an own frame, which the warden's ingress has none
 of. A connection's lanes chain by construction from (0, 0) into its first bucket to (0, n) out of its `END`'s, so an
 accepted verdict on every window says what IoTieRequest's units say together: connection i + 1 is an id request of
-v0's `prompt_len` prompt fields (REDTEAM phase 9 (b): a carried field count is held by the bucket before). That is
+v0's `prompt_len` prompt fields (a carried field count is held by the bucket before). That is
 the premise `advised.ends` reads, from the verifier's own tie source alone (`Ties`, the tie, its stream and the
-release as `service.LinkWindows.ties`), never from what the prover delivers (REDTEAM phase 10), and `advised.view`
+release as `service.LinkWindows.ties`), never from what the prover delivers, and `advised.view`
 holds the verdict to the link and the registrations the source records, so a verdict on another link or another
 ingress record isn't reused.
 
@@ -130,7 +130,7 @@ def _unit(check) -> CompositeDefinition:
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
-        doc="the proof unit of the ingress tie: one bucket row of the warden's ingress link-window, its "
+        doc="the proof block of the ingress tie: one bucket row of the warden's ingress link-window, its "
             "`io_request.IoTieRequest` on the row the registered read holds to the warden's root and the verifier's "
             "lanes")
 
