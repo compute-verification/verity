@@ -59,7 +59,7 @@ theorem pub_siteHP {T : Model.Statement} {a : AcceptedHP T} {pop : Public} {o : 
   obtain ⟨ro, ri, -, hRi, hst⟩ := s.regions
   have hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList := fun r hr' => by
     rw [hst, Array.toList_append]; exact List.mem_append_right _ hr'
-  obtain ⟨p, t', hkey, hq, hb⟩ := pub_block L regs hregs hRi hri (ports_of_pub s.ports hpub) C hg x hx hpub hz o
+  obtain ⟨p, t', hkey, hq, hb⟩ := pub_block L regs hregs hRi hri (ports_of_pub s.ports hpub) C P.tmpl hg x hx hpub hz o
   rw [hk] at hkey
   injection hkey with hqq htt
   subst hqq htt
@@ -243,7 +243,9 @@ theorem out_copy_keyP {T : Model.Statement} (a : AcceptedHP T) (hce : a.st.c = c
       (a.st.c.leavesOut.getD u' #[])[j] := by
     rw [← hwj]
     omega
-  have := out_copyHP a ho hrf hz o hg x hu' hj ht h1 h2 hx hjo hkk hw
+  have er : unitRows a.st a.L.unit_built = Rows.ofNet hU := Placed.ofNet_eq (lunit_flat P.tmpl) _ hU
+  have := out_copyHP a ho hrf hz o hg x hu' hj ht (by rw [er]; exact h1) (by rw [er]; exact h2) (by rw [er]; exact hx)
+    hjo hkk hw
   rw [hq, hk]
   exact this
 
