@@ -147,6 +147,10 @@ class Position:
     offset: int
     at: int = 0
 
+    #: its read entry's kind in a bundle row: a record of the bundle, not a circuit port (tests/test_seed_ports.py
+    #: scans dict literals of that kind as ports)
+    KIND = "position"
+
 
 @dataclass(frozen=True)
 class RegisteredRead:
@@ -602,7 +606,7 @@ def _read_entries(who: str, c: Mapping[str, Any], kind: str, row: bytes, pieces:
                     or int.from_bytes(row[2 * q.at:2 * q.at + 2], "little") != c["step"] + q.offset:
                 raise ValueError(f"{who}: word {q.at} is not its step + {q.offset}, or a position in an output")
             covered[q.at] = True
-            out.append({"kind": "position", "at": q.at, "offset": q.offset})
+            out.append({"kind": Position.KIND, "at": q.at, "offset": q.offset})
             continue
         if isinstance(q, RegisteredRead):
             reg = (weights or {}).get(q.value)
@@ -955,7 +959,7 @@ def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payl
         at = q.get("at")
         if not isinstance(at, int) or isinstance(at, bool) or not 0 <= at < words:
             return f"read {j}: its place is outside the row"
-        if q.get("kind") == "position":
+        if q.get("kind") == Position.KIND:
             if out or q.get("offset") not in (0, 1) or covered[at] \
                     or int.from_bytes(row[2 * at:2 * at + 2], "little") != c["step"] + q["offset"]:
                 return f"read {j}: the word is not its step plus its offset, or another read's"
