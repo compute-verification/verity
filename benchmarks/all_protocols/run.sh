@@ -6,11 +6,15 @@
 # flock-circuit, Lean's flock-verify and flock-firewall, the sampled-proofs verifier of record, onsite, PoUS's run and
 # setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol) and the streamed
 # wipe's (wipe-protocol), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the
-# runner (--of-record, --windows N, --start I, --tamper W,..., --pouw h1, --registered, --wired, --tie, --tie-tamper W,...
+# runner (--of-record, --windows N, --start I, --tamper W,..., --pouw h1, --pouw-gate USER@HOST or --pouw-live DIR, --registered, --wired, --tie, --tie-tamper W,...
 # with CERTIFIER_TAMPER=byte), which checks them (--check) before anything builds; ALLP_FLOCK_WORK=DIR keeps M0's build
-# across runs. S1's run of record, the one way a run of it counts (README), every layer chained and the output tied:
-#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
-#     bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
+# across runs. S1's run of record, the one way a run of it counts (README), every layer chained and the output tied, PoUW's
+# salt and draw from vy-challenger-1 (challenger-key.json is art:d12f85becc, main.txt origin/main's first parents):
+#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read \
+#     --send challenger-key.json --send main.txt -- bash -c 'bash benchmarks/all_protocols/run.sh --of-record \
+#     --windows 2 --tie-tamper 0 --pouw-gate research@204.12.178.84 --peer vy-nebius-cpu-4 \
+#     --challenger-key $RESEARCH_RUN_DIR/inputs/challenger-key.json --main $RESEARCH_RUN_DIR/inputs/main.txt \
+#     --gate-key $HOME/.ssh/vy-gate-compute-accounting'
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH

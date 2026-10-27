@@ -89,6 +89,13 @@ every machine of a census deployment, the pooled total first and the per-window 
   `--wired` serves the loop's wired circuit (`serve --wired`).
   `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
   `verity_torch_loop.pouw_audit` before the legs.
+  `--pouw-gate USER@HOST --peer NAME --challenger-key RECORD --main FILE [--gate-key KEY]` (with `--pouw h1
+  --registered`) takes the H1 window's salt from vy-challenger-1's salt-only session (`serve --pouw-gate`), and PoUW's
+  audit draws on the same gate (records_audit's `--challenger`); the window's `period.json` carries the verifier's pins
+  (`pouw.verifier`: the deployment's challenger-key/v1 record and the path of its main line), which PoUW's leg checks
+  the salt session under, never the key or main line the prover wrote. `--pouw-live` salts it from a development gate in
+  scratch instead, on the prover's node, so its coins are not live under AGENTS.md. The mode's `pouw_coins` says which
+  (`gate:USER@HOST`, `local` or `seeded`).
   `--tie` ties the outputs to the certified ones (`verity_all_protocols/tie.py`) under a work law (default `work:64`,
   with `--wired` every unit; any other refused), and `--tie-tamper W,...` with `CERTIFIER_TAMPER=byte` ties those
   windows to a relay with one output byte changed on the egress, which must reject.
@@ -110,11 +117,22 @@ This is the one way to run S1 so that it counts, the joint run: every layer chai
 network certifier relayed:
 
 ~~~sh
-research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
-  bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
+git rev-list --first-parent origin/main > main.txt
+research data fetch art:d12f85becc --to .   # challenger-key.json, vy-challenger-1's key record (pubkey SHA-512 27271eaf…)
+research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read \
+  --send challenger-key.json --send main.txt -- bash -c 'bash benchmarks/all_protocols/run.sh --of-record \
+  --windows 2 --tie-tamper 0 --pouw-gate research@204.12.178.84 --peer vy-nebius-cpu-4 \
+  --challenger-key $RESEARCH_RUN_DIR/inputs/challenger-key.json --main $RESEARCH_RUN_DIR/inputs/main.txt \
+  --gate-key $HOME/.ssh/vy-gate-compute-accounting'
 ~~~
 
-`--of-record` sets the flags three lanes' work needs:
+The gate key is the lane's own, registered on vy-challenger-1 (TOP-84), on the node the run serves from, which must be
+one of the gate's `/etc/vy/peers`. Each window opens two sessions on it, one at a time: the salt session on the salt
+epoch's root, and the draw session on the window's run. The integrity window's draw (sampled proofs) is still on the
+verifier's own coins: its run is the H1 window's, and the gate opens a root once, ever.
+
+`--of-record` requires `--pouw-gate` (AGENTS.md, "Live coins only"): without it the H1 window is seeded, and
+`--pouw-live`'s gate runs on the prover's node. It sets the flags three lanes' work needs:
 
 - `--wired`, every layer chained;
 - `--tie`, network-accounting's output tie;
@@ -128,7 +146,7 @@ Under `--tie-tamper` it also sets `CERTIFIER_TAMPER=byte`.
 
 `run.sh` checks the command before it builds anything (`runner --check`, whose output is `$OUT/mode-check.json`). It
 refuses a command that contradicts the mode, with the reason: another `--law`, `--jobs` or `--session-jobs` other than 1,
-or another `CERTIFIER_TAMPER`.
+another `CERTIFIER_TAMPER`, or no `--pouw-gate`.
 
 Window 0 is tied to a relay with one egress byte changed, so it must reject (Lean's registered read of the wired
 down_proj unit's `o0`), and window 1 is honest, so it must accept. Any other command is a development run: its
