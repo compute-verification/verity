@@ -17,7 +17,10 @@ theorem acceptedWindows : AcceptedWindows := by
   intro p c e pc prof h
   obtain ⟨_, hwn, ws, hws, _, hK, T, hT, hlen, hall⟩ := acceptMeans p c e pc prof h
   refine ⟨ws, hws, by rw [hwn, hlen], hK, T, hT, fun i => ?_⟩
-  have hi : i.val < (ws.zip pc.windows).length := by simp [List.length_zip, hlen]
+  have hi : i.val < (ws.zip pc.windows).length := by
+    have := i.isLt
+    simp only [List.length_zip]
+    omega
   have hmem : (ws[i], pc.windows[i.val]'(hlen ▸ i.isLt)) ∈ ws.zip pc.windows :=
     List.mem_iff_getElem.mpr ⟨i.val, hi, by simp [List.getElem_zip]⟩
   obtain ⟨layout, rows, hw⟩ := hall _ hmem
