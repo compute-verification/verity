@@ -64,7 +64,8 @@ import Proofs.Pous.Obligation
 `Security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean` (the frozen statements)
+`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
+`Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` (the frozen statements)
 and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
 change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
 `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
@@ -208,6 +209,7 @@ theorem StreamedWipeMeetsServer8H200HBMRAM : Pous.Guarantees.StreamedWipeMeetsSe
   PousStreamedWipe.streamed_wipe_meets_server_8H200_HBMRAM
 theorem StreamedWipeMeetsServer8H200 : Pous.Guarantees.StreamedWipeMeetsServer8H200 :=
   PousStreamedWipe.streamed_wipe_meets_server_8H200
+theorem StreamedWipeMeetsDisk : Pous.Guarantees.StreamedWipeMeetsDisk := PousStreamedWipe.streamed_wipe_meets_disk
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family
