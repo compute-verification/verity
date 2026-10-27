@@ -154,7 +154,7 @@ def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_ju
     assert E([7, 7, 99], 4, 1, {99})[0] == [1, 2, 3, 4]                         # EOS at slot C - 1: the lag slot is the cap slot
     assert E([7, 7, 7, 99], 4, 1, {99})[0] == [1, 2, 3, 4]                      # EOS at the cap slot: nothing after
     assert E([7, 99, 5, 99], 6, 1, {99})[0] == [1, 2, 3]                        # the FIRST EOS rules; a later one is on a non-executed slot
-    assert E([7, 7], 4, 1, None)[0] is None and "F-pm-24" in E([7, 7], 4, 1, None)[1]["unjudged"]
+    assert E([7, 7], 4, 1, None)[0] is None and "cannot be read as an EOS stop" in E([7, 7], 4, 1, None)[1]["unjudged"]
     assert E([7, 7, 7, 7], 4, 1, None)[0] == [1, 2, 3, 4]                       # undeclared EOS but the cap is reached: judged on the cap
     assert E([7, 99], 4, None, {99})[0] is None and "unattested" in E([7, 99], 4, None, {99})[1]["unjudged"]
 

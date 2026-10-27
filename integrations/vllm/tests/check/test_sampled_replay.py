@@ -1370,7 +1370,7 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     rep = SR.sampled_replay(_programs(world), bmap, device_reader, _weights(world), per_stratum=2, seed=3, workers=4, retention="device")
     assert rep["result"] is True and rep["grade"] == "complete", rep.get("why")
     assert rep["evaluator"] == {"retention": "device", "workers_requested": 4, "workers": 1, "mode": "serial (parent process)",
-                                "note": "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)",
+                                "note": "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context",
                                 "prewarmed_libraries": {}, "fork": {}}
     assert rep["timing"]["workers"] == 1 and calls["parent"] > 0
     # (b) no retention hint, a forked pool: the children's device fault is a pool failure, the parent replays serially and PASSES

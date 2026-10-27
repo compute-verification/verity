@@ -718,7 +718,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             "placeholders_deleted": placeholders_deleted,
             "placeholders_deleted_note": ((f"{len(placeholders_deleted)} Fp8KVCacheMethod loader placeholder(s) (attn.q/k/v/prob_scale) pinned as the -1.0 "
                                           "sentinel on the record are not served: vLLM's process_weights_after_loading deletes them after weight loading; "
-                                          "the attn._x_scale the kernels read are compared (F-r19-int-11)") if placeholders_deleted else None),
+                                          "the attn._x_scale the kernels read are compared") if placeholders_deleted else None),
             "analytic": analytic_checked, "engine_assumptions": record.get("engine_assumptions"),
             "unpinned_note": (("engine constants left unpinned by name are not authenticated by this pin (form (B) only)") if unpinned else
                               "every declared weight field is pinned: checkpoint bytes by digest, kv scales as the engine constant, the rotary table by the frozen analytic bound"),
@@ -859,7 +859,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
         why.append(f"no component Program under {programs_root}")
     record["of_record_set"] = {"program_digests": sorted(digests), "components": comps, "workload_digest": workload_digest,
                                "manifest_digests": sorted(set(manifest_digests)), "programs_root": str(programs_root), "why": why or None,
-                               "rule": "every component Program's weights struct == the record's; the run's of-record set must equal this set (rev-cb M-0733)"}
+                               "rule": "every component Program's weights struct == the record's; the run's of-record set must equal this set"}
     if why:
         record["of_record"] = False
         record["of_record_why"] = "; ".join(why)[:600]
@@ -910,17 +910,17 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
 class Options:
     """weights of record: per-field digests of the checkpoint-composed served weights (MAN-09)"""
     program_dir: str | None = option("--program-dir", default=None, help="the Program of record (instances.json.gz + result.json)")
-    programs_root: str | None = option("--programs-root", default=None, help="[M-0733] a row dir: derive from its first component Program and stamp EVERY component's " "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
+    programs_root: str | None = option("--programs-root", default=None, help="a row dir: derive from its first component Program and stamp EVERY component's " "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
     manifest: str | None = option("--manifest", default=None, help="the row's required manifest (default <programs-root>/manifest.json): its digests join the stamp")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint snapshot (safetensors shards + config.json); required to derive")
-    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; " "exit 0 when they pin the same weights of record (COORD R16 ruling 25: same-model rows across pods under schema v1)")
+    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; " "exit 0 when they pin the same weights of record (same-model rows across pods under schema v1)")
     checkpoints: str | None = option("--checkpoints", default=None, help="manifests/checkpoints.json (default: the repo's)")
     model: str | None = option("--model", default=None, help="HF repo id, to select the checkpoints.json entry when --checkpoint-dir is not its local_path")
     revision: str | None = option("--revision", default=None)
     no_verify_shards: bool = option("--no-verify-shards", default=False, action="store_true", help="skip the shard sha256 (the record then says pinned: null)")
     kv_cache_dtype: str = option("--kv-cache-dtype", default="auto", help="[MAN-09c] the engine's kv_cache_dtype the record assumes (auto: kv scales pinned as f32 1.0)")
     out: str | None = option("--out", default=None, help="write the record here (default: <program-dir>/weights_of_record.json)")
-    supersedes: str | None = option("--supersedes", default=None, help="[COORD R16 M-0038 (2)] the record this derivation replaces (moved aside by the caller), named in `derived`")
+    supersedes: str | None = option("--supersedes", default=None, help="the record this derivation replaces (moved aside by the caller), named in `derived`")
 
 
 def main(a: Options) -> int:

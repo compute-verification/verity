@@ -84,7 +84,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
     # the positive it must not touch: EOS at the last served index only
     ok = EP.executed_prefix_of_record(["r0"], {"r0": [7, 3, EOS]}, caps={"r0": 5}, eos_of_record=[EOS], lag=1)
     assert ok["ok"] and ok["requests"]["r0"]["first_eos_index"] == 2 and ok["requests"]["r0"]["executed_prefix_len"] == 4 and ok["requests"]["r0"]["lag_steps"] == [3]
-    # no declared EOS set: nothing to find (the length-stop request is fine; the early stop fails for its own reason, F-pm-24)
+    # no declared EOS set: nothing to find (the length-stop request is fine; the early stop fails for its own reason)
     nn = EP.executed_prefix_of_record(["r0"], {"r0": [7, 3, 9]}, caps={"r0": 3}, eos_of_record=None, lag=1)
     assert nn["ok"] and nn["requests"]["r0"]["first_eos_index"] is None
 
@@ -321,7 +321,7 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
     in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
-    eos_declared by F-pm-24, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
+    eos_declared from the stop rule, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
     e = _mixed_epr()
     link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
     assert link["ok"] and link["lag_attested"] is True and link["tokens_json"]["served_by_request"] == {"r0": 11, "r1": 32}

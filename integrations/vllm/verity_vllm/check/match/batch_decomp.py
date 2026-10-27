@@ -341,7 +341,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             if not seq_equal and not diff and chunked:
                 ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
             elif not seq_equal and not diff and within_step == "dag":
-                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record, COORD M-0177; sequence differs)"
+                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
         ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (cmp.get("splits_values") or {}).get("equal", True)
         ent["totals"] = cmp["totals"]
         ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
@@ -433,7 +433,7 @@ class Options:
     log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     out: str = option("--out")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
-                              help="within-step criterion of record: dag (COORD M-0177; live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
+                              help="within-step criterion of record: dag (live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
 
 
 def main(a: Options) -> int:
