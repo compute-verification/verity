@@ -210,14 +210,14 @@ def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray)
   let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
   pure { i with holo := false, sparse := none, stacked := none }
 
-/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, whether the file is complete, the known rows
-and the template parameters the ports read. -/
+/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, the known rows and the template parameters the
+ports read. -/
 def registeredOf (j : Json) :
-    V (Array Flock.Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
+    V (Array Flock.Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
   let own ← Flock.Registered.ofJson j
   let known ← Flock.Registered.knownOf j
   Flock.Registered.checkKnownAll own known
-  pure (own, ← Flock.Registered.completeOf j, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
+  pure (own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
     ← Flock.Registered.paramsOf j)
 
 /-- `pure ()` when `b`, else the refusal `why`. -/
@@ -320,9 +320,9 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
   fits pubB s!"part {j}'s public file"
   let tags := Flock.Zk.tags (tags0.withCoins coins) (Flock.Zk.maskLogOf circuitB) count
   let tables : List (String × ByteArray) := []
-  let (registered, complete, known, regParams) ← match p.registered with
-    | none => pure (none, false, #[], #[])
-    | some r => (fun (own, c, k, ps) => (some own, c, k, ps)) <$> registeredOf r
+  let (registered, known, regParams) ← match p.registered with
+    | none => pure (none, #[], #[])
+    | some r => (fun (own, k, ps) => (some own, k, ps)) <$> registeredOf r
   let rows := some h.rows
   let bindings ← Flock.RecVStar.ownBindingsOfJson p.bindings
   let partition := some p.partition
@@ -337,7 +337,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         Flock.Registered.checkProgram program registered.isSome
         Flock.RecSetup.checkInner inner recCoins h.bound
         let r ← OneStageZk.buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
-        if complete then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (registered.getD #[])
+        if let some own := registered then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c own
         r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c program partition registered regParams
         r.2.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c known
         Flock.RecSetup.checks inner recCommits tags0 tables r.2 circuitB partition program registered (some j) (some bindings)
