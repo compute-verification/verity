@@ -23,8 +23,8 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   `AttnBlock_v5` is about 9.2M ANDs at Llama's geometry, a head of 32 blocks past C-Flock's 2^27 block).  v18 writes its first
   visited block and its epilogue in its body; v19 Calls `AttnBlockFirst_v1` (that block's steps and padding, with no running
   state in, which an `AttnBlock_v5{FIRST=True}` Call would be passed and ignore) and `AttnHeadEnd_v1`.
-* `AttnBlockFirst_v2{D, NVIS, BN, DOT, SLICES}`: `AttnBlockFirst_v1` with each key's value as SLICES slices of D / SLICES
-  columns, so that a unit's v port, cut once an element, reads the value projection's output one slice a row.
+* `AttnBlockFirst_v2{D, NVIS, BN, DOT, VS}`: `AttnBlockFirst_v1` with each key's value as D / VS slices of VS columns, so
+  that a unit's v port, cut once an element, reads the value projection's output one slice a row.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
 index 0 (`tests/program/test_dead_free.py`); the attention versions compute v5's at every binding.
@@ -369,23 +369,23 @@ def _first_block(B, S, q, k, v, name):
     return F2._check_inf_block(B, first, q, k, v, None, None, None, None, read_pads_only=True)
 
 
-def _slices_refuse(b: dict) -> str | None:
-    D, n = b.get("D"), b.get("SLICES")
-    if n is not None and not (type(n) is int and n >= 1 and (D is None or D % n == 0)):
-        return f"SLICES must be a positive divisor of D (got D={D!r}, SLICES={n!r})"
+def _slice_refuse(b: dict) -> str | None:
+    D, vs = b.get("D"), b.get("VS")
+    if vs is not None and not (type(vs) is int and vs >= 1 and (D is None or D % vs == 0)):
+        return f"VS must be a positive divisor of D (got D={D!r}, VS={vs!r})"
     return None
 
 
-@composite("AttnBlockFirst", 2, ["D", "NVIS", "BN", "DOT", "SLICES"],
+@composite("AttnBlockFirst", 2, ["D", "NVIS", "BN", "DOT", "VS"],
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16))),
-                       ("v", Array(S.NVIS * S.SLICES, Array(S.D // S.SLICES, BF16)))),
+                       ("v", Array(S.NVIS * S.D // S.VS, Array(S.VS, BF16)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
-           conformance="not-yet-established: AttnBlockFirst_v1's function", refuse=_slices_refuse)
+           conformance="not-yet-established: AttnBlockFirst_v1's function", refuse=_slice_refuse)
 def AttnBlockFirstV2(B, S, q, k, v):
-    """`AttnBlockFirst_v1{D, NVIS, BN, DOT}` with each key's value as SLICES slices of D / SLICES columns: v's element
-    ``t·SLICES + s`` is key t's columns [s·D/SLICES, (s+1)·D/SLICES), so a cut of v once an element reads one slice a row (a
-    slice of the value projection's output), where a cut of v1's v holds at least a whole key a row.  Its leaves are v1's v in
-    the same order, so the body is v1's over them, node for node."""
+    """`AttnBlockFirst_v1{D, NVIS, BN, DOT}` with each key's value as D / VS slices of VS columns: v's element
+    ``t·D/VS + s`` is key t's columns [s·VS, (s+1)·VS), so a cut of v once an element reads one slice a row (a slice of the
+    value projection's output), where a cut of v1's v holds at least a whole key a row.  Its leaves are v1's v in the same
+    order, so the body is v1's over them, node for node."""
     return _first_block(B, S, q, k, _Coll(Array(S.NVIS, Array(S.D, BF16)), v.refs), "AttnBlockFirst_v2")
 
 

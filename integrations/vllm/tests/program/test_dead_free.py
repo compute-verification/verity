@@ -319,18 +319,18 @@ def test_attention_head_v19_is_v18_with_its_calls_inlined_at_llama_geometry(D, B
         assert _inlined(new, V19_STEPS) == _inlined(old)
 
 
-def _first_blocks(D: int, NVIS: int, BN: int, SLICES: int):
-    return (bind(DF.AttnBlockFirstV2, D=D, NVIS=NVIS, BN=BN, DOT=FA2["DOT"], SLICES=SLICES),
+def _first_blocks(D: int, NVIS: int, BN: int, VS: int):
+    return (bind(DF.AttnBlockFirstV2, D=D, NVIS=NVIS, BN=BN, DOT=FA2["DOT"], VS=VS),
             bind(DF.AttnBlockFirstV1, D=D, NVIS=NVIS, BN=BN, DOT=FA2["DOT"]))
 
 
-@pytest.mark.parametrize("SLICES", [1, 2, 4, 16])
+@pytest.mark.parametrize("VS", [16, 8, 4, 1])
 @pytest.mark.parametrize("NVIS,BN", [(1, 32), (8, 32), (15, 32), (16, 32), (17, 32), (31, 32), (32, 32), (16, 16), (5, 128)])
-def test_attn_block_first_v2_equals_v1(NVIS, BN, SLICES):
+def test_attn_block_first_v2_equals_v1(NVIS, BN, VS):
     """A first block of 1 ... BN keys, its V rows padded to a k-step or not, each key's value in 1 to D slices: v2's circuit is
     v1's node for node over the same leaves of v in the same order, and the two agree word for word on edge words, random words
     and normals, and all -inf keys."""
-    new, old = _first_blocks(16, NVIS, BN, SLICES)
+    new, old = _first_blocks(16, NVIS, BN, VS)
     assert _dead(new) == 0
     assert _inlined(new) == _inlined(old)
     for q, k, v in _attention_cases(16, NVIS):
@@ -340,7 +340,7 @@ def test_attn_block_first_v2_equals_v1(NVIS, BN, SLICES):
 @pytest.mark.parametrize("NVIS", [1, 15, 16, 17, 35, 128])
 def test_attn_block_first_v2_equals_v1_at_llama_geometry(NVIS):
     """Llama-3.2-1B's heads (D 64, kBlockN 128) with a key's value in 4 slices of 16 columns."""
-    new, old = _first_blocks(64, NVIS, 128, 4)
+    new, old = _first_blocks(64, NVIS, 128, 16)
     assert _inlined(new) == _inlined(old)
     for q, k, v in _attention_cases(64, NVIS):
         _same(new, old, q, k, v)
@@ -360,7 +360,7 @@ def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
     S = 64 // n
     assert (n, S) == (16, 4)
     for NVIS in range(1, WindowClass(4, 32, 4).positions + 1):
-        new, old = _first_blocks(64, NVIS, 128, S)
+        new, old = _first_blocks(64, NVIS, 128, n)
         lay = IF.layout(new)
         assert (lay.outer[1:], IF.layout(old).outer[1:]) == ((NVIS, S * NVIS), (NVIS, NVIS))
         rows = lay.cut({"k": NVIS, "v": S * NVIS})

@@ -11,7 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     split count S = 32, the sampler at V = 64 (where `GumbelTopPTokenSelect_v2` has 6,034 dead gates), and FA2's attention with a
     first block of 16 keys below kBlockN 32 (where `Attention_v5` has 2 dead gates a head), v19's head also at a first block of 8
     keys (whose V rows `AttnBlockFirst_v1` pads to a k-step), and `AttnBlockFirst_v2` at those two first blocks with a key's
-    value in 4 slices."""
+    value in 4 slices of 4 columns."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF, hopper, prims as P
 
@@ -22,8 +22,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("AttentionHead_v19", lambda: bind(DF.AttentionHeadV19, T=48, **fa2)),
         ("AttentionHead_v19-padded", lambda: bind(DF.AttentionHeadV19, T=40, **fa2)),
         ("Attention_v19", lambda: bind(DF.AttentionV19, T=48, NH=2, KVH=1, **fa2)),
-        ("AttnBlockFirst_v2", lambda: bind(DF.AttnBlockFirstV2, D=16, NVIS=16, BN=32, DOT=fa2["DOT"], SLICES=4)),
-        ("AttnBlockFirst_v2-padded", lambda: bind(DF.AttnBlockFirstV2, D=16, NVIS=8, BN=32, DOT=fa2["DOT"], SLICES=4)),
+        ("AttnBlockFirst_v2", lambda: bind(DF.AttnBlockFirstV2, D=16, NVIS=16, BN=32, DOT=fa2["DOT"], VS=4)),
+        ("AttnBlockFirst_v2-padded", lambda: bind(DF.AttnBlockFirstV2, D=16, NVIS=8, BN=32, DOT=fa2["DOT"], VS=4)),
         ("RMSNormTriton_v5", lambda: bind(DF.RMSNormTritonV5, N=64, EPS=1e-5)),
         ("RMSNormTriton_v5-wide", lambda: bind(DF.RMSNormTritonV5, N=2048, EPS=1e-5)),
         ("TokenSelect_v3", lambda: bind(DF.TokenSelectV3, V=16)),
