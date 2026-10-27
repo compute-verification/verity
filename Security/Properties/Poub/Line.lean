@@ -1,7 +1,7 @@
 import Definitions.Pouw.Basic.Prob
-import Definitions.Accounting.Assumptions.RemoteHeld
-import Definitions.Accounting.Assumptions.RemoteOutside
-import Definitions.Accounting.Assumptions.RemoteDraw
+import Definitions.Accounting.Assumptions.PoubHeld
+import Definitions.Accounting.Assumptions.PoubOutside
+import Definitions.Accounting.Assumptions.PoubDraw
 import Properties.Poub.Line.Record
 import Properties.Poub.Line.Premises
 
@@ -36,12 +36,12 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   most `n·2^-191` over the session's `n` draws in all), and `bind` the receipts' binding term over the session's draws
   (`Receipts.binding`: some opened receipt presented with an accepted row other than the one its root holds). The
   rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` … `Node.chipBlocks`), and the
-  openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives draw `c`'s
+  openings are the deployed draw's (`Accounting.Poub.Draw`: `Key.subset` on the first blocks `prf c` gives draw `c`'s
   coin, at most `receiptMax = 2^64 − 1 < 2^448` receipts a draw, the verifier's `RECEIPT_LIMIT` less one, the
-  sampler's fallbacks `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
+  sampler's fallbacks `rest` free), at the error `Accounting.Guarantees.Poub.PooledDraw` states.
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
-They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`, the line's W covering
+They follow from the model's argument for `Accounting.Guarantees.Poub.HeldOverTimeLinksDrawn`, the line's W covering
 the session's pooled bound (`Properties.Poub.LineCoversSession`, at the record's draws, whose draws the line
 holds to `min(s, U_c)` and whose receipts on an accepted record are `recordDraw`'s sizes: the reached state is the
 run's, a window's receipts are below `RECEIPT_LIMIT`, `Properties.Poub.ReceiptsBelowLimit`, and the line refuses
@@ -74,8 +74,8 @@ holds from any start in `[s_0, e_0]`, which the proof of `LineHeld` uses.
 
 namespace Properties.Poub.Line
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.Poub.Line
+open Accounting.Poub.Held Accounting.Poub.Held.Assumptions Accounting.Poub.Draw
+  Accounting.Poub.Draw.Assumptions _root_.Poub.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
@@ -103,7 +103,7 @@ def LineRegistered : Prop :=
 closing group is a group of the record, its span is `[spanStart, spanStop)` on the record's clock, nonempty, ending at
 its paced session's `stop` and starting at its `ended 0` (the first stretch) or its `released 0` (the rest), its form's
 charge is `charges`', its credit `span · (N − lost)` is at most the left-hand side of
-`Accounting.Guarantees.Remote.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' blocks
+`Accounting.Guarantees.Poub.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' blocks
 `chip / b` rounded up, the form's charge and the wrong receipts' bound the line read (`Line.wrong`), and its weights bytes
 a tick are
 `max(0, w − lost) · b`. -/

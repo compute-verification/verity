@@ -81,7 +81,7 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of exclusion only. For the served PoUW, the
   one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's no-fold
   receipt, which takes none. The
-  remote audit (`Accounting.Remote`) makes no exclusion claim, so its PoUW guarantee is the size credit alone.
+  remote audit (`Accounting.Poub`) makes no exclusion claim, so its PoUW guarantee is the size credit alone.
 - **Exclusion** bounds how much hidden work could run beside the credited work (the exclusion bound). It is the one place the
   ACCEL model 𝓜's resources appear (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure
   a device's capacity. Its result is reported as counted operations, each labelled with that operation's canonical AND

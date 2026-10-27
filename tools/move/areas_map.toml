@@ -6,7 +6,7 @@
 # - `Properties.{CertifierDevice,CertifierNetwork,NetworkCertifier,NetworkRecords}` become
 #   `Properties.NetworkCertifier.{Device,DeviceOutput,Check,Records}`;
 # - `Properties.NciDesc` becomes `Properties.Nci.Desc`, `Properties.Identity` `Properties.Hash.Identity`,
-#   `Properties.Evaluate` `Properties.Core.Evaluate`, `Properties.Poub` `Properties.Accounting.Remote`;
+#   `Properties.Evaluate` `Properties.Core.Evaluate`, `Properties.Poub` `Properties.Accounting.Poub`;
 # - `Definitions.Population` and `Proofs.Population` become `Definitions.SampledProofs` and `Proofs.SampledProofs`.
 # Module names only: declarations and namespaces keep their names, so no guarantee changes. Six statement modules share
 # their name with their namespace (`namespace Properties.CertifierDevice`), so [keep] holds a namespace where it is one: on
@@ -21,7 +21,7 @@
 "Properties/NciDesc" = "Properties/Nci/Desc"
 "Properties/Identity" = "Properties/Hash/Identity"
 "Properties/Evaluate" = "Properties/Core/Evaluate"
-"Properties/Poub" = "Properties/Accounting/Remote"
+"Properties/Poub" = "Properties/Accounting/Poub"
 "Properties.CertifierDevice" = "Properties.NetworkCertifier.Device"
 "Properties.CertifierNetwork" = "Properties.NetworkCertifier.DeviceOutput"
 "Properties.NetworkCertifier" = "Properties.NetworkCertifier.Check"
@@ -29,7 +29,7 @@
 "Properties.NciDesc" = "Properties.Nci.Desc"
 "Properties.Identity" = "Properties.Hash.Identity"
 "Properties.Evaluate" = "Properties.Core.Evaluate"
-"Properties.Poub" = "Properties.Accounting.Remote"
+"Properties.Poub" = "Properties.Accounting.Poub"
 "Definitions/Population" = "Definitions/SampledProofs"
 "Proofs/Population" = "Proofs/SampledProofs"
 "Definitions.Population" = "Definitions.SampledProofs"

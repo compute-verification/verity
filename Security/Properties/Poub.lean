@@ -13,7 +13,7 @@ premise or a proofs unit of the bridge, named in each docstring.
 
 The memory line of record (`Poub.Line.line`, its W from `Poub.Pooled`) is one statement over what this
 verifier accepts: `Properties.Poub.Line.LineHeld` and `LineHeldIdentity` (`Properties/Poub/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
+proved in `Proofs/Accounting/PoubHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
 record, `Properties/Poub/Line/Premises.lean`, and the verifier refuses a record not of the registration given,
 `LineRegistered`) and the W's cover of the session's pooled bound in `Properties/Poub/Pooled.lean`.
 

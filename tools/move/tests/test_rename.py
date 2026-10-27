@@ -141,10 +141,10 @@ def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
             "theorem t (r : Properties.Poub.Line.Record) : Properties.Poub.Line.LineHeld r := x\n"
             'roots = ["Properties.Poub.Line", "Properties.Poub.Line.LineHeld"]\n')
     assert areas.sub(code, "Security/Proofs/Properties/X.lean") == (
-        "import Properties.Accounting.Remote.Line.Record\nimport Proofs.Properties.Accounting.Remote.Line\n"
+        "import Properties.Accounting.Poub.Line.Record\nimport Proofs.Properties.Accounting.Poub.Line\n"
         "open Poub\n  Properties.Poub.Line\n"
         "theorem t (r : Properties.Poub.Line.Record) : Properties.Poub.Line.LineHeld r := x\n"
-        'roots = ["Properties.Accounting.Remote.Line", "Properties.Poub.Line.LineHeld"]\n')
+        'roots = ["Properties.Accounting.Poub.Line", "Properties.Poub.Line.LineHeld"]\n')
 
 
 def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):

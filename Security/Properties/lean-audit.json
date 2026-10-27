@@ -102,55 +102,55 @@
    "owner": "@compute-research",
    "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
   },
-  "Accounting.Remote.Draw.Assumptions.Counted": {
+  "Accounting.Poub.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
   },
-  "Accounting.Remote.Draw.Assumptions.Live": {
+  "Accounting.Poub.Draw.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9"
   },
-  "Accounting.Remote.Draw.Assumptions.Refused": {
+  "Accounting.Poub.Draw.Assumptions.Refused": {
    "owner": "@memory-accounting",
    "digest": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
   },
-  "Accounting.Remote.Held.Assumptions.ChipCeiling": {
+  "Accounting.Poub.Held.Assumptions.ChipCeiling": {
    "owner": "@memory-accounting",
    "digest": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae"
   },
-  "Accounting.Remote.Held.Assumptions.Covers": {
+  "Accounting.Poub.Held.Assumptions.Covers": {
    "owner": "@memory-accounting",
    "digest": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040"
   },
-  "Accounting.Remote.Held.Assumptions.Disks": {
+  "Accounting.Poub.Held.Assumptions.Disks": {
    "owner": "@memory-accounting",
    "digest": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca"
   },
-  "Accounting.Remote.Held.Assumptions.Identity": {
+  "Accounting.Poub.Held.Assumptions.Identity": {
    "owner": "@memory-accounting",
    "digest": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236"
   },
-  "Accounting.Remote.Held.Assumptions.Links": {
+  "Accounting.Poub.Held.Assumptions.Links": {
    "owner": "@memory-accounting",
    "digest": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a"
   },
-  "Accounting.Remote.Held.Assumptions.NoOutsideCompute": {
+  "Accounting.Poub.Held.Assumptions.NoOutsideCompute": {
    "owner": "@memory-accounting",
    "digest": "00299a3d3e2bb1d72b639c2ab816de31cd74beac5f5ff4436a57510b439cce33"
   },
-  "Accounting.Remote.Held.Assumptions.Paced": {
+  "Accounting.Poub.Held.Assumptions.Paced": {
    "owner": "@memory-accounting",
    "digest": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e"
   },
-  "Accounting.Remote.Held.Assumptions.Routed": {
+  "Accounting.Poub.Held.Assumptions.Routed": {
    "owner": "@memory-accounting",
    "digest": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c"
   },
-  "Accounting.Remote.Held.Assumptions.SketchBoundAt": {
+  "Accounting.Poub.Held.Assumptions.SketchBoundAt": {
    "owner": "@memory-accounting",
    "digest": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020"
   },
-  "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
+  "Accounting.Poub.Held.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
@@ -497,18 +497,18 @@
   "Properties.Poub.Pooled": {
    "imports": ["Definitions.Accounting", "Poub"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Poub.Draw`), never a proof"
   },
   "Properties.Poub.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
-    "Definitions.Accounting.Remote",
+    "Definitions.Accounting.Poub",
     "Definitions.Accounting.Assumptions",
     "Poub",
     "Properties.Poub.Line"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Poub, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.Poub.Schedule": {
    "imports": ["Definitions.Accounting", "Poub"],

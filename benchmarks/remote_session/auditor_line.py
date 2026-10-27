@@ -185,12 +185,12 @@ NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(pr
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
 prices and no number here does. Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
+    "statement C in full (Accounting.Poub.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
     "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
     "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
     "the credited span"),
     "binding-split": (
-    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
+    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Poub.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
     "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
     "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
@@ -203,7 +203,7 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
+    "the provider's lockdown of the gate node (Accounting.Poub.Held.Assumptions.ProviderLockdown, under "
     "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
     "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
     "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "

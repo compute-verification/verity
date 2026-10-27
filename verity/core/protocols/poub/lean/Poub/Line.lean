@@ -6,8 +6,8 @@ import Poub.Shared
 
 The line of record a gate run publishes (the verifier process's `line_record` request, which `auditor_line.py` holds to
 `line.py`'s): the conclusions of
-`Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
+`Accounting.Guarantees.Poub.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
+`Security/Definitions/Accounting/Guarantees/PoubHeld.lean`, read over each stretch of a paced session's groups in exact
 rationals, every refusal the Python's word for word. `lineOfRecord` reads the session's groups, its windows and its
 registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
 (`Seen`), refused unless the record is of the registration given with it (`lineOfRegistered`); `line` takes them

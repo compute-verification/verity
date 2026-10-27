@@ -323,7 +323,7 @@ end DeployedWindow
 
 end Accounting.Rate
 
-namespace Accounting.Remote
+namespace Accounting.Poub
 
 open Accounting.Rate
 open scoped ENNReal
@@ -465,11 +465,11 @@ theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-end Accounting.Remote
+end Accounting.Poub
 
 namespace Accounting.SecurityProofs
 
-open Accounting.Rate Accounting.Remote
+open Accounting.Rate Accounting.Poub
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
@@ -483,13 +483,13 @@ theorem RemoteSessionConservationRelay : Accounting.Guarantees.RemoteSessionCons
   ring
 
 /-- **The deployed session with relaying side sources conserves its words as a run of the remote audit**
-(`Accounting.Guarantees.RemoteSessionRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
+(`Accounting.Guarantees.RemoteSessionRunConservationRelay`), from `Accounting.SecurityProofs.Poub.Conservation`. -/
 theorem RemoteSessionRunConservationRelay : Accounting.Guarantees.RemoteSessionRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF
   have hs := ofDeployed_sampled A tier (Deployed.rebuildBits b rounds cRoot F) Nd a dbar hn hP hN hb hdbar hab hC
   have hp := ofDeployed_paid_relay A tier Nd a hrc ha hab hal hW hF
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
-  refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
+  refine Poub.holds_mono ?_ (Poub.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
   rw [ofDeployed_paid] at h2
@@ -507,13 +507,13 @@ theorem RemoteSessionRunConservationRelay : Accounting.Guarantees.RemoteSessionR
   nlinarith [h2, eΛ, k]
 
 /-- **Each window with relaying side sources conserves its words as a run of the remote audit**
-(`Accounting.Guarantees.RemoteWindowRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
+(`Accounting.Guarantees.RemoteWindowRunConservationRelay`), from `Accounting.SecurityProofs.Poub.Conservation`. -/
 theorem RemoteWindowRunConservationRelay : Accounting.Guarantees.RemoteWindowRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF
   have hs := ofDeployedWindow_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
   have hp := ofDeployedWindow_paid_relay A w tier Nd a hrc ha hab hal hW hF
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
-  refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
+  refine Poub.holds_mono ?_ (Poub.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
   rw [ofDeployedWindow_paid] at h2

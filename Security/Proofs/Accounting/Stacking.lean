@@ -1155,9 +1155,9 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
           P * (S + (L + C - ρ) + Rate.Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
         (((A.stack L C K hL).win w ω).correctAll Es (ω w).1).card * b
   have hunif := Rate.DeployedSession.pr_unpaid_le (A.stack L C K hL) tier _ _
-    (Remote.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
+    (Poub.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
       (fun w η j ι c => Rate.PIDevice.stack_ceiling _ L C (K w η j ι c) (hL w η j ι c) (hF w η j ι c)))
-  have base := Remote.session_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
+  have base := Poub.session_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
     lam m rounds cRoot F dbar dw hn hP hN hb hdw _ (hu.trans (add_le_add hunif le_rfl))
   refine ((Bandwidth.pr_mono fun y hy => ?_).trans base).trans (le_of_eq ?_)
   · have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2

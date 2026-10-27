@@ -1,5 +1,5 @@
 import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.Remote.Deployed
+import Definitions.Accounting.Poub.Deployed
 import Definitions.Accounting.Assumptions.RateAudit
 import Definitions.Accounting.Assumptions.RateAuditDeployed
 
@@ -15,11 +15,11 @@ pooled draw a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Deploy
 * `RemoteSessionConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB
   blocks, SHA-512 receipts, 2,773 openings a window, `d̄ = 0.15%`, `d_w = 1%`, at most `2^55` compressions), where
   the draw's two terms are each at most `2^-40` from seven windows on.
-* `RemoteSessionRoutes`: the session as a run of the remote audit (`Accounting.Remote.Run.ofDeployed`) meets its routes
+* `RemoteSessionRoutes`: the session as a run of the remote audit (`Accounting.Poub.Run.ofDeployed`) meets its routes
   `Sampled d̄` and `Paid`, at the errors above.
-* `RemoteSessionRunConservation`: `Accounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
+* `RemoteSessionRunConservation`: `Accounting.SecurityProofs.Poub.Conservation` at those routes, read at the node: the
   run's tier reads are at least `(1 − (d̄ + μ))·C`, the same `γ̄` as `RemoteSessionConservation`'s horizon.
-* `RemoteWindowRunConservation`: the same for each window (`Accounting.Remote.Run.ofDeployedWindow`) at `γ_w`.
+* `RemoteWindowRunConservation`: the same for each window (`Accounting.Poub.Run.ofDeployedWindow`) at `γ_w`.
 * `RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`: the three
   readings with side sources that may depend on the oracle (relayed receipts), at `m` relayed words a pass.
 
@@ -132,7 +132,7 @@ def RemoteSessionConservationDeployed : Prop :=
 
 /-- **The deployed session meets the remote audit's routes.** Read as a run of the remote audit on a node `Nd` whose
 declared capacity over `a`'s interval is the session's `n·P·N·b` bits, with `a`'s passes the session's `n·P`, its word
-`b` and its slack `λ` (`Accounting.Remote.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
+`b` and its slack `λ` (`Accounting.Poub.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
 deployed session under `RemoteSessionConservation`'s hypotheses meets
 
 * `Sampled d̄` (μ_sample) except with probability `(1 − d̄)^(d·n)`: the pooled draws pass while the correct receipts
@@ -141,59 +141,59 @@ deployed session under `RemoteSessionConservation`'s hypotheses meets
   run paid for them (its tier reads, its on-chip state, the side link beyond the stream, its completed bits) and its
   `n·P` slacks `λ`.
 
-**The reading.** These are the routes `Accounting.SecurityProofs.Remote.Conservation` composes, proved for the runs the
+**The reading.** These are the routes `Accounting.SecurityProofs.Poub.Conservation` composes, proved for the runs the
 deployed game realizes; the run's fields are the game's (`Run.ofDeployed`), so its `paid` is the session's tier reads
 and the `n·P` passes' `S + (L − ρ) + b·F/(rounds·c_root)` bits.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteSessionRoutes : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Poub.Node (Fin τ)) (a : Poub.Audit) (dbar : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
     a.P = n * P → a.b = b → a.lam = lam → Nd.declared a.T = n * P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
     (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
-    (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Sampled dbar ((1 - dbar) ^ (d * n)) ∧
-      (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
+    (Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Sampled dbar ((1 - dbar) ^ (d * n)) ∧
+      (Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
         ((n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
 
 /-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`.** Under
-`RemoteSessionRoutes`' hypotheses, the probability that the run of the session (`Accounting.Remote.Run.ofDeployed`)
+`RemoteSessionRoutes`' hypotheses, the probability that the run of the session (`Accounting.Poub.Run.ofDeployed`)
 accepts while its correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, is at
 most the two routes' errors summed:
 
   `γ̄ = d̄ + μ_chip + μ_link + μ_rebuild + μ_λ`,   the error `(1 − d̄)^(d·n) + n·P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 
-**The reading.** `Accounting.SecurityProofs.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every
+**The reading.** `Accounting.SecurityProofs.Poub.Conservation` gives `(1 − d̄ − λ)·C` of payments at every
 location; the run's payments other than its tier reads are its state, its side link beyond the stream and its
 completed bits, which are `μ_chip`, `μ_link` and `μ_rebuild` of `C`, and the remote model's `λ` share
-(`Accounting.Remote.muLambda`) is `μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with
+(`Accounting.Poub.muLambda`) is `μ_λ`. So this is `RemoteSessionConservation`'s horizon reading, the same `γ̄`, with
 the window's term dropped.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteSessionRunConservation : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Poub.Node (Fin τ)) (a : Poub.Audit) (dbar : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
     a.P = n * P → a.b = b → a.lam = lam → Nd.declared a.T = n * P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
     (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
-    (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
+    (Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
       ((1 - dbar) ^ (d * n) + (n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
       fun x =>
         (1 - dbar) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
+            ((Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
           (1 - (dbar + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
+            ((Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **Each window of the deployed session conserves its words as a run of the remote audit, at the same `γ_w`.**
-Window `w` read as a run of the remote audit (`Accounting.Remote.Run.ofDeployedWindow`) on a node `Nd` whose declared
+Window `w` read as a run of the remote audit (`Accounting.Poub.Run.ofDeployedWindow`) on a node `Nd` whose declared
 capacity over `a`'s interval is the window's `P·N·b` bits, with `a`'s passes the window's `P`: under
 `RemoteSessionConservation`'s hypotheses and `d_w ≤ 1`, the run meets `Sampled d_w` except with probability
 `(1 − d_w/n)^(d·n)` and `Paid` except with `P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`, and
-`Accounting.SecurityProofs.Remote.Conservation` at them gives: the probability that every window's draw passes while
+`Accounting.SecurityProofs.Poub.Conservation` at them gives: the probability that every window's draw passes while
 window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`,
 `γ_w = d_w + μ_chip + μ_link + μ_rebuild + μ_λ`, is at most
 
@@ -205,20 +205,20 @@ window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier read
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteWindowRunConservation : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Poub.Node (Fin τ)) (a : Poub.Audit)
     (dw : ℝ),
     0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     a.P = P → a.b = b → a.lam = lam → Nd.declared a.T = P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
     (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
-    (Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
+    (Poub.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
       ((1 - dw / n) ^ (d * n) + (P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
       fun x =>
         (1 - dw) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
+            ((Poub.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
           (1 - (dw + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
+            ((Poub.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **The remote bandwidth audit as deployed, with side sources that may relay receipts.** `RemoteSessionConservation`
 without its hypothesis that the side sources ignore the oracle: the rest of the prover may answer the chip's side reads
@@ -262,32 +262,32 @@ def RemoteSessionConservationRelay : Prop :=
 
 /-- **The deployed session with relaying side sources conserves its words as a run of the remote audit.**
 `RemoteSessionRunConservation` without the hypothesis that the side sources ignore the oracle, for every `m`, with the
-run's slack `a.λ = λ + m·b` a pass: the probability that the run (`Accounting.Remote.Run.ofDeployed`) accepts while its
+run's slack `a.λ = λ + m·b` a pass: the probability that the run (`Accounting.Poub.Run.ofDeployed`) accepts while its
 correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, with
 `γ̄ = d̄ + μ_chip + μ_link + μ_rebuild + (λ + m·b)/(N·b)`, is at most
 
   `(1 − d̄)^(d·n) + n·P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`.
 
 **The reading.** `RemoteSessionConservationRelay`'s horizon reading through
-`Accounting.SecurityProofs.Remote.Conservation`: the relayed receipts are the run's `λ` share beyond the compression's,
+`Accounting.SecurityProofs.Poub.Conservation`: the relayed receipts are the run's `λ` share beyond the compression's,
 `m` words a pass.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteSessionRunConservationRelay : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam m τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Poub.Node (Fin τ)) (a : Poub.Audit) (dbar : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
     a.P = n * P → a.b = b → a.lam = lam + m * b → Nd.declared a.T = n * P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
+    (Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
       ((1 - dbar) ^ (d * n) +
         (n * P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam))
       fun x =>
         (1 - dbar) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
+            ((Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
           (1 - (dbar + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
+            ((Poub.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **Each window of the deployed session with relaying side sources conserves its words as a run of the remote
 audit.** `RemoteWindowRunConservation` without the hypothesis that the side sources ignore the oracle, for every `m`,
@@ -300,20 +300,20 @@ receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 �
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
 def RemoteWindowRunConservationRelay : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam m τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
+    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Poub.Node (Fin τ)) (a : Poub.Audit)
     (dw : ℝ),
     0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     a.P = P → a.b = b → a.lam = lam + m * b → Nd.declared a.T = P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    (Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
+    (Poub.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Holds
       ((1 - dw / n) ^ (d * n) +
         (P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam))
       fun x =>
         (1 - dw) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
+            ((Poub.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).correct x * a.b : ℝ) ∧
           (1 - (dw + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * Nd.declared a.T ≤
-            ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
+            ((Poub.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
 windows draws one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass (the

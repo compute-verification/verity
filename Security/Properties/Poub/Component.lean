@@ -32,8 +32,8 @@ that is not the record's is an outcome the bound counts nothing for, not one the
 
 namespace Properties.Poub.Component
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.Poub.Line
+open Accounting.Poub.Held Accounting.Poub.Held.Assumptions Accounting.Poub.Draw
+  Accounting.Poub.Draw.Assumptions Properties.Poub.Line
 
 /-- **The component's check accepts only what `Shared.run g` accepts.** Whenever `Poub.Protocol.check` accepts
 parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session

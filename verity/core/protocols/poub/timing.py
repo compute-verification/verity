@@ -280,7 +280,7 @@ def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: i
     `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-257`, the third
     term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
     (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose 256-bit sign keys collide share their signs.  At 16 rows
-    and r = 12 it is the δ at which `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
+    and r = 12 it is the δ at which `Accounting.Guarantees.Poub.SketchBoundDeployed` derives `SketchBound`."""
     if type(outside) is not int or outside < 1:
         raise ValueError("the outside-compute factor F is a positive integer")
     if r is None:

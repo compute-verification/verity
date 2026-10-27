@@ -22,7 +22,7 @@ model's `fill` is at most the code's (`stretch_fill`). `stretch_bound_of` puts t
 
 namespace Properties.Poub.Line
 
-open _root_.Poub.Line Accounting.Remote.Held
+open _root_.Poub.Line Accounting.Poub.Held
 
 /-- A loop in `Except` whose every step pushes one value `x` with `P a x` (or refuses): each value of its result was in
 the initial array or pushed at some `a ∈ l`. -/
