@@ -1,0 +1,11 @@
+# The streamed wipe's rung on the ladder (examples/README.md): level 0, moved. Level 2 needs a run of record with the
+# memory challenger on an auditor host (demo.sh --challenger) and the verdict judged off the GPU node (wipe.case.json
+# replayed with wipe-protocol on a CPU node the prover doesn't run).
+protocol = "pous"
+workload = "none"
+level = 0
+
+[placement]
+prover = "gpu-node"          # the GPU whose memory is wiped (wipe_store.Cuda)
+challenger = "auditor-host"  # wipe_party, through the auditor host's gate (--challenger)
+verifier = "gpu-node"        # wipe_period's verdict, the Lean's and the Python's, on the prover's node

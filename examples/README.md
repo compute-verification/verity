@@ -26,3 +26,6 @@ below it need. A directory's name is lowercase letters, digits and `_`, since `v
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.
+- `wipe/`: PoUS's streamed-label wipe of one GPU's memory, the memory challenger on a host of its own streaming the fill
+  and timing its spot reads, the Lean and the Python judging the signed session. Its scripts run by path from the tree
+  root; the wipe's GPU timing measurement stays in `benchmarks/pous/streamed_wipe/`.
