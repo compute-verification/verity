@@ -67,14 +67,14 @@ def _named(node: ast.AST | None, form: str) -> str:
 
 def reads(source: str) -> list[tuple[int, str]]:
     """(line, what) of each direct environment read in ``source``: ``what`` is the variable, when it is a literal, and the
-    form (``HF_HOME (os.environ.get)``, ``<computed> (os.environ[...])``).  None in a file that doesn't parse: ruff's lint
-    holds that."""
+    form (``HF_HOME (os.environ.get)``, ``<computed> (os.environ[...])``).  A file that doesn't parse counts one, at its
+    error, since its reads can't be seen."""
     if "environ" not in source and "getenv" not in source:
         return []
     try:
         tree = ast.parse(source)
-    except (SyntaxError, ValueError):
-        return []
+    except (SyntaxError, ValueError) as e:
+        return [(getattr(e, "lineno", None) or 0, f"<unparseable: {getattr(e, 'msg', e)}>")]
     lines = source.splitlines()
     aliases = {w for line in lines if NAMES.search(line) for m in ALIAS.finditer(line) for w in m.groups() if w}
     hot_line = re.compile(NAMES.pattern + "".join(f"|\\b{re.escape(w)}\\b" for w in sorted(aliases)))
@@ -240,7 +240,8 @@ def test_what_is_a_read_and_what_is_not() -> None:
         (4, "A (os.environ[...])"), (5, "B (os.environ.get)"), (6, "C (os.getenv)"), (7, "D (os.environ.setdefault)"),
         (8, "E (os.getenv)"), (9, "<computed> (in os.environ)"), (9, "F (in os.environ)"), (10, "G (os.environ.pop)"),
         (13, "H (os.environ.get)"), (13, "I (os.environb[...])")]
-    assert reads("import os\nos.environ.get(\n") == [] and reads("X = 1\n") == []
+    assert reads("import os\nos.environ.get(\n") == [(2, "<unparseable: '(' was never closed>")]
+    assert reads("X = (\n") == [] and reads("X = 1\n") == []
 
 
 def test_a_settings_registry_is_exempt_and_the_list_is_well_formed() -> None:
@@ -253,9 +254,10 @@ def test_a_settings_registry_is_exempt_and_the_list_is_well_formed() -> None:
                 {"file": "a.py", "count": 1, "rule": "x"}):
         try:
             parse({"entries": [bad]})
-        except AssertionError:
-            continue
-        raise AssertionError(f"{bad} parsed")
+        except AssertionError as e:
+            assert str(e).startswith(f"{LIST.name}: "), e
+        else:
+            raise AssertionError(f"{bad} parsed")
     assert moved(Counter({"a/x.py": 2, "b.py": 1}), frozenset({"a/settings_x.py"}), "a", "c") == (
         Counter({"c/x.py": 2, "b.py": 1}), frozenset({"c/settings_x.py"}))
 
