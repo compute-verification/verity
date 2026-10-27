@@ -281,7 +281,7 @@ def mark_waiting(name: str, waiting: bool) -> None:
     """Mark check slot NAME's research.mem reservation as waiting (or not) while its check queues for something that holds no
     memory, such as one of the node's few Lean audit slots: a waiting reservation counts nothing (`reserved_gb`, research.mem's
     `reservations`), so checks queued behind a Lean slot don't hold their GB idle and block every other slot on the node. No
-    reservation file, or an unreadable one, is left as it is."""
+    reservation file, or an unreadable one, is left as it is, and said on stderr."""
     path = RAMLOCK / f"check-{name}.json"
     try:
         with open(RAMLOCK / ".admission.lock", "a") as lock:
@@ -294,8 +294,9 @@ def mark_waiting(name: str, waiting: bool) -> None:
             tmp.write_text(json.dumps(doc) + "\n")
             tmp.chmod(0o664)
             os.replace(tmp, path)
-    except (OSError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"slot: check slot {name}'s reservation not marked {'waiting' if waiting else 'running'} ({e}): it counts as before",
+              file=sys.stderr)
 
 
 def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
