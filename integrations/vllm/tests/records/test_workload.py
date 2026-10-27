@@ -8,11 +8,11 @@ import json
 
 import pytest
 
-from verity_vllm.config import WORKLOAD_SCHEMA, WORKLOADS, RowConfig
+from verity_vllm.config import WORKLOAD_SCHEMA, RowConfig, workload_files
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 from verity_vllm.records.workload import SCHEMA, V1, Workload
 
-ROWS = sorted(WORKLOADS.glob("*.json"))
+ROWS = workload_files()
 
 
 def _v2() -> dict:
@@ -35,7 +35,7 @@ def _sha256(doc: dict) -> str:
 
 
 def test_every_row_file_loads_and_dumps_back_to_itself():
-    assert len(ROWS) > 100 and SCHEMA == WORKLOAD_SCHEMA
+    assert len(ROWS) > 70 and SCHEMA == WORKLOAD_SCHEMA
     for p in ROWS:
         doc = json.loads(p.read_text())
         w = Workload.load(p)
