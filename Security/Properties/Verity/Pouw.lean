@@ -54,6 +54,12 @@ def ComponentBound {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) 
     Game.prob (fun o => ComponentAccepts .pouw o.sent ∧ ¬ V.Holds θ F c σ .pouw o) (V.game θ F c) σ ≤
       V.error .pouw θ F c σ
 
+/-- **PoUW's component bound at an acceptance `acc`** (ONE-18's `TargetFor`): `ComponentBound` with `acc` in place of
+PoUW's component's acceptance, so that a verifier accepting everything (`acc = fun _ => True`) can be stated. -/
+def ComponentBoundFor {ι α : Type} [Fintype α] {d : Device ι} (acc : Sent → Prop) (V : Vocab d α) : Prop :=
+  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+    Game.prob (fun o => acc o.sent ∧ ¬ V.Holds θ F c σ .pouw o) (V.game θ F c) σ ≤ V.error .pouw θ F c σ
+
 /-- **What PoUW's compiled check reads, and what it credits.** The windows a period's parameters register; for each
 window the release whose coins are its salt and the release whose coins draw its tiles, as `PouwCheck.Period.protocol`
 decodes them from what the prover sent; each window's registration digest; the tiles published as drawn and the

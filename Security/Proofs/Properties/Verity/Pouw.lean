@@ -1,5 +1,6 @@
 import Properties.Verity.Pouw
 import Proofs.Core.Game.Prob
+import Proofs.Properties.Verity.Soundness
 
 /-!
 # PoUW's component bound from its named premises
@@ -9,6 +10,11 @@ missing from the log or a break (the finder's, `FinderAnswers`), a drawn tile un
 (`ServiceSound`), fewer gates computed than the credited words get right (`ComputedOfRight`), and the rest, where the
 check's reading gives each window's salt and draw and the claim's failure is a count of right gates below the credit
 floor (`CreditedPeriodRefines`, through `PublishedCredit`).
+
+Beside it, rule 3's two checks: `pouwComponentBound_honest` (at registered files, where PoUW's honest lemma
+`Vocab.HonestHolds .pouw` holds, the deployment's honest prover meets the conclusion's event with probability `0`) and
+`pouwComponentBound_nontrivial` (the conclusion, at a verifier that accepts everything, fails at a strategy on whose
+every play PoUW's claim fails and whose error is below one).
 -/
 
 namespace Verity
@@ -65,5 +71,34 @@ theorem pouwComponentBound : PouwComponentBound := by
             V.loss .pouw θ ((V.live θ F c).collides sha512Msg .pouw σ) := by ring
       _ ≤ _ := add_le_add (hδ θ _) le_rfl
   · exact le_top
+
+/-- `ComponentBound` is `ComponentBoundFor` at PoUW's component's acceptance. -/
+theorem Pouw.componentBoundFor_iff {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) :
+    Pouw.ComponentBoundFor (ComponentAccepts .pouw) V ↔ Pouw.ComponentBound V := Iff.rfl
+
+/-- **Its conclusion's event at the honest deployment**: at registered files, where PoUW's honest lemma holds
+(`Vocab.HonestHolds .pouw`), the deployment's honest prover meets `ComponentBound`'s event with probability `0`, so
+within PoUW's error. -/
+theorem pouwComponentBound_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+    (h : V.HonestHolds .pouw) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+    Game.prob (fun o => ComponentAccepts .pouw o.sent ∧ ¬ V.Holds θ F c (V.honest θ F c) .pouw o) (V.game θ F c)
+        (V.honest θ F c) = 0 ∧
+      Game.prob (fun o => ComponentAccepts .pouw o.sent ∧ ¬ V.Holds θ F c (V.honest θ F c) .pouw o) (V.game θ F c)
+        (V.honest θ F c) ≤ V.error .pouw θ F c (V.honest θ F c) := by
+  have h0 : Game.prob (fun o => ComponentAccepts .pouw o.sent ∧ ¬ V.Holds θ F c (V.honest θ F c) .pouw o)
+      (V.game θ F c) (V.honest θ F c) = 0 :=
+    le_antisymm ((Game.prob_mono (fun o ho => ho.2) _ _).trans (h θ F c hreg).le) zero_le
+  exact ⟨h0, h0 ▸ zero_le⟩
+
+/-- **Its conclusion fails for a verifier that accepts everything**: at a strategy on whose every play PoUW's claim
+fails (fewer than `W` gates computed after their window's coin), with PoUW's error there below one (so its finder
+meets `FinderCR`, and its collision term is below one), `ComponentBoundFor (fun _ => True)` is false. -/
+theorem pouwComponentBound_nontrivial {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hfail : ∀ o, ¬ V.Holds θ F c σ .pouw o)
+    (hlt : V.error .pouw θ F c σ < 1) : ¬ Pouw.ComponentBoundFor (fun _ => True) V := by
+  intro h
+  have h1 := prob_play_eq_one (V.rounds θ) θ F c (fun o => (fun _ : Sent => True) o.sent ∧ ¬ V.Holds θ F c σ .pouw o)
+    (fun _ _ => ⟨trivial, hfail _⟩) σ
+  exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 end Verity
