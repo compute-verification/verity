@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import settings
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
 import fill_dither
@@ -438,18 +439,14 @@ def test_perm_kernel_launches_within_its_bounds():
     assert launches and set(launches) == {"PERM_THREADS(lp)"}
 
 
-V31_LIB = "VERITY_POUW_V31_LIB"
-
-
-@pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get(V31_LIB), reason=f"{V31_LIB} names a libv31.so (v31lib.build_lib) for the GPU in hand "
-                    "(about 20 s)")
+@pytest.mark.skipif(not settings.V31_LIB, reason="VERITY_POUW_V31_LIB names a libv31.so (v31lib.build_lib) for the GPU in hand "
+                    "(about 5 s)")
 @pytest.mark.parametrize("name", ["f-lp1024", "c-skip-lp1024", "s-lp1024", "f-lp2048"])
 def test_gpu_forms_w_prime_under_the_written_permutation(name):
     """At L' >= 1,024 the GPU forms W' under the pi_tau perm_kernel writes: its values and every tree level are the
     reference's, an honest call is accepted and one that skips a noise tile refused. Had perm_kernel's CTA not launched,
     v31_prove would refuse the call (a launch failed) rather than commit W' under an unwritten pi."""
     _, kind, *dims, a_kind, cheat = next(g.split() for g in v31lib.GATES.strip().splitlines() if g.split()[0] == name)
-    rep = v31lib.gate_case(v31lib.Lib(os.environ[V31_LIB]), name, kind == "served", *map(int, dims), a_kind, cheat, 64,
+    rep = v31lib.gate_case(v31lib.Lib(settings.V31_LIB), name, kind == "served", *map(int, dims), a_kind, cheat, 64,
                            np.random.default_rng(7))
     assert rep["exact"] and rep["good"], rep
