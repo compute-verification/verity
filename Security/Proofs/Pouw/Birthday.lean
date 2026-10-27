@@ -178,10 +178,10 @@ theorem card_freshHit_le {α : Type} :
           rw [Finset.mem_filter] at hH
           obtain ⟨-, hH, hf⟩ := hH
           simp only [FreshHit] at hf
-          rw [Finset.mem_union, Finset.mem_filter, Finset.mem_filter]
+          simp only [Finset.mem_union, E1, E2, Finset.mem_filter, Finset.mem_univ, true_and]
           rcases hf with ⟨-, h⟩ | hf
-          · exact Or.inl ⟨Finset.mem_univ _, hH, h⟩
-          · exact Or.inr ⟨Finset.mem_univ _, hH, hf⟩
+          · exact Or.inl ⟨hH, h⟩
+          · exact Or.inr ⟨hH, hf⟩
         -- the first query is a fresh hit on at most `m` of the `|R|` fibers
         have h1 : Fintype.card R * E1.card ≤ seen.length * A.card := by
           let img := (seen.map ρ).toFinset
