@@ -6,7 +6,8 @@ A kernel's busy time on a pipe is its share of the pipe's peak over its elapsed 
 scaled by sm__cycles_active / sm__cycles_elapsed) times its duration; a pipe's duty is the call's busy time over the
 overlapped call's wall time, so kernels that overlap add. ncu runs kernels one at a time, so this takes each kernel's pipe
 use as unchanged by overlap. The weight side (fill_b_kernel, perm_kernel: once a period) and the operands' generation are
-left out, as fill-bench's ovl arm forms W' once.
+left out, as fill-bench's ovl arm forms W' once, and so is everything before the first call's bits_kernel (cuBLASLt's
+algorithm search under V31_LTW).
 
     python3 h200_pipes.py OUT_DIR    # a markdown table, one row a shape and L
 """
@@ -22,10 +23,10 @@ from pathlib import Path
 PCT = re.compile(r"^sm__(inst_executed_pipe_|pipe_)(\w+?)(_cycles_active)?\.avg\.pct_of_peak_sustained_active$")
 SKIP = ("gen_kernel", "fill_b_kernel", "perm_kernel", "ne_kernel")
 HASH = ("salt_", "leaf_", "node_kernel", "level_kernel", "quad_", "seg_kernel", "top_small")
-SCALE = {"nsecond": 1e-9, "usecond": 1e-6, "msecond": 1e-3, "second": 1.0}
+SCALE = {"ns": 1e-9, "nsecond": 1e-9, "us": 1e-6, "usecond": 1e-6, "ms": 1e-3, "msecond": 1e-3, "s": 1.0, "second": 1.0}
 #: the pipes the table names (a column each), by ncu's pipe name; the rest go in `other pipes`
-SHOWN = (("tensor", ("tensor_op_gmma", "tensor_op_imma", "tensor")), ("alu", ("alu",)), ("fma", ("fma", "fmaheavy")),
-         ("lsu", ("lsu",)))
+SHOWN = (("tensor", ("tensor_op_gmma", "tensor_op_imma", "tensor", "tensor_type_hmma_hgmma_qgmma_imma_igmma_bmma_bgmma")),
+         ("alu", ("alu",)), ("fma", ("fma", "fmaheavy")), ("lsu", ("lsu",)))
 
 
 def _num(s: str) -> float:
@@ -52,15 +53,20 @@ def read_ncu(path: Path) -> list[dict]:
     head = next(i for i, r in enumerate(rows) if "Kernel Name" in r)
     cols, units = rows[head], rows[head + 1]
     at = {c: i for i, c in enumerate(cols)}
+    unit = units[at["gpu__time_duration.sum"]]
+    if unit not in SCALE:
+        raise ValueError(f"{path.name}: gpu__time_duration's unit {unit!r} is none of {sorted(SCALE)}")
+    data = sorted((r for r in rows[head + 2:] if len(r) == len(cols)), key=lambda r: int(_num(r[at["ID"]])))
+    first = next((x for x, r in enumerate(data) if r[at["Kernel Name"]].startswith("bits_kernel")), None)
+    if first is None:
+        raise ValueError(f"{path.name}: no bits_kernel, so no call to profile")
     out = []
-    for r in rows[head + 2:]:
-        if len(r) != len(cols):
-            continue
+    for r in data[first:]:
         name = r[at["Kernel Name"]]
         k = kind(name)
         if k is None:
             continue
-        t = _num(r[at["gpu__time_duration.sum"]]) * SCALE.get(units[at["gpu__time_duration.sum"]], 1e-9)
+        t = _num(r[at["gpu__time_duration.sum"]]) * SCALE[unit]
         act, el = _num(r[at["sm__cycles_active.avg"]]), _num(r[at["sm__cycles_elapsed.avg"]])
         frac = act / el if el > 0 else 1.0
         pipes = {}
