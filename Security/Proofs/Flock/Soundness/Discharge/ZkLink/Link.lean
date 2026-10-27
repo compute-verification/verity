@@ -217,8 +217,13 @@ omit [Fintype K] in
 /-- **Every success of the finder outputs a collision.** -/
 theorem outZ_spec (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P planZ tab vb L c))
     (hS : Succ (rdZ A P planZ tab vb R τ c) x) :
-    ∃ a b, outZ A P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide
+    ∃ a b, outZ A P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
+  have e : outZ A P planZ tab vb R τ c x = outOf (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c)
+      vb.collide x := by
+    unfold outZ outOf
+    congr
+  rw [e]
+  exact outOf_spec (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfZ_spec A P planZ tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 
