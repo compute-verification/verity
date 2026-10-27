@@ -309,6 +309,341 @@ theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = b
   · rfl
   · exact F128.mul_zero _
 
+/-- `a + b` entry by entry. -/
+def vadd (a b : Array F128) : Array F128 := Array.zipWith (· + ·) a b
+
+theorem size_vadd (a b : Array F128) : (vadd a b).size = min a.size b.size := Array.size_zipWith
+
+theorem vadd_zeros (a : Array F128) : vadd a (Array.replicate a.size 0) = a := by
+  apply Array.ext
+  · simp [vadd]
+  · intro i h1 h2
+    simp only [vadd, Array.getElem_zipWith, Array.getElem_replicate, F128.add_zero]
+
+theorem modify_vadd (a b : Array F128) (h : a.size = b.size) (j : Nat) (e : F128) :
+    (vadd a b).modify j (· + e) = vadd a (b.modify j (· + e)) := by
+  apply Array.ext
+  · simp [vadd, h]
+  · intro i h1 h2
+    simp only [vadd, Array.getElem_modify, Array.getElem_zipWith]
+    split <;> simp [F128.add_assoc]
+
+theorem size_foldRow (m : Sparse) (i : Nat) (ei : F128) :
+    ∀ fuel t acc, (m.foldRow i ei fuel t acc).size = acc.size
+  | 0, _, _ => rfl
+  | fuel + 1, t, acc => by rw [Sparse.foldRow, size_foldRow m i ei fuel, Array.size_modify]
+
+theorem foldRow_vadd (m : Sparse) (i : Nat) (ei : F128) :
+    ∀ fuel t (a b : Array F128), a.size = b.size → m.foldRow i ei fuel t (vadd a b) = vadd a (m.foldRow i ei fuel t b)
+  | 0, _, _, _, _ => rfl
+  | fuel + 1, t, a, b, h => by
+    rw [Sparse.foldRow, Sparse.foldRow, modify_vadd a b h]
+    exact foldRow_vadd m i ei fuel (t + 1) a _ (by rw [Array.size_modify]; exact h)
+
+theorem size_foldRows (m : Sparse) (e : Array F128) : ∀ fuel i acc, (m.foldRows e fuel i acc).size = acc.size
+  | 0, _, _ => rfl
+  | fuel + 1, i, acc => by
+    rw [Sparse.foldRows, size_foldRows m e fuel]
+    split
+    · rfl
+    · exact size_foldRow _ _ _ _ _ _
+
+theorem foldRows_vadd (m : Sparse) (e : Array F128) :
+    ∀ fuel i (a b : Array F128), a.size = b.size → m.foldRows e fuel i (vadd a b) = vadd a (m.foldRows e fuel i b)
+  | 0, _, _, _, _ => rfl
+  | fuel + 1, i, a, b, h => by
+    rw [Sparse.foldRows, Sparse.foldRows]
+    split
+    · exact foldRows_vadd m e fuel (i + 1) a b h
+    · rw [foldRow_vadd m i _ _ 0 a b h]
+      exact foldRows_vadd m e fuel (i + 1) a _ (by rw [size_foldRow]; exact h)
+
+theorem foldRows_add (m : Sparse) (e : Array F128) (f₂ : Nat) :
+    ∀ f₁ i acc, m.foldRows e (f₁ + f₂) i acc = m.foldRows e f₂ (i + f₁) (m.foldRows e f₁ i acc)
+  | 0, i, acc => by simp [Sparse.foldRows]
+  | f₁ + 1, i, acc => by
+    rw [show f₁ + 1 + f₂ = (f₁ + f₂) + 1 by omega, Sparse.foldRows, Sparse.foldRows, foldRows_add m e f₂ f₁,
+      show i + 1 + f₁ = i + (f₁ + 1) by omega]
+
+/-- Rows `i, …, i + fuel − 1` folded on `acc` are `acc` plus their fold on zeros. -/
+theorem foldRows_zeros (m : Sparse) (e : Array F128) (fuel i : Nat) (acc : Array F128) :
+    m.foldRows e fuel i acc = vadd acc (m.foldRows e fuel i (Array.replicate acc.size 0)) := by
+  conv => lhs; rw [← vadd_zeros acc]
+  exact foldRows_vadd m e fuel i acc _ (by simp)
+
+theorem foldRows_blocks (m : Sparse) (e : Array F128) (b w : Nat) :
+    ∀ k, m.foldRows e (k * b) 0 (Array.replicate w 0) =
+      ((List.range k).map fun j => m.foldRows e b (j * b) (Array.replicate w 0)).foldl vadd (Array.replicate w 0)
+  | 0 => by simp [Sparse.foldRows]
+  | k + 1 => by
+    have hs : (m.foldRows e (k * b) 0 (Array.replicate w 0)).size = w := by rw [size_foldRows]; simp
+    rw [Nat.succ_mul, foldRows_add, foldRows_zeros m e b, hs, foldRows_blocks m e b w k, List.range_succ,
+      List.map_append, List.foldl_append, Nat.zero_add]
+    rfl
+
+theorem foldl_vadd_get (c : Nat) :
+    ∀ (l : List (Array F128)) (acc : Array F128), c < acc.size → (∀ p ∈ l, p.size = acc.size) →
+      (l.foldl vadd acc)[c]! = l.foldl (fun s p => s + p[c]!) acc[c]!
+  | [], _, _, _ => rfl
+  | p :: l, acc, hc, hl => by
+    have hp := hl p (List.mem_cons_self ..)
+    have hsz : (vadd acc p).size = acc.size := by rw [size_vadd, hp, Nat.min_self]
+    rw [List.foldl_cons, List.foldl_cons, foldl_vadd_get c l (vadd acc p) (by rw [hsz]; exact hc)
+      (fun q hq => by rw [hsz]; exact hl q (List.mem_cons_of_mem _ hq))]
+    congr 1
+    rw [getElem!_pos (vadd acc p) c (by rw [hsz]; exact hc), getElem!_pos acc c hc,
+      getElem!_pos p c (by rw [hp]; exact hc)]
+    simp only [vadd, Array.getElem_zipWith]
+
+/-- `Sparse.foldT` in 32 tasks of rows, each folded on zeros, their sums added column by column in tasks
+(`foldRows_zeros`). -/
+def foldTPar (m : Sparse) (e : Array F128) : Array F128 :=
+  let n := min m.rows e.size
+  let b := n / 32
+  let ts := (List.range 32).map fun j => Task.spawn fun _ => m.foldRows e b (j * b) (Array.replicate m.width 0)
+  let r := m.foldRows e (n - 32 * b) (32 * b) (Array.replicate m.width 0)
+  let ps := ts.map Task.get ++ [r]
+  parGen (fun c => ps.foldl (fun s p => s + p[c]!) 0) m.width
+
+theorem foldTPar_eq (m : Sparse) (e : Array F128) : foldTPar m e = m.foldT e := by
+  let n := min m.rows e.size
+  let b := n / 32
+  let z := Array.replicate m.width (0 : F128)
+  let ps := (List.range 32).map (fun j => m.foldRows e b (j * b) z) ++ [m.foldRows e (n - 32 * b) (32 * b) z]
+  have hps : ∀ p ∈ ps, p.size = z.size := by
+    intro p hp
+    rcases List.mem_append.1 hp with hp | hp
+    · obtain ⟨j, -, rfl⟩ := List.mem_map.1 hp
+      exact size_foldRows _ _ _ _ _
+    · rw [List.mem_singleton.1 hp]
+      exact size_foldRows _ _ _ _ _
+  have hT : m.foldT e = ps.foldl vadd z := by
+    rw [Sparse.foldT, show min m.rows e.size = 32 * b + (n - 32 * b) from (Nat.add_sub_cancel' (Nat.mul_div_le n 32)).symm,
+      foldRows_add, Nat.zero_add, foldRows_zeros m e _ (32 * b), size_foldRows, Array.size_replicate,
+      foldRows_blocks, List.foldl_append]
+    rfl
+  have hP : foldTPar m e = parGen (fun c => ps.foldl (fun s p => s + p[c]!) 0) m.width := by
+    simp only [foldTPar, List.map_map]
+    rfl
+  rw [hP, hT, parGen_eq]
+  have hsz : (ps.foldl vadd z).size = m.width := by
+    rw [← hT, Sparse.foldT, size_foldRows, Array.size_replicate]
+  apply Array.ext
+  · simp [hsz]
+  · intro c h1 h2
+    have hc : c < m.width := by simpa using h1
+    rw [Array.getElem_map, Array.getElem_range, ← getElem!_pos (ps.foldl vadd z) c h2,
+      foldl_vadd_get c ps z (by simpa [z] using hc) hps, getElem!_pos z c (by simpa [z] using hc)]
+    simp [z]
+
+
+/-- `Stmt.tensor` in tasks of `2^12` entries, each reading its own copy of `lw`. -/
+def tensorPar (lw rho : Array F128) : Array F128 :=
+  let eIn := eqTable rho
+  parGenWith (fun _ => lw.map (· + 0)) (fun l k => l[k % l.size]! * eIn[k / l.size]!) (lw.size * eIn.size)
+
+theorem tensorPar_eq (lw rho : Array F128) : tensorPar lw rho = Stmt.tensor lw rho := by
+  have hl : lw.map (· + 0) = lw := by simp [F128.add_zero]
+  rw [tensorPar, parGenWith_eq, hl, parGen_eq, Stmt.tensor]
+  apply Array.ext
+  · simp
+  · intro i h1 h2
+    simp only [Array.getElem_map, Array.getElem_range, Array.getElem_ofFn]
+
+/-- `Stmt.baseOf` with `Sparse.foldT` as `foldTPar`, and its map in tasks of `2^12` entries, each with its own table of
+`α`. -/
+def baseOfPar (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
+  let fa := foldTPar a eLo
+  let fb := match lk with
+    | some t => Lookup.foldB t eLo (foldTPar b eLo)
+    | none => foldTPar b eLo
+  parGenWith (fun _ => F128.mulTableL alpha) (fun ta i => F128.mulBy ta fa[i]! + fb[i]!) (2 ^ sl)
+
+theorem baseOfPar_eq (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) :
+    baseOfPar alpha eLo a b lk sl = Stmt.baseOf alpha eLo a b lk sl := by
+  simp only [baseOfPar, Stmt.baseOf, foldTPar_eq, parGenWith_eq, parGen_eq, F128.mulBy_mulTableL]
+  rfl
+
+/-- `Stmt.slotBase` from `tensorPar` and `baseOfPar`. -/
+def slotBasePar (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × Nat) : V (Array F128) := do
+  let sl := key.2
+  let eLo := tensorPar lw (rho.extract 0 (sl - 6))
+  match key.1 with
+  | .comp =>
+    if sl != st.leaf.comp.spec.kLog then throw "lincheck fold: a compression slot of the wrong size"
+    pure (baseOfPar alpha eLo st.leaf.comp.a st.leaf.comp.b none sl)
+  | .net i =>
+    let net := (st.c.nets.getD i default).2
+    if net.unitLog != sl then throw "lincheck fold: a unit slot of the wrong size"
+    pure (baseOfPar alpha eLo net.a net.b net.lookup sl)
+  | .mask => pure (parMap (fun x => (alpha + 1) * x) eLo)
+
+theorem slotBasePar_eq (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × Nat) :
+    slotBasePar st alpha lw rho key = st.slotBase alpha lw rho key := by
+  simp only [slotBasePar, Stmt.slotBase, tensorPar_eq, baseOfPar_eq, parMap_eq]
+  rfl
+
+/-- Every slot type `bases` holds is `slotBase`'s. -/
+def Cached (st : Stmt) (alpha : F128) (lw rho : Array F128) (bases : Array ((Kind × Nat) × Array F128)) : Prop :=
+  ∀ kb ∈ bases, st.slotBase alpha lw rho kb.1 = .ok kb.2
+
+theorem cached_find {st : Stmt} {alpha : F128} {lw rho : Array F128} {bases : Array ((Kind × Nat) × Array F128)}
+    (h : Cached st alpha lw rho bases) (key : Kind × Nat) :
+    (∃ b, bases.find? (fun kb => decide (kb.1 = key)) = some (key, b) ∧ st.slotBase alpha lw rho key = .ok b) ∨
+      bases.find? (fun kb => decide (kb.1 = key)) = none := by
+  cases hf : bases.find? (fun kb => decide (kb.1 = key)) with
+  | none => exact .inr rfl
+  | some kb =>
+    have hk : kb.1 = key := by simpa using Array.find?_some hf
+    refine .inl ⟨kb.2, by rw [← hk], ?_⟩
+    rw [← hk]
+    exact h kb (Array.mem_of_find?_eq_some hf)
+
+theorem cached_push {st : Stmt} {alpha : F128} {lw rho : Array F128} {bases : Array ((Kind × Nat) × Array F128)}
+    (h : Cached st alpha lw rho bases) {key : Kind × Nat} {b : Array F128} (hb : st.slotBase alpha lw rho key = .ok b) :
+    Cached st alpha lw rho (bases.push (key, b)) := by
+  intro kb hkb
+  rcases Array.mem_push.1 hkb with hkb | rfl
+  · exact h kb hkb
+  · exact hb
+
+/-- `foldRanges` reads the same slot types from any cache of `slotBase`'s. -/
+theorem foldRanges_cached (st : Stmt) (alpha : F128) (lw rho : Array F128) :
+    ∀ (rs : List Range) (b₁ b₂ : Array ((Kind × Nat) × Array F128)) (out : Array F128),
+      Cached st alpha lw rho b₁ → Cached st alpha lw rho b₂ →
+      st.foldRanges alpha lw rho rs b₁ out = st.foldRanges alpha lw rho rs b₂ out
+  | [], _, _, _, _, _ => rfl
+  | r :: rs, b₁, b₂, out, h₁, h₂ => by
+    simp only [Stmt.foldRanges]
+    rcases cached_find h₁ (r.kind, r.slotLog) with ⟨v₁, hf₁, hv₁⟩ | hf₁ <;>
+      rcases cached_find h₂ (r.kind, r.slotLog) with ⟨v₂, hf₂, hv₂⟩ | hf₂
+    · rw [hv₁] at hv₂
+      cases hv₂
+      simp only [hf₁, hf₂]
+      exact foldRanges_cached st alpha lw rho rs _ _ _ h₁ h₂
+    · simp only [hf₁, hf₂, hv₁]
+      exact foldRanges_cached st alpha lw rho rs _ _ _ h₁ (cached_push h₂ hv₁)
+    · simp only [hf₁, hf₂, hv₂]
+      exact foldRanges_cached st alpha lw rho rs _ _ _ (cached_push h₁ hv₂) h₂
+    · simp only [hf₁, hf₂]
+      cases hv : st.slotBase alpha lw rho (r.kind, r.slotLog) with
+      | error e => rfl
+      | ok v => exact foldRanges_cached st alpha lw rho rs _ _ _ (cached_push h₁ hv) (cached_push h₂ hv)
+
+/-- `partialRangesT` reads the same slot types from any cache of `slotBase`'s. -/
+theorem partialRangesT_cached (st : Stmt) (alpha : F128) (lw rho rr : Array F128) :
+    ∀ (rs : List Range) (b₁ b₂ : Array ((Kind × Nat) × Array F128)) (out : Array F128),
+      Cached st alpha lw rho b₁ → Cached st alpha lw rho b₂ →
+      st.partialRangesT alpha lw rho rr rs b₁ out = st.partialRangesT alpha lw rho rr rs b₂ out
+  | [], _, _, _, _, _ => rfl
+  | r :: rs, b₁, b₂, out, h₁, h₂ => by
+    simp only [Stmt.partialRangesT]
+    cases hu : st.unitShare alpha lw rho rr r with
+    | some p => exact partialRangesT_cached st alpha lw rho rr rs _ _ _ h₁ h₂
+    | none =>
+      rcases cached_find h₁ (r.kind, r.slotLog) with ⟨v₁, hf₁, hv₁⟩ | hf₁ <;>
+        rcases cached_find h₂ (r.kind, r.slotLog) with ⟨v₂, hf₂, hv₂⟩ | hf₂
+      · rw [hv₁] at hv₂
+        cases hv₂
+        simp only [hf₁, hf₂]
+        exact partialRangesT_cached st alpha lw rho rr rs _ _ _ h₁ h₂
+      · simp only [hf₁, hf₂, hv₁]
+        exact partialRangesT_cached st alpha lw rho rr rs _ _ _ h₁ (cached_push h₂ hv₁)
+      · simp only [hf₁, hf₂, hv₂]
+        exact partialRangesT_cached st alpha lw rho rr rs _ _ _ (cached_push h₁ hv₂) h₂
+      · simp only [hf₁, hf₂]
+        cases hv : st.slotBase alpha lw rho (r.kind, r.slotLog) with
+        | error e => rfl
+        | ok v => exact partialRangesT_cached st alpha lw rho rr rs _ _ _ (cached_push h₁ hv) (cached_push h₂ hv)
+
+/-- The slot types of the ranges `rs`, each once, from `slotBasePar`: a cache of `slotBase`'s (`basesPar_cached`). -/
+def basesPar (st : Stmt) (alpha : F128) (lw rho : Array F128) (rs : List Range) : Array ((Kind × Nat) × Array F128) :=
+  rs.foldl (fun bs r =>
+    let key := (r.kind, r.slotLog)
+    if (bs.find? fun kb => decide (kb.1 = key)).isSome then bs else
+      match slotBasePar st alpha lw rho key with
+      | .ok b => bs.push (key, b)
+      | .error _ => bs) #[]
+
+theorem basesPar_cached (st : Stmt) (alpha : F128) (lw rho : Array F128) (rs : List Range) :
+    Cached st alpha lw rho (basesPar st alpha lw rho rs) := by
+  suffices ∀ (rs : List Range) bs, Cached st alpha lw rho bs → Cached st alpha lw rho (rs.foldl (fun bs r =>
+      let key := (r.kind, r.slotLog)
+      if (bs.find? fun kb => decide (kb.1 = key)).isSome then bs else
+        match slotBasePar st alpha lw rho key with
+        | .ok b => bs.push (key, b)
+        | .error _ => bs) bs) from this rs #[] (fun _ h => absurd h (by simp))
+  intro rs
+  induction rs with
+  | nil => exact fun _ h => h
+  | cons r rs ih =>
+    intro bs h
+    refine ih _ ?_
+    dsimp only
+    split
+    · exact h
+    · cases hv : slotBasePar st alpha lw rho (r.kind, r.slotLog) with
+      | error e => exact h
+      | ok b => exact cached_push h (by rw [← slotBasePar_eq]; exact hv)
+
+
+/-- `Stmt.fold` with its ranges' slot types from `basesPar`. -/
+def foldPar (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Array F128) := do
+  let kl := st.c.kLog
+  if rho.size + 6 != kl || lw.size != 64 then throw "lincheck fold: the point is not the block's"
+  let rs := st.c.ranges.toList
+  let out ← st.foldRanges alpha lw rho rs (basesPar st alpha lw rho rs) (Array.replicate (2 ^ kl) 0)
+  let eIn := eqTable rho
+  let e := fun (i : Nat) => lw[i % 64]! * eIn[i / 64]!
+  return Stmt.addDelta e st.db.toList (Stmt.addDelta (fun i => alpha * e i) st.da.toList out)
+
+theorem foldPar_eq (st : Stmt) : foldPar st = st.fold := by
+  funext alpha lw rho
+  simp only [foldPar, Stmt.fold, foldRanges_cached st alpha lw rho _ (basesPar st alpha lw rho _) #[] _
+    (basesPar_cached st alpha lw rho _) (fun _ h => absurd h (by simp))]
+
+/-- `Stmt.foldedPartial` with the slot types of the ranges no template folds from `basesPar`. -/
+def foldedPartialPar (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F128) := do
+  let kl := st.c.kLog
+  if rho.size + 6 != kl || lw.size != 64 then throw "lincheck fold: the point is not the block's"
+  let rr := ts.reverse
+  let rs := st.c.ranges.toList
+  let out ← st.partialRangesT alpha lw rho rr rs
+    (basesPar st alpha lw rho (rs.filter fun r => (st.unitShare alpha lw rho rr r).isNone)) (Array.replicate 64 0)
+  let n := 2 ^ kl
+  let eIn := eqTable rho
+  let eR := eqTable rr
+  let e := fun (i : Nat) => lw[i % 64]! * eIn[i / 64]!
+  let add := fun (w : Nat → F128) (o : Array F128) (ic : Nat × Nat) =>
+    if ic.2 < n then o.modify (ic.2 % 64) (· + w ic.1 * eR[ic.2 / 64]!) else o
+  let out := st.db.toList.foldl (add e) (st.da.toList.foldl (add fun i => alpha * e i) out)
+  return if st.pin < n then out.modify (st.pin % 64) (· + beta * eR[st.pin / 64]!) else out
+
+theorem foldedPartialPar_eq (st : Stmt) : foldedPartialPar st = st.foldedPartial := by
+  funext alpha beta lw rho ts
+  simp only [foldedPartialPar, Stmt.foldedPartial, partialRangesT_cached st alpha lw rho _ _
+    (basesPar st alpha lw rho _) #[] _ (basesPar_cached st alpha lw rho _) (fun _ h => absurd h (by simp))]
+
+/-- `Stmt.folded` from `foldedPartialPar` and `foldPar`. -/
+def foldedPar (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F128) :=
+  if st.structured && ts.size + 6 == st.c.kLog then foldedPartialPar st alpha beta lw rho ts
+  else do
+    let v ← foldPar st alpha lw rho
+    pure (ts.foldl (fun c t => halve t c) (v.modify st.pin (· + beta)))
+
+theorem foldedPar_eq (st : Stmt) : foldedPar st = st.folded := by
+  funext alpha beta lw rho ts
+  simp only [foldedPar, Stmt.folded, foldedPartialPar_eq, foldPar_eq]
+
+/-- `Setup.ofCircuit` with its fold computed in tasks (`foldPar`, `foldedPar`): the firewall's setup of a statement. -/
+def setupPar (st : Stmt) : Setup :=
+  { Setup.ofCircuit st with fold := { st.circuitFold with fold := foldPar st, folded := foldedPar st } }
+
+theorem setupPar_eq : setupPar = Setup.ofCircuit := by
+  funext st
+  simp only [setupPar, foldPar_eq, foldedPar_eq]
+  rfl
+
 end Fast
 
 /-- Compiled code runs `switchVecFast` and `basisValsFast`; the kernel and every proof see `switchVec` and `basisVals`.
@@ -856,7 +1191,7 @@ def cmd (args : List String) : IO UInt32 := do
   let (spec, sts) ← match Witness.setupOf I draw with
     | .ok s => pure s
     | .error e => return (← refuse s!"setup: {e}")
-  serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit) fun _ => pure none
+  serve ch IO.getRandomBytes spec (sts.map Fast.setupPar) fun _ => pure none
 
 /-- **The session loop's finish**, a connection to its frames port whose first line is `line`: `finish LEN` followed by
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
@@ -881,7 +1216,7 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .error e => say s!"err setup: {e.replace "\n" " "}"
       | .ok (spec, sts) =>
         say "ok 0"
-        let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
+        let _ ← serve ch IO.getRandomBytes spec (sts.map Fast.setupPar)
           (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own true
   | _ => say s!"err a request `{line.trim}`"
 
