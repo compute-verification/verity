@@ -77,11 +77,13 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "harness"))
+sys.path.append(str(HERE.parent))
 import arms as A  # noqa: E402
 import scoring as S  # noqa: E402
+import settings  # noqa: E402
 
-NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
-os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
+NVCC = settings.NVCC or "/usr/local/cuda-13.0/bin/nvcc"
+settings.put("PATH", f"{Path(NVCC).parent}:{settings.PATH}")  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]
 LIBS = ["-lcublasLt", "-lnvidia-ml", "-ldl"]
 GATES = ("slowdown", "receipts", "replay", "honest", "dram", "clocks", "serving_exact")
@@ -128,7 +130,7 @@ def build(bdir: Path, out: Path) -> dict:
     (out / "sass-dfill.txt").write_text("\n".join(lines))
     rec["dfill_sass"] = {"imma": sum("IMMA" in ln for ln in lines),
                          "memory_ops": sum(any(op in ln for op in ("LDG", "STG", "LDS", "STS", "LDL", "STL")) for ln in lines)}
-    rec["nvcc_append_flags"] = os.environ.get("NVCC_APPEND_FLAGS") or None
+    rec["nvcc_append_flags"] = settings.NVCC_APPEND_FLAGS
     rec["kernel_facts"] = S.kernel_facts(sass)
     rec |= program_build(bdir, out, log)
     (out / "build.json").write_text(json.dumps(rec, indent=1))
@@ -172,13 +174,13 @@ def program_build(bdir: Path, out: Path, log: Path) -> dict:
 
 
 def smi(out: Path) -> None:
-    uuid = os.environ.get("GPU_LEASE_UUID")
+    uuid = settings.GPU_LEASE_UUID
     cmd = ["nvidia-smi", f"--query-gpu={SMI_FIELDS}", "--format=csv,noheader,nounits"] + (["-i", uuid] if uuid else [])
     sh(cmd, out=out / "smi.csv", err=out / "errors.txt")
 
 
 def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
-    env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip())
+    env = dict(settings.environ(), DFILL_COINS=(out / "coins.txt").read_text().strip())
     fl = arm.filler
     if fl:
         env["DFILL_CHUNK_LOG2"] = str(fl.chunk_log2)
@@ -322,7 +324,7 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
     g["ok"] = g["ok"] and g["serving_exact"]["ok"] and g.get("filler_paths", {"ok": True})["ok"]
     res = {"scorer": version, "arm": doc["name"], "interface": doc["interface"], "lineage": doc["lineage"],
            "variant": doc["variant"]["id"], "choice": doc["choice"], "commit": read(out / "commit.txt"),
-           "coins": read(out / "coins.txt"), "run": os.environ.get("RESEARCH_RUN_ID") or read(out / "run.txt"),
+           "coins": read(out / "coins.txt"), "run": settings.RESEARCH_RUN_ID or read(out / "run.txt"),
            "scored": g["ok"] and "SCORE" in sc, "SCORE": sc.get("SCORE") if g["ok"] else None,
            "score_if_gated": sc.get("SCORE"), "min": sc.get("min"), "min_mix": sc.get("min_mix"),
            "score_nominal": sc.get("score_nominal"), "score_at_target": sc.get("score_at_target"),
@@ -392,7 +394,7 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
     rec = {"kind": ledger.KIND, "meta": ledger._clean(meta), "refs": {"parent": lin["parent"]}
            if str(lin.get("parent") or "").startswith("art:") else {}, "labels": [(ledger.KERNEL_OUTCOME, "screened")]}
     ledger.write(run_dir, [rec])
-    if (run_dir / "job.json").is_file() or os.environ.get("RESEARCH_RUN_DIR"):
+    if (run_dir / "job.json").is_file() or settings.RESEARCH_RUN_DIR:
         ledger.write_outputs(run_dir, [rec])
     return rec
 
@@ -795,12 +797,12 @@ def main(argv=None) -> int:
                                  epilog="\n\n".join(__doc__.split("\n\n")[1:4]),
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("arm", help=f"one of {sorted(A.ARMS)}, or benchmarks/pouw/filler/FILE.py:Class")
-    ap.add_argument("--out", type=Path, default=Path(os.environ["OUT"]) if os.environ.get("OUT") else None)
+    ap.add_argument("--out", type=Path, default=Path(settings.OUT) if settings.OUT else None)
     ap.add_argument("--rounds", type=int, default=8)
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--no-robust", action="store_true")
     ap.add_argument("--max-min", type=int, default=25, help="the lease's bound in minutes")
-    ap.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"))
+    ap.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE)
     a = ap.parse_args(argv)
     if a.out is None:
         ap.error("--out (or $OUT, as research run sets it)")
@@ -812,8 +814,8 @@ def main(argv=None) -> int:
     (out / "coins.txt").write_text(secrets.token_hex(16))
     (out / "commit.txt").write_text(subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True,
                                                    text=True).stdout.strip())
-    if os.environ.get("RESEARCH_RUN_ID"):
-        (out / "run.txt").write_text(os.environ["RESEARCH_RUN_ID"])
+    if settings.RESEARCH_RUN_ID:
+        (out / "run.txt").write_text(settings.RESEARCH_RUN_ID)
     bdir = Path(tempfile.mkdtemp(prefix="filler-score."))
     try:
         build(bdir, out)
@@ -825,7 +827,7 @@ def main(argv=None) -> int:
     finally:
         shutil.rmtree(bdir, ignore_errors=True)
     res = report(out, arm)
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else out
+    run_dir = Path(settings.RESEARCH_RUN_DIR) if settings.RESEARCH_RUN_DIR else out
     record(res, doc, run_dir, a.by)
     show(res)
     return 0 if rc == 0 else rc

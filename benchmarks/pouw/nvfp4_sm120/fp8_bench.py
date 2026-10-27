@@ -34,6 +34,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nvf4_bench as NB
+import settings  # noqa: E402
 
 FP8 = 1  # the harness's kind
 ONE = struct.pack("<f", 1.0)
@@ -86,7 +87,7 @@ def sha(a) -> str:
 
 
 def cache_path(m: int, n: int, k: int, seed: int) -> str | None:
-    d = os.environ.get("MODEL_CACHE")
+    d = settings.MODEL_CACHE
     return os.path.join(d, f"model-{m}x{n}x{k}-{seed}.npz") if d else None
 
 
@@ -115,8 +116,8 @@ def cache(out_dir: str) -> int:
     import numpy as np
     from verity.ml.circuits.silicon import models
     os.makedirs(out_dir, exist_ok=True)
-    os.environ["MODEL_CACHE"] = out_dir
-    samples, full = int(os.environ.get("MODEL_SAMPLES", "4096")), int(os.environ.get("FULL_MODEL", "131072"))
+    settings.put("MODEL_CACHE", out_dir)
+    samples, full = settings.MODEL_SAMPLES, settings.FULL_MODEL
     model, source = sm120_model(models)
     _, shapes, ranges = NB.plan()
     for sc in ranges:
@@ -202,7 +203,7 @@ class Fp8Bench(NB.Bench):
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("SHAPE", "8192 16384")
+    settings.setdefault("SHAPE", "8192 16384")
     if sys.argv[1] == "--model-cache":
         sys.exit(cache(sys.argv[2]))
     sys.exit(NB.main(sys.argv, Fp8Bench))

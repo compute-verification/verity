@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
-import os
 import secrets
 import shutil
 import subprocess
@@ -27,9 +26,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(HERE.parent))
 import fused_score as FS  # noqa: E402
 import psched_score as PS  # noqa: E402
 import score as SC  # noqa: E402
+import settings  # noqa: E402
 
 A, S = SC.A, SC.S
 FUSED_GATES = ("fused_receipts", "fused_dram", "fused_exact")
@@ -50,7 +51,7 @@ def drivers(arm, pts) -> dict:
 
 
 def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
-    env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip(), DFILL_CHUNK_LOG2=str(arm.filler.chunk_log2))
+    env = dict(settings.environ(), DFILL_COINS=(out / "coins.txt").read_text().strip(), DFILL_CHUNK_LOG2=str(arm.filler.chunk_log2))
     fl, err, rc_log = arm.filler, out / "errors.txt", out / "rc.txt"
 
     def note(s):
@@ -166,12 +167,12 @@ def main(argv=None) -> int:
         return 0
     ap = argparse.ArgumentParser(prog="pfill_fp_score.py", description="score a fused-and-phase arm with the locked scorer")
     ap.add_argument("arm", help="benchmarks/pouw/filler/FILE.py:Class, an arm with fused(phase, B, L) and phase(phase, B, L)")
-    ap.add_argument("--out", type=Path, default=Path(os.environ["OUT"]) if os.environ.get("OUT") else None)
+    ap.add_argument("--out", type=Path, default=Path(settings.OUT) if settings.OUT else None)
     ap.add_argument("--rounds", type=int, default=8)
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--no-robust", action="store_true")
     ap.add_argument("--max-min", type=int, default=30, help="the lease's bound in minutes")
-    ap.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"))
+    ap.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE)
     a = ap.parse_args(argv)
     if a.out is None:
         ap.error("--out (or $OUT, as research run sets it)")
@@ -191,8 +192,8 @@ def main(argv=None) -> int:
     (out / "coins.txt").write_text(secrets.token_hex(16))
     (out / "commit.txt").write_text(subprocess.run(["git", "-C", str(SC.REPO), "rev-parse", "HEAD"], capture_output=True,
                                                    text=True, check=False).stdout.strip())
-    if os.environ.get("RESEARCH_RUN_ID"):
-        (out / "run.txt").write_text(os.environ["RESEARCH_RUN_ID"])
+    if settings.RESEARCH_RUN_ID:
+        (out / "run.txt").write_text(settings.RESEARCH_RUN_ID)
     bdir = Path(tempfile.mkdtemp(prefix="pfill-fp-score."))
     try:
         SC.build(bdir, out)
@@ -218,7 +219,7 @@ def main(argv=None) -> int:
     finally:
         shutil.rmtree(bdir, ignore_errors=True)
     res = report(out, arm)
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else out
+    run_dir = Path(settings.RESEARCH_RUN_DIR) if settings.RESEARCH_RUN_DIR else out
     SC.record(res, doc, run_dir, a.by)
     show(res)
     return 0 if rc == 0 else rc

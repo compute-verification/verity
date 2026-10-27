@@ -50,6 +50,9 @@ import statistics
 import sys
 import time
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import settings  # noqa: E402
+
 NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
 UINT8, SWIZZLE_64B, L2_128B = 0, 2, 2
@@ -140,7 +143,7 @@ class Dev:
 
     def identity(self, expect: str | None, env: str = "NVF4_EXPECT_UUID") -> list[str]:
         bad = []
-        visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+        visible = settings.CUDA_VISIBLE_DEVICES or ""
         if not visible.isdigit():
             bad.append(f"CUDA_VISIBLE_DEVICES={visible!r} is not a single index")
         if self.count != 1:
@@ -354,7 +357,7 @@ class Bench:
 
     def __init__(self, dev: Dev):
         self.dev = dev
-        self.raster = int(os.environ.get("RASTER", "8"))
+        self.raster = settings.RASTER
         self.lts: list[tuple[str, Harness]] = []
 
     def model_gate(self, ops: dict, ref: int, m: int, n: int, k: int, samples: int, full: int, seed: int) -> dict:
@@ -478,8 +481,8 @@ def model_gate(dev: Dev, ops: dict, ref: int, m: int, n: int, k: int, samples: i
 def registry(bench: Bench, harness: Harness | None, plains: list[Harness]) -> list[tuple[str, Harness, bool]]:
     """(name, library, plain) of each registry baseline: HARNESS_LIB's kernels named in CUTLASS (default bench.CUTLASS), then
     each PLAIN_LIB entry of the bench's kind (those PLAIN_ENTRIES names, if set)."""
-    out = [(nm, harness, False) for nm in os.environ.get("CUTLASS", bench.CUTLASS).split()] if harness else []
-    only = os.environ.get("PLAIN_ENTRIES", "").split()
+    out = [(nm, harness, False) for nm in (settings.CUTLASS or bench.CUTLASS).split()] if harness else []
+    only = settings.PLAIN_ENTRIES.split()
     return out + [(nm, p, True) for p in plains for nm in sorted(p.index) if not only or nm in only]
 
 
@@ -683,18 +686,18 @@ def stamps(bench: Bench, m: int, n: int, k: int, ops: dict, kernels: list[str], 
 
 def plan() -> tuple[list[int], list[tuple[int, int, int]], list[int]]:
     """SHAPE's sizes, every gated shape (SMALL's, then SHAPE's cubes) and the scale ranges."""
-    sizes = [int(x) for x in os.environ.get("SHAPE", "8192").split()]
-    shapes = [tuple(int(x) for x in t.split("x")) for t in os.environ.get("SMALL", "256x128x128 512x256x1024 768x384x640").split()]
-    return sizes, shapes + [(s, s, s) for s in sizes], [int(x) for x in os.environ.get("SCALES", "0 1").split()]
+    sizes = [int(x) for x in settings.SHAPE.split()]
+    shapes = [tuple(int(x) for x in t.split("x")) for t in settings.SMALL.split()]
+    return sizes, shapes + [(s, s, s) for s in sizes], [int(x) for x in settings.SCALES.split()]
 
 
 def main(argv: list[str], bench_cls: type = Bench) -> int:
     image = open(argv[1], "rb").read()
     dev = Dev(image)
-    expect = os.environ.get(bench_cls.UUID_ENV)
+    expect = settings.get(bench_cls.UUID_ENV)
     refused = dev.identity(expect, bench_cls.UUID_ENV)
     nv = Nvml(dev.uuid)
-    emit({"kind": "env", "device": dev.name, "uuid": dev.uuid, "expect_uuid": expect, "visible": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    emit({"kind": "env", "device": dev.name, "uuid": dev.uuid, "expect_uuid": expect, "visible": settings.CUDA_VISIBLE_DEVICES,
           "count": dev.count, "cc": list(dev.cc), "sms": dev.sms, "cuda_driver_api": dev.driver, "nvml_driver": nv.driver,
           "cubin_sha256": hashlib.sha256(image).hexdigest(), "clk": nv.read(), "refused": refused,
           "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -704,20 +707,19 @@ def main(argv: list[str], bench_cls: type = Bench) -> int:
     dev.open()
     bench = bench_cls(dev)
     kind = bench_cls.KIND
-    harness = Harness(os.environ["HARNESS_LIB"], kind) if os.environ.get("HARNESS_LIB") else None
-    lt2 = Harness(os.environ["LT2_LIB"], kind) if os.environ.get("LT2_LIB") else None
-    plains = [Harness(p, kind) for p in os.environ.get("PLAIN_LIB", "").split()]
-    bench.lts = ([("lt", harness)] if harness and os.environ.get("LT", "1") == "1" and hasattr(harness.lib, "ph_lt_plan_create")
+    harness = Harness(settings.HARNESS_LIB, kind) if settings.HARNESS_LIB else None
+    lt2 = Harness(settings.LT2_LIB, kind) if settings.LT2_LIB else None
+    plains = [Harness(p, kind) for p in settings.PLAIN_LIB.split()]
+    bench.lts = ([("lt", harness)] if harness and settings.LT == "1" and hasattr(harness.lib, "ph_lt_plan_create")
                  else []) + ([("lt2", lt2)] if lt2 else [])
     for h, role in ([(harness, "harness")] if harness else []) + ([(lt2, "lt2")] if lt2 else []) + [(p, "plain") for p in plains]:
         emit({"kind": role, "lib_sha256": h.sha256, "harness_kind": kind, "kernels": sorted(h.index)})
     plain_all = {nm for nm, _, plain in registry(bench, None, plains) if plain}
     plain_ok = set(plain_all)
-    kernels = os.environ.get("KERNELS", bench_cls.KERNELS).split()
+    kernels = (settings.KERNELS or bench_cls.KERNELS).split()
     sizes, shapes, ranges = plan()
-    time_scales = int(os.environ.get("TIME_SCALES", "1"))
-    repeats = int(os.environ.get("GATE_REPEATS", "3"))
-    model_args = (int(os.environ.get("MODEL_SAMPLES", "4096")), int(os.environ.get("FULL_MODEL", "131072")))
+    time_scales, repeats = settings.TIME_SCALES, settings.GATE_REPEATS
+    model_args = (settings.MODEL_SAMPLES, settings.FULL_MODEL)
     ok = {nm: True for nm in kernels}
     refs_ok, keep = True, {}
     for sc in ranges:
@@ -741,23 +743,23 @@ def main(argv: list[str], bench_cls: type = Bench) -> int:
     all_ok = len(gated) == len(kernels) and plain_ok == plain_all
     emit({"kind": "gated", "passed": gated, "plain_passed": sorted(plain_ok), "refs_ok": refs_ok})
     print(f"passed: {gated}, plain {sorted(plain_ok)} (refs_ok {refs_ok})", file=sys.stderr)
-    if os.environ.get("ONLY_CHECK") or not keep:
+    if settings.ONLY_CHECK or not keep:
         return 0 if all_ok else 4
     for s, ops in keep.items():
-        row, bodies, releases = timing(bench, harness, plains, nv, s, s, s, ops, gated, plain_ok, int(os.environ.get("REPS", "20")))
+        row, bodies, releases = timing(bench, harness, plains, nv, s, s, s, ops, gated, plain_ok, settings.REPS or 20)
         row["gated"] = gated
         emit(row)
         print(f"timing {s}^3 (Measured diagnostic): "
               + ", ".join(f"{nm} {row['ms'][nm]:.4f} ms {row['tflops'][nm]} TFLOPS" for nm in row["ms"]), file=sys.stderr)
-        if os.environ.get("STEADY"):
-            st = steady(dev, nv, s, s, s, bodies, int(os.environ.get("STEADY_ROUNDS", "4")), int(os.environ["STEADY"]))
+        if settings.STEADY:
+            st = steady(dev, nv, s, s, s, bodies, settings.STEADY_ROUNDS, settings.STEADY)
             emit(st)
             print(f"steady {s}^3 (Measured diagnostic): {st['summary']}", file=sys.stderr)
-        if os.environ.get("STAMPS") and gated:
-            st = stamps(bench, s, s, s, ops, gated, os.environ["STAMPS"])
+        if settings.STAMPS and gated:
+            st = stamps(bench, s, s, s, ops, gated, settings.STAMPS)
             emit(st)
             print(f"stamps {s}^3 (Measured diagnostic): {json.dumps(st['kernels'])}", file=sys.stderr)
-        if os.environ.get("PROFILE"):   # one launch of each, between cuProfilerStart and Stop (ncu --profile-from-start off)
+        if settings.PROFILE:   # one launch of each, between cuProfilerStart and Stop (ncu --profile-from-start off)
             dev.ck("cuProfilerStart")
             for nm, body in bodies.items():
                 body()

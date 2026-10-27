@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -79,6 +80,9 @@ from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+import settings  # noqa: E402
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
@@ -105,8 +109,7 @@ OK_VALUE = "ok"
 def tile() -> str:
     """The H1 tile under the unit: ``H1_TILE`` v1 (`h1tile.PouwH1Tile`, z the exact A Bᵀ) or v3 (`h1tile.PouwH1Tile3`, the
     one stream: z = O' - sum_d 128^d D_d of the folded words, with its wrap correction and dither peel; A Bᵀ too)."""
-    import os
-    t = os.environ.get("H1_TILE", "v1")
+    t = settings.H1_TILE
     if t not in ("v1", "v3"):
         raise ValueError(f"H1_TILE={t!r}: v1 or v3")
     return t
@@ -125,9 +128,8 @@ def layout() -> str | None:
     (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
     layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier refuses a templated
     statement, after every other check, until its proof lands (`Tags.templated`, PRF-133), so it stays opt-in."""
-    import os
     from verity_flock import tmpl as TM
-    m = os.environ.get("H1_TMPL") or FLAT
+    m = settings.H1_TMPL or FLAT
     if m == FLAT:
         return None
     if m == STRUCTURAL:

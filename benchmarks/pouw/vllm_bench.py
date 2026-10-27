@@ -34,13 +34,14 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 sys.path.insert(0, str(Path(__file__).parent))
+import settings  # noqa: E402
+
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 
 PROMPTS = [
     "Explain why the sky is blue in two sentences.", "Write a haiku about matrix multiplication.",
@@ -69,7 +70,7 @@ LOWBYTE_STATUS = "gamma unproved: not a result"
 
 def ncp2_committer(mode: str):
     from verity_vllm.protocols.pouw import device as PD
-    PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
+    PD.configure(build_dir=settings.VERITY_POUW_CUDA_BUILD, arch=settings.VERITY_POUW_CUDA_ARCH)
     flags = {"ncp2": PD.HASH | PD.CACHE_Y, "ncp2-nohash": 0, "ncp2-lowbyte": PD.HASH | PD.CACHE_Y | PD.LOWBYTE}[mode]
     return PD.FusedCommitter("ncp-v2", bytes(range(32)), flags | PD.TIME_TILES)
 
@@ -394,7 +395,7 @@ def split(bf16: dict, full: dict, nohash: dict, lowbyte: dict | None) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "vllm.json")
+    ap.add_argument("--out", type=Path, default=Path(settings.RESEARCH_RUN_DIR or ".") / "vllm.json")
     ap.add_argument("--modes", default="bf16,fp8,w7a7,ncp,pearl")
     ap.add_argument("--revision", help="the model's revision (vLLM's ``revision``)")
     ap.add_argument("--decode-batches", type=lambda s: [int(x) for x in s.split(",")], default=[1, 8, 32])

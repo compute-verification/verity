@@ -61,6 +61,9 @@ from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.indexed import RangeIndexedDomain
 
 HERE = Path(__file__).resolve().parent
+sys.path.append(str(HERE.parent))
+import settings  # noqa: E402
+
 M_REAL, LAYERS = 32, 32
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}   # (n, k)
 POISON, SLOT, SEG_TPB = 0xA5, 256, 256
@@ -202,10 +205,10 @@ def main() -> int:
     vp, u64, P = C.c_void_p, C.c_uint64, C.POINTER
     image, rimage = Path(args.cubin).read_bytes(), Path(args.rows_cubin).read_bytes()
     dev = R.Dev(image)
-    refused = dev.identity(os.environ.get("PEARLC_EXPECT_UUID"))
-    calls, reps, prefill = int(os.environ.get("CALLS", "32")), int(os.environ.get("REPS", "30")), int(os.environ.get("PREFILL", "8192"))
+    refused = dev.identity(settings.PEARLC_EXPECT_UUID)
+    calls, reps, prefill = settings.CALLS, settings.REPS or 30, settings.PREFILL
     res: dict = {"schema": "verity-pouw/served-zk-rows-bench/v0",
-                 "run": os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local",
+                 "run": os.path.basename((settings.RESEARCH_RUN_DIR or "").rstrip("/")) or "local",
                  "device": dev.name, "uuid": dev.uuid, "sms": dev.sms, "cubin_sha256": hashlib.sha256(image).hexdigest(),
                  "rows_cubin_sha256": hashlib.sha256(rimage).hexdigest(), "refused": refused, "m_real": M_REAL,
                  "shapes": {s: list(v) for s, v in SHAPES.items()}, "layers": LAYERS, "calls": calls, "reps": reps,

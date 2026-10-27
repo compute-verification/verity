@@ -35,8 +35,10 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
+sys.path.append(str(HERE.parent))
 
 import h1unit as U  # noqa: E402
+import settings  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
@@ -67,7 +69,7 @@ def check_against_reference(rows: dict, outs: dict, r: int = U.TILE[0], c: int =
 
 def main() -> None:
     k, work = int(sys.argv[1]), Path(sys.argv[2])
-    stage = os.environ.get("HZ_STAGE", "fast")
+    stage = settings.HZ_STAGE
     (work / "requests").mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     if stage == "fast":

@@ -23,6 +23,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
+sys.path.append(str(HERE.parent))
 
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
 from verity.core.protocols.pouw.circuit import leaves as L  # noqa: E402
@@ -33,6 +34,7 @@ from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 
 import served_commit as SC  # noqa: E402
+import settings  # noqa: E402
 
 TILE = (1, 1)
 DEV = "sm120"
@@ -41,7 +43,7 @@ DEV = "sm120"
 def main() -> None:
     t0 = time.time()
     src, params, unit, out = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text()), int(sys.argv[3]), Path(sys.argv[4])
-    stage = os.environ.get("HZ_STAGE", "fast")
+    stage = settings.HZ_STAGE
     out.mkdir(parents=True, exist_ok=True)
     if stage == "fast":
         import fast_stage

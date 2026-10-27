@@ -10,10 +10,12 @@ tile is no Program's: the verifier holds no descriptor (`--program`), so its hon
 alone, once every check has passed (`NO_PROGRAM`). Every other tile check passes only when a check rejects it.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""
 import json
-import os
 import statistics
 import sys
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+import settings  # noqa: E402
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
@@ -112,10 +114,10 @@ def one(d: Path) -> dict:
     role = (st or {}).get("role") or d.name
     rec.update(zk=session(d), controls=selftests(d),
                lean=lean(d, not role.startswith(("tile", "hidden")), role.startswith("hidden")),
-               lean_checks=os.environ.get("HZ_LEAN") or "*")
+               lean_checks=settings.HZ_LEAN or "*")
     rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean"]
                            and all(v["pass"] for v in rec["lean"].values()) and all(v["pass"] for v in rec["controls"].values()))
-    if os.environ.get("HZ_STAGE_ONLY", "0") == "1":
+    if settings.HZ_STAGE_ONLY == "1":
         rec.update(stage_only=True, lean_checks=None, all_pass=None)
     (d / "summary.json").write_text(json.dumps(rec, indent=1))
     return rec

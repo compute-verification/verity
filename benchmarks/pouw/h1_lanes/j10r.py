@@ -39,8 +39,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(HERE.parent))
 
 import run as RN  # noqa: E402
+import settings  # noqa: E402
 from run import U  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
@@ -54,7 +56,7 @@ from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noq
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
 
-RC = tuple(int(x) for x in os.environ.get("H1L_RC", "16x16").split("x"))
+RC = tuple(int(x) for x in settings.H1L_RC.split("x"))
 RN.RC = RC
 REGISTERED = RN.REGISTERED
 STEPS = RN.STEPS

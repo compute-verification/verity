@@ -25,7 +25,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import resource
 import sys
 import time
@@ -45,9 +44,12 @@ from verity.core.protocols.pouw.schemes import pearl_c4 as F
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+sys.path.append(str(HERE.parent))
+import settings  # noqa: E402
+
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip
-STAGE = os.environ.get("HZ_STAGE", "fast")
+STAGE = settings.HZ_STAGE
 
 
 def _load(name: str, path: Path):

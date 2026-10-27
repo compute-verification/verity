@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import statistics
 import subprocess
 import threading
@@ -20,6 +19,8 @@ import time
 from pathlib import Path
 
 import torch
+
+import settings
 
 #: pattern: (left operand, right operand)
 PATTERNS = {"full": ("full", "full"), "wide": ("wide", "wide"), "u-bit": ("wide", "bit"), "bit": ("bit", "bit"),
@@ -92,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    gpu = os.environ.get("GPU_LEASE_UUID", "0")
+    gpu = settings.GPU_LEASE_UUID or "0"
     info = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,clocks.max.sm,power.limit", "--format=csv",
                            "-i", gpu], capture_output=True, text=True, check=False).stdout
     gen = torch.Generator(device="cuda").manual_seed(0)

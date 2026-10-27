@@ -1,8 +1,13 @@
 import asyncio
+import sys
 import threading
+from pathlib import Path
 
 import pytest
 from verity.core.protocols.certifier import active
+
+# the benchmarks' settings registry (`settings.py`), which a script reaches with benchmarks/pouw on its path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
 @pytest.fixture(autouse=True)
