@@ -22,7 +22,7 @@ research run --pool research --as LANE --pool-wait 3600 --timeout 5h --project v
   bash -c 'bash benchmarks/network_certifier/e2e/run.sh --from "$RESEARCH_RUN_DIR/inputs/planned-40.tgz"'
 ~~~
 
-`run.sh` is what `verity bench network_e2e` runs. It builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean
+`run.sh` is the runner. It builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean
 firewall and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py`. On
 vy-nebius-cpu-1 a run goes through a check slot (`--pool research`), so `--mem-gb` is dropped there and the slot's
 memory applies. `E2E_MEM_GB` is the proving sessions' memory cap. Exit 0 means the report says OK.
@@ -31,7 +31,7 @@ N2 alone, without proofs, runs on any machine with `lake` on the PATH (the Lean 
 use):
 
 ~~~text
-uv run --extra torch-cpu verity bench network_e2e --from REHEARSAL --out DIR --no-prove
+uv run --extra torch-cpu bash benchmarks/network_certifier/e2e/run.sh --from REHEARSAL --out DIR --no-prove
 ~~~
 
 When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` (or a tarball of it) as
@@ -103,9 +103,9 @@ The plan's target (G-A) is one command from serving to the Lean verdict: serve, 
 Lean, with the advice's bits per link-window. `chain.py` holds the stages after N2 and the proofs, each on what exists now:
 
 ~~~text
-verity bench network_e2e --endpoint-peer NAME:PORT --endpoint-run SERVE_DIR --traffic varied --out DIR \
+bash benchmarks/network_certifier/e2e/run.sh --endpoint-peer NAME:PORT --endpoint-run SERVE_DIR --traffic varied --out DIR \
   --strategies honest,late,extra,drop,token --prove-path PROVE_PATH_OUT
-verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic varied --out DIR \
+bash benchmarks/network_certifier/e2e/run.sh (--upstream URL | --endpoint-peer NAME:PORT) --traffic varied --out DIR \
   --strategies honest,late,extra,drop,token --advice ADVICE --serving-config CONFIG.json --prove-path PROVE_PATH_OUT
 ~~~
 
