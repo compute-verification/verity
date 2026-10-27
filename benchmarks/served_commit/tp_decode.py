@@ -9,7 +9,7 @@ combination, openings or verdict. Measurement only.
 One engine process per arm (``--arm``), since the row size is a module constant set on each rank before its committer is built
 (`prof_arm.Rows4kArm`):
 
-- ``rows``: rows-sha512's step at 256 B rows, the row size it had before 4 KiB (so its roots are no scheme's now), with
+- ``rows``: rows-sha512's step at 256 B rows (whose roots are no scheme's), with
   `tp-commit`'s acquisition: the acquired classes' modules, the MoE block
   stream, every TP collective's rank-local partial, the capture map's routes and attention taps, and the block-FP8 linears'
   input quantization (`acquisition_manifest` names its family; the vocabulary-range tap, one small tensor a step, is off);

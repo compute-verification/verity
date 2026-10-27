@@ -5,7 +5,7 @@ distinct Definition), timed per Definition.
     uv run benchmarks/bool_build_cost/run.py [--row qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
                                              [--jobs N] [--t T,T,...] --out DIR
 
-A row is its Calls' word specializations (`ROWS`); the Boolean ones are `program.boolean.boolean_version` of each, as the Boolean
+A row is its Calls' word specializations (`ROWS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
 Build's lift calls them.  `--t` keeps the attention specializations of those key lengths only.  Writes `DIR/<ir>.json` (descriptor
 bytes, Program digest, the largest Definitions, rule seconds and the verdict per specialization, a digest of every rule) and
 `DIR/rules-<ir>.jsonl` (one line per rule as it finishes, so a run cut short keeps what it measured).

@@ -1,6 +1,6 @@
-"""G2's served arm: the Commit's overhead (rows-sha512, 4 KiB rows) over stock as vLLM serves it (torch.compile and CUDA
-graphs), beside the batch-invariant eager stock that GLM-5.3's eager-vs-eager points on G2's curve compare against, on one
-RTX PRO 6000 (sm_120).
+"""Renders the served arm's runs (`benchmarks/served_commit/served_arm.sh`, which measures them): the Commit's overhead
+(rows-sha512, 4 KiB rows) over stock as vLLM serves it (torch.compile and CUDA graphs), beside the batch-invariant eager stock
+that GLM-5.3's eager-vs-eager points on G2's curve (`curve.py`) compare against, on one RTX PRO 6000 (sm_120).
 
 One resident run interleaves, rep by rep and on one GPU, batch-invariant eager stock (`stock`, `stock-fp8`: the harness's
 eager), compiled stock (`stock@compiled`: vLLM's serving defaults, a served variant) and the Commit, compiled or eager. The
@@ -38,8 +38,8 @@ Writes OUT/g2-served.md, OUT/g2-served.json (every measure with its pin and why 
 points, host load, failed gates, pin) and OUT/g2-served.png; OUT defaults to $OUT, else ./out.
 
 ``--tail RUN=FIXED`` reads RUN's compiled Commit run time with FIXED's tail (`retail`): for a run whose Commit arm did more
-than commit between its last step and the clock stop (`prof_arm.RootsArm` wrote its profiling records there before
-8374522a79), FIXED being a run of the same model whose arm doesn't. Its rows are labeled ``RUN (tail FIXED)``.
+than commit between its last step and the clock stop (an older `prof_arm.RootsArm` wrote its profiling records there),
+FIXED being a run of the same model whose arm doesn't. Its rows are labeled ``RUN (tail FIXED)``.
 """
 from __future__ import annotations
 

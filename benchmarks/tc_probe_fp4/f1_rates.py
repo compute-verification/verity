@@ -1,6 +1,6 @@
 """F1 (`fp4-tile-only/sm120`): every multiplier on sm_120a priced per nonzero product against dense NVFP4 (lane pouw rtx-pro GPU 4).
 
-The FP4-tile model (docs/pouw/fp4-tile-model.md §1) claims that no sm_120 instruction multiplies faster than the NVFP4 m16n8k64
+The FP4-tile model claims that no sm_120 instruction multiplies faster than the NVFP4 m16n8k64
 tile per nonzero product.  This tool measures that claim over every ``mma.sync`` / ``mma.sp::ordered_metadata`` kind, shape,
 type and sparsity ptxas accepts for sm_120a, and over the CUDA-core multipliers, each in the same process as dense NVFP4:
 

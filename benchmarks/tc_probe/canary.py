@@ -18,13 +18,12 @@ The tile set is a pure function of the instruction id, the repository fixtures a
   (:data:`trust.REGRESSION_TILES`): ``family:<name>`` tiles join the family set, ``replay:<fragment>`` files
   are replayed in full (golden records; the tc-total special captures for BF16).
 
-TODO(pod): the device half (``run_canary``: ``Probe.tiles`` + ``model_eval`` + ``replay_golden``) has not been executed on
-silicon from this laptop.  First pod run per anchor: ``research run --tool tc_probe --project verity -- python
-benchmarks/tc_probe/tc_probe.py --instruction <id> --out $RESEARCH_RUN_DIR --canary --sass-check``, check the wall time (< 60 s) and
-that ``probe_results.json["canary"]["digest"]`` equals :func:`canary_digest` computed offline, then label the artifact.  BF16
-anchors have no ``adder_width_cancellation`` / ``acc_only_lsb_walk`` families yet (they are FP8-only in ``families()``): the
-trust framework's PINNED criterion P3 lists them as missing for every BF16 instruction until ``families()`` yields them for BF16
-and the anchors are re-swept.
+The device half is ``run_canary`` (``Probe.tiles`` + ``model_eval`` + ``replay_golden``).  On an anchor's first canary
+(``research run --tool tc_probe --project verity -- python benchmarks/tc_probe/tc_probe.py --instruction <id> --out
+$RESEARCH_RUN_DIR --canary --sass-check``), check the wall time (< 60 s) and that ``probe_results.json["canary"]["digest"]`` equals
+:func:`canary_digest` computed offline, then label the artifact.  BF16 anchors have no ``adder_width_cancellation`` /
+``acc_only_lsb_walk`` families (they are FP8-only in ``families()``), so the trust framework's PINNED criterion P3 lists them as
+missing for every BF16 instruction.
 """
 from __future__ import annotations
 

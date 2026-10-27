@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G2's served arm (served_arm.py, the specs *-rtx-served-arm*): SPEC through run.sh (ARGS go to it), compiling into an Inductor dir
+# The served arm (served_arm.py, the specs *-rtx-served-arm*): SPEC through run.sh (ARGS go to it), compiling into an Inductor dir
 # of this job's own. With SEED_ARGS (run.sh's arguments for a pass of the spec's bi-eager and compiled stock: `--arms` names every
 # arm the `--arm-module`s define, so it takes an eager arm's module, which compiles nothing), that pass runs first, one rep, so
 # every kernel compiled stock launches has its autotune winner in the dir before an arm of the measured run compiles: compiled

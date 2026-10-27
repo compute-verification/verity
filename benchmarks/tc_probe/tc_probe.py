@@ -76,8 +76,7 @@ seed, n, families, models; ``tc_evidence`` = per-family counts, ``model_agrees``
 iff every mismatch count against a pinned model and every replay is zero).  ``--compile-only`` builds the instruction's kernel
 for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
 instructions per tile kernel, compared with the table's ``sass_mma``; the tile kernel's SASS is kept as ``sass_<kernel>_<arch>.txt``)
-and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.  The BF16 path is unchanged from WP1:
-the same families, the same random draws, the same words.
+and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.
 
 ``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
 plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any

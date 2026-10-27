@@ -9,10 +9,9 @@ staging) hashes them into one root per step. Its control is ``stock`` token for 
 is served.
 
 An arm commits under its ``commit_scheme``, and ``install`` refuses ``vllm-v1`` by name. These two arms, and
-every `prof_arm` arm that doesn't name ``rows-sha512``, are ``vllm-v1`` (SHA-256), the record as it was before the Commit's default
-became ``rows-sha512``: their runs of record stay readable (`benchmarks/g2/curve.py` reads an arm's scheme from its name), and they
-run no new one. The Commit is what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`)
-measure.
+every `prof_arm` arm that doesn't name ``rows-sha512``, are ``vllm-v1`` (SHA-256), so they run nothing; `benchmarks/g2/curve.py`
+reads an arm's scheme from its name. The Commit is what `prof_arm`'s rows arms and the harness's ``commit`` arms
+(`verity_bench.vllm.commit_arm`) measure.
 
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
 ``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and

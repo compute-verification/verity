@@ -1,5 +1,6 @@
 """G2: the served Commit's measured overhead over stock, per model, GPU, batch and phase, and the best achievable, rendered from
-the evidence store only (CIR-26). G2 has no pass/fail number: it is this curve.
+the evidence store only (CIR-26). It measures nothing: the runs it reads are `benchmarks/served_commit`'s and the hash loop's.
+G2 has no pass/fail number: it is this curve.
 
 Where the numbers come from:
 - Runs labeled campaign=g2 (`research data label RUN campaign g2 --by circuits --ref RUN`). The run's record
