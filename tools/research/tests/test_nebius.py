@@ -3590,3 +3590,10 @@ def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():
         "https://cursor.com/agents/bc-worker"
     assert remote.sender({"RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == "https://cursor.com/agents/bc-coord"
     assert remote.sender({}) is None
+
+
+def test_node_1s_jobs_default_to_the_image_built_from_sky_gpu_dockerfile():
+    """build.sh tags an image by its Dockerfile's hash and pods never pull it: a default naming another hash finds no image."""
+    tag = "verity-sky-gpu:" + hashlib.sha256((NEBIUS / "image" / "sky-gpu.Dockerfile").read_bytes()).hexdigest()[:16]
+    for name in ("dispatch.py", "n1_lease.py", "n1_custody.sh"):
+        assert re.findall(r"verity-sky-gpu:[0-9a-f]+", (NEBIUS / name).read_text()) == [tag], f"{name}: set its default to {tag}"
