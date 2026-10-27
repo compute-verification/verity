@@ -59,9 +59,10 @@ print(v.profile().statement())                                                 #
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
 on a machine the prover doesn't control at the prover's site (the auditor's own VM or box, under the auditor's account),
-never a process on the prover's node. It commits its indices in a coin tree before the session, hashes each whole
-answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
-`answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's root of `C*`.
+never a process on the prover's node. It commits its indices in a coin tree it keeps until the session is signed, hashes
+each whole answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's
+leaf, which `answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's
+root of `C*`; only then does it release the coin tree's root (`commitment`) and its openings.
 A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
 (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
@@ -71,6 +72,11 @@ the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/P
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
+
+As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
+instead (`period_reports`, on `verity.core.attest`): each session is a sampling block whose one public output is its
+liveness record, and the period's root is signed once at its close, for the prover only. `period_reports.PERIOD` is not
+in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads `MemoryChallenger.Attest.check`.
 
 ~~~python
 from verity.ml.crypto import lms
@@ -101,7 +107,11 @@ prior content, with no named assumption, for the sequential reveal, the only one
 fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` (`StreamedWipeMeetsFamily`, with
 `StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`); at any `k` with `(1 − 1/r)^k ≤ 2^-129`, the egress plus
 `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200 at
-`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`). `PROTOCOL.md` ("The
+`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`); with the count of the missing labels in
+place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
+`StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`): one H200 as measured at its deployed `k = 5500`, and a whole
+8×H200 server, HBM, 2 TB of RAM and 12 TB of disk, at `k = 1,268,143` with 3.9 GB outside the fill
+(`StreamedWipeMeetsServer8H200`). `PROTOCOL.md` ("The
 streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
@@ -142,6 +152,15 @@ declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML ga
 of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
+`wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
+`wipe_store.Joint`; `demo.sh --disk PATH`): a fill file of the session's own in each target directory, or a raw block
+device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The whole disks under the targets
+are declared, with `spare_bytes` for each drive's spare area and cache, so what the fill doesn't overwrite (the used
+filesystem, its metadata, the reserve, the spare area) counts in `R`. That is `Pous.Guarantees.StreamedWipeMeetsDisk`.
+A virtual disk's backing store, an undeclared spare area, buffered I/O and the disks outside the targets go in
+`uncertified`: every block device in `/sys/block` but loop and RAM devices, mounted or not, each whole. `wipe.dram` puts the host's DRAM in that session too, after the card (`demo.sh --dram`): the fill takes
+what `MemAvailable` says less a reserve, and the whole DRAM is declared (`wipe_store.HostMemory(whole=True)`), so the
+rest counts in `R`.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

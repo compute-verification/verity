@@ -48,7 +48,8 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | the network certifier (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | the remote bandwidth audit (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
@@ -62,8 +63,8 @@ own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), 
 own difftest or its period hook. Every component of both products is ported; NCI is a registration check, not a component, and
 the trial's reconciling is not a component yet.
 
-A component that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings: sampled
-proofs' proof files) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to every
+A component that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings: sampled proofs'
+proof files) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to every
 component, those that read none ignore them (`Protocol.withoutBlobs`), and on the blobs it is `product` of its
 components on them (`productB_on`). `onsite check P C E [BLOB ...]` reads them after the evidence, and a `serve` case
 carries them as hex under `blobs`.
@@ -96,19 +97,19 @@ adds nothing to what is public or kept.
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule (vendored, with its source files named), over the harness's framing
 of the core interface (`verity_difftest.protocol.answer`), and
-each component's own Python (PoUW's `core_check.case`; for sampled proofs, v2's framing over the one-stage difftest's
-`one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network certifier's
-period difftest's `reference`, its Python mirror over the certifier's certificates and one-stage's answers, on small
-signed periods from its `build`; the wipe's mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`), which
-that component's own difftest holds its Lean to; for PoUS and the remote bandwidth audit, their Python verifiers'
-answers on small periods of their hooks
+each component's own Python (PoUW's `core_check.case`, and for its period `period_check.case`; for sampled proofs, v2's
+framing over sampled proofs' one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides
+without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
+certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
+`wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to; for
+PoUS and the remote bandwidth audit, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
 Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
 (one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), every case hands
 the components the same blobs (sampled proofs' circuit and public file), and the composition's inputs, its blobs or the
-case itself are often broken. Sampled proofs accept only on a session's proof, which no case carries (its cases are
+case itself are often broken. Sampled proofs accepts only on a session's proof, which no case carries (its cases are
 audits with no session, undecided when their draw drew nothing, and audits whose sessions' files are in no blob), so no
 product accepts in the difftest until a v2 case with a proof does. The port follows the rule above where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):

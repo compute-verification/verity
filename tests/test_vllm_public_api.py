@@ -1,5 +1,4 @@
-"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces
-(note:20261024T0615Z-draft-verity-vllm-vision, sections 3 and 5).
+"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
 ``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
 ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
@@ -43,10 +42,14 @@ PUBLIC = {
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
+    "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
+                                          "own Build without a trace",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
+    "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
+                                          "its digest",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -56,7 +59,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.taps",
     "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
-    "verity_vllm.check.codes",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
     "verity_vllm.check.oracle_compare",
@@ -143,7 +145,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.device",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
-    "verity_vllm.protocols.pouw.h1.commit",
     "verity_vllm.protocols.pouw.h1.handoff",
     "verity_vllm.protocols.pouw.h1.kept",
     "verity_vllm.protocols.pouw.h1.prover",

@@ -11,8 +11,8 @@ The circuit a C-Flock session checks is defined from its circuit file: the descr
 file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and partition (`keyCircuit`,
 `keyPartition`) the session's game is stated over. Here that circuit is core's:
 
-* `Verity.Circuit.ofAudit C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), the same
-  gates, one bit each; `Verity.Partition.ofAudit P`, the same partition.
+* `Verity.Circuit.ofAudit C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), the Boolean
+  profile's `toCircuit`: the same gates, one bit each; `Verity.Partition.ofAudit P`, the same partition.
 * `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
   parsed file as core's circuit and its `n` units.
 * `circuitOfFile tags cf tables pf`, `unitsOfFile` and `partsOfFile`: the same at the committed files themselves, the
@@ -22,51 +22,31 @@ file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and 
 The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
 -/
 
-namespace Flock.Bridge
-
-/-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → Verity.Boolean.Op N
-  | .input => .input
-  | .and a b => .and a b
-  | .xor a b => .xor a b
-  | .not a => .not a
-  | .row a b => .row a b
-
-theorem args_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).args = o.args := by
-  cases o <;> rfl
-
-theorem isInput_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).isInput = o.isInput := by
-  cases o <;> rfl
-
-end Flock.Bridge
-
 namespace Verity
 
-open Flock.Bridge (coreOp args_coreOp isInput_coreOp)
-
-/-- **A game circuit as core's**: the Boolean profile's circuit of it, one bit a gate, written out so that its gates are
-the game circuit's. -/
+/-- **A game circuit as core's**: the Boolean profile's circuit of it (`FlockSoundness.Audit.Circuit.toCircuit`), one
+bit a gate, written out so that its gates reduce to the game circuit's. -/
 abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit where
   N := C.N
   w _ := 1
-  isInput g := (coreOp (C.op g)).isInput
-  reads g := (coreOp (C.op g)).args.toFinset
-  reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
-  op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
+  isInput g := (C.op g).isInput
+  reads g := (C.op g).args.toFinset
+  reads_lt g a ha := C.topo g a (List.mem_toFinset.1 ha)
+  input_reads g h := by simp [FlockSoundness.Audit.Op.args_of_isInput h]
+  op g v := BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0)
   op_congr g v v' h := by
-    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+    rw [FlockSoundness.Audit.Op.apply_congr (C.op g) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
   outputs := C.outputs
 
 theorem Circuit.ofAudit_isInput {C : FlockSoundness.Audit.Circuit} (g : Fin C.N) :
     (Circuit.ofAudit C).isInput g = (C.op g).isInput :=
-  isInput_coreOp _
+  rfl
 
 /-- A game partition as core's: the same units. -/
 def Partition.ofAudit {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
     Partition (Circuit.ofAudit C) n where
   unit := P.unit
-  input_iff g := (P.input_iff g).trans (by rw [Circuit.ofAudit_isInput])
+  input_iff g := P.input_iff g
 
 /-- The circuit with no gates: what files that don't parse register. -/
 def Circuit.empty : Circuit where

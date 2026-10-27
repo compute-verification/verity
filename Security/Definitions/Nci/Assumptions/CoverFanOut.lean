@@ -75,7 +75,7 @@ Scope:
   the first read on a key path, and with (I) the values beyond it are on no other spent value's key path. A path's start
   is the exception `Keyed`'s (F) rules out: a value keyed to an activation `κ` (a re-quantization of an `f`-bit `κ`)
   would be spent beside `κ` at one bit, `f + 1` bits for two values. With (I) and (F), no spent value is a key ancestor
-  of another (`Keyed.spent_eq_of_follows`).
+  of another.
 
 Kimi K2 (`f = 4`, `b = 2.5`): with `ColumnsIncompressible` at 1 bit per entry, about 3.6·10⁴ (`FanOutReadCoverBound`),
 four times `FanOutCoverBound`'s 8,900. With Dgrad on the forward's tokens (`c = 2`), 7.3·10⁴ against 1.66·10⁴. -/
