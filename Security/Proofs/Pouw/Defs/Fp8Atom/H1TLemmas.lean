@@ -5,7 +5,7 @@ import Definitions.Pouw.Fp8Atom.H1T
 import Proofs.Pouw.Defs.Fp8Atom.H1TVec
 
 /-!
-# H-1T's M3 statements (trusted)
+# H-1T's M3 statements
 
 M3 of `internal/pouw-fp8/lean-atom-m2-plan.md` (§0.6): the lemmas the one-flip clauses of `DistinctLiveH1T` rest on.
 
