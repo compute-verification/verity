@@ -153,7 +153,8 @@ Landing:
   list, and a rename moves a file's entries (`--move OLD NEW`). Ruff: one rule set, the root `ruff.toml`, counted per
   (file, rule) (23:47Z); `noqa` lines aren't counted. Configuration in one place (01:30Z): no file adds a direct
   environment read; read it through the area's settings registry, a `settings.py` or a file the list marks `"registry":
-  true` (counted from the PR's base).
+  true` (counted from the PR's base). Recorded outcomes (02:05Z): no file adds an except handler that swallows, typed or
+  broad; re-raise, record the outcome, or test for the expected case.
 
 Protocols and claims:
 

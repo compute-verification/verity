@@ -26,7 +26,9 @@ failure message carries its fix.
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
 - **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
  `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
- the record), never dropped with `pass`, `continue` or a default.
+ the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
+ can't read, or puts a default where a value was, shrinks the evidence a verdict is decided on and leaves no trace of it.
+ `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
@@ -70,6 +72,14 @@ is exempt: a module named `settings.py`, or one the list marks `{"file", "regist
 a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is
 `integrations/vllm/verity_vllm/settings.py`), or create one. A mark counts from the PR's base, so it lands before the reads
 it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
+It holds except handlers that swallow what they catch the same way (27 Oct 02:05Z: recorded outcomes).
+`tests/lint/test_repo_silent_excepts.py` counts, in the same files, each handler, typed or broad, whose every statement is
+`pass`, `continue`, `break`, a bare constant, or a `return` or assignment of a default (nothing, `None`, a constant other than
+a string or `False`, a name other than the caught exception's, an empty container), against
+`tests/lint/allowlists/repo_silent_excepts.json`, built like the env-read list. The gate refuses a PR that adds one to a file it
+changes, naming each, with the fix: re-raise; or record the outcome in the area's typed record or log; or test for the
+expected case and let the rest raise (a narrower handler that still swallows still counts). A rename moves its entry
+(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more
