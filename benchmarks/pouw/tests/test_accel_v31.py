@@ -458,16 +458,6 @@ def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_pat
     assert capsys.readouterr().out.splitlines()[-8].endswith("| 0.01710 | 0.950 | - |")
 
 
-def test_leaf_pieces_fit_their_flag_word():
-    """leaf_persist's pieces hand a group on through flag[group] = epoch << 8 | k: k must fit in the low 8 bits and the
-    epoch in the other 24, else a piece waits on a word that never comes (or starts from a stale chaining value). Lanes
-    caps the pieces at 255 (and at the row's chunks) and the epoch at 24 bits."""
-    src = (Path(v31.__file__).parent / "v31.cu").read_text()
-    assert re.search(r"return std::min\(\{want, T, (\d+)u\}\);", src).group(1) == "255"
-    assert "epoch = (epoch + 1) & 0xFFFFFF;" in src
-    assert src.count("p.epoch << 8 | k") == 1 and src.count("p.epoch << 8 | (k + 1)") == 1
-
-
 def test_perm_kernel_launches_within_its_bounds():
     """perm_kernel's SHA-512 takes 90 registers a thread, so a CTA of 1,024 never launches and pi stays unwritten: every
     launch takes PERM_THREADS(L') threads, at most the kernel's __launch_bounds__ of 512."""

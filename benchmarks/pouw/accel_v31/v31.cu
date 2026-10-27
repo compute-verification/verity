@@ -1367,19 +1367,19 @@ struct CellRow {
 };
 
 // Full-block rows (ROW a multiple of 128): no data block holds padding, and the padding block is a constant whose schedule
-// the host computed (C.kw_xpad, the Committer's lb = ROW), so a row is T = ROW / 128 + 1 chunks after P. hash_full_range
-// takes the chaining value x (C.mid_P before chunk 0) through chunks c0 .. c1 - 1, each data block's 16 words from
-// src.block(b, W) at one address a block, the next block's line prefetched (src.pf) as its compression starts.
+// the host computed (C.kw_xpad, the Committer's lb = ROW), so a row is ROW / 128 data blocks and that block after P.
+// hash_full takes x from C.mid_P through them, each data block's 16 words from src.block(b, W) at one address a block,
+// the next block's line prefetched (src.pf) as its compression starts.
 template <class Src>
-DEV void hash_full_range(u64* x, const Src& src, u32 nblk, u32 c0, u32 c1, bool pf) {
-  const u32 e = c1 < nblk ? c1 : nblk;
-  for (u32 b = c0; b < e; ++b) {
+DEV void hash_full(u64* x, const Src& src, u32 nblk, bool pf) {
+  cpy8(x, C.mid_P);
+  for (u32 b = 0; b < nblk; ++b) {
     if (pf && b + 1 < nblk) src.pf(b + 1);
     u64 W[16];
     src.block(b, W);
     sha::compress(x, W);
   }
-  if (c1 > nblk) sha::compress_kw(x, C.kw_xpad);
+  sha::compress_kw(x, C.kw_xpad);
 }
 DEV void be_words(const uint4 v, u64* w) {
   w[0] = be64(v.x, v.y);
@@ -1426,8 +1426,8 @@ struct ServedBlk {
 // leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a prefix-sum row (segment j / ROW_W), else O's row j - S ROW_W. Both kinds
 // go through one CellRow, so a warp whose leaves straddle the two (most warps: LPT isn't a multiple of 32) hashes once,
 // not once a kind.
-// A row source's leaf phase (leaf_persist): chunks() of a row, digest_range hashing chunks c0 .. c1 - 1 into x; full (set
-// by the host for ROW a multiple of 128): hash_full_range's path, else one chunk, the whole row from hash_after_block.
+// A row source's leaf phase (leaf_persist) takes a row's digest from leaf_digest: full (set by the host for ROW a multiple
+// of 128), hash_full's path, else digest's (hash_after_block).
 struct V31Row {
   const uint8_t* words;
   const uint8_t* O;
@@ -1439,14 +1439,12 @@ struct V31Row {
     const uint8_t* base = w ? words + t * S * 32768ull + j * row : O + ((t / tiles_n) * TILE * N + (t % tiles_n) * TILE) * 4;
     hash_after_block(C.mid_P, CellRow{base, w ? 512ull : N * 4, w ? 0u : (u32)((j - srw) * row / 4), pf}, row, x, pf != 0);
   }
-  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
-  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+  DEV void leaf_digest(u64 pos, u64* x) const {
     if (!full) { digest(pos, x); return; }
     const u64 t = pos / lpt, j = pos % lpt;
     const bool w = j < srw;
     const uint8_t* base = w ? words + t * S * 32768ull + j * row : O + ((t / tiles_n) * TILE * N + (t % tiles_n) * TILE) * 4;
-    const QuarterSrc src{base, w ? 512u : (u32)(N * 4), w ? 0u : (u32)((j - srw) * row / 128), pf};
-    hash_full_range(x, src, row / 128, c0, c1, pf != 0);
+    hash_full(x, QuarterSrc{base, w ? 512u : (u32)(N * 4), w ? 0u : (u32)((j - srw) * row / 128), pf}, row / 128, pf != 0);
   }
 };
 // timing only (the bench's leaf_nomem arm): a row's bytes made in registers, V31Row's compressions without its loads
@@ -1466,9 +1464,8 @@ struct NoMemBlk {
 struct NoMemRow {
   u32 row, full;
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, NoMemSrc{(u32)pos}, row, x); }
-  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
-  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
-    if (full) hash_full_range(x, NoMemBlk{(u32)pos}, row / 128, c0, c1, false);
+  DEV void leaf_digest(u64 pos, u64* x) const {
+    if (full) hash_full(x, NoMemBlk{(u32)pos}, row / 128, false);
     else digest(pos, x);
   }
 };
@@ -1528,12 +1525,10 @@ struct LtRow {
     return LtSrc{D + (t / tiles_n) * TILE * N + (t % tiles_n) * TILE, N, (u32)(j * row / 2), pf};
   }
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
-  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
-  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+  DEV void leaf_digest(u64 pos, u64* x) const {
     if (!full) { digest(pos, x); return; }
     const u64 t = pos / lpt, j = pos % lpt;
-    hash_full_range(x, LtBlk{D + (t / tiles_n) * TILE * N + (t % tiles_n) * TILE, N, (u32)(j * row / 128), pf}, row / 128, c0,
-                    c1, pf != 0);
+    hash_full(x, LtBlk{D + (t / tiles_n) * TILE * N + (t % tiles_n) * TILE, N, (u32)(j * row / 128), pf}, row / 128, pf != 0);
   }
 };
 // A served call's rows (dither.Shape(o=True)): per tile its W prefix-sum rows (the prefix-sum buffer, W tile-segments a
@@ -1574,14 +1569,13 @@ struct ServedRow {
                             sa + tm * TILE, rb + tn * TILE, sb + tn * TILE, N, w ? 0u : (u32)((j - wrows) * row / 4), pf};
   }
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
-  DEV u32 chunks() const { return full ? row / 128 + 1 : 1; }
-  DEV void digest_range(u64 pos, u64* x, u32 c0, u32 c1) const {
+  DEV void leaf_digest(u64 pos, u64* x) const {
     if (!full) { digest(pos, x); return; }
     const u64 t = pos / lpt, j = pos % lpt, tm = t / tiles_n, tn = t % tiles_n;
     const bool w = j < wrows;
     const QuarterSrc d{w ? words + t * W * 32768ull + j * row : reinterpret_cast<const uint8_t*>(D + tm * TILE * N + tn * TILE),
                        w ? 512u : (u32)(N * 4), w ? 0u : (u32)((j - wrows) * row / 128), pf};
-    hash_full_range(x, ServedBlk{d, ra, sa, rb, sb, (u32)(tm * TILE), (u32)(tn * TILE), w ? 0u : ~0u}, row / 128, c0, c1, pf != 0);
+    hash_full(x, ServedBlk{d, ra, sa, rb, sb, (u32)(tm * TILE), (u32)(tn * TILE), w ? 0u : ~0u}, row / 128, pf != 0);
   }
 };
 
@@ -1669,8 +1663,7 @@ struct FusedRow {
     }
     hash_blocks(x, row.src(pos), row.row, b, row.pf != 0, NoStop{});
   }
-  DEV u32 chunks() const { return 1; }
-  DEV void digest_range(u64 pos, u64* x, u32, u32) const { digest(pos, x); }
+  DEV void leaf_digest(u64 pos, u64* x) const { digest(pos, x); }
 };
 
 // ---------------------------------------------------------------- the commit in at most cap CTAs an SM
@@ -1826,56 +1819,24 @@ __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     }
   persist_done(p);
 }
-// leaf_persist's rows in np pieces (1: each row whole): unit u is piece k = u / ng of group u % ng, chunks k T / np ..
-// (k + 1) T / np - 1 of each of the group's rows (T = Row::chunks()). A piece past the first starts from the chaining values
-// its predecessor stored in xs, once flag[group] = epoch << 8 | k. Units are claimed in order, so a piece's predecessor went
-// to a CTA that was already running, and every wait ends; the groups of the last round then end within a piece of the
-// others rather than a row.
-struct Pieces {
-  u64* xs;     // a chaining value a leaf
-  u32* flag;   // a word a group
-  u32 np, ng;
-};
-// leaf_small (g = 1, no bc, no fused top) a group (or a piece of one) at a time (nvb = ng np units, ng = ceil(n / 128));
-// MINB its CTAs an SM by registers (4: 128 a thread, for a leaf phase that has the SMs to itself); fl, the group's levels
-// the CTA folds itself (log2 of its leaves, or 0 when level kernels fold them after, Lanes::lfold)
+// leaf_small (g = 1, no bc, no fused top) a group at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by registers (4:
+// 128 a thread, for a leaf phase that has the SMs to itself); fl, the group's levels the CTA folds itself (log2 of its
+// leaves, or 0 when level kernels fold them after, Lanes::lfold)
 template <class Row, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
-                 u64* levels, Pieces pc, int fl) {
-  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS), T = row.chunks();
+                 u64* levels, int fl) {
+  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   if (persist_claim(p))
-    for (u32 u; (u = persist_next(p)) < p.nvb;) {
-      const u32 k = u / pc.ng, vb = u - k * pc.ng;
-      const bool last = k + 1 == pc.np;
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
       const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
-      if (k) {
-        if (threadIdx.x == 0) {
-          while (*reinterpret_cast<volatile u32*>(pc.flag + vb) != (p.epoch << 8 | k)) __nanosleep(128);
-          __threadfence();
-        }
-        __syncthreads();
-      }
       if (pos < n) {
-        u64 x[8];
-        if (k) ld8cg(pc.xs + 8 * pos, x);
-        else cpy8(x, C.mid_P);
-        row.digest_range(pos, x, k * T / pc.np, (k + 1) * T / pc.np);
-        if (last) {
-          u64 out[8];
-          leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
-          st8(levels + 8 * pos, out);
-        } else {
-          st8(pc.xs + 8 * pos, x);
-          __threadfence();
-        }
+        u64 x[8], out[8];
+        row.leaf_digest(pos, x);
+        leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
+        st8(levels + 8 * pos, out);
       }
-      if (last) {
-        fold_vb(dom, levels, width, cnt, fl, vb);
-      } else {
-        __syncthreads();
-        if (threadIdx.x == 0) *reinterpret_cast<volatile u32*>(pc.flag + vb) = p.epoch << 8 | (k + 1);
-      }
+      fold_vb(dom, levels, width, cnt, fl, vb);
     }
   persist_done(p);
 }
@@ -2129,8 +2090,7 @@ static std::string env_str(const char* name, const char* dflt) {
 // A Fill's commit: V31_LMINB 4, 5 (the default), 6 or 8, its leaf phase's CTAs an SM by registers (leaf_persist's MINB: 128,
 // 96, 80 or 64 a thread); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued with the
 // call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
-// a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks; V31_LPIECES, the
-// pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1);
+// a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks;
 // V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 1, a group's levels (1 .. 7) folded by the group's CTA
 // (the leaf phase's for a group of leaves, the salt phase's for a group of pads alone), whose other warps wait while a few
 // fold, rather than (0, the default) by a level_kernel launch a level, over the whole width, after the leaf phase.
@@ -2140,8 +2100,7 @@ struct Knobs {
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
       ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
-      full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0), sminb = env_int("V31_SMINB", SMALL_MINB),
-      lfold = env_int("V31_LFOLD", 0);
+      full = env_int("V31_FULL", 1), sminb = env_int("V31_SMINB", SMALL_MINB), lfold = env_int("V31_LFOLD", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -2170,35 +2129,15 @@ static void set_carveout(int pct) {
 
 // A committer's salt and leaf phases in at most ccta CTAs an SM (salt_persist, leaf_persist; ccta 0: commit_gpu's small
 // path), then its levels above the leaves' CTAs. Launches that share ctl run in one stream's order.
-template <class R> static u32 host_chunks(const R& r) { return r.full ? r.row / 128 + 1 : 1; }
-static u32 host_chunks(const FusedRow&) { return 1; }
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB, lpieces = 0, sminb = SMALL_MINB, lfold = 0;
-  u64* xs = nullptr;     // Pieces: a chaining value for each of up to cap_n leaves, a flag a group
-  u32* flag = nullptr;
-  u64 cap_n = 0;
+  int nsm = 1, lminb = SMALL_MINB, sminb = SMALL_MINB, lfold = 0;
   void init(int nsm_) {
     nsm = nsm_;
     ctl = dalloc<u32>(2 + 2 * 8 * (size_t)nsm);
     claim = dalloc<u32>(1024);
     CK(cudaMemset(ctl, 0, 4 * (2 + 2 * 8 * (size_t)nsm)));
     CK(cudaMemset(claim, 0, 4096));
-  }
-  void pieces_init(u64 n) {
-    const u64 ng = (n + SMALL_THREADS - 1) / SMALL_THREADS;
-    cap_n = n;
-    xs = dalloc<u64>(8 * n);
-    flag = dalloc<u32>(ng);
-    CK(cudaMemset(flag, 0, 4 * ng));
-  }
-  // the pieces of a leaf phase over ng groups (V31_LPIECES; 0: 8 when the groups outnumber ccta CTAs an SM, else 1)
-  template <class Row>
-  u32 pieces(const Row& rows, u64 n, u64 ng, int ccta) const {
-    const u32 T = host_chunks(rows);
-    if (T < 2 || !xs || n > cap_n) return 1;
-    const u32 want = lpieces > 0 ? (u32)lpieces : ng > (u64)ccta * nsm ? 8u : 1u;
-    return std::min({want, T, 255u});
   }
   // a capped launch over nvb groups: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs
   Persist persist(u64 nvb, int ccta) {
@@ -2235,25 +2174,22 @@ struct Lanes {
       cm.leaves(rows, st);
     } else {
       const u64 ng = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
-      const u32 np = pieces(rows, cm.n, ng, ccta);
-      const u64 nu = ng * np;
-      const Persist p = persist(nu, ccta);
-      const Pieces pc{xs, flag, np, (u32)ng};
-      const unsigned g = grid(nu, ccta);
+      const Persist p = persist(ng, ccta);
+      const unsigned g = grid(ng, ccta);
       const int L = group_levels(cm.width), fl = folds_after(ccta) ? 0 : L;
       if (lminb == 4) {
-        leaf_persist<Row, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
+        leaf_persist<Row, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, fl);
       } else if (lminb == 6 || lminb == 8) {
         if constexpr (std::is_same_v<Row, FusedRow>) {
           fprintf(stderr, "V31_LMINB %d: the fused leaf phase takes 4 or %d\n", lminb, SMALL_MINB);
           exit(2);
         } else if (lminb == 6) {
-          leaf_persist<Row, 6><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
+          leaf_persist<Row, 6><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, fl);
         } else {
-          leaf_persist<Row, 8><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
+          leaf_persist<Row, 8><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, fl);
         }
       } else {
-        leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
+        leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, fl);
       }
       for (int d = fl; d < L; ++d) {   // the whole width: salts left the groups of pads alone to these too
         const u64 n_out = cm.width >> (d + 1);
@@ -2678,7 +2614,6 @@ struct Fill {
       fprintf(stderr, "V31_LMINB: 4, %d, 6 or 8\n", SMALL_MINB);
       exit(2);
     }
-    if (kn.lpieces < 0 || kn.lpieces > 255) { fprintf(stderr, "V31_LPIECES: 0 to 255\n"); exit(2); }
     if (kn.sminb != 4 && kn.sminb != SMALL_MINB) { fprintf(stderr, "V31_SMINB: 4 or %d\n", SMALL_MINB); exit(2); }
     if (kn.lfold != 0 && kn.lfold != 1) { fprintf(stderr, "V31_LFOLD: 0 or 1\n"); exit(2); }
     own = !c0;
@@ -2695,10 +2630,8 @@ struct Fill {
     CK(cudaMemset(gctr, 0, 4));
     pl.init(nsm);
     pl.lminb = kn.lminb;
-    pl.lpieces = kn.lpieces;
     pl.sminb = kn.sminb;
     pl.lfold = kn.lfold;
-    if (full_rows()) pl.pieces_init(leaves);
     if (kn.sahead) {
       int pr;
       CK(cudaStreamGetPriority(s1, &pr));
@@ -2920,13 +2853,8 @@ struct Fill {
     return ServedRow{reinterpret_cast<const uint8_t*>(words[b]), D[b], ra[b], sa[b], rb[b], sb[b], (u64)lpt,
                      (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf, full_rows()};
   }
-  // rows of whole SHA-512 blocks (V31_FULL): the leaf phase's hash_full_range path
+  // rows of whole SHA-512 blocks (V31_FULL): the leaf phase's hash_full path
   u32 full_rows() const { return kn.full && row % 128 == 0 ? 1u : 0u; }
-  // the pieces copy b's leaf phase cuts its rows into (Lanes::pieces; the fused rows and the small path's, 1)
-  u32 leaf_pieces(int b) const {
-    if (!kn.ccta || (o && xd[b])) return 1;
-    return pl.pieces(rowsrc(b), leaves, (leaves + SMALL_THREADS - 1) / SMALL_THREADS, kn.ccta);
-  }
   void leaves_nodes(int b, cudaStream_t st) {
     if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row, full_rows()}, kn.ccta, st);
     else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
@@ -3763,10 +3691,10 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     };
     const double rs = per_cycle("sha", cc.sha), rl = per_cycle("leaf", cc.leaf), rn = per_cycle("leaf_nomem", cc.leaf),
                  rt = per_cycle("salt", cc.salt), rc = per_cycle("commit", cc.leaf + cc.salt);
-    printf("\"sminb\": %d, \"lfold\": %d, \"full\": %u, \"lpieces\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, "
+    printf("\"sminb\": %d, \"lfold\": %d, \"full\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, "
            "\"per_sm_cycle\": {\"sha\": %s, \"leaf\": %s, \"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, \"of_sha\": {\"leaf\": %s, "
            "\"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, ",
-           f.kn.sminb, f.kn.lfold, f.full_rows(), f.leaf_pieces(0), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
+           f.kn.sminb, f.kn.lfold, f.full_rows(), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
            jn(rt).c_str(), jn(rc).c_str(), jn(rl / rs).c_str(), jn(rn / rs).c_str(), jn(rt / rs).c_str(), jn(rc / rs).c_str());
     printf("\"kernels\": ");
     kernel_attrs(stdout);
