@@ -1674,6 +1674,9 @@
    "owner": "@compute-accounting",
    "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
   },
+  "Pouw.Assumptions.TTPerCoin": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.Barrier.CheapPoint": {
    "owner": "@compute-accounting",
    "digest": "c524bd24674f8135b39217af8c02ef5218639912219aaabbed6257d2829d7eb7"

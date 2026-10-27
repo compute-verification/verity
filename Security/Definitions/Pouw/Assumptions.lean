@@ -56,6 +56,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
 import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Definitions.Pouw.Assumptions.PerCoin
 import Definitions.Pouw.Assumptions.Pinned
 import Definitions.Pouw.Assumptions.RelativeSecurity
 import Definitions.Pouw.Assumptions.ShaRealize

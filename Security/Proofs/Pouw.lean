@@ -167,6 +167,7 @@ import Proofs.Pouw.PearlC.RowStats
 import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
+import Proofs.Pouw.PerCoin
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
