@@ -488,9 +488,9 @@ theorem read_card {Ω : Type} {T : Trace Ω} (hcov : Covers T) {ω : Ω} (ha : T
     (T.read ω p).card + (T.plan ω p \ T.correct ω p).card = T.blocks := by
   have hr : T.read ω p = T.plan ω p ∩ T.correct ω p := by
     unfold Trace.read
-    refine Finset.filter_true_of_mem fun j hj => ?_
+    refine Finset.inter_eq_left.2 fun j hj => ?_
     obtain ⟨t, h1, h2, ht⟩ := hk j (Finset.mem_inter.1 hj).2
-    exact ⟨t, Finset.mem_Ico.2 ⟨h1, h2⟩, ht⟩
+    exact Finset.mem_biUnion.2 ⟨t, Finset.mem_Ico.2 ⟨h1, h2⟩, ht⟩
   rw [hr, add_comm, Finset.card_sdiff_add_card_inter, hcov ω ha p hp, Finset.card_univ, Fintype.card_fin]
 
 /-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the W the
@@ -515,7 +515,7 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
     rw [Finset.sum_const_nat fun p hp' => read_card hcov ha (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)
       (hk p (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)), Finset.card_range]
   have h2 : ∑ p ∈ range P, (T.plan ω p \ T.correct ω p).card ≤ T.wrong ω :=
-    Finset.sum_le_sum_of_subset (Finset.range_mono hPle)
+    Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 hPle)
   have hsum : P * T.blocks ≤ T.reads ω P + T.wrong ω := by
     rw [Finset.sum_add_distrib] at h1
     unfold Trace.reads
@@ -579,7 +579,7 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
       ∃ t, T'.tick ω p ≤ t ∧ t < T'.tick ω (p + 1) ∧ j ∈ T'.present ω t := fun p _ j hj => by
     have hj' : j ∈ T.read ω p := hj
     unfold Trace.read at hj'
-    obtain ⟨t, ht, htj⟩ := (Finset.mem_filter.1 hj').2
+    obtain ⟨t, ht, htj⟩ := Finset.mem_biUnion.1 (Finset.mem_inter.1 hj').2
     exact ⟨t, (Finset.mem_Ico.1 ht).1, (Finset.mem_Ico.1 ht).2, htj⟩
   have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
   have hw' : ∀ l, lineOf node (rec ω) = .ok l → (T'.wrong ω : ℝ) ≤ l.wrong := fun l' hline' => by

@@ -186,19 +186,18 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
 block on the node at its first tick reads every registered block. -/
 theorem read_full {Ω : Type} (T : Trace Ω) (ω : Ω) (p : ℕ) (hp : T.plan ω p = univ) (hc : T.correct ω p = univ)
     (ht : T.tick ω p < T.tick ω (p + 1)) (hm : T.present ω (T.tick ω p) = univ) : (T.read ω p).card = T.blocks := by
-  have hf : (univ.filter fun j => ∃ t ∈ Ico (T.tick ω p) (T.tick ω (p + 1)), j ∈ T.present ω t) = univ :=
-    Finset.filter_true_of_mem fun j _ => ⟨T.tick ω p, Finset.mem_Ico.2 ⟨le_rfl, ht⟩, hm ▸ Finset.mem_univ j⟩
+  have hf : univ ⊆ (Ico (T.tick ω p) (T.tick ω (p + 1))).biUnion (T.present ω) := fun j _ =>
+    Finset.mem_biUnion.2 ⟨T.tick ω p, Finset.mem_Ico.2 ⟨le_rfl, ht⟩, hm ▸ Finset.mem_univ j⟩
   unfold Trace.read
-  rw [hp, hc, Finset.inter_self, hf, Finset.card_univ, Fintype.card_fin]
+  rw [hp, hc, Finset.inter_self, Finset.inter_eq_left.2 hf, Finset.card_univ, Fintype.card_fin]
 
 /-- A pass with no registered block on the node at any of its ticks reads none. -/
 theorem read_absent {Ω : Type} (T : Trace Ω) (ω : Ω) (p : ℕ)
     (h : ∀ t, T.tick ω p ≤ t → t < T.tick ω (p + 1) → T.present ω t = ∅) : T.read ω p = ∅ := by
   unfold Trace.read
-  refine Finset.filter_false_of_mem fun j _ hj => ?_
-  obtain ⟨t, ht, htj⟩ := hj
-  rw [h t (Finset.mem_Ico.1 ht).1 (Finset.mem_Ico.1 ht).2] at htj
-  simp at htj
+  refine Finset.subset_empty.1 fun j hj => ?_
+  obtain ⟨t, ht, htj⟩ := Finset.mem_biUnion.1 (Finset.mem_inter.1 hj).2
+  rwa [h t (Finset.mem_Ico.1 ht).1 (Finset.mem_Ico.1 ht).2] at htj
 
 /-- **`LineHeld`'s event is empty at the honest node.** At the honest trace on a clock whose passes take a tick or more
 each, at every outcome the certifiers count nothing but the verifier's messages entering the node (`quietIngress`), and

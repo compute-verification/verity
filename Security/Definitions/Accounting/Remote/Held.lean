@@ -98,7 +98,7 @@ def wrong (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p \ T.correct 
 /-- The registered blocks pass `p` read on the node: those of its plan whose receipts are correct, each in node memory
 or on a chip at a tick of the pass. -/
 def read (ω : Ω) (p : ℕ) : Finset (Fin T.blocks) :=
-  (T.plan ω p ∩ T.correct ω p).filter fun j => ∃ t ∈ Ico (T.tick ω p) (T.tick ω (p + 1)), j ∈ T.present ω t
+  T.plan ω p ∩ T.correct ω p ∩ (Ico (T.tick ω p) (T.tick ω (p + 1))).biUnion (T.present ω)
 
 /-- The registered blocks the first `P` passes read on the node, summed over the passes. -/
 def reads (ω : Ω) (P : ℕ) : ℕ := ∑ p ∈ range P, (T.read ω p).card
