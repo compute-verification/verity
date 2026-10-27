@@ -50,8 +50,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and level of doneness; a milestone is a set of
-  (example, level) pairs, which top keeps (`examples/README.md`).
+- `examples/`: one directory per example: its workload, placement, commands and doneness; a milestone is (example,
+  run, proof) triples, which top keeps (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -105,7 +105,7 @@ check, `verity check tests|lean|circuits` runs only those parts, and `verity ben
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check
 research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
@@ -210,12 +210,11 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks one. The
-  datacenter's size (from
-  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
-  parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
-  compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
-  not the result.
+  all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
+  one. The datacenter's size (from `benchmarks/census/`) and the window's length are stated parameters, and a figure
+  scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over the
+  period and as a share of the compute it covers, beside the per-window figure, never instead of it: a per-window δ that
+  looks weak is not the result.
 
 ## Tests
 
@@ -267,7 +266,8 @@ multi-core CPU pod. It covers:
   run sends the upstream build then.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
+unchanged. `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit
+in M's NAME pool.
 
 Landing (Daniel, 24 Oct 06:05Z): PRs land on an eyeball review, and the full check runs after landing. A part's verdict is
 reused only while a hash of its declared inputs (the read guard enforces them), the base image and the code that decides it (a
@@ -491,8 +491,6 @@ over and archived as `infra/cursor/README.md` says.
   `environment: "cloud"`; Daniel's ruling, 18 Oct 10:20 AM PDT) or as a detached `research run`. A local subagent is only
   for a short read-only lookup. A coordinator's foreground local Task is refused (#2510), and heavy work never runs on an
   agent VM (the shell hook refuses it).
-- **No step waits long.** No tool call blocks for more than about 20 minutes: launch detached, end the step, and check
-  back on the run.
 - **Workers restart from notes.** Each brief asks for a checkpoint note before long work and every 3 to 4 hours, and
   words red-team work neutrally. A worker resumed twice, or whose base branch was deleted, is relaunched fresh from its
   last note.
@@ -516,8 +514,8 @@ over and archived as `infra/cursor/README.md` says.
     at each hourly checkpoint (`git fetch -q origin B && git show origin/B:inbox/<agent-id>.md`), which gets changes to
     it within the hour. Larger changes go in when you resume it (Task's `resume`, with the `bc-…` id the launch
     returned) after its turn ends.
-  - It stays reachable as below: when it would wait on a run, it ends its turn naming the run id and ETA, and its
-    launcher resumes it. A running turn holds one of the team's concurrent cloud-agent slots.
+  - It stays reachable (below), and its launcher resumes it. A running turn holds one of the team's concurrent
+    cloud-agent slots.
   - It opens its own PR from its VM (`research queue open`), and syncs its notes like any worker. Where that fails, it
     reports its branch and SHA and the launcher opens the PR for it. Its final message goes to whoever launched it.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
@@ -537,8 +535,7 @@ over and archived as `infra/cursor/README.md` says.
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research. A reviewer ci staffs writes its verdict, a lock or code Lean change waits for its Lean check, and the full check
-  runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
+  research. The rest is Checking and merging's, and you hear back only if yours is held, ejected or reverted. Before
   marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
   source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"` (main's SHA, expanded in your checkout: a shipped tree may hold no
