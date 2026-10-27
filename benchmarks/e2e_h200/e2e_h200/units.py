@@ -1,6 +1,6 @@
 """A step's units, read from its committed tables, and their replay on the CPU against circuits' semantics.
 
-The units are circuits' FAMILIES map's (`plan.Map`, PRF-166 db928eb0): each `Family` is one `plan.Units`, one template key
+The units are circuits' FAMILIES map's (`plan.Map`): each `Family` is one `plan.Units`, one template key
 over one table, its unit i's output that table's bytes at ``offset + i * stride``. `Family.replay` gives a unit's opened
 inputs, its committed outputs (its output rows' bytes, as 16- or 32-bit words where the rows are) and what replay computes.
 
@@ -26,7 +26,7 @@ slot ``slots[b]`` at its own position p; its attention reads the slot's K and V 
 the step and row the slot ran it (`Replayer.history`), never the live cache.
 
 A `Subcircuit` joins the step's integrity registration as one more sampling block, drawn with the step's families: PoUW's
-per-call-noise tiles (H200-PERCALL, CMP-126) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
+per-call-noise tiles (`percall`) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
 """
 from __future__ import annotations
 
@@ -39,8 +39,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-import replay as RP
-
+from ._replay import RP
 from .commit import StepTables
 from .plan import Map, Units
 from .shape import EPS, PV_K, Shape
@@ -414,7 +413,7 @@ class Replayer:
 
     def draw(self, step: int, k: int, seed: bytes, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """``k`` units of every family of ``step`` (or of those ``only`` keeps), replayed: a FIXTURE coin per family, until
-        PRF-170's plan draws from live coins (`replay.draw`)."""
+        the sampling plan draws from live coins (`replay.draw`)."""
         batch = self.steps[step].batch
         units = []
         for fam in self.families(step):

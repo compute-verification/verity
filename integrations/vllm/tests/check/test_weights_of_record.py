@@ -643,7 +643,7 @@ def test_verdict_requires_the_pin_on_a_row_record_and_fails_by_name():
     """commit_verdict: a served weight that differs from the checkpoint of record is a named FAIL at every B; on a row-procedure record
     (binding block) an absent / not-evaluated pin is 'weights unpinned' (fail closed); legacy records without a binding block are untouched."""
     from verity_vllm.check.commit_pass import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
@@ -668,7 +668,7 @@ def test_verdict_reads_a_components_only_replay_by_its_method_rel_m0621():
     reads the components where the top level is absent -- only a component that says it is a sampled exact replay counts; another method
     (an oracle compare, a root compare) never stands in for the replay of record."""
     from verity_vllm.check.commit_pass import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "weights_pin": {"result": True, "compared": 10}}
     comps_ok = {"sampled_replay": {"result": True, "grade": "complete", "method": "sampled-exact-replay(kernel launches)"},

@@ -29,7 +29,7 @@ and the schedule check's acceptance at the cap `cap`, which is the event's first
 `c` of the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
 blocks accepts some schedule for a session whose appends are `appended c y` and whose pass `idx c` sent the runs
 `sent c y`. The gap: the pass's layout is the verifier's positions `pos c` of those appends and runs. `cap` is the one
-cap the session committed before its first coin, over which the check refuses a schedule (#4021), so on the coins the
+cap the session committed before its first coin, over which the check refuses a schedule, so on the coins the
 check accepts the layout reads `y` only through the accepted schedule's `cap + 1` padded bits
 (`Properties.RemoteAudit.steered_of_checked`).
 
@@ -46,7 +46,7 @@ told only through `steer`, so the union in `G`'s query term runs over both summa
 Frozen (no-function, hash): `G`'s game, its premises but `SteeredLayout`, `ScheduleLayoutGap` and
 `RemoteAudit.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
 def ScheduledRequirement : Prop :=
-  ∀ (n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
+  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
@@ -68,7 +68,8 @@ def ScheduledRequirement : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
+    Assumptions.SquaringFloor Gates.p1024 es εnum εden → Assumptions.ChainSum Gates.p1024 3 B es εnum εden →
+    E ≤ 3 * Gates.p1024.squarings * es → εden ≤ 2 ^ 64 * εnum →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →

@@ -1,5 +1,5 @@
 """A served window's credited set, its drawn units and their outcome, its A rows, and the period it counts toward, as
-PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). `_window_outcomes` and `_period_outcomes` are the Python
+PoUW's verifier reads them. `_window_outcomes` and `_period_outcomes` are the Python
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
 `window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run, which the
 Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
@@ -24,7 +24,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
   `h1window.table_reads_file`'s, main's per-call tables). A rejected session refuses the window, and so does a
   verifier that can't run. The circuit file's tie to the descriptor's Definitions rests on the auditor's lowering,
-  which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133). The verdict
+  which built the committed file, until the verifier derives the circuit from the descriptor. The verdict
   over the statements is the Lean's (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement
   to verify and the inputs (`_asks`: up to the first statement a check before the verifier refuses), this module only
   runs the verifier on them, and the Lean judges the answers (`_lean_verified`).
@@ -134,7 +134,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   which contains it (`domain_of`). The window's request table ``<prefix>requests@0`` (`is_requests`, the live unit's
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's draw's, not credit's.
-* **The window serves its period's fixed length** (`committed_length`, `_length`; Daniel, 19 Oct, ASK-39): correct
+* **The window serves its period's fixed length** (`committed_length`, `_length`): correct
   tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
@@ -150,8 +150,8 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
   ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids and request tables, the window's open root
-  (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds since
-  PRF-127); round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
+  (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds);
+  round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
   instead. Each proof was
   verified against that
   descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
@@ -271,7 +271,7 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the rows of record's fixed length (Daniel, 19 Oct, ASK-39): ``{max_tokens, stop}``,
+#: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
 #: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
 #: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
 LENGTH_FIELD = "length"
@@ -1165,6 +1165,18 @@ def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[d
     return (None, ("sampler", "the draw's stream ran out")) if got is None else (got, None)
 
 
+def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
+                  ) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """The units the window's draw coin (`draw`'s ``coin``, a live opening) draws over the strata `ss` at the period's
+    committed K `k`, its stream the window's root, its registration the draw's root and its receipt ``{"receipts": …}``
+    (`_drawn`), and None; or None and the refusal."""
+    try:
+        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin
+    except Ch.CoinError as e:
+        return None, ("coin", f"the draw coin: {e}")
+    return _drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, ss, k)
+
+
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
     """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
     value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
@@ -1251,7 +1263,7 @@ def domain_of(program: str, window: str, e: dict, session: str | None = None) ->
     `ids_step` 0) and request table (``…/requests@0``, `is_requests`), whose roots the window's open root contains
     (`requests_root`, `_arow`), bind the window's session `session` in that root's place; every other value's rows are
     the window's own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the
-    window's open root (PRF-127)."""
+    window's open root."""
     v, first = e["value"], ids_step(e["value"]) == 0 or is_requests(e["value"])
     return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
                     None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
@@ -1922,8 +1934,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
         why = _length(max_tokens, rows, layout, len(rounds))
     if why is not None:
         return None, why
-    units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
-                        {"receipts": draw["receipts"]}, ss, k)
+    units, why = _window_drawn(window, draw, ss, k)
     proofs = None
     if why is None:
         proofs, why = proved(layout, bytes.fromhex(descriptor), units, len(rounds))
@@ -2325,7 +2336,7 @@ def passes_distinct(passes: Any) -> tuple[str, str] | None:
     `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
     (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
     so a repeated index under one salt and root_B repeats its seeds, noise and tickets and would be credited twice
-    (CMP-84; `Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
+    (`Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
     ``index``."""
     seen: dict[str, dict[int, int]] = {}
     for p, m in enumerate(passes):
@@ -2362,7 +2373,7 @@ SALT_ONLY, PASS_REFUSED, INDEX = "salt-only", "pass", "index"
 
 def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
                           verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
-    """Pearl-C period `name`'s credit and None, or None and the refusal (CMP-82; LIVESALT2's Pearl-C period rule). A
+    """Pearl-C period `name`'s credit and None, or None and the refusal (the Pearl-C period rule). A
     live Pearl-C pass earns only inside a Pearl-C period, and the period earns only when every clause holds, each
     refused with its own code:
 

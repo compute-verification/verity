@@ -1,0 +1,17 @@
+{
+ "params": {
+  "scheme": "p2",
+  "w": 16448,
+  "c0": 21065,
+  "profile": "p2-2054B",
+  "blocks_per_segment": 3,
+  "segments": 3,
+  "expander": "sha512-ctr-v4"
+ },
+ "source": "the verifier's secret",
+ "commitment": "7133d1b63c5e2c9707ef51efb3272f92d8bfdae9cde5d4fb799c6a9e49ca92b1013b3a4c1fb29dabe2f70d9ba0cf30615652331736103a81df76d72f61adb04c",
+ "salt": "873edc5a9f615636d10dad22473db9d0629310b87941e2f2",
+ "root": "9c9f972c1bd7002c2fbeba19e8b56db76efde1d36e92e5e0520319c8db771fc0301135d517b4367d6a9981abb6ec7d0346f8c44ab4e6df424e9c4eb9d4341626",
+ "c_star_sha512": "4d656b2d546c42114b6dd02ece843cb36a6b796848241e1843cc05bbe972893c8960aabf351ea7850ea8f10cad16cf039081226ce7bfbd45b70cc2cf9e55ea23",
+ "w": "SHA512(\"verity/remote-bandwidth/tests/p2-store/w\\0\" || u64be(c)) for c = 0, 1, ..., to 18,486 bytes"
+}

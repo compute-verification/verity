@@ -16,10 +16,10 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
 of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` draws row ``salt_row``'s y in slot s as ChaCha20
-blocks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
+chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
 
-The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 blocks), so the
+The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 chunks), so the
 tests hold each call to its compressions a digest.
 
 Builds are cached by a hash of the sources, flags and compiler version under ``~/.cache/verity/sha512_rows``
@@ -63,17 +63,17 @@ ROOT_SCHEMA = "frame-v3-sha512/root/v1"
 MAX_SCHEMA = 64
 
 ROW_SPEC = np.dtype([("a", "<u8"), ("a_stride", "<u8"), ("b", "<u8"), ("b_stride", "<u8"), ("a_len", "<u4"), ("b_len", "<u4"),
-                     ("nbytes", "<u4"), ("a16", "<u4"), ("mid", "<u8", (8,))])
+                     ("nbytes", "<u4"), ("a16", "<u4"), ("mid", "<u8", (8,)), ("kw", "<u8", (80,))])
 LEAF_ROW = np.dtype([("rank", "<u8"), ("position", "<u8"), ("did", "<u4"), ("salt_row", "<u4"), ("q", "<u4"), ("pad_", "<u4"),
                      ("mid", "<u8", (8,)), ("tail", "<u8", (16,))])
-assert ROW_SPEC.itemsize == 112 and LEAF_ROW.itemsize == 224
+assert ROW_SPEC.itemsize == 752 and LEAF_ROW.itemsize == 224
 
 u32, u64, vp = ctypes.c_uint32, ctypes.c_uint64, ctypes.c_void_p
 
 
 class LeafArgs(ctypes.Structure):
     _fields_ = [("rows", vp), ("x", vp), ("out", vp), ("T", vp), ("salts", vp), ("key", u32 * 8), ("nonce0", u64),
-                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("pad_", u32),
+                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("sms", u32),
                 ("frames", vp), ("dest", vp), ("units_out", vp), ("units", u32), ("pad2_", u32)]
 
 
@@ -127,6 +127,9 @@ def _abi(dll: ctypes.CDLL, path: Path) -> ctypes.CDLL:
         getattr(dll, f).restype = ctypes.c_int
     if hasattr(dll, "sxr_counts"):
         dll.sxr_counts.argtypes, dll.sxr_counts.restype = [vp, ctypes.c_int], None
+    if hasattr(dll, "sxr_graph_rekey"):
+        dll.sxr_graph_leaf_nodes.argtypes, dll.sxr_graph_leaf_nodes.restype = [vp, vp, u32], ctypes.c_int
+        dll.sxr_graph_rekey.argtypes, dll.sxr_graph_rekey.restype = [vp, vp, u32, vp], ctypes.c_int
     dll.path = path  # type: ignore[attr-defined]
     return dll
 
@@ -183,7 +186,7 @@ def hankel_table(key: bytes = KEY) -> np.ndarray:
 
 @dataclass(frozen=True)
 class SaltKey:
-    """Salts from a 32-byte key: row r's y in slot s is ChaCha20 blocks 3r .. 3r + 2 with nonce ``nonce0 + s``."""
+    """Salts from a 32-byte key: row r's y in slot s is ChaCha20 chunks 3r .. 3r + 2 with nonce ``nonce0 + s``."""
 
     key: bytes
     nonce0: int = 0
@@ -228,6 +231,7 @@ class Engine:
     """The engine's calls on ``device``: a CUDA device (torch tensors), or ``"host"`` for the host twin (numpy arrays)."""
 
     def __init__(self, device: Any = "cuda", arch: str | None = None, key: bytes = KEY, default: str = DEFAULT_VARIANT) -> None:
+        self._schemas: dict[str, tuple[Any, int]] = {}
         self.host = device == "host"
         if self.host:
             self.torch, self.device, self.lib = None, "host", host_lib()
@@ -288,7 +292,7 @@ class Engine:
 
     def counts(self, reset: bool = False) -> dict[str, int]:
         """The host twin's hashing since its last reset: compressions, those over a constant schedule (``kw``) and ChaCha20
-        blocks."""
+        chunks."""
         if not self.host:
             raise ValueError("only the host twin counts")
         out = np.zeros(3, dtype=np.uint64)
@@ -296,7 +300,7 @@ class Engine:
         return {"compressions": int(out[0]), "kw": int(out[1]), "chacha": int(out[2])}
 
     def midstate(self, block: bytes) -> np.ndarray:
-        """The chaining value after one 128-byte block from the IV."""
+        """The chaining value after one 128-byte chunk from the IV."""
         if len(block) != 128:
             raise ValueError("a midstate is of one 128-byte block")
         out = np.zeros(8, dtype=np.uint64)
@@ -383,10 +387,13 @@ class Engine:
         return LeafTable(d_rows, (d_dids, d_schema), G)
 
     def _schema(self, schema: str) -> tuple[Any, int]:
-        s = schema.encode()
-        if len(s) > MAX_SCHEMA:
-            raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
-        return self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8)), len(s)
+        """The schema's bytes on the device, uploaded once."""
+        if schema not in self._schemas:
+            s = schema.encode()
+            if len(s) > MAX_SCHEMA:
+                raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
+            self._schemas[schema] = self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8)), len(s)
+        return self._schemas[schema]
 
     def frame_table(self, dids: Any, rank0: int, n: int, schema: str = ROOT_SCHEMA) -> LeafTable:
         """n units' frame leaves in one domain (``dids``, one): unit j's is leaf (rank0 + j, rank0 + j, schema) over its root,
@@ -416,9 +423,10 @@ class Engine:
         return run
 
     def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None, minb: int = 0, frames: LeafTable | None = None,
-               dest: Any = None, run: Any = None) -> Any:
+               dest: Any = None, run: Any = None, sms: int = 0) -> Any:
         """(G, S, 8): each row's frame leaf over hm96's tree leaf of x (``row_digests``) under salt y. ``minb`` is the leaf
-        kernel's blocks an SM (1 or 2; 0, the build's default, 1).
+        kernel's CTAs an SM (1 or 2; 0, the build's default, 1), and ``sms`` the SMs its persistent grid fills (0, the
+        device's; a green context of fewer runs a grid of the device's in waves): the same bytes either way.
 
         With ``frames`` (``frame_table``, a unit each), ``dest`` (G,) uint32 on the device and ``run`` (S, units, 8): a row
         whose ``dest`` d is below the units is unit d alone, so its leaf is the unit's root, and the unit's frame leaf over it
@@ -442,11 +450,32 @@ class Engine:
                 raise ValueError(f"salts are (G, S, 192) bytes, not {tuple(salts.shape)}")
             a.salts = self._ptr(salts)
         a.ms_salt[:], a.ms_leaf[:] = [int(v) for v in self.ms_salt], [int(v) for v in self.ms_leaf]
-        a.G, a.S, a.minb = G, S, minb
+        if sms < 0:
+            raise ValueError("a leaf grid fills a positive number of SMs, or 0 for the device's")
+        a.G, a.S, a.minb, a.sms = G, S, minb, sms
         if frames is not None:
             a.frames, a.dest, a.units_out, a.units = self._ptr(frames.rows), self._ptr(dest), self._ptr(run), frames.G
         self._ok(self.lib.sxr_leaves(self._stream(), ctypes.byref(a)), "leaves")
         return out
+
+    def graph_leaf_nodes(self, graph: int, n: int) -> Any:
+        """The ``n`` leaf launches (``leaves``) of a CUDA graph captured from this engine's calls (a ``cudaGraph_t``), for
+        ``rekey``; refused if the graph holds another number of them."""
+        nodes = (ctypes.c_void_p * max(1, n))()
+        got = self.lib.sxr_graph_leaf_nodes(ctypes.c_void_p(graph), nodes, n)
+        if got < 0:
+            raise RuntimeError(f"graph leaf nodes: CUDA error {-got}")
+        if got != n:
+            raise RuntimeError(f"the graph holds {got} leaf launches, not {n}")
+        return nodes
+
+    def rekey(self, graph_exec: int, nodes: Any, n: int, key: bytes) -> None:
+        """The graph's instantiation (a ``cudaGraphExec_t``) to salt its ``n`` leaf launches ``nodes`` under ``key`` (32
+        bytes) from its next launch on, each launch's first nonce as captured."""
+        if len(key) != 32:
+            raise ValueError("a salt key is 32 bytes")
+        k = (ctypes.c_uint32 * 8)(*np.frombuffer(key, dtype="<u4").tolist())
+        self._ok(self.lib.sxr_graph_rekey(ctypes.c_void_p(graph_exec), nodes, n, k), "graph rekey")
 
     def u32s(self, a: Any) -> Any:
         """A uint32 array on the engine's device (int32 there): ``leaves``' ``dest``."""

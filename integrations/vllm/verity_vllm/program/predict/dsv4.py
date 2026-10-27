@@ -41,11 +41,11 @@ class Net:
     """One rank's decoder: the configuration, the weights record (`leaves`), the peers and schedule words a pass reads
     (`peer_shapes`, `schedule_words`) and the target's selections the forward (`model`) reads."""
 
-    DOMAIN = ((8,), "eager", "float8_e4m3fn")
+    DOMAIN = ((8,), "eager", ("float8_e4m3fn",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.engine.profiles import family_facts as FF
-        from verity_vllm.engine.profiles.generic import rank_hf_config
+        from verity_vllm.observe.fold.profiles.generic import rank_hf_config
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
         from verity_vllm.program.frontend.rules.vllm_dsv4 import COMPRESSORS, FLASHMLA_GEOMETRY
@@ -324,7 +324,7 @@ class _Model(dsa._Model):
         C, net, r, P = self.C, self.net, self.net.ratios[L], hist["from"]
         D, DR, NH, NHP, window = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "NH", "PADDED_HEADS", "WINDOW"))
         G, scale, sink = net.G, float(C["ATTN_SCALE"]), self.w[(L, "attn.attn_sink")].refs.slice(0, NH)
-        BN, blocks = G["BN"], lambda n, b: -(-n // b)  # noqa: E731
+        BN, blocks = G["BN"], lambda n, b: -(-n // b)
         consts: dict[int, Refs] = {}
 
         def i32(v: int) -> Refs:

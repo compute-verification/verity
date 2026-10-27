@@ -1,10 +1,11 @@
-"""Attacks: constructions that finish counted products in a block, so ρ's upper end.
+"""Attacks: constructions that finish counted products in a block, reported beside the overhead's lower bound.
 
 An attack is an `Argument` on the `attack` side: `allowance(profile)` is what the construction finishes in a block with
-that budget (never more than the block's compute, which `theorem.share` caps). Its `cites` are what it rests on: an
-analysis (`draft:`), a measured run (`art:`), a finding (`note:`). The best attack for an algorithm sets its `hi`; a
-bound above an attack's achieved count (`lo > hi`) means a premise is false for that algorithm at that budget, and
-`scenario.evaluate` reports it.
+that budget (never more than the block's compute, which `theorem.terms` caps), in the FLOP model as the classes are
+(`classes.FlopBudget`). Its `cites` are the analyses it rests on (`draft:`). The best attack for an algorithm is its
+best known attack (`FamilyResult.best_attack`), a construction and not an end of an interval; a bound above an attack's
+achieved count means a premise is false for that algorithm at that budget, and `scenario.evaluate` reports it as a
+contradiction.
 
 Every allowance here is achieved: a lower bound on the most a block can finish, never an estimate of it. Where a
 construction's count is of another set than the profile's `κ` (the tile's forward products), it is converted as a
@@ -19,9 +20,15 @@ from dataclasses import dataclass, field
 from functools import cache, lru_cache
 from typing import Literal
 
-from rho.classes import E1, FINDINGS, Argument, Outside, counted, need
+from rho.classes import (
+    Allowance,
+    Argument,
+    FlopBudget,
+    Outside,
+    counted,
+    need,
+)
 from rho.profile import Profile
-from rho.theorem import Allowance, Budget
 
 
 @dataclass(frozen=True)
@@ -46,7 +53,7 @@ class StateFits:
     cites: tuple[str, ...] = ("draft:N1",)
 
     def allowance(self, p: Profile) -> Allowance:
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             return p.kappa * budget.compute / 2 if p.state_bits <= budget.inputs else 0.0
         return a
 
@@ -90,9 +97,9 @@ class Shard:
         u, splits, flops, cut, data, decode, shared = need(
             p, "token_state_bits", "state_splits", "flops_per_token", "cut_bits", "token_bits", "decode_flops",
             "shared_state_bits")
-        memo: dict[Budget, float] = {}
+        memo: dict[FlopBudget, float] = {}
 
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             if budget not in memo:
                 memo[budget] = p.kappa / 2 * search(u, splits, flops, cut, data, decode, budget.inputs, budget.compute,
                                                      shared)
@@ -128,7 +135,7 @@ class Tile:
 
     name: str = "tile"
     side: Literal["bound", "attack"] = "attack"
-    cites: tuple[str, ...] = ("draft:E1-tile", E1, FINDINGS)
+    cites: tuple[str, ...] = ("draft:E1-tile",)
 
     def allowance(self, p: Profile) -> Allowance:
         values = need(p, "tile_weight_bits", "beta_x_marginal", "psum_bits", "tile_inputs", "tile_outputs")
@@ -161,7 +168,7 @@ class Measured:
         if p.name not in self.families:
             raise Outside(f"{self.name} was measured on {', '.join(self.families)}, not {p.name}")
 
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             best = 0.0
             for pt in self.points:
                 if pt.flops is None:
@@ -175,8 +182,8 @@ class Measured:
 
 #: C1's cheapest executions at FP8 on V4's and K2's shapes, computed from B1's measured rates (not run at that scale):
 #: the high end of each range, so that both models reach it
-C1 = ("draft:C1-cheapest-execution", "art:b63ecfa5ae31d7f33979db8cc5d955113f9d7fc7af890fc949825275ff7660b4", FINDINGS)
-#: matched compute, `c = φ k` at `φ = 6.7·10⁹` FLOPs per bit (D1, the findings note)
+C1 = ("draft:C1-cheapest-execution",)
+#: matched compute, `c = φ k` at `φ = 6.7·10⁹` FLOPs per bit (D1)
 PHI = 6.7e9
 
 ATTACKS: Mapping[str, Argument] = {a.name: a for a in (
@@ -184,6 +191,5 @@ ATTACKS: Mapping[str, Argument] = {a.name: a for a in (
     Measured("measured-full", ("full",), (Point(2e7, PHI * 2e7, 6.8e5), Point(8e6, PHI * 8e6, 1.25e6)), C1),
     Measured("measured-frozen-prefix", ("frozen-prefix",),
              (Point(2e7, PHI * 2e7, 4.9e5), Point(8e6, PHI * 8e6, 1.22e6)), C1),
-    Measured("measured-rl-elicitation", ("rl-elicitation",), (Point(7.84e4, None, 1.0),),
-             ("art:d8feafe2a5fc", FINDINGS)),
+    Measured("measured-rl-elicitation", ("rl-elicitation",), (Point(7.84e4, None, 1.0),), ()),
 )}
