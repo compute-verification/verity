@@ -1,6 +1,6 @@
 # recursion_e2e: the recursive session, timed stage by stage (`verity bench recursion_e2e`)
 
-Recursive witness zero knowledge proves an inner statement with ZK off (M0) against the inner phase's firewall. It then
+Recursive witness zero knowledge proves an inner statement with C-Flock's circuit prover, ZK off, against the inner phase's firewall. It then
 proves V*, the inner verifier written as C-Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
 sessions only. This is the one runner for that pipeline. It drives `verity/ml/flock/pod/85-rec-reprice.sh`'s steps as one
 research run, times each stage on the smallest real input (K = 4096, N = 2), repeats what is cheap to repeat, and says
@@ -80,12 +80,12 @@ Every stage is a STEP of 85 (read as it is), run on one node with the big files 
 `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation (`on_gpu`), and
 everything else is CPU. The node column is a GPU run's: a CPU run (the default) runs every step on its CPU node
 with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
-(`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), with every unit drawn.
+(`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), with every proof block drawn.
 
 | # | stage (STEP) | command (inside 85) | reads | writes | node |
 |---|---|---|---|---|---|
 | 0 | `build` | `60-circuit.sh MODE=build` (the prover), `lake build flock-verify` (Lean), `class_statement --stage-only` twice; `lake build flock-firewall` (the firewall's Lean session loop) from the same Lean sources | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: today's `--zk`, the baseline) | n1, CPU |
-| 1 | `inner` | `flock-circuit prove --gpu` (M0, ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner firewall's proxy); then today's M0 and `--zk` on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` | n1, GPU |
+| 1 | `inner` | `flock-circuit prove --gpu` (ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner firewall's proxy); then today's ZK-off and `--zk` statements on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` | n1, GPU |
 | 2 | `icheck` | `flock-circuit replay` of the last inner session, `python -m verity_flock.rec_vstar` (V*'s hashing reference) | `inner/` | records only | n1, CPU |
 | 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, and `--forge`'s forged statements (`FORGE`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-<kind>/` | n1, CPU |
 | 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops (V*'s verdict needs them) | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | n1, CPU |
@@ -132,10 +132,10 @@ are still read.
   and [min, max] over the repeats. Lean's verify also splits into `inputs`, `setup` and the session's own checks. 85
   runs `vstage`'s stages and `lean`'s sessions `JOBS` at a time (4 here), so each one's wall is measured under its
   neighbours' load. The step's whole wall (`lean step`) is what an auditor waits, and it is what the pipeline sum adds.
-  `stage <name>` rows carry what `rec_vstage` printed of each unit (template, rows, lowering seconds, circuit bytes).
+  `stage <name>` rows carry what `rec_vstage` printed of each proof block (template, rows, lowering seconds, circuit bytes).
 - **Sizes**: the V* proofs' bytes (`proof_bytes`, what the auditor receives), the inner proof's (the prover's witness,
   never sent), the transcript bytes each way, and the staged files (`sizes.txt`).
-- **The pipeline sum**: the inner M0's e2e, the vstage and vcap steps' walls, the outer prove's session e2e summed over
+- **The pipeline sum**: the inner session's e2e, the vstage and vcap steps' walls, the outer prove's session e2e summed over
   every statement in the mode that proved the most of them, and the lean step's wall. It is one recursive session's
   path, as long as an auditor waits for it.
 - **Setup** (`build`): the step's wall and peak, once, cold or cached as the job found it.

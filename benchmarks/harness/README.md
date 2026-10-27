@@ -222,7 +222,7 @@ the store, never from numbers in code. It has four sections.
   same way.
 - **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and a record, as above) is the bandwidth
   breakdown's rows (below) at each point of the record's runs, in ms an output token and not a ratio, beside the
-  protocol's row of record.
+  protocol's run of record.
 
 The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
 read through from the remote (and a live run's `row` label).

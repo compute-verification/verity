@@ -9,7 +9,7 @@ catalog (after pulling the remote's attempts started since the spec was added), 
 older one. A result labelled `superseded_by` is skipped. Ratios are paired by rep from the result's own reps; caveats are
 the `label` and `note` assertions on the result and its run.
 
-Beside a protocol's row of record, `BREAKDOWNS` puts where its time goes by span: `verity_bench.breakdown`'s rows (ms an
+Beside a protocol's run of record, `BREAKDOWNS` puts where its time goes by span: `verity_bench.breakdown`'s rows (ms an
 output token, not ratios) at each run its record names.
 """
 
