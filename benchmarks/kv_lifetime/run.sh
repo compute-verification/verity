@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# KV block lifetimes under a ShareGPT chat workload on one vLLM engine (serve.py), then their analysis (analyze.py).
+# KV page lifetimes under a ShareGPT chat workload on one vLLM engine (serve.py), then their analysis (analyze.py).
 # cwd = the source tree; outputs in $RESEARCH_RUN_DIR/out. ARGS go to serve.py, WARMUP (default 120 s) to analyze.py.
 #
 #   research run --queue --project verity --source . --cwd source --gpus 1 --preemptible --max-min 60 --mem-gb 64 \

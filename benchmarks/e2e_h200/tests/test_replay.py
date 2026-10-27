@@ -385,7 +385,7 @@ TINY_FORMS = S.Forms(rms_chunk=16, rms_group=2, amax_chunk=16, part_fanin=2, pv_
 def tiny() -> S.Step:
     """Two sequences through a tiny MQA decoder of the frozen architecture (width 64, 2 layers, 4 query heads of 16, MLP
     128, byte vocabulary, context 8, 16-code weight rows) on ALLP-IFACE's test-seeded weights: 6 positions, ~159k units."""
-    from verity_torch_loop import weights as WG
+    from e2e_h200 import served_weights as WG
     shape = WG.Shape("replay-tiny-mqa", 64, 2, 4, 16, 1, 128, 256, 8, 16)
     step = S.Step(shape, lambda n: WG.generate(shape, WG.TEST_SEED, n), batch=2, forms=TINY_FORMS)
     S.decode(step, [b"hi", b"ok"], 4)

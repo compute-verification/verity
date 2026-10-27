@@ -1,5 +1,5 @@
-"""The frozen H200 shape's decode step on CPU (CMP-92 Phase 2, frozen by compute-accounting 25 Oct 23:00Z), an integration of
-Verity's (`verity.ml.windows.interface`) beside `loop`'s MLP: PRF-173's fallback, so that drawn units of the demo's shape are
+"""The frozen H200 shape's decode step on CPU, an integration of
+Verity's (`verity.ml.windows.interface`) beside `loop`'s MLP: the fallback, so that drawn units of the demo's shape are
 proved and checked by Lean whether or not the H200's replay bundle arrives.
 
 * **The shape** (:data:`FROZEN`): an MQA decoder of width 16,384, 256 query heads of 64 with one KV head, MLP 65,536 with
@@ -18,7 +18,7 @@ proved and checked by Lean whether or not the H200's replay bundle arrives.
 * **The other ops** (the embedding add, RMSNorm, softmax, ReLU, the per-row quantizer, the residual adds, argmax) run in
   torch and are not units until circuits registers their Definitions (CIR-100). Their outputs are committed as the next
   unit's inputs.
-* **One window per template** (:data:`TAGS`), as the sampling planner hands a plan off (PRF-166 part 3): each its own circuit,
+* **One window per template** (:data:`TAGS`), as the sampling planner hands a plan off: each its own circuit,
   run root (the run id and the tag) and law, so each is drawn on its own (``subset:k`` per template).
 * ``tamper``: every recorded output word has bit 0 flipped, which the proof of any drawn unit must refuse. ``keep``: only
   the first ``keep`` units of each op are recorded (the step is still computed whole), for a smoke run at the shape's K.
@@ -67,7 +67,7 @@ class Shape:
         return max(self.head_dim, self.context)
 
 
-#: compute-accounting's frozen shape for one H200 (CMP-92, 25 Oct 23:00Z)
+#: the frozen shape for one H200
 FROZEN = Shape()
 
 

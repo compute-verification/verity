@@ -1,4 +1,4 @@
-"""[Daniel R17-39 (c), coord M-0762] ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
+"""ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
 (opening.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
 table) SHARE.  "Reader and oracle sharing one alias mechanism prevents drift AND lets them share the same bug" -- so this file derives what
 every side must say BY COUNTING (layers x members x steps x requests, invocation k = layer order, ordinal = position in acquisition order),

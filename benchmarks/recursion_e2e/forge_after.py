@@ -27,12 +27,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import settings as RS
 
 CASES = {"coef": ("L0", "coef"), "dirs": ("L0", "dirs"), "message": ("alg-p0", "m0")}
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
@@ -205,7 +206,7 @@ def main() -> int:
     kinds = [k for k in CASES if k in a.kinds.replace(",", " ").split()]
     if not kinds:
         raise SystemExit(f"--kinds {a.kinds!r}: none of {', '.join(CASES)}")
-    out = Path(os.environ.get("OUT", "out")) / "forge-after"
+    out = Path(RS.OUT or "out") / "forge-after"
     out.mkdir(parents=True, exist_ok=True)
     dd = a.work / "data" / a.tag
     inner = sorted((dd / "inner").glob("s[0-9]*"), key=lambda p: int(p.name[1:]))[-1]

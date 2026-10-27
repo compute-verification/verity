@@ -59,7 +59,7 @@ H1_DELTA = "1/1000000"
 H1_RANGE = [1, 1 << 16]
 QUOTE_DELTAS = ("1/100", "1/1000000")
 SALT = "salt.json"  # {"answer": issued.answer, "live": issued.live}, written beside the window by the loop (window_salt.issue)
-#: core's name for a live window's salt-session inputs in its parameters (#4405); None where core takes no live parameters
+#: core's name for a live window's salt-session inputs in its parameters; None where core takes no live parameters
 LIVE_PARAM = getattr(CC, "LIVE_PARAM", None)
 
 
