@@ -93,7 +93,8 @@ theorem a_copy (h1 : 1 < (R hU).nComp) : ∃ z, (R hU).a ⟨1, h1⟩ = [z] ∧ z
   intro h1
   have hs := FlockVBridge.stack_a (Rows.ofNet hU) 1 (u := 0) Nat.zero_lt_one ⟨0, by rw [nComp_ofNet hU]; omega⟩
   rw [show (⟨1, h1⟩ : Fin ((Rows.ofNet hU).stack 1).nComp) =
-      ⟨0 * ((Rows.ofNet hU).nComp + 1) + (1 + 0), Rows.mul_add_lt Nat.zero_lt_one (by omega)⟩ from
+      ⟨0 * ((Rows.ofNet hU).nComp + 1) + (1 + 0), Rows.mul_add_lt (n := (Rows.ofNet hU).nComp + 1)
+        (c := 1 + 0) Nat.zero_lt_one (by omega)⟩ from
       Fin.ext (by simp), hs, hy]
   refine ⟨_, rfl, ?_⟩
   have hlt : y.val < (Rows.ofNet hU).nIn := by rw [hy0, nIn_ofNet hU]; omega
@@ -129,7 +130,8 @@ theorem xIn_val : (xIn hU).val = 2 := by
       = (Placed.insOf 1 (Layout.keyB circuit hU) (Aliased.keyIdx circuit (Layout.keyB circuit hU)) 0
           ⟨0, hlt0⟩).val := Placed.insAt_uniform 1 0 0 hlt0
     _ = 2 := by
-      rw [Placed.insOf_of_lt 1 _ _ Nat.zero_lt_one, keyIdx_zero hlt0 (by rw [srcKey0]; simp)]
+      rw [Placed.insOf_of_lt (hu := Nat.zero_lt_one),
+        keyIdx_zero (B := Layout.keyB circuit hU) hlt0 (by rw [srcKey0]; simp)]
       simp [Placed.srcGate]
 
 theorem consts_xIn : constsOf circuit hU 1 (xIn hU) = none := by
@@ -143,7 +145,8 @@ theorem consts_xIn : constsOf circuit hU 1 (xIn hU) = none := by
   have hn0 : xIn hU ≠ Layout.zeroG (c := circuit) (hU := hU) (n := 1) := fun h => by
     have := congrArg Fin.val h
     omega
-  rw [if_neg hn1, if_neg hn0]
+  rw [if_neg (show ¬ (xIn hU : Fin (Layout.keyN circuit hU 1)) = Layout.oneG from hn1),
+    if_neg (show ¬ (xIn hU : Fin (Layout.keyN circuit hU 1)) = Layout.zeroG from hn0)]
 
 theorem op_xIn : (Cc hU).op (xIn hU) = .input := by
   obtain ⟨-, hz0⟩ := Classical.choose_spec (a_copy hU (h1R hU))

@@ -19,6 +19,9 @@ namespace Flock.Bridge.ToyPub
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
   FlockSoundness.Discharge.ZkReg
+open FlockSoundness.Discharge.Exec (Inputs)
+open FlockSoundness.Discharge.ZkExec (zkTags)
+open FlockSoundness.Discharge.Placed (keyProg)
 
 /-- A registered port of circuit port `q`'s name with one leaf, `payload`'s at position 0 under the empty domain,
 which is its root; unit 0 reads position 0. -/
@@ -73,24 +76,25 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Discharge.Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
-/-- The registrant's leaf at `p`: hm96's leaf of its row there (`lieWv`) under the empty salt. -/
-noncomputable def lieLeaf (p : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos) : ByteArray :=
-  ((Binding.ExplicitLeaf.hm96X ((rsShHJS dj y₀ ht hc hscope hU hpub).enc p)
-    ((rsShHJS dj y₀ ht hc hscope hU hpub).ext p) ((rsShHJS dj y₀ ht hc hscope hU hpub).ext_spec p)).leaf
-      (lieWv p) []).1
+/-- The registrant's port at `p`: `liePort` over hm96's leaf of its row there (`lieWv`) under the empty salt. -/
+noncomputable def liePortOf (p : PosH c hU n) : Flock.Registered.Port :=
+  portOf c (fun p : PosH c hU n =>
+    ((Binding.ExplicitLeaf.hm96X ((rsShHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).enc p)
+      ((rsShHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).ext p)
+      ((rsShHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).ext_spec p)).leaf (lieWv p) []).1) p
 
 /-- **The registrant's reads**: every unit's row of every port (`LieRead`), port 0's opened to zeros and every
 other's to ones (`lieWv`), each through `liePort` over its own leaf, at position 0 and the empty path. -/
 noncomputable def lieReads :
-    Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+    FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub) where
-  isRead := LieRead
+  isRead p := LieRead (c := c) (p : PosH c hU n)
   read_row := by
     rintro p ⟨u, q, rfl⟩
     exact rfl
-  port := portOf c (lieLeaf dj y₀ ht hc hscope hU hpub)
+  port := liePortOf (Reg := Reg) dj y₀ ht hc hscope hU hpub
   readAt _ := 0
-  wv := lieWv
+  wv p := lieWv (c := c) (p : PosH c hU n)
   ws _ := []
   wpath _ := ByteArray.empty
   committed := by
@@ -100,7 +104,7 @@ noncomputable def lieReads :
 /-- The registrant's ports: each unit's port of each circuit port. -/
 noncomputable def lieOwn : Array Flock.Registered.Port :=
   ((List.finRange n).flatMap fun u => (List.finRange c.ports.size).map fun q =>
-    portOf c (lieLeaf (Reg := Reg) dj y₀ ht hc hscope hU hpub) (.inl (u, q))).toArray
+    liePortOf (Reg := Reg) dj y₀ ht hc hscope hU hpub (.inl (u, q))).toArray
 
 /-- **Every read of the registrant is one of the verifier's own**, at one table, under a record whose draw proves
 unit 0 of a population of one, the public file's instance unit 0, and ports named once. -/
