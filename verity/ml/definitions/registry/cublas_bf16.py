@@ -97,7 +97,7 @@ def conformance_cc12(launch: str) -> str:
 CONFORMANCE_CC12 = conformance_cc12("`splitKreduce_kernel` with a bf16 workspace (M 1 to 303, split counts 2 to 16)")
 CONFORMANCE_CC12_SERIAL = conformance_cc12("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
                                            "(M 303, K 12288, 5 slices)")
-TRAIN_CAPTURE = ("run r20261027-030510-d787: smollm2-135m's training GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
+TRAIN_CAPTURE = ("run r20261027-030510-d787: the training workload's GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
                  "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256 and B 8 x S 512, every "
                  "launch's kernel and grid recorded, each role's sampled words fitting its route exactly on random and "
                  "count-probe words")
