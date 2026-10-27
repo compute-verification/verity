@@ -1470,10 +1470,16 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from verity_vllm.pipeline.workload_file import workload_file
+
+    def workload_arg(s: str) -> str:
+        workload_file(s)
+        return s
+
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("advice", help="a declared run's I1 advice from its workload file")
-    p.add_argument("--workload", required=True)
+    p.add_argument("--workload", required=True, type=workload_arg)
     p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding")
     for name in ("commit", "audit"):
         p = sub.add_parser(name)
@@ -1482,7 +1488,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--bundle", help="instead of --tp-commit: a single-GPU Commit's sealed replay bundle (<row dir>/commit/"
                        "replay_bundle_p0), its window's Programs I2's")
         p.add_argument("--row-dir", help="with --bundle or --serve-run: the row dir (the Build's Programs, manifest.json, commit/)")
-        p.add_argument("--workload", help="with --bundle: the workload file the Commit served (φ's declared inputs, I2's)")
+        p.add_argument("--workload", type=workload_arg, help="with --bundle: the workload file the Commit served (φ's declared inputs, I2's)")
         p.add_argument("--serve-run", help="instead: a serve-openai run dir (serve.json, windows.jsonl, requests.jsonl, advice/w<K>/), "
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
@@ -1544,7 +1550,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
-        p.add_argument(flag, required=True)
+        p.add_argument(flag, required=True, **({"type": workload_arg} if flag == "--workload" else {}))
     p = sub.add_parser("circuit", help="a served window's registered compiler as a command: the circuit record it compiles the "
                        "advice to (records_audit.py's compile check)")
     for flag in ("--serve-run", "--partition", "--advice", "--out"):
