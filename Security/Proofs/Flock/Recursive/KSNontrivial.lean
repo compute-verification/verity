@@ -15,8 +15,8 @@ round with no SHA-512 call; it computes nothing, so its record holds no call and
 (`RecAt.acceptAll`). The parser, the inner view, the numbers, `IVStar`, the bound record, the outer record, the caps and
 the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
-* **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `KSLin2On` at accept-all is false at every
-  brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled
+* **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `RecursiveKSAtRec` at accept-all is false at
+  every brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled
   statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a coin-server
   record at whose transcript its V\* parts are in scope (`PartsInScope`). The inner statement need not be false. The
   silent prover is accepted on every run; the accepting record stages no V\* statement, so each session's statement is
@@ -428,27 +428,25 @@ theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
     obtain ⟨a, b, c, d, e⟩ := ht st hst
     exact ⟨a, b, show st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1026 ∧ spec.mPts ≤ 64 from ⟨c, d, e⟩⟩
 
-/-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `KSLin2On` at the deployed values, is
-false at the verifier that accepts everything (`RecAt.acceptAll`), at every brings, from the named assumption
+/-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `RecursiveKSAtRec` at the deployed
+values, is false at the verifier that accepts everything (`RecAt.acceptAll` of the deployment's compiled record), at
+every brings, from the named assumption
 `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled statement with a V\* session whose
 inner statement is in the plain scope (`DeployedParses`), with a coin-server record at whose transcript its V\* parts
 are in scope (`PartsInScope`). Everything else is proved here: the statement is dense (`denseAt_of_parses`) and in the
 plain scope (`plainIn_of_parses`); the silent prover is accepted on every run, and the accepting record stages no V\*
 statement, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), so `E*` extracts nothing and
 `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each; and `λ₂ ≥ 100` there
-(`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
+(`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. `E*` is the one `KSLin2On` names at that record, and the
+collision term `√(γ·Pr[B])` is a summand of the bound, not a disjunct, and is `0` there (`prB_acc`). -/
 theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
     ∃ (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
       (recRest : Msg → List (Msg × Out) → List UInt8), ∀ b : RecDeploy.Brings,
-      ¬ Claims.Recursion.KSLin2On FlockDeploy.sha512
+      ¬ RecursiveKSAtRec
         (RecDeploy.recBoundAt _root_.Flock.Readable.relation
           { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
           (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).acceptAll
-        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
-          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
-          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-          RecDeploy.DeployedR.wR)
-        (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt := by
+        RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR := by
   obtain ⟨x, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_parses hP
   refine ⟨aux, nOf, hd, recRest, fun b => ?_⟩
