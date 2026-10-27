@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from rho import envelopes, hardware, lean
-from rho.envelopes import Context, Detection, Onsite, Remote
+from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, overhead
@@ -177,6 +177,65 @@ def test_the_links_form_is_what_windows_proves():
     assert "Accounting.Guarantees.Actual.Windows" in r.cites()
     assert lean.weakest(r.cites()) == "conditional"
     assert lean.weakest(envelopes.regime(REG, "onsite").cites()) == "draft"
+
+
+def test_the_declared_io_bound_at_w63_is_the_plan_notes():
+    """NET-92's per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 21, KO 64, τ_b
+    100 ms; note:network-accounting/20261027T0220Z-finding-net92-plan): K = 45 ids a cell, 36,067 bits in and 1,095 out
+    a request (1,088 id bits and the count), so a server takes at most 65.6 kbit/s in and 2.0 kbit/s out, against the
+    warden's line rate of 655 kbit/s each way. `regime.onsite` doesn't take it."""
+    c = envelopes.regime(REG, "onsite-w63").certifier
+    assert (c.ids_per_cell, c.request_in, c.request_out) == (45, 36_067, 1_095)
+    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (65.6, 2.0, 655_360)
+    # a lane anchors a request at most every D + 1 = 22 buckets
+    assert c.period_bits(22) == (4 * 36_067, 4 * 1_095) and c.period_bits(23) == (8 * 36_067, 8 * 1_095)
+    assert not envelopes.regime(REG, "onsite").certifier.declared
+    for refused in (lambda: Certifier(declared=True),
+                    lambda: envelopes.regime(REG.override({"regime.onsite.declared": True}), "onsite")):
+        with pytest.raises(ValueError, match=r"declared I/O bound needs \['cell_bytes'"):
+            refused()
+
+
+def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_upper_end():
+    """`regime.onsite`'s certified ingress is `intake · α Φ`, cited to draft:NET-92 (a server's ingress only its
+    declared inputs, at most α Φ at full use). With `declared` (`regime.onsite-w63`) it is `hosts · r_in`, cited to the
+    plan note too: as an intake `r_in / (α Φ_s)`, 0.0133 at Kimi K2's policy on an H200 server. `declared_x` scales it up
+    to at most the location's links (its high end is line rate, the upper end until NET-92's PR 5)."""
+    line = REG.override({"regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
+    on, off, at_line = (envelopes.regime(REG, "onsite-w63"), envelopes.regime(REG, "onsite"),
+                        envelopes.regime(line, "onsite-w63"))
+    c = on.certifier
+    for fleet in ("reference-h200", "reference-gb200"):
+        ctx = context(fleet)
+        loc, alpha_phi = ctx.location, ctx.policy.k / ctx.c * ctx.location.phi
+        assert c.prompts(ctx) == pytest.approx(loc.hosts * c.r_in)
+        assert c.intake_of(ctx) == pytest.approx(loc.hosts * c.r_in / alpha_phi) and c.intake_of(ctx) < 0.02
+        assert on.rate_in(ctx) == pytest.approx(loc.hosts * (c.r_in + c.timing + c.side))
+        assert at_line.rate_in(ctx) == pytest.approx(loc.links + loc.hosts * (c.timing + c.side))
+        assert off.rate_in(ctx) == pytest.approx(alpha_phi + loc.hosts * (c.timing + c.side))
+        assert off.certifier.intake_of(ctx) == 1
+    assert c.intake_of(context("reference-h200")) == pytest.approx(0.01326, rel=1e-3)
+    assert {"draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan"} <= set(on.cites())
+    assert "draft:NET-92" in off.cites() and not any("NET-35" in c for c in on.cites() + off.cites())
+
+
+def test_onsite_w63_beside_the_reference():
+    """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 65.6 kbit/s,
+    0.0203 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.58e10 bits and the overhead's lower bound,
+    which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best attack at 249 and 250; at line rate
+    both fall to remote's (2.75, at the card table's clock). The cadence feeds the
+    serving rho credits only if outputs outnumber prompts more than 28:1, so it isn't the default."""
+    reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
+    ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
+    inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
+    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.583e10, rel=1e-3)]
+    assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.0203, rel=1e-3)
+    assert [(round(r.lo, 1), round(r.attack)) for r in (ref, w63)] == [(98.7, 249), (99.8, 250)]
+    line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
+                         "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
+    at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
+    remote = evaluate_named(reg, "reference-remote-h200").lo
+    assert all(r.lo == pytest.approx(remote, rel=1e-9) for r in at_line) and round(remote, 2) == 2.75
 
 
 def test_four_servers_as_one_location_have_four_times_a_servers_budget():

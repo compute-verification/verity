@@ -43,7 +43,7 @@ it; each module's docstring says what it implements.
 | `q_U(U) = ω_max U / s_×`, `s_×` | `u · U`, `u = Structure.weight` (`structure.<name>.s_times`, `omega_max`, `data/exclusion.toml`), under `draft:no-straddle` at `s_×` > 1; ρ's normalizer, the reference's weight per gate, `w = classes.weight_per_gate` |
 | `ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`, Lean's `χ` | uncertified routes `undecl.*`, `gap.*`, `skip.*`, `break.*`, `exfil.faulty` (`Cut.uncertified`) |
 | `E_i`, `δ_i(S)`, `δ_coin`, `δ_crypto`, `Pr[Break]` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` (`coin`, `crypto`, `by`); `Pr[Break]` named, not bounded |
-| `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe` per server (`per = "server"`; per device: `residual_bits`, `host_residual_bits`), `Certifier.rate_in` (`intake` or `ingress`, `timing`, `side`) |
+| `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe` per server (`per = "server"`; per device: `residual_bits`, `host_residual_bits`), `Certifier.rate_in` (`intake` · α Φ, at most α Φ under NET-92, or `ingress`; with `declared`, `regime.onsite-w63`, each server's declared inputs `r_in` at the warden form's public parameters, `declared_x` up to line rate, and `r_out` reported; `timing`, `side`) |
 | the local minimum `min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)}` | `theorem.local`; the minimum of global bounds `theorem.aggregate` (`overhead(..., aggregate_only=True)`) |
 | `\|C_{0,m}(G)\|/T_0`, `ρ`, `T ≥ ρ T_0 / Φ_total` | `Profile.efficiency` (`μ`), `Overhead.rho`, `Scenario.seconds` |
 

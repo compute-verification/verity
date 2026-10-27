@@ -6,6 +6,7 @@ import pytest
 from rho import analysis, figures
 from rho.analysis import LO, crossing
 from rho.params import Param, Registry
+from rho.scenario import build
 
 REG = Registry.load()
 NAMES = REG.names("scenario")
@@ -202,3 +203,28 @@ def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_o
     assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(
         "not modeled")
     assert "hi" not in record and "lo" not in record
+
+
+def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
+    """NET-92 at W63 (`onsite-w63`): 65.6 kbit/s a server, intake 0.0203 at the reference policy, line rate beside it;
+    the reference itself at `intake · α Φ`, 3.23 Mbit/s."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "onsite-w63",
+                                      "--scenario", "reference-remote-h200"])
+    run.main()
+    text = capsys.readouterr().out
+    assert ("**Certified ingress:** 6.56e+04 bit/s into a location, intake 0.0203 × α Φ: 1 × each server's declared "
+            "inputs, r_in = 6.56e+04 bit/s (r_out = 1.99e+03 bit/s out)") in text
+    assert "line rate, 4.8e+12 bit/s, is its upper end until NET-92's PR 5" in text and text.count("Certified") == 1
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]
+    assert record["reference-remote-h200"]["certified"] is None
+    assert record["onsite-w63"]["certified"]["r_in"] == pytest.approx(65_576, abs=1)
+    reference = run.certified(build(REG, "reference-onsite-h200"))
+    assert not reference["declared"] and reference["intake"] == 1
+    assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "
+                                              "`intake · α Φ`, a server's ingress only its declared inputs "
+                                              "(draft:NET-92); plus 1.86e+03 bit/s of timing and side channels.")

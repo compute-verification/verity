@@ -116,6 +116,36 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
             f"{fmt(t.ceiling)} while it remains" + (f"; and on `{'`, `'.join(straddle)}`" if straddle else "") + ".")
 
 
+def certified(s: Scenario) -> dict | None:
+    """Where a certifier sets the serving cut's link term: the certified prompt ingress into a location (bit/s), as an
+    intake (a multiple of `α Φ`), and with `declared` a server's declared inputs and outputs (NET-92)."""
+    regime = operating._inner(s.regime)
+    cert = getattr(regime, "certifier", None)
+    if cert is None or getattr(regime, "form", None) == "links":
+        return None
+    c, loc = s.context, s.context.location
+    out = {"prompts": cert.prompts(c), "intake": cert.intake_of(c), "channels": loc.hosts * (cert.timing + cert.side),
+           "links": loc.links, "declared": cert.declared, "given": cert.ingress is not None}
+    if cert.declared:
+        out |= {"r_in": cert.r_in, "r_out": cert.r_out, "declared_x": cert.declared_x}
+    return out
+
+
+def certified_md(d: dict | None) -> list[str]:
+    if d is None:
+        return []
+    if d["given"]:
+        basis = "given directly (`ingress`)"
+    elif d["declared"]:
+        basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
+                 f"{fmt(d['r_out'])} bit/s out), at the warden form's public parameters (draft:NET-92); line rate, "
+                 f"{fmt(d['links'])} bit/s, is its upper end until NET-92's PR 5")
+    else:
+        basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:NET-92)"
+    return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
+             f"{basis}; plus {fmt(d['channels'])} bit/s of timing and side channels."), ""]
+
+
 def operating_md(points: list[operating.Point]) -> list[str]:
     out = []
     for kind, head in (("work", "work"), ("exfil", "exfiltration through side channels")):
@@ -217,7 +247,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
            "What sets ρ (each part's share of the bound's weight per gate `dark + (1 − ε_dark) g`, and the most ρ can be "
            "while it remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
            f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
-    out += operating_md(points) + faulty
+    out += certified_md(certified(s)) + operating_md(points) + faulty
     for f in r.families:
         fu = f.profile.efficiency / s.mfu
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)}; no protocol: ρ = {fmt(fu)})", ""]
@@ -346,6 +376,7 @@ def main() -> None:
                           "cites": s.structure.cites()},
             "units": {"gates_per_flop": s.context.units.gates_per_flop, "basis": s.context.units.basis},
             "delta": s.regime.delta(s.context).json(),
+            "certified": certified(s),
             "seconds": s.seconds(r.lo),
             "overhead_by_status": by_status,
             "attribution": [vars(t) for t in terms], "monitored": monitored(r),
