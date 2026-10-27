@@ -3,6 +3,9 @@ import Std.Data.String.ToNat
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Flock.Claims.Complete.Json.Parse
 import Proofs.Flock.Claims.Bridge.Custody
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
 
 /-!
 # The device's refusals, read in the play
@@ -909,6 +912,34 @@ theorem sessionUses_pointsHash_of_decode {slot : Nat} {record : String} {us : Li
   first
     | (simpa [ht] using hstr)
     | (simp only [ht] at hstr; exact hstr)
+
+theorem setupOne_tags {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
+    (h : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
+    st.tags = tags := by
+  unfold FlockSoundness.Discharge.HiddenExec.setupOne at h
+  split at h
+  · exact FlockSoundness.Discharge.HiddenExec.setupHidden_tags h
+  · exact FlockSoundness.Discharge.Exec.setupH_tags h
+
+/-- **A one-table `--zk` setup's spec** names `I`'s table, with SHA-512 digests where `I`'s tags commit hm96 rows. -/
+theorem setupOf_zk_spec {I : FlockSoundness.Discharge.Exec.Inputs} {record : String} {spec : Flock.SessionSpec}
+    {sts : Array Flock.Stmt} (hc : I.count ≤ 1)
+    (h : FlockSoundness.Discharge.Exec.setupOf (FlockSoundness.Discharge.ZkExec.zkInputs I) record = .ok (spec, sts)) :
+    spec.tables = #[I.tags.table] ∧ spec.sha512Digests = I.tags.hm96Rows := by
+  unfold FlockSoundness.Discharge.Exec.setupOf at h
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny h with ⟨-, st, hst, rfl, -⟩ | ⟨hc', -⟩
+  · have ht := setupOne_tags hst
+    refine ⟨?_, ?_⟩
+    · show #[st.tags.table] = _
+      rw [ht]
+      show #[(FlockSoundness.Discharge.ZkExec.zkTags I).table] = #[I.tags.table]
+      rw [FlockSoundness.Discharge.ZkExec.zkTags_eq]
+      try rfl
+    · show st.tags.hm96Rows = _
+      rw [ht]
+      exact FlockSoundness.Discharge.ZkExec.zkTags_hm96Rows I
+  · exact absurd hc' (by show ¬ 1 < I.count; omega)
 
 end SampledProofs.OneStageZk
 
