@@ -29,7 +29,7 @@ from verity_vllm.observe.fold.resolver import Compute, Group, Transparent
 from verity_vllm.observe.log import LogWriter, read_log
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
-Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 C = Q3.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 

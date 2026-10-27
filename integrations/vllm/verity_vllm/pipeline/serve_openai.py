@@ -6,7 +6,8 @@
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
-        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON]]
+        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
+        [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -38,7 +39,7 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
 release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
-``serve.json``'s ``step_rows``).
+``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -76,8 +77,12 @@ finish, and ``summary.json`` counts the requests and checks, the seals, and the 
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
-(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``; its coins are in-process, so no window
-credits anything yet.
+(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
+``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
+bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -100,13 +105,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_h1 as SH
+from verity_vllm.pipeline import serve_remote as SR, serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
-                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
+                                               records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -222,6 +228,8 @@ class Options:
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
+    gate: SH.GateOptions = group(SH.GateOptions)
+    remote: SR.RemoteOptions = group(SR.RemoteOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -641,11 +649,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts):
         raise UsageError(why)
-    if opts.protocols_config and not opts.protocols:
-        raise UsageError("--protocols-config without --protocols")
-    SH.config_of(opts.protocols_config)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
@@ -653,9 +658,9 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
                          f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")
 
 
-def build(opts: Options) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`) and, with the Commit on, its committer, sized from the engine's envelope, with a
-    `served_record.SamplerInputsSource` attached."""
+def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
+    """The engine (`verity_vllm.LLM`), scheduling as the bench ``row`` declares, and with the Commit on, its committer, sized
+    from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
     engine_env.apply_engine(opts.hf_home)
@@ -664,11 +669,14 @@ def build(opts: Options) -> tuple[Any, Any]:
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
+    kw = engine_options(opts) | RW.engine_args(row)
+    llm = RW.checked(row, LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw)))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
             raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
+    if session is not None:
+        session.built(llm)
     if not opts.commit:
         return llm, None
     return llm, SS.committer(opts, llm)
@@ -678,7 +686,8 @@ def main(opts: Options) -> int:
     preflight(opts)
     out = Path(opts.out)
     out.mkdir(parents=True, exist_ok=True)
-    llm, com = build(opts)
+    session = SR.session_of(opts, out)
+    llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
     reference = getattr(proto, "base", proto)
@@ -693,7 +702,7 @@ def main(opts: Options) -> int:
 
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config))
+                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -703,16 +712,18 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm)
-    loop = EngineLoop(engine, windows, cap=opts.window_requests)
+    if session is not None:
+        session.begin(windows)
+    loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests)
     if windows is not None:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
     order = rows = None
     if opts.admit == "release-order":
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine.handle import model_runner
         from verity_vllm.engine.step_trace import scheduler_of
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
-        rows = keep_scheduler_rows(get_model_runner(llm.vllm), scheduler_of(engine))
+        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)
@@ -745,12 +756,13 @@ def main(opts: Options) -> int:
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
+              "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
-              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of()}
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()
@@ -765,7 +777,8 @@ def main(opts: Options) -> int:
             got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
-                   "mirror_errors": mirror.errors[:10] if mirror else None}
+                   "mirror_errors": mirror.errors[:10] if mirror else None,
+                   "remote_session": session.end() if session is not None else None}
             (out / "summary.json").write_text(json.dumps(got, indent=1))
             if mirror is not None:
                 mirror()
@@ -783,17 +796,5 @@ def main(opts: Options) -> int:
             rows.uninstall()
         if com is not None:
             com.close()
-    return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1
-
-
-def records_mirror(out: Path, dst: str | None) -> Mirror | None:
-    """`serve_commit.Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
-    if not dst or Path(dst).resolve() == Path(out).resolve():
-        return None
-    return Mirror(out, dst)
-
-
-def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
-    """serve.json's disk floor: the filesystem it watches, its floor and what was free at the start."""
-    d = windows.disk if windows is not None else None
-    return None if d is None else {"path": str(d.path), "floor_gb": d.floor / SS.GB, "free_gb_at_start": round(d.free() / SS.GB, 1)}
+    passed = windows is None or windows.summary()["passed"] or not server.served
+    return 0 if loop.error is None and passed and SR.accepted(session) else 1

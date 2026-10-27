@@ -1,6 +1,7 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, and `TokenFeed_v1` down a class Program's positions."""
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and a slot's `SlotRow_v1` and
+`SlotMask_v1`."""
 from __future__ import annotations
 
 import json
@@ -143,6 +144,26 @@ def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
     for kw in ({"NP": 0, "FIRST": True}, {"NP": 2, "FIRST": 1}):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(X.TokenFeed, **kw)
+
+
+def test_a_slots_row_opens_into_its_occupancy_and_feed_and_an_empty_slot_outputs_no_token():
+    """`SlotRow_v1` copies a slot's ingress row (occupancy, lp, ids) out as its occupancy word and the first `TokenFeed_v1`'s
+    slot; `SlotMask_v1` passes the select through while the occupancy word's low bit is 1 and otherwise outputs `EMPTY`,
+    which no token id is, at every occupancy word and token tried."""
+    def run(fn, *rows):
+        args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
+        return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
+
+    row, ids = bind(X.SlotRow, NP=3), [7, 0, 0xFFFFFFFF]
+    for occ, lp in ((1, 3), (0, 0), (0xFFFFFFFE, 1)):
+        assert run(row, [occ, lp, *ids]) == [occ, lp, *ids]
+    mask = bind(X.SlotMask)
+    for occ in (0, 1, 2, 3, 0x80000000, 0xFFFFFFFF):
+        for tok in (0, 5, 128255, 0xFFFFFFFF):
+            assert run(mask, [occ], [tok]) == [X.mask_reference(occ, tok)] == [tok if occ & 1 else X.EMPTY]
+    assert X.EMPTY >= 1 << 31
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(X.SlotRow, NP=0)
 
 
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "served"])

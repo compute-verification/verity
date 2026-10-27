@@ -16,8 +16,8 @@ import Proofs.Pouw.ShaRealize
   - A round's factor reads only the coins up to that round, and is frozen at 1 on a round whose oracle and advice
     are bad for `ShaSpeed` (`roundF`), so the rounds' product is a supermartingale over the fresh coins
     (`expect_prod_rounds`), and Markov bounds the luck by `δ` (`prob_rounds_le`).
-  - The union bound adds the service's `κ_S`, the extraction's `κ_x(A)` on runs within the cap (a run whose timed
-    work and answers fit makes at most `Q` oracle calls, `calls_le_of_fits`), the bad oracles' `κ_sha(A)` and the
+  - The union bound adds the service's `κ_S`, the extraction's `κ_x(A)` on runs within the cap (a run whose sampling
+    blocks' timed work fits makes at most `Q` oracle calls, `calls_le_of_fits`), the bad oracles' `κ_sha(A)` and the
     degenerate dithers'
     `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off those events the rounds meet the work floor (`floor_of_rounds`), and
     `FreedOfFloor` turns it into freed compute.
@@ -370,8 +370,8 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
 
 /-! ## The cap on oracle calls -/
 
-/-- **A run whose timed use fits makes at most `Q` oracle calls** (RT-LEAN-2 L39): by (G3) the rounds' calls, in
-their work and answers, use at least `calls · callUse_r` of a resource `r` a call uses, which fits within its capacity
+/-- **A run whose timed use fits makes at most `Q` oracle calls** (RT-LEAN-2 L39, CMP-154): by (G3) the calls in the
+sampling blocks' work use at least `calls · callUse_r` of a resource `r` a call uses, which fits within its capacity
 `cap_r ≤ Q callUse_r`. -/
 theorem calls_le_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
     (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r) (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r)
@@ -381,9 +381,7 @@ theorem calls_le_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P 
   have h1 : A.calls o x * G.callUse r ≤ A.timedUse o x r := by
     unfold Prover.calls Prover.timedUse
     rw [Finset.sum_mul]
-    exact Finset.sum_le_sum fun w _ => by
-      rw [add_mul]
-      exact add_le_add ((hG3 (A.work w) (A.workIn o x w)).2 r) ((hG3 (A.answer w) (A.answerIn o x w)).2 r)
+    exact Finset.sum_le_sum fun b _ => (hG3 (A.work b) (A.workIn o x b)).2 r
   have h2 : A.timedUse o x r ≤ Pd.cap r :=
     le_trans (le_add_of_nonneg_right (Finset.sum_nonneg fun j _ => mul_nonneg (hfit.1 j) (hneeds j r))) (hfit.2 r)
   exact le_of_mul_le_mul_right ((h1.trans h2).trans hc) hr
@@ -481,8 +479,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       simp only [one_mul]
     rw [hC]
     have hS0 : 0 ≤ ∑ r, μ r * A.timedUse o x r := Finset.sum_nonneg fun r _ => mul_nonneg (hμ r)
-      (Finset.sum_nonneg fun w _ =>
-        add_nonneg ((hG2.2 (A.work w) (A.workIn o x w)).2 r).1 ((hG2.2 (A.answer w) (A.answerIn o x w)).2 r).1)
+      (Finset.sum_nonneg fun w _ => ((hG2.2 (A.work w) (A.workIn o x w)).2 r).1)
     have hcost : ∑ w, (G.cost μ (Mw w) (adv o x w, (x w).1) +
           G.cost μ (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1))) ≤
         ∑ r, μ r * A.timedUse o x r + ∑ r, μ r * ξ A r := by
@@ -499,9 +496,9 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
         exact mul_le_mul_of_nonneg_left (huse o x hq r) (hμ r)
     have hextk : ∑ w, (G.ext (Mw w) (adv o x w, (x w).1) +
         G.ext (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1))) ≤ K :=
-      calc _ ≤ ∑ w, (G.ext (A.work w) (A.workIn o x w) + G.ext (A.answer w) (A.answerIn o x w)) :=
-            Finset.sum_le_sum fun w _ => by linarith [hext o x w, (hG2.2 (A.answer w) (A.answerIn o x w)).1]
-        _ = A.ext o x := rfl
+      calc _ ≤ ∑ w, G.ext (A.work w) (A.workIn o x w) := Finset.sum_le_sum fun w _ => hext o x w
+        _ ≤ A.ext o x := Finset.sum_le_sum fun w _ =>
+            le_add_of_nonneg_right (hG2.2 (A.answer w) (A.answerIn o x w)).1
         _ ≤ K := himp A o x hv
     exact floor_of_rounds (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
       (fun w => pubsha (reg w))
