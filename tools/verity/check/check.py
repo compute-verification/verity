@@ -767,7 +767,7 @@ def _version(v: str) -> tuple[int, ...]:
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its PR #83 commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
+    (its `pr83` commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
     ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
     16's honest session does: Lean refuses it for completeness, upstream accepts it."""
     import argparse

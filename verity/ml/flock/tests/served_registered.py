@@ -32,7 +32,6 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.commitments import hm96
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
