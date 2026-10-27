@@ -635,12 +635,28 @@ def _inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) ->
     return out
 
 
+@dataclass(frozen=True)
+class Lowered:
+    """A class circuit with what its lowering knows (`window_rows` fills its units from it): the class Program's function, each
+    slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``) and each template's runs of units by their
+    (slot, step), ``(at, count, slot, step)``."""
+    circuit: IF.Circuit
+    fn: Any
+    programs: tuple[_Program, ...]
+    spans: dict[str, list[tuple[int, int, int, int]]]
+
+
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
                   name: str = NAME) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading
     row k of `SLOT_ROWS` (the system's ingress at its anchor, `WindowClass.anchor`) and each allocation's slots side by side in its
     template; its blocks' slots are the slots.
     A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census (`class_size`)."""
+    return lower(registered, cls, programs, grain, name).circuit
+
+
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME) -> Lowered:
+    """`class_circuit`'s circuit with its lowering (`Lowered`)."""
     programs = cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
@@ -661,10 +677,11 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
                         tuple(openings))
     rows = {r.reader for r in b.reads if r.param == SLOT_ROWS}
     masks = {f.tid for f in b.feeds if f.port == "occ"}
-    return IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                      external=tuple(sorted({f"{t}/row" for t in rows} | {f"{t}/o0" for t in masks})),
-                      wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
-                      blocks=IF.Blocks(programs, cls.positions, tuple(_inference(b.spans, programs))))
+    circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
+                         external=tuple(sorted({f"{t}/row" for t in rows} | {f"{t}/o0" for t in masks})),
+                         wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
+                         blocks=IF.Blocks(programs, cls.positions, tuple(_inference(b.spans, programs))))
+    return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
@@ -674,6 +691,12 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     ``placed`` is each request's anchor bucket and the bucket of its last output in the window, in its request order, as the
     network certifier's scan placed it (the end None: unchecked); by default every request is at the window's first
     boundary, its end unchecked."""
+    takes(compiled, cls, placed)
+    return class_circuit(registered, cls, None, grain, name)
+
+
+def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None) -> None:
+    """Refuse a window ``cls``'s slots don't take (`window_circuit`)."""
     units = [u for u in compiled.requests if u is not None]
     if len(units) > cls.slots:
         raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
@@ -704,8 +727,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
         if u.LP > cls.prompt or u.T + 1 > cls.outputs:
             raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
-    return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["ACROSS", "CLASS_OF_RECORD", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "SLOT_ROW", "SLOT_ROWS", "WindowClass", "class_circuit",
-           "class_program", "window_circuit"]
+__all__ = ["ACROSS", "CLASS_OF_RECORD", "FAMILIES", "Grain", "KEYS", "Lowered", "NAME", "Row", "SLOT_ROW", "SLOT_ROWS", "WindowClass",
+           "class_circuit", "class_program", "lower", "takes", "window_circuit"]
