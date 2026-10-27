@@ -73,8 +73,11 @@ block and range for range, on parts Python's `rec_vstage.stage` staged:
   its drawn level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
   session (`test_the_recorded_plain_leaf_sessions_satisfy`).
 
-8aa6's and eeb1's checks run on 06c6's own tree. Neither difftest compares `refP`'s inner rounds (`IrDep x`'s rows and
-openings) with Python's builder. -/
+8aa6's and eeb1's checks run on 06c6's own tree. Neither difftest compares `refP`'s inner rounds with Python's builder;
+`verity/core/service/vstar/tests/test_irdep_difftest.py` does, on 06c6's own tree: `IrDep x`'s rows at every inner round,
+openings, running-sum salts, κ, eq(α) and v, evaluated by `IrDepSession.lean` (the setup-level copies `IrDep.lean`
+proves equal to `IrDep`'s own), are what `rec_live`, `rec_vstar` and `rec_vstage` built there, and a planted byte in
+any of them is refused. -/
 def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
