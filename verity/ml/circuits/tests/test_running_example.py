@@ -10,7 +10,6 @@ import pytest
 from verity.ml.circuits import (Array, FunctionCall, Program, Region, Tuple, Value, bind, composite, decode_program, descriptor_size,
                        encode_program, evaluate_call, evaluate_region, primitive, program_digest, query, GapError,
                        QueryError, REGISTRY)
-from verity.ml.circuits.defs import CompositeDefinition
 
 V16 = Value(16)
 MASK = 0xFFFF

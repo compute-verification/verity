@@ -8,7 +8,7 @@ transcript (they are the prescribed inputs; the correspondence tool authenticate
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from typing import Iterable
 
 from .layout import FunctionCall, Circuit, GateSelection
 

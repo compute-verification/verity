@@ -199,7 +199,7 @@ def test_every_column_is_constrained(name: str) -> None:
                 c = R.Census(strict=False)
                 try:
                     R.check_step(pipe, w, c)
-                except Exception as e:  # a perturbed column may make a lookup key non-integer etc.
+                except Exception as e:  # noqa: BLE001 - a perturbed column may make a lookup key non-integer etc.
                     c.violations.append(repr(e))
                 assert c.violations, (name, trial, key, delta)
         # output state fields
@@ -213,7 +213,7 @@ def test_every_column_is_constrained(name: str) -> None:
                 c = R.Census(strict=False)
                 try:
                     R.check_step(pipe, w, c)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - whatever a perturbed state makes the check raise is its violation
                     c.violations.append(repr(e))
                 assert c.violations, (name, trial, gi, fld)
 

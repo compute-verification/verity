@@ -91,7 +91,7 @@ def step_total(C, acc, a, b, sa, sb, ue8m0: bool = False):
     encoding: a NaN scale byte gives 0x7FFFFFFF whatever the accumulator; else a NaN accumulator gives 0x7FFFFFFF and an infinite
     one itself; else the finite step on stand-ins, where a UE8M0 sum leaving binary32 is the infinity of its sign. Words are
     lists of bits, LSB first: 64 E2M1 codes per operand, then its scale bytes."""
-    from .fp import F32_INF, TC_NAN, _classes, _finite_or_zero, select
+    from .fp import TC_NAN, _classes, _finite_or_zero, select
 
     s_nan, sx, sw = ZERO, [], []
     for byte, out in [(y, sx) for y in sa] + [(y, sw) for y in sb]:

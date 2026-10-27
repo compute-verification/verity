@@ -9,6 +9,7 @@ import gzip
 import json
 from pathlib import Path
 
+from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, MODELS, tc_dot_chain
 from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
@@ -61,8 +62,8 @@ def test_finite_chains_agree_with_tc_dot_chain() -> None:
             continue
         try:
             assert tc_dot_chain(HOPPER_BF16_WGMMA_K16, acc, a, b) == int(r["d"], 16), r
-        except Exception as exc:  # the finite model refuses an intermediate infinity; the total step covers those
-            assert type(exc).__name__ == "InvalidArtifact", exc
+        except InvalidArtifact as exc:  # the finite model refuses an intermediate infinity; the total step covers those
+            assert _step_total(HOPPER_BF16_WGMMA_K16, acc, a, b) == int(r["d"], 16), (r, exc)
 
 
 def test_the_capture_separates_hopper_from_ampere() -> None:

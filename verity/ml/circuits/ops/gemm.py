@@ -165,7 +165,10 @@ def GemmCoordinatePad(B, S, x, wrow):
         return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, wrow)
     space, idx, leaf = B.call(P.const(16, 0)).refs[0]
     zeros = broadcast(space, idx, leaf, S.K - S.T)
-    pad = lambda a: Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
+    def pad(a):
+        return Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
     return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
 
 
@@ -301,7 +304,10 @@ def ScaledMmS8CoordinateRows(B, S, *ports):
     concatenations: the same word for every input. Past K = 32,768 an s8 operand is wider than `partition_v2.UNIT_CLASS_MAX`
     (262,144 bits), so a unit reads it as R rows."""
     R = S.R
-    cat = lambda parts: Coll(Array(S.K, S8), concat([p.refs for p in parts]))
+
+    def cat(parts):
+        return Coll(Array(S.K, S8), concat([p.refs for p in parts]))
+
     x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
     return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
 
