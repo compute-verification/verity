@@ -1518,10 +1518,6 @@
    "owner": "@memory-accounting",
    "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
   },
-  "Pous.Period.RingDevice": {
-   "owner": "@lean",
-   "digest": "07dbf213c59177a8609f33e7e0b844c23ad68ae00b8041337ea9d794a4e447be"
-  },
   "Pous.Prog.Bounded": {
    "owner": "@memory-accounting",
    "digest": "4eaccdb39e04a3ffda69506389dd61a81c05aa0e86791800a88890739da925ec"
