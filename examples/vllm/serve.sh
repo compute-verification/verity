@@ -12,13 +12,12 @@
 # top's rule for n1: checked before serving and every 10 s). The serve dir's records (requests.jsonl, serve.json, windows.jsonl,
 # advice_trace.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody keeps them.
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
-# varied requests (network-accounting's traffic, `tools/serve_load.py --varied`), each numbered under a fresh release run and
+# varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
 # admission order (VLLM-98), else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
-#   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
-#     gpu-lease 1 --wait --mem-gb 256 -- bash examples/vllm/serve.sh
-# Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
+# `verity example vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
+# CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the row's REPO, REV and ROW (the Commit of record's row
+# dir) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
 # WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
@@ -28,21 +27,20 @@
 # shim and probes) as vllm does.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
-# Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
-# The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
+# Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
-REPO=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
-ROW=${ROW:-/workspace/research/vllm-llama1b-commit/r20261024-055630-5377/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
-HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-/workspace/cp/norm_tap/build/verity_norm_tap.so}
+for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
+  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity example vllm serve\` (examples/vllm/run.sh)"; exit 2; }
+done
 TREE=$PWD
-ROOT=${SERVE_ROOT:-/workspace/research/vllm-serve-seal}
+ROOT=$SERVE_ROOT
 D=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 mkdir -p "$D" "$ROOT/cache"
-export PY=/workspace/jobs/venv312/bin/python HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
-export CUDA_HOME=/workspace/jobs/cuda-12.9 TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
-export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH
+export PY=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
+export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
+export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
@@ -214,7 +212,7 @@ EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
 fi
 
-"$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
+"$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
 sleep 5
 for _ in $(seq 1 120); do                                   # the load's windows' advice, before they compile
@@ -289,7 +287,7 @@ done
 if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the warden releases it
   for i in $(seq 1 "${VARIED_RUNS:-3}"); do
     run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)")
-    "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
+    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
       --release "$run" --jitter-ms "${VARIED_JITTER_MS:-400}" --seed "$i" --out "$D/varied_$i.jsonl" > "$OUT/varied_$i.log" 2>&1
     echo "$(date -u +%H:%M:%SZ) varied run $i ($run) rc=$?" | tee -a "$OUT/steps.txt"
   done

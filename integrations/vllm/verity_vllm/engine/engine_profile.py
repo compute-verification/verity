@@ -18,7 +18,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.engine import env
+from verity_vllm.engine import env, handle
 
 DECLARED_ENV = env.ENGINE
 
@@ -155,27 +155,6 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
         # is the R3 (prefix cache) row's rule.
         kw["enable_prefix_caching"] = False
     return kw
-
-
-def get_model_runner(llm: Any) -> Any:
-    """Navigate LLM -> in-process engine core -> worker -> model runner (uniproc executor)."""
-    eng = llm.llm_engine
-    core = getattr(eng, "engine_core", None)
-    inner = getattr(core, "engine_core", None) or core
-    executor = getattr(inner, "model_executor", None)
-    worker = getattr(executor, "driver_worker", None)
-    for attr in ("worker", "model_runner"):
-        if hasattr(worker, attr):
-            worker = getattr(worker, attr)
-            if attr == "model_runner":
-                return worker
-    raise RuntimeError("could not find the in-process model runner (is VLLM_ENABLE_V1_MULTIPROCESSING=0?)")
-
-
-def get_scheduler(llm: Any) -> Any:
-    core = llm.llm_engine.engine_core
-    inner = getattr(core, "engine_core", None) or core
-    return inner.scheduler
 
 
 def _run(cmd: list[str]) -> str:
@@ -367,7 +346,7 @@ def backends_info(llm: Any) -> dict[str, Any]:
             out["ranks"] = len(per_rank)
             out.pop("tp_rank", None)
             return out
-        out = _backends_of_runner(get_model_runner(llm))
+        out = _backends_of_runner(handle.model_runner(llm))
     except Exception as e:  # noqa: BLE001
         out["error"] = repr(e)
     return out

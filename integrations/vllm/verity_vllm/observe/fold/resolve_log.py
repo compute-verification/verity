@@ -34,7 +34,7 @@ from verity_vllm.observe.fold.resolver import (Compute, Group, Profile, Resoluti
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 
 def load_profile(name: str) -> tuple[Profile, Any]:
-    mod_name = name if "." in name else f"verity_vllm.engine.profiles.{name}"
+    mod_name = name if "." in name else f"verity_vllm.observe.fold.profiles.{name}"
     mod = importlib.import_module(mod_name)
     return mod.PROFILE, mod
 
@@ -370,7 +370,7 @@ def report_markdown(rep: dict) -> str:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     log: str = option("log")
-    profile: str = option("--profile", help="the profile to resolve against: a module of verity_vllm.engine.profiles, or a dotted path")
+    profile: str = option("--profile", help="the profile to resolve against: a module of verity_vllm.observe.fold.profiles, or a dotted path")
     step: int | None = option("--step", type=int, default=None, help="resolve (and dump) only this step")
     dump_trees: bool = option("--dump-trees", default=False, action="store_true")
     max_depth: int = option("--max-depth", type=int, default=6)
