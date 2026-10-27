@@ -84,3 +84,6 @@ First every smell is cleaned up and the remote demo runs on the right names and 
 
 ## Worktree tries ship the wrong tree (22:25Z)
 `verity lean try` (and any `research run` whose launcher code comes from `/workspace/.venv`) ships the checkout its own CLI code lives in, `/workspace`, not your worktree. From a worktree, run the worktree's own CLI (`uv run --project <worktree> verity lean try …` from inside it, or `python3 <worktree>/tools/verity/cli/…`), and check the run's `source_sha`/`tree_sha` (`research status RUN --json`) equals your head before trusting a pass.
+
+## Registration scope (Daniel 3:24 PM PDT, 22:35Z)
+Only the site, θ and B are registered (log entries: site, theta, builder). Subprotocol Programs, parameters and the proof system are verifier parameters, not registration. One-stage's `verity/registration/v1|v2` record is the window's commitment record (a homonym): bytes stay, code names move off "registration". Read the AMENDED comment on PRF-268.
