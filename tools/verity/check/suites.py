@@ -7,6 +7,7 @@
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
+    uv run tools/verity/check/suites.py --known-red origin/main   what is red on main: its newest check's failed tests, as JSON
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
@@ -109,6 +110,13 @@ does (`serial_slots`, from each suite's last duration); each lane goes longest f
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
 `--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of ten
 lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
+
+Known red on main. With `--changed REV` (a PR's quick tier, a lane's pre-mark run; never check's own run), a failure is judged
+against what is already red on `main` (CI-173): the failed tests in the suite reports of the newest ended post-landing run or
+recorded check of REV's newest first-parent commit that has one in the evidence store (`known_red`, read in a process of its own
+that alone gets a recorded run's store key: `known_red_on_main`). A failed suite whose every failed test is on that list, and that
+failed for nothing else, is `known-red` and fails nothing; one with other failures still fails, and says which of them are red on
+`main` too. Where the list can't be read, every failure counts. `--known-red REV` prints the list.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -1889,6 +1897,95 @@ def failing(out: Path, results: list[Result]) -> None:
     tmp.replace(failing_path(out))
 
 
+#: how many of `main`'s first-parent commits `known_red` looks down for one a check reported its suites at: drive's after-landing
+#: run checks `main`'s tip about every 4 h, and dozens of landings can come between two (25-26 Oct: 467 in a day and a half)
+KNOWN_RED_WALK = 200
+#: a check's suite reports among its run files (`check.py`'s `write_result` lists them), which drive reads a red suite from too
+KNOWN_RED_REPORTS = ("suites.json", "suites-lean.json")
+#: what `known_red_on_main` may take: a refresh of the store's attempts and one run's reports
+KNOWN_RED_S = 300
+
+
+def _reported_red(store, rid: str) -> dict[str, list[str]] | None:
+    """{suite path: the node ids of its failed tests} in the suite reports of attempt ``rid``'s run files, or None when it
+    published none."""
+    outs = (store.get_attempt(rid) or {}).get("outputs") or {}
+    for art in dict.fromkeys(a for a in (outs.get("run_files"), outs.get("run_record")) if a):
+        if have := [n for n in KNOWN_RED_REPORTS if any(f["path"] == n for f in store.listing(art))]:
+            red: dict[str, list[str]] = {}
+            with tempfile.TemporaryDirectory(prefix="known-red-") as d:
+                got = store.fetch(art, Path(d), paths=have)
+                for name in have:
+                    for row in json.loads((got / name).read_text()):
+                        if row.get("status") == "failed" and row.get("failed_tests"):
+                            red.setdefault(row["suite"], []).extend(row["failed_tests"])
+            return red
+    return None
+
+
+def known_red(rev: str, store=None) -> dict:
+    """What is red on `main`: the failed tests in the suite reports of the newest ended check (a post-landing run, or a recorded
+    check: `plan.own_checks`) of the newest of ``rev``'s first `KNOWN_RED_WALK` first-parent commits that has one,
+    ``{"run", "commit", "red": {suite path: [node id]}}``; ``{"why"}`` when no such run is in the evidence store."""
+    if store is None:
+        from research.store.local import LocalStore
+
+        store = LocalStore()
+    if store.remote is not None:
+        store.refresh(attempts_only=True)
+    spec = importlib.util.spec_from_file_location("suites_plan", HERE / "plan.py")
+    plan = sys.modules[spec.name] = importlib.util.module_from_spec(spec)      # dataclasses resolve their module by name
+    spec.loader.exec_module(plan)
+    for commit in _git("rev-list", "--first-parent", "-n", str(KNOWN_RED_WALK), rev).split():
+        for rid in plan.own_checks(store, commit):
+            if (red := _reported_red(store, rid)) is not None:
+                return {"run": rid, "commit": commit, "red": red}
+    return {"why": f"no check of {rev[:12]} or its last {KNOWN_RED_WALK - 1} first-parent commits reported its suites in the store"}
+
+
+def known_red_on_main(rev: str) -> dict:
+    """`known_red` in a process of its own (`--known-red`), which alone gets the store key a recorded run's custody holds when this
+    machine has no store config of its own (as `verity/ml/flock/verifier/ci.py`'s `store_env`): the tests' environment never
+    does. ``{"why"}`` when it can't be read."""
+    env = dict(os.environ)
+    custody = Path(env[CUSTODY_ENV]) if env.get(CUSTODY_ENV) else None
+    if (custody is not None and not env.get("RESEARCH_STORE_CONFIG") and not (Path.home() / ".research" / "store.toml").is_file()
+            and (custody / "store.toml").is_file() and (custody / "cred.json").is_file()):
+        cred = json.loads((custody / "cred.json").read_text())
+        env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+        env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
+    try:
+        p = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--known-red", rev], cwd=ROOT, env=env,
+                           capture_output=True, text=True, timeout=KNOWN_RED_S)
+    except subprocess.TimeoutExpired:
+        return {"why": f"`suites.py --known-red` took over {KNOWN_RED_S} s"}
+    try:
+        return json.loads(p.stdout)
+    except ValueError:
+        return {"why": f"`suites.py --known-red` exited {p.returncode}: {(p.stderr or p.stdout).strip()[-300:] or 'no output'}"}
+
+
+def mask_known_red(failed: list[Result], doc: dict) -> list[str]:
+    """Each of ``failed`` whose every failed test is red on `main` too (``doc``, `known_red`'s) and that failed for nothing else
+    becomes `known-red`, which fails no run; the lines that say what `main`'s red list explains of ``failed``."""
+    if "red" not in doc:
+        return [f"known red on `main`: not read ({doc.get('why')}), so every failure here counts"]
+    red = {s: set(ts) for s, ts in doc["red"].items()}
+    lines = [f"known red on `main` (run {doc['run']}, at {doc['commit'][:12]}): a test that failed there too fails nothing here"]
+    for r in failed:
+        tests, there = set(r.failed_tests or ()), red.get(r.suite.path, set())
+        if not tests & there:
+            continue
+        alone = not (r.outside or r.child_reads or r.unguarded or r.timed_out or r.signal or r.nondeterministic or not r.reported)
+        if tests <= there and alone:
+            r.status = "known-red"
+            lines.append(f"  known-red {r.suite.name}: {', '.join(sorted(tests)[:5])}" + (" ..." if len(tests) > 5 else ""))
+        else:
+            lines.append(f"  failed    {r.suite.name}: {len(tests & there)} of its {len(tests)} failed tests are red there too, "
+                         f"{', '.join(sorted(tests - there)[:3]) or 'and it failed for more than its tests'} not")
+    return lines
+
+
 _stopping = False
 
 
@@ -1935,12 +2032,18 @@ def main(argv: list[str] | None = None) -> int:
                     "per-test reuse; runs nothing")
     ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
                     f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
+    ap.add_argument("--known-red", metavar="REV", help="print, as JSON, what is red on main at REV (`known_red`: the newest check of "
+                    "its first-parent commits in the evidence store) and run nothing; with --changed, a suite whose every failed "
+                    "test is on that list fails nothing")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
     if not in_git():
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "
               f"(`research run --on` ships one; a tree the archive stream or an older launcher shipped isn't)", file=sys.stderr)
         return 2
+    if a.known_red:
+        print(json.dumps(known_red(a.known_red)))
+        return 0
     store_custody()
 
     pkgs, suites = members(), discover()
@@ -2174,9 +2277,17 @@ def main(argv: list[str] | None = None) -> int:
         for name, test, secs in sorted(slow, key=lambda x: -x[2])[:10]:
             print(f"  {secs:6.1f} s  {name}: {test}")
     failed = [r for r in results if r.status == "failed"]
+    if failed and a.changed:
+        print("\n" + "\n".join(mask_known_red(failed, known_red_on_main(rev))))
+        failed = [r for r in failed if r.status == "failed"]
+        if a.json and failed:
+            failing(a.json, results)
+        elif a.json:
+            failing_path(a.json).unlink(missing_ok=True)
     ran = sum(r.seconds for r in results)
-    print(f"\n{len(results)} suites: {len(results) - len(failed)} passed ({sum(r.status == 'cached' for r in results)} cached),"
-          f" {len(failed)} failed; {ran / 60:.1f} min of test time; logs in {logs}")
+    red = sum(r.status == "known-red" for r in results)
+    print(f"\n{len(results)} suites: {len(results) - len(failed) - red} passed ({sum(r.status == 'cached' for r in results)} cached),"
+          f" {len(failed)} failed" + (f", {red} known red on main" if red else "") + f"; {ran / 60:.1f} min of test time; logs in {logs}")
     if a.json:
         a.json.write_text(json.dumps([{"suite": r.suite.path, "name": r.suite.name, "status": r.status, "key": r.key,
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,

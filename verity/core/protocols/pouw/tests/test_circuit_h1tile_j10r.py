@@ -1,5 +1,5 @@
-"""`circuit.h1tile`'s J10-R units, `PouwH1Tile_v5` and `PouwH1Tile_v6` (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3,
-J10-R, RT-ALGO-11 and -16): one seed a call from its first position and its registered roots, a unit's rows' and columns'
+"""`circuit.h1tile`'s J10-R units, `PouwH1Tile_v5` and `PouwH1Tile_v6`
+(J10-R): one seed a call from its first position and its registered roots, a unit's rows' and columns'
 noise the call-scale stream's at public block counters, its fold keys σ_R's at its own position; and the SHA-512
 compressions that saves a unit against the note's formula."""
 from __future__ import annotations

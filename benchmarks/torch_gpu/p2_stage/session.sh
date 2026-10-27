@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# One staging session on vy-dc-h200, from build.sh's lib, ALLP-IFACE's weights module, the weights manifest with
-# digests memory-accounting held W to, and CMP-95 item 2's fixture (the store's layout JSON, `p2_v1/store.py layout`,
+# One staging run on vy-dc-h200, from build.sh's lib, the weights module, the weights manifest with
+# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
 #   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 240m \
-#     --env GPU_LEASE_WHO=kernels-kstage [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
-#     --send /tmp/p2lib.tar --send WEIGHTS/weights.py --send h200-manifest.json --send store-layout.json \
+#     --env GPU_LEASE_WHO=LANE [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
+#     --send /tmp/p2lib.tar --send benchmarks/e2e_h200/e2e_h200/served_weights.py --send h200-manifest.json \
+#     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
 #
-# (WEIGHTS: ALLP-IFACE's verity_torch_loop, whose weights.py writes the seeded stream; h200-manifest.json: its manifest
-# with digests, art:6600b3ec….)
+# (served_weights.py writes the seeded stream; h200-manifest.json: its manifest with digests.)
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
-# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the coin and commitment MEM-69 posted.
-# Otherwise the development store STORE under the public test salt SALT, which `encode` extends across sessions.
+# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
+# Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the
 # manifest to MANIFEST_SHA256; layer LAYER's stream bytes generated once into SRC/w.bin (`weights write`, seed SEED) and
@@ -38,10 +38,10 @@ ENC=${ENC:-/workspace/tmp/kernels-kstage/mem69-v2-l$LAYER}
 SEED=${SEED:-text:verity/cmp92/h200/weights/v1}
 # public: sha512("not-a-secret: verity/p2-stage/test-salt")[:24], the development store's salt
 SALT=${SALT:-011feb1ddfe7334099b02f79a43b4d1411bec106975fffe4}
-# MEM-69: the deployment coin of record (infra, 00:34:29Z) and W's commitment under the frozen layout
+# the deployment's coin of record and W's commitment under the frozen layout
 SOURCE=${SOURCE:-dd56f549e504fa8a48db829588683baa66d5ab0c8c381665a87c3b53ffeb3ced}
 COMMITMENT=${COMMITMENT:-9aaaf192b1a7c0962b6139b7bad5b6a2abc9809d889ed5da5890628d1799dfe4291ce318bc8ba410b41886e30d52278f89686f429839257eab1728ac5902706a}
-# p2_v1/store.py's LAYOUT_SHA512 (CMP-95 item 2), and art:6600b3ec…'s h200-manifest.json
+# p2_v1/store.py's LAYOUT_SHA512, and h200-manifest.json's
 LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
 MANIFEST_SHA256=${MANIFEST_SHA256:-28a29668627351e0118b02bbb4dddd0d3f25e2dfa6860b82f3048c0871792f27}
 STEPS=${STEPS:-toy,stage,gemm,check}
@@ -53,15 +53,15 @@ export O D PY S SRC STORE ENC SALT LAYER STEPS LAYOUT MANIFEST PATH=$CUDA/bin:$P
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 
-mkdir -p "$S/lib" "$S/toy" "$S/tl/verity_torch_loop" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
+mkdir -p "$S/lib" "$S/toy" "$S/tl/e2e_h200" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
   && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) && tar -C "$S/toy" -xf "$IN/store-toy.tar" \
   && [ "$(sha512sum < "$LAYOUT" | cut -c1-128)" = "$LAYOUT_SHA512" ] \
   && [ "$(sha256sum < "$MANIFEST" | cut -c1-64)" = "$MANIFEST_SHA256" ]
 step ship $?
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
-cp "$IN/weights.py" "$S/tl/verity_torch_loop/weights.py" && touch "$S/tl/verity_torch_loop/__init__.py"
-(cd "$IN" && sha256sum weights.py h200-manifest.json store-layout.json store-toy.tar) > "$O/inputs.sha256"
+cp "$IN/served_weights.py" "$S/tl/e2e_h200/served_weights.py" && touch "$S/tl/e2e_h200/__init__.py"
+(cd "$IN" && sha256sum served_weights.py h200-manifest.json store-layout.json store-toy.tar) > "$O/inputs.sha256"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
@@ -97,7 +97,7 @@ print(*L.Weights.of(json.load(open(os.environ["MANIFEST"]))).span(int(os.environ
 EOF
 )
 if [ ! -e "$SRC/w.key" ]; then
-  "$PY" -m verity_torch_loop.weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
+  "$PY" -m e2e_h200.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
     --workers "$(nproc)" 2>> "$O/prepare.log" && echo "$SEED $LO $HI" > "$SRC/w.key"
   step prepare $?
 else

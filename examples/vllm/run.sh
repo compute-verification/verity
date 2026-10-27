@@ -10,7 +10,7 @@
 #   commit   once per row: the row's Commit of record with its sealed replay bundle (commit.sh), the row dir the endpoint commits
 #            under (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
-# Further FLAGs go to `research run` (`--env CLASSES='4,32,4 record'`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
+# Further FLAGs go to `research run` (`--env WC_RECORD_TIMEOUT=3h`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
 # starts nothing. It returns once the run starts: `research status RUN` checks on it.
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
