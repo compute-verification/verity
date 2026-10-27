@@ -863,7 +863,7 @@ def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[i
     return [rows, *([list(c[k]) for c in cases] for k in range(1, len(cases[0])))]
 
 
-__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "SCAN_STATE", "STATICS", "Slot", "State",
-           "arguments", "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode",
-           "prog_encode", "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row", "view",
-           "view_bits", "view_encode", "window_state"]
+__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "STATICS", "Slot", "State", "arguments",
+           "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode", "prog_encode",
+           "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row", "view", "view_bits",
+           "view_encode", "window_state"]
