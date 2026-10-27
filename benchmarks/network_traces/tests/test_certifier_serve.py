@@ -682,7 +682,7 @@ def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served
 def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_longer():
     """F is the body's token count, so probed responses of F − 1 and F events plan F frames each; a response of more
     than F events, or of none, or a body that doesn't ask for exactly its tokens (`ignore_eos`, a `max_tokens` of at
-    least 1) or asks for `min_tokens`, which vllm's advice refuses, has no plan."""
+    least 1) or asks for `min_tokens`, which the vLLM integration's advice refuses, has no plan."""
     body = cs.request_body("stub", TOKENS)
 
     def probed(*lengths):

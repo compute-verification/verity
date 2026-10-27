@@ -29,7 +29,7 @@ import warden_serve as ws  # noqa: E402
 import wipe_egress as E  # noqa: E402
 
 SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
-#: c20261026T172351Z-7f47's origin, the rehearsal the record was first read off
+#: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))
