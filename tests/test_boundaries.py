@@ -2,7 +2,7 @@
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
-    workloads' Definitions (ml.definitions) on the catalog and the kernels;
+    workloads' Definitions (ml.definitions) on the catalog, the kernels and the cards (hardware);
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
@@ -50,8 +50,9 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
-    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
-    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
+    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier
+    # reads; a device's numbers (an H200's SMs) come from its card
+    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels", "hardware"},
     # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).

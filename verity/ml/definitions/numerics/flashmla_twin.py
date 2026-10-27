@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from verity.hardware import load
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
@@ -41,8 +42,9 @@ LOG2F_POLY = (0x3DC6B27F, 0xBE2C7F30, 0x3E2FCF2A, 0xBE374E43, 0x3E520BF4, 0xBE76
               0xBF38AA3B)
 #: FlashMLA's `LOG_2_E` (api/common.h:31)
 LOG_2_E = 1.44269504
-#: the sm_90 decode's tile (`TOPK_BLOCK_SIZE`), the scheduler's fixed overhead per request, and the H200's SMs
-BLOCK, FIXED_OVERHEAD, H200_SMS = 64, 5, 132
+#: the sm_90 decode's tile (`TOPK_BLOCK_SIZE`), the scheduler's fixed overhead per request, and the H200's SMs (its card)
+BLOCK, FIXED_OVERHEAD = 64, 5
+H200_SMS = load("h200-sxm-141gb")["sm"]["count"]["value"]
 
 
 def scale_log2(scale: float) -> int:

@@ -100,6 +100,7 @@ from typing import NamedTuple
 
 import numpy as np
 
+from verity.hardware import load
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
@@ -134,7 +135,8 @@ MULTIMEM_ALIGN_BYTES = 16
 MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
 #: `CAPTURE_RUNS`' kept multimem words replayed on `AllReduceMultimemVector_v1`'s batch (tests/properties/glm53_multimem_replay.py)
 MULTIMEM_REPLAY_RUN = "r20261019-023101-2f28"
-H200_SMS = 132
+#: the H200's SMs, from its card
+H200_SMS = load("h200-sxm-141gb")["sm"]["count"]["value"]
 _NEG_ZERO32 = const(32, 0x80000000)
 
 #: vLLM's all-reduce settings: name -> (custom all-reduce on, torch symmetric memory on), FlashInfer's all-reduce on in each.
