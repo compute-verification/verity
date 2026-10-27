@@ -29,10 +29,9 @@ from `SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, remot
 and recursion's knowledge form (12). The rest (2–6, 8 and 13) are E2EMAP's; item 2 is #4043. E2EMAP turns the map into
 a refactor plan by 22:00Z 25 Oct, with the first refactor PR marked Mon 26 Oct.
 
-**Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts 33 module prefixes from the tree rule
-until C-Flock's spec is extracted (RECKSLOCK, Wed 4 Nov). 31 are C-Flock's; the other two, `Proofs.Accounting.TS.Session`
-and `Proofs.Pouw.PearlC.FlockTile`, are on PoUW's chain. None is PoUS's, bandwidth's, remote bandwidth's, the
-certifier's, NCI's or accounting's, so this is a C-Flock question, plus one PoUW definition.
+**Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts module prefixes from the tree rule
+until C-Flock's spec is extracted (RECKSLOCK, Wed 4 Nov). Each is there for C-Flock's definitions in `Proofs/`, and one
+of them, `Proofs.Accounting.TS.Session`, is on PoUW's chain, so this is a C-Flock question.
 - **lean's list** (run r20261025-031300-0fcc, in CHAINMAP's note): 40 `Prop`-valued definitions under `trees.except`
   that a locked statement takes without a lock entry. 39 are C-Flock's, and one, `SoundAtBridge.RowsSession.CanonRead`,
   is PoUW's. CHAINMAP's list was due by 12:00Z 25 Oct and came out at 04:20Z.

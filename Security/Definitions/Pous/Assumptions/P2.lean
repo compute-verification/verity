@@ -32,9 +32,10 @@ independent ideal permutations, once a responder may not finish a root within th
 (`PrimeP16448`; both refutations read only the `AuditSecureOn` conjunct of `MeetsOn` and `ε ≤ 2^-128`), it is false at
 `D ≥ 32,894` with `Q ≥ 2` and `L ≥ 65,789` (`PousP2Ring.tight_p16448`: the responder recomputes the roots), at every
 `k`. Its form at `k ≤ 88` is false at `L ≥ 2^30` (`PousP2Ring.not_meetsOn_b19_k88`: a responder that stores truncated
-roots and recomputes the dropped bits); at `k = 105` the same attack needs about 167 dropped bits per block, which no
-theorem here refutes or rules out. So it is a hypothesis only at the `(D, Q, L)` a deadline gives. Those two theorems
-are its falsification tests. It follows from the per-round form `P2RingRoundSecure p ε₀ D Q L` whenever
+roots and recomputes the dropped bits), and at `k = 105` it is false at `L ≥ 2^169` with `D ≥ 2` and `Q ≥ 2`
+(`Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc`: the same attack with 168 dropped bits per block). So it is
+a hypothesis only at the `(D, Q, L)` a deadline gives, as `Pous.Period.PeriodHeldDeployed` takes it at
+`(16,446, 2^20, 2^64)`. Those three theorems are its falsification tests. It follows from the per-round form `P2RingRoundSecure p ε₀ D Q L` whenever
 `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure`). -/
 def P2RingAuditSecure (D Q L : ℕ) : Prop :=
   AuditSecureOn (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) .sequential
@@ -129,26 +130,5 @@ def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
         ∀ j < k, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ →
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
-
-/-- **`statistical-hiding` (open in Lean): the memory challenger's coin commitments hide its indices, up to `ε`.**
-`com s c I` is what the challenger publishes about the indices `I` before a session `s`, from its fresh coins `c`
-(for the deployed code, `Pous.EndToEnd.coinView`: the coin tree's root and its hm96 key). For every session, and every
-event `E` of a quantity `a` drawn independently of the coins and indices (a server's whole view apart from them), the
-event holds with the published commitment and the indices it commits to at most `ε` more often than with the
-commitment to independent indices `I'`. Unbounded `E`: the hiding is statistical.
-
-Why it should hold at `ε = 2^-131`, for every hash: each coin is an hm96 commitment `b ‖ c` with `b = x ⊕ M·y` and
-`c = H(SALT_TAG ‖ y)`, the salt `y` uniform over 1,536 bits and `M` the 512 × 1,536 Toeplitz matrix of the fresh key,
-uniform over its 2,047 free bits and published. Given `c` (512 bits), `y` keeps average min-entropy at least 1,024, and
-Toeplitz matrices are a universal family, so by the generalized leftover hash lemma `(M, M·y, c)` is within
-`½·2^((512 − 1024)/2) = 2^-257` of `(M, U, c)`, whatever `H` is; a hybrid over the 105 coins, from `I` to uniform masks
-and back to `I'`, gives at most `210 · 2^-257 < 2^-249`, and the tree's root is a function of the key and the coins.
-Lean has neither the leftover hash lemma nor a proof that the code's `Hm96.mask` is that Toeplitz product, so it is
-a named assumption about the code's function, not an open conjecture of mathematics alone. -/
-def CoinCommitHides {σ Coins Γ : Type} [Fintype Coins] {K B : ℕ} (com : σ → Coins → (Fin K → Fin B) → Γ)
-    (ε : ℝ≥0∞) : Prop :=
-  ∀ (s : σ) (α : Type) [Fintype α] (E : α → Γ → (Fin K → Fin B) → Prop),
-    pr (fun x : α × Coins × (Fin K → Fin B) => E x.1 (com s x.2.1 x.2.2) x.2.2) ≤
-      pr (fun x : α × Coins × (Fin K → Fin B) × (Fin K → Fin B) => E x.1 (com s x.2.1 x.2.2.2) x.2.2.1) + ε
 
 end Pous.P2.Assumptions

@@ -12,8 +12,10 @@ import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.ScopeGate
 import Proofs.Flock.Bridge.KSLive
+import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicDeployed
+import Proofs.Flock.Bridge.Honest
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -28,7 +30,9 @@ preconditions refused by `verify --zk` (`ScopeGate`). `Lowers`: the claims progr
 `Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
 `Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
-parameters. -/
+parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
+hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
+(`Bridge.Assumptions.ServedFilesParse`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

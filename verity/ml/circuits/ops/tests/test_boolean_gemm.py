@@ -105,10 +105,10 @@ FAMILIES = [(BG.DotBf16, 16, BG.GEMM_AMPERE), (BG.GemmCoordinate, 16, BG.GEMM_HO
 @pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
 def test_each_composite_refuses_the_k_its_word_definition_refuses(defn, k, rest) -> None:
     """A K that isn't a multiple of the step, and for the s8 composites K = 2^17 (`test_gemm`, `test_integer_mma`)."""
-    for K in (k + 1, 3 * k // 2):
-        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={K} is not a multiple of the "
+    for bad in (k + 1, 3 * k // 2):
+        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={bad} is not a multiple of the "
                                                        f"{k}-wide step")):
-            bind(defn, K=K, **rest)
+            bind(defn, K=bad, **rest)
     if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate, BG.ScaledMmS8CoordinateRows):
         with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
             bind(defn, K=1 << 17, **rest)
@@ -279,7 +279,10 @@ def test_the_padded_coordinate_agrees_with_its_word_definition_and_is_the_coordi
         target = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
         assert TR.word_of(target).id == f"GemmCoordinatePad_v1{{T={T},K=32,DOT=HopperBF16WgmmaDot16_v1}}"
         _agree(target, [xs[:, :T], ws[:, :T]])
-        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
+        def pad(a):
+            return np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
         assert np.array_equal(BS.evaluate_words(target, xs[:, :T], ws[:, :T]), BS.evaluate_words(coord, pad(xs), pad(ws)))
 
 
