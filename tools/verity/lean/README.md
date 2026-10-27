@@ -36,7 +36,8 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
-python tools/verity/lean/survey.py map|conventions|size  the Lean read as text, no build: its map, its form, its trusted size
+python tools/verity/lean/survey.py map|conventions|size|unused  the Lean read as text: its map, its form, its trusted size,
+                                                  and the modules no guarantee uses (by `Facts.lean`'s usage mode)
 ~~~
 
 A lane's edit loop is `verity lean try FILE [--on NODE]`: `lean_changed.py --try FILE` on this checkout, uncommitted edits included,
