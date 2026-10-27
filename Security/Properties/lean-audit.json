@@ -555,6 +555,7 @@
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
     "Properties.Verity.Game",
+    "Properties.Verity.Soundness",
     "Definitions.Accounting.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
