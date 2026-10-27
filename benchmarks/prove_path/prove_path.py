@@ -76,7 +76,7 @@ Two kinds of committed run:
   and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
-  the tree's code (`source_identity.code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
+  the tree's code (`code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
@@ -148,6 +148,7 @@ import argparse
 import contextlib
 import functools
 import hashlib
+import importlib
 import json
 import multiprocessing
 import os
@@ -203,10 +204,10 @@ class I2Compiler:
     (``own``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
     transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest, a single-GPU
     window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
-    `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
-    served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
-    the model, its revision and config, the target and the execution; the default seed; ℓ; the served model name, where it
-    names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
+    `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the verifier's
+    `interface.compiler_digest` over the integration's import closure as git lists it), everything ``registered`` holds
+    that I2 reads (φ: the model, its revision and config, the target and the execution; the default seed; ℓ; the served
+    model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
     from the one its advice was registered under names another compiler."""
 
     registered: Any
@@ -293,29 +294,10 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
         write_build(have[dg], program, named)
 
 
-#: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
-CODE_DIRS = ("verity", "integrations/vllm/verity_vllm")
-
-
-@functools.lru_cache(maxsize=1)
 def code_identity() -> str:
-    """The code the compiler runs, once per process: every file git lists under `CODE_DIRS` (tracked, or untracked and not
-    ignored, so a node's build outputs, ``.lake`` under ``verity/``, don't count; docs, ``*.md``, compute nothing), by path and
-    content. Refused where the tree isn't a git work tree: a listing without git's ignore rules is another identity."""
-    import subprocess
-
-    import verity_vllm
-
-    root = Path(verity_vllm.__file__).resolve().parents[3]
-    p = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *CODE_DIRS], cwd=root,
-                       capture_output=True)
-    if p.returncode != 0:
-        raise ValueError(f"the compiler's code identity reads the tree's git listing, and {root} has none: "
-                         f"{p.stderr.decode(errors='replace').strip()[:200]}")
-    h = hashlib.sha256()
-    for rel in sorted({f for f in p.stdout.decode().split("\0") if f and not f.endswith(".md") and (root / f).is_file()}):
-        h.update(rel.encode() + b"\0" + hashlib.sha256((root / rel).read_bytes()).digest())
-    return h.hexdigest()
+    """The code a single-GPU window's I2 runs: the served compiler's digest (`served_identity`), so a single-GPU window's
+    I2 and a served one's name their code by one formula, the verifier's `interface.compiler_digest`."""
+    return served_identity()[1]
 
 
 def bodies_by_digest(programs_root: str) -> dict[str, str]:
@@ -578,7 +560,7 @@ def served_identity() -> tuple[str, str]:
     the integration's import closure (``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
-        from verity_vllm.pipeline import advice as ADV
+        ADV = importlib.import_module("verity_vllm.pipeline.advice")
     except ImportError:
         raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
                          "which this tree lacks") from None
