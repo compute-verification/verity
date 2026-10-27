@@ -481,6 +481,8 @@ def test_every_record_difference_code_is_one_update_settles():
         "guarantees.readers": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}, facts()),
         "guarantees.reads-digest": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}, facts()),
         "assumptions.digest": (pol, facts(pins={"P.t": fact(reads=hyp)})),
+        "assumptions.unread": (pol | {"assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}},
+                               facts()),
     }
     assert set(cases) == A.RECORD_DIFFERENCE
     for code, (policy, now) in cases.items():
@@ -1327,9 +1329,11 @@ def test_a_premise_the_lock_does_not_list_fails():
     assert fails == [] and pol["assumptions"] == {
         "P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     assert A.judge(pol, f, FILES)[0] == []
+    digest = pol["assumptions"]["P.Hyp"]["digest"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Hyp\": "
+        f"{{\"owner\": \"@lean\", \"digest\": \"{digest}\"}} under `assumptions`."]
 
 
 def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
@@ -1352,7 +1356,132 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_depend
     assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Sound\": "
+        "{\"owner\": \"@lean\"} under `assumptions`."]
+
+
+def asserted(head, module="P.Assumptions", props=False):
+    return {"head": head, "module": module, "props": props}
+
+
+def aliased(unfolds: dict, closed: bool = False) -> dict:
+    """Facts whose guarantee `P.t` takes `P.Both`, a definition of `P.Defs` (a module the repository builds) that unfolds as
+    ``unfolds`` says (`Facts.lean`'s `unfolds`), as an open hypothesis or, ``closed``, as a closed one."""
+    hyps = [{"binder": "h", "type": "P.Both", "closed": True, "named": "P.Both", "module": "P.Defs"}]
+    pin = fact(signature="P.t (h : P.Both) (n : Nat) : P.f n = n", hyps=hyps) if closed else fact()
+    pin["premises"] = [{"binder": "h", "head": "P.Both", "module": "P.Defs", "unfolds": unfolds}]
+    graph = {"P.Defs": {"imports": ["Init"], "olean": "/r/Security/.lake/build/lib/lean/P/Defs.olean"}}
+    return facts(pins={"P.t": pin}, graph=graph)
+
+
+def test_an_alias_of_listed_assumptions_is_no_new_named_assumption():
+    """TOP-90 row 17 (#4440, #4358): a premise that only packs listed assumptions (`def Both n := Hyp ∧ Hyp2 n`, or through
+    another such definition) failed as a new named assumption, and listing or renaming it took another records run. It is
+    not one: the check holds its parts to the lock in its place (so a listed part reached only through it is read), an
+    update doesn't add it, and taken closed, its parts are the guarantee's named assumptions."""
+    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}}}
+    for unfolds in ({"P.Both": [asserted("P.Hyp"), asserted("P.Hyp2")]},
+                    {"P.Both": [asserted("P.Inner", "P.Defs"), asserted("P.Hyp")], "P.Inner": [asserted("P.Hyp2")]}):
+        fails, pol = A.judge(listed, aliased(unfolds), FILES, update=True)
+        assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Hyp2"}, (fails, pol["assumptions"])
+        assert A.judge(pol, aliased(unfolds), FILES)[0] == []
+    closed = aliased({"P.Both": [asserted("P.Hyp"), asserted("P.Hyp2")]}, closed=True)
+    fails, pol = A.judge(listed, closed, FILES, update=True)
+    assert fails == [] and pol["guarantees"]["P.t"]["assumptions"] == ["P.Hyp", "P.Hyp2"]
+    assert A.judge(pol, closed, FILES)[0] == []
+
+
+def test_an_alias_hiding_anything_but_listed_assumptions_is_a_new_one_and_its_failure_names_the_entry():
+    """Fail-closed: a premise that unfolds to anything but listed assumptions (one the lock doesn't list, `False`, a bound
+    predicate, a constant applied to a proposition or a predicate, a part that doesn't unfold) stays a new named assumption,
+    taken open or closed; its failure says what it unfolds to and the entry an update would write, so one edit settles it."""
+    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}}}
+    pol = A.judge(listed, aliased({"P.Both": [asserted("P.Hyp")]}), FILES, update=True)[1]
+    cases = {"P.Hidden": [asserted("P.Hyp"), asserted("P.Hidden")],
+             "False": [asserted("P.Hyp"), asserted("False", "Init.Prelude")],
+             "a bound predicate": [asserted("P.Hyp"), asserted(None, None)],
+             "P.Hyp applied to a proposition or predicate": [asserted("P.Hyp", props=True)],
+             "P.Inner": [asserted("P.Hyp"), asserted("P.Inner", "P.Defs")]}
+    for why, parts in cases.items():
+        got = aliased({"P.Both": parts})
+        fails = [f for f in A.judge(pol, got, FILES)[0] if f.code == "assumptions.unlisted-premise"]
+        beside = " beside the listed P.Hyp" if why != "P.Hyp applied to a proposition or predicate" else ""
+        assert fails == [
+            "assumptions: P.Both is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+            "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Both\": "
+            f"{{\"owner\": \"@lean\"}} under `assumptions`. It unfolds to {why}{beside}, so it is no alias of listed "
+            "assumptions, which the lock would not count."], (why, fails)
+        assert "P.Both" in A.judge(listed, got, FILES, update=True)[1]["assumptions"]
+        assert A.judge({**pol, "assumptions": pol["assumptions"] | {"P.Both": {"owner": "@lean"}}}, got, FILES)[0] == []
+        closed = aliased({"P.Both": parts}, closed=True)
+        assert "guarantees: P.t assumes (h : P.Both), a closed Prop" in "".join(A.judge(listed, closed, FILES, update=True)[0])
+    hidden = aliased({"P.Both": cases["P.Hidden"]})
+    hidden["pins"]["P.u"] = fact() | {"premises": [{"binder": "h", "head": "P.Hidden", "module": "P.Assumptions"}]}
+    fails, pol = A.judge({**listed, "guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}, hidden, FILES,
+                         update=True)
+    assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Hidden"} and A.judge(pol, hidden, FILES)[0] == []
+
+
+ALIASES = """import Control.Assumptions
+
+namespace Control
+
+def Both (n : Nat) : Prop := A n ∧ B n
+abbrev BothR (n : Nat) : Prop := A n ∧ B n
+abbrev AR (n : Nat) : Prop := A n
+def Nested (n : Nat) : Prop := ∀ m, m ≤ n → Both m ∧ AR m
+def Closed : Prop := ∀ n, Both n
+def Sneaky (n : Nat) : Prop := A n ∧ Hidden n
+abbrev SneakyR (n : Nat) : Prop := A n ∧ Hidden n
+def Absurd (n : Nat) : Prop := A n ∧ False
+def AllR (p : Nat → Prop) : List Nat → Prop
+  | [] => True
+  | x :: xs => p x ∧ AllR p xs
+def Rec (l : List Nat) : Prop := AllR A l
+
+theorem t_both (n : Nat) (_h : Both n) : True := trivial
+theorem t_bothR (n : Nat) (_h : BothR n) : True := trivial
+theorem t_nested (n : Nat) (_h : Nested n) : True := trivial
+theorem t_closed (_h : Closed) : True := trivial
+theorem t_sneaky (n : Nat) (_h : Sneaky n) : True := trivial
+theorem t_sneakyR (n : Nat) (_h : SneakyR n) : True := trivial
+theorem t_absurd (n : Nat) (_h : Absurd n) : True := trivial
+theorem t_rec (l : List Nat) (_h : Rec l) : True := trivial
+
+end Control
+"""
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_aliases_of_listed_assumptions_pass_and_aliases_hiding_others_fail_on_a_real_build(tmp_path):
+    """`Facts.lean`'s `unfolds` on a real build, with `A` and `B` listed: a `def` or `abbrev` alias of them, one nested
+    through another and an abbrev, and one taken closed are no new named assumptions; one that hides the unlisted `Hidden`,
+    `False` or a recursive definition applied to a predicate is, and so is `Hidden` itself behind an abbrev, which `Facts.lean`
+    read as `And` and dropped. An update lists `Hidden`, which makes `Sneaky` an alias, and the record of `t_closed` names
+    `A` and `B`."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    src = pkg / "Control" / "Assumptions.lean"
+    src.write_text(src.read_text().replace("end Control", "def A (n : Nat) : Prop := n + 0 = n\ndef B (n : Nat) : Prop := "
+                                           "0 + n = n\ndef Hidden (n : Nat) : Prop := n * 1 = n\n\nend Control"))
+    (pkg / "Control" / "Aliases.lean").write_text(ALIASES)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Aliases\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["t_both", "t_bothR", "t_nested", "t_closed", "t_sneaky", "t_sneakyR", "t_absurd", "t_rec"]
+    policy = unclaimed(A.load(pkg))
+    policy["guarantees"] = policy["guarantees"] | {f"Control.{n}": {"owner": "@lean"} for n in names}
+    policy["assumptions"] = policy["assumptions"] | {"Control.A": {"owner": "@lean"}, "Control.B": {"owner": "@lean"}}
+    f = A.facts_of(pkg, policy, tmp_path)
+    files = A.lean_modules(pkg)
+    new = lambda fails: sorted(x.split(" ")[1] for x in fails if x.code in ("assumptions.unlisted-premise",
+                                                                           "guarantees.unnamed-hypothesis"))
+    assert new(A.judge(policy, f, files)[0]) == ["Control.Absurd", "Control.Hidden", "Control.Rec", "Control.Sneaky"]
+    fails, pol = A.judge(policy, f, files, update=True)
+    assert new(fails) == [] and sorted(set(pol["assumptions"]) - set(policy["assumptions"])) == [
+        "Control.Absurd", "Control.Hidden", "Control.Rec"]
+    assert pol["guarantees"]["Control.t_closed"]["assumptions"] == ["Control.A", "Control.B"]
+    assert new(A.judge(pol, A.facts_of(pkg, pol, tmp_path), files)[0]) == []
 
 
 def test_a_statement_whose_premises_could_not_be_read_fails():
@@ -2264,6 +2393,36 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     build()
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (3, 1) and rep["replay"]["closure"]["checked"] == 0
+
+
+def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure(tmp_path, monkeypatch):
+    """The replay cache keeps its `REPLAYS_KEPT` newest entries by mtime, and a reuse never touched one: Mathlib's and
+    ArkLib's entries, stored once and reused by every replay, were the first evicted, so Security's and Properties' replays
+    checked 1,300 to 3,800 closure modules again in most of 26 Oct's Lean checks (150 to 260 s each). A replay now marks
+    each entry it reuses, its own modules' and the closure's, and stores those it checked; nothing else is touched."""
+    graph = {"Init": [], "Std": ["Init"], "Old": ["Init"], "A": ["Std"], "B": ["A"]}
+    facts = {"graph": {m: {"imports": i} for m, i in graph.items()}, "modules": ["A", "B"], "axioms": []}
+    cache = tmp_path / "replay"
+    cache.mkdir()
+    for m in ("Init", "Old", "A", "Unrelated"):
+        (cache / f"{m}.json").write_text("{}")
+        os.utime(cache / f"{m}.json", (1000, 1000))
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+    argv = []
+
+    def run(cmd, cwd, log, timeout=None):
+        argv.extend(cmd)
+        (tmp_path / "replay.json").write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, cache, closure=True)
+    assert fails == [] and stats["checked"] == 1 and stats["reused"] == 1 and stats["closure"]["checked"] == 1
+    assert argv[argv.index("--closure") + 1:] == ["Std"] and argv[argv.index("--reused") + 1] == "A"
+    mtime = {p.stem: p.stat().st_mtime for p in cache.glob("*.json")}
+    assert sorted(mtime) == ["A", "B", "Init", "Old", "Std", "Unrelated"]
+    assert mtime["Init"] > 1000 and mtime["Old"] > 1000 and mtime["A"] > 1000 and mtime["Unrelated"] == 1000
 
 
 def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):

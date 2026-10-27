@@ -1001,6 +1001,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
+                                  "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -1263,7 +1264,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
-    kept, premised = {}, {}
+    kept, premised, unfolds = {}, {}, {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
         if not who:
@@ -1290,15 +1291,20 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(Failure("guarantees.premises", name, f"guarantees: {name}'s premises could not be read "
                                  f"(`Facts.lean`'s `premisesOf` failed on its statement), so the lock can't be held to "
                                  f"them: make `premisesOf` read this statement's form"))
+        mine = {}
         for pr in f.get("premises") or []:
+            mine |= pr.get("unfolds") or {}
             if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
+        unfolds |= mine
         named = []
         for h in f["hypotheses"]:
             if not h["closed"]:
                 continue
             if h["named"] and (h["named"] in assumed if not prefixes else under(prefixes, h["module"] or "")):
                 named.append(h["named"])
+            elif not prefixes and h["named"] and (u := unfolding(h["named"], mine, assumed)) and not u[1]:
+                named += u[0]
             else:
                 fails.append(Failure("guarantees.unnamed-hypothesis", name, f"guarantees: {name} assumes ({h['binder']} : "
                                      f"{h['type']}), a closed Prop that is not a named assumption: a Prop constant listed "
@@ -1350,7 +1356,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 fails.append(Failure("guarantees.reads-digest", m, f"guarantees: the digest recorded for {m} is not the "
                                      f"SHA-256 of its definitions; `python tools/verity/lean/merge.py --normalize` "
                                      f"recomputes it"))
-    records, why = assumption_records(policy, now_reads, update, owner, premised)
+    records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds)
     fails += why
     out = dict(policy)
     if kept:
@@ -1521,8 +1527,36 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
     return None
 
 
+def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | None:
+    """What the premise ``d`` asserts, by `Facts.lean`'s `unfolds` (the parts its definition asserts through `∧`, the bodies
+    of `∀` and `→`, and reducible unfolding, beside the assumptions what it takes mentions): (the ``listed`` assumptions it
+    comes to, the parts that are none), or None when it doesn't unfold.  A part the lock doesn't list comes to what it
+    unfolds to when that is listed assumptions alone; a bound predicate, a constant applied to a proposition or a predicate
+    (a combinator, a recursive definition) and anything else that is no listed assumption keep ``d`` from being an alias of
+    listed assumptions, which it is when the second list is empty."""
+    def walk(c: str, path: frozenset) -> tuple[list[str], list[str]] | None:
+        parts = unfolds.get(c)
+        if not isinstance(parts, list) or c in path:
+            return None
+        yes, no = set(), set()
+        for p in parts:
+            h = p.get("head")
+            if h is None:
+                no.add("a bound predicate")
+            elif p.get("props"):
+                no.add(f"{h} applied to a proposition or predicate")
+            elif h in listed:
+                yes.add(h)
+            elif (u := walk(h, path | {c})) and not u[1]:
+                yes |= set(u[0])
+            else:
+                no.add(h)
+        return sorted(yes), sorted(no)
+    return walk(d, frozenset())
+
+
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
-                       premised: dict | None = None) -> tuple[dict, list[str]]:
+                       premised: dict | None = None, unfolds: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
     stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
     `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
@@ -1533,8 +1567,11 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
     definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
     constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
-    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
+    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent.
+    A premise that is an alias of listed assumptions (`unfolding`, by ``unfolds``) is not one: what it unfolds to is
+    premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
+    premised, unfolds = {d: set(by) for d, by in (premised or {}).items()}, unfolds or {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
     if isinstance(assumed, list):
@@ -1545,6 +1582,12 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             if under(policy["assumptions"], m):
                 who = {owners.get(g) for g in by} - {None}
                 assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
+    listed = set(assumed) | ({d for d in premised if not isinstance(unfolds.get(d), list)} if update else set())
+    for d in sorted(premised):
+        if d not in assumed and (u := unfolding(d, unfolds, listed)) and not u[1]:
+            by = premised.pop(d)
+            for a in u[0]:
+                premised.setdefault(a, set()).update(by)
     for a, rec in sorted(assumed.items()):
         who = (rec or {}).get("owner") or owner
         if a not in read and a in (premised or {}):
@@ -1572,18 +1615,23 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         elif rec["digest"] != h:
             fails.append(Failure("assumptions.digest", a, f"assumptions: {a}'s definition in {m} changed; run `check.py "
                                  f"--update` and commit the record (Daniel's DM shows the change when it lands)"))
-    for d, by in sorted((premised or {}).items()):
+    for d, by in sorted(premised.items()):
         if d in assumed:
             continue
+        who = {owners.get(g) for g in by} - {None}
+        mine = who.pop() if len(who) == 1 else owner
+        entry = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
         if update:
-            who = {owners.get(g) for g in by} - {None}
-            mine = who.pop() if len(who) == 1 else owner
-            out[d] = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
-        else:
-            fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
-                                 f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
-                                 f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
-                                 f"lands)"))
+            out[d] = entry
+            continue
+        u = unfolding(d, unfolds, assumed)
+        parts = "" if not u else (f" It unfolds to {', '.join(u[1])}" + (f" beside the listed {', '.join(u[0])}" if u[0]
+                                  else "") + ", so it is no alias of listed assumptions, which the lock would not count.")
+        fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
+                             f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
+                             f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
+                             f"lands), or write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
+                             f"`assumptions`{'' if mine else ' with the lane that answers for it'}.{parts}"))
     return out, fails
 
 
@@ -1596,14 +1644,16 @@ class Codes(frozenset):
 
 #: the failures `--update` settles from the build alone, by code: a guarantee, a `reads` group or an assumption whose record
 #: differs from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no
-#: record yet, and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an
-#: owner, and every other failure take a person
+#: record yet, a premise the lock doesn't list (the premise rule adds it with its guarantees' owner), and an assumption no
+#: guarantee reads (an update drops it; `merge.py` keeps one entry a side removed while the other changed it).  A missing
+#: name, an owner, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
     "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
     "guarantees.readers", "guarantees.reads-digest",
     "guarantees.unrecorded",                                                        # owned, with no record yet
     "assumptions.digest", "assumptions.unrecorded", "assumptions.unlisted-premise",
+    "assumptions.unread",
 })
 
 
@@ -2577,6 +2627,16 @@ def store_replay(replay_cache: Path, key: str, module: str) -> None:
     os.replace(tmp, replay_cache / f"{key}.json")
 
 
+def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> None:
+    """Mark the entries of ``modules`` used now, so the cache's eviction (`lean_audit.prune_replays`, by mtime) keeps what
+    every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored."""
+    for m in modules:
+        try:
+            os.utime(replay_cache / f"{keys[m]}.json")
+        except OSError:                                # evicted since it was read: this replay already reused it
+            pass
+
+
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
                 closure: bool = False) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
@@ -2595,6 +2655,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        if keys:
+            fresh = {*facts["modules"], *deps_checked}
+            touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
         rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),

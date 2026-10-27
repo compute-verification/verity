@@ -2,6 +2,9 @@
 e2e_h200.engine:FACTORY`` with ``benchmarks/e2e_h200`` on ``PYTHONPATH``. A FACTORY (`tiny`, `small`, `frozen`) is called
 with ``seed`` (0: ALLP-IFACE's test seed) and returns an `Engine`; the device is ``$E2E_H200_DEVICE`` (default cuda when
 there is one), the commit backend ``$E2E_H200_COMMIT`` (default slots) and the generator's processes ``$E2E_H200_WORKERS``.
+``$E2E_H200_WEIGHTS_FILE`` serves W from that file (`store.FileStore`: every tensor's sha256 checked against the manifest
+``$E2E_H200_WEIGHTS_MANIFEST`` before the endpoint listens, refused on any mismatch), and ``$E2E_H200_SEED=demo`` serves
+``DEMO_SEED``'s weights, the ones network's load writes.
 
 Each call's sequences (a sampling row's known tokens) are served from the KV pool's slots: a sequence continues the slot whose
 fed tokens are a prefix of it, else takes the least recently used slot afresh, and its unfed tokens are fed one position a
@@ -20,7 +23,7 @@ import torch
 from .commit import Committer, fixture_secrets
 from .driver import Driver, Params
 from .shape import FROZEN, SMALL, TINY, Shape
-from .store import GeneratorStore
+from .store import FileStore, GeneratorStore
 from .weights import SW, Weights
 
 
@@ -31,9 +34,18 @@ class Engine:
         commit = commit or os.environ.get("E2E_H200_COMMIT", "slots")
         workers = workers or int(os.environ.get("E2E_H200_WORKERS", "1"))
         self.shape, self.vocab, self.context = shape, shape.vocab, shape.context
-        self.name = f"e2e-h200/{shape.name}/seed{seed}"
-        weights = Weights(shape, SW.TEST_SEED if seed == 0 else b"%d" % seed)
-        store = GeneratorStore(weights, workers)
+        demo = os.environ.get("E2E_H200_SEED") == "demo"
+        seed_bytes = SW.DEMO_SEED if demo else SW.TEST_SEED if seed == 0 else b"%d" % seed
+        self.name = f"e2e-h200/{shape.name}/seed{'demo' if demo else seed}"
+        weights = Weights(shape, seed_bytes)
+        path = os.environ.get("E2E_H200_WEIGHTS_FILE")
+        if path:
+            manifest = os.environ.get("E2E_H200_WEIGHTS_MANIFEST")
+            if not manifest:
+                raise ValueError("E2E_H200_WEIGHTS_FILE needs E2E_H200_WEIGHTS_MANIFEST, the manifest it is checked against")
+            store = FileStore(weights, path, manifest, workers)
+        else:
+            store = GeneratorStore(weights, workers)
         try:
             params = Params(shape, store, device, resident=True)
         finally:

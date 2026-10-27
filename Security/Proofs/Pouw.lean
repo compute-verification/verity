@@ -75,6 +75,12 @@ import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.RouteUProofs
 import Proofs.Pouw.NCP.RouteUWordProofs
 import Proofs.Pouw.NCP.WordProofs
+import Proofs.Pouw.Period
+import Proofs.Pouw.Period.Accept
+import Proofs.Pouw.Period.Honest
+import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.PeriodJ10R
+import Proofs.Pouw.PeriodJ10R.Honest
 import Proofs.Pouw.PearlC
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr

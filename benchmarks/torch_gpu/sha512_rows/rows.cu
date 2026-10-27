@@ -1,5 +1,5 @@
 // The engine's kernels (rows.cuh), launched on the caller's stream; built by engine.device_lib with nvcc. Every launch
-// function returns 0, or the CUDA error of its launch.
+// function returns 0, or the CUDA error of its launch. sxr_graph_* rekey the leaf launches of a graph captured from them.
 //
 // The row kernel comes in every compression variant the bench sweeps (VARIANTS: sha512x.cuh's V and ROLL, and "pouw",
 // commit_gpu's sha::compress, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <vector>
 
 #include "rows.cuh"
 #include "../../pouw/commit_gpu/sha512.cuh"
@@ -24,7 +26,7 @@
 #define SXR_MINB 2
 #endif
 #ifndef SXR_LEAF_MINB
-#define SXR_LEAF_MINB 2
+#define SXR_LEAF_MINB 1
 #endif
 
 using namespace sxr;
@@ -34,6 +36,7 @@ namespace {
 template <int V, int ROLL>
 struct Sx {
   static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sx::compress<V, ROLL>(st, w); }
+  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) { sx::compress_kw<V, ROLL>(st, kw); }
 };
 struct Pouw {
   static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sha::compress(st, w); }
@@ -69,36 +72,44 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
   if (t < G) leaf_setup<D>(rows[t], dids, schema, schema_len);
 }
 
-// T in shared memory (a block's 64 KB, loaded once), the leaves grid-stride over resident blocks; MINB blocks an SM caps
-// the registers (1: as many as it wants, 2: 128)
+// T in shared memory (a block's 64 KB, loaded once), then each thread's salt words (48 KB a block; word w of thread j at
+// w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident blocks; MINB blocks
+// an SM caps the registers (1: as many as it wants, 2: 128)
 template <int MINB>
 __global__ void __launch_bounds__(SXR_THREADS, MINB) k_leaves(const __grid_constant__ LeafArgs a) {
   extern __shared__ uint4 smem[];
   const uint4* Tg = reinterpret_cast<const uint4*>(a.T);
-  for (int i = threadIdx.x; i < T_BYTES / 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = __ldg(Tg + i);
+  for (int i = threadIdx.x; i < T_BYTES / 16; i += blockDim.x) smem[i] = __ldg(Tg + i);
   __syncthreads();
   const uint8_t* T = reinterpret_cast<const uint8_t*>(smem);
+  u32* y = reinterpret_cast<u32*>(smem + T_BYTES / 16) + threadIdx.x;
   const u64 n = (u64)a.G * a.S, step = (u64)gridDim.x * blockDim.x;
 #pragma unroll 1
-  for (u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x; t < n; t += step) leaf<D>(a, T, TSTRIDE, (u32)(t / a.S), (u32)(t % a.S));
+  for (u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x; t < n; t += step)
+    leaf<D>(a, T, y, SXR_THREADS, threadIdx.x & 7, (u32)(t / a.S), (u32)(t % a.S));
 }
-constexpr int LEAF_SMEM = 256 * TSTRIDE;
+constexpr int LEAF_SMEM = T_BYTES + 4 * SALT_U32 * SXR_THREADS;
 
 template <int MINB>
 int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
-  static int resident[64] = {};   // a device's resident leaf blocks, once its shared-memory limit is raised
+  static int per_sm_[64] = {}, sms_[64] = {};   // a device's resident leaf CTAs an SM and its SMs, once its
+                                                // shared-memory limit is raised
   int dev = 0, rc;
   if ((rc = cudaGetDevice(&dev))) return rc;
   if (dev < 0 || dev >= 64) return (int)cudaErrorInvalidDevice;
-  if (!resident[dev]) {
+  if (!per_sm_[dev]) {
     int sms = 0, per_sm = 0;
     if ((rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributeMaxDynamicSharedMemorySize, LEAF_SMEM)) ||
+        (rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                   cudaSharedmemCarveoutMaxShared)) ||
         (rc = cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) ||
         (rc = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k_leaves<MINB>, SXR_THREADS, LEAF_SMEM)))
       return rc;
-    resident[dev] = per_sm * sms > 0 ? per_sm * sms : 1;
+    sms_[dev] = sms > 0 ? sms : 1;
+    per_sm_[dev] = per_sm > 0 ? per_sm : 1;
   }
-  const unsigned grid = (unsigned)std::min<u64>((n + SXR_THREADS - 1) / SXR_THREADS, (u64)resident[dev]);
+  const u64 sms = a.sms ? std::min<u64>(a.sms, (u64)sms_[dev]) : (u64)sms_[dev];
+  const unsigned grid = (unsigned)std::min<u64>((n + SXR_THREADS - 1) / SXR_THREADS, (u64)per_sm_[dev] * sms);
   k_leaves<MINB><<<grid, SXR_THREADS, LEAF_SMEM, stream>>>(a);
   return (int)cudaGetLastError();
 }
@@ -111,17 +122,39 @@ __global__ void __launch_bounds__(SXR_THREADS) k_frame_leaves(const u64* dids, u
   frame_leaf<D>(dids + 8 * (D_ == 1 ? 0 : tree), rank0 + j, schema, schema_len, values + 8 * t, out + 8 * t);
 }
 
+__global__ void __launch_bounds__(SXR_THREADS) k_frame_setup(LeafRow* rows, u32 n, u64 rank0, const u64* did,
+                                                              const uint8_t* schema, u32 schema_len) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t < n) frame_setup<D>(rows[t], rank0 + t, did, schema, schema_len);
+}
+
+// out[s][units[i]] = the slot-tree leaf of values[i][s] under frames[units[i]], for n units and S slots
+__global__ void __launch_bounds__(SXR_THREADS) k_frame_units(const LeafRow* frames, const u64* units, const u64* values, u32 n,
+                                                              u32 S, u32 U, u64* out) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= (u64)n * S) return;
+  const u64 d = units[t / S], s = t % S;
+  u64 v[8];
+  for (int i = 0; i < 8; ++i) v[i] = values[8 * t + i];
+  frame_tail<D>(frames[d], v, v);
+  for (int i = 0; i < 8; ++i) out[8 * (s * U + d) + i] = v[i];
+}
+
 __global__ void __launch_bounds__(SXR_THREADS) k_node_mids(const u64* dids, u32 D_, u32 level, u64* mids) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t < D_) node_mid<D>(dids + 8 * t, level, mids + 8 * t);
 }
 
-__global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, const u64* in, u32 T, u32 w, u64* out) {
+// tree t's children are pre[t] (if pre) and then in[t][0 ..], its trees in_stride words apart
+__global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, const u64* pre, u64 pre_stride, const u64* in,
+                                                        u64 in_stride, u32 T, u32 w, u64 first, u64* out) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (u64)T * w) return;
-  const u64 tree = t / w, i = t % w;
-  const u64* l = in + 8 * (2 * tree * w + 2 * i);
-  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), i, l, l + 8, out + 8 * t);
+  const u64 tree = t / w, i = t % w, j = 2 * i;
+  const u64* kids = in + tree * in_stride;
+  const u64* l = !pre ? kids + 8 * j : j ? kids + 8 * (j - 1) : pre + tree * pre_stride;
+  const u64* r = kids + 8 * (pre ? j : j + 1);
+  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
 }
 
 __global__ void __launch_bounds__(SXR_THREADS) k_pads(const u64* dids, u32 D_, u32 T, u64 first, u32 n, u64* out) {
@@ -218,14 +251,28 @@ int sxr_frame_leaves(void* stream, const uint64_t* dids, uint32_t D_, const uint
   return launched();
 }
 
+int sxr_frame_setup(void* stream, LeafRow* rows, uint32_t n, uint64_t rank0, const uint64_t* did, const uint8_t* schema,
+                    uint32_t schema_len) {
+  if (n) k_frame_setup<<<blocks(n), SXR_THREADS, 0, (cudaStream_t)stream>>>(rows, n, rank0, did, schema, schema_len);
+  return launched();
+}
+
+int sxr_frame_units(void* stream, const LeafRow* frames, const uint64_t* units, const uint64_t* values, uint32_t n, uint32_t S,
+                    uint32_t U, uint64_t* out) {
+  const u64 m = (u64)n * S;
+  if (m) k_frame_units<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(frames, units, values, n, S, U, out);
+  return launched();
+}
+
 int sxr_node_mids(void* stream, const uint64_t* dids, uint32_t D_, uint32_t level, uint64_t* mids) {
   if (D_) k_node_mids<<<blocks(D_), SXR_THREADS, 0, (cudaStream_t)stream>>>(dids, D_, level, mids);
   return launched();
 }
 
-int sxr_level(void* stream, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t* out) {
+int sxr_level(void* stream, const uint64_t* mids, uint32_t D_, const uint64_t* pre, uint64_t pre_stride, const uint64_t* in,
+              uint64_t in_stride, uint32_t T, uint32_t w, uint64_t first, uint64_t* out) {
   const u64 m = (u64)T * w;
-  if (m) k_level<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(mids, D_, in, T, w, out);
+  if (m) k_level<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(mids, D_, pre, pre_stride, in, in_stride, T, w, first, out);
   return launched();
 }
 
@@ -233,6 +280,56 @@ int sxr_pads(void* stream, const uint64_t* dids, uint32_t D_, uint32_t T, uint64
   const u64 m = (u64)T * n;
   if (m) k_pads<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(dids, D_, T, first, n, out);
   return launched();
+}
+
+// The leaf kernel's nodes in a captured graph (a cudaGraph_t): up to max of them to out. Returns how many there are, or a
+// CUDA error negated. A node another runtime launched (torch's) may not give its parameters here; it is not a leaf node.
+int sxr_graph_leaf_nodes(void* graph, void** out, uint32_t max) {
+  size_t n = 0;
+  int rc = cudaGraphGetNodes((cudaGraph_t)graph, nullptr, &n);
+  if (rc) return -rc;
+  std::vector<cudaGraphNode_t> nodes(n);
+  if (n && (rc = cudaGraphGetNodes((cudaGraph_t)graph, nodes.data(), &n))) return -rc;
+  int k = 0;
+  for (cudaGraphNode_t node : nodes) {
+    cudaGraphNodeType type;
+    if ((rc = cudaGraphNodeGetType(node, &type))) return -rc;
+    if (type != cudaGraphNodeTypeKernel) continue;
+    cudaKernelNodeParams p;
+    if (cudaGraphKernelNodeGetParams(node, &p)) {
+      cudaGetLastError();
+      continue;
+    }
+    const bool leaf = p.func == (void*)k_leaves<1> || p.func == (void*)k_leaves<2> ||
+                      (p.sharedMemBytes == (unsigned)LEAF_SMEM && p.blockDim.x == SXR_THREADS);
+    if (!leaf) continue;
+    if ((uint32_t)k < max) out[k] = node;
+    ++k;
+  }
+  return k;
+}
+
+// Each of n leaf nodes (sxr_graph_leaf_nodes) in the graph's instantiation (a cudaGraphExec_t) to salt under key (eight
+// words) from its next launch on; every other argument stays as captured. The current context is the one the graph was
+// captured in. A refusal is returned, and not left for the next launch's cudaGetLastError.
+int sxr_graph_rekey(void* exec, void* const* nodes, uint32_t n, const uint32_t* key) {
+  for (uint32_t i = 0; i < n; ++i) {
+    cudaKernelNodeParams p;
+    int rc = cudaGraphKernelNodeGetParams((cudaGraphNode_t)nodes[i], &p);
+    if (!rc) {
+      LeafArgs a = *static_cast<const LeafArgs*>(p.kernelParams[0]);
+      std::memcpy(a.key, key, sizeof a.key);
+      void* args[] = {&a};
+      p.kernelParams = args;
+      p.extra = nullptr;
+      rc = cudaGraphExecKernelNodeSetParams((cudaGraphExec_t)exec, (cudaGraphNode_t)nodes[i], &p);
+    }
+    if (rc) {
+      cudaGetLastError();
+      return rc;
+    }
+  }
+  return 0;
 }
 
 }

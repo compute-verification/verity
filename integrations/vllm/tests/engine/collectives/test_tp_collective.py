@@ -19,10 +19,10 @@ from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine import collective as QC
-from verity_vllm.program.registry.quarantine.collective import allreduce as A
+from verity.ml.definitions.registry import b1_tp2
+from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.quarantine import collective as QC
+from verity_vllm.program.quarantine.collective import allreduce as A
 
 REPO = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures" / "tp2"
@@ -215,7 +215,7 @@ def test_quarantine_lint_passes_for_the_collective_package():
 
 
 def test_difftest_adapter_cases_and_spec_are_torch_free():
-    from verity_vllm.program.registry.quarantine.collective import allreduce_difftest as D
+    from verity_vllm.program.quarantine.collective import allreduce_difftest as D
     import random
     kinds = set()
     for i in range(10):
