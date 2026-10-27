@@ -1,4 +1,4 @@
-"""vLLM's served run r20261024-141912-8eb1 (`fixtures/vllm-8eb1`, its `meta.json`): it serves without prefix caching,
+"""vLLM's served run in `fixtures/vllm-8eb1` (with its `meta.json`): it serves without prefix caching,
 the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
 scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
 fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own

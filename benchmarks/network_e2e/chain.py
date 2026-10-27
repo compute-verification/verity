@@ -5,7 +5,7 @@
 stood on; `stubs` lists what is still a stand-in.
 
 * **The advice** (`advice`, ``--advice FILE``): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
-  advice from before v0 fixed ``release`` and ``sources`` (r20261024-052710-8932's ``advice/advice.json``), upgraded as
+  advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
@@ -880,9 +880,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
     where = str(r.get("where") or "")
     if where.startswith("off the prover's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
-                   "the auditor host (#3433 brings the gate's runs: --from RUN.tgz).")
+                   "the auditor host (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor host: the certifier ran off the gate (#3433 brings the gate's runs: --from RUN.tgz).")
+        out.append("Auditor host: the certifier ran off the gate (--from takes a gate run's fetch).")
     return out
 
 
