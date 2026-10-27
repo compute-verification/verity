@@ -31,8 +31,9 @@
 # `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384) beside cuBLASLt and
 # CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
-# implied: dither.Shape(o=True); its params named served-*).
-# FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
+# implied: dither.Shape(o=True); its params named served-*); with gemm=1 (a -DV31_WG build) its D comes from wg_proto.cuh's
+# GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup, and the bench adds wgmma.linear's arm (wgl).
+# FILL_GATE_KNOBS=1 runs the gates under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
 # timeline`'s .timeline.md. FILL_PROF=1, after the bench, runs Nsight Compute's pipe utilization on `v31 fill-once`
@@ -42,7 +43,7 @@
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
-# gemm (0), wgbn (256), cm (0), wgg (16), rp (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, V31_MAXNREG or under
+# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), hall (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, V31_MAXNREG or under
 # V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a
 # verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -74,7 +75,7 @@ knob_env() {
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
-    "V31_RP=$(knob "$1" rp 0)"
+    "V31_RP=$(knob "$1" rp 0) V31_HALL=$(knob "$1" hall 0)"
 }
 export -f knob knob_env
 
@@ -141,9 +142,10 @@ if [ "$MODE" = fill ]; then
   $LEASE bash -c '
     nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv \
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
+    gk=(); [ "${FILL_GATE_KNOBS:-0}" = 1 ] && gk=($(knob_env "${VARIANTS%% *}"))
     for x in 0 1; do
       only=(); [ $x = 1 ] && only=(--only fill)
-      V31_LTW=$x $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates-ltw$x" --q "$Q" "${only[@]}" \
+      env "${gk[@]}" V31_LTW=$x $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates-ltw$x" --q "$Q" "${only[@]}" \
         > "$O/fill-gates-ltw$x.log" 2> "$O/fill-gates-ltw$x.err"
       echo "fill gate ltw$x rc $?" >> "$O/rc.txt"
       if [ "${FILL_DITHER:-0}" = 1 ]; then

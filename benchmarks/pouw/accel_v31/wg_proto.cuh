@@ -38,17 +38,28 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //         a sub-partition, 16,128, no room
 //   RP 3  256 threads at 200 (no producer warp: thread 0 issues the loads between its own steps): 2 warps a
 //         sub-partition, 12,800, 3,584 left
+//   RP 4  384 threads at 168, the producer warpgroup at 104 and the consumers at 200: warp 8 issues the loads, warps 9 to
+//         11 (one a sub-partition 1 to 3) hash the rows of the tiles the consumers have stored (gemm_r4's H), so the
+//         commit's compressions run on the ALU while the consumers wait on their MMAs. No back-pressure: when the
+//         consumers are done (static schedule, every gridDim.x-th tile) a hash warp drops its leaf within 16 blocks and
+//         stops, and the leaf phase hashes what it didn't (H's flags)
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0: the commit's CTAs never
 // landed beside it, r20261027-045150-d9ee.)
 template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : 3 * 128; }
+// RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop) hashes O row j of commit tile ct (tm N / 128 + tn),
+// giving up when stop() holds
+struct NoHash {
+  WGD unsigned lpt() const { return 1; }
+  template <class Stop> WGD void operator()(unsigned long long, unsigned, const Stop&) const {}
+};
 
 template <int BN> struct Tile {
   static_assert(BN == 128 || BN == 256, "128 x 128 or 128 x 256 tiles");
   static constexpr int NWG = 2, NA = BN / 2;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int STAGES = SMEM_BUDGET / STAGE < MAX_STAGES ? SMEM_BUDGET / STAGE : MAX_STAGES;
-  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 4 * MAX_TT + 4 * STAGES;
+  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 4 * MAX_TT + 4 * STAGES + 16;
 };
 struct alignas(128) Args {
   CUtensorMap a, b, pa, pb;   // X or A (boxes of 128 rows), W' or B (BN rows), P_A (128 rows), P_B (BN rows)
@@ -66,6 +77,7 @@ struct alignas(128) Args {
   unsigned* tctr;
   unsigned tbase;
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
+  int hall;                   // RP 4: the hash warps hash every row, past the consumers' end (timing their own rate)
 };
 
 WGD uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -102,6 +114,14 @@ WGD void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
 }
 template <int R> WGD void regs_dec() { asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;" ::"n"(R)); }
 template <int R> WGD void regs_inc() { asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;" ::"n"(R)); }
+WGD uint32_t ld_acq(const uint32_t* p) {
+  uint32_t v;
+  asm volatile("ld.acquire.cta.shared::cta.u32 %0, [%1];" : "=r"(v) : "r"(smem_at(p)) : "memory");
+  return v;
+}
+WGD void red_rel(uint32_t* p, uint32_t v) {
+  asm volatile("red.release.cta.shared::cta.add.u32 [%0], %1;" ::"r"(smem_at(p)), "r"(v) : "memory");
+}
 #define WGP_FENCE asm volatile("wgmma.fence.sync.aligned;" ::: "memory")
 #define WGP_COMMIT asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory")
 #define WGP_WAIT(n) asm volatile("wgmma.wait_group.sync.aligned " #n ";" ::: "memory")
@@ -166,18 +186,46 @@ WGD void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
 // with dO = w_X B~^T alone; T_s = lo16(acc - tau) are untouched.
 enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 1 << 20 };
 
-template <int BN, int CM, int RP> __device__ void body(const Args& p) {
+// RP 4's hash warps (warps 9 to 11): warp w takes batches w, w + 3, ..: batch b is the CTA's O rows 32 b .. 32 b + 31 in
+// its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8 warps a tile) every
+// tile the batch reads. Without hall, a batch isn't started once the consumers are done, and stop() drops the leaf.
+template <int BN, class H>
+WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles_m, int tiles_n, int ntile) {
+  const unsigned w = (threadIdx.x - (2 * 128 + 32)) / 32, lane = threadIdx.x % 32, lpo = h.lpt(), Lg = (BN / TW) * lpo,
+                 nq = (unsigned)ntile * Lg, done = 8u * (unsigned)ntile;
+  auto stop = [&]() { return !p.hall && ld_acq(posted) >= done; };
+  for (unsigned b = w; 32 * b < nq; b += 3) {
+    const unsigned q0 = 32 * b, need = 8 * (min(q0 + 31, nq - 1) / Lg + 1);
+    unsigned v = ld_acq(posted);
+    if (!p.hall && v >= done) break;
+    while (v < need) {
+      __nanosleep(256);
+      v = ld_acq(posted);
+    }
+    const unsigned q = q0 + lane;
+    if (q < nq) {
+      const unsigned i = q / Lg, jj = q % Lg;
+      int tm, tn;
+      raster((int)(blockIdx.x + i * gridDim.x), tiles_m, tiles_n, p.group, tm, tn);
+      h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn * (BN / TW) + jj / lpo, jj % lpo, stop);
+    }
+  }
+}
+
+template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const Args& p, const H& h = H{}) {
   using T = Tile<BN>;
   constexpr int NWG = T::NWG, STAGES = T::STAGES, NA = T::NA;
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
   int* tab = reinterpret_cast<int*>(smem + (base - smem_at(smem)) + STAGES * T::STAGE + 16 * STAGES);
   int* const stile = tab + MAX_TT;   // the tile a stage starts (written with its first k-tile), or -1: no more tiles
+  uint32_t* const posted = reinterpret_cast<uint32_t*>(stile + STAGES);   // RP 4: consumer warps' stored tiles
   const int M = p.M, N = p.N, KT = p.K / BK, tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n;
   const bool proto = p.mode == 1;
   const int TT = proto ? p.TT + p.KQ : 0, steps = TT + KT;
   const int tid = threadIdx.x, wg = tid / 128;
   if (tid == 0) {
+    *posted = 0;
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
     if (TT) {
@@ -198,7 +246,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   __syncthreads();
 
   auto next = [&](int t) {
-    const unsigned q = p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
+    const unsigned q = RP != 4 && p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
     return q < (unsigned)tiles ? (int)q : tiles;
   };
   auto prefetch = [&]() {
@@ -227,6 +275,12 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
 
   if (RP != 3 && wg == NWG) {
     if constexpr (RP == 0) regs_dec<40>();
+    if constexpr (RP == 4) regs_dec<104>();
+    if constexpr (RP == 4)
+      if (tid >= NWG * 128 + 32) {
+        const int ntile = (int)blockIdx.x < tiles ? (tiles - 1 - (int)blockIdx.x) / (int)gridDim.x + 1 : 0;
+        hash_warps<BN>(p, h, posted, tiles_m, tiles_n, ntile);
+      }
     if (tid == NWG * 128) {
       prefetch();
       int s = 0;
@@ -248,6 +302,14 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
     asm volatile("exit;");
   }
   if constexpr (RP == 0) regs_inc<232>();
+  if constexpr (RP == 4) regs_inc<200>();
+  // RP 4: the warp's stores of the tile are done (bar.warp.sync orders its lanes' stores before lane 0's release)
+  auto post = [&]() {
+    if constexpr (RP == 4) {
+      __syncwarp();
+      if (tid % 32 == 0) red_rel(posted, 1);
+    }
+  };
 
   // RP 3: thread 0 is the producer too, between its own steps: issue() fills the next stage (waiting for it to be free),
   // pump() every stage already free up to STAGES steps past the consumers' cg, need() whatever step cg still lacks
@@ -394,6 +456,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
         y0[4 * j] = bf16_pair(d[4 * j], d[4 * j + 1], r0, c.x, c.y);
         y1[4 * j] = bf16_pair(d[4 * j + 2], d[4 * j + 3], r1, c.x, c.y);
       }
+      post();
       continue;
     }
     if (proto && p.lA && !(p.diag & 4)) {
@@ -437,6 +500,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
       *reinterpret_cast<int2*>(o1 + 8 * j) = hi;
       if (j % 8 == 7) ld_fence();
     }
+    post();
   }
 }
 
@@ -451,6 +515,13 @@ template <int BN>
 __global__ void __maxnreg__(200) gemm_r3(const __grid_constant__ Args p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   body<BN, 1, 3>(p);
+#endif
+}
+// RP 4: the GEMM with the commit's row hashes in its producer warpgroup (CM 1, as RP 3)
+template <int BN, class H>
+__global__ void __launch_bounds__(threads<4>(), 1) gemm_r4(const __grid_constant__ Args p, const __grid_constant__ H h) {
+#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
+  body<BN, 1, 4, H>(p, h);
 #endif
 }
 
