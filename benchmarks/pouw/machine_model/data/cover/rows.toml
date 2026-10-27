@@ -687,18 +687,50 @@ argument = "two words to one packed word a lane; the census runs them on the ALU
 source = "census 'LOP3, IADD3, SHF, PRMT, I2FP, F2FP.BF16/F16 pack 2.000 64', 'F2FP.SATFINITE.E4M3 / E2M1 pack 1.000 + one LOP3 each (ALU pipe, 2/clk shared)'"
 
 [[row]]
-ops = ["F2F", "F2I", "F2IP", "FRND", "I2F", "I2I", "I2IP"]
+ops = ["F2I", "FRND", "I2F"]
+forms = ['I2F(\.U32|\.S16|\.U16|\.S8)?(\.RP|\.RZ|\.RM)?', 'F2I(\.FTZ)?(\.U32|\.S16|\.U16|\.S8)?(\.TRUNC|\.FLOOR|\.CEIL)?\.NTZ',
+         'FRND(\.FTZ)?(\.TRUNC|\.FLOOR|\.CEIL)?']
 devices = ["sm_120"]
-what = "type conversions and rounding (64-bit forms included)"
-kinds = ["CVT64"]
-mark = "coarse"
+what = "32-bit conversions between f32 and s32, u32, s16, u16 or s8, and f32 rounding, in any rounding mode"
+mark = "covered"
 envelope = "lane"
 pipe = "sfu"
-words = [2, 2]
+words = [1, 1]
 rate = "mufu"
 cost = "a lane of sfu a lane"
-argument = "≤ 2 words to ≤ 2 a lane; the CPG puts conversions on the XU at 16 results a SM-clock (DS_xu); 64-bit-destination forms measured 0.0625 warp instructions (2 lanes) a SM-clock"
-source = "DS_xu; θ mufu; census ROW_CVT64 0.06252 (r20261016-151430-a2aa)"
+argument = "a word to a word a lane. Each measured pair runs on the XU: 0.4999 warp instructions a SM-clock alone (16 lanes, sfu's ρ) and 0.5000 with MUFU.EX2 (on separate units the pair would reach 1.0); its rounding mode is a field of the same instruction"
+source = "DS_xu; θ mufu; pipes.cu, r20261027-020842-385c: i2f_f2i (I2F.U32.RP, F2I.FTZ.U32.TRUNC.NTZ), i2f16_f2i16 (I2F.S16), cvt_s32 (I2F.RP, F2I.TRUNC.NTZ), cvt_u16, cvt_s8 (I2F.S8, F2I.S8.NTZ), frnd (FRND.FLOOR), cvt_frnd (FRND.TRUNC, FRND) and their mix_X_mufu"
+
+[[row]]
+ops = ["F2F", "F2I", "FRND", "I2F"]
+forms = ['F2F\.(F64\.F32|F32\.F64)', 'I2F\.(F64(\.U32|\.S64)?|S64|U64)(\.RP|\.RZ|\.RM)?',
+         'F2I(\.U32|\.S64)?\.F64(\.TRUNC|\.FLOOR|\.CEIL)?', 'F2I\.(S64|U64)(\.TRUNC|\.FLOOR|\.CEIL)?',
+         'FRND\.F64(\.TRUNC|\.FLOOR|\.CEIL)?']
+devices = ["sm_120"]
+what = "conversions with a 64-bit side (f32↔f64, s32/u32/s64↔f64, f32↔s64/u64) and f64 rounding, in any rounding mode"
+kinds = ["CVT64"]
+mark = "covered"
+envelope = "lane"
+pipe = "f64"
+words = [2, 2]
+rate_value = 0.0625
+rate_unit = "warp instructions/SM/clk"
+cost = "a lane of f64 a lane"
+argument = "≤ 2 words to ≤ 2 a lane. Each measured pair runs on the f64 pipe: 0.0580 to 0.0625 warp instructions a SM-clock alone (2 lanes, f64's ρ) and 0.0552 to 0.0566 with DFMA (on separate pipes about 0.087); beside 24 MUFU.EX2 one pair adds 0.0416 to MUFU's 0.4994 (0.5411, past sfu's 0.5), so they aren't the XU's"
+source = "census ROW_CVT64 0.06252 (r20261016-151430-a2aa); pipes.cu, r20261027-015905-5712 and r20261027-020842-385c: f2f64, i2f64, s64, cvt_u64, cvt_frnd64, cvt_f64_u32, cvt_f64_s64 and their mix_X_dfma and mix_X_mufu24"
+
+[[row]]
+ops = ["F2F", "F2I", "F2IP", "FRND", "I2F", "I2I", "I2IP"]
+devices = ["sm_120"]
+what = "the other conversions: 16-bit floats (F16, BF16), F2IP, I2I and I2IP, and 64-bit pairs no run measures"
+mark = "coarse"
+envelope = "lane"
+pipe = "fma"
+words = [2, 2]
+rate = "issue"
+cost = "1/32 of an issue slot a lane (fma)"
+argument = "≤ 2 words to ≤ 2 a lane, on fma, which holds an opcode on any pipe at the issue slot it takes: no run places these forms on a pipe, and I2I.S8.S32.SAT (0.9408 alone) and I2IP.S8.S32.SAT (1.6831) run past sfu's 0.5 and beside MUFU.EX2 at their own rate (0.4989 and 0.4999 with MUFU's), so they aren't the XU's"
+source = "θ issue; pipes.cu, r20261027-020842-385c: cvt_i2i, cvt_i2ip and their mix_X_mufu"
 
 [[row]]
 ops = ["F2F", "F2I", "F2IP", "FRND", "I2F", "I2FP", "I2I", "I2IP", "F2FP"]
@@ -1188,8 +1220,8 @@ envelope = "collective"
 pipe = "alu"
 units = 16
 words = [32, 1]
-argument = "each thread gets the AND, OR or count of a predicate over the CTA: a vote's 16 alu lanes a warp and a shared-memory add a warp would dominate it if the barrier's rate is at most the vote's, which no run measures; MODEL-MIN's README puts BAR under none (no data effect)"
-source = "corpus BAR.RED.AND.DEFER_BLOCKING, BAR.RED.OR.DEFER_BLOCKING"
+argument = "each thread gets the AND, OR or count of a predicate over the CTA, a function of other warps' registers, which no one envelope op computes (`collective` is a warp's). Simulated as a vote, a `red` of its word into shared memory and a `move` of the result to every lane, it costs about one issue slot a warp more than the card's one. On sm_120 the barrier holds 16 alu lanes: BAR.RED.OR runs at 0.2105 warp instructions a SM-clock alone (one 1024-thread CTA a SM), and on a named barrier in 16 warps beside a LOP3 stream in the other 16, LOP3 + BAR/2 = 1.8107 + 0.1535/2 = 1.8874; smaller CTAs, which may run it faster, aren't measured, and no H200 run measures it. MODEL-MIN's README puts BAR under none (no data effect)"
+source = "corpus BAR.RED.AND.DEFER_BLOCKING, BAR.RED.OR.DEFER_BLOCKING; pipes.cu, r20261027-015018-838b (bar_or, mix_bar_or_lop3), r20261027-015905-5712 and r20261027-020842-385c (bar16, mix_bar16_lop3)"
 
 [[row]]
 ops = ["BAR"]

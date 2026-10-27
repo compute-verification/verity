@@ -557,8 +557,10 @@ benchmarks/pouw/sass_census/lowering.sh`. It is what shows that f16 accumulators
 sm_120, that OMMA.SF.SP is the native sparse FP4 form, that BMMA's XOR has no native SASS on sm_90a, and that
 tcgen05 and wgmma are absent on sm_120a.
 
-Three GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
-vy-nebius-1 --cwd source` and its verdict line quoted in the row's source once it lands:
+GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
+vy-nebius-1 --cwd source` and its run id in the row's source once it lands. `match.cu` and `collective.cu` build for
+sm_90a too (`probe.py build --arch sm_90a`, or `../dc/emp.sh build` and `emp.sh time` for the H200), and
+`../opcode_probe/collective_verdict.py` reads either card's rows:
 
 - `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4, 2 and 1
   classes, and .U64, alone and beside LOP3 and FFMA. Its hypothesis was that a 119-unit simulation in 6-word lanes (238
@@ -567,6 +569,10 @@ vy-nebius-1 --cwd source` and its verdict line quoted in the row's source once i
 - `../opcode_probe/probes/collective.cu` times REDUX and VOTE alone, beside LOP3, and REDUX beside MATCH.ANY. Its
   hypothesis is the REDUX and VOTE rows': each spends at least a fold's 16 alu lanes, so LOP3's rate plus half the
   collective's stays at most LOP3's cap of 2 a SM-clock. It showed REDUX on MATCH.ANY's unit and VOTE at 16 alu lanes.
+- `../opcode_probe/probes/pipes.cu` times each lane opcode the table had placed on a pipe without a run, alone and
+  beside that pipe's own partner (LOP3, MUFU.EX2 or DFMA); `../opcode_probe/pipes_verdict.py` holds each to the pipe's
+  ρ. It put PLOP3, SGXT and BMSK on alu, the 32-bit conversions on the XU, the 64-bit ones on f64 (beside 24 MUFU.EX2
+  they pass sfu's 0.5), and showed I2I and I2IP off the XU, so the forms it didn't measure are on fma.
 - `../sass_census/multimem.sh` reads the card's multicast attribute and what `cuMulticastCreate` answers, and runs
   `multimem.ld_reduce` (LDGMC) and `multimem.red` on ordinary memory. Its hypothesis is the sm_120 LDGMC row's: no
   multicast object exists, and on a unicast address LDGMC faults or loads the one copy.
