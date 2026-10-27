@@ -29,6 +29,13 @@ slot commits 6,102,102 units in 6,102,832 rows, 5,970,688 of them s8 coordinates
   ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``, coordinate i adding the projection's word to the residual stream's
   word i, and write the residual's table (``attn_residual``, ``mlp_residual``); the projections' own tables and the
   ``Bf16AddRow_v2`` families go.
+* ``norm``: each RMSNorm into its quantizer (``attn``, ``mlp`` into ``up``, ``final`` into ``head``). The sums stay; the
+  quantizer's amax is ``RmsNormAbsMax_v1{C, S, G, N, EPS}`` a part of `shape.Forms`' ``norm_part`` words (2,048) and
+  ``RowAbsMax_v1{parts, false}`` over the partials, and its codes ``RmsNormQuantCodes_v1{C, S, G, N, EPS}`` a block of
+  ``norm_codes`` words (512), the amax parts and code blocks reading the stream, the gain and the sums; each chunk row's
+  scale is ``QuantScaleS8_v1`` of the row's amax. The rows are a chunk's codes and its scale as before, so the coordinates
+  read what they read unfused. The norm outputs' tables (``attn_norm``, ``mlp_norm``, ``final_norm``) and those quantizers'
+  ``RmsNormOutSums_v1`` and ``QuantChunkS8_v1`` families go.
 """
 from __future__ import annotations
 
@@ -40,9 +47,9 @@ from .shape import PV_K, Shape, forms
 DEFINITION, PENDING = "definition", "pending-definition"
 #: the map's Definitions on main (#4517, `verity_vllm`'s registry, #4482); the rest are circuits' open PRs
 ON_MAIN = frozenset({"ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1", "AllGather_v1",
-                     "EmbeddingCoordinate_v1"})
+                     "EmbeddingCoordinate_v1", "RmsNormAbsMax_v1", "RmsNormQuantCodes_v1", "QuantScaleS8_v1"})
 EPS_KEY = 1e-05
-FUSIONS = frozenset({"residual"})
+FUSIONS = frozenset({"norm", "residual"})
 
 
 @dataclass(frozen=True)
@@ -76,6 +83,12 @@ class Units:
         """A unit's output bits."""
         return 8 * self.nbytes + 32 * self.scale
 
+    @property
+    def scale_only(self) -> bool:
+        """Whether its output is its quantizer row's scale alone (`QuantScaleS8_v1`): unit i writes the scale of the chunk row
+        of codes ``i * stride ..``."""
+        return self.template == "QuantScaleS8_v1"
+
 
 def key(name: str, **statics: object) -> str:
     return RP.key_of(name, statics)
@@ -104,8 +117,31 @@ class Map:
         f, n = self.f, self.shape.width
         c, sc, s = f.chunk, f.sums_c(n), f.rows(n)
         sums = _units(op + "_sums", key("RmsSumSqChunks_v1", C=sc, K=c), op + "_sums", n // sc, 4 * (sc // c))
-        out = _units(op + "_norm", key("RmsNormOutSums_v1", C=c, S=s, G=f.groups(n), N=n, EPS=EPS_KEY), op + "_norm", s, 2 * c)
+        out = _units(op + "_norm", key("RmsNormOutSums_v1", C=c, **self._norm_statics(n)), op + "_norm", s, 2 * c)
         return [(Table(op + "_sums", 4 * s), (sums,)), (Table(op + "_norm", 2 * n), (out,))]
+
+    def _norm_statics(self, n: int) -> dict[str, object]:
+        return {"S": self.f.rows(n), "G": self.f.groups(n), "N": n, "EPS": EPS_KEY}
+
+    def normed(self, norm: str, op: str) -> list[Entry]:
+        """RMSNorm ``norm`` into the quantizer ``op`` (no ReLU). Fused under ``norm``: no ``norm_norm`` table; the amax an
+        ``RmsNormAbsMax_v1`` a part and ``RowAbsMax_v1`` over the partials (``op_amax``: the partials, then the row's), the
+        codes an ``RmsNormQuantCodes_v1`` a block, each part and block reading the stream, the gain and ``norm_sums``, and
+        each chunk row's scale a ``QuantScaleS8_v1``."""
+        n = self.shape.width
+        if "norm" not in self.fused:
+            return self.norm(norm) + self.quant(op, n, False)
+        f, st = self.f, self._norm_statics(n)
+        (parts, pw), q, cw = f.norm_parts(n), f.qchunk(n), f.ncodes(n)
+        if parts > 1:
+            amax = (_units(op + "_amax.part", key("RmsNormAbsMax_v1", C=pw, **st), op + "_amax", parts, 2),
+                    _units(op + "_amax", key("RowAbsMax_v1", N=parts, RELU=False), op + "_amax", 1, 2, offset=2 * parts))
+        else:
+            amax = (_units(op + "_amax", key("RmsNormAbsMax_v1", C=n, **st), op + "_amax", 1, 2),)
+        codes = _units(op + "_quant", key("RmsNormQuantCodes_v1", C=cw, **st), op + "_quant", n // cw, cw)
+        scale = Units(op + "_quant.scale", key("QuantScaleS8_v1"), op + "_quant", n // q, 4, q)
+        return self.norm(norm)[:1] + [(Table(op + "_amax", 2 * (parts + (parts > 1))), amax),
+                                      (Table(op + "_quant", n, True), (codes, scale))]
 
     def quant(self, op: str, n: int, relu: bool) -> list[Entry]:
         """The quantizer ``op`` over a row of n: its amax table ``op_amax`` (the partials, then the row's) and ``op_quant``."""
@@ -148,7 +184,7 @@ class Map:
     def layer(self, i: int) -> list[Entry]:
         sh, c, p = self.shape, self.f.chunk, f"l{i}."
         w, d, h = sh.width, sh.head_dim, sh.heads
-        out = self.norm(p + "attn") + self.quant(p + "attn", w, False)
+        out = self.normed(p + "attn", p + "attn")
         out += self.linear(p + "wq", h * d, w, d) + self.linear(p + "wk", d, w, d) + self.linear(p + "wv", d, w, d)
         out += [(Table(p + "softmax", 2 * h * PV_K), (_units(p + "softmax", key("QkSoftmaxRowPad_v1", T=PV_K, D=d), p + "softmax",
                                                              h, 2 * PV_K),)),
@@ -157,13 +193,13 @@ class Map:
                                              _units(p + "pv.gather", key("AllGather_v1", WORLD=c // d, N=d), p + "pv",
                                                     h * d // c, 2 * c)))]
         out += self.quant(p + "o", w, False) + self.projection(p + "wo", h * d, p + "attn_residual")
-        out += self.norm(p + "mlp") + self.quant(p + "up", w, False) + self.linear(p + "wup", sh.mlp, w, c)
+        out += self.normed(p + "mlp", p + "up") + self.linear(p + "wup", sh.mlp, w, c)
         out += self.quant(p + "down", sh.mlp, True) + self.projection(p + "wdown", sh.mlp, p + "mlp_residual")
         return out
 
     def head(self) -> list[Entry]:
         sh = self.shape
-        out = self.norm("final") + self.quant("head", sh.width, False) + self.linear("head", sh.vocab, sh.width, self.f.chunk)
+        out = self.normed("final", "head") + self.linear("head", sh.vocab, sh.width, self.f.chunk)
         return out + [(Table("argmax", 2), (_units("argmax", key("Argmax_v2", V=sh.vocab), "argmax", 1, 2),))]
 
     def groups(self) -> list[list[Entry]]:

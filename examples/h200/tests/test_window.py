@@ -8,7 +8,8 @@
   are assembled from its committed rows (under 1 KiB rows, 64 B rows whose ports span rows, and today's ``families/v1``,
   whose slot roots are the run's own). They must be the inputs replay reads and the outputs it checks, and each row opens
   against its step's root.
-- All of it again on the map with the ``residual`` fusion (`plan.FUSIONS`), whose frozen layout drops the projections' rows.
+- All of it again on the map with the ``residual`` fusion (`plan.FUSIONS`), whose frozen layout drops the projections' rows,
+  and with ``norm`` as well, whose layout also drops each norm's rows.
 """
 from __future__ import annotations
 
@@ -41,6 +42,13 @@ FUSED_DIGEST = ("6d4651773566e0caf2aad9c47748bf109da83a5dff3889ee2ee11721f51f41a
                 "4894fc249aa52f98dd974c1bc9d3eccd5ecadbfff1e70767b4bc4b9095211de8")
 FUSED_WRITERS = ("59b05a362a01f35542a56228db5f37dc1172e956168562e4990ced295e0342b8"
                  "fbda60c5e1f52cfb19ca927699cf472697e5ac0c71ab9cbd09ed5ff6eeb317f9")
+BOTH = RESIDUAL | {"norm"}
+#: the frozen shared layout under the ``norm`` and ``residual`` fusions, as above
+BOTH_ROWS, BOTH_BYTES = 15_169, 20_569_300
+BOTH_DIGEST = ("ee72e98b95ff7c65b169b045b56ae1817ee1397271f97f7094b616af648d040d"
+               "b937c6b3254713b9265234776f8b8949a372822f033fa7f48cf8aeb599024763")
+BOTH_WRITERS = ("76500ee2039320165ece05dc036700700e4821e8187353e1765ec6f13389d619"
+                "08f52fff0d9ac2f719bd904b091724b45ca16a3945912d937ca3da9e5934b478")
 SLOTS, N, P, G, ADMIT = 4, 7, 2, 3, 1
 
 
@@ -56,6 +64,11 @@ def frozen() -> W.Window:
 @pytest.fixture(scope="module")
 def frozen_fused() -> W.Window:
     return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=RESIDUAL)
+
+
+@pytest.fixture(scope="module")
+def frozen_both() -> W.Window:
+    return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=BOTH)
 
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
@@ -93,6 +106,46 @@ def test_the_residual_fusion_drops_the_projections_tables_and_the_residual_adds_
     assert frozen_fused.locate(7, 1, "l50.wdown", 11, "wrow3") == (W.Registered("l50.wdown", 11 * 8 + 3, 0, 8192),)
 
 
+def test_the_norm_fusion_drops_each_norms_table_and_its_quantizer_reads_the_stream_at_the_frozen_shape(frozen_fused,
+                                                                                                      frozen_both) -> None:
+    """Each norm's output table goes (32 KiB, 32 rows) and with it its ``RmsNormOutSums_v1`` family. The amax is 8 parts of
+    2,048 and a combine over their partials (16 B more a norm), the codes blocks of 512 and each chunk row's scale a block
+    of its own (two more families a norm); the parts and blocks read the stream, the registered gain and the sums, and the
+    rows the linears read are the chunk rows they read unfused."""
+    lay, norms = frozen_both.layout, 2 * FROZEN.layers + 1
+    assert (lay.row_count, lay.slot_bytes, lay.digest.hex()) == (BOTH_ROWS, BOTH_BYTES, BOTH_DIGEST)
+    assert frozen_fused.layout.row_count - lay.row_count == 32 * norms
+    assert frozen_fused.layout.slot_bytes - lay.slot_bytes == (32_768 - 16) * norms
+    ws = frozen_both.writers()
+    assert len(ws) == len(frozen_fused.writers()) + norms and W.writers_digest(ws) == BOTH_WRITERS
+    assert ({u.template for u in frozen_fused.units.values()} - {u.template for u in frozen_both.units.values()}
+            == {"RmsNormOutSums_v1"})
+    statics = f"S=128,G=2,N={FROZEN.width},EPS=1e-05}}"
+    for f, table, count, key in (("l50.attn_amax.part", "l50.attn_amax", 8, f"RmsNormAbsMax_v1{{C=2048,{statics}"),
+                                 ("l50.attn_amax", "l50.attn_amax", 1, "RowAbsMax_v1{N=8,RELU=false}"),
+                                 ("l50.up_quant", "l50.up_quant", 32, f"RmsNormQuantCodes_v1{{C=512,{statics}"),
+                                 ("head_quant.scale", "head_quant", 2, "QuantScaleS8_v1")):
+        u = frozen_both.family(f)
+        assert (u.table, u.count, u.key) == (table, count, key)
+    for t in ("l50.attn_norm", "l50.mlp_norm", "final_norm"):
+        assert t in frozen_fused.tables and t not in frozen_both.tables
+    at = lambda f, *a: frozen_both.locate(7, 1, f, *a)  # noqa: E731
+    out = lambda f, i: frozen_both.outputs(7, 1, f, i)[0]  # noqa: E731
+    first = out("l49.wdown", 0)[0].row
+    assert at("l50.attn_quant", 17, "x") == (W.Segment(7, 1, first + 17, 0, 1024),)
+    assert at("l50.attn_quant", 17, "w") == tuple(W.Registered("l50.attn_norm", 17 * 512 + j, 0, 2) for j in range(512))
+    assert at("l50.attn_amax.part", 3, "x") == tuple(W.Segment(7, 1, first + 12 + r, 0, 1024) for r in range(4))
+    sums = out("l50.attn_sums", 0)[0].row
+    assert at("l50.attn_quant", 17, "s") == at("l50.attn_amax.part", 3, "s") == (W.Segment(7, 1, sums, 0, 512),)
+    p0 = out("l50.attn_amax.part", 0)[0]
+    assert at("l50.attn_amax", 0, "x") == (W.Segment(7, 1, p0.row, p0.offset, 16),)
+    assert at("l50.attn_quant", 17, "amax") == at("l50.attn_quant.scale", 1, "amax") == out("l50.attn_amax", 0)
+    c1 = at("l50.wq", 5, "x1")
+    assert out("l50.attn_quant", 17) == (W.Segment(7, 1, c1[0].row, 512, 512),) and c1[0].nbytes == 8192
+    assert at("l50.wq", 5, "sx") == out("l50.attn_quant.scale", 0)
+    assert out("l50.attn_quant.scale", 1) == (W.Segment(7, 1, c1[0].row, 8192, 4),)
+
+
 def _written(writers: list[dict]) -> dict[int, list[tuple[int, int]]]:
     """Each row's byte ranges its producers write (a quantizer's scale after its codes)."""
     out: dict[int, list[tuple[int, int]]] = {}
@@ -114,7 +167,7 @@ def _inside(lo: int, hi: int, ranges: list[tuple[int, int]]) -> bool:
     return lo >= hi
 
 
-@pytest.mark.parametrize("which", ["frozen", "frozen_fused"])
+@pytest.mark.parametrize("which", ["frozen", "frozen_fused", "frozen_both"])
 def test_every_read_at_the_frozen_shape_is_in_rows_its_producers_wrote(which, request) -> None:
     frozen = request.getfixturevalue(which)
     ws = frozen.writers()
@@ -197,10 +250,10 @@ def test_under_shared_rows_an_output_is_a_window_of_its_row(frozen) -> None:
 
 # -- the round trip at MINI
 
-@pytest.fixture(scope="module", params=[frozenset(), RESIDUAL], ids=["unfused", "fused-residual"])
+@pytest.fixture(scope="module", params=[frozenset(), RESIDUAL, BOTH], ids=["unfused", "fused-residual", "fused-norm-residual"])
 def served(request):
     """A run served by continuous batching (slots reused, steps mixing positions) under the per-slot commit at MINI, on the
-    unfused map and on the ``residual`` fusion's."""
+    unfused map, on the ``residual`` fusion's and on both fusions'."""
     if not any(shutil.which(c) for c in ("g++", "c++", "clang++")):
         pytest.skip("the slots commit's host twin needs a C++ compiler")
     fused = request.param
@@ -213,7 +266,8 @@ def served(request):
     win = W.Window(MINI, d.steps, fused=fused)
     assert any(r != b for s, st in enumerate(d.steps) for b in range(st.batch) for _, r in win.history(s, b)), \
         "a sequence's earlier keys are in other rows of their steps"
-    assert ("l0.wo" in d.steps[0].tables) == (not fused)
+    assert ("l0.wo" in d.steps[0].tables) == ("residual" not in fused)
+    assert ("l0.attn_norm" in d.steps[0].tables) == ("norm" not in fused)
     return w, c, d
 
 
