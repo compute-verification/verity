@@ -17,26 +17,27 @@ from types import SimpleNamespace
 import pytest
 
 torch = pytest.importorskip("torch")
-from torch import nn  # noqa: E402
+# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+from torch import nn
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity_vllm.acquire import h1_commit as HC  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import commit as CT  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import ranks as PHR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw.coins import Challenger
+from verity_vllm.acquire import h1_commit as HC
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import ranks as PHR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import pouw_h1_gpu as G  # noqa: E402
-from tests.protocols import pouw_h1_ranks_gpu as RG  # noqa: E402
-from tests.protocols.test_pouw_h1_commit import (  # noqa: E402
+from tests.protocols import pouw_h1_gpu as G
+from tests.protocols import pouw_h1_ranks_gpu as RG
+from tests.protocols.test_pouw_h1_commit import (
     EXPERTS, FIRST, I, K, MOE, PROMPTS, Arm, Committer, Linear, MoE, _ids, vllm_config)
-from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so  # noqa: E402
-from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
+from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so
+from tests.protocols.test_pouw_h1_served import _unit
 
 ROWS, STEPS = 32, 3
 KEY = hashlib.sha512(b"key").digest()[:32]

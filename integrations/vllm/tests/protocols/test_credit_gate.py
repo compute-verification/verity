@@ -17,31 +17,32 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
+# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.commit.served_record import PORT_NAMES  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols.pouw import credit_gate as CG  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import commit as CT  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import records as ZR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw.coins import Challenger
+from verity.core.protocols.sampled_proofs import challenger as LC
+from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity_vllm import protocols as PO
+from verity_vllm.commit.served_record import PORT_NAMES
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols.pouw import credit_gate as CG
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import challenger_host as CH  # noqa: E402
+from tests.protocols import challenger_host as CH
 
 K = 64
 #: the window's T

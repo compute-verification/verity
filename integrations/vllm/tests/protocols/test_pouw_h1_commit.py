@@ -19,31 +19,32 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-from torch import nn  # noqa: E402
+# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+from torch import nn
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import weights as Wt  # noqa: E402
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.acquire import h1_commit as HC  # noqa: E402
-from verity_vllm.commit.served_record import StepInputPort  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-from verity_vllm.engine.hooks import Hooks  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import commit as CT  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import weights as Wt
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.sampled_proofs import remote as R
+from verity.ml.circuits.codec import canonical_json
+from verity_vllm import protocols as PO
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.acquire import h1_commit as HC
+from verity_vllm.commit.served_record import StepInputPort
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.engine.hooks import Hooks
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols.test_pouw_h1 import AUDITOR, Experts, Runner, _host, _remote, _so  # noqa: E402
-from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols.test_pouw_h1 import AUDITOR, Experts, Runner, _host, _remote, _so
+from tests.protocols.test_pouw_h1_served import _unit
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"
