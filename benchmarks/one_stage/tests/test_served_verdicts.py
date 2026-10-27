@@ -409,10 +409,10 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
 
 def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "2h"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "20m"], (rc, lines)
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=2h (exit 124): no count"]
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=20m (exit 124): no count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
