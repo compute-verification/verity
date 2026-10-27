@@ -32,6 +32,8 @@ OTHER_FAMILIES = {
            "accepted chains the Boolean versions lower"),
     "dense": ({"softcap_mul_bits", "softcap_scale_log2_bits"}, "the softcap stage's word constants (`set_params_fprop`)"),
     "hopper": ({"Fa3InvSum", "HopperBF16WgmmaDot16"}, "FA3's reciprocal primitive and the Hopper BF16 dot (the B1 Hopper profile)"),
+    "dead_free": ({"AttnBlockFirstV1", "AttnHeadEndV1"},
+                  "the dead-free first key block and head end, which FA3's per-key-block chain (Attention_v20) reuses"),
     "fp8": ({"E4M3"}, "the e4m3 type of DSA's quantized indexer keys"),
     "topp_word_gates": ({"I32ToF32"}, "the int-to-float conversion primitive DSA's top-k reads"),
     "value_inputs": ({"AttentionHeadV10", "AttentionHeadV12", "AttentionHeadV13", "AttentionV10", "AttentionV12", "AttentionV13",
