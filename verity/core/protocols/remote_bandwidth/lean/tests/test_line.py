@@ -3,7 +3,7 @@ as outputs so that both sides' reasons are compared word for word: sessions of z
 stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of drawn windows, `pooled`) that
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
 group's, a stretch's empty span), with malformed inputs rejected by both. The same line read off an accepted session's
-record (`line_record`, `line.line_of_record`: its groups' passes, its windows and its registered blocks the record's,
+record (`line_record`, `line.line_of_record`: its groups' passes, its windows and its registered chunks the record's,
 what the auditor saw of each window beside it; drawn g > 1 windows a coin, its draws in place of its windows), with
 the record's own refusals (a record not of the registration given with it, the auditor saw another count of windows,
 a window or a draw drew other than min(s, U), a record drawn g > 1 a coin at one window in flight) and malformed
@@ -146,7 +146,7 @@ def test_line(server) -> None:
 
 def session(stretch: int = 1, *, weights: int = 600, host: int = 0, n: int = 12, windows=((1, 1),),
             delta: object = 2.0 ** -40, rates: line.Rates = line.Rates(0, 1), **over) -> dict:
-    """`n` groups of two passes over N blocks, 10 ns apart but group 5, `stretch` times that, each one's last root at
+    """`n` groups of two passes over N chunks, 10 ns apart but group 5, `stretch` times that, each one's last root at
     the next coin, its record's `windows` at `delta` (by default one opened whole, so no receipt is wrong)."""
     gs, t = [], 0
     for g in range(n):
@@ -219,7 +219,7 @@ def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why
 
 
 def test_both_lines_charge_the_chips_in_whole_blocks_rounded_up(server) -> None:
-    """One byte over 5 blocks of chip is charged as 6 blocks, in the Python and the Lean alike."""
+    """One byte over 5 chunks of chip is charged as 6 chunks, in the Python and the Lean alike."""
     over, six = session(1, n=8, chip_bytes=5 * B + 1), session(1, n=8, chip_bytes=6 * B)
     assert line.run_json(over) == line.run_json(six) != line.run_json(session(1, n=8, chip_bytes=5 * B))
     six_blocks = ("output", D.canonical(line.run_json(six)))
@@ -227,14 +227,14 @@ def test_both_lines_charge_the_chips_in_whole_blocks_rounded_up(server) -> None:
 
 
 def registration(blocks: int, root: bytes = bytes(64)) -> audit.Registration:
-    """A registration of `blocks` blocks, its codec seed given, as `line_record` reads one (`M.registration_of`)."""
+    """A registration of `blocks` chunks, its codec seed given, as `line_record` reads one (`M.registration_of`)."""
     return audit.Registration(M.NODE, blocks, root, bytes(32), M.P512, receipts.DEFAULT, False, receipts.LAYOUT,
                               receipts.SKETCH_ROWS)
 
 
 def recorded(v: dict, samples: int = 1) -> dict:
     """`session`'s inputs read off a record of `registration(N)` (`line_record`'s form): window t is group t, each of
-    its passes reading the N registered blocks, drawn `min(samples, U_t)`, the rest of the record well formed; what the
+    its passes reading the N registered chunks, drawn `min(samples, U_t)`, the rest of the record well formed; what the
     auditor saw of it each group's times and reads."""
     ws = []
     for t, g in enumerate(v["groups"]):
@@ -261,7 +261,7 @@ INVALID = (("rows", 3), ("layout", "x"), ("bind", True), ("node", ""), ("node", 
 @st.composite
 def records(draw) -> dict:
     """An accepted session's record of a registration given with it and what the auditor saw of each window, as they
-    are or with one fault: the record not of the registration given (another registration, or the record's blocks
+    are or with one fault: the record not of the registration given (another registration, or the record's chunks
     another count), the auditor seeing another count of windows, a window drawn other than min(s, U_t), one of the
     node's inputs `line` refuses, or a malformed record, registration, seen or input (most often none: Hypothesis leans
     to each choice's first)."""
@@ -379,7 +379,7 @@ def test_line_record(server) -> None:
 @pytest.mark.parametrize("samples", [1, 37, 2 * N])
 def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples) -> None:
     """Read off a record, the line is `line`'s at the record's groups (its passes, the auditor's times and reads), its
-    windows (Σ lengths_t, drawn_t) and its registered blocks, the Lean's and line.py's alike."""
+    windows (Σ lengths_t, drawn_t) and its registered chunks, the Lean's and line.py's alike."""
     for v in (session(9, rates=line.Rates(10 ** 6, 1)), session(1, weights=0, host=400),
               session(9, rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))):
         r = recorded(v, samples)

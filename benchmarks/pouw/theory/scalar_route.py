@@ -4,8 +4,8 @@ tables?
 QSTAR (note:20261017T0344Z-draft-eps1-qstar) proved class P (radix-packed programs) costs >= 1 + 28/27 ~ 2.04 issue slots
 a word (Theorem C), and named four shapes that escape the proof: count-coefficient fields, joint (non-radix) encodings,
 vertical bit-sliced words, and first-mixed hashing. The joint-encoding count permits as little as 1.875 < 2.03, so the
-proof alone does not exclude a sub-2.03 word. SCALAR-ROUTE (the coordinator's named assumption, Daniel's call) is that no
-such word exists without tables; QSTAR r3 (bc-98e285b9, branch cursor/isa-cap-ea24) checks the per-opcode premise ISA-CAP.
+proof alone does not exclude a sub-2.03 word. SCALAR-ROUTE (a named assumption) is that no such word
+exists without tables; QSTAR checks the per-opcode premise ISA-CAP.
 
 This script is the complementary half: a constructive search over the escape shapes, asking whether any *realizable* sm_120
 program in them makes a fresh committed Dither word below 2.03 issue slots without tables. The committed Dither word is a

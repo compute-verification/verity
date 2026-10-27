@@ -2,7 +2,7 @@
 `--replay-deferred`) and for the CPU replay of the rank's sealed bundle (`pipeline.tp.commit_replay`) alike.
 
 `load` reads the rank's request Programs and refuses, by name, any whose digest is not of record for the rank or whose TP context is
-not the rank's; `evaluate` runs manbind's sampled replay and the exhaustive boundary linkage on the rank's binding map, its committed
+not the rank's; `evaluate` runs the sampled replay and the exhaustive boundary linkage on the rank's binding map, its committed
 members (`committed`: an `oracle_compare.OpenedReader` over the live committer, or over the bundle's dumped store) and its weight
 shards (`weights_of(prefix)`: the weights the rank registered, or the checkpoint's shards opened against the committed weights root).
 The seed is `seed_of`'s: the driver's targeted seed, else the verifier's challenge with the rank's run root, else the run root.
@@ -28,7 +28,7 @@ from typing import Any
 from verity_vllm.engine import hooks
 
 SCHEMA = "verity-sweep/tp-sampled-replay/v1"
-METHOD = "sampled-exact-replay per rank (manbind sampled_replay on the rank's map, Programs and shards)"
+METHOD = "sampled-exact-replay per rank (sampled_replay on the rank's map, Programs and shards)"
 
 
 def request_program_dirs(root: str, reqs: list[dict], rank: int) -> dict[str, str]:
@@ -131,7 +131,7 @@ def unreplayable_sites(p: Loaded) -> dict[str, Any]:
         from verity_vllm.query.manifest import format as RM
 
         xs: dict[str, set] = {}
-        xr_fams = collective_kinds.cross_rank_families(p.world)     # [lane vllm-tp-n] from the registry's composites at this world, not typed
+        xr_fams = collective_kinds.cross_rank_families(p.world)     # from the registry's composites at this world, not typed
         for r_ in p.index.rows:
             fam_ = RM.spec_family(r_["spec"])
             if collective_kinds.evaluated_cross_rank(fam_, xr_fams):
@@ -156,7 +156,7 @@ def xrank_facts(st: dict[str, Any], p: Loaded) -> None:
 
 
 def seed_of(cfg: dict[str, Any], run_root: bytes) -> tuple[int, str]:
-    """[O6] seed from the rank's run root AFTER commitment unless the driver targets one; [manbind MAN-06d] under a
+    """[O6] seed from the rank's run root AFTER commitment unless the driver targets one; [MAN-06d] under a
     VERIFIER-ISSUED post-commitment challenge the seed is sha256(challenge | this rank's run root)[:8] (no grind by recommitting)."""
     from verity_vllm.check.replay import driver as SR
 
@@ -168,7 +168,7 @@ def seed_of(cfg: dict[str, Any], run_root: bytes) -> tuple[int, str]:
 
 
 def manifest_of_rank(doc: Any, rank: int) -> dict[str, Any] | None:
-    """[reqval] Q(P) of record for THIS rank: the merged TP manifest's identities of rank r (per-rank populations + the rank's
+    """Q(P) of record for THIS rank: the merged TP manifest's identities of rank r (per-rank populations + the rank's
     own partials); the replay's reach is reconciled against them identity by identity (population.query_total / ...)."""
     if not (isinstance(doc, dict) and isinstance(doc.get("identities"), list)):
         return None
@@ -319,7 +319,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
             # the rank Program's shard map).  `pin_of_record` stays None until the Build emits it.
             wc = {"equal": eq, "self_consistent": eq, "pin_of_record": None, "pinned": None, "committed_root": w_ref, "replay_root": w_now.get("root"),
                   "tensors": w_now.get("tensors"), "method": f"rank {rank}: live parameters (weight SHARDS) re-registered at replay == the run's committed weights root "
-                                                              "(self-consistency; not a weights-of-record pin, M-0614)",
+                                                              "(self-consistency; not a weights-of-record pin)",
                   "why": None if eq else ("no committed weights root on the run" if not w_ref else "root differs")}
         except Exception as we:  # noqa: BLE001
             wc = {"equal": None, "self_consistent": None, "pin_of_record": None, "pinned": None, "note": f"by reference, unverified at replay: {we!r}"[:200]}

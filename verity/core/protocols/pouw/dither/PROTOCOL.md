@@ -9,7 +9,7 @@ CMP-154), written in the shared notation (CMP-158).
 
 Its credit at pub(μ°) against W_reg is superseded (Daniel, 26 Oct, 6:40 PM PDT, tentative): credit is a sampling block's
 size in AND gates, a statement about values, and 𝓜's resources appear only inside the exclusion argument
-(`glossary/README.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
+(`GLOSSARY.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
 
 The protocol is experimental. Its guarantee is stated in Lean on open PRs: `Pouw.Guarantees.Dither.WorkSound` and its
 card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
@@ -63,7 +63,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
   puts in one sequence. **G** is the number of replicas a claim registers.
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
 - **ε_skip**: Dither's ε, the share of W_reg a period may skip: the Notation's ε_W, PoUW's part of the fleet's ε_skip
-  (`glossary/README.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
+  (`GLOSSARY.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
   **δ_crypto** the cryptographic one. **k_infil** and **k_exfil** are the bits the certifier counts into and out of the
   replica.
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year

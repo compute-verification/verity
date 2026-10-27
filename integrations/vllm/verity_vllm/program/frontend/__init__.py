@@ -15,7 +15,7 @@ from verity_vllm.program.frontend.provenance import DerivationRule, RuleApplicat
 
 try:
     import torch as _torch
-except ImportError:  # pure-IR use (no torch): the analyses above are still available
+except ImportError:  # pure-circuit use (no torch): the analyses above are still available
     _torch = None
 else:
     from verity_vllm.program.frontend.errors import CODES, DeadGateWarning, FrontendError  # noqa: F401

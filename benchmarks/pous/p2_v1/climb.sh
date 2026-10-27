@@ -14,7 +14,7 @@
 # set), which only the bench holds; a job that already holds its GPU (`research run --queue --gpus 1`, which sets
 # GPU_LEASE_UUID) runs the bench on it.
 # A variant is NAME=SOURCE:FLAGS; FLAGS replace the Makefile's defaults where they name the same macro (later -D wins).
-# BLOCKS (default 8 segments, 524,288 blocks), REPS and GATE pass through, and KEYS_ALL=1 checks every block's v4 keys.  ENV_DIR holds the shared torch venv and CGBN
+# BLOCKS (default 8 segments, 524,288 labels), REPS and GATE pass through, and KEYS_ALL=1 checks every label's v4 keys.  ENV_DIR holds the shared torch venv and CGBN
 # (pod.sh's WORK/pous-bench, used read-only; on a node without them, a fresh ENV_DIR gets them as pod.sh makes them); WORK holds
 # this job's own builds.  The bench writes the run's result.json (decode_bench.py --result-dir).
 set -uxo pipefail

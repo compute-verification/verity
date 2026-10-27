@@ -1,4 +1,4 @@
-"""Shared, frozen interface types for the general structural query API (2026-09-17 window).
+"""Shared, frozen interface types for the general structural query API.
 
 Circuit terminology (gate-centric): DAG nodes are *gates*, edges are *wires*.  Input gates are gates whose values the
 circuit input supplies; some gates are designated output gates (`Program.root_outputs()`).  Every gate produces one

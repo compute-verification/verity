@@ -2,9 +2,9 @@
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
 network accounting's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
 the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
-and on CMP-92's class circuit (S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server; its split
+and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server; its split
 across two (layer 0 | layer 1 and the head) puts every inference block on both, which network accounting's check refuses
-(NET-92: an inference block runs on one server)."""
+(an inference block runs on one server)."""
 from __future__ import annotations
 
 import json
@@ -109,7 +109,7 @@ def test_members_are_cut_where_a_servers_units_begin_or_end():
     """Network accounting's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
     units where one begins or ends as at a wire's ends, so every statement's units sit on one server. A range outside its
     template's units, or servers without units, are refused; that the servers partition the units, and run each inference
-    block on one (NET-92), is network accounting's check."""
+    block on one, is network accounting's check."""
     net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
            "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
     plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
@@ -167,8 +167,8 @@ SPLIT = {"s0": [[EID, 0, H * T * S], [QID, 0, 6 * T * S], [KID, 0, QK_LAYER], [O
 
 
 def cmp92(servers: int) -> I.Circuit:
-    """CMP-92's class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
-    H = 16, its row ops stood in by catalog units until CIR-100's Definitions land, rows gathered by WIRES' cut. At step p,
+    """The class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
+    H = 16, its row ops stood in by catalog units, rows gathered by the wire cut. At step p,
     slot j: the token's embedding as H ``Bf16Add`` coordinates (the token and the position's weight, units (p·S + j)·H + c);
     per layer, six ``Gemm_v2{16, 16}`` head rows (q0 q1 k0 k1 v0 v1) reading the H coordinates cut a row each, QKᵀ as
     ``GemmCoordinate_v2{16}`` over every key so far in the plan's order (head, key, slot: layer l's at l·S·T(T+1) +
@@ -178,7 +178,7 @@ def cmp92(servers: int) -> I.Circuit:
     response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
     layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
     of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights. That split puts every inference block (slot, step) on both servers, the form NET-92 forbids: it is the
+    own weights. That split puts every inference block (slot, step) on both servers, the form network accounting forbids: it is the
     negative of network accounting's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
@@ -254,7 +254,7 @@ def test_cmp92s_class_circuit_on_one_server_has_one_inference_and_nothing_free(c
 
 
 def test_cmp92s_split_across_two_servers_is_refused(circuits):
-    """NET-92 (Daniel, 26 Oct): a server's ingress and egress carry only its inference blocks' declared inputs and outputs,
+    """A server's ingress and egress carry only its inference blocks' declared inputs and outputs,
     and an inference block runs on one server. Network accounting's check of the servers (`certifier.blocks.server_blocks`,
     on the record's ``blocks``) accepts the class circuit on one server and refuses it split layer 0 | layer 1 and the head,
     where every (slot, step) has units on both, by naming the first such block. The records' blocks differ in the network
@@ -264,7 +264,7 @@ def test_cmp92s_split_across_two_servers_is_refused(circuits):
     assert [s.name for s in BK.server_blocks(docs[1], docs[1]["blocks"]["server"], lays)] == ["s0"]
     with pytest.raises(ValueError, match=re.escape(f"inference block (slot 0, step 0): units of {KID} on server s0 and of {KID} "
                                                    "on server s1; an inference block runs on one server, the one that may "
-                                                   "read its inputs (NET-92)")):
+                                                   "read its inputs")):
         BK.server_blocks(docs[2], docs[2]["blocks"]["server"], lays)
     r1, r2 = docs[1]["blocks"], docs[2]["blocks"]
     assert {k: v for k, v in r1.items() if k not in I.NETWORK} == {k: v for k, v in r2.items() if k not in I.NETWORK}
@@ -274,8 +274,8 @@ def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circ
     """With one server the layer row units are one statement (their one wire covers both layers); with two, each template is
     cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
     descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
-    registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and CMP-92's
-    weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network accounting
+    registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the class
+    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network accounting
     refuses this split (`test_cmp92s_split_across_two_servers_is_refused`)."""
     cap = 1 << 20
     with pytest.raises(ValueError, match="whole registered rows"):

@@ -24,7 +24,7 @@ other coin (each wipe's label key, the prior content, the workload's inputs). Th
 
 A block's held set at a guessing level (a label value on a `2^-λ` share of the coins with the state's content) is not
 a memory measure: one label's offset, `b − log₂ |B|` bits, makes every block of the store held at once with
-probability `1 − 1/e`, at every `λ ≥ log₂ |B| + 1` (note:20261019T1330Z-report-timed-round-redteam-2).
+probability `1 − 1/e`, at every `λ ≥ log₂ |B| + 1`.
 -/
 
 namespace Accounting

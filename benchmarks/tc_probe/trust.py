@@ -48,7 +48,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from verity.ml.circuits.silicon import models as _models
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS, Instruction
@@ -89,9 +89,9 @@ def registry_level(status: str | None) -> Level:
 
 #: Elements with 0 mismatches on the anchor SKU for PINNED.  One default ``tc_probe --sweep`` is ~2.5e7 elements, so 1e7 demands a
 #: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent draws a per-element
-#: defect of rate 5e-7 escapes with probability e^-5 < 1%.
+#: defect of rate 5e-7 is accepted with probability e^-5 < 1%.
 N_MIN = 10_000_000
-#: Honest verification units the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.
+#: Honest proof blocks the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.
 HONEST_MIN = 2_000
 NEGATIVES_MIN = 100
 #: Words an agreeing anchor run must hold to count as a second device / environment for TRUSTED_STABLE (a canary is ~5-30k).
@@ -143,7 +143,7 @@ REGRESSION_TILES: dict[str, tuple[str, ...]] = {
     "D10": ("replay:golden/ada_e4m3_m16n8k32.json", "family:adder_width_cancellation", "family:zero_products_nonzero_acc"),
     "D11": ("replay:probe3",),                                       # autoproof nvfp4 vectors (model5 vs the refuted v0)
     "D12": ("replay:probe3",),                                       # what autoproof's pin covers
-    # D13-D20 tiles are tc_probe_fp4 families (lane fp4-re, RTX 5090, model BlockScaledAlignAdd: 0 mismatches / 15.7M words).
+    # D13-D20 tiles are tc_probe_fp4 families (RTX 5090, model BlockScaledAlignAdd: 0 mismatches).
     "D13": ("family:ue8m0_underflow",),                              # resolved: mxf4 ue8m0 underflow sign is +0
     "D14": ("family:randn_zero_acc", "family:zero_products_nonzero_acc"),  # sm_90 FP8 mma.sync lowering
     "D15": ("family:fp8_floor_probe", "family:zero_products_nonzero_acc"),  # resolved: the FP8 adder floor is unobservable in [-152, -126] (pin-bf16)
@@ -154,7 +154,7 @@ REGRESSION_TILES: dict[str, tuple[str, ...]] = {
     "D20": (),                                                       # excluded: NaN/inf accumulators and overflow (outside the domain; recorded by specials)
 }
 
-#: bench-result ``relation`` label values per target (the coordinator's convention today); ``target=<name>`` is the go-forward key.
+#: bench-result ``relation`` label values per target; ``target=<name>`` is the go-forward key.
 RELATION_LABELS: dict[str, tuple[str, ...]] = {
     "first-campaign-target/2026-09-21": ("bf16-ampere-k1536",),
     "fp8-ada-mma-draft/2026-09-22": ("fp8-ada-k1536",),
@@ -164,14 +164,14 @@ RELATION_LABELS: dict[str, tuple[str, ...]] = {
 #: Proof classes that prove the whole relation contract (ZK or not); RELATION-ONLY diagnostics are excluded by the checker text.
 FULL_CONTRACT_PROOF_CLASSES = ("COMPLETE_ZK_BACKEND", "COMPLETE_HVZK_BACKEND", "NON_ZK_PROOF_DIAGNOSTIC")
 
-#: Model-name aliases used by producers that predate the registry names (fp4-5090's ``model5``).
+#: Model-name aliases used by producers that predate the registry names (the FP4 probe's ``model5``).
 MODEL_ALIASES: dict[str, tuple[str, ...]] = {
-    # model5 was the registry model for sm_120 FP4 until lane fp4-re refuted it (D16/D17: 29,118 mismatches on the RTX 5090) and
-    # replaced it with BlockScaledAlignAdd; fp4-5090's model5-only sweeps are evidence about model5, not about the current model.
+    # model5 was the registry model for sm_120 FP4 until the FP4 probe refuted it (D16/D17, on the RTX 5090) and
+    # replaced it with BlockScaledAlignAdd; the earlier model5-only sweeps are evidence about model5, not about the current model.
     # tc_probe names the E5M2 hypotheses as the E4M3 pipeline with E5M2 products; the registry's E5M2 models are those pipelines
     "ada_e5m2_m16n8k32": ("ada_e4m3_m16n8k32+e5m2_product",),
     "hopper_e5m2_wgmma_k32": ("hopper_e4m3_wgmma_k32+e5m2_product",),
-    # lane tcgen05 tested the sm_120 models as the hypothesis on the B200 and labelled its captures with the sm_120 names; the
+    # The B200 probe tested the sm_120 models as the hypothesis and labelled its captures with the sm_120 names; the
     # sm_100 registry models are those parameters under an sm_100 name (verity.ml.circuits.silicon.models).
     "blackwell_sm100_tcgen05_nvf4": ("blackwell_sm120_nvf4_m16n8k64", "blackwell_sm120_nvf4"),
     "blackwell_sm100_tcgen05_mxf4": ("blackwell_sm120_mxf4_m16n8k64", "blackwell_sm120_mxf4"),
@@ -215,18 +215,18 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
                              ("verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
                               "verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/summary.json"),
                              replay="tc-hopper-2026-09-07/special.reduced",
-                             note="veritor lane HP: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
+                             note="veritor: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
                                   "(14 families, non-finite included) replayed by tc_probe --replay-capture"),
     ),
     "sm89.mma.m16n8k32.e4m3": (
         IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",),
-                             replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records (24.9M-element campaign)"),
+                             replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
     "sm90.wgmma.m64n8k32.e4m3": (
         IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",),
                              replica="verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
-                             note="veritor lane QZ: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
+                             note="veritor: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
     ),
     "sm120.mma.m16n8k64.e2m1.nvf4": (
@@ -413,8 +413,8 @@ def all_subject_names() -> list[str]:
 
 @dataclass
 class HardwareRecord:
-    """One hardware run of one instruction, normalised from any of the three formats the store holds (tc-probe-fp8's nested
-    ``tc_evidence``, fp4-5090's flat meta, the WP1 ``bench-result/v1`` of ``tc_probe`` whose counts live in ``probe_results.json``)."""
+    """One hardware run of one instruction, normalised from any of the three formats the store holds (tc_probe's nested
+    ``tc_evidence``, tc_probe_fp4's flat meta, and ``tc_probe``'s legacy ``bench-result/v1``, whose counts live in ``probe_results.json``)."""
 
     id: str
     kind: str
@@ -621,7 +621,7 @@ def _params(model: Model | None) -> tuple | None:
 
 
 def _legacy_instruction(arch: str | None, pipeline: str | None) -> tuple[str | None, set[str]]:
-    """The registry instruction a WP1 ``tc_probe`` result (arch + pipeline name) measured, and every model name its mismatch count
+    """The registry instruction a legacy ``tc_probe`` result (arch + pipeline name) measured, and every model name its mismatch count
     stands for: the pipeline's own name plus the instruction's model when that model has identical parameters (the RTX 4090 runs
     compared the Ampere pipeline, which is Ada's under another name)."""
     sm = _sm(arch)
@@ -664,7 +664,7 @@ def _hardware_record(view: _StoreView, art_id: str, kind: str, meta: dict, refs:
             rec.sass = {"single_instruction": s.get("single_instruction", s.get("tile_kernel_mma_count") == 1), "count": s.get("tile_kernel_mma_count"),
                         "expected": s.get("expected_mma_count"), "ok": s.get("ok")}
         rec.lowering = {_norm_model(m): d.get("lowering") for m, d in (te.get("models") or {}).items() if isinstance(d, dict)}
-        if te.get("instances_tier") and rec.instances is None:            # instances-hw lane (benchmarks/tc_probe/instances_hw.py): one tier per artifact
+        if te.get("instances_tier") and rec.instances is None:            # benchmarks/tc_probe/instances_hw.py: one tier per artifact
             tier = str(te["instances_tier"])
             negative = bool(te.get("negative")) or tier.endswith("-neg")
             if negative:  # the tier's expected words are the CLAIMED (wrong) ones: its failure count is the undetected negatives
@@ -718,7 +718,7 @@ def _hardware_record(view: _StoreView, art_id: str, kind: str, meta: dict, refs:
             vals = [v for v in sm.values() if isinstance(v, int)]
             if vals:
                 rec.sass = {"single_instruction": max(vals) == 1, "count": max(vals), "expected": 1, "ok": None}
-    elif wf.get("probe") == "benchmarks/tc_probe/tc_probe.py":                 # WP1 tc_probe result recorded as bench-result/v1
+    elif wf.get("probe") == "benchmarks/tc_probe/tc_probe.py":                 # legacy tc_probe result recorded as bench-result/v1
         rec.legacy = True
         rec.sku, rec.arch, rec.seed = wf.get("device"), wf.get("arch"), _as_int(wf.get("seed"))
         derived, model_keys = _legacy_instruction(wf.get("arch"), wf.get("pipeline"))
@@ -876,7 +876,7 @@ def d_class(entry: dict) -> str:
 
 #: Input sets identified by a recipe digest pinned in the bench contract rather than by a repo fixture manifest (the FP8 Ada
 #: set is seeded: uniform finite E4M3 bytes from ``FP8_ADA_INSTANCES_SEED``).  target name -> the contract constant prefix; the
-#: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count (the Hopper ones once b-hopper lands them).
+#: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count.
 CONTRACT_INSTANCE_SETS: dict[str, str] = {
     "fp8-ada-mma-draft/2026-09-22": "FP8_ADA",
     "fp8-hopper-wgmma-draft/2026-09-22": "FP8_HOPPER",
@@ -900,7 +900,7 @@ def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> li
         vals = {k: getattr(contract, f"{prefix}_INSTANCES_{k}", None) for k in ("DATASET", "TIER", "DIGEST")}
         if not all(isinstance(v, str) and v for v in vals.values()):
             continue
-        # an optional ``<PREFIX>_INSTANCES_FAMILIES`` (family -> VU count at the frozen tier size) is the recipe's corner-family
+        # an optional ``<PREFIX>_INSTANCES_FAMILIES`` (family -> proof-block count at the frozen tier size) is the recipe's corner-family
         # composition -- what a fixture manifest's ``composition.corner_families`` carries for a materialised set (Tc's edge predicate)
         fams = getattr(contract, f"{prefix}_INSTANCES_FAMILIES", None)
         tier: dict = {}
@@ -1185,7 +1185,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     legacy = [r for r in agreeing_anchor if r.legacy]
     if legacy:
         c.details["legacy_records"] = [r.id for r in legacy]
-        notes.append(f"P1 rests on {len(legacy)} WP1 tc_probe result(s) recorded as bench-result/v1 (no instruction/model_agrees labels; counts read from "
+        notes.append(f"P1 rests on {len(legacy)} legacy tc_probe result(s) recorded as bench-result/v1 (no instruction/model_agrees labels; counts read from "
                      "probe_results.json): re-registering them as tc-evidence/v1 would make the contract uniform")
     criteria.append(c)
 
@@ -1502,7 +1502,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         invalidation_triggers=[dict(t) for t in INVALIDATION_TRIGGERS], relitigation_procedure=list(RELITIGATION_PROCEDURE),
         constants={"N_MIN": N_MIN, "HONEST_MIN": HONEST_MIN, "NEGATIVES_MIN": NEGATIVES_MIN, "canonical_families": {k: list(v) for k, v in CANONICAL_FAMILIES.items()},
                    "full_contract_proof_classes": list(FULL_CONTRACT_PROOF_CLASSES)},
-        generated_utc=_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_utc=_dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         previous_dossiers=[d["id"] for d in ev.dossiers if d.get("target") in subject.names], notes=notes,
         canaries=[{"id": r.id, "run_id": r.run_id, "passed": r.agrees(names), "elements": r.elements, "mismatches": r.mismatches_for(names),
                    "driver": r.driver, "nvcc": (r.nvcc or "")[:60] or None} for r in canaries],

@@ -69,7 +69,7 @@ def test_a_one_word_per_leaf_reader_misreads_a_mixed_width_lifted_store_and_the_
     """The attack in full: a store of leaves of widths [32, 16, 1, 32, 32] holding ⊥, Active, Active(1), Active(max), INV.  The
     lifted reader (offsets from `leaf_words`) round-trips exactly.  A legacy one-word-per-leaf reader reads the ⊥ as Active(0) and
     then every later leaf from the wrong offset; the ONLY thing that stops it is the size check `len(words) == Σ leaf_words(w)` —
-    which is therefore a required field of a lifted binding map (F-pad-06 condition for the record stage)."""
+    which is therefore a required field of a lifted binding map (F-pad-06 condition for the record phase)."""
     widths = [32, 16, 1, 32, 32]
     leaves = [L.enc_bot(32), L.enc_active(16, 0xBEEF), L.enc_active(1, 1), L.enc_active(32, (1 << 32) - 1), L.inv(32)]
     flat = [wd for w, x in zip(widths, leaves) for wd in L.pack_leaf(w, x)]

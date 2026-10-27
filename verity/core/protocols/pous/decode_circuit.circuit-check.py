@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _pous_roots() -> list[Any]:
-    """P2's decode of one block (`verity.core.protocols.pous.decode_circuit`) at W = 64 (C0 = 189, its 144-byte
+    """P2's decode of one label (`verity.core.protocols.pous.decode_circuit`) at W = 64 (C0 = 189, its 144-byte
     expansion base: one midstate block and a 16-byte rest) reaches the counter-mode SHA-512 and field pieces."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.pous.decode_circuit import PousP2Decode

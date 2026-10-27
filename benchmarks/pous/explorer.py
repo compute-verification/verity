@@ -8,7 +8,8 @@ misses F ≤ f₀, the (1 − α) quantile of the honest miss count, Poisson wit
 ε_proof(d) + g(f₀)] ≤ β with g(f) = min over θ > 0 of (θf + ln(1/β)) / ((1 − e^−θ) λT).  The honest model sets only the
 false-alarm rate, never soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of
 `call_ns`, the model's unit: at the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481
-Keccak-f, about a tenth of a call, so neither bounds an adversary there (red team, 4 Oct 2026, art:7617c8017e80).
+Keccak-f, about a tenth of a call, so neither bounds an adversary there (the red team's state attack,
+`verity.core.protocols.pous.primitives.pi2_keccak_f`).
 
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:

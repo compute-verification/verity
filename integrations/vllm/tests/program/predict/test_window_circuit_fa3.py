@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.window_circuit on sm_90 (VLLM-127): the H200's Program binds FA3's `Attention_v4`, which the
+"""verity_vllm.program.predict.window_circuit on sm_90: the H200's Program binds FA3's `Attention_v4`, which the
 lowering cuts by key block as `Attention_v20` (`CUTS`): a head's units are its first visited block `AttnBlockFirst_v1` and its
 end `AttnHeadEnd_v1` at FA3's dot and reciprocal, and past one key block (TINY's kBlockN on sm_90 is 128) each full block
 `AttnBlock_v4{FIRST=False, CHECK=False}`, reading that block's gather, made once. An attention version with no cut
@@ -51,8 +51,8 @@ def test_an_fa3_head_is_v20s_calls_over_its_kv_groups_gathers():
     `AttnHeadEnd_v1` at FA3's reciprocal, a unit a head each (2 slots, 2 layers, 4 heads: 16 a T). At position 4 slot 0's
     heads 0 and 1 read KV group 0's keys as one `AllGather_v1{5, 16}` row over the RoPE'd keys of positions 0..4 (RoPE units
     24p + 8), slot 1's head 0 its own (24p + 10), and the end reads its block's running sum and output. Two windows of the
-    class are one circuit, blocks included, with the weights pinned no input row is free, and every wire reads its own slot
-    at its step or before."""
+    class are one circuit, blocks included, with the weights and the scan state pinned no input row is free, and every wire
+    reads its own slot at its step or before."""
     reg = _registered()
     circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
     other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
@@ -139,7 +139,7 @@ def test_a_head_with_no_cut_past_keys_is_refused_by_name(monkeypatch):
                            "and 45 GB on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
 @pytest.mark.parametrize("cls", [WindowClass(4, 32, 4), CLASS_OF_RECORD], ids=["4,32,4", "class-of-record"])
 def test_int8_llama_3_2_1b_lowers_on_sm_90(cls):
-    """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at CIR-95's
+    """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
     grain: every head `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full block), no unit past 256 rows in
     and out, and no free input row. Its numbers (units, free inputs, the most rows a unit, peak RSS, the heads' census) are
     printed as a JSON line."""

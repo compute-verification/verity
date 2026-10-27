@@ -6,7 +6,7 @@
   reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
   draw cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
-  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (#1809, `GAMMA_PIN`), so
+  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (`GAMMA_PIN`), so
   every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
@@ -53,15 +53,15 @@ DELTA = Fraction(1, 2 ** 40)
 GAMMA_PIN = "#1809"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
-#: the bandwidth protocol's red-team grant (#1805, with conditions), whose point `granted_params` is
+#: the bandwidth protocol's red-team grant (with conditions), whose point `granted_params` is
 Q_GRANT = "red-team grant at 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 GRANTED_T_NS = 1_200_000
 RESIDUAL = "residual, worst case over the audit's coins (CovertResidual's weak form)"
-PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model (Daniel's "
-           "decision 9; #1821's CovertResidualPerRun, and #1827: BudgetAbort holds for constant-cost models and W1's "
-           "operand refund breaks it), so none is shown")
-FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute (Daniel's ruling); a priced-sum column, "
+PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model "
+           "(CovertResidualPerRun; BudgetAbort holds for constant-cost models and W1's operand refund breaks it), so "
+           "none is shown")
+FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute; a priced-sum column, "
                "compute + p·reads at p the device's DRAM rate in MAC units, waits for compute-accounting's priced lemma "
                "(w1Priced)")
 S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "

@@ -39,14 +39,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from verity_vllm.config import RowEngine, option
+from verity_vllm.config import RowEngine, option, workload_arg
 
 ENTRY = "pouw:ncp-v2"
 
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", help="a row file (config.RowConfig): the pinned model, its engine.revision and the requests")
+    workload: str = option("--workload", type=workload_arg, help="a row file (config.RowConfig): the pinned model, its engine.revision and the requests")
     draws: int = option("--draws", type=int, default=16, help="the window's work-law budget K (default 16)")
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the output directory (default $RESEARCH_RUN_DIR, else .)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")

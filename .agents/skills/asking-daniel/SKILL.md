@@ -12,7 +12,7 @@ description: >
 
 # Asking Daniel
 
-An ask is a **page** in the [Asks for Daniel](https://app.notion.com/p/914ab9399fe44f79ae19ff05db87e1fa) Notion database,
+An ask is a **page** in the Asks for Daniel Notion database (Notion's search finds it by that title),
 where Daniel reads, comments and decides, and a **card** in `#ask-daniel` that mentions him and links the page (the
 registry's `#ask-daniel` `pages` holds the database's URL and data source). A coordinator asks, one question a page; a worker asks its coordinator. Every ask gets
 a card: a decision waiting in a note or a thread waits forever.
@@ -24,7 +24,7 @@ skills, the friction skill's "Standing rulings") stands until he reverses it. A 
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 
 An ask that isn't keys or access goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
-"Provisionally accepted (Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with
+"Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
 that option and `--provisional` (implied by a `--note` starting "Provisionally accepted"), so it says your lane decided,
 and act on it; he reviews these in the "Provisional, to review" view and can reverse any. A page that waits on him leaves
 Choose empty: a Choose reads as his pick.

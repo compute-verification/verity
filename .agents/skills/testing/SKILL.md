@@ -121,9 +121,8 @@ nothing, so list what they read, and list a path a test only checks the existenc
   value).
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
-  --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`,
-  then an INF issue asking infra, with branch and commit, to run `research data export` (only the control pod holds the
-  export key). `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
+  --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
+  The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
   bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file.
 

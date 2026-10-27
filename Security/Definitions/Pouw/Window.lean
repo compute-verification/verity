@@ -373,8 +373,8 @@ non-uniform adversary that bound doesn't cover, and `qs` is free:
 `Prover.Bounded` counts), and that field isn't tied to an oracle program either. No guarantee reads `CollCounted`, and
 before the random-oracle card discharges it, it is restated with gap (4)'s session-query tie, one definition for both:
 over an oracle strategy of the window's game, one `QTree` per prover move, with `H` only in the verdict, so the plays
-and their count can depend on `H` only through queries (note:compute-accounting/20261018T2336Z-finding-pw8-rered,
-the recheck's (c)). -/
+and their count can depend on `H` only through queries (the
+recheck's (c)). -/
 def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
     (sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (H : O) → (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess H c S R) → ℝ≥0∞)

@@ -1,6 +1,6 @@
 """The store binding's decision at a hello at a store's size, timed through both verifiers: a synthetic pinned model
-whose arena is `--weights` blocks (random digests) then zeros to `--arena-blocks`, `--engines` arenas of it, then
-`--host` host blocks, under one payload key, `store.Binding` over it as it stands past what it reads of the files, and
+whose arena is `--weights` chunks (random digests) then zeros to `--arena-blocks`, `--engines` arenas of it, then
+`--host` host chunks, under one payload key, `store.Binding` over it as it stands past what it reads of the files, and
 the Lean verifier of record (`remote-audit-verifier`) bound to it (`verifier.bind_lean`). Each phase is one hello's
 decision, timed as a whole, with each verifier's own time (store.py's `recompute_s`, the Lean's `lean_s`) and CPU
 seconds (store.py's processes, the Lean's threads):
@@ -21,7 +21,7 @@ disagree, or that decides otherwise than its row says, fails the bench. Writes O
     python binding_bench.py --out OUT [--engines 8 --arena-blocks 16250000 --weights 4000000 --host 0 --workers N]
                             [--phases sequential,concurrent,bound,split] [--python-share 0.6]
 
-The defaults are a whole node's 130M blocks: eight arenas of an 8B BF16 model's 4M weights blocks.
+The defaults are a whole node's 130M chunks: eight arenas of an 8B BF16 model's 4M weights chunks.
 
     research run --on vy-nebius-cpu-1 --project verity --cwd source -- bash -lc \
       'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/remote_session/binding_bench.py --out "$OUT"'
@@ -52,7 +52,7 @@ NODE = b"binding-bench-node"
 PHASES = ("sequential", "concurrent", "bound", "split")
 PYTHON_SHARE = 0.6
 """store.py's share of the cores in `split`: its root's time over both roots' on 11 cores each, 665 s and 436 s at
-130M blocks (r20261023-232339-6365)."""
+130M chunks (r20261023-232339-6365)."""
 
 
 def pin_data() -> bytes:
@@ -73,7 +73,7 @@ def python_cpu() -> float:
 
 
 def binding(weights: int, engines: int, arena_blocks: int, workers: int, digests: Path) -> store.Binding:
-    """A `store.Binding` of the synthetic pin whose arena is `weights` blocks of the digests in the file `digests`, as
+    """A `store.Binding` of the synthetic pin whose arena is `weights` chunks of the digests in the file `digests`, as
     `Binding` leaves it once it has read the files."""
     b = store.Binding.__new__(store.Binding)
     b.pin_data, b.pin_path, b.role = pin_data(), Path("pin.json"), ROLE

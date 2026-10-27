@@ -6,9 +6,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # Every estimate's status is read from the locks (rho/lean.py), and the tests check each cited Lean name is in one.
 # tests/test_envelopes.py holds the remote regime to tiers.py's terms at its DEFAULTS (imported by path), and
-# tests/test_hardware.py holds the locations to the census's devices. test_classes and test_attacks cross-check the
-# threaded class and the shard attack against benchmarks/nci's implementations, imported by path (slowdown.py imports
-# catalog.py). families.Nci reads the NCI library's algorithms and their traits.
+# tests/test_hardware.py holds the locations to the census's devices and the world fleets to its adversary.
+# test_classes and test_attacks cross-check the threaded class and the shard attack against benchmarks/nci's
+# implementations, imported by path (slowdown.py imports catalog.py). families.Nci reads the NCI library's algorithms
+# and their traits.
 inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
-          "benchmarks/census/hardware.json", "benchmarks/nci/slowdown.py", "benchmarks/nci/catalog.py",
-          "benchmarks/nci/algorithms.json"]
+          "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",
+          "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json"]

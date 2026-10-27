@@ -1,5 +1,5 @@
 """Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
-(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
+(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit phase reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
 by run index (control run i <-> treatment run i).  Refuses when the two processes' compilation settings differ (CompilationMode,
@@ -84,17 +84,17 @@ def main(a: Options) -> None:
         problems.append("treatment process did not run with --compiled-taps on|kernels|served")
     if cc.get("compiled_taps") not in (None, "off"):
         problems.append("control process ran with compiled taps")
-    # [coord M-0178 (2a)] the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
+    # the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
     # {(name, source sha256)}) and the per-piece launch programs.  The treatment's pieces carry the record op as an extern call, so its
     # launch programs (call_set) legitimately differ; its KERNEL SET should equal the control's -- a difference means the record op changed
-    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the row's implementation is then the treatment's).
+    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the workload's implementation is then the treatment's).
     gkc, gkt = cc.get("generated_kernels") or {}, ct.get("generated_kernels") or {}
     kernels_identified = bool(gkc.get("kernel_set_sha256")) and bool(gkt.get("kernel_set_sha256"))
     kernel_set_equal = kernels_identified and gkc.get("kernel_set_sha256") == gkt.get("kernel_set_sha256")
     kc, kt = gkc.get("kernels") or {}, gkt.get("kernels") or {}
     kernel_diff = {"only_control": sorted(set(kc) - set(kt))[:40], "only_treatment": sorted(set(kt) - set(kc))[:40],
                    "same_name_different_source": sorted(k for k in set(kc) & set(kt) if kc[k] != kt[k])[:40]} if kernels_identified else None
-    # [rev-pm M-0589 TIP2] on the P_compiled path (taps=kernels) the manifest built from the CONTROL's Inductor dir gates the TREATMENT's
+    # on the P_compiled path (taps=kernels) the manifest built from the CONTROL's Inductor dir gates the TREATMENT's
     # commit, and the kernels are untouched by the hooks (wrapper-level seam): the kernel set must be identical across arms, and the
     # PROGRAM derived from each arm's own output code (compiled_manifest.build: kernel set x launch table x dataflow = program_digest) must
     # be the same Program -- else the Program of record is not the executed implementation: a refusal, not a label.  The raw wrapper text
@@ -123,7 +123,7 @@ def main(a: Options) -> None:
             problems.append("P_compiled path: P_compiled not derived from BOTH arms' Inductor output code (--manifest-control/--manifest-treatment)")
         elif not program_digests["equal"]:
             problems.append(f"P_compiled path: the Program derived from the treatment's output code differs from the control's: {program_digests}")
-        # [Daniel M-0776 (3)] runtime <-> pinned artifact identity: the code objects LOADED in each running process (PyCodeCache registry:
+        # runtime <-> pinned artifact identity: the code objects LOADED in each running process (PyCodeCache registry:
         # Triton sources + cubins) must be one set across arms, and every kernel P_compiled names must be among the loaded objects
         lc, lt = gkc.get("loaded") or {}, gkt.get("loaded") or {}
         # refusal = the LOADED KERNEL SOURCES (the code objects) differ; the binaries (cubin sha256 where Inductor retains the bytes, else
@@ -140,7 +140,7 @@ def main(a: Options) -> None:
         import re as _re
         _loaded_names = set(lc.get("kernel_names") or [])
         not_loaded = sorted(k for k in manifest_kernels if k not in _loaded_names and _re.sub(r"_\d+$", "", k) not in _loaded_names)
-        # [R16 unit B, rev F-r16-09] the EXECUTED specialization per kernel: code_sha256 = every ELF section of the executed cubin EXCEPT the
+        # the EXECUTED specialization per kernel: code_sha256 = every ELF section of the executed cubin EXCEPT the
         # named deny-list (debug/line info, embedded PTX text, symbol/string tables) -- SASS, constant banks, initialised globals, rodata all
         # count; the executed autotune config; and -- where the arms' cubins differ -- WHICH sections differ, DECODED: a non-deny-listed
         # section may differ across arms only if its bytes are equal once absolute-path strings are normalised (per-process source path
@@ -157,7 +157,7 @@ def main(a: Options) -> None:
         def _denied(s: str) -> bool:
             return s in _DENY_EXACT or s.startswith(_DENY_PREFIX)
 
-        # [rev F-r16-14] a path-string difference is decodable ONLY in a DATA section (initialised globals, constant banks, rodata): SASS
+        # a path-string difference is decodable ONLY in a DATA section (initialised globals, constant banks, rodata): SASS
         # (.text*), kernel info (.nv.info*) and relocations never legitimately embed the module path, so a difference there is never
         # 'per-process path' whatever its bytes look like once a slash-led run is normalised.  And every string must BE the generated
         # module's path: ends with .py or .py:<line>, and is a loaded module path of its arm (modules_list) or lives under the inductor cache.
@@ -190,8 +190,8 @@ def main(a: Options) -> None:
                     and int(a.get("n_path_strings") or 0) == int(b.get("n_path_strings") or 0) and int(a.get("n_path_strings") or 0) <= 16
                 kind = ("per-process absolute-path strings in device data; bytes equal once normalised" if ok
                         else ("section_detail not recorded (older record) -> fail closed" if not a or not b
-                              else (f"{s} is not a data section: a difference there is never a path string (F-r16-14) -> not one specialization" if res_eq and not data_section
-                                    else ("strings are not the generated module's .py path (F-r16-14) -> NON-PATH DATA DIFFERS" if res_eq and not module_paths
+                              else (f"{s} is not a data section: a difference there is never a path string -> not one specialization" if res_eq and not data_section
+                                    else ("strings are not the generated module's .py path -> NON-PATH DATA DIFFERS" if res_eq and not module_paths
                                           else "NON-PATH DATA DIFFERS -> not one specialization"))))
                 decoded.append({"section": s, "residue_equal": res_eq, "data_section": data_section, "module_paths": module_paths,
                                 "size_control": a.get("size"), "size_treatment": b.get("size"),
@@ -248,7 +248,7 @@ def main(a: Options) -> None:
                 config_differ.append(k)
             if code_equal and cc_bytes and ct_bytes and cc_bytes != ct_bytes:
                 code_equal_denied_differ.append(k)
-        # [R16 compiled, Daniel DECISIONS-3 autotune rule] a kernel whose arms executed DIFFERENT autotune configs of the SAME source is two
+        # [the compiled-kernel autotune rule] a kernel whose arms executed DIFFERENT autotune configs of the SAME source is two
         # specializations -- lifted only when the treatment process SHOWED, on committed inputs of sampled launches, that the kernel's own
         # compiled source under EVERY candidate config of its heuristic reproduces the committed outputs bit for bit (compiled_autotune),
         # every treatment run agreeing, the control's executed config(s) among the candidates, and the sources equal; else it stays DIFFERS.
@@ -270,7 +270,7 @@ def main(a: Options) -> None:
             cands = [json.dumps(c, sort_keys=True) for c in (recs[0].get("candidates") or [])]
             ctrl_in = bool(d.get("control", {}).get("configs")) and all(json.dumps(c, sort_keys=True) in cands for c in d["control"]["configs"])
             trt_in = bool(d.get("treatment", {}).get("configs")) and all(json.dumps(c, sort_keys=True) in cands for c in d["treatment"]["configs"])
-            # [rev F-r16-22] structural = POINTWISE heuristic (one thread per element; the config cannot change the arithmetic); a reduction's
+            # structural = POINTWISE heuristic (one thread per element; the config cannot change the arithmetic); a reduction's
             # config sets the summation order, so its sampled equality is recorded but never lifts -- DIFFERS stands
             structural = bool(recs) and all(str(r.get("heuristic") or "").endswith("POINTWISE") for r in recs)
             shown = all(bool(r.get("all_shown")) and int(r.get("launches") or 0) > 0 for r in recs) and len(cands) > 1 and ctrl_in and trt_in
@@ -280,13 +280,13 @@ def main(a: Options) -> None:
                                      "launches_shown": sum(int(r.get("launches") or 0) for r in recs), "treatment_runs": len(recs),
                                      "exact_by_config": recs[0].get("exact_by_config"), "derived_scalars": recs[0].get("derived_scalars_sample"),
                                      "heuristic": recs[0].get("heuristic"), "structural": True,
-                                     "rule": "pointwise kernel (config independence structural: one thread per element) AND every candidate config of the kernel's heuristic reproduces the committed outputs bit for bit from the committed inputs (the executed config included); the autotune choice does not affect the numerics -> not part of the specialization identity, recorded (rev F-r16-22)"}
+                                     "rule": "pointwise kernel (config independence structural: one thread per element) AND every candidate config of the kernel's heuristic reproduces the committed outputs bit for bit from the committed inputs (the executed config included); the autotune choice does not affect the numerics -> not part of the specialization identity, recorded"}
                 d["identity_verdict"] = "equal modulo autotune config (pointwise; every candidate shown output-equivalent on committed inputs)"
                 d["autotune_equivalence"] = autotune_shown[k]
             else:
                 d["autotune_equivalence"] = {"shown": False, "structural": structural, "heuristic": recs[0].get("heuristic"), "candidates": recs[0].get("candidates"),
                                              "control_in_candidates": ctrl_in, "treatment_in_candidates": trt_in,
-                                             "why": (None if structural else "F-r16-22: non-pointwise heuristic -- the config sets the reduction order; a different config is a different specialization (DIFFERS stands)"),
+                                             "why": (None if structural else "non-pointwise heuristic -- the config sets the reduction order; a different config is a different specialization (DIFFERS stands)"),
                                              "runs": [{"launches": r.get("launches"), "shown": r.get("shown"), "why": r.get("why")} for r in recs][:6]}
         # in P_compiled (launch-site names -> JIT names)
         _pk = {_re.sub(r"_\d+$", "", k) for k in manifest_kernels} | set(manifest_kernels)
@@ -316,7 +316,7 @@ def main(a: Options) -> None:
                                ("not recorded" if not lc.get("executed_code_set_sha256") else
                                 (f"recorded under the earlier .text-only rule (no code_identity_rule / section_detail): not the deny-list identity" if not rule_recorded
                                  else f"differs: {code_differ[:8]}"))))))
-        # [R16 unit B] repeated graph replay covered: each arm's build-time snapshot == its end-of-run snapshot (commit_delta writes replay_covered)
+        # repeated graph replay covered: each arm's build-time snapshot == its end-of-run snapshot (commit_delta writes replay_covered)
         rc_c, rc_t = gkc.get("replay_covered") or {}, gkt.get("replay_covered") or {}
         replay_covered = {"control": {k: rc_c.get(k) for k in ("ok", "why", "new_modules", "new_kernels", "executed_changed", "binaries_changed")} if rc_c else None,
                           "treatment": {k: rc_t.get(k) for k in ("ok", "why", "new_modules", "new_kernels", "executed_changed", "binaries_changed")} if rc_t else None,
@@ -347,14 +347,14 @@ def main(a: Options) -> None:
                            "manifest_kernels": len(manifest_kernels), "manifest_kernels_not_loaded": not_loaded[:40],
                            "read_from": lc.get("read_from"), "files_vs_loaded": lc.get("files_vs_loaded")}
         if loaded_ok is False or not_loaded:
-            problems.append(f"P_compiled path: runtime<->artifact identity (M-0776 (3)): loaded code objects equal across arms {loaded_ok}, "
+            problems.append(f"P_compiled path: runtime<->artifact identity: loaded code objects equal across arms {loaded_ok}, "
                             f"manifest kernels not among the loaded objects {not_loaded[:8]}")
         if code_differ_unexplained_in_program:
-            problems.append(f"P_compiled path (rev F-r16-09): a NON-deny-listed ELF section of the executed cubin of a P_compiled kernel differs across arms and "
+            problems.append(f"P_compiled path: a NON-deny-listed ELF section of the executed cubin of a P_compiled kernel differs across arms and "
                             f"is not a decoded path-string difference: {code_differ_unexplained_in_program[:8]} "
                             f"{[exec_detail[k].get('non_denied_unexplained') for k in code_differ_unexplained_in_program[:4]]} -> not one specialization")
         if text_differ_in_program and not code_differ_unexplained_in_program and not modulo_paths_equal and not modulo_autotune_equal:
-            problems.append(f"P_compiled path (rev F-r16-09): executed code of a P_compiled kernel differs across arms ({text_differ_in_program[:8]}) and the "
+            problems.append(f"P_compiled path: executed code of a P_compiled kernel differs across arms ({text_differ_in_program[:8]}) and the "
                             f"normalised set digests do not agree -> not one specialization")
         if replay_covered["control"] is not None and replay_covered["treatment"] is not None and not replay_covered["ok"]:
             problems.append(f"P_compiled path: loaded code objects changed between build and end of run (replay not covered): control {rc_c.get('why')}; treatment {rc_t.get('why')}")
@@ -418,7 +418,7 @@ def main(a: Options) -> None:
           f"kernel_set {str(gkc.get('kernel_set_sha256'))[:16]}; treatment {gkt.get('wrappers')} pieces / {gkt.get('distinct_kernel_sources')} sources kernel_set "
           f"{str(gkt.get('kernel_set_sha256'))[:16]}; kernel set equal across arms: {kernel_set_equal}"
           + (f"; diff {kernel_diff}" if kernels_identified and not kernel_set_equal else ""),
-          *( [f"- runtime<->artifact identity (M-0776 (3)): LOADED code objects read from each running process (PyCodeCache registry): control "
+          *( [f"- runtime<->artifact identity: LOADED code objects read from each running process (PyCodeCache registry): control "
               f"{loaded_identity['control']['modules']} modules / {loaded_identity['control']['kernels']} kernels ({loaded_identity['control']['kernels_with_binaries']} with cubins) "
               f"kernel_set {str(loaded_identity['control']['kernel_set_sha256'])[:16]} cubin_set {str(loaded_identity['control']['cubin_set_sha256'])[:16]}; treatment "
               f"{loaded_identity['treatment']['modules']} / {loaded_identity['treatment']['kernels']} ({loaded_identity['treatment']['kernels_with_binaries']}) kernel_set "
@@ -426,7 +426,7 @@ def main(a: Options) -> None:
               f"{loaded_identity['equal_across_arms']} (kernel SOURCES of the loaded code objects; refusal if not); binaries equal across arms "
               f"{loaded_identity['binaries_equal_across_arms']} (labelled; differ: {loaded_identity['kernels_whose_binaries_differ'] or 'none'}); "
               f"P_compiled kernels {loaded_identity['manifest_kernels']}, not among the loaded objects {loaded_identity['manifest_kernels_not_loaded'] or 'none'}",
-              f"- EXECUTED specialization (R16 unit B, rev F-r16-09 deny-list identity): executed_code_set (every ELF section of the launchers' cubins except "
+              f"- EXECUTED specialization (deny-list identity): executed_code_set (every ELF section of the launchers' cubins except "
               f"debug/line-info/PTX-text/symbol tables) control {str(loaded_identity['control'].get('executed_code_set_sha256'))[:16]} "
               f"treatment {str(loaded_identity['treatment'].get('executed_code_set_sha256'))[:16]} STRICT equal {loaded_identity['executed_code_equal_across_arms']}; "
               f"normalised (absolute-path strings in device data replaced) control {str(loaded_identity['control'].get('executed_code_set_sha256_normalized'))[:16]} "

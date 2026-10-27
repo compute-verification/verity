@@ -5,7 +5,11 @@
     verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
-    verity example NAME [ARGS]      examples/NAME's command (run.py or run.sh): its workload on its placement
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+                                    a deployment configuration's parties on this machine, and its verdict (run.py)
+    verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+                                    workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE [--on NODE] [--pool P] [--as LANE]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
@@ -125,10 +129,18 @@ def main(argv: list[str] | None = None) -> int:
         return _check(args[1:])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
+    if args[0] in ("run", "config"):
+        from . import run
+
+        return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
     if args[0] == "example" and args[1:] == ["--status"]:
         from verity_cli.examples import status
         return status(ROOT)
     if args[0] == "example":
+        if args[1:] and (config := ROOT / "examples" / args[1].replace("-", "_") / "config.toml").is_file():
+            from . import run
+
+            return run.run_main([str(config), *args[2:]])
         return _runner("examples", "example", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])

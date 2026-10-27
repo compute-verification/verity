@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 /-!
 # The FP32 pipe, the residual assumption `A1_fp`, and `CanonicalNaN` (draft semantics)
 
-**Draft semantics, S-1 to S-11 pending Daniel's review** (`barrier-assets/embed/DESIGN.md` §5).
+**Draft semantics, S-1 to S-11 pending review** (`barrier-assets/embed/DESIGN.md` §5).
 
 `EmbedM4090` (`Pouw.Dimension.Embed`) maps every `M4090` program into the open quadratic pipe at no greater cost,
 except its non-quadratic FP32 instructions. What is left is a statement about the FP32 class alone: the **FP32 pipe**
@@ -71,7 +71,7 @@ def A1fpOn (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (γ : ℝ) (k m n N : �
     ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, word k m n N R A B x.1 x.2 ∈ slots P L) →
       (1 - γ) * (16 * S.card : ℝ) ≤ cost P
 
-/-- **Assumption `A1_fp(fpSem, γ)`** (named; draft semantics, S-1 to S-11 pending Daniel's review): under checkpoint
+/-- **Assumption `A1_fp(fpSem, γ)`** (named; draft semantics, S-1 to S-11 pending review): under checkpoint
 independence and MinRank ≥ 5, `A1fpOn` holds: every FP32-pipe program that outputs `|S|` non-final checked words costs
 at least `(1 − γ)·16·|S|`. -/
 def A1fp (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (γ : ℝ) : Prop :=

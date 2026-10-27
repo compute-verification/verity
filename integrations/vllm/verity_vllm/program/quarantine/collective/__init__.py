@@ -1,4 +1,4 @@
-"""verity_vllm.program.quarantine.collective — lane tp2 (window 2026-09-17): provisional definitions for the cross-rank
+"""verity_vllm.program.quarantine.collective — provisional definitions for the cross-rank
 collectives of tensor-parallel serving (Qwen2.5-1.5B, `tensor_parallel_size=2`, vLLM d9105ea80, PyNccl path, custom
 all-reduce disabled).
 
@@ -11,9 +11,7 @@ its all-reduce `b1_tp2.all_reduce(R, N)` (see the module docstring for what is k
 The all-gather needs no definition (a reference rearrangement: `b1_tp2.AllGather2` is a `reshape`), and the rank-local masked
 lookup `_C.vocab_parallel_embedding` is `b1_tp2.EmbeddingShard`.
 
-Fold-side use is NOT wired in this window: `fold.py` / `patterns.py` are frozen (WINDOW rule 7); `tests/collectives/collective_link.py`
-produces the per-launch linkage record (which per-rank launch produced each operand, which launches consume the result) that a future
-pattern would turn into an instance of this definition whose output is a journaled write on every rank.
+No fold pattern binds this definition yet.
 """
 from __future__ import annotations
 

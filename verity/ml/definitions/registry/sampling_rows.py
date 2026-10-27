@@ -1,7 +1,7 @@
 """Vectorised exact twins of the sampler Definition — `GumbelTopPTokenSelect_v1{V}` over a whole vocabulary row at once
 (the `derived_rows` pattern: numpy twins of registered gate semantics, held word-equal to the lane-walk evaluators).
 
-[R17 stoch, COORD R17-34 (3) / R17-28 (2) lever (a)]  `stoch_recompute` evaluates every sampled row of a record through the
+`stoch_recompute` evaluates every sampled row of a record through the
 Definition of record, `GumbelTopPTokenSelect_v1 = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1`, by the generic
 gate interpreter: 17 gates x V lanes per row (2.18 M gates at V = 128,256), ~44 s/row of which 60 % is the interpreter's
 per-gate address resolution and 29 % the per-lane fp32 emulation through `struct.pack` (profiles/README.md).  This module
@@ -12,7 +12,7 @@ milliseconds instead of tens of seconds.
 WHAT THIS IS NOT: not a new Definition (nothing in `sampling.py` changes; no Program digest moves) and not a weaker check —
 the Definition stays the reference; `tests/program/test_sampling_rows.py` holds every function here word-equal to the scalar
 registry functions (`sampling.noise_lane` / `nv_logf` / `nv_log1pf` / `fma_ftz` / `add_rz_ftz` / `stream_key`) and the whole row
-equal to `evaluate_spec(GumbelTopPTokenSelect_v1)` on the R16 GPU fixture rows and random rows at every S, and `stoch_recompute`
+equal to `evaluate_spec(GumbelTopPTokenSelect_v1)` on the GPU fixture rows and random rows at every S, and `stoch_recompute`
 keeps a per-run sample of rows through the lane walk beside the vectorised path (`--reference-rows`), naming both on the record.
 
 Bit-exactness notes (each mirrors the scalar function it twins, by name):
@@ -20,7 +20,7 @@ Bit-exactness notes (each mirrors the scalar function it twins, by name):
     `sampling.fma_ftz` rounds the same exact value the same way (TwoSum + exact tie rule); both are RN32 of a*b + c.  The
     only difference is NaN canonicalisation: derived_rows returns `P.F32_NAN`, sampling returns the struct NaN — no finite
     logit row reaches a NaN inside the noise chain (u in [2^-31', 1)), and a NaN logit lane is `y = NaN`, which never wins.
-  * `add_rz_ftz` — equals the REGISTERED scalar, whose toward-zero step is a no-op (see the function: F-stoch-r17-01, revb's call).
+  * `add_rz_ftz` — equals the REGISTERED scalar, whose toward-zero step is a no-op (see the function).
   * `nv_logf` / `nv_log1pf` — the int32 exponent arithmetic in int64 with explicit wraparound; the branches as `np.where`.
   * `philox` — uint64 products of uint32 operands (exact), high/low words as in `philox4x32_10_word0`.
   * the select — `GumbelSelectStep`'s scan: best = y[0], i = 0; a lane replaces the best iff `y > best` (IEEE strict, NaN false):
@@ -70,8 +70,8 @@ ftz = DR.ftz
 
 
 def add_rz_ftz_v1_model(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """[F-stoch-r17-01 WITNESS, test-only] `sampling_twins.add_rz_ftz_v1_model` lane for lane: the `add.rz.ftz.f32` model `nv_log1pf` used up
-    to R17, which is ftz(RN32(RN64(ftz(a) + ftz(b)))) -- round to NEAREST (its toward-zero correction was dead code: a double-ulp step
+    """`sampling_twins.add_rz_ftz_v1_model` lane for lane: the `add.rz.ftz.f32` model `nv_log1pf` used
+    before, which is ftz(RN32(RN64(ftz(a) + ftz(b)))) -- round to NEAREST (its toward-zero correction was dead code: a double-ulp step
     that f32 rounding undoes).  Kept so the exhaustive comparison with the true RZ (`nv_log1pf` vs `nv_log1pf_v1_model`) stays runnable."""
     a, b = np.broadcast_arrays(ftz(_u32(a)), ftz(_u32(b)))
     s = DR.as_f32(a).astype(np.float64) + DR.as_f32(b).astype(np.float64)
@@ -134,7 +134,7 @@ def nv_log1pf(a: np.ndarray) -> np.ndarray:
 
 
 def nv_log1pf_v1_model(a: np.ndarray) -> np.ndarray:
-    """[F-stoch-r17-01 WITNESS, test-only] `sampling_twins.nv_log1pf_v1_model` lane for lane: log1pf with the RN model of `__fadd_rz`."""
+    """`sampling_twins.nv_log1pf_v1_model` lane for lane: log1pf with the RN model of `__fadd_rz`."""
     return _log1pf_from_sum(_u32(a), add_rz_ftz_v1_model(_u32(a), _u32(SP.ONE_BITS)))
 
 

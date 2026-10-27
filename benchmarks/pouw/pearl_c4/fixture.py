@@ -28,7 +28,7 @@ from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c4 as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import twin as T  # noqa: E402
+import twin as T
 
 SHAPE = (128, 128, 1024)
 WEIGHT = 1
