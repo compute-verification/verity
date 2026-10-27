@@ -1,4 +1,4 @@
-"""Stage MIXED BATCH, Program side on CPU — **padded baseline (experimental)**, lane `pad` (R16, BRIEF §7B).
+"""Stage MIXED BATCH, Program side on CPU — **padded baseline (experimental)**.
 
 The lifted fixed WORKLOAD Program: GP-01's `WorkloadProgram` compose — unchanged — over lifted request components
 (`lifted.lifted_workload`).  Two declared requests share ONE lifted weights Input; A stops early (its transcript emits the declared EOS
@@ -20,8 +20,8 @@ The lifted fixed WORKLOAD Program: GP-01's `WorkloadProgram` compose — unchang
     `Σ_r LIsActive(tok_in_{r,t})` read off the components' OWN guard nodes at every engine step, drops by exactly one at `a_A`, follows
     arrivals, and `S_t = LSplitsForSMS<142>(n_live_t)` is Active while any request is live and ⊥ when none is; both `LAG ∈ {0, 1}`.
 
-What it does NOT establish: anything about a real B2 record (the `mixedstop` workload in `out/gen/r16/pad/workloads/` waits on the
-DP-pad-02 ruling and a Commit, like DENSE B1's record half).
+What it does NOT establish: anything about a real B2 record (the `mixedstop` workload in `out/gen/r16/pad/workloads/` needs a
+Commit, like DENSE B1's record half).
 """
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
 from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
 from verity.ml.definitions.numerics import serve3_reference as ref
@@ -60,7 +61,7 @@ def _requests(component, arrivals=(0, 0)):
 
 @pytest.fixture(scope="module")
 def wl_u(component):
-    return W.WorkloadProgram(_requests(component), lag=0)  # R17-1: lag is a required static of Workload_v1 (moe a96a2071b); the unlifted reference is used for fn/inputs/transcripts
+    return W.WorkloadProgram(_requests(component), lag=0)  # lag is a required static of Workload_v1; the unlifted reference is used for fn/inputs/transcripts
 
 
 @pytest.fixture(scope="module")
@@ -133,7 +134,7 @@ def test_the_lifted_workload_is_gp01s_compose_over_lifted_components_with_a_fixe
     root = wl_l.program.root.body
     calls = root.nodes[wl_l._K:]
     assert [n.name for n in calls] == ["request[A]", "request[B]"] and wl_l._K == wl_u._K  # one shared lifted weights Input set + 2 prompts
-    gg = L.continuation_gate_count(CAP, len(EOS), 0)  # F-r17b-43: the R17-1 guard + the Continuation_v1 controller (3·cap)
+    gg = L.continuation_gate_count(CAP, len(EOS), 0)  # the guard + the Continuation_v1 controller (3·cap)
     for r_l, r_u in zip(wl_l.requests, wl_u.requests):
         c_l, c_u = r_l.component, r_u.component
         assert c_l.fn.id.startswith("LiftedRequest_v2{") and c_l.fn.bindings["LAG"] == 0 and c_l.fn.bindings["EOS"] == EOS
@@ -166,7 +167,7 @@ def test_the_lifted_workload_is_gp01s_compose_over_lifted_components_with_a_fixe
     assert lifted_compose.lifted_workload(_requests(component, (0, 2)), EOS, lag=0, boundary_prefix=BOUNDARY).digest != d0  # arrivals are declared
     with pytest.raises(ValueError, match="never from a served length"):
         lifted_compose.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP, 0, component, T=3)], EOS, lag=0, boundary_prefix=BOUNDARY)
-    with pytest.raises(ValueError, match="F-pad-15"):  # a component of a smaller cap under a larger declaration
+    with pytest.raises(ValueError, match=EVIDENCE["lifted_served_shape"]["finding"]):  # a component of a smaller cap under a larger declaration
         lifted_compose.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP + 1, 0, component)], EOS, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(TypeError):
         lifted_compose.lifted_workload(_requests(component), EOS, boundary_prefix=BOUNDARY)  # type: ignore[call-arg]  # the lag is declared
@@ -404,7 +405,7 @@ def test_the_live_count_hook_equals_the_components_own_input_activity_and_drops_
         acts[rid] = a
     assert acts["B"] == [1] * CAP and acts["A"] == [1] * n_exec + [0] * (CAP - n_exec)
     assert counts == [acts["A"][s] + acts["B"][s] for s in range(CAP)]
-    # S_t: Active(32) at 142 SMs for n ∈ {1, 2} (stoch's table: 142 SMs, 4 → 32 is the first breakpoint), never ⊥ while B is live
+    # S_t: Active(32) at 142 SMs for n ∈ {1, 2} (the sampler's table: 142 SMs, 4 → 32 is the first breakpoint), never ⊥ while B is live
     assert [L.payload(L.SPLITS_BITS, x) for x in S] == [32] * CAP and all(L.is_active(L.SPLITS_BITS, x) for x in S)
 
 
@@ -433,7 +434,7 @@ def test_the_hook_follows_declared_arrivals_and_S_is_bot_when_no_request_is_live
         lifted_compose.lifted_workload(_requests(component), EOS, lag=3, boundary_prefix=BOUNDARY)
 
 
-# F-pad-19 (padrev M-0245): GP-01's populations have UNEQUAL caps (its standard B2 fixture is cap 3 / cap 2). The hook takes one cap per request.
+# GP-01's populations have UNEQUAL caps (its standard B2 fixture is cap 3 / cap 2). The hook takes one cap per request.
 
 D_MAX_B = 3
 CAP_B = D_MAX_B + 1
@@ -452,9 +453,9 @@ def test_f_pad_19_the_hook_takes_one_cap_per_request_and_refuses_a_served_length
     for lag in (0, 1):
         wl = lifted_compose.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
         wl_u = W.WorkloadProgram(reqs, lag=lag)
-        # ONE cap for both is refused by name -- 9 would read B's out[4..8] (padrev measured an UNNAMED IndexError), 4 would truncate A's schedule
+        # ONE cap for both is refused by name -- 9 would read B's out[4..8] (the hook once raised an UNNAMED IndexError), 4 would truncate A's schedule
         for one_cap in (CAP, CAP_B):
-            with pytest.raises(ValueError, match="F-pad-19"):
+            with pytest.raises(ValueError, match=EVIDENCE["lifted_per_request_cap"]["finding"]):
                 Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=one_cap))
         with pytest.raises(ValueError, match="one cap per request"):
             Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=(CAP,)))
