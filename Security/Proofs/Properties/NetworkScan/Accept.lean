@@ -131,6 +131,9 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, h12, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, h15, -⟩ := bind_ok h
   replace h15 := Option.isNone_iff_eq_none.1 (need_ok h15)
   replace h3 := need_ok h3
@@ -184,10 +187,10 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨⟨hn1, hnl⟩, -⟩ := h3
   obtain ⟨⟨⟨⟨hxf, hxn⟩, hln⟩, hxeb⟩, hxen⟩ := h4
   obtain ⟨hr0, hrl⟩ := h5
-  have hdf : df.params.size = 2 := by
+  have hdf : 0 < df.params.size := by
     have := congrArg Array.size hn1
     rw [Array.size_map] at this
-    exact this.trans rfl
+    rw [this]; simp [firstParams]
   refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
@@ -204,10 +207,10 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa
     simp only [Option.all_some] at hnl hrl
-    have hbs : (callee P b).params.size = 3 := by
+    have hbs : 0 < (callee P b).params.size := by
       have := congrArg Array.size (beq_iff_eq.1 hnl)
       rw [Array.size_map] at this
-      exact this.trans rfl
+      rw [this]; simp [ingressParams]
     try dsimp only at hln
     split at hln
     · rename_i hcond

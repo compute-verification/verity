@@ -410,9 +410,10 @@ def Schedule.digest (s : Schedule) : V ByteArray :=
 
 /-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
 state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),
-which computes its row and returns it. -/
-def firstParams : Array String := #["row", "prog"]
-def ingressParams : Array String := #["row", "sin", "prog"]
+which computes its row and returns it. An ingress bucket's `prog<j>` is lane `j`'s slot entry, one a lane. -/
+def progParams (lanes : Nat) : Array String := (Array.range lanes).map (s!"prog{·}")
+def firstParams (lanes : Nat) : Array String := #["row"] ++ progParams lanes
+def ingressParams (lanes : Nat) : Array String := #["row", "sin"] ++ progParams lanes
 def egressParams : Array String := #["state"]
 
 /-- A type's bits: its leaves' widths summed. -/
@@ -495,6 +496,25 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
   pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries }
 
+/-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
+and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `j · nb + ⌊(t0 + m) / every⌋` of input node
+`k`, `E` leaves a row, leaf by leaf (`Flock.Program.Arg.memberRef`). That row is lane `j`'s slot of the boundary whose
+Programs bucket `t0 + m` reads (`io_shell.SlotEntry_v1`'s row k is slot k, lane-major). -/
+def readsEntries (x : Flock.Program.Node) (o t0 lanes nb every E k : Nat) : Bool :=
+  (List.range lanes).all fun j => match x.args[o + j]? with
+    | some a => (List.range x.n).all fun m => (List.range E).all fun l =>
+        a.memberRef m l == { p := false, i := k, j := (j * nb + (t0 + m) / every) * E + l }
+    | none => false
+
+/-- A batch of 3 members whose argument 1 reads leaf `rows[m]` of node 7 at member `m`, one leaf a member. -/
+def entriesProbe (rows : List Nat) : Flock.Program.Node :=
+  let arg := fun (rs : List Nat) => Flock.Program.Arg.mk (.value 1)
+    (.ofParts (rs.toArray.map fun r => Flock.Program.Part.affine false 7 r 1)) (some (rs.length, 1))
+  Flock.Program.Node.mk .batch 0 #[arg [0, 0, 0], arg rows] (.value 1) #[] 3 0
+
+#guard readsEntries (entriesProbe [0, 1, 1]) 1 1 1 2 2 1 7 && !readsEntries (entriesProbe [0, 1, 0]) 1 1 1 2 2 1 7 &&
+  !readsEntries (entriesProbe [0, 1, 1]) 1 1 2 2 2 1 7 && !readsEntries (entriesProbe [0, 1, 1]) 1 1 1 2 2 1 6
+
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
 registered Program (`program`, its SHA-512) and the generator form of the schedule's link-window: its root batches one
 instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both returning
@@ -509,10 +529,15 @@ the description, at the cost of its nodes and returns: the Program is laid out a
 within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
 returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); each
-ingress template's row, and every template's argument, is one input node's leaves (`inputArg`), so each ingress gate is
-an input and a template reads only input gates outside its own; no egress template's argument is an ingress row's
-input node, so no egress gate depends on an ingress gate; and the Program is topological (`Prog.orderViolation`, as
-`NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it. -/
+ingress template's row, and every template's row, state and egress argument, is one input node's leaves (`inputArg`),
+so each ingress gate is an input and a template reads only input gates outside its own; no egress template's argument
+is an ingress row's input node, so no egress gate depends on an ingress gate; and the Program is topological
+(`Prog.orderViolation`, as `NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it.
+
+The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
+the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
+`j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
+`SlotEntry_v1` entries port. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -524,9 +549,9 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
     (the checker form): no egress gate is an input (NetTiming.Layout.Fits)"
   let ((xf, df), later) ← ingressTemplates templates.pop.toList
-  need (df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
+  need (df.params.map (·.1) == firstParams s.lanes && later.all (·.2.params.map (·.1) == ingressParams s.lanes) &&
       de.params.map (·.1) == egressParams)
-    s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
+    s!"scan: the templates' parameters are not {firstParams s.lanes}, {ingressParams s.lanes} and {egressParams}"
   let laterN := match later with
     | some (x, _) => if x.form == .batch && 1 ≤ x.n then some x.n else none
     | none => some 0
@@ -534,16 +559,20 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
   need (df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row))
     "scan: an ingress template's row is not the schedule's"
-  need (later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret)
-    "scan: the ingress templates' prog or return differ"
+  let ety := df.params[1]!.2
+  need ((df.params.toList.drop 1).all (·.2 == ety) &&
+      later.all fun (_, d) => (d.params.toList.drop 2).all (·.2 == ety) && d.ret == df.ret)
+    "scan: the ingress templates' entry ports' types or returns differ"
   need (de.ret == .tuple #[.array outBits (.value 1), row])
     "scan: the egress template doesn't return a u16 and the schedule's row"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
-  let laterBits := (later.map (paramBits ·.2.params)).getD 0
-  need (inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params)
-    "scan: an input gate that is no template's parameter"
+  let nb := T / s.every
+  let laterBits := (later.map fun (_, d) => paramBits (d.params.extract 0 2)).getD 0
+  need (inputs == paramBits (df.params.extract 0 1) + (T - 1) * laterBits + T * paramBits de.params +
+      s.lanes * nb * bitsOf ety)
+    "scan: an input gate that is no template's row, state or egress parameter, nor one of the slot entries"
   need (NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog)
     "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
       (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
@@ -559,10 +588,23 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let rows := ingress.map fun x => x.args[0]?.bind (inputArg prog)
   need (rows.all (·.isSome)) "scan: an ingress template's row is not one input node's leaves, so an ingress gate \
     would be no input (NetTiming.Layout.Fits)"
-  need ((ingress.push xe).all fun x => x.args.all fun a => (inputArg prog a).isSome)
-    "scan: a template's argument is not one input node's leaves"
+  need (xf.args.size == 1 + s.lanes && (later.all fun (x, _) => x.args.size == 2 + s.lanes) &&
+      (xf.args.extract 0 1).all (fun a => (inputArg prog a).isSome) &&
+      (later.all fun (x, _) => (x.args.extract 0 2).all fun a => (inputArg prog a).isSome) &&
+      xe.args.all fun a => (inputArg prog a).isSome)
+    "scan: a template's row, state or egress argument is not one input node's leaves"
   need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
     row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
+  let a0 ← needSome xf.args[1]? "scan: bucket 0 has no entry port"
+  let pk := (a0.memberRef 0 0).i
+  need (!(a0.memberRef 0 0).p && !rows.contains (some pk) && match root.body.nodes[pk]? with
+      | some n => NciCheck.Desc.isInputNode prog n
+      | none => false)
+    "scan: bucket 0's prog0 reads no input node of its own, the slot entries'"
+  need (readsEntries xf 1 0 s.lanes nb s.every ety.leaves pk &&
+      later.all fun (x, _) => readsEntries x 2 1 s.lanes nb s.every ety.leaves pk)
+    s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
+      slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret }
