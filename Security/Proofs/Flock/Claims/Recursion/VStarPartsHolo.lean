@@ -68,7 +68,7 @@ open FlockSoundness FlockSoundness.Discharge.Hm FlockVBridge.OfVStar
 /-- **An algebra part's copies compute its residuals, at the statement's holo flag**: `partCols_of_satisfies` with the
 flag the circuit's META gives (`holoOf`), the net `RecResiduals.check` built at `{ sh with holo }` (`check_part_at`).
 At `holo = true` it is the holo shape's algebra parts, whose `h` round is one of the part's row ports like any other. -/
-theorem partCols_of_satisfies_at {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem partCols_of_satisfies_at {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) (hc : RecResiduals.check st.c = .ok ()) {m k cl j : ℕ}
@@ -83,7 +83,7 @@ theorem partCols_of_satisfies_at {st : Flock.Stmt} (L : FlockSoundness.Layout st
   obtain ⟨S', ns', nv', hpart', hn⟩ := check_part_at hc hp hsh hh
   rw [hpart] at hpart'
   cases hpart'
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hn
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hn
   rw [inWords_unitLaid hn] at hL
   exact laid_part S ns nv (part_small hpart) _ hL W vv hw0 hv0 hin
 
@@ -101,13 +101,13 @@ theorem partCols_of_check_at {decode : Claims.Msg → Option Read} {x : Claims.M
     (hin : InCols (partRep ns nv) W vv (copyOf p t htl w o g u)) :
     PartCols S W vv (copyOf p t htl w o g u) (partBase S ns nv) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  exact partCols_of_satisfies_at L regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
+  exact partCols_of_satisfies_at L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
 
 /-! ## The levels, under either name -/
 
 /-- **A level's copies climb, at any name the verifier built its net under**: `climb_of_satisfies` with the net taken
 as given, so R's levels (`rec-open-stacked/…`) are the levels' (`rec-open/…`) template under another name. -/
-theorem openOuts_of_net {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem openOuts_of_net {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) {LANES H : ℕ} {name : String}
@@ -123,7 +123,7 @@ theorem openOuts_of_net {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   have hH : H ≤ 32 := by
     simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hvalid
     exact hvalid.2
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hl
   rw [FlockVBridge.inWords_unit hl] at hL
   exact FlockVBridge.laid_unit ms hms LANES H hH _ hL r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc hcoef hdir
 
@@ -154,7 +154,7 @@ theorem openOuts_of_check_any {decode : Claims.Msg → Option Read} {x : Claims.
     OpenOuts (copyOf p t htl w o g u) ms LANES H r a cf rest idx ss := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   obtain ⟨_, hvalid, hl⟩ := recOpen_check_ok_any hrec hp
-  exact openOuts_of_net L regs hz ho hg hu hvalid hl ms hms hin
+  exact openOuts_of_net L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hvalid hl ms hms hin
 
 /-! ## R's opening parts -/
 
@@ -176,7 +176,7 @@ theorem partCols_of_check_opening {decode : Claims.Msg → Option Read} {x : Cla
   obtain ⟨S', ns', nv', hpart', hn⟩ := check_opening hc hp hsh
   rw [hpart] at hpart'
   cases hpart'
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hn
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hn
   rw [inWords_unitLaid hn] at hL
   exact laid_part S ns nv (opening_small hpart) _ hL W vv hw0 hv0 hin
 
@@ -217,7 +217,7 @@ theorem sparseCopyOuts_of_check {decode : Claims.Msg → Option Read} {x : Claim
     SparseCopyOuts sh (copyOf p t htl w o g u) wA vA τA := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   obtain ⟨hv, -, -, hn⟩ := FlockVBridge.Sparse.check_sparse hc hp
-  have hL := laidRows_of_satisfies L regs hz ho hg hu (l := Flock.RecSparse.unitLaid sh) hn
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu (l := Flock.RecSparse.unitLaid sh) hn
   rw [inWords_sparse hn] at hL
   have ht16 : sh.tLog ≤ 16 := by
     simp only [Flock.RecSparse.Shape.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
