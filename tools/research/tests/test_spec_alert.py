@@ -86,7 +86,7 @@ def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or
 
 
 def test_an_entry_added_to_the_frozen_shape_list_is_shown_with_its_reason_and_one_removed_is_not():
-    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change Daniel sees, as he ruled (9 Oct)."""
+    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change, so the DM shows it."""
     base = _doc({"P.t": _g("P.t : A", H1)})
     frozen = base | {"shape": {"frozen": {"P.t": "RESTATE: split the iff."}}}
     assert spec.changes(base, frozen) == ["• frozen `P.t` (doesn't have the shape yet): RESTATE: split the iff."]

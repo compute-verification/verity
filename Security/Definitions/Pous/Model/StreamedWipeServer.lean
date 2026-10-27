@@ -39,7 +39,7 @@ def fillShare (n r k : ℕ) : ℕ := 512 * missing n r + countBits n (missing n 
 labels at ratio `r` with `k` reads, before its egress: the fill's share plus `R`, every bit outside the fill. -/
 def serverBound (n r k R : ℕ) : ℕ := fillShare n r k + R
 
-/-- **The 5 GB point**, the wipe's operating point (Daniel, 26 Oct): `B(n, r, k, R) ≤ 4·10^10` bits, so the server
+/-- **The 5 GB point**, the wipe's operating point: `B(n, r, k, R) ≤ 4·10^10` bits, so the server
 keeps at most 5 GB of its assumed memory capacity plus its egress. -/
 def OperatingPoint (n r k R : ℕ) : Prop := serverBound n r k R ≤ 40000000000
 

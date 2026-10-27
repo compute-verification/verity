@@ -1,7 +1,8 @@
 """verity_vllm.program.predict.window_rows: a window's rows, every unit of `window_circuit.lower`'s class circuit given its
 output rows from its slots' values. Pinned on `test_window_circuit`'s TINY class (2 slots, 4 prompt ids, 2 outputs: 5
 positions a Program) at its grain, TINY's exact-int8 checkpoint on the H200 (FA3's `Attention_v4`, the class 4,32,4's
-attention), with random weights registered under a committer's key.
+attention), with random weights registered under a committer's key and a scan state whose row at bucket 0 carries the two
+slots' requests.
 """
 from __future__ import annotations
 
@@ -10,9 +11,10 @@ import re
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN
+from tests.program.predict.test_window_circuit import CLASS, GRAIN, state_row
 from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.program.model import INT8_EXACT_QUANT
+from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
@@ -21,15 +23,22 @@ from verity_vllm.program.predict import window_weights as WW
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.gates import embedding as E
+from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 
 PROGRAM = "test/model"
 LAW = {"law": "stratified", "k": 2}
 RUN = "ab" * 64
-#: slot 0 a prompt of 4 (its last output from position 3's select), slot 1 a prompt of 3
-SLOTS = ([1, 4, 17, 3, 250, 9], [1, 3, 5, 77, 42, 0])
+#: the lanes of the scan state row both slots read (bucket 0's), each (occupancy, prompt length, max_tokens, ids): slot 0 a
+#: prompt of 4 (its first output from position 3's select), slot 1 a prompt of 3, each keeping 2 outputs
+LANES = [(1, 4, 2, [17, 3, 250, 9]), (1, 3, 2, [5, 77, 42, 0])]
+#: each slot's row, its lane's (occupancy, prompt length, ids)
+SLOTS = tuple([occ, lp, *ids] for occ, lp, _m, ids in LANES)
+#: the window's scan state rows, a bucket each: bucket 0's the slots' lanes, every later one's another request in each lane
+STATE = [state_row(CLASS.scan, LANES)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
 #: the nodes prefill computes at its last prompt position only: the final norm, the LM head and the token select
 PRUNED = 3
 EMBED = "model.embed_tokens.weight"
@@ -70,17 +79,19 @@ def _registered():
 
 @pytest.fixture(scope="module")
 def window():
-    """The class circuit lowered, its weights, its registered values under `KEY` (each weight's parameter and the slot
-    rows, as `Rows` and `Window` take them) and each slot's `Slot`."""
+    """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
+    state's, `STATE` committed as a stand-in for the network certifier's, in ``row/v2`` rows as the scan's units commit
+    their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(), CLASS, None, GRAIN)
     fields = _weights(low.fn)
-    values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True),
-              WC.SLOT_ROWS: WR.slot_rows_value(PROGRAM, SLOTS, KEY, 0, window=RUN)}
+    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+                                 schema=CR.SCHEMA_V2)
+    values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
 
-    return low, fields, values, weights, [WR.Slot(low.fn, CLASS, row, weights) for row in SLOTS]
+    return low, fields, values, weights, [WR.Slot(low.fn, CLASS, row, weights) for row, _ in WR.scan_slots(low, STATE)]
 
 
 def _position(fn, family: str) -> list[int]:
@@ -119,9 +130,10 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's chunks, ``x0``
     and combine give the node's token, and its mask the token for an occupied slot; each feed holds its token and carried
-    slot, each slot row its row opened; each head's first key block (`Attention_v20`'s cut) is evaluated, and its end's
-    Definition on that block's state is the node's value, the row kernel's. With no served values every unit is computed
-    or evaluated."""
+    slot, each slot row its row opened; each slot's scan read every lane's row and head of the state row at its anchor, its
+    last collector the 2 outputs from its prompt's last position on and its entry their count and ids; each head's first
+    key block (`Attention_v20`'s cut) is evaluated, and its end's Definition on that block's state is the node's value, the
+    row kernel's. With no served values every unit is computed or evaluated."""
     low, fields, tables, _w, slots = window
     rows = WR.Rows(low, slots, tables)
     assert {int(x) for v in rows.source.values() for x in v} == {WR.COMPUTED, WR.EVALUATED}
@@ -161,6 +173,13 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             assert _i32(rows.outs[mask[0]][0][mask[1]]) == [token]
             (_, _, r), = P.outs[j]
             assert _i32(rows.outs[r.tid][0][r.unit]) == [token]
+        st, su = P.scan_unit
+        assert [_i32(rows.outs[st][k][su]) for k in range(4)] == [SLOTS[0], [4, 2], SLOTS[1], [3, 2]]
+        lp, picks = row[1], [int(s.values[j][0][0]) for j in P.selects]
+        outs, (ct, cu), (et, eu) = picks[lp - 1:lp + 1], P.collects[-1], P.entry_unit
+        assert len(P.collects) == len(picks) == CLASS.positions and len(outs) == CLASS.outputs
+        assert _i32(rows.outs[ct][0][cu]) == [(lp - 1 - CLASS.positions) & 0xFFFFFFFF, 2, *outs]
+        assert sum(int(w) << 16 * k for k, w in enumerate(rows.outs[et][0][eu])) == 2 | outs[0] << 32 | outs[1] << 49
         assert len(P.heads) == 2 * (CLASS.prompt + CLASS.outputs - 1)
         for j, (plan, calls) in P.heads.items():
             (first, _), (end, _) = plan
@@ -170,6 +189,31 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
+
+
+def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
+    """Each slot's row and head are its lane's of the scan state row its `ScanSlots_v1` reads, the one at its anchor
+    (`scan_slots`; both of TINY's slots at bucket 0, lanes 0 and 1): slots given out of their lanes' order, or no scan
+    state's value, are refused by name."""
+    low, _f, values, _w, slots = window
+    assert WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
+    with pytest.raises(ValueError, match="class Program 0: its slot's row isn't lane 0's of the scan state row at bucket 0"):
+        WR.Rows(low, slots[::-1], values)
+    with pytest.raises(ValueError, match=re.escape(f"give the scan state's registered value, {SS.SCAN_STATE}, with its rows")):
+        WR.Rows(low, slots, {p: v for p, v in values.items() if p != SS.SCAN_STATE})
+
+
+def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
+    """Where no scan ran (`prove_path`'s window commit), `standin_state` is the scan state rows that give each slot its row
+    and ``max_tokens`` at its anchor and lane, every other field zero: bucket 0's row is `STATE`'s, which holds the slots'
+    lanes alone. It is committed under the committer's key at `STATE_NONCE` plus the window's index, a per-window value in
+    its reading port's rows, and `Rows` takes it as the scan state."""
+    low, _f, values, _w, slots = window
+    v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
+    assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
+    assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
+    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
@@ -360,29 +404,30 @@ def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(wind
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(bad)))
 
 
-def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
+def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
-    (``row-seg``), and the slot rows the slots' rows of i32s under the window's root, each committed under the committer's
-    key at a nonce of its own: the table and a weight are core's commits of those rows under the weights record's program
-    and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the registration's roots, `weights_registration`),
-    the slot rows at `SLOT_NONCE` plus the window's index, and the entries name nothing but each value's size, domain and
-    hiding root. Another parameter is refused."""
+    (``row-seg``), each committed under the committer's key at a nonce of its own: the table and a weight are core's commits
+    of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
+    registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
+    root. The scan state is no value of the committer's but the network certifier's, a row a bucket of the window. Each
+    value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
+    reads = low.circuit.registered.reads
+    lays = {r.reader: dict(IF.layout(low.circuit.template(r.reader)).schemas) for r in reads}
+    assert {(r.param, got[r.param].schema) for r in reads} == {(r.param, lays[r.reader][r.port]) for r in reads}
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
     nonces, program = WW.weight_nonces(got), WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
-    assert set(nonces) == set(got) - {WC.SLOT_ROWS} and {v.program for p, v in got.items() if p in nonces} == {program}
+    assert set(nonces) == set(got) - {SS.SCAN_STATE} and {v.program for p, v in got.items() if p in nonces} == {program}
+    assert (got[SS.SCAN_STATE].leaves, got[SS.SCAN_STATE].words) == (CLASS.buckets, SS.words(CLASS.scan))
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
                                (WB.weight_param(EMBED, 512), fields[EMBED].reshape(-1, 512), CR.SCHEMA_V2)):
         salts = [hm96_salt(KEY, nonces[name], j) for j in range(len(rows))]
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
-    s = got[WC.SLOT_ROWS]
-    assert (s.leaves, s.words, s.window, s.schema) == (2, 12, RUN, CR.SCHEMA_V2) and _i32(s.rows[:][1]) == SLOTS[1]
-    assert bytes(s.salts[0]) == hm96_salt(KEY, WR.SLOT_NONCE, 0) and WR.SLOT_NONCE > max(nonces.values())
     assert len({bytes(v.salts[0]) for v in got.values()}) == len(got)
     s8 = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 512)].rows[:]
     assert s8.shape == (8, 512) and np.array_equal(s8.reshape(-1).view(np.uint8), fields["model.layers.0.mlp.down_proj.weight"])
@@ -390,19 +435,49 @@ def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
         WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16), KEY, 0)
 
 
+def _as_leaves(x: np.ndarray, width: int, leaves: int) -> np.ndarray:
+    """A port's ``width``-bit elements as its Definition's ``leaves``: the elements themselves, or each element's bits, least
+    significant first, where the port's leaves are bits (`ScanSlots_v1`'s state words)."""
+    if x.shape[1] == leaves:
+        return x
+    return ((x.astype(np.uint64)[:, :, None] >> np.arange(width, dtype=np.uint64)) & 1).reshape(len(x), -1)
+
+
+def _packed(bits: np.ndarray, width: int) -> np.ndarray:
+    """``(n, k · width)`` bits as ``k`` ``width``-bit elements, least significant first (`_as_leaves`' inverse)."""
+    return (bits.reshape(len(bits), -1, width) << np.arange(width, dtype=np.uint64)).sum(axis=2)
+
+
+def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
+    """`_as_leaves` and `_packed` against `ScanSlots_v1` and `SlotEntry_v1`, whose ports are words of bit leaves: a state row
+    gives `slots_reference`'s lanes through them, and an entry's bits pack to `entry_reference`'s words."""
+    scan = SS.bridge(CLASS.scan, CLASS.prompt)
+    row = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
+    (_, t), = scan.signature()[0]
+    out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(1, -1).astype(np.uint64)
+    b = scan.bindings
+    ref = IO.slots_reference(row[0].tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
+    assert _packed(out, 32)[0].tolist() == [v for r, h in ref for v in (*r, *h)]
+    entry = bind(IO.SlotEntry, KO=2, IDB=17, NP=4, STOP=())
+    state = [(2 - 4 - 2) & IO.M32, 2, 17, 3]
+    bits = np.asarray(evaluate_batch(entry, np.array([[1]], np.uint32), np.array([state], np.uint32), kernel="reference"))
+    words = _packed(bits.reshape(1, -1).astype(np.uint64), 16)[0].tolist()
+    assert words == IO.entry_reference(1, state, 2, 17, 4, ()) and words[:2] == [2, 0]
+
+
 @pytest.mark.slow
 def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs(window):
     """The rows recorded into a `Window` (its registered values under the committer's key, the tables' supplied) are
     every unit's Definition on the inputs the window commits: its wired rows, its registered reads' rows and its openings',
     each word template's outputs under the reference evaluator, each embedding read's by `gates.embedding.reference`; the
-    window closes over them, labelled by step and source. What no cheaper test reaches: the circuit's own wires and reads
+    window closes over them, labelled by step, slot and form. What no cheaper test reaches: the circuit's own wires and reads
     resolved by the window, against every Definition. Slow (minutes) for the window's members, which trace the embedding
     read's population Program, and the reference evaluator on every unit."""
     low, _f, values, weights, slots = window
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
     rows = WR.Rows(low, [s0, slots[1]], values)
-    win = IF.Window(low.circuit, RUN, LAW, 64, registered=values)
+    win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
     bad = {}
@@ -421,15 +496,22 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
                 if h != rows.outs[tid][0][u].tolist() or [ok] != rows.outs[tid][1][u].tolist():
                     bad.setdefault(tid, []).append(u)
             continue
-        args = [np.ascontiguousarray(x).view(f"<u{w // 8}").reshape(n, -1) for x, w in zip(ins, lay.widths)]
-        want = np.asarray(evaluate_batch(fn, *args, kernel="reference")).reshape(n, -1).astype(np.uint64)
-        got = np.concatenate([np.ascontiguousarray(o).view(f"<u{w // 8}").reshape(n, -1).astype(np.uint64)
-                              for o, w in zip(rows.outs[tid], lay.widths[len(lay.rows):])], axis=1)
+        params, ret = fn.signature()
+        args = [_as_leaves(np.ascontiguousarray(x).view(f"<u{w // 8}").reshape(n, -1), w, t.leaves)
+                for x, w, (_, t) in zip(ins, lay.widths, params)]
+        flat = np.asarray(evaluate_batch(fn, *args, kernel="reference")).reshape(n, -1).astype(np.uint64)
+        got, want, at = [], [], 0
+        for o, w, f in zip(rows.outs[tid], lay.widths[len(lay.rows):], getattr(ret, "fields", None) or (ret,)):
+            got.append(np.ascontiguousarray(o).view(f"<u{w // 8}").reshape(n, -1).astype(np.uint64))
+            part, at = flat[:, at:at + f.leaves], at + f.leaves
+            want.append(part if part.shape[1] == got[-1].shape[1] else _packed(part, w))
+        got, want = np.concatenate(got, axis=1), np.concatenate(want, axis=1)
         if (u := np.flatnonzero((got != want).any(axis=1))).size:
             bad[tid] = u.tolist()
     assert bad == {}
     c = win.close(salt_key=bytes(32))
     assert c is not None
     labels = win.labels()
-    seen = {lab["source"] for m in labels["members"] for *_, lab in m["labels"]}
-    assert seen == {"served", "computed", "evaluated"} and all(m["labels"] for m in labels["members"])
+    seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}
+    assert seen == set(WR.FORMS) and all(m["labels"] for m in labels["members"])
+    assert {int(x) for v in rows.source.values() for x in v} == {WR.SERVED, WR.COMPUTED, WR.EVALUATED}

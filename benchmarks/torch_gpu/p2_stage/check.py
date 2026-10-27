@@ -1,4 +1,4 @@
-"""The CPU half of a staging session's check, run on the node after the GPU is released:
+"""The CPU half of a staging run's check, run on the node after the GPU is released:
 
 - **decode**: every encoded block of the layer, from the development store or an encoded store's segment files (as
   `layer.py` takes them), against P2's reference (`layout.check_blocks`: the spec's `reference.decode` under
@@ -11,8 +11,8 @@
     python check.py --layout LAYOUT --weights M [--w W] (--store DIR --salt HEX | --encoded DIR --source HEX
                     --commitment HEX) --out OUT [--layer 0] [--workers N] [--blocks N] [--sample N --seed S]
 
-With `--sample N` the decode half takes N blocks of every tensor of the encoded store instead (`sample_blocks`: each
-tensor's first and last block among them), for `full.py`'s whole-store session.
+With `--sample N` the decode half takes N labels of every tensor of the encoded store instead (`sample_blocks`: each
+tensor's first and last label among them), for `full.py`'s whole-store run.
 
 Writes `OUT/check.json`; exits 1 if anything differs.
 """
@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import layout as L  # noqa: E402
+import layout as L
 
 _JOB: dict = {}
 

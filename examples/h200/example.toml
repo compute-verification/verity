@@ -1,6 +1,5 @@
-# The H200 example's rung on the ladder (examples/README.md): the one-H200 demo (benchmarks/e2e_h200, its interfaces in
-# benchmarks/e2e_demo), which #4903's move makes this directory, its step driver's run.py the runner (`verity example h200
-# --out OUT`). Demo A's M3 proper is eight runs, one phase each: phases.sh. Its evidence is sampled proofs': the step committed
+# The H200 example's rung on the ladder (examples/README.md): the one-H200 demo, its interfaces in interfaces/, its step
+# driver's run.py the runner (`verity example h200 --out OUT`). Demo A's M3 proper is eight runs, one phase each: phases.sh. Its evidence is sampled proofs': the step committed
 # on the H200, 8 proof blocks drawn by one live coin, each proved by C-Flock --zk and accepted by Lean. The skeleton's other
 # legs (e2e_h200/legs.py: onsite's in skeleton form, on fixture coins) aren't claimed.
 # Placed where M3 proper's runs ran: the step committed and replayed on vy-dc-h200-2, the coin from vy-challenger-1, and the

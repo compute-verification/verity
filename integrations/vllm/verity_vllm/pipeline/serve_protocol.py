@@ -1,8 +1,8 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
 CPU tests; `framing_agrees` holds the two to each other. `IdsProtocol` (``--protocol ids``) streams the scan's id form
-instead to the warden's id requests, since the warden forwards the server's bytes into its cells unchanged, and answers
-every other request as vLLM does (`of`)."""
+instead to the network certifier's id requests, since the certifier forwards the server's bytes into its cells unchanged,
+and answers every other request as vLLM does (`of`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -227,9 +227,9 @@ ID_PAYLOAD = 503
 
 
 class IdsProtocol:
-    """The scan's id form (``--protocol ids``) for the warden's id requests, and ``base`` for every other request (`of`),
+    """The scan's id form (``--protocol ids``) for the network certifier's id requests, and ``base`` for every other request (`of`),
     so that clients straight to the endpoint (the network certifier's shim and probes, the load) get vLLM's HTTP and JSON.
-    The warden relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
+    The network certifier relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
     each cell as one id event. So a streamed response here has no HTTP head and no chunked body:
     - each token id its own `io_tie.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id right-
       aligned in 10 characters, spaces before the blank line), whatever the delta carries;
@@ -248,11 +248,11 @@ class IdsProtocol:
         self.base = VllmProtocol(force_include_usage) if base is None else base
 
     def of(self, request: bytes) -> IdsProtocol | PlainProtocol:
-        """This protocol if `request` is a warden's id request (`id_request_of`), else ``base``."""
+        """This protocol if `request` is a network certifier's id request (`id_request_of`), else ``base``."""
         return self if self.id_request_of(request) else self.base
 
     def id_request_of(self, request: bytes) -> bool:
-        """Whether `request` (its head and body as the server read them) is an id request as the warden forwards it:
+        """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it:
         without the release headers it puts on the server's copy (`release.with_release`), exactly `active.id_request`
         of its own fields in the scan's B = P + 9-byte cells, from their first byte (``offset`` 0)."""
         head, _, body = request.partition(b"\r\n\r\n")

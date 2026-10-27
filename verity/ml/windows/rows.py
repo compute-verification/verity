@@ -108,9 +108,27 @@ WIRED = "wired"
 class ValueRows:
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
     (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
-    under the value's salts, so each row's ``b || c`` is the value's."""
+    under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts concatenated, when the
+    caller has drawn them (`value_salts`), else drawn here."""
     value: Any
     positions: tuple[int, ...]
+    salts: bytes | None = field(default=None, repr=False, compare=False)
+
+
+def value_salts(value: Any, positions: Sequence[int] | np.ndarray) -> bytes:
+    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts draw many
+    (``salts.at``, `pouw.h1.registered.Salts`), else one by one."""
+    at = getattr(value.salts, "at", None)
+    return at(positions) if at is not None else b"".join(bytes(value.salts[int(i)]) for i in positions)
+
+
+def value_rows(value: Any, positions: Sequence[int] | np.ndarray) -> np.ndarray:
+    """Rows ``positions`` of registered value ``value`` as ``(len(positions), words)`` u16, gathered at once where its rows
+    are an array or gather many (``rows.at``), else row by row."""
+    r, at = value.rows, np.asarray(positions, dtype=np.int64)
+    a = r[at] if isinstance(r, np.ndarray) else r.at(at) if hasattr(r, "at") else [r[int(i)] for i in at]
+    return np.asarray(a, dtype=np.uint16).reshape(len(at), value.words)
+
 
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
@@ -552,8 +570,11 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
         _JOB.clear()
     roots: dict[str, bytes] = {}
     bc: dict[str, bytes] = {}
+    by: dict[str, list[tuple[int, bytes, bytes]]] = {}
+    for q, s, node, b in res:
+        by.setdefault(q, []).append((s, node, b))
     for p, j in ports.items():
-        mine = sorted((s, node, b) for q, s, node, b in res if q == p)
+        mine = sorted(by.get(p, ()))
         size = min(chunk, _width(j["count"]))
         roots[p] = _Frame(j["domain_id"]).reduce([node for _, node, _ in mine], 0, (size - 1).bit_length())
         if j["kind"] == "row":
@@ -567,16 +588,17 @@ def _wire(m: Member, port: str) -> tuple[str, str, tuple[int, ...]]:
     return next(w for w in m.wired if w[0] == port)
 
 
-def _by_reference(members: Sequence[Member], src: Any, ys: Mapping[str, bytes], bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
+def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Mapping[str, bytes],
+                  bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
     """A port given by reference (`commit`): its rows' salts and ``b || c``, its source's (a `ValueRows`' value's, or a wired
-    port's writers' output rows', from their committed ``ys`` and ``bc``)."""
+    port's writers' output rows', from their committed ``ys`` and ``bc``); ``bases``, the members' (`wiring.bases`)."""
     if isinstance(src, ValueRows):
         v = src.value
-        return b"".join(bytes(v.salts[i]) for i in src.positions), b"".join(bytes(v.bcs[i]) for i in src.positions)
+        return (value_salts(v, src.positions) if src.salts is None else src.salts), b"".join(bytes(v.bcs[i]) for i in src.positions)
     m, port = src
     _p, o, ws = _wire(m, port)
     y, s = np.empty((m.n, SALT_BYTES), dtype=np.uint8), np.empty((m.n, BC_BYTES), dtype=np.uint8)
-    for wm, mine, theirs in WI._writers(members, ws):
+    for wm, mine, theirs in WI._writers(members, ws, bases):
         y[mine] = np.frombuffer(ys[wm.port(o)], dtype=np.uint8).reshape(wm.n, SALT_BYTES)[theirs]
         s[mine] = np.frombuffer(bc[wm.port(o)], dtype=np.uint8).reshape(wm.n, BC_BYTES)[theirs]
     return y.tobytes(), s.tobytes()
@@ -588,19 +610,18 @@ class _Rows(Mapping):
 
     def __init__(self, members: Sequence[Member], rows: Mapping[str, np.ndarray], refd: Mapping[str, Any], order: tuple[str, ...]):
         self._members, self._rows, self._refd, self._order = members, rows, refd, order
+        self._bases = WI.bases(members)
 
     def __getitem__(self, port: str) -> np.ndarray:
         if port in self._rows:
             return self._rows[port]
         src = self._refd[port]
         if isinstance(src, ValueRows):
-            r, at = src.value.rows, np.asarray(src.positions, dtype=np.int64)
-            a = r[at] if isinstance(r, np.ndarray) else [r[i] for i in src.positions]
-            return np.asarray(a, dtype=np.uint16).reshape(len(src.positions), src.value.words)
+            return value_rows(src.value, src.positions)
         m, p = src
         _p, o, ws = _wire(m, p)
         out = np.empty((m.n, dict(m.rows)[p]), dtype=np.uint16)
-        for wm, mine, theirs in WI._writers(self._members, ws):
+        for wm, mine, theirs in WI._writers(self._members, ws, self._bases):
             out[mine] = self[wm.port(o)][theirs]
         return out
 
@@ -659,12 +680,18 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
                 if kind == "rows" and (isinstance(src, ValueRows) or (isinstance(src, str) and src == WIRED)):
                     if isinstance(src, str) and p not in wired:
                         raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
-                    if isinstance(src, ValueRows) and (len(src.positions) != want[0] or src.value.words != words
-                                                       or src.value.word_bits != 16 or src.value.schema != m.schema(p)
-                                                       or not all(0 <= i < len(src.value.rows) for i in src.positions)):
-                        raise ValueError(f"{m.port(p)}: {len(src.positions)} rows of a value's {len(src.value.rows)} {src.value.schema} "
-                                         f"rows of {src.value.words} {src.value.word_bits}-bit leaves, not {want[0]} {m.schema(p)} "
-                                         f"rows of {words} u16 words")
+                    if isinstance(src, ValueRows):
+                        v, have = src.value, len(src.value.rows)
+                        why = [reason for reason, bad in (
+                            (f"{len(src.positions)} rows, not {want[0]}", len(src.positions) != want[0]),
+                            (f"rows of {v.words} words, not {words}", v.words != words),
+                            (f"{v.word_bits}-bit leaves, not 16", v.word_bits != 16),
+                            (f"{v.schema} rows, not {m.schema(p)}", v.schema != m.schema(p)),
+                            (f"positions outside its {have} rows", not all(0 <= i < have for i in src.positions)),
+                            (f"salts not one {SALT_BYTES}-byte salt a row",
+                             src.salts is not None and len(src.salts) != SALT_BYTES * len(src.positions))) if bad]
+                        if why:
+                            raise ValueError(f"{m.port(p)}: a registered value's rows given by reference: {'; '.join(why)}")
                     refd[m.port(p)] = src if isinstance(src, ValueRows) else (m, p)
                     continue
                 a = np.asarray(src, dtype=np.uint16)
@@ -711,9 +738,9 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
     if refd:
-        strings = {}
+        strings, at = {}, WI.bases(ms)
         for p, src in refd.items():
-            ys[p], strings[p] = _by_reference(ms, src, ys, bc)
+            ys[p], strings[p] = _by_reference(ms, at, src, ys, bc)
         more, _ = commit_ports(domains, {}, {}, {}, workers=workers, chunk=chunk, schemas=schemas, strings=strings)
         roots |= more
         roots = {p: roots[p] for p in counts}
