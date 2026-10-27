@@ -1149,14 +1149,14 @@ def test_a_target_named_on_the_command_line_reruns_when_its_descriptor_changes_w
 
 def _shimmed(harness: str) -> str:
     """``harness`` with the synthetic package imported through a link outside the tree (``shim/syn -> tree/syn``) first on the
-    import path, as `research run` puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
+    import path, as a remote run puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
     return harness.replace("sys.path.insert(0, str(root))",
                            "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root.parent / 'shim'))")
 
 
 @pytest.mark.parametrize("named", [False, True], ids=["all", "named"])
 def test_a_module_imported_through_a_link_into_the_tree_is_held(tmp_path, named):
-    """Under `research run` every module of `verity` has its file in the shim, outside the root, so a file through a link into
+    """In a remote run every module of `verity` has its file in the shim, outside the root, so a file through a link into
     the tree is the tree's (`cache._LINKS`): else no entry would hold one, and an edit to a primitive's evaluator, which
     changes no descriptor, would be reused."""
     root, shim = _tree(tmp_path / "tree"), tmp_path / "shim"
