@@ -105,9 +105,9 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
   simp only [String.append_assoc]
   rfl
 
+set_option maxHeartbeats 1000000 in
 /-- **V\*'s file is its lines** (`RecVStar.circuitFile`): the head `flock-circuit <unit>`, `META <d>`, then the three
 sections. -/
-set_option maxHeartbeats 1000000 in
 theorem file_text (u : VStar.UnitC) (l : Laid) (d : String) :
     ((do (fun x => (modify (· ++ x) : StateM String PUnit)) (s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n"); VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l : StateM String PUnit).run "").2 =
       joinNl (fileLs u.name d l (shaLaid ()) (hmLaid ())) := by
@@ -117,7 +117,12 @@ theorem file_text (u : VStar.UnitC) (l : Laid) (d : String) :
   try dsimp only
   simp only [fileLs, List.append_assoc, joinNl_append, joinNl_cons, joinNl_nil]
   simp only [String.empty_append, String.append_empty, String.append_assoc]
-  rfl
+  have h0 : ∀ t : String, toString t = t := fun _ => rfl
+  have h1 : ∀ t : String, VStar.FORMAT_CIRCUIT ++ (" " ++ t) = "flock-circuit " ++ t := fun t => by
+    rw [← String.append_assoc]; rfl
+  have h2 : ∀ t : String, "\nMETA " ++ t = "\n" ++ ("META " ++ t) := fun t => by
+    rw [← String.append_assoc]; rfl
+  simp only [h0, h1, h2]
 
 /-- `withMeta`'s head is `compose`'s first two lines, META a `pyDumps` line. -/
 theorem withMeta_ok {u : VStar.UnitC} {extra : List (String × Lean.Json)} {head h : String}
