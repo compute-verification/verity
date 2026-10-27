@@ -312,7 +312,7 @@ def main(args: Options) -> None:
     doc["lag"] = {"value": _lag, "async_scheduling": _asched,
                   "source": "vllm_adapter.resolved_async_scheduling(engine) after the build (= RunHeader.profile.engine_kwargs.async_scheduling)",
                   "rule": "served_output_len = len(generated_token_ids); executed_prefix_len = served_output_len + LAG iff finish_reason == 'stop' and "
-                          "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens"}
+                          "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens (R17-1)"}
     for r in wl["requests"]:
         rid = r["request_id"]
         acc = wl["accepted"].get(rid)
