@@ -131,7 +131,7 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
     have h1' := h1
     rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hhid] at h1'
     exact FlockVBridge.Family.spec_regions_le (FlockSoundness.Discharge.Hidden.setupHidden_spec' h1')
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := FlockComplete.JsonRT.setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, -, hct⟩ := FlockComplete.JsonRT.setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := FlockComplete.JsonRT.insOf_false hins
   obtain ⟨hzk, hcoins, hdraw⟩ := FlockComplete.JsonRT.Raw.ins_read hw
   have hz : s.read.zk = false := hzk.trans hwz
@@ -139,7 +139,7 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
   rw [hx] at hset2
   have hds := inner_drawn hr ha hset2
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hds
-  have hu := FlockComplete.JsonRT.unitDraw_of S hl (hd d hdd)
+  have hu := FlockComplete.JsonRT.unitDraw_of hl (hd d hdd)
   have hU : st.spec.unitDraw = some d := by simp [Stmt.spec, hu, Except.toOption]
   obtain ⟨D, hD, hn⟩ := hinst d hu
   have hdl := FlockComplete.JsonRT.Ins.setup_drawLaw hsu hds
@@ -159,7 +159,9 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
     rw [hn'] at hD
     cases hD
   refine ⟨st, st.tags.table, rfl, rfl, ?_, hsig, ?_, ?_, rfl, hreg, by simp [hsch]⟩
-  · refine FlockComplete.JsonRT.ofHello_helloOf S ?_ hhello
+  · change st.coinTree = none
+    rw [hct]
+    refine FlockComplete.JsonRT.tree?_none ?_
     simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
     exact hcoins hwz
   · unfold DrawOk
