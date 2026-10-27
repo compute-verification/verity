@@ -46,7 +46,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
       Rust verifier as a cross-check.
-- `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/` and `Proofs/`
+- `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
@@ -351,8 +351,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     workers' values, can only refuse more, and relays (live `PROTOCOL.md` §10.4). The ZK theorem
     (`Flock.zk_server_lean_loop`) reads the released bytes only through named hypotheses not yet proved about the live
     path, so the ZK server is not yet proved.
-  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary, named assumptions and
-    guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
+  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
+    assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
     each proved guarantee.
     `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
