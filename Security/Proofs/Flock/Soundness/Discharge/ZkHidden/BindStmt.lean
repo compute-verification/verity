@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
 set_option Elab.async false
 
 /-!
-# The binding half at the session's statement circuit (PRF-133 G-B)
+# The binding half at the session's statement circuit
 
 `SoundBind.lean`'s `sitesShH` … `rsZH` and `DefsJ.lean`'s `sitesShHJ` … `rsZHJ` take the session's circuit
 from `HmOut.parse`, which refuses a templated file. Here they are at the statement circuit `c`

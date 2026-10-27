@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 import Proofs.Flock.Soundness.TmplLayout
 
 /-!
-# A hidden-output session on the committed circuit (PRF-133, ASK-112 option A)
+# A hidden-output session on the committed circuit
 
 A session commits the circuit `HmOut.parseCommit` reads: `HmOut.parse`'s for a flat file, `HmOut.parseTmpl`'s, which
 carries its template, for a templated one (`Tags.isTmpl`). What the session side reads of `HmOut.parse … = .ok st.c` it
