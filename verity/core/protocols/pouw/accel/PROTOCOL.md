@@ -77,7 +77,7 @@ w_X and w_W.
 - O at 32 bits, bound to them by O = T_S + 256(w_X W′ᵀ + X w_Wᵀ + 256 w_X w_Wᵀ) − Z_X Uᵀ − V Y_Wᵀ. Here
   Z_X = Σ_τ (A + d_A + V)_τ π_τᵀ, Y_W = Σ_τ (B + d_B)_τ, and T_S is taken at full width.
 
-**Leaves and roots.** Values go in SHA-512 hiding leaves (8 blocks, one 128-bit salt, 7,935 data bits) in 16-ary
+**Leaves and roots.** Values go in SHA-512 hiding leaves (8 SHA-512 chunks, one 128-bit salt, 7,935 data bits) in 16-ary
 frame-v3-sha512 trees.
 - Each call has an operand root, bound in its sampling block's dither run's commit phase, and a value root holding its
   T_s and O, bound in that run's response phase (see "A sampling block's runs").
@@ -202,7 +202,7 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
   the most predictable proof block's measured free-guess rate: p ≤ 2.79e-5 on the H200 (T_1 at L = 64) and p ≤ 2.02e-5
   on the RTX PRO 6000 (T_1 at L = 384). D6 takes η = 1 − 2.8e-5 on both.
 - ε_net = β(k_infil + k_exfil)/W_reg ≤ β·E/W_reg (P18), the channel term priced at β a bit while credit is work at μ°.
-  β = n_max·W_mac, where W_mac is the honest cost of one MAC of the block (hashing included), and n_max = N, 128,256 for
+  β = n_max·W_mac, where W_mac is the honest cost of one MAC of the sampling block (hashing included), and n_max = N, 128,256 for
   the Llamas and 129,280 for V4. E = E_in + E_out:
   - tokens crossing the replica's boundary at 4 bytes a token (4,500-token requests; about 6.5 times that if HTTP/SSE
     crosses it);
@@ -227,7 +227,7 @@ Inside a selected block, its proof block p is drawn with probability W_p/W_b.
   and 14,378 at the 1 − 1e-6 quantile on the H200. ACCEL surfaces ε_skip at δ_coin for whatever q the draw sets.
 
 **This is a sampling design main doesn't have**, proposed name `poisson:Q`:
-- `bernoulli:NUM/DEN` and `rate:NUM/DEN[:T]` give every block one flat rate (`rate` as a subset of size ⌈qN⌉), not a
+- `bernoulli:NUM/DEN` and `rate:NUM/DEN[:T]` give every sampling block one flat rate (`rate` as a subset of size ⌈qN⌉), not a
   rate proportional to its cost.
 - `work:K` and `stratified:K` draw a fixed-size subset per template stratum once, over the whole registration. ACCEL
   has no strata, a random count, and a draw interleaved with serving.
@@ -240,8 +240,8 @@ profile.
 ### Registration
 
 - **W_reg is a budget**, registered before the period's first coin. Each block's W_b is fixed in its dither run's
-  commit phase, before its seeds, with W_b ≤ W_reg/q. The challenger draws no seeds for a block that would take Σ_b W_b past W_reg.
-  Blocks follow live traffic, so their shapes needn't be known when the period starts.
+  commit phase, before its seeds, with W_b ≤ W_reg/q. The challenger draws no seeds for a sampling block that would take Σ_b W_b past W_reg.
+  Sampling blocks follow live traffic, so their shapes needn't be known when the period starts.
 - An unspent budget only raises ε_skip against the credit: the bound is ε_skip·W_reg whatever share of W_reg is served.
 
 **The fleet.** A claim over several replicas registers its fleet before any member's first coin, in one of two forms:
@@ -286,16 +286,19 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts.
+  the certifier counts. In the Lean, `CoinsConfidential` is ACCEL's premise, and the placement premise
+  `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
+  server's coins) travel only on private links, and the certifier sits on the server's own uplink (Daniel, 26 Oct,
+  4:41 PM PDT).
   - **The MVP: the certifier's device is the challenger** (Daniel, 26 Oct, 1:30 PM PDT). The device that runs the
     replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is one of its certifier devices,
-    and its coins reach the other servers only through the certifiers' tunnels.
-  - After the MVP, a challenger on a device of its own may reach the certifier only over a path on auditor hosts. A path
-    across hosts the prover controls would need encryption and authentication under a key the auditor provisions to both
-    ends, and that key would go to Daniel. A SHA-512 keystream with HMAC-SHA-512, at the measured 0.86 GB/s a core, takes
-    about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an RTX PRO 6000 V4 replica's 24.0 GB/s.
-  - Without it an outside machine reads the dither on the path and serves the block, and ε_skip rises to the credited
+    and its coins reach the other servers' certifiers only over the auditor's private links.
+  - After the MVP, a challenger on a device of its own may reach the certifier only over a private link. A keyed path
+    across hosts the prover controls is the secure-transport workstream's. A SHA-512 keystream with HMAC-SHA-512, at
+    the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
+    RTX PRO 6000 V4 replica's 24.0 GB/s.
+  - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
 - **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the coins are made on the
@@ -314,10 +317,9 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
   its own would have to keep its clock within 1.03 s of the certifier's.
 - **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would draw a check coin before the roots.
-- **A multi-node replica has one boundary**, carried by certifier-to-certifier tunnels, with the replica's certifiers
-  keeping one count and the challenger's device stamping every time. The tunnels are authenticated and encrypted end to
-  end, since coins ride them and the prover chooses whatever else does, under a key the auditor provisions to the
-  replica's certifier devices; that key goes to Daniel. Everything else crossing between its nodes counts.
+- **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
+  `WitnessPathPrivate`, never through the prover's network, with the replica's certifiers keeping one count and the
+  challenger's device stamping every time. Everything else crossing between its nodes counts.
   V4's replica is 12 H200s (1.5 nodes) or 17 RTX PRO 6000s (2.1 nodes). Counting its inter-node expert and KV traffic
   would fail honest replicas, and excluding that traffic by address would let an outside machine join as a node.
 
@@ -332,12 +334,12 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
 ### Timing
 
 - T = 1 week and Δ = 30 s.
-- **Answers.** Each selected block's answer is one outer proof, which the firewall releases as its own session. Its
+- **Answers.** Each selected sampling block's answer is one outer proof, which the firewall releases on its own. Its
   statement, the proof block's Program on the call's committed values, is fixed by the value-root receipt and the check
-  coin before its session draws coins. A replica's answers are a stream of one-statement batches, run concurrently beside
-  its later blocks and never serialized. τ_ans includes the wait for the firewall's release slot.
-- **No q(Δ + τ_ans) ≤ T.** #4787's `Timed` covers any number of sampling blocks, with answers beside later blocks: the
-  blocks' work windows telescope to T. Selections arrive about every 43.8 s a replica (T/q).
+  coin before its run's challenge phase. A replica's answers are a stream of one-statement batches, run concurrently
+  beside its later sampling blocks and never serialized. τ_ans includes the wait for the firewall's release slot.
+- **No q(Δ + τ_ans) ≤ T.** #4787's `Timed` covers any number of sampling blocks, with answers beside later ones: their
+  sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on run r20261024-092255-2edd, which failed (rc 2) and
   measured no ACCEL proof block. τ_ans is to be set from a passing `--zk` run of the proof block with live coins, the
   release slot included, with a wide margin.
@@ -422,20 +424,22 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
     η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
-  certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node tunnels, as implemented.
-- **The tunnels' key** goes to Daniel: V4's replicas span 1.5 (H200) or 2.1 (RTX PRO 6000) nodes, so D6's V4 rows
-  need it.
+  certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
+  implemented.
+- **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
+  keys set at provisioning), is the secure-transport workstream's. Whether ML-KEM may bend the one-hash rule is
+  Daniel's.
 - **The firewall** (@proofs, with C-Flock's ZK server):
-  - that it runs a replica's answer sessions concurrently, and its release schedule. If it can't, RT-SIZE's queued check
+  - that it proves a replica's answers concurrently, and its release schedule. If it can't, RT-SIZE's queued check
     coins are the fix (CMP-158, RS5), and `Timed` must then read the check coin's time apart from the selection's;
-  - main's batch rule fixes every staged statement before any session draws coins. ACCEL's statements are staged through
-    the period, each fixed before its own session but after earlier answers' sessions, so the rule is to be read per
-    statement for a stream (RS6).
+  - main's batch rule fixes every staged statement before any run's challenge phase. ACCEL's statements are staged
+    through the period, each fixed before its own run's challenge phase but after earlier answers' releases, so the rule
+    is to be read per statement for a stream (RS6).
 - **τ_ans**, from a passing measured run (see "Timing").
 - **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price** (Daniel's open Ask).
-  - At μ°, plain int8 tensor work beside the credited blocks is valued at little or nothing. Let x be its plain MACs
+  - At μ°, plain int8 tensor work beside the credited sampling blocks is valued at little or nothing. Let x be its plain MACs
     for each credited MAC. At x = 0.25 it is 5.1–7.3% of the claim on the H200 and 10.8–13.0% on the RTX PRO 6000, and
     neither ε_skip·W_reg nor the uncredited column bounds it.
   - μ¹, the honest period's duals at x = 1, published as a parameter, removes 37–40% of that on the H200 and 78–80% on
@@ -446,7 +450,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     It is false wherever a known cheaper route is missing from the menu.
   - `ShaSpeed` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.
   - Beside them are `OutsourceWithinEgress`, `CertifierSeesImports`, `RootAfterCoin` and `ServiceSound`, and
-    POOL-THM's `CoinsConfidential` and `IndependentCoins`.
+    POOL-THM's `CoinsConfidential` (which `WitnessPathPrivate` discharges) and `IndependentCoins`.
   - `PeriodInventory` is held pending Daniel: whether host CPUs and DPUs are devices of the period.
 - **The RTX PRO 6000's cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
   stay bounds until CALIB moves them to a current vector.
