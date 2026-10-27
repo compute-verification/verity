@@ -15,7 +15,7 @@ import Proofs.Pouw.ShaRealize
     convexity of `exp` at the block's honest shares (`combined_moment_le`), in units of priced cost at one rate `η`.
   - A block's factor reads its advice and its committed instance, both fixed before its coins
     (`ShaRealize.inst_congr`), and its own coin. It is frozen at 1 on a block whose instance isn't registrable or whose
-    oracle and advice are bad for `ShaSpeed` (`roundF`), so the blocks' product is a supermartingale over the
+    oracle and advice are bad for `SAKSha` (`roundF`), so the blocks' product is a supermartingale over the
     challenger's coins (`expect_prod_rounds`), of average at most 1: the moment.
   - Its bad event is the service's `κ_S` (which also covers an unregistrable instance), the extraction's `κ_x(A)`
     on runs within the cap (a run whose sampling blocks' timed work fits, and whose selected answers run within the
@@ -291,7 +291,7 @@ theorem combined_moment_le (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pm
 open Classical in
 /-- **Sampling block `w`'s factor of the supermartingale** at the oracle `o`, its advice and committed instance `s`
 (both fixed before the block's coins) and its coin: the combined factor at the instance `s.2` and the advice `s.1`
-where they are good for the block (`Good`: the instance registrable, and the oracle and advice good for `ShaSpeed`),
+where they are good for the block (`Good`: the instance registrable, and the oracle and advice good for `SAKSha`),
 and `1` where they aren't (the stopped process: a bad block is counted in `κ_S` or `κ_sha`, not in the luck). -/
 noncomputable def roundF {G : Accel} {P : RoundProto} {k : ℕ} {Adv : Type} (μ : G.Res → ℝ) (pm ps : Fin k → ℝ)
     (η : ℝ) (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr) (Mh : Fin k → G.Mc.Alg (P.Orc × (Adv × P.Draw) × P.Tr) P.Root)

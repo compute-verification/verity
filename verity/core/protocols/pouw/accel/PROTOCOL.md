@@ -181,8 +181,8 @@ which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
 - δ_coin is the draw's failure probability;
 - δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
-  extraction and in `ShaSpeed`;
-- κ_dmm and κ_dsha are `SAKMatmul`'s and `ShaSpeed`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
+  extraction and in `SAKSha`;
+- κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
   per sampling block.
 
 **Its budget.** For a fleet of G replicas to keep these terms within δ_coin in total, each replica's are at most
@@ -298,6 +298,14 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
     across hosts the prover controls is the secure-transport workstream's. A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
+  - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
+    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
+      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
+      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
+      none of its own coins.
+    - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
+      and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
+      It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
@@ -412,17 +420,17 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
 - **κ's values** (see "Its budget") and the headline's single κ go to Daniel: κ_dmm and κ_dsha are `SAKMatmul`'s and
-  `ShaSpeed`'s error terms.
+  `SAKSha`'s error terms.
 - **The Lean** (WORKSOUND-5, stacked on #4787):
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
     `Timed`, and the phase's oracle calls logged before root b;
   - the budget registration: `reg` adapted, fixed before each round's coins, with k padded to a fixed maximum by empty
     rounds;
-  - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, the
-    coin stream's exact exclusion in `CertifierSeesImports`, the multi-node boundary, and `SAKMatmul`'s reuse form over
-    the challenger's draw for the weight-side coins (P17's κ_re);
-  - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
-    η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
+  - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, and
+    `SAKMatmul`'s reuse form over the challenger's draw for the weight-side coins (P17's κ_re). The coin stream's exact
+    exclusion and the multi-node boundary are stated in `CertifierSeesImports` (RP5, RP9);
+  - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s (RP18, in `WorkSound`'s Open). Until the Lean
+    is restated at v3.2's words, η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.

@@ -35,7 +35,7 @@ import Definitions.Core.Accel.Principles
 The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
 H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`, `slack ≥ 1`; on sm_120 `madHi ≥ 2` and no native `b1`, RT-MODEL M12, M13) with the
 product form (`Assumptions.AccelProductForm`). Without the floors the model runs an `IMAD.HI`, a `b1` MAC or an
-`mma.sync` MAC for nothing, `ShaSpeed` at a card's rates is false in it, and the headline says nothing.
+`mma.sync` MAC for nothing, `SAKSha` at a card's rates is false in it, and the headline says nothing.
 -/
 
 open scoped NNRat
@@ -129,7 +129,7 @@ counts (`Assumptions.CertifierSeesImports`). The commitment and the round's othe
 `P.Orc`, which the card machine has no instruction for: they reach it through `G`'s priced calls (G3), each at a public
 SHA-512 schedule's units on the card (`CallsAtPub`); that the card can't query the oracle more cheaply is ABSORB-THM's
 realization (R-ACCEL-7), open. A program of `G` cheaper than any of the card's makes
-`SAKMatmul` or `ShaSpeed` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
+`SAKMatmul` or `SAKSha` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
 has the card's programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
     (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
@@ -215,7 +215,7 @@ def pubMmSm120 : List ResUnits :=
    mmUnits (67 / 64) (329 / 3145728) 0 0 (233 / 24576), mmUnits (17 / 16) (83 / 786432) 0 0 (59 / 6144)]
 
 /-- **The pinned public SHA-512 schedules on the H200, at the model's prices** (the coordinator's 06:18Z decision on
-RT-UNITS U13: `ShaSpeed` is in model units, so `c_sha = 1` in the model): the default build of `commit_gpu`
+RT-UNITS U13: `SAKSha` is in model units, so `c_sha = 1` in the model): the default build of `commit_gpu`
 (r20261018-062010-1c6b, measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760, IMAD 152), A-wide + R-hi (D5's
 `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850, IMAD.WIDE 850), with RT-UNITS'
 counts a compression (`note:20261026T0320Z-draft-accel-rt-units`). Priced as the model prices a lane (`opUse`): one
@@ -305,9 +305,10 @@ section Certifier
 /-- **The verdict with the network certifier's counts** (RT-PROTO P2, RT-LEAN L32): the service's verdict, and the
 certifier's signed counts of the bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them
 from the devices' readings, are within the caps `E_in` and `E_out`, fixed before the period at served traffic; a
-period past either is refused. The counts exclude the challenger's signed coin stream, which the certifier sees cross
-the boundary (RT-PROTO-2 P18, RT-POOL RP27): the dither coin is the sampling block's `Draw`, an input of its programs,
-not an exchanged bit (`Accel.ext`). -/
+period past either is refused. The counts exclude the challenger's coin stream and nothing else, as
+`Assumptions.CertifierSeesImports` defines it (RT-PROTO-2 P18, RT-POOL RP5, RP27): the dither coin is the sampling
+block's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). A replica on several nodes has one pair
+of counts, its certifiers' together (RT-POOL RP9). -/
 def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ)
     (Ein Eout : ℝ) : Verdict P k Obs :=
   fun o x tr ob => verdict o x tr ob ∧ cin ob ≤ Ein ∧ cout ob ≤ Eout
@@ -319,8 +320,7 @@ section Clock
 /-- **The verdict with the auditor's clocks** (RT-PROTO P5, RT-PROTO-2 P13, P25, O-REDTEAM NF5, RT-LEAN L33, CMP-154,
 RT-POOL RP26): the service's verdict, read with the challenger's signed issue times and the network certifier's signed
 arrival times, as the verdict reads them from the devices' readings `ob`. Each sampling block runs its commit phase,
-then its challenge phase, then its response phase, every commitment bound before any of its coins (Daniel, 26 Oct,
-11:09 AM PDT).
+then its challenge phase, then its response phase, every commitment bound before any of its coins.
 
 * **The commit phase.** The network certifier signs the arrival of sampling block `b`'s operand root
   (`opArrive ob b`), and the challenger issues the block's dither coins at `t ob b`, after it: the period is refused

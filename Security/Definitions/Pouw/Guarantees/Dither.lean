@@ -71,11 +71,13 @@ their commit phases and work) with
 
 The rate `η`, per priced cost, is one rate for every sampling block (RT-PROTO-2 P15, P20): a block selected by a
 Bernoulli coin at a probability proportional to its public cost meets its premises at `η = q/C` at `q` checks, so
-the luck term is `ln(1/δ)/q`. The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
+the luck term is `ln(1/δ)/q`. The served block is `ditherSelected` (its check coin carries the selection), with
+`sel` its selection; there SAK(matmul) at this rate follows from `Pouw.SakLb.SAKResidual` at the luck allowance
+`lam_w` once `η H_w / H_mm,w · (pub_mm,w + lam_w) ≤ π` (`Pouw.SakLb.workSound_sakMatmul_selected`). The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
 honest kernel and hashing are the public best), the honest work that is neither (no lower bound, full weight), the
 sampling luck (`ε_skip`'s at `δ_coin = δ`), the exchanged bits, and the walk and log the extraction adds.
 
-The phases (Daniel, 26 Oct, 11:09 AM PDT): each sampling block's commit phase commits its operands before any of its
+The phases: each sampling block's commit phase commits its operands before any of its
 coins, the challenge phase's work commits its words before its check coin, and only the response phase follows the
 check coin (`Prover`). The cap (L39, CMP-154, RT-POOL RP20, RP23): the challenger times each block's commit phase
 and work, from the previous block's work to the block's commitment, so on the event bounded they fit the devices, and
@@ -105,11 +107,17 @@ Open (stated so the red team can aim at them):
 * a block's costs and public bests are per sampling block, fixed before the period, and hold at every instance of
   `Reg w`: an instance the prover adapts to the earlier coins gets the cheapest registrable instance's `pub`. A
   registered cost `W_reg` that is itself a budget read off the committed instances (RT-POOL RP11) is not stated;
+* `noFoldRound`'s word isn't protocol v3.2's proof block (RT-POOL RP18): its word is a 32-bit prefix sum of the noised
+  product (`Word`) with `s` cells checked, while a v3.2 proof block checks one segment's `T_s − T_{s−1}` mod `2^16`
+  of the wrapped operands' product, and the last segment's also `O` mod `2^32` and its binding identity. So the
+  detection rate's `p`, and which committed values are words, differ, and `WorkSoundNoFold` is not v3.2's statement.
+  Until it is restated at v3.2's words, ACCEL's PROTOCOL.md prices `η` at the measured `p ≤ 2.8e-5` and POOL-THM's
+  `ζ` at `2^-16`;
 * `G` is any accelerator here. The card instance reads it as MODEL-SPEC's machine at a card's θ with its floors
   (RT-LEAN L4, L9; RT-MODEL M12), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the
   dither bits and counting `K = E_in + E_out` (RT-PROTO P2, which holds only while the dither bits stay streamed), and
   makes the hosts and DPUs resources of `G` (P9; that they are all the processors the cards reach is
-  `PeriodInventory`, held pending Daniel). -/
+  `PeriodInventory`, held until it is decided whether they are devices of the period). -/
 def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
@@ -122,8 +130,8 @@ def WorkSound : Prop :=
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
-    ShaSpeed G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
-    OutsourceWithinEgress G μ β → ServiceSound G P k Reg verdict dev κS →
+    SAKSha G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
+    OutsourceWithinEgress G μ β → ProofSystemSound G P k Reg verdict dev κS →
     ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
     ExtractAdv G P k Reg sel Q Badv ξ κx →
     FreedSound G P k verdict dev Pd 1
@@ -152,8 +160,8 @@ def WorkMoment : Prop :=
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
-    ShaSpeed G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
-    OutsourceWithinEgress G μ β → ServiceSound G P k Reg verdict dev κS →
+    SAKSha G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
+    OutsourceWithinEgress G μ β → ProofSystemSound G P k Reg verdict dev κS →
     ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
     ExtractAdv G P k Reg sel Q Badv ξ κx →
     MomentSound G P k verdict dev Pd 1
@@ -206,9 +214,9 @@ def WorkSoundNoFold : Prop :=
     G.G1 → G.G2 → G.G3 → G.OracleCalls eo → G.P1 → G.P2 →
     (∀ w, SAKMatmul G (noFoldRound nf) μ (Reg w) (fun _ => pubmm w)
       (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
-    ShaSpeed G (noFoldRound nf) k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha
+    SAKSha G (noFoldRound nf) k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha
       (fun _ => κsha) →
-    OutsourceWithinEgress G μ β → ServiceSound G (noFoldRound nf) k Reg verdict dev κS →
+    OutsourceWithinEgress G μ β → ProofSystemSound G (noFoldRound nf) k Reg verdict dev κS →
     ImportWithinCertifier G (noFoldRound nf) k verdict dev K → AnswersFit G (noFoldRound nf) k verdict dev sel Pd →
     ShaRealize G nf k Reg sel Q E eo rD pl dirs ξw ξl (fun _ => (k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊)
       (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) →

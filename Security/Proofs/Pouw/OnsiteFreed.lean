@@ -182,7 +182,7 @@ end PerProgram
 
 namespace OnsiteFreedWitness
 
-open Pouw.SecurityProofs.DitherWitness
+open Pouw.Witness Pouw.SecurityProofs.DitherWitness
 
 /-- The work check at the witness: every sampling block's check on the transcript at its committed instance. It reads
 no device. -/
@@ -390,7 +390,7 @@ end OnsiteFreedWitness
 
 section Witnesses
 
-open Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFreedWitness
+open Pouw.Witness Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFreedWitness
 
 /-- **`OnsiteFreed`'s honest witness** (LEAN-66, CMP-145): at `Proofs.Pouw.DitherWitness`'s machine, round and period,
 every premise of `OnsiteFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
