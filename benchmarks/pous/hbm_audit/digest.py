@@ -162,7 +162,8 @@ def _build():
 
 
 def _kernel():
-    """The one-lane label-hash kernel (built lazily so the module imports without torch/triton for the CPU reference)."""
+    """The one-lane kernel that hashes labels (built lazily so the module imports without torch/triton for the CPU
+    reference)."""
     return _build()[0]
 
 
