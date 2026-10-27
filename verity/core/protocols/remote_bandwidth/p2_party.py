@@ -36,7 +36,8 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 `python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT
 [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side (`main`), each session with
 fresh coins, the Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` or
-`$VERITY_REMOTE_AUDIT_VERIFIER_EXE` names a built one. Listening, it prints `{"listening": port}` and then each
+`$VERITY_REMOTE_AUDIT_VERIFIER_EXE` names a built one, or, without `lake` on the PATH, the one already built there
+(`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`benchmarks/live_verifier/host.py`'s party verbs). `prove(reader, writer, prover)` is the prover's: it answers each
 message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns.

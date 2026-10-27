@@ -43,10 +43,15 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 def exe(given: Path | None = None) -> Path:
-    """The executable: `given`, else `$VERITY_REMOTE_AUDIT_VERIFIER_EXE`, else built here (`build`)."""
+    """The executable: `given`, else `$VERITY_REMOTE_AUDIT_VERIFIER_EXE`, else built here (`build`), or, where `lake`
+    isn't on the PATH, the one already built here: an auditor gate's party, whose pinned tree, never changed after,
+    `vy-verifier-pin` built it in."""
     if given is None and os.environ.get(ENV):
         given = Path(os.environ[ENV])
-    return build() if given is None else given
+    if given is not None:
+        return given
+    built = PACKAGE / ".lake" / "build" / "bin" / EXE
+    return built if shutil.which("lake") is None and built.is_file() else build()
 
 
 class Lean:
