@@ -48,6 +48,7 @@ def outside_a_slot(monkeypatch):
     """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
     `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
     monkeypatch.delenv("CHECK_SLOT", raising=False)
+    monkeypatch.delenv("CHECK_SLOTS", raising=False)
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
@@ -350,6 +351,19 @@ def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     with pytest.raises(Exec) as e:
         SLOT.main(["--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
+
+
+def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, monkeypatch, capsys):
+    """INF-278: CHECK_SLOTS named a pool vy-nebius-1 didn't have, and the job ran unpinned beside the GPU jobs."""
+    for pool, line in (("proofs", "p0 0-1\n"), ("trains", "t 2 only=trains\n")):
+        (tmp_path / pool).mkdir()
+        (tmp_path / pool / "slots").write_text(line)
+    monkeypatch.setenv("CHECK_SLOTS", str(tmp_path / "soundness" / "slots"))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "soundness" / "slots")
+    monkeypatch.setattr(SLOT.os, "execvp", lambda f, argv: pytest.fail(f"ran {argv}"))
+    assert SLOT.main(["--", "true"], now=lambda: NOW) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):

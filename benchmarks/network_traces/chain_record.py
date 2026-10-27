@@ -674,8 +674,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                              "pooled_share": {d: k / weights_bits for d, k in pooled.items()},
                              "per_period": per, "per_period_share": per / weights_bits,
                              "per_link_window": count(1, None, reading)})
-    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"], "class": {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY",
-                                                                             "WITHIN", "D", "KO")},
+    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
+            "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": {"NS": NS, "NP": NP, "NV": NV, "egress_row": 8 * cls.egress.R * cls.B},
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
@@ -693,7 +693,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "and the server can't move an admission (not met today)",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
 
 
 #: each reading of the scan's free inputs, as the report labels it

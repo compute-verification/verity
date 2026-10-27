@@ -194,22 +194,22 @@ set_option exponentiation.threshold 20000
 /-- **PoUS's per-window obligation guarantee** (`Pous.Period.ObligationHeld`): `PeriodHeld` at the snapshot, at every
 value of the other tags' keys, averaged over them. -/
 theorem obligationHeld : ObligationHeld := by
-  intro D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P round S hdev hS o
+  intro D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P τ round S hdev hinst hS o
   exact Pous.Mutable.SecurityProofs.pr_snap_le_real tag htag
     (fun e x => P.Accepts (o.1, (o.2, e), x) ∧ ¬ P.Break (o.1, (o.2, e), x) ∧
       (r.held (o.1, (o.2, e), x) : ℝ) < S * (r.win .capacity).len) _
     (add_nonneg δ_nonneg ENNReal.toReal_nonneg)
-    fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P round S
-      hdev hS (o.1, (o.2, e))
+    fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
+      hdev hinst hS (o.1, (o.2, e))
 
-/-- **`obligationHeld` holds at the honest instance**: its device premise, `ringDevice_honest`, the other tags' keys
-among the other audits' coins. -/
+/-- **`obligationHeld` holds at the honest instance**: its device premises, `periodHeld_honest`, with the other tags'
+keys among the other audits' coins. -/
 theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
     (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : Audits ΩW ΩQ) (D Q L round : ℕ)
-    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, Pous.EndToEnd.S < (r.schedule ω t).mem (r.acct .capacity)) :
-    RingDevice r P D Q L round :=
-  ringDevice_honest r P D Q L round hfull
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
+    DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=
+  periodHeld_honest r P D Q L round hs hfull
 
 /-- **`obligationHeld` is nontrivial**: at a store of `2^19` tags, an event that holds on every oracle and coin
 exceeds its bound `δ + ε_max`. -/

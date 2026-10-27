@@ -48,9 +48,9 @@ for one server-time block and what the composed verdict reads. It extends the al
   `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity bound, W_cert,
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
-- the composed verdict and the error of `Accounting.Guarantees.JointHorizon` over the block: the accepted subprotocols'
-  errors summed. The statement is not yet proved and not on `main` (lane fc8d);
-- the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizon's
+- the composed verdict and the error of `Accounting.Guarantees.JointHorizonLive` over the block: the accepted
+  subprotocols' errors summed;
+- the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
   union bound over that many blocks and the per-block error each δ needs.
 
 `check` recomputes every derived field from the subprotocols' entries.
@@ -67,11 +67,15 @@ server, with the other subprotocols absent.
 ## Demo A's report
 
 `verity_e2e_demo/report.py` renders block records and a measurements file (`verity/demo-a-measurements/v1`) through
-`demo_a.template`; its module docstring is the contract. Part 3 is circuit size in AND gates, with no FLOP figure or
-price. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
+`demo_a.template`; its module docstring is the contract. A report with an unfilled number is refused; only a draft
+(`render(..., draft=True)`, never the command) shows `⟨NAME⟩`. Part 3 is circuit size in AND gates, with no FLOP figure or
+price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling_plan/demo_a.py --spans week`), filled
+together with `PLANNER`. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is
 DRAWPROVE's run (PRF-172), its VERDICT and PROVEBUNDLE lines verbatim: the first line is the M3 fallback's until all 8
-drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. The rendered report goes to the
+drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. Per-call noise's serving overhead
+is one line, `serve_noise_line` (CMP-126): the seconds it adds a step with both ratios, never γ_step alone, ending the
+section marked `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
 evidence store (`research data put --kind demo-a-report/v1 --file F --preserve`), never Git.
 
     python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE
