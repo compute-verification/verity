@@ -25,7 +25,7 @@ def lift_component(component: Any, eos: Sequence[int], *, max_tokens: int, lag: 
         segs.append((lo, b + 1))
         lo = b + 1
     if lo != len(body.nodes):
-        # F-r17b-43: the nodes after the LAST sampling event are the last slot's Continuation_v1 controller (`slot=<cap>/is_eos`,
+        # the nodes after the LAST sampling event are the last slot's Continuation_v1 controller (`slot=<cap>/is_eos`,
         # `slot=<cap>/out`: its EOS test and designated output) -- they belong to the step that produced that token, not to a
         # (cap+1)-th step; GP-01's chronology requires exactly `cap` step segments per component (`component_steps_equal_cap`)
         segs[-1] = (segs[-1][0], len(body.nodes))

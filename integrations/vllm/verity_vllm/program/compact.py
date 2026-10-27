@@ -307,7 +307,7 @@ def hash_operand(items: list[tuple]) -> list | dict:
     return [list(t) for t in expand_mixed(items)]
 
 
-# ---- the STORED form (F2, COORD R17-34 (2)): instances.jsonl `operand_refs` items ------------------------------------------------------
+# ---- the STORED form: instances.jsonl `operand_refs` items ------------------------------------------------------
 # An operand in the file is a list of items in reference order.  Record form (verity-gen/instances/v1): every item a maximal run
 # ["space", idx, lo, hi].  Progressions form (v2): node- and parameter-space references as progressions
 # ["N"|"P", idx, lo, hi, dI, dL, dH, count] -- the UPPER-CASE space is the marker, one progression per maximal arithmetic run sequence of

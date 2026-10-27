@@ -73,7 +73,7 @@ def check_log(log: str, profile_name: str, snapshots: str | None, *, seed: int, 
     store = SnapshotStore(snaps) if snaps is not None and (snaps / "snapshots.json").exists() else None
     cs = Path(cos_sin) if cos_sin else ((snaps / "cos_sin_cache.npy") if snaps is not None and (snaps / "cos_sin_cache.npy").exists() else None)
     weights = WeightSource(result.params[-1][1], [Path(p) for p in sorted(glob.glob(safetensors))] if safetensors else None, cs, repo=repo,
-                           config=dict(profile.config or {}))   # [SHARED-CODE lane cov-ln]
+                           config=dict(profile.config or {}))
     vals = Values(result, store, weights) if store is not None else None
     captured_note = None
     if store is None:

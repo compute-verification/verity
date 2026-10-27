@@ -1,4 +1,4 @@
-"""The reference evaluator's COMPLETE small assignment of a lifted Program, one row per gate (R17-42 §7 Stage 1: "the reference
+"""The reference evaluator's COMPLETE small assignment of a lifted Program, one row per gate ("the reference
 evaluator should expose the complete small assignment, not only final outputs"; revb PADDED-ACCEPTANCE Stage 1 artefact: "a
 reference-evaluator dump that exposes the COMPLETE small assignment (every wire, not only outputs)").
 

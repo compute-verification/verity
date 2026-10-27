@@ -10,7 +10,7 @@ RoPETriton (q and k in one kernel, bf16 cos|sin table, f32 math, one rounding). 
 (`_triton_sum_models`): the one exact on every S2 launch is "8 contiguous positions per thread, xor-butterfly over 32 lanes, then over 8
 warps" (labels `r0=2048 warps=8 chunk=8 sep|fma`; sep/fma coincide on bf16-derived data).
 
-[R16 compiled] The norm relation OF RECORD is the literal Triton transcription of the generated source launched with the executed config
+The norm relation OF RECORD is the literal Triton transcription of the generated source launched with the executed config
 (compiled_norm_literal.py, labels `triton-literal XBLOCK=.. R0_BLOCK=.. warps=.. (executed)`); the torch model set stays as witnesses.
 
 Argument roles per kernel (`ROLES`: hook arg index -> role; `WEIGHT_ARGS`: registered inputs, committed by reference only) are read off
@@ -23,7 +23,7 @@ import importlib.util
 from verity_vllm.program.compiled_norm_literal import literal_variants
 
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
-# [R16 compiled, Qwen row] a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
+# a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
 # Llama RoPE (in_ptr0..2, out_ptr0..1: qkv, positions, cos|sin -> k, q) and the Qwen2.5 RoPE-with-QKV-bias (in_ptr0..3, out_ptr0..1: qkv,
 # bias, positions, cos|sin -> k (rotated from the UNROUNDED f32 qkv+bias), qkv+bias (bf16)), and the R15 name-keyed table applied the Llama
 # roles to the Qwen kernel (the cos|sin table taken for the k output; 84 undefined dataflow edges).  The role table is therefore keyed by

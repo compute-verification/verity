@@ -4,7 +4,7 @@
 `c10::BFloat16(float)` = `cvt.rn.bf16.f32` (NaN -> 0x7FFF).  wave-1 probe `normalizer`: `aten.mul(bf16 x, bf16 0-d) ==
 bf16(f32(x) * 48)` on all 65,282 non-NaN bf16 words.
 
-[R13 X-08] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.b1.Bf16MulScalarTensor`, bound as
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.b1.Bf16MulScalarTensor`, bound as
 kind `scale_tensor` by the pinned `b1-eager-v3` vocabulary); this module re-exports the same object so the quarantine's
 difftest adapter and `ALL_DEFINITIONS` are unchanged.
 

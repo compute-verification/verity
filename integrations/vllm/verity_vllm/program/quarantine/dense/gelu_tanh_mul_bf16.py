@@ -28,7 +28,7 @@ gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` 
 `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
 distinguishable on the domain.  `tanhf` is the lane's `TanhF32Rn` stand-in (see `tanh_f32.py`).
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations

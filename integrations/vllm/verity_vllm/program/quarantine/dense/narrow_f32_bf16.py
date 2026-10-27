@@ -3,7 +3,7 @@
 `__float2bfloat16` = `cvt.rn.bf16.f32`: RNE, NaN -> 0x7FFF — the registered `F2fpBf16_v1` (the same word the b1 GEMM /
 RMSNorm stores use; wave-1's exhaustive tables of two other ATen bf16 kernels show the 0x7FFF NaN word).
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.NarrowF32ToBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.NarrowF32ToBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
