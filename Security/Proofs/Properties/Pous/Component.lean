@@ -999,6 +999,7 @@ private theorem table_toy :
     (Merkle.root (Run.rowLeaves toyPoint.params toyPublic.salt toyDigests) == some toyPublic.root) = true := by
   decide +kernel
 
+set_option maxRecDepth 100000 in
 private theorem checkAt_toy (pk sig : ByteArray)
     (hv : (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)
       toySessionCommitment toyOpenings).accepted = true) :
