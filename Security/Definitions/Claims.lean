@@ -549,7 +549,7 @@ outputs, which the verifier checks against the registered rows; their salts are 
 structure Stmt where
   m : ℕ
   kLog : ℕ
-  C : Verity.Boolean.Circuit
+  C : FlockSoundness.Audit.Circuit
   inp : ℕ → ℕ → Src
   out : ℕ → ℕ → Src
   pub : List Bool
@@ -570,9 +570,10 @@ def val (s : Stmt) (w : Wit) : Src → Bool
   | .hid i => w.hid.getD i false
 
 /-- **Flock's relation** on a parsed statement: `C` maps inputs to outputs in every block. Evaluated one bit per gate
-(`Verity.Boolean.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each output
-gate `o` the value `out b o`. That is the whole relation: the commitments are hm96 rows under frame-v3-sha512 trees
-that `C` computes from the hidden values, salts included, and outputs, so this clause reads them as `C`'s outputs. -/
+(`FlockSoundness.Audit.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each
+output gate `o` the value `out b o`. That is the whole relation: the commitments are hm96 rows under frame-v3-sha512
+trees that `C` computes from the hidden values, salts included, and outputs, so this clause reads them as `C`'s
+outputs. -/
 def RelS (s : Stmt) (w : Wit) : Prop :=
   ∀ b < s.nBlocks, ∀ o ∈ s.C.outputs,
     (s.C.toCircuit.eval (fun g => BitVec.ofBool (val s w (s.inp b g.val))) o).getLsbD 0 = val s w (s.out b o.val)

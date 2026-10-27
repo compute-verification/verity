@@ -117,7 +117,7 @@ def Parsed.only (p : Parsed) (j : ℕ) : Parsed := { p with sts := #[p.sts[j]!] 
 /-- The readable relation's fields: the block circuit, each block's inputs and outputs at the circuit's gates, and the
 public values. -/
 structure Relation where
-  C : Verity.Boolean.Circuit
+  C : FlockSoundness.Audit.Circuit
   inp : ℕ → ℕ → Claims.Flock.Src
   out : ℕ → ℕ → Claims.Flock.Src
   pub : List Bool

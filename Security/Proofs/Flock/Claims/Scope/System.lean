@@ -60,7 +60,7 @@ def copied (p : ℕ) : List ℕ :=
 
 /-- Gate `g` of the block circuit: an input bit, row `g − J·N`'s AND of XORs, or a copy, the AND of one bit with
 itself. -/
-def gate (g : Fin S.size) : Verity.Boolean.Op S.size :=
+def gate (g : Fin S.size) : FlockSoundness.Audit.Op S.size :=
   if g.val < S.J * S.N then .input
   else if g.val < 2 * (S.J * S.N) then
     .row (S.ins (S.sel S.A (g.val - S.J * S.N))) (S.ins (S.sel S.B (g.val - S.J * S.N)))
@@ -80,16 +80,16 @@ theorem gate_lt (g : Fin S.size) : ∀ a ∈ (S.gate g).args, a < g := by
   show a.val < g.val
   unfold gate at ha
   split_ifs at ha with h1 h2
-  · simp [Verity.Boolean.Op.args] at ha
-  · simp only [Verity.Boolean.Op.args, List.mem_append] at ha
+  · simp [FlockSoundness.Audit.Op.args] at ha
+  · simp only [FlockSoundness.Audit.Op.args, List.mem_append] at ha
     rcases ha with ha | ha <;> have := S.ins_lt ha <;> omega
-  · simp only [Verity.Boolean.Op.args, List.mem_append] at ha
+  · simp only [FlockSoundness.Audit.Op.args, List.mem_append] at ha
     rcases ha with ha | ha <;> have := S.ins_lt ha <;> omega
 
 /-- **The block circuit**: gates `0, …, J·N − 1` the input bits, then gate `J·N + q` for row `q = c·N + i`, the AND of the
 XOR of its table's bits that `A c i` selects and the XOR of those `B c i` selects, then a copy of each pin's bit and of
 each fixed bit. Every gate after the inputs is an output. -/
-@[reducible] def circ : Verity.Boolean.Circuit where
+@[reducible] def circ : FlockSoundness.Audit.Circuit where
   N := S.size
   op := S.gate
   topo := S.gate_lt
@@ -165,26 +165,28 @@ variable {a : S.circ.toCircuit.Transcript} {x : ℕ → Bool}
 
 theorem bit_input {g : Fin S.size} (hg : g.val < S.J * S.N) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = (a g).getLsbD 0 := by
-  rw [Verity.Circuit.eval_input _ a (g := g) (by show (S.gate g).isInput = true; simp [gate, hg, Verity.Boolean.Op.isInput])]
+  rw [Verity.Circuit.eval_input _ a (g := g)
+    (by show (S.gate g).isInput = true; simp [gate, hg, FlockSoundness.Audit.Op.isInput])]
 
 theorem bit_op {g : Fin S.size} (h : (S.gate g).isInput = false) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = (S.gate g).apply fun y : Fin S.size => (S.circ.toCircuit.eval a y).getLsbD 0 :=
-  Verity.Boolean.eval_toCircuit S.circ a h
+  FlockSoundness.Audit.eval_toCircuit S.circ a h
 
 theorem xorSum_ins {v : Fin S.size → Bool} (hv : ∀ g : Fin S.size, g.val < S.J * S.N → v g = x g.val) {ts : List ℕ}
-    (hts : ∀ t ∈ ts, t < S.J * S.N) : Verity.Boolean.xorSum (S.ins ts) v = (ts.map x).foldr xor false := by
+    (hts : ∀ t ∈ ts, t < S.J * S.N) : FlockSoundness.Audit.xorSum (S.ins ts) v = (ts.map x).foldr xor false := by
   induction ts with
   | nil => rfl
   | cons t ts ih =>
     have ht := hts t (by simp)
     have e : S.ins (t :: ts) = ⟨t, by unfold size; omega⟩ :: S.ins ts := by simp [ins, ht]
     rw [e]
-    simp only [Verity.Boolean.xorSum, List.map_cons, List.foldr_cons] at ih ⊢
+    simp only [FlockSoundness.Audit.xorSum, List.map_cons, List.foldr_cons] at ih ⊢
     rw [ih fun t' h => hts t' (by simp [h]), hv _ ht]
 
 theorem xorSum_sel (hN : 0 < S.N) {v : Fin S.size → Bool} (hv : ∀ g : Fin S.size, g.val < S.J * S.N → v g = x g.val)
     (A : ℕ → ℕ → ℕ → Bool) {q : ℕ} (hq : q < S.J * S.N) :
-    Verity.Boolean.xorSum (S.ins (S.sel A q)) v = xsum (A (q / S.N) (q % S.N)) (fun r => x (q / S.N * S.N + r)) S.N := by
+    FlockSoundness.Audit.xorSum (S.ins (S.sel A q)) v =
+      xsum (A (q / S.N) (q % S.N)) (fun r => x (q / S.N * S.N + r)) S.N := by
   have hle := table_le hN hq
   rw [xorSum_ins hv fun t ht => ?_]
   · rw [xsum, foldl_filter, Bool.false_xor, sel, List.map_map]
@@ -203,7 +205,7 @@ theorem bit_row (hN : 0 < S.N) {g : Fin S.size} (h1 : S.J * S.N ≤ g.val) (h2 :
   have hv : ∀ g' : Fin S.size, g'.val < S.J * S.N → (S.circ.toCircuit.eval a g').getLsbD 0 = x g'.val :=
     fun g' h => (bit_input h).trans (hxa g' h)
   rw [bit_op (by rw [hop]; rfl), hop]
-  simp only [Verity.Boolean.Op.apply]
+  simp only [FlockSoundness.Audit.Op.apply]
   rw [xorSum_sel hN hv _ (by omega), xorSum_sel hN hv _ (by omega)]
   rfl
 
@@ -215,7 +217,7 @@ theorem bit_copy {g : Fin S.size} (h2 : 2 * (S.J * S.N) ≤ g.val)
   have hv : ∀ g' : Fin S.size, g'.val < S.J * S.N → (S.circ.toCircuit.eval a g').getLsbD 0 = x g'.val :=
     fun g' h => (bit_input h).trans (hxa g' h)
   rw [bit_op (by rw [hop]; rfl), hop]
-  simp only [Verity.Boolean.Op.apply]
+  simp only [FlockSoundness.Audit.Op.apply]
   rw [xorSum_ins hv hc, Bool.and_self]
 
 end Eval
