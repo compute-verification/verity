@@ -234,9 +234,6 @@
         "benchmarks/nci/",
         "benchmarks/e2e_h200/",
         "benchmarks/e2e_demo/",
-        "examples/toy/",
-        "examples/h200_demo/",
-        "examples/dither_full_util/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -284,7 +281,10 @@
         "Security/Proofs/Accounting/HMu/",
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
-        "Security/Proofs/Accounting/TS/"
+        "Security/Proofs/Accounting/TS/",
+        "examples/toy_onsite/",
+        "examples/h200/",
+        "examples/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",

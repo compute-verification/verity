@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# `verity example h200-demo PHASE [--dry-run] [FLAG...]`: one phase of Demo A on the demo H200 (benchmarks/e2e_h200, its
-# interfaces in benchmarks/e2e_demo). Demo A is not one command: it is eight runs, each phase's output the next one's input,
-# the coin drawn only after the registration is in the challenger's ledger. Each phase below starts its job by `research run`
+# `bash examples/h200/phases.sh PHASE [--dry-run] [FLAG...]`: one phase of Demo A's M3 proper on the demo H200
+# (benchmarks/e2e_h200, its interfaces in benchmarks/e2e_demo; once #4903 moves them here, run.py is the step driver).
+# Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin drawn only after the registration is in the challenger's ledger. Each phase below starts its job by `research run`
 # on its machine (or, for `register`, here on the CPU) with the variables it names; --dry-run prints the command and starts
 # nothing, and further FLAGs go to `research run`. Its run of record in M3 proper, of record in the drawn blocks' tree
 # art:c6dffca9 (example.toml):
@@ -33,16 +33,16 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 PHASES="commit weights register coin open replay bundle prove"
 PHASE=${1:-}
-[[ " $PHASES " == *" $PHASE "* ]] || { echo "verity example h200-demo PHASE [--dry-run] [FLAG...]: PHASE is one of $PHASES" >&2; exit 2; }
+[[ " $PHASES " == *" $PHASE "* ]] || { echo "examples/h200/phases.sh PHASE [--dry-run] [FLAG...]: PHASE is one of $PHASES" >&2; exit 2; }
 shift
 DRY=0
 if [ "${1:-}" = --dry-run ]; then DRY=1; shift; fi
 H200=${H200_NODE:-vy-dc-h200-2} CPU=${CPU_NODE:-vy-nebius-cpu-4} WNODE=${WEIGHTS_NODE:-vy-nebius-cpu-2}
-need() { for v; do [ -n "${!v:-}" ] || { echo "h200-demo $PHASE: set $v (examples/h200_demo/run.sh's header says what it is)" >&2; exit 2; }; done; }
+need() { for v; do [ -n "${!v:-}" ] || { echo "h200 phases $PHASE: set $v (examples/h200/phases.sh's header says what it is)" >&2; exit 2; }; done; }
 have() {
-  grep -qs -- "${3:-}" "$1" || { echo "h200-demo $PHASE: $1${3:+ with $3} isn't in this checkout: it is on $2 until it lands" >&2; exit 3; }
+  grep -qs -- "${3:-}" "$1" || { echo "h200 phases $PHASE: $1${3:+ with $3} isn't in this checkout: it is on $2 until it lands" >&2; exit 3; }
 }
-named() { [ "$(basename "$1")" = "$2" ] || { echo "h200-demo $PHASE: $1 must be named $2 (the job reads inputs/$2)" >&2; exit 2; }; }
+named() { [ "$(basename "$1")" = "$2" ] || { echo "h200 phases $PHASE: $1 must be named $2 (the job reads inputs/$2)" >&2; exit 2; }; }
 main_txt() { T=$(mktemp -d); git rev-list --first-parent origin/main > "$T/main.txt"; echo "$T/main.txt"; }
 RR=(research run --project verity --source .)
 JOB=benchmarks/e2e_h200/m3proper_job.sh BR=cursor/m3-proper-1de3
@@ -65,7 +65,7 @@ uv run --no-sync research keep "$ST" --owner @compute-accounting --expires 30d -
     have benchmarks/e2e_h200/m3stepreg.py $BR
     need ROOTS WEIGHTS_REG PROGRAM COMMIT_RUN
     CMD=(uv run python benchmarks/e2e_h200/m3stepreg.py --roots "$ROOTS" --weights "$WEIGHTS_REG" --program "$PROGRAM"
-         --run "$COMMIT_RUN" --out "${REG_OUT:-out/h200_demo/registration}") ;;
+         --run "$COMMIT_RUN" --out "${REG_OUT:-out/h200/registration}") ;;
   coin)
     have benchmarks/e2e_h200/m3coin.py $BR
     need REG; named "$REG" step-registration.json

@@ -23,16 +23,19 @@ below it need. A directory's name is lowercase letters, digits and `_`, since `v
 `verity example --status` prints every example's next missing evidence. The roles, the machine classes and the checks are
 `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `ROLES`, with its side.
 
+- `dither_full_util/`: CMP-176's full-utilization demo on the H200, with PoUW over Dither's no-fold receipt. Level 0, with no
+  runner and no run of record yet.
+- `h200/`: the one-H200 demo (`benchmarks/e2e_h200`, with `benchmarks/e2e_demo` as its `interfaces/` once #4903 moves them
+  here): the frozen MQA shape served on one GPU node with every op's output committed a step. Its run.py is the step driver,
+  and `phases.sh` runs Demo A's M3 proper one phase a run, from the step's commit on the H200 to its drawn blocks proved.
+  Level 1 on DRAWPROVE r20261027-013625-8e25: 8 live-drawn proof blocks are proved by C-Flock `--zk` and accepted by Lean,
+  and the flipped bit is refused. Demo B's memory terms (memory-accounting's, M4) have a slot in its `example.toml` and
+  aren't claimed.
+- `toy_onsite/`: the CPU toy (`integrations/torch_loop`) through every protocol and the wipe, composed through onsite, one run
+  on one CPU machine. Its run.sh is `benchmarks/all_protocols/run.sh`, which #4903 moves here; until then `verity bench
+  all-protocols` runs it. Level 1 on S1's run of record, r20261026-161826-eb34: a window with one egress byte changed is
+  rejected, and the honest window is accepted over all six subprotocols. The sampled-proofs roles, each run on its own, are
+  DEPLOYSP's separate toy_network example (#4928).
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.
-- `toy/`: the CPU toy (`integrations/torch_loop`) through every protocol and the wipe, composed through onsite, one run on one
-  CPU machine (`benchmarks/all_protocols/run.sh`, called in place). Level 1 on S1's run of record, r20261026-161826-eb34: a
-  window with one egress byte changed is rejected, and the honest window is accepted over all six subprotocols. The
-  sampled-proofs roles, each run on its own, are DEPLOYSP's separate toy_network example (#4928).
-- `h200_demo/`: Demo A on the demo H200 (`benchmarks/e2e_h200`, `benchmarks/e2e_demo`), one phase a run, from the step's
-  commit on the H200 to its drawn blocks proved. Level 1 on M3 proper's DRAWPROVE run, r20261027-013625-8e25: 8 live-drawn
-  proof blocks are proved by C-Flock `--zk` and accepted by Lean, and the flipped bit is refused. Demo B's memory terms
-  (memory-accounting's, M4) have a slot there and aren't claimed.
-- `dither_full_util/`: CMP-176's full-utilization demo on the H200, with PoUW over Dither's no-fold receipt. Level 0, with no
-  runner and no run of record yet.
