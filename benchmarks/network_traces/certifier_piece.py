@@ -58,6 +58,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 
@@ -176,11 +177,16 @@ def window_requests(serve_dir: Path, window: int) -> list[dict]:
 def unpack(fetch: Path) -> tuple[Path, Path]:
     """The kept fetch unpacked in a 0700 scratch directory beside it, and its warden run."""
     d = Path(tempfile.mkdtemp(dir=fetch.parent, prefix="unpacked-"))
-    with tarfile.open(fetch, "r:gz") as tar:
-        tar.extractall(d, filter="data")
+    try:
+        with tarfile.open(fetch, "r:gz") as tar:
+            tar.extractall(d, filter="data")
+    except (OSError, tarfile.TarError) as e:
+        rm(d)
+        raise NotRun(f"{fetch}: {type(e).__name__}: {e}") from None
     run = next((p.parent.parent if p.parent.name == SS.A.WITNESS else p.parent for p in d.rglob("certified.jsonl")),
                None)
     if run is None:
+        rm(d)
         raise NotRun(f"{fetch}: no warden run (a certified.jsonl) in the fetch")
     return d, run
 
@@ -375,6 +381,9 @@ def piece(a: argparse.Namespace) -> int:
             raise NotRun(f"the leak guard failed (exit {g}): DIR withheld")
     except NotRun as e:
         return refuse(d, str(e))
+    except (OSError, ValueError, tarfile.TarError) as e:
+        traceback.print_exc()
+        return refuse(d, f"the piece failed on a file: {type(e).__name__}: {e}")
     finally:
         if unpacked is not None:
             rm(unpacked)

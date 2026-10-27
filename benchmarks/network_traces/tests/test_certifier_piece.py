@@ -208,12 +208,15 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
 
 
-@pytest.mark.parametrize("case", ["no kept run", "no report", "no build", "time limit", "foreign answer"])
+@pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "time limit",
+                                  "foreign answer"])
 def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, warden, capsys, monkeypatch):
-    """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a chain that ends without a
-    report, a missing Lean build, SIGTERM from the piece's time limit and a check that answers no certifier/v0 verdict
-    can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing in the record."""
+    """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
+    ends without a report, a missing Lean build, SIGTERM from the piece's time limit and a check that answers no
+    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing."""
     d = _serve_dir(tmp_path / "serve", warden, kept=case != "no kept run")
+    if case == "corrupt fetch":
+        (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
     chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
     cmd = {"no report": "exit 7", "time limit": 'kill -TERM "$PPID"; while :; do :; done'}.get(case)
     lean = tmp_path / "no-such-network-period" if case == "no build" else None
@@ -224,7 +227,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     why = (piece / CP.REFUSED).read_text()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
-    assert {"no kept run": "no warden run kept", "no report": "the chain wrote no report (exit 7)",
+    assert {"no kept run": "no warden run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
             "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
     if case != "no kept run":
