@@ -265,9 +265,10 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   schedule: it enters the compute audit's terms, which go into JointPeriod.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-  Each entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused),
-  so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
 - No faulty term with every unit drawn, and D_j = 1.
+
+Each `prog` entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is
+refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
