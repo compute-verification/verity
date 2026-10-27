@@ -8,7 +8,9 @@ bytes with its time once the tick has made them (`Pacer.hand`), and it writes th
 monotonic clock, sleeping until `SPIN_S` before it and spinning on the clock for the rest. It writes to the link's
 socket, which the proxy passes it, and reports each bucket as its write ends (`Report`): how long after the bucket's
 time the bucket reached it, and its write started and ended, and whether the link took it. `active.Proxy(paced=…)` reads
-the reports and fails closed on them.
+the reports and fails closed on them. The pacer still shares its host's scheduler: at an ordinary priority, a task that
+wakes on its CPU near a bucket's time, the proxy's own reads of the server among them, can hold the write back by a
+scheduler slice, which a real-time class or a core of its own on the auditor's host takes away.
 
 The pacer reads each bucket as its index, its time and its length (`HEAD`), then its bytes, and writes a ready byte
 (`READY`), then one `REPORT` a bucket, in order. It ends at its input's end, once every bucket it read is written. It
