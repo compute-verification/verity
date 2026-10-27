@@ -46,7 +46,9 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
   most that run's `PrBad` at the leak relation at the network certifier's rows, `RLeakTap` (`window_le`). Past
   `RLeakTap` and the scope, `WindowGood` holds the trace's values at the registered inputs and the records' coverage
   (`Covered`, length and jitter): `window_le` holds them on acceptance. The registered values are the gap
-  `PeriodLeakAccepted` names, which the registration's commitment binds; no proof here gives it. `window_le` is the
+  `PeriodLeakAccepted` names: a trace disagreeing with them opens the registration's commitment two ways, a collision
+  that the one theorem charges to the network component's finder (`PeriodLive.finder .network s`) like the guarantee's
+  other two; no proof here gives it. `window_le` is the
   per-window bound that the trusted network certifier's records give; deriving it from `PeriodLeakAccepted` at the
   deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
 structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}

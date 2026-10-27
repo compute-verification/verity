@@ -362,5 +362,7 @@ What it doesn't cover:
 - `hdata` (the active warden's arrivals are the framed egress of the network certifier's observations) and `Carries` are run conditions
   that no named assumption states yet.
 - B_reg: the trace's values at reg are the registration's (proofs' #4253). No probability covers it yet.
+  `CommOfPeriodLeakAccepted` charges a window's other collisions, B_ext and B_tap, to the network component's one
+  finder (`PeriodLive.finder .network s`), 2·Pr[B] a window in place of ε_bind + ε_tap, and B_reg is to join them.
 - #(freeInputs \ reg) is not bounded by the advice bits until V3's padding, so b_w is vacuous (NET-68).
 - No carry across windows: each window's terms stand alone, and a request that spans two windows is charged in each.
