@@ -40,8 +40,9 @@ case " ${PF_GEMM_MODES:-} ${PF_GEMM_LGC_MODES:-} " in
   *" 12 "*)
     py=(python3)
     python3 -c "import numpy" 2>/dev/null || py=(uv run --no-project --with numpy python3)
-    "${py[@]}" "$HERE/real_operands.py" "$WORK/real" >"$OUT/real_operands.json" || exit 1
-    export PF_REAL_X=$WORK/real/x.s8 PF_REAL_W=$WORK/real/w.s8
+    # without the weight cache only the mode-12 rows fail
+    "${py[@]}" "$HERE/real_operands.py" "$WORK/real" >"$OUT/real_operands.json" &&
+      export PF_REAL_X=$WORK/real/x.s8 PF_REAL_W=$WORK/real/w.s8
     ;;
 esac
 gpu-lease 1 --wait ${PF_LEASE_ON:+--on "$PF_LEASE_ON"} --max-min "${PF_LEASE_MIN:-30}" -- \
