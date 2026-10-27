@@ -108,28 +108,29 @@ theorem check_returned_all {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.
   obtain ⟨-, h⟩ := ite_throw_cond h
   obtain ⟨seen, hseen, h⟩ := except_bind_ok h
   obtain ⟨hany, -⟩ := ite_throw_cond h
-  refine (fun hI : SeenInv c (returned c (List.range c.upv)) seen => ⟨hI.2.2.1, fun o hlt => hI.2.1 o ?_⟩)
-    (forIn_range_inv (fun pre s => SeenInv c (returned c pre) s) (fun pre a s t hs hst => ?_) ?_ hseen)
-  · have hsz : o < seen.size := by rw [hI.1]; exact hlt
-    rw [getElem!_pos seen o hsz]
-    by_contra hf
-    exact hany (Array.any_eq_true.2 ⟨o, hsz, by simpa using hf⟩)
-  · obtain ⟨-, hst⟩ := ite_throw_cond hst
-    obtain ⟨s', hin, hst⟩ := except_bind_ok hst
-    cases hst
-    refine ⟨_, rfl, ?_⟩
-    have e0 : (default : Array ℕ) = #[] := rfl
-    rw [Hidden.getElem!_eq_getD', e0, ← Array.forIn_toList] at hin
-    have := forIn_list_inv (fun pre' s => SeenInv c (returned c pre ++ pre') s) (fun pre' o s t hs hst => by
-      obtain ⟨hc, hst⟩ := ite_throw_cond hst
+  have hI : SeenInv c (returned c (List.range c.upv)) seen := by
+    refine forIn_range_inv (fun pre s => SeenInv c (returned c pre) s) (fun pre a s t hs hst => ?_) ?_ hseen
+    · obtain ⟨-, hst⟩ := ite_throw_cond hst
+      obtain ⟨s', hin, hst⟩ := except_bind_ok hst
       cases hst
       refine ⟨_, rfl, ?_⟩
-      rw [← List.append_assoc]
-      exact seenInv_step hs hc) _ [] s s' (by simpa using hs) hin
-    simpa [returned, List.flatMap_append] using this
-  · refine ⟨Array.size_replicate, fun o h1 => ?_, List.nodup_nil, fun o h => by cases h⟩
-    rw [bool_get, Array.getElem?_replicate, ho, bne_self_eq_false] at h1
-    split at h1 <;> cases h1
+      have e0 : (default : Array ℕ) = #[] := rfl
+      rw [Hidden.getElem!_eq_getD', e0, ← Array.forIn_toList] at hin
+      have := forIn_list_inv (fun pre' s => SeenInv c (returned c pre ++ pre') s) (fun pre' o s t hs hst => by
+        obtain ⟨hc, hst⟩ := ite_throw_cond hst
+        cases hst
+        refine ⟨_, rfl, ?_⟩
+        rw [← List.append_assoc]
+        exact seenInv_step hs hc) _ [] s s' (by simpa using hs) hin
+      simpa [returned, List.flatMap_append] using this
+    · refine ⟨Array.size_replicate, fun o h1 => ?_, List.nodup_nil, fun o h => by cases h⟩
+      rw [bool_get, Array.getElem?_replicate, ho, bne_self_eq_false] at h1
+      split at h1 <;> cases h1
+  refine ⟨hI.2.2.1, fun o hlt => hI.2.1 o ?_⟩
+  have hsz : o < seen.size := by rw [hI.1]; exact hlt
+  rw [getElem!_pos seen o hsz]
+  by_contra hf
+  exact hany (Array.any_eq_true.2 ⟨o, hsz, by simpa using hf⟩)
 
 /-- **`HmRow.check`'s `seen` loop**: the copies' leaf maps, in order, return each output word at most once
 (`check_returned_all`). -/
