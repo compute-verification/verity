@@ -308,25 +308,32 @@ theorem toList_expandArr (ranges : Array (ℕ × ℕ)) :
     (ranges.flatMap fun (r : ℕ × ℕ) => (Array.range (r.2 - r.1)).map (r.1 + ·)).toList = expand ranges.toList := by
   simp [expand, Array.toList_flatMap, List.range'_eq_map_range]
 
-/-- The input class `Slots.layout` lays after the population: every gate of the root's input nodes, one replay unit
-each, or no stratum when there are none. -/
-def inputClass (d : Program) : Array (Array Slots.RU) :=
-  let inputs := (Slots.inputGates d.desc).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : Slots.RU)
-  if inputs.isEmpty then #[] else #[inputs]
-
-/-- A population stratum as `Slots.layout` lays it: its units in order, each one replay unit of one proof unit. -/
+/-- A population stratum as `Slots.layout` lays it: its units in order, each one replay unit, its unit's gates first. -/
 def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.RU) : Prop :=
-  s.toList.map (·.unit) = (expand p.2.toList).map some ∧ ∀ r ∈ s.toList, r.pus.size = 1
+  s.toList.map (·.unit) = expand p.2.toList ∧ ∀ r ∈ s.toList, 0 < r.pus.size
 
-/-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
+theorem forall₂_laysOut {F : ℕ → Except String Slots.RU} (hF : ∀ u r, F u = .ok r → r.unit = u ∧ 0 < r.pus.size) :
+    ∀ (us : List ℕ) (rus : List Slots.RU), List.Forall₂ (fun a b => F a = .ok b) us rus →
+      rus.map (·.unit) = us ∧ ∀ r ∈ rus, 0 < r.pus.size
+  | [], [], .nil => ⟨rfl, fun r hr => absurd hr (by simp)⟩
+  | u :: us, r :: rus, .cons hab h => by
+    obtain ⟨ih1, ih2⟩ := forall₂_laysOut hF us rus h
+    obtain ⟨hu, hp⟩ := hF u r hab
+    refine ⟨by simp [hu, ih1], fun r' hr' => ?_⟩
+    rcases List.mem_cons.1 hr' with rfl | hr'
+    · exact hp
+    · exact ih2 r' hr'
+
+/-- **`Slots.layout`'s one class**: the strata of the evaluated query, each laid out unit by unit. -/
 theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
     (h : Slots.layout d query = .ok l) :
     ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.RU),
-      l = { classes := #[pop, inputClass d] } ∧
+      l = { classes := #[pop] } ∧
       List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList pop.toList := by
   unfold Slots.layout at h
   obtain ⟨rs, he, h⟩ := bind_eq_ok.1 h
   obtain ⟨gs, _, h⟩ := bind_eq_ok.1 h
+  obtain ⟨ins, _, h⟩ := bind_eq_ok.1 h
   dsimp only at h
   obtain ⟨pop, hp, h⟩ := bind_eq_ok.1 h
   refine ⟨rs, he, pop, (Except.ok.inj h).symm, ?_⟩
@@ -335,30 +342,18 @@ theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
   dsimp only at hs
   have hf := mapM_ok _ _ _ hs
   rw [toList_expandArr] at hf
-  have key : ∀ (us : List ℕ) (rus : List Slots.RU), List.Forall₂ (fun u (r : Slots.RU) =>
-      (match gs[u]? with
-        | some g => pure { unit := some u, pus := #[g] }
-        | _ => throw (toString "unit " ++ toString u ++ toString " has no gates") : Except String Slots.RU) =
-        .ok r) us rus → rus.map (·.unit) = us.map some ∧ ∀ r ∈ rus, r.pus.size = 1 := by
-    intro us rus hF
-    induction hF with
-    | nil => exact ⟨rfl, fun r hr => absurd hr (by simp)⟩
-    | cons hab _ ih =>
-      rename_i u r us' rus'
-      split at hab
-      · obtain rfl := (Except.ok.inj hab).symm
-        refine ⟨by simp [ih.1], fun r' hr' => ?_⟩
-        rcases List.mem_cons.1 hr' with rfl | hr'
-        · rfl
-        · exact ih.2 r' hr'
-      · exact absurd hab (by simp [throw, throwThe, MonadExceptOf.throw])
-  exact key _ _ hf
+  refine forall₂_laysOut ?_ _ _ hf
+  intro u r hab
+  split at hab
+  · obtain rfl := (Except.ok.inj hab).symm
+    exact ⟨rfl, by simp⟩
+  · exact absurd hab (by simp [throw, throwThe, MonadExceptOf.throw])
 
-/-- **The proof units `checked` lists**: `(v, i)` is one when slot `v` holds a replay unit whose unit is proved (or
-none, an input), and `i` is one of its proof units. -/
+/-- **The proof units `checked` lists**: `(v, i)` is one when slot `v` holds a replay unit whose unit is proved, and `i`
+is one of its proof units. -/
 theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v i : ℕ) :
     (v, i) ∈ Slots.checked l proved ↔
-      ∃ h : v < l.rus.size, l.rus[v].unit.all proved.contains = true ∧ i < l.rus[v].pus.size := by
+      ∃ h : v < l.rus.size, proved.contains l.rus[v].unit = true ∧ i < l.rus[v].pus.size := by
   unfold Slots.checked
   simp only [Array.mem_flatMap, Array.mem_filter, Array.mem_map, Array.mem_range, Prod.mk.injEq]
   constructor

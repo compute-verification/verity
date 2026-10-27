@@ -37,7 +37,7 @@ def popCheck (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
   | .ok p =>
     match SampledProofs.Slots.layout p q with
     | .error _ => false
-    | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
+    | .ok l => decide ((popOf l).map (·.unit) = List.range n)
 
 /-- **The registration's population is `n` units, in order**: `desc` parses, its layout under the query `q` is
 defined, and the layout's population is `n` replay units with slot `u` unit `u`. -/
@@ -48,7 +48,7 @@ instance instDecidablePopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) :
 
 theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
     PopMatches desc q n ↔ ∃ p l, SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p ∧
-      SampledProofs.Slots.layout p q = .ok l ∧ (popOf l).map (·.unit) = (List.range n).map some := by
+      SampledProofs.Slots.layout p q = .ok l ∧ (popOf l).map (·.unit) = List.range n := by
   unfold PopMatches popCheck
   constructor
   · intro h
@@ -63,7 +63,7 @@ theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
     rw [hp]
     show (match SampledProofs.Slots.layout p q with
       | .error _ => false
-      | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)) = true
+      | .ok l => decide ((popOf l).map (·.unit) = List.range n)) = true
     rw [hl]
     exact decide_eq_true h
 
@@ -71,7 +71,7 @@ theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
 theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
     {l : SampledProofs.Slots.Layout} (h : PopMatches desc q n)
     (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l) :
-    (popOf l).map (·.unit) = (List.range n).map some := by
+    (popOf l).map (·.unit) = List.range n := by
   obtain ⟨p', l', hp', hl', hu⟩ := popMatches_iff.1 h
   rw [hp] at hp'
   cases hp'
@@ -91,7 +91,7 @@ theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledPro
 theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
     {l : SampledProofs.Slots.Layout} (h : PopMatches desc q n)
     (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l)
-    (u : ℕ) (hu : u < (popOf l).length) : ((popOf l)[u]'hu).unit = some u := by
+    (u : ℕ) (hu : u < (popOf l).length) : ((popOf l)[u]'hu).unit = u := by
   have hu' : u < ((popOf l).map (·.unit)).length := by rw [List.length_map]; exact hu
   have := List.getElem_of_eq (popOf_units h hp hl) hu'
   simpa only [List.getElem_map, List.getElem_range] using this

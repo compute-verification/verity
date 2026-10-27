@@ -456,7 +456,7 @@ theorem designWellFormed : DesignWellFormed := by
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hm
     exact strataOf_pos _ (partition_covered d query rs he) p hp
   suffices h : ∀ first : OneStage, first.WellFormed (S.toList.map fun p => rsSize p.2) →
-      (⟨[⟨first, none⟩, ⟨.all, none⟩]⟩ : Design).WellFormed (slotPartition { classes := #[pop, inputClass d] }) by
+      (⟨[⟨first, none⟩]⟩ : Design).WellFormed (slotPartition { classes := #[pop] }) by
     rcases hDc with ⟨-, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
     · exact h .all trivial
     · exact h _ (first_wf rule d query table n named derived parsed S (strata_eq d query rs he) hne hnamed hd hp
@@ -467,8 +467,7 @@ theorem designWellFormed : DesignWellFormed := by
     List.not_mem_nil, or_false] at hp
   have hnone : ∀ (st : OneStage) k, (⟨st, none⟩ : Rule).check = some k → 1 ≤ k ∧ ∃ num den, st = .bernoulli num den :=
     fun _ _ hk => absurd hk (by simp)
-  rcases hp with rfl | rfl
-  · exact ⟨by simpa [strataSizes, Function.comp_def, hns] using hf, hnone first⟩
-  · exact ⟨trivial, hnone .all⟩
+  obtain rfl := hp
+  exact ⟨by simpa [strataSizes, Function.comp_def, hns] using hf, hnone first⟩
 
 end Properties.SampledProofs.SecurityProofs

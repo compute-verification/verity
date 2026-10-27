@@ -296,7 +296,7 @@ noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
 
 /-- **A class's sampling rule**: the first stage's design over the class's replay units, and how many proof units of
 each drawn replay unit are checked (`none`: all of them). One-stage sampling is a class whose replay units are each one
-proof unit; the input stratum is a class drawn `all`. -/
+proof unit. -/
 structure Rule where
   first : OneStage
   check : Option ℕ

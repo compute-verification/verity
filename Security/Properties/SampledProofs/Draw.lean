@@ -10,11 +10,10 @@ checks no proof unit of any replay unit at a slot of `B` with probability at mos
 `P_a(B)` of the design it draws, on the partition it draws over. It takes no premise: the draw is a function of its inputs
 and its bytes, and every input is in it, the `L` bytes included, however few.
 
-* **The partition** (`slotPartition`) is `Slots.layout`'s, its classes the population's strata and the input class, each
-  replay unit its proof units' gates.
-* **The design** (`slotDesign`) is the one the draw runs: the first class's first stage the C-Flock law it samples
-  (`Select.select`'s, `oneStageOf`), `all` for the `All` rule; the input class drawn `all`; every proof unit of a drawn
-  replay unit checked. The bound is `0` where the draw is refused before it samples (`missBound`).
+* **The partition** (`slotPartition`) is `Slots.layout`'s, one class, the population's strata, each replay unit its
+  proof units' gates: its unit's, then each input row it owns.
+* **The design** (`slotDesign`) is the one the draw runs: the class's first stage the C-Flock law it samples
+  (`Select.select`'s, `oneStageOf`), `all` for the `All` rule; every proof unit of a drawn replay unit checked. The bound is `0` where the draw is refused before it samples (`missBound`).
 * **The bytes** are `src`'s, in order (`bytesOf`): a draw that would read past them is refused, so it misses nothing.
 
 `DesignWellFormed`: that design is well formed on that partition (the claims' `Design.WellFormed`), so its `P_a` is a
@@ -44,8 +43,8 @@ def oneStageOf : Flock.Draw.Law → Claims.Sampling.OneStage
   | .work k ws => .work k (ws.toList.map (·.work)) (ws.toList.map (·.floor))
 
 /-- **The design `Slots.select` draws** under `rule` on `d` and `query` with the work `table`: the population's first
-stage, the law `Select.select` samples (`all` for the `All` rule), and the input class drawn `all`, each class checking
-every proof unit of a drawn replay unit. An error where `Select.select` refuses before it samples. -/
+stage, the law `Select.select` samples (`all` for the `All` rule), checking every proof unit of a drawn replay
+unit. An error where `Select.select` refuses before it samples. -/
 def slotDesign (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) : Flock.V Claims.Sampling.Design := do
   let n ← Partition.units d query
   let named ← rule.lawOver n
@@ -55,7 +54,7 @@ def slotDesign (rule : Select.Rule) (d : Program) (query : Json) (table : Option
     | _ => do
       let parsed ← Draw.flockLaw ((derived.map (·.toJson)).getD named) n
       pure (oneStageOf (derived.getD parsed))
-  return ⟨[⟨first, none⟩, ⟨.all, none⟩]⟩
+  return ⟨[⟨first, none⟩]⟩
 
 /-- The bound: `P_a(B)` of the design on the partition the draw runs over, and `0` where the draw is refused before it
 samples. -/

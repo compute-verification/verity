@@ -3039,7 +3039,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; there is no input class, and
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the layout is one class, and
     each input row is a one-gate block of the first unit that reads it, so the replay units' gates are every gate of the
     program once; and the checked proof blocks are every block of the drawn units' slots, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))

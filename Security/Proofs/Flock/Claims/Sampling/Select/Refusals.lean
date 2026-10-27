@@ -15,8 +15,8 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 * `RefusesWide`: every proof unit's committed values (the claims' `committed`, on its own gates) fit its public size
   class (`unitClass`).
 
-On partitions of the shape of the verifier's own layouts (`DrawSlots`), whose replay units are one proof unit each
-(`slotPartition_single`, `Partition.single_of_shape`), the
+On partitions of the shape of the verifier's own layouts (`DrawSlots`), whose replay units each have a proof unit
+(`slotPartition_nonempty`, `Partition.nonempty_of_shape`), the
 five give `ProgramScope` (`programScope_of_refusals`), and so `ScopeMatches` (`scopeMatches_of_refusals`) and, with
 `ChecksScope`, `Refuses` (`refuses_of_refusals`). Each is needed: `ScopeMatches` at such a scope check gives all five
 (`refusals_of_scopeMatches`, `scopeMatches_iff_refusals`).
@@ -44,11 +44,10 @@ def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
 theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
   ⟨h.1, ⟨h.2.1, h.2.2.1⟩, h.2.2.2.2.1, h.2.2.2.2.2⟩
 
-/-- **A partition whose replay units are one proof unit each partitions `C` exactly when it cuts it.** -/
-theorem partitions_iff_cuts (P : Partition) (C : Prog) (h1 : ∀ r ∈ P.rus, r.length = 1) :
+/-- **A partition whose replay units each have a proof unit partitions `C` exactly when it cuts it.** -/
+theorem partitions_iff_cuts (P : Partition) (C : Prog) (h1 : ∀ r ∈ P.rus, r ≠ []) :
     P.Partitions C ↔ P.Cuts C :=
-  ⟨Partition.Partitions.cuts, fun ⟨hnd, ⟨hin, hcov⟩, hne, hw⟩ =>
-    ⟨hnd, hin, hcov, fun r hr h => by simpa [h] using h1 r hr, hne, hw⟩⟩
+  ⟨Partition.Partitions.cuts, fun ⟨hnd, ⟨hin, hcov⟩, hne, hw⟩ => ⟨hnd, hin, hcov, h1, hne, hw⟩⟩
 
 theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ b ∈ l₂, ∃ a ∈ l₁, R a b
@@ -59,32 +58,24 @@ theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
     · obtain ⟨a', ha', h'⟩ := forall₂_mem_right h b hb
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
-/-- **The verifier's replay units are one proof unit each**: every replay unit of a layout `Slots.layout` gives, a
-population unit's or an input gate's, has one proof unit (`layout_ok`). -/
-theorem slotPartition_single (d : Program) (query : Lean.Json) (l : Slots.Layout) (h : Slots.layout d query = .ok l) :
-    ∀ r ∈ (slotPartition l).rus, r.length = 1 := by
+/-- **The verifier's replay units each have a proof unit**: every replay unit of a layout `Slots.layout` gives has its
+unit's gates as its first proof unit (`layout_ok`). -/
+theorem slotPartition_nonempty (d : Program) (query : Lean.Json) (l : Slots.Layout) (h : Slots.layout d query = .ok l) :
+    ∀ r ∈ (slotPartition l).rus, r ≠ [] := by
   obtain ⟨rs, -, pop, rfl, hpop⟩ := layout_ok d query l h
-  have hone : ∀ c ∈ [pop, inputClass d], ∀ s ∈ c.toList, ∀ ru ∈ s.toList, ru.pus.size = 1 := by
-    intro c hc s hs ru hru
-    rcases List.mem_cons.1 hc with rfl | hc
-    · obtain ⟨p, -, hp⟩ := forall₂_mem_right hpop s hs
-      exact hp.2 ru hru
-    · rw [List.mem_singleton.1 hc] at hs
-      unfold inputClass at hs
-      dsimp only at hs
-      split at hs
-      · simp at hs
-      · simp only [List.mem_singleton] at hs
-        subst hs
-        simp only [Array.toList_map, List.mem_map] at hru
-        obtain ⟨g, -, rfl⟩ := hru
-        rfl
   intro r hr
   simp only [Partition.rus, slotPartition, List.mem_flatten, List.mem_map] at hr
   obtain ⟨_, ⟨_, ⟨c, hc, rfl⟩, hl⟩, hr⟩ := hr
   obtain ⟨s, hs, rfl⟩ := List.mem_map.1 hl
   obtain ⟨ru, hru, rfl⟩ := List.mem_map.1 hr
-  simpa using hone c (by simpa using hc) s hs ru hru
+  have hc : c = pop := by simpa using hc
+  subst hc
+  obtain ⟨p, -, hp⟩ := forall₂_mem_right hpop s hs
+  have := hp.2 ru hru
+  intro h0
+  have := congrArg List.length h0
+  simp only [List.length_map, Array.length_toList, List.length_nil] at this
+  omega
 
 /-- **The scope check is the verifier's evaluation**: it takes a statement exactly when the statement parses and its
 query evaluates. -/
@@ -124,7 +115,7 @@ theorem programScope_of_refusals [Fintype Coin] [Nonempty Coin] (D : Deploy Coin
   · rintro ⟨s, Pt, hx, hP⟩
     obtain ⟨-, d, query, -, -, l, -, -, -, hl, hshape, -⟩ := hslots x s Pt hx hP
     exact ⟨s, _, hx, hP, h₁ x s _ hx hP,
-      (partitions_iff_cuts _ _ (Partition.single_of_shape hshape (slotPartition_single d query l hl))).2
+      (partitions_iff_cuts _ _ (Partition.nonempty_of_shape hshape (slotPartition_nonempty d query l hl))).2
         ⟨h₂ x s _ hx hP, h₃ x s _ hx hP, h₄ x s _ hx hP, h₅ x s _ hx hP⟩⟩
   · rintro ⟨s, Pt, hx, hP, -, -⟩
     exact ⟨s, Pt, hx, hP⟩

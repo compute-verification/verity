@@ -10,9 +10,9 @@ import Properties.SampledProofs.Draw
 (`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
 program `p` and query:
 * **units**: the service draws and proves the units of the verifier's own partition of its program
-  (`SampledProofs.Slots.layout`: the population's replay units, each one proof unit and its gates, then the input
-  class). Every gate of `Cd` that is not an input lies in the gates of the replay unit that is its own unit, every
-  input slot's gate is an input of `Cd`, and every population unit is one of `Cd`'s. It reads `Cd`'s gate `i` as `p`'s
+  (`SampledProofs.Slots.layout`: the population's replay units, each its unit's gates, then a one-gate proof unit for
+  each input row the unit owns). Every gate of `Cd` that is not an input lies in the gates of the replay unit that is its
+  own unit, every input row's gate is an input of `Cd`, and every unit is one of `Cd`'s. It reads `Cd`'s gate `i` as `p`'s
   root gate `i`, and a `Q_word` unit's span may hold another unit's gates (`Partition.unitGates`), so it bounds each
   gate inside its own unit's span, not the span inside the unit;
 * **commit coins**: the code's schedule. PoUW's coins are one salt a window and the draw (`PouwCommit.LABELS`): the
@@ -46,8 +46,8 @@ open Pouw.RelativeSecurity (prob)
 namespace Properties.Compose
 
 /-- **`Cd` is the service's** on program `p` under `query`, wherever the layout is defined: each of `Cd`'s non-input
-gates lies in a proof unit of the replay unit that is its own unit, each input slot's gate is an input of `Cd`, each
-population unit is one of `Cd`'s `units`; each value `Cd` writes is committed before coin `0` when it is a registered
+gates lies in a proof unit of the replay unit that is its own unit, each input row's gate (a replay unit's proof units
+after its first) is an input of `Cd`, each unit is one of `Cd`'s `units`; each value `Cd` writes is committed before coin `0` when it is a registered
 input and before the draw (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedule; each round's seed names a value
 `Cd` writes exactly when it is a registered input (through the salt, which names the weights' root); and where the
 population is `N_p` units, the code's `subset:K_d` draw from `L` uniform bytes is accepted and misses a set `U` of
@@ -57,9 +57,9 @@ def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ
     (query : Json) : Prop :=
   ∀ l, SampledProofs.Slots.layout p query = .ok l →
     (∀ i, i < Cd.dag.length → Cd.binding i = none →
-      ∃ r ∈ l.rus.toList, r.unit = some (Cd.unit i) ∧ ∃ g ∈ r.pus.toList, g.1 ≤ i ∧ i < g.2) ∧
-    (∀ r ∈ l.rus.toList, r.unit = none → ∀ g ∈ r.pus.toList, g.1 < Cd.dag.length ∧ (Cd.binding g.1).isSome) ∧
-    (∀ r ∈ l.rus.toList, ∀ u, r.unit = some u → u < Cd.units) ∧
+      ∃ r ∈ l.rus.toList, r.unit = Cd.unit i ∧ ∃ g ∈ r.pus.toList, g.1 ≤ i ∧ i < g.2) ∧
+    (∀ r ∈ l.rus.toList, ∀ g ∈ r.pus.toList.tail, g.1 < Cd.dag.length ∧ (Cd.binding g.1).isSome) ∧
+    (∀ r ∈ l.rus.toList, r.unit < Cd.units) ∧
     (∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ = match Cd.binding ℓ with
       | some .registered => 0
       | _ => Cd.rounds) ∧

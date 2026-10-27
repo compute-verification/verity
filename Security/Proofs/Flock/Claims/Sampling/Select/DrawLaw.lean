@@ -104,15 +104,16 @@ theorem Partition.sizes_of_shape {P Q : Partition} (h : P.shape = Q.shape) : P.s
 theorem Partition.rus_length_of_shape {P Q : Partition} (h : P.shape = Q.shape) : P.rus.length = Q.rus.length := by
   simpa [Partition.sizes] using congrArg List.length (Partition.sizes_of_shape h)
 
-/-- Partitions of one shape whose replay units are one proof unit each: either both or neither. -/
-theorem Partition.single_of_shape {P Q : Partition} (h : P.shape = Q.shape) (hQ : ∀ r ∈ Q.rus, r.length = 1) :
-    ∀ r ∈ P.rus, r.length = 1 := by
-  intro r hr
-  have hm : r.length ∈ Q.sizes := by
+/-- Partitions of one shape whose replay units each have a proof unit: either both or neither. -/
+theorem Partition.nonempty_of_shape {P Q : Partition} (h : P.shape = Q.shape) (hQ : ∀ r ∈ Q.rus, r ≠ []) :
+    ∀ r ∈ P.rus, r ≠ [] := by
+  intro r hr h0
+  subst h0
+  have hm : ([] : RU).length ∈ Q.sizes := by
     rw [← Partition.sizes_of_shape h]
     exact List.mem_map_of_mem hr
   obtain ⟨r', hr', he⟩ := List.mem_map.1 hm
-  rw [← he, hQ r' hr']
+  exact hQ r' hr' (List.eq_nil_of_length_eq_zero (by simpa using he))
 
 theorem classesPa_of_shape : ∀ (rs : List Rule) (cs cs' : List (List (List RU))) (o : ℕ) (B : Finset ℕ),
     cs.map classShape = cs'.map classShape → classesPa rs cs o B = classesPa rs cs' o B

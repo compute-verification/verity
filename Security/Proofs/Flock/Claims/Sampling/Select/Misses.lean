@@ -3,9 +3,8 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
 /-!
 # `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.SampledProofs.DrawMisses`)
 
-* `misses_layout`: a draw that checks no proof unit at a slot of `B` leaves `B` no input slot, and proves no unit at a
-  population slot of `B`.
-* `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
+* `misses_layout`: a draw that checks no proof unit at a slot of `B` proves no unit at a slot of `B`.
+* `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage.
 * `drawMisses`: the draw is accepted and misses `B` with probability at most `missBound`.
 -/
 
@@ -18,17 +17,16 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampl
 /-- The population's replay units, slot by slot. -/
 def popRUs (pop : Array (Array Slots.RU)) : List Slots.RU := pop.toList.flatMap (·.toList)
 
-theorem rus_toList (pop ic : Array (Array Slots.RU)) :
-    (({ classes := #[pop, ic] } : Slots.Layout).rus).toList = popRUs pop ++ popRUs ic := by
-  simp [Slots.Layout.rus, popRUs, List.flatten_append]
-  rfl
+theorem rus_toList (pop : Array (Array Slots.RU)) :
+    (({ classes := #[pop] } : Slots.Layout).rus).toList = popRUs pop := by
+  simp [Slots.Layout.rus, popRUs]
 
 /-- The population's units, slot by slot. -/
 def popUnits (S : Array (String × Array (ℕ × ℕ))) : List ℕ := S.toList.flatMap fun p => expand p.2.toList
 
 theorem laysOut_units : ∀ (S : List (String × Array (ℕ × ℕ))) (pop : List (Array Slots.RU)), List.Forall₂ LaysOut S pop →
-    (pop.flatMap (·.toList)).map (·.unit) = (S.flatMap fun p => expand p.2.toList).map some ∧
-      (∀ r ∈ pop.flatMap (·.toList), r.pus.size = 1) ∧ pop.map (·.size) = S.map fun p => rsSize p.2
+    (pop.flatMap (·.toList)).map (·.unit) = S.flatMap (fun p => expand p.2.toList) ∧
+      (∀ r ∈ pop.flatMap (·.toList), 0 < r.pus.size) ∧ pop.map (·.size) = S.map fun p => rsSize p.2
   | [], [], .nil => ⟨rfl, fun r hr => absurd hr (by simp), rfl⟩
   | p :: S, s :: pop, .cons ⟨hu, hp⟩ h => by
     obtain ⟨ih1, ih2, ih3⟩ := laysOut_units S pop h
@@ -43,75 +41,47 @@ theorem laysOut_units : ∀ (S : List (String × Array (ℕ × ℕ))) (pop : Lis
         exact this
       simp only [List.map_cons, this, ih3]
 
-theorem inputClass_rus (d : Program) : ∀ r ∈ popRUs (inputClass d), r.unit = none ∧ r.pus.size = 1 := by
-  intro r hr
-  unfold popRUs inputClass at hr
-  dsimp only at hr
-  split at hr
-  · simp at hr
-  · simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, Array.toList_map, List.mem_map] at hr
-    obtain ⟨g, -, rfl⟩ := hr
-    exact ⟨rfl, rfl⟩
-
-/-- **A draw that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
-input slot, and no unit at a population slot of `B` is proved. -/
-theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array (Array Slots.RU))
-    (hlays : List.Forall₂ LaysOut S.toList pop.toList)
-    (hic : ∀ r ∈ popRUs ic, r.unit = none ∧ r.pus.size = 1) (proved : Array ℕ) (B : Finset ℕ)
-    (h : Misses B (Slots.checked { classes := #[pop, ic] } proved)) :
-    window (popUnits S).length (popRUs ic).length B = ∅ ∧
-      ∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ proved := by
+/-- **A draw that misses `B`**, over a layout of the population's strata `S`: no unit at a slot of `B` is proved. -/
+theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop : Array (Array Slots.RU))
+    (hlays : List.Forall₂ LaysOut S.toList pop.toList) (proved : Array ℕ) (B : Finset ℕ)
+    (h : Misses B (Slots.checked { classes := #[pop] } proved)) :
+    ∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ proved := by
   obtain ⟨hu, hp, -⟩ := laysOut_units S.toList pop.toList hlays
-  replace hu : (popRUs pop).map (·.unit) = (popUnits S).map some := hu
-  replace hp : ∀ r ∈ popRUs pop, r.pus.size = 1 := hp
+  replace hu : (popRUs pop).map (·.unit) = popUnits S := hu
+  replace hp : ∀ r ∈ popRUs pop, 0 < r.pus.size := hp
   have hlen : (popRUs pop).length = (popUnits S).length := by
-    rw [← List.length_map (f := fun r : Slots.RU => r.unit), hu, List.length_map]
-  have hrus := rus_toList pop ic
-  constructor
-  · refine Finset.eq_empty_of_forall_notMem fun j hj => ?_
-    have hjl : j < (popRUs ic).length := Finset.mem_range.1 (window_subset _ _ _ hj)
-    refine h _ ((mem_window hjl).1 hj) 0 ((mem_checked _ _ _ _).2 ?_)
-    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.Layout).rus.size := by
-      rw [← Array.length_toList, hrus, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).rus[(popUnits S).length + j] = (popRUs ic)[j] := by
-      rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_right (by omega)]
-      congr 1; omega
-    refine ⟨hv, ?_, ?_⟩
-    · rw [hr, (hic _ (List.getElem_mem _)).1]; rfl
-    · rw [hr, (hic _ (List.getElem_mem _)).2]; omega
-  · intro v hv hpv
-    have hvl : v < (popUnits S).length := Finset.mem_range.1 (window_subset _ _ _ hv)
-    rw [mem_window hvl, zero_add] at hv
-    refine h v hv 0 ((mem_checked _ _ _ _).2 ?_)
-    have hvr : v < ({ classes := #[pop, ic] } : Slots.Layout).rus.size := by
-      rw [← Array.length_toList, hrus, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).rus[v] = (popRUs pop)[v] := by
-      rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_left]
-    have hunit : (popRUs pop)[v].unit = some ((popUnits S).getD v 0) := by
-      have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popRUs pop).map (·.unit)).length)
-      rw [List.getElem_map, List.getElem_map] at this
-      rw [List.getD_eq_getElem _ _ hvl]
-      exact this
-    refine ⟨hvr, ?_, ?_⟩
-    · rw [hr, hunit]
-      simpa using hpv
-    · have := hp (popRUs pop)[v] (List.getElem_mem _)
-      rw [hr, this]; omega
+    rw [← List.length_map (f := fun r : Slots.RU => r.unit), hu]
+  have hrus := rus_toList pop
+  intro v hv hpv
+  have hvl : v < (popUnits S).length := Finset.mem_range.1 (window_subset _ _ _ hv)
+  rw [mem_window hvl, zero_add] at hv
+  refine h v hv 0 ((mem_checked _ _ _ _).2 ?_)
+  have hvr : v < ({ classes := #[pop] } : Slots.Layout).rus.size := by
+    rw [← Array.length_toList, hrus]; omega
+  have hr : ({ classes := #[pop] } : Slots.Layout).rus[v] = (popRUs pop)[v] := by
+    rw [← Array.getElem_toList]; exact List.getElem_of_eq hrus _
+  have hunit : (popRUs pop)[v].unit = (popUnits S).getD v 0 := by
+    have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popRUs pop).map (·.unit)).length)
+    rw [List.getElem_map] at this
+    rw [List.getD_eq_getElem _ _ hvl]
+    exact this
+  refine ⟨hvr, ?_, ?_⟩
+  · rw [hr, hunit]
+    simpa using hpv
+  · rw [hr]; exact hp _ (List.getElem_mem _)
 
 theorem slots_length (c : Array (Array Slots.RU)) :
     (c.toList.map fun s => s.toList.map fun r => r.pus.toList.map puGates).flatten.length = (popRUs c).length := by
   simp [popRUs, List.length_flatten, List.length_flatMap, Function.comp_def]
 
-/-- **The design's `P_a` on `Slots.layout`'s partition**: the population's first stage on its window of `B`, times the
-input class's `all`. -/
-theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.RU)) (B : Finset ℕ) :
-    (⟨[⟨first, none⟩, ⟨.all, none⟩]⟩ : Design).Pa (slotPartition { classes := #[pop, ic] }) B =
-      first.Pa (pop.toList.map (·.size)) (window 0 (popRUs pop).length B) *
-        (if window (popRUs pop).length (popRUs ic).length B = ∅ then 1 else 0) := by
+/-- **The design's `P_a` on `Slots.layout`'s partition**: the population's first stage on its window of `B`. -/
+theorem pa_slots (first : OneStage) (pop : Array (Array Slots.RU)) (B : Finset ℕ) :
+    (⟨[⟨first, none⟩]⟩ : Design).Pa (slotPartition { classes := #[pop] }) B =
+      first.Pa (pop.toList.map (·.size)) (window 0 (popRUs pop).length B) := by
   unfold Design.Pa slotPartition
-  simp only [List.map_cons, List.map_nil, classesPa, Rule.Pa_none (r := ⟨first, none⟩) rfl,
-    Rule.Pa_none (r := ⟨.all, none⟩) rfl, strataSizes, slots_length, zero_add, mul_one]
-  congr 2
+  simp only [List.map_cons, List.map_nil, classesPa, Rule.Pa_none (r := ⟨first, none⟩) rfl, strataSizes,
+    slots_length, mul_one]
+  congr 1
   simp [Function.comp_def]
 
 /-- `slotDesign`'s steps: the population, the rule's law and its expansion, and the design they give. -/
@@ -119,9 +89,9 @@ theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (ta
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
       Draw.deriveLaw d query named table = .ok derived ∧
-      ((rule = .all ∧ D = ⟨[⟨.all, none⟩, ⟨.all, none⟩]⟩) ∨
+      ((rule = .all ∧ D = ⟨[⟨.all, none⟩]⟩) ∨
         (rule ≠ .all ∧ ∃ parsed, Draw.flockLaw (lawObj named derived) n = .ok parsed ∧
-          D = ⟨[⟨oneStageOf (derived.getD parsed), none⟩, ⟨.all, none⟩]⟩)) := by
+          D = ⟨[⟨oneStageOf (derived.getD parsed), none⟩]⟩)) := by
   unfold slotDesign at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
   obtain ⟨named, hnamed, h⟩ := bind_eq_ok.1 h
@@ -293,8 +263,8 @@ theorem drawMisses : DrawMisses := by
   have hlenP : (popRUs pop).length = (popUnits S).length := by
     obtain ⟨hu, -, -⟩ := laysOut_units _ _ hlays
     rw [← List.length_map (f := fun r : Slots.RU => r.unit),
-      show (popRUs pop).map (·.unit) = (popUnits S).map some from hu, List.length_map]
-  have hstep : ∀ src, E src → window (popUnits S).length (popRUs (inputClass d)).length B = ∅ ∧
+      show (popRUs pop).map (·.unit) = popUnits S from hu]
+  have hstep : ∀ src, E src →
       ∃ units : Array ℕ, (∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ units) ∧
         ((rule = .all ∧ units = Array.range (popUnits S).length) ∨
           (rule ≠ .all ∧ ∃ parsed read', Draw.flockLaw (lawObj named derived) (popUnits S).length = .ok parsed ∧
@@ -304,7 +274,7 @@ theorem drawMisses : DrawMisses := by
     obtain ⟨hl', draw, proved, read, hsel, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
     rw [hl] at hl'
     obtain rfl := (Except.ok.inj hl')
-    obtain ⟨hW1, hW0⟩ := misses_layout S pop (inputClass d) hlays (inputClass_rus d) proved B hm
+    have hW0 := misses_layout S pop hlays proved B hm
     obtain ⟨n', named', derived', hn', hnamed', hd', units, hsub, hcase⟩ := select_ok _ _ _ _ _ _ _ _ _ hsel
     rw [hn] at hn'
     obtain rfl := Except.ok.inj hn'
@@ -312,21 +282,15 @@ theorem drawMisses : DrawMisses := by
     obtain rfl := Except.ok.inj hnamed'
     rw [hd] at hd'
     obtain rfl := Except.ok.inj hd'
-    exact ⟨hW1, units, fun v hv hu => hW0 v hv (hsub _ hu), hcase⟩
-  by_cases hW1 : window (popUnits S).length (popRUs (inputClass d)).length B = ∅
-  swap
-  · rcases hDc with ⟨-, rfl⟩ | ⟨-, -, -, rfl⟩ <;>
-    · rw [hzero fun src hs => hW1 (hstep src hs).1, pa_slots, hlenP]
-      simp [hW1]
+    exact ⟨units, fun v hv hu => hW0 v hv (hsub _ hu), hcase⟩
   rcases hDc with ⟨hrule, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
   · rw [pa_slots, hlenP]
-    simp only [hW1, ↓reduceIte, mul_one]
     by_cases hW0 : window 0 (popUnits S).length B = ∅
     · simp only [OneStage.Pa, hW0, ↓reduceIte]
       exact Claims.Pr_le_one _
     · simp only [OneStage.Pa, hW0, ↓reduceIte]
       refine le_of_eq (hzero fun src hs => ?_)
-      obtain ⟨-, units, hW0', hcase⟩ := hstep src hs
+      obtain ⟨units, hW0', hcase⟩ := hstep src hs
       rcases hcase with ⟨-, rfl⟩ | ⟨hr, -⟩
       · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 hW0
         have hvl := Finset.mem_range.1 (window_subset _ _ _ hv)
@@ -337,10 +301,9 @@ theorem drawMisses : DrawMisses := by
         omega
       · exact absurd hrule hr
   · rw [pa_slots, hlenP]
-    simp only [hW1, ↓reduceIte, mul_one]
     refine le_trans (Claims.Pr_mono fun src hs => ?_)
       (law_bound d query rs he pop hlays named table derived parsed hd hp _ (window_subset _ _ _) L)
-    obtain ⟨-, units, hW0, hcase⟩ := hstep src hs
+    obtain ⟨units, hW0, hcase⟩ := hstep src hs
     rcases hcase with ⟨hr, -⟩ | ⟨-, parsed', read', hp', hu⟩
     · exact absurd hr hne
     · rw [hp] at hp'
