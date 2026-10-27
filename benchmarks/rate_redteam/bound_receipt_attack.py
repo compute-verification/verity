@@ -1,21 +1,21 @@
-"""The bound receipt binds a block's sketch to the prior tile's noised output z.
+"""The bound receipt binds a chunk's sketch to the prior tile's noised output z.
 
 The design (remote-bandwidth-exhaustion.md §3, §5) proposes a per-block receipt
 
     receipt_{j,p} = H(sigma, p, sketch(E_j (*) expand(z_{p-1})), z_{p-1}),
 
 with z mixed in *before* the linear sketch, elementwise, so that a relay must move
-min(|z|, |E|) bytes per block per pass. The sketch is a fixed +-1 projection whose
+min(|z|, |E|) bytes per chunk per pass. The sketch is a fixed +-1 projection whose
 sign matrix S is derived from the window challenge sigma (ra-sketch-tag:
 K_S = derive(sigma, ...)), so S is constant across the window's passes.
 
-This script shows, bit-exact over the integers, that for a fixed window the block's
+This script shows, bit-exact over the integers, that for a fixed window the chunk's
 entire contribution to every pass's receipt collapses to a static digest
 C = contract(S, E, pattern), of shape (rows x L) where L is the number of distinct
-z-values the block sees. Each pass's sketch is then C @ z_p, read from C alone; the
-block E_j is never touched after C is built. So:
+z-values the chunk sees. Each pass's sketch is then C @ z_p, read from C alone; the
+chunk E_j is never touched after C is built. So:
 
-  * one read of the store builds every block's C (cost |C|, not |E|, per block);
+  * one read of the store builds every chunk's C (cost |C|, not |E|, per chunk);
   * every subsequent pass's receipts cost zero store reads;
   * if z_p is equal across audit passes (filler, or a static-activation decode step),
     even C @ z is computed once and the pass index p only relabels the hash.
@@ -65,14 +65,14 @@ def main(passes: int) -> None:
     rng = np.random.default_rng(20261012)
     rows = 16  # sketch outputs, k_s = 16
 
-    # Decode weight block: 4 KiB int8, shape k_blk x n_blk, batch m. expand(z) broadcasts
-    # the prior tile output (one value per output column) across the block's k rows, so the
-    # block sees L = n_blk distinct z-values. |z|/|E| = 4m/k in the design; here L/(k_blk*n_blk).
+    # Decode weight chunk: 4 KiB int8, shape k_blk x n_blk, batch m. expand(z) broadcasts
+    # the prior tile output (one value per output column) across the chunk's k rows, so the
+    # chunk sees L = n_blk distinct z-values. |z|/|E| = 4m/k in the design; here L/(k_blk*n_blk).
     for (k_blk, n_blk, m) in [(256, 16, 8), (128, 32, 8), (64, 64, 8), (64, 64, 64)]:
         n = k_blk * n_blk
         L = n_blk
         E = rng.integers(-128, 128, size=n, dtype=np.int64)
-        # g maps block coordinate (a, b) -> column b in [0, L); a = i // n_blk, b = i % n_blk.
+        # g maps chunk coordinate (a, b) -> column b in [0, L); a = i // n_blk, b = i % n_blk.
         g = np.arange(n) % n_blk
         sigma = hashlib.blake2b(f"{k_blk}x{n_blk}m{m}".encode(), digest_size=32).digest()
         # S derived from sigma: fixed for the whole window.
@@ -108,7 +108,7 @@ def main(passes: int) -> None:
             "read_reduction_x": round(honest_reads / attack_reads, 1),
         }))
 
-    # The sharper collapse: when z is identical across audit passes (filler blocks have no
+    # The sharper collapse: when z is identical across audit passes (filler chunks have no
     # matmul; a decode step over a frozen store repeats the same tile output), the inner
     # sketch is computed once and the pass index only relabels the hash.
     n = 4096
