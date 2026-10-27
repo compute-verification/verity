@@ -14,7 +14,8 @@ the change's base, the list's total held, a loosened lint failing, a base lint t
 the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
-further, the source checks' findings kept beside the verdict, where ruff comes from (this
+further, a public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
+there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
@@ -1090,6 +1091,52 @@ def test_both_counted_lints_count_the_top_change_each_naming_its_own_fix(env_lin
     assert first.startswith("adds 1 direct environment read(s)") and "settings registry" in first, c["why"]
     assert second.startswith(f"adds 1 silent except handler(s) to the Python it changes, as the base's {REPO_SILENT_LINT} "
                              "counts them (tools/b.py 0 -> 1): Re-raise;"), c["why"]
+
+
+CALLERS_LINT = "integrations/vllm/tests/lint/test_p16_cli_callers.py"
+CLI = "integrations/vllm/verity_vllm/pipeline/cli.py"
+ROW = {"row": "benchmarks/row.sh"}
+
+
+def _cli(*names: str) -> str:
+    """cli.py's COMMANDS table, each command running a module of its own"""
+    return "COMMANDS: dict[str, tuple[str, str]] = {\n" + "".join(
+        f'    "{n}": ("verity_vllm.{n}", "help"),\n' for n in names) + "}\n"
+
+
+def _callers(public: dict[str, str]) -> str:
+    return json.dumps({"rule": "P16", "public": public, "entries": []}, indent=1) + "\n"
+
+
+@pytest.fixture
+def callers_linted(repo) -> Repo:
+    """``repo`` with the real P16 lint, whose one command, row, is public, run by benchmarks/row.sh."""
+    repo.commit("p16", {CALLERS_LINT: (REAL_LINT / "test_p16_cli_callers.py").read_text(),
+                        "integrations/vllm/tests/lint/_ratchet.py": (REAL_LINT / "_ratchet.py").read_text(),
+                        CLI: _cli("row"), G.CALLERS_LIST: _callers(ROW), "benchmarks/row.sh": "verity-vllm row --x 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_is_refused_when_it_does_not(callers_linted):
+    """#5088's weights-tie, run only from benchmarks/prove_path/run.sh: the base's P16 lint, run on the change's tree, reads
+    the change's public table, and the gate checks each caller the table gains (a new command's, or one moved to another
+    file) as that lint finds a call."""
+    callers_linted.commit("adds tie, run from benchmarks", {
+        CLI: _cli("row", "tie"), G.CALLERS_LIST: _callers({**ROW, "tie": "benchmarks/tie/run.sh"}),
+        "benchmarks/tie/run.sh": 'WT="$PY -m verity_vllm.pipeline.cli tie"\n$WT --x 1\n'})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.CALLERS_LIST], ["p16_cli_callers"]), c["why"]
+    assert "public, each run by its caller: tie (benchmarks/tie/run.sh)" in c["why"], c["why"]
+    callers_linted.git("checkout", "-q", "-b", "uncalled", "main")
+    callers_linted.commit("adds tie, which its caller only names, and gives row a caller that isn't there", {
+        CLI: _cli("row", "tie"), G.CALLERS_LIST: _callers({"row": "benchmarks/gone.sh", "tie": "benchmarks/tie/run.sh"}),
+        "benchmarks/tie/run.sh": "# run verity-vllm tie by hand\necho tie\n"})
+    [c] = G.gate("main", "uncalled")["changes"]
+    assert (c["verdict"], c["lints"]) == ("failed", []), c["why"]
+    assert c["why"].startswith(f"declares 2 command(s) public in {G.CALLERS_LIST} that the file it names doesn't run"), c["why"]
+    assert c["fix"] == [f'{G.CALLERS_LIST}: public "row": "benchmarks/gone.sh" is no file in the change\'s tree',
+                        f'{G.CALLERS_LIST}: public "tie": benchmarks/tie/run.sh doesn\'t run `verity-vllm tie`']
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"
