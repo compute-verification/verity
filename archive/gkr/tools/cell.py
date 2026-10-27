@@ -837,10 +837,10 @@ def main(argv=None) -> int:
                      "meta": dict(d, label=f"{a.operator} {d['workload_fingerprint'].get('relation')} sweep point {d['workload_fingerprint']['B']} VUs")}
                     for d in others]
             Path(a.others).write_text(json.dumps({"schema": "research/outputs/v0.1", "outputs": outs}, indent=1, default=str))
-        from verity_numerical.bench import views
-        ix = views.interaction(best)
+        from verity_numerical.bench import interaction
+        ix = interaction.interaction(best)
         print(json.dumps({"out": a.out, "sweep": best["sweep"], "protocol": {k: v for k, v in best["protocol"].items() if k != "contention"},
-                          "interaction_problem": views.interaction_problem(ix), "contract_problems": best.get("contract_problems")},
+                          "interaction_problem": interaction.interaction_problem(ix), "contract_problems": best.get("contract_problems")},
                          indent=1, default=str))
         return 0
     if a.cmd == "register":

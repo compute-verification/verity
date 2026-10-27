@@ -128,11 +128,7 @@ def bench(seconds: float) -> tuple[dict[str, Any], dict[str, Any] | None]:
 
 
 def sku_of(name: str | None) -> str | None:
-    try:
-        from verity_numerical.bench.tables import normalise_sku
-    except ImportError:
-        return name
-    return normalise_sku(name)
+    return name
 
 
 def judge(measured: dict[str, Any] | None, ref: dict[str, Any] | None) -> tuple[str, dict[str, float]]:

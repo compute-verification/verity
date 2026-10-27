@@ -165,13 +165,13 @@ WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
 
 
 def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
-    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``, ``headline.groups``), in
-    id order; an attention head's T range is its census ``variable_ranges.T``."""
+    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``: a mix entry's
+    template bound to exactly its parameters), in id order; an attention head's T range is its census ``variable_ranges.T``."""
     from . import census
-    from . import headline as H
 
-    sids = sorted({g["subcircuit"] for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows
-                   for g in H.groups(w) if g["subcircuit"]})
+    bound = {(s.template, json.dumps(vars(s.parameters), sort_keys=True)): s.id for s in census.SUBCIRCUITS.values()}
+    sids = sorted({sid for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows for m in w["template_mix"]
+                   if (sid := bound.get((m["subcircuit_template"], json.dumps(m["subcircuit_parameters"] or {}, sort_keys=True))))})
     out = []
     for sid in sids:
         sub = TM.parse_subcircuit_id(sid)

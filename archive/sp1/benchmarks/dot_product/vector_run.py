@@ -485,12 +485,13 @@ def sp1_timeline(log_text: str) -> list[dict]:
 def _check_bf16_fixtures(root: Path) -> tuple[str, dict]:
     """sha256 of ``manifest.json`` (must be the frozen BF16 set's, and the checkout's own) and of every array read."""
 
-    from verity_numerical.bench import tables
+    from verity_numerical.bench import census
 
+    frozen = census.INPUT_SETS["bench-instances-v1"].manifest_sha256
     man_path = root / "manifest.json"
     manifest_sha = _sha256_file(man_path)
-    if manifest_sha != tables.BF16_INSTANCES_MANIFEST_SHA256:
-        raise SystemExit(f"sp1-bare: {man_path} is {manifest_sha}, not the frozen {tables.BF16_INSTANCES_MANIFEST_SHA256}")
+    if manifest_sha != frozen:
+        raise SystemExit(f"sp1-bare: {man_path} is {manifest_sha}, not the frozen {frozen}")
     own = INSTANCES_ROOT / "manifest.json"
     if own.is_file() and _sha256_file(own) != manifest_sha:
         raise SystemExit(f"sp1-bare: {man_path} differs from the checkout's {own}")
@@ -516,8 +517,6 @@ def _batch_header(path: Path) -> dict:
 
 
 def run_sp1_bare(a) -> int:
-    from verity_numerical.bench import tables
-
     started = time.perf_counter()
     out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -717,11 +716,6 @@ def run_sp1_bare(a) -> int:
         "artifacts": [os.path.relpath(proofs_dir / "statement.bin", out)] + [v["proof"] for v in verdicts],
     }
     problems = contract.validate(result)
-    from verity.ml.circuits.targets.target import TARGETS
-    sp1 = next(c for c in tables.CANDIDATES if c.id == "SP1")
-    tgt = TARGETS.get(target_name)
-    reasons = tables.reject_reasons(result, [], None, tgt, sp1) if tgt else [f"unknown target {target_name!r}"]
-    result["validation"]["evidence"]["table2_reasons_at_production"] = reasons
     tmp = out / "result.json.tmp"
     tmp.write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
     os.replace(tmp, out / "result.json")
@@ -729,8 +723,7 @@ def run_sp1_bare(a) -> int:
         print(f"contract: {len(problems)} problem(s): " + "; ".join(problems), file=sys.stderr)
     print(json.dumps({"backend": "sp1-bare", "format": fmt, "B": B, "t_total": t_total, "prove": rep["prove_seconds"], "serialize": rep["save_seconds"],
                       "shards": shards, "proof_bytes": rep["proof_bytes"], "cycles": execute["total_cycles"] if execute else None,
-                      "verify_s": verify_s, "validation": result["validation"]["status"], "contract": problems or "conforms",
-                      "table2_reasons": reasons}, indent=1))
+                      "verify_s": verify_s, "validation": result["validation"]["status"], "contract": problems or "conforms"}, indent=1))
     return 0 if ok and not problems else 1
 
 

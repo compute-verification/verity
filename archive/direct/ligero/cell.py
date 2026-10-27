@@ -8,7 +8,7 @@
 session with a verifier on another pod, which drew the coins and ran the Rust verifier), with what the same run measured around
 it -- the open-connection RTT and one-flow bandwidth to the verifier (``live probe --pings``, before the sweep), the same-run
 loopback probe (one ``bench-vu`` at the plateau size against a verifier on 127.0.0.1: the prover's own handling per round trip)
--- and the interaction record the views read (``bench.views.interaction``).  ``register`` stamps the producing lane and the
+-- and the interaction record (``bench.interaction.interaction``).  ``register`` stamps the producing lane and the
 verifier run's session verdicts on that document for ``research data put``, and refuses it (exit 3) unless its soundness bound,
 with the chain test's field term booked (``chain_bound``), is at or below 2^-128.
 """
@@ -251,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"register refused: {e}", file=sys.stderr)
             return 3
     a.out.write_text(json.dumps(doc, indent=1, default=str))
-    ix = __import__("verity_numerical.bench.views", fromlist=["interaction"])
+    ix = __import__("verity_numerical.bench.interaction", fromlist=["interaction"])
     rec = ix.interaction(doc)
     print(json.dumps({"out": str(a.out), "interaction": rec, "problem": ix.interaction_problem(rec)}, indent=1, default=str))
     return 0

@@ -6,7 +6,7 @@ Run from the repository root with the workspace ``PYTHONPATH`` (``research env -
 B-Ligero instance generators, so it needs numpy and torch and runs on a pod, never on the laptop.
 
 The four sets are synthetic and pinned by recipe (``verity_numerical.bench.contract.*_INSTANCES_*``,
-``verity_numerical.bench.tables.FROZEN_INSTANCES``): VU ``i`` draws its operands from
+the census's ``INPUT_SETS``): VU ``i`` draws its operands from
 ``np.random.default_rng([seed, i])`` and records its accumulators through the model.  This module calls the very
 functions the B-Ligero cells proved -- ``relchain._instance`` for the grouped-sum relations (``bf16-hopper``,
 ``fp8-hopper``, ``fp8-ada``) and ``fp4.chain.instances_fp4`` for ``fp4-nvf4`` -- and checks the recipe digest against
@@ -84,10 +84,11 @@ def _nvfp4_chunk(args: tuple[str, int, int, int]) -> list[tuple[bytes, bytes, in
 def recipe(fmt: str) -> tuple[object, dict, int, str]:
     """(target, frozen ref, seed, recipe digest) of ``fmt``; the digest must equal the frozen ref's manifest_sha256."""
     from verity.ml.circuits.targets import target as targets
-    from verity_numerical.bench.tables import FROZEN_INSTANCES
+    from verity_numerical.bench import census, contract
 
     tgt = getattr(targets, FORMATS[fmt][0])
-    ref = FROZEN_INSTANCES[tgt.name]
+    s = next(s for s in census.INPUT_SETS.values() if s.target == tgt.name)
+    ref = contract.instances_ref(s.tier, 0, s.size, s.manifest_sha256, dataset=s.dataset)
     if fmt == "fp4-nvf4":
         from archive.direct.ligero.fp4.chain import INSTANCE_SEED, instances_digest
         seed, digest = INSTANCE_SEED, instances_digest(ref["range"][1])

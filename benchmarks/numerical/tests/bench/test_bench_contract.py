@@ -658,3 +658,12 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
     assert contract.validate_fingerprint(old) == [] and contract.identity(old)["domain"] == "finite-only"
     assert contract.incomparable(old, {**old, "domain": "finite-only"}) == []
     assert [f for f, _, _ in contract.incomparable(old, {**old, "domain": "total"})] == ["domain"]
+
+
+def test_the_store_vocabulary_copies_the_contracts_closed_sets() -> None:
+    """``research.store.vocab`` copies the proof classes (plus the ledger's ``COMPONENT``) and authentication modes, since the store
+    imports no bench package."""
+    from research.store import vocab
+
+    assert set(vocab.PROOF_CLASSES) == set(contract.PROOF_CLASSES) | {"COMPONENT"}
+    assert set(vocab.AUTHENTICATION_VALUES) == set(contract.AUTHENTICATION)

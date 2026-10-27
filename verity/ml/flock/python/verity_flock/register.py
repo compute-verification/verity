@@ -1,4 +1,4 @@
-"""Re-register a Flock cell's ``bench-result/v1`` from its recorded runs, with what the red team and the renderer require.
+"""Re-register a Flock cell's ``bench-result/v1`` from its recorded runs, with what the red team and `bench.interaction` require.
 
     python -m verity_flock.register --prover-run DIR --verifier-run DIR --lane LANE --out meta.json \\
         [--loopback-seconds S --loopback-method TEXT] [--rtt-ms MS --rtt-method TEXT] [--supersedes art:...]
@@ -134,12 +134,12 @@ def main(argv=None) -> int:
         doc.setdefault("interaction", {})["wait_correction"] = "not recomputed: the run's session lines (prove-s*.txt) are not present"
     problems = contract.validate(doc)
     doc["validation"]["contract_problems"] = problems
-    from verity_numerical.bench import views
-    ix = views.interaction(doc, interactive=True)
-    inter_problem = views.interaction_problem(ix)
+    from verity_numerical.bench import interaction
+    ix = interaction.interaction(doc, interactive=True)
+    inter_problem = interaction.interaction_problem(ix)
     doc["validation"]["interaction_problem"] = inter_problem
     Path(a.out).write_text(json.dumps(doc, indent=1, default=str))
-    print(json.dumps({"problems": problems, "interaction": inter_problem or "PASS (renderer's rule: loopback per round is prover "
+    print(json.dumps({"problems": problems, "interaction": inter_problem or "PASS (loopback per round is prover "
                       "compute, the excess is network wait, checked at the run's measured RTT)", "live": {m["name"]: m["value"] for m in doc["measurements"]
                                                      if m["name"].startswith(("live.", "net.", "t.total"))},
                       "achieved_log2": doc["workload_fingerprint"]["security"]["achieved_log2"],

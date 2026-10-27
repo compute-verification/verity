@@ -255,7 +255,7 @@ def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) 
 
 def instances_ref(rel: Relation, total_vus: int, tile: tuple[int, int] | None = None, root=None) -> dict:
     """The fingerprint's ``instances`` block of a :func:`bench_vu_rel` result over ``total_vus`` VUs (``tile``: the
-    ``--tile`` workload) -- field for field what the result carries (``verity_numerical.bench.instance_equiv`` reads it)."""
+    ``--tile`` workload) -- field for field what the result carries."""
     if tile is not None:
         # tile_instances draws other VUs than instances() (nx rows x nw columns from (seed, "tile", ...) streams): no
         # frozen set is a tile, so the ref names the tile (the non-frozen relations named their frozen set here until

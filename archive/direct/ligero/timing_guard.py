@@ -17,8 +17,8 @@ carries it into ``result.json``) and printed::
 
 Contended when another process held a GPU context at any sample; when the cgroup was throttled in more than :data:`THROTTLED`
 of its scheduler periods while the GPU was busy (so an instance build or leaf hashing before the timed reps does not count);
-or when the load average exceeded the host's cores.  ``verity_numerical.bench.summary`` shows the column, and its ``--best``
-selection refuses contended rows.  ``VY_TIMING_GUARD=0`` turns the guard off.
+or when the load average exceeded the host's cores.  The frozen tables' summary showed the column, and its ``--best``
+selection refused contended rows.  ``VY_TIMING_GUARD=0`` turns the guard off.
 """
 from __future__ import annotations
 

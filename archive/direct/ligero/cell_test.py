@@ -24,7 +24,7 @@ def _point(tmp: Path, name: str, n: int, wait: float, sessions: int = 5, round_t
 
 
 def test_finish_assembles_the_interaction_record(tmp_path) -> None:
-    from verity_numerical.bench import views
+    from verity_numerical.bench import interaction
     sweep = tmp_path / "sweep"
     sweep.mkdir()
     _point(sweep, "p0-1024", 1024, 0.05)
@@ -44,8 +44,8 @@ def test_finish_assembles_the_interaction_record(tmp_path) -> None:
     assert m["net.pass_wait_seconds"] == 0.04 and abs(m["net.wait_seconds"] - 0.29) < 1e-12 and abs(m["t.total_live"] - 2.29) < 1e-12
     assert abs(m["live.loopback_round_seconds"] - 0.012 / 14) < 1e-12
     assert doc["workload_fingerprint"]["verifier"]["placement"] == "10.0.0.3:7000" and doc["artifacts"] == ["sweep/p1-2048/proofs"]
-    assert views.rtt_method_enum(doc["interaction"]["rtt_method"]) == "open-connection-ping" and doc["interaction"]["loopback_method"]
-    ix = views.interaction(doc)
+    assert interaction.rtt_method_enum(doc["interaction"]["rtt_method"]) == "open-connection-ping" and doc["interaction"]["loopback_method"]
+    ix = interaction.interaction(doc)
     assert ix["live"] and ix["rounds"] == 6 and ix["rtt_ms"] == 0.9 and ix["bandwidth_bps"] == 9e9 and ix["loopback_method"]
 
 

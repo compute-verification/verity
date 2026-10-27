@@ -1,7 +1,7 @@
 """The TABLES.md batch sweep for ``bench-vu``: double ``--total-vus`` from ``--start`` at fixed per-proof settings until two
 successive doublings together raise the median throughput by less than 2 % (or a point fails, e.g. out of memory), then stamp
-every point's ``result.json`` with the ``sweep`` and ``protocol`` blocks the views read (``bench.views._protocol``,
-benchmark-standard §6.1) and the ``commit.seconds`` measurement (:data:`bench.views.COMMIT`) when the run timed its commitment
+every point's ``result.json`` with the ``sweep`` and ``protocol`` blocks the tables read (``bench.interaction.protocol_problem``,
+benchmark-standard §6.1) and the ``commit.seconds`` measurement (:data:`bench.interaction.COMMIT`) when the run timed its commitment
 per rep (``--commit-per-rep``: ``commitment.seconds``).
 
     python -m archive.direct.ligero.sweep_vu --relation fp8-hopper+blake3 --out-dir D [--start 1024] [--max 65536] \\
