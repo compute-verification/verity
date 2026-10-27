@@ -48,7 +48,8 @@ def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_anoth
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     assert AC.registered_seed({"default_seed": DEFAULT_SEED}) == DEFAULT_SEED
     for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
-        with pytest.raises(ValueError, match=re.escape(f"filled in default seed {seed!r}, and the registered one is engine.served_seed.")):
+        why = f"filled in default seed {seed!r}, and the registered one is engine.served_seed."
+        with pytest.raises(ValueError, match=re.escape(why)):
             AC.registered_seed({"default_seed": seed})
     with pytest.raises(ValueError, match="filled in default seed None"):
         AC.registered_seed({})
