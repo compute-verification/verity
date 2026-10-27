@@ -49,7 +49,7 @@ V*'s bridge (`Flock.Assumptions.VBridge`), one of five holds:
   shape in range: `Recursion.recursive_sound_compiled_fast100`) as its inner term.
 
 It needs `VBridge` in full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give. Its
-event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which is nearly empty (see
+event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which LEAN-19 found nearly empty (see
 `RecursiveSound`); the knowledge form is `Claims.Recursion.KS`. -/
 def RecursiveSoundExec : Prop :=
   ∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
