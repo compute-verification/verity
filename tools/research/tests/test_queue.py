@@ -2168,11 +2168,12 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
         world, capsys):
     """CI-207: a PR that carries another PR's Lean change re-ran records at its own head, 1-2 h of queue on a full node, though the
     package's inputs were byte-identical to a head where it passed.  A pass at any commit whose trees of the package, the packages
-    it requires by path and the toolchain are the head's vouches for it; a commit this clone lacks is fetched, and one that can't
-    be read vouches for nothing."""
+    it requires by path, the toolchain and the checker (CI-210: `tools/verity/lean/`, `tools/verity/check/common.py`) are the
+    head's vouches for it; a commit this clone lacks is fetched, and one that can't be read vouches for nothing."""
     world.with_store_remote()
     _move_main(world, {"pkg/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../lib", "name": "lib"}]}),
-                       "lib/lakefile.toml": 'name = "lib"\n', "lib/L.lean": "def l := 1\n", "lean-toolchain": "v1\n"})
+                       "lib/lakefile.toml": 'name = "lib"\n', "lib/L.lean": "def l := 1\n", "lean-toolchain": "v1\n",
+                       "tools/verity/lean/check.py": "# the checker\n", "tools/verity/check/common.py": "# its helpers\n"})
     other = world.tmp / "other"
     _git(world.tmp, "clone", "-q", str(world.origin), str(other))
     (other / LOCK).write_text(_lock(A="2"))
@@ -2190,7 +2191,9 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
     assert _mark(world, 1, h) == 0
     assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
-    for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"})):
+    for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"}),
+                     (4, {"tools/verity/lean/check.py": "# the checker, changed\n"}),
+                     (5, {"tools/verity/check/common.py": "# its helpers, changed\n"})):
         capsys.readouterr()
         assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
         assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err

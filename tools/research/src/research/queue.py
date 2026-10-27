@@ -22,8 +22,8 @@ after landing).
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against `main` unless a records run or Lean check in the store passed
                                                    that package, of the head or of a commit whose trees of the package, the
-                                                   packages it requires and lean-toolchain are the head's, naming the run to
-                                                   start; then, in about a minute, the preflight (`Preflight`) refuses, with
+                                                   packages it requires, lean-toolchain and the Lean checker (tools/verity/lean)
+                                                   are the head's, naming the run to start; then, in about a minute, the preflight (`Preflight`) refuses, with
                                                    the fix, a head that conflicts with a
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
                                                    (naming it), fails a landing gate of drive.toml at `main` (with
@@ -115,7 +115,7 @@ checks it).  `--no-preflight` skips it, for the lander.
 Records gate.  On 26 Oct three marks of heads whose own records run had printed `AUDIT: FAIL` for Security each failed a train's
 Lean check (TOP-90 row 58).  So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
 unless the store holds a records run or a Lean check of that head that passed each such package on its lock, or of a commit whose
-trees of the package's inputs (it, the packages it requires, `lean-toolchain`) are the head's, or vouches for it through a head
+trees of the package's inputs (it, the packages it requires, `lean-toolchain`, the checker) are the head's, or vouches for it through a head
 that only merged `main` or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
 and refuses when it can't; `--no-preflight` doesn't skip it.
 
@@ -2717,8 +2717,10 @@ RECORDS_WALK = 8
 #: the attempts `RecordsGate` lists from the store's remote: those started after the oldest commit it may read, less the skew of a
 #: machine's clock, and never more than the lookback before now (an older run the catalog here lacks isn't seen)
 RECORDS_SKEW_S, RECORDS_LOOKBACK_S = 3600, 3 * 86400
-#: the repository's files besides the packages' own that a records run reads as an input: the toolchain they may share
-RECORDS_SHARED = ("lean-toolchain",)
+#: the repository's paths besides the packages' own that decide a records run's verdict: the toolchain they may share, and the
+#: checker `RECORDS_COMMAND` runs (`lean_changed.py`, with the `lean_audit.py`, `check.py`, `merge.py` and `sandbox.sh` it loads,
+#: and the `common.py` the audit's key counts among its files; `lean_slot.py` only takes a slot)
+RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py")
 #: the most commits with runs in the window, records runs' first and then the newest, that `RecordsGate` fetches when this clone
 #: lacks them, in its search for a run on the same inputs (one the clone can't read vouches for nothing)
 RECORDS_FETCH = 64
@@ -2781,8 +2783,9 @@ class RecordsGate:
 
     A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): the git tree
     of the package's directory, lock included, of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
-    `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and `RECORDS_SHARED`, each the same id there as at the
-    head.  A PR that carries another PR's Lean change needs no run of its own for the packages that change passed in.  The
+    `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and `RECORDS_SHARED` (the root `lean-toolchain` and
+    the checker: `tools/verity/lean/` and `tools/verity/check/common.py`), each the same id there as at the head, so a pass under
+    another checker vouches for nothing.  A PR that carries another PR's Lean change needs no run of its own for the packages that change passed in.  The
     candidates are the commits of the attempts in the window read (`RECORDS_FETCH` of them fetched when this clone lacks them);
     a commit that can't be read vouches for nothing.
 
@@ -3553,8 +3556,8 @@ def main(argv: list[str]) -> int:
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else with --on on {PREFLIGHT_LEAN_ON}); the records gate (a changed Lean lock needs a records "
-                         "run that passed it, of the head or of a commit whose trees of its package, the packages it requires "
-                         "and lean-toolchain are the head's) still runs")
+                         "run that passed it, of the head or of a commit whose trees of its package, the packages it requires, "
+                         "lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: land a commit whose Lean check passed by regenerating lock records with those locks committed "
                          "on top (`Regenerated:`), which `research merge`'s gate accepts on that check (CI-64)")
