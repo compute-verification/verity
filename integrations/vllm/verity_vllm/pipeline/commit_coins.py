@@ -1,4 +1,4 @@
-"""The Commit's coins from the auditor host's challenger (VLLM-17, CIR-72): one session a Commit, which draws its openings
+"""The Commit's coins from the auditor host's challenger: one session a Commit, which draws its openings
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,

@@ -283,7 +283,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     return vus, not_ev, not_ev_fam
 
 
-#: [COORD R17-27 / Daniel, verbatim] the scope of the class -- on the rule, on every record that carries it, in the C2 schema doc
+#: the scope of the class, verbatim on the rule, on every record that carries it, and in the C2 schema doc
 NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                       "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
                       "there is no not-required-because-not-executed category.")

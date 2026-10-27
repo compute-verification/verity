@@ -1,5 +1,5 @@
-"""The static serving schedule: a run whose step counts, batch membership and admissions are a function of the public declaration only
-(Daniel's static-circuit ruling, 18 Oct 20:52Z; VLLM-31).  Torch-free.
+"""The static serving schedule: a run whose step counts, batch membership and admissions are a function of the public declaration only,
+so the served circuit is static.  Torch-free.
 
 A workload declares the static form with `sampling.ignore_eos: true`: every request runs exactly its `max_tokens` steps from its
 arrival, so no generated token decides when a slot frees, who shares a launch, where a waiting prefill is cut by the token budget, or

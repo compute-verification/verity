@@ -55,7 +55,7 @@ verifier's check that a served window's coins are that challenger's.
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
   coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
   after its coins).
-* **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`, PRF-132), called through its one composed
+* **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
   Program's descriptor (`pouw_h1_served.descriptor`), its draw K (``draw_k``, `draw_k`: the proof service's selection
   at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
@@ -359,7 +359,7 @@ def evidence(ledger: Ledger, root: str, fetch: Fetch, verify: Any = lms_verify
     received, as core reads a session run from main's code (`Ledger.pinned`: `challenger.pinned_session` under the
     ledger's pins log, then `challenger.session_named`); `CoinError` naming why."""
     window = {"root": root}
-    # TODO(#3015): `Ch.credited_session(lines, window, key, descriptor, verify)` here once it is on main.
+    # TODO: `Ch.credited_session(lines, window, key, descriptor, verify)` here once core has it.
     audited = ledger.pinned(window, verify)
     tree = fetch(audited.session)
     if tree is None:
@@ -651,7 +651,7 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
                   key: ChallengerKey, descriptor: bytes | None, statements: Any = (), k: int | None = None,
                   verify: Any = lms_verify, run: Any = None, *, pins: Sequence[str | Path] | None,
                   main: Sequence[str] | None, live: Any = None) -> dict[str, Any]:
-    """One window's credit by core's one composed entry (`credit.window`, PRF-132) on its evidence (`window_evidence`:
+    """One window's credit by core's one composed entry (`credit.window`) on its evidence (`window_evidence`:
     its record `pouw_h1.CALLS_FILE`, its session `directory`, `window` ``{root}``, `descriptor`, the bytes of the circuit
     its period committed, its drawn calls' `statements` and its `live` evidence), under the ledger at `heads` and `key`,
     its session run from a commit the pins log at `pins` records (`pins_head`) on the verifier's own first-parent history

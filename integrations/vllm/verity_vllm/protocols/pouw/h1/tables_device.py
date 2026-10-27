@@ -1,4 +1,4 @@
-"""`pouw_h1.H1Run`'s call tables hashed on the GPU (VLLM-96): a call's A table and z table, each
+"""`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
 `pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels (`protocol_options/pouw_cuda/row_table.cu`,
 `commit.row_tables_device`) as a step of one table.
 

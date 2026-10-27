@@ -452,7 +452,7 @@ class TP2CaptureWorkerExtension:
             if hasattr(mod, attr) and (mod.__name__, attr) not in wrapped:
                 wrapped.add((mod.__name__, attr))
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
-        for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
+        for mod, attr in FN.targets(model):      # DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
         # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`): each
         # Marlin MoE align call's schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl`

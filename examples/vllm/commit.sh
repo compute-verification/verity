@@ -34,7 +34,7 @@ fi
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; nvidia-smi -L; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 14d --priority high \
-  --why "PROVE-PATH (VLLM-83): Llama-3.2-1B TP1 Commits of record with their sealed replay bundles, Builds and Matches" | tail -2
+  --why "PROVE-PATH: Llama-3.2-1B TP1 Commits of record with their sealed replay bundles, Builds and Matches" | tail -2
 
 row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in $OUT/NAME.out
   local name=$1; shift
@@ -77,7 +77,7 @@ put() {  # the row dir as one tree, with this run's custody key (a node's job ho
   echo "STORED ${art:-none} $D" | tee "$OUT/store.txt"
   [ -n "$art" ] || return 1
   rs keep "$(dirname "$D")" --owner @vllm --expires 14d --priority high --art "$art" \
-    --why "PROVE-PATH (VLLM-83): the Llama-3.2-1B TP1 Commit of record and its sealed bundle, stored as $art" | tail -2
+    --why "PROVE-PATH: the Llama-3.2-1B TP1 Commit of record and its sealed bundle, stored as $art" | tail -2
 }
 if [ -n "${STORE_ROW:-}" ]; then   # an earlier run's row dir, stored as is
   D=$STORE_ROW; rmdir "$BASE/sealed" "$BASE/$ROW" "$BASE" 2>/dev/null

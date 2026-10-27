@@ -1,4 +1,4 @@
-"""H1's served tables (VLLM-64), committed as registered values of compute accounting's window Program
+"""H1's served tables, committed as registered values of compute accounting's window Program
 (`h1window.program`, one tile template per K) as the window serves them, so the Lean verifier opens every row a unit reads
 (`flock-verify --zk --registered`, `h1window.table_reads_file`).
 
@@ -13,7 +13,7 @@
   of the period's weights' root, round 0's request root and the session, or the key the run is given, 64 bytes); round
   0's input-ids table, whose root that request root contains, binds the session instead (`Served.ids_tree`).
 * **The tables** are the ones a unit's rows open at (`h1window.table`, `h1window.table_reads`): step s's A table of K
-  ``a/<K>@<s>`` (VLLM-77), the M slot rows of each of step s's calls of K, call after call in call order (`step_calls`;
+  ``a/<K>@<s>``, the M slot rows of each of step s's calls of K, call after call in call order (`step_calls`;
   the j-th starts at row M·j), each its K int8 codes then its f32 s_a (`h1zy.ROW`; the served rows, then zero codes of
   scale 0), and call c's z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
   row-major, then their bf16 y; a slot past the served rows is z = 0 and y = +0, dq(0, +0, s_w) for a finite positive
@@ -30,20 +30,20 @@
   from. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the statement's output row o1): row u
   `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry, since credit registers them itself
   and refuses a window that does.
-* **The weights are the period's** (`Weights`, VLLM-71): each K's ``b/<K>`` is registered once a period, before its first
+* **The weights are the period's** (`Weights`): each K's ``b/<K>`` is registered once a period, before its first
   window's salt (`register_weights`), under the period's declared Program, binding no window, its salts fixed for the
   registration. `credit.weights_root` of their roots is the weights' root every window's open root binds and the
   period-open signs, so a window can't serve other codes or s_w than the period registered: every window registers the
   same entries, and `Served.commit` refuses a call whose weight isn't its linear's registered rows.
-* **The salts are the auditor's** (VLLM-72): the auditor registers the served model's ``b/<K>`` from its published
+* **The salts are the auditor's**: the auditor registers the served model's ``b/<K>`` from its published
   checkpoint under its own salt key (infra's ``model-register``, core's `weights.weights_roots`), and a period opens with
   ``period-open --model M``, which signs that registration's weights' root W. The prover reads the key with its gate key
   (``model-key --model M --circuit C``, `model_key`) and registers the same rows under it (`Served`'s ``registry``), so
   its ``b/<K>`` are the registration's openings, and a window whose served rows fold to a root other than W is refused.
 * **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed as
-  `registered.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`, VLLM-76), under the
+  `registered.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`), under the
   registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
-  open root (`registered.domain`'s ``window``, `Served.root`, #3044), row j's salt `audit.hm96_salt` of the run's key at
+  open root (`registered.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
   the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
 * **Chunk rows** (SPLITK). Past K = 4096 an A or B row of K is n = `weights.chunks` (K) leaves (6144 → 2, 14336 → 4):
   row r's leaf n·r + c is its codes [c·K/n, (c + 1)·K/n) then its scale (`chunk_words`, `h1zy.ROW` (K/n)), so
@@ -59,7 +59,7 @@
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
-* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
+* **The Commit** (ROOTS1): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
   AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), and the window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
   outside the Program's values (`ids`, in `entries`), and lists it whole under round s's root (`segments`). Round 0's
   is its prompts' tokens in step 0's batch order, registered before the window opens (`open_ids`), its root inside
@@ -201,7 +201,7 @@ def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]
 
 @dataclass(frozen=True)
 class Weights:
-    """A period's registered weights (VLLM-71): each K's ``<prefix>b/<K>``, the B rows of K's linears in the window's
+    """A period's registered weights: each K's ``<prefix>b/<K>``, the B rows of K's linears in the window's
     linear order, each row its K int8 codes then its f32 s_w as `weights.chunks` (K) = n leaves (`chunk_words`; one
     leaf, `row_words`, at K <= 4096), registered once (`register_weights`) under the
     period's declared Program (``circuit``, its `program_digest`), binding no window, its salts fixed for the
@@ -371,7 +371,7 @@ class Served:
                      layers: Sequence[Any], register: bool = True) -> bytes | None:
         """The period's weights' root (`Weights.root`, the one ``period-open --model`` signs): ``weights``', or, with only
         ``registry`` and ``register``, registered now from the served ``layers`` under the declared Program with the
-        registration's key, before any salt (VLLM-71, VLLM-72); else None. With ``registry``, the window is refused
+        registration's key, before any salt; else None. With ``registry``, the window is refused
         unless they are its registration: under its circuit, folding to its weights' root."""
         if self.weights is None and self.registry is not None and register:
             self.weights = register_weights(self.declare(shapes, modules, rows, steps), shapes, weights_of(layers),

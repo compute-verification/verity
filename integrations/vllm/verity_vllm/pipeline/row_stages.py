@@ -55,7 +55,7 @@ from verity_vllm.program import prefix_plan as PP
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
 #: a derive on ir="boolean" lifts every word Definition to bits after the word derive: 2.6x the word derive's wall on Qwen3-0.6B,
-#: and over 900 s against 357 s on the int8 Llama-3.1-8B row (VLLM-27)
+#: and over 900 s against 357 s on the int8 Llama-3.1-8B row
 BOOLEAN_DERIVE_SCALE = 4
 
 

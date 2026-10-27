@@ -8,7 +8,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   column) grid, so each rest commits one BF16 (the width rule). Rows and weight rows off a whole tile (`TILE`, a warp's
   32 × 32, the tile the H1 kernel computes) are padded: pad row p reads constant zero bits of its own, contiguous, so it is a
   distinct row of the site, and its outputs are not served.
-* **The static layout** (`H1Run`, Daniel's static-circuit rule): every call has the same T rows (``rows``, vLLM's
+* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, vLLM's
   ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
   served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
   steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's units,
@@ -16,7 +16,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   positions comes from its tokens, batch or EOS. Gate-passed is the served rows of the calls the credit gate passes only;
   the padded work is shown beside it.
 * **u** (`H1Run.utilization`, PERIOD-PATH's ``u`` in `benchmarks/pouw/period_cost.py`): the window's served rows over its
-  declared rows, Σ_s m_s / (S·T). A `Static` declaration (VLLM-31's ``sampling.ignore_eos``: every request admitted at
+  declared rows, Σ_s m_s / (S·T). A `Static` declaration (the static schedule's ``sampling.ignore_eos``: every request admitted at
   step 0, prefilled there and run to its cap) fixes each step's rows ahead of serving, so its u is public: SERVE-H1's 5
   prompts (44 tokens) at cap 16 are 119/1152, and `FILL`'s 64 one-token prompts fill all 16 served steps, 16/18. A served
   step short of its declared rows is padded in the layout (its calls keep their positions) and refused by `Static.check`.
@@ -45,8 +45,8 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
   The verdict is the serving process's own, so it is only the call's credit bit (`H1Run.credit_bits`, ``credit`` in its
-  manifest row under calls_root, before the draw root): credit is the verifier's (core's `credit`, PRF-132).
-* **Requests and rounds** (`pouw_h1_requests`, #2677's `Accounting.Served`): round s is step s. `admitting` hands each
+  manifest row under calls_root, before the draw root): credit is the verifier's (core's `credit`).
+* **Requests and rounds** (`pouw_h1_requests`, `Accounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
   window serving a row of a request with no entry credits nothing. A window admits only in round 0 unless its
@@ -696,7 +696,7 @@ class H1Run:
     def credit(self) -> dict[str, Any]:
         """Gate-passed: the served rows' MACs of the calls the serving process's own credit gate passes (`gated`), only. No
         verifier reads this: a window's credit is its verifier's (`pouw_h1_challenger.credit_reason`, RT4-INT-31). The padded
-        work (empty slots and pad columns) is shown beside it (Daniel, 18 Oct), and so are the refused calls' rows, with each
+        work (empty slots and pad columns) is shown beside it, and so are the refused calls' rows, with each
         refusal's reason."""
         served = [c for c in self.calls if c.m]
         gaps, verdicts = self.request_gaps(), self.gated()

@@ -1,4 +1,4 @@
-"""H1's live tables (VLLM-85): the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
+"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
 the unit that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
 public max_tokens.
 

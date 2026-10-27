@@ -1,7 +1,7 @@
 """serve-openai's admissions: what a request brings to the engine (`Admission`, and `Delta`, what goes back), and the order
 they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed it, in the
 API server's body-read order; ``release-order`` adds them in the warden's release order, so the advice needn't carry the
-permutation between the two (VLLM-89: 3,669 bits on TRACE-CORPUS's heavy trace).
+permutation between the two (3,669 bits on TRACE-CORPUS's heavy trace).
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
@@ -20,7 +20,7 @@ frontend, or whose body doesn't arrive, would hold every later one: once a later
 it is skipped and the held ones go on; if it comes after all it is forwarded at once (``late``). Both are counted
 (`summary`), and so are the runs.
 
-**A step's rows** (VLLM-98). The advice numbers requests by their first row, so the order of the rows inside a step is a
+**A step's rows**. The advice numbers requests by their first row, so the order of the rows inside a step is a
 choice the engine must not make. vLLM's scheduler (FCFS) lists a step's requests as its running ones in running order, then
 the ones it newly schedules in waiting-queue order, which is the admission order; Model Runner V2 then lays the step out by
 its own `sort_batch_req_ids` (vLLM d9105ea8: decode-length rows first, every other row by its row count, shortest first),
