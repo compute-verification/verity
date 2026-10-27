@@ -2193,7 +2193,9 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
 /-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
-`setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
+`setupH` makes, it makes on each table. Several tables take one draw of fixed count (`Draw.tablesWhy`): a subset draw, or a
+stratified draw, whose law is held to the verifier's own derivation once, for the session, before it is split. Every part
+comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
 draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, `closure` its
 own closure map, which a work draw's closure is held to, and `publicInputs` its own recomputation of the public input
@@ -2251,8 +2253,8 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
-    | .subset _ => splits u.units.size
-    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+    | .subset _ | .stratified .. => splits u.units.size
+    | _ => throw Draw.TABLES_LAW
   -- without a draw, the population's units (`setupH` checks a draw's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
@@ -2402,8 +2404,8 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
-    | .subset _ => splits u.units.size
-    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+    | .subset _ | .stratified .. => splits u.units.size
+    | _ => throw Draw.TABLES_LAW
   -- without a draw, the population's units (`setupH` checks a draw's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)

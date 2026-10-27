@@ -1,5 +1,5 @@
 """A W8A8 coordinate (`ScaledMmS8Coordinate_v2{K, GEMM_SM90_S8}`) split along K into Boolean Definitions that each output at
-most 16 bits (a proof unit's outputs, the 16-bit forms of CIR-100's fallback).
+most 16 bits (a proof block's outputs, the 16-bit forms of CIR-100's fallback).
 
     S8AccumulatorPartHalf_v1{K, HALF}  (x, wrow: Array<K, Array<8, Value<1>>>) -> Array<16, Value<1>>
     I32SumPartHalf_v1{G, HALF}         (s: Array<G, Array<32, Value<1>>>) -> Array<16, Value<1>>

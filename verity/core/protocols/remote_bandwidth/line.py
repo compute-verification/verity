@@ -24,7 +24,8 @@ from outside the store while the stretch's reads are served:
 W is the pooled bound of the session's record (`pooled.bound`, the Lean's `RemoteAudit.Pooled`: its windows' receipts
 and draws at δ), so the line reads it from the record's windows, never from a float another module computed.  The
 line of record reads its groups' passes, its windows and its registered blocks off the Lean verifier's record of the
-session (`line_of_record`, the Lean's `lineOfRecord`), and each group's times and reads beside it (`Seen`).
+session (`line_of_record`, the Lean's `lineOfRecordAt` at the record's `groups_per_coin` g, `lineOfRecord` at g = 1),
+and each group's times and reads beside it (`Seen`).
 
 Each kind is credited its mean blocks a pass less those, in bytes, and at least 0: weights (in HBM), HBM, and filler
 (HBM less the weights, and the host tier).  A reading's line is its worst stretch by weights credited, the first on a
@@ -44,6 +45,7 @@ from fractions import Fraction
 from typing import Any
 
 from . import pooled
+from .audit import RECEIPT_LIMIT
 
 TIME_HELD, LINK_CHARGED = "time-held", "link-charged"
 FORMS = (TIME_HELD, LINK_CHARGED)
@@ -409,7 +411,7 @@ def run_json(j: Mapping) -> dict:
         return {"refused": str(e)}
 
 
-# --- the line read off the Lean verifier's record (`RemoteAudit.Line.lineOfRecord`, the Difftest's `line_record`) ---
+# --- the line read off the Lean verifier's record (`RemoteAudit.Line.lineOfRecordAt`, the Difftest's `line_record`) ---
 
 SEEN = ("released_ns", "last_ns", "least", "weights", "hbm", "host")
 
@@ -438,27 +440,47 @@ def receipts(window: Mapping) -> int:
     return sum(window["lengths"])
 
 
-SHARED = ("a record drawn more than one window a coin (groups_per_coin) has no line: the line reads each window's own "
-          "draw")
-"""Why a record drawn more than one window a coin (`audit.Params.groups_per_coin`) has no line: the line reads each
-window's own draw, min(s, U_t) of its receipts, and such a window holds its share of its draw's."""
+SHARED = ("a record drawn more than one window a coin (groups_per_coin) at one window in flight has no line: no "
+          "property of the code covers its draws there")
+"""Why a record drawn more than one window a coin (`audit.Params.groups_per_coin`) at one window in flight
+(`audit.Pace.in_flight` 1) has no line: no property of the code covers its draws there (`LiveIsRun` is at two)."""
 
 
-def of_summary(record: Mapping, samples: int, seen: Sequence[Seen]) -> tuple[list[Group], list[tuple[int, int]]]:
+def draws_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
+    """The draws of a record drawn `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
+    windows cg … min((c + 1)g, W) − 1, its receipts U and its draws theirs summed."""
+    return [(sum(receipts(w) for w in ws[a:a + g]), sum(w["drawn"] for w in ws[a:a + g])) for a in range(0, len(ws), g)]
+
+
+def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
+               g: int = 1) -> tuple[list[Group], list[tuple[int, int]]]:
     """The groups and windows the line reads of an accepted session's record (the Lean verifier's, as its `outcome`
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
     and its times and reads `seen[t]`'s, and window t's receipts and draws are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
-    the session's `samples` s, as the verifier's draw does."""
+    the session's `samples` s, as the verifier's draw does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
+    windows are the record's draws (`draws_of`), each refused unless it drew min(s, U) of its U receipts and has fewer
+    than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's draw reads at most
+    2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a draw's windows' receipts need not be."""
     ws = record["windows"]
     if len(seen) != len(ws):
         raise Refused(f"the auditor saw {len(seen)} windows, not the record's {len(ws)}")
-    for t, w in enumerate(ws):
-        if w["drawn"] != min(samples, receipts(w)):
-            raise Refused(f"window {t} drew {w['drawn']} of its {receipts(w)} receipts, not "
-                          f"min({samples}, {receipts(w)})")
-    return ([Group(x.released_ns, x.last_ns, len(w["lengths"]), x.least, x.weights, x.hbm, x.host)
-             for w, x in zip(ws, seen)], [(receipts(w), w["drawn"]) for w in ws])
+    if g <= 1:
+        for t, w in enumerate(ws):
+            if w["drawn"] != min(samples, receipts(w)):
+                raise Refused(f"window {t} drew {w['drawn']} of its {receipts(w)} receipts, not "
+                              f"min({samples}, {receipts(w)})")
+        windows = [(receipts(w), w["drawn"]) for w in ws]
+    else:
+        windows = draws_of(g, ws)
+        for c, (u, d) in enumerate(windows):
+            if d != min(samples, u):
+                raise Refused(f"draw {c} drew {d} of its {u} receipts, not min({samples}, {u})")
+        for c, (u, _) in enumerate(windows):
+            if u >= RECEIPT_LIMIT:
+                raise Refused(f"draw {c} has {u} receipts, not fewer than 2^64")
+    return [Group(x.released_ns, x.last_ns, len(w["lengths"]), x.least, x.weights, x.hbm, x.host)
+            for w, x in zip(ws, seen)], windows
 
 
 CLOCKS = ("record", "challenger", "replay")
@@ -484,14 +506,15 @@ def times_off(record: Mapping, seen: Sequence[Seen]) -> str | None:
 
 def line_of_record(record: Mapping, *, samples: int, seen: Sequence[Seen], per: int, block_bytes: int,
                    chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record") -> Line:
-    """The line of an accepted session's record: `line` at its groups and windows (`of_summary`) and its registered
-    blocks (the record's `blocks`, the registration the session ran on). Refused for a record drawn more than one
-    window a coin (`groups_per_coin`, `SHARED`). On the record's `clock` the times seen are held to the record's,
-    refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record doesn't
-    hold them."""
-    if record.get("groups_per_coin", 1) != 1:
+    """The line of an accepted session's record: `line` at its groups and windows (`of_summary`, at the record's
+    `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its draws) and its registered blocks (the
+    record's `blocks`, the registration the session ran on). Refused for a record drawn more than one window a coin at
+    one window in flight (`SHARED`). On the record's `clock` the times seen are held to the record's, refused after
+    `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record doesn't hold them."""
+    g = record.get("groups_per_coin", 1)
+    if g != 1 and (record.get("pace") or {}).get("in_flight", 2) == 1:
         raise Refused(SHARED)
-    groups, windows = of_summary(record, samples, seen)
+    groups, windows = of_summary(record, samples, seen, g)
     if clock == "record" and (why := times_off(record, seen)) is not None:
         raise Refused(why)
     return line(groups, per=per, blocks=record["blocks"], block_bytes=block_bytes, chip_bytes=chip_bytes,
@@ -502,8 +525,9 @@ def record_inputs_json(record: Mapping, *, samples: int, seen: Sequence[Seen], p
                        chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record",
                        session: Mapping | None = None) -> dict:
     """`line_of_record`'s inputs in the JSON form, the record as the Lean wrote it; with `session`, the session's
-    transcript, from which the Lean verifier's `line_record` makes the record itself (`Session.run`) and refuses a
-    `record` that isn't the one it makes (line.py reads `record`)."""
+    transcript, from which the Lean verifier's `line_record` makes the record itself (`Shared.run g` at its
+    `groups_per_coin` g, `Session.run` at 1) and refuses a `record` that isn't the one it makes (line.py reads
+    `record`)."""
     if clock not in CLOCKS:
         raise ValueError(f"clock: one of {', '.join(CLOCKS)}, not {clock!r}")
     return {"record": record, "samples": samples, "seen": [{k: getattr(x, k) for k in SEEN} for x in seen],
@@ -547,6 +571,8 @@ def _record(j: object) -> Mapping:
     if pace is not None:
         _nat(pace, "k")
         _nat(pace, "window_ns")
+        if "in_flight" in pace:
+            _nat(pace, "in_flight")
     _hex(_field(j, "appends"), "appends")
     if "groups_per_coin" in j:
         _nat(j, "groups_per_coin")

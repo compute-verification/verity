@@ -18,12 +18,15 @@ or an array. θ is empty, every input (refused, `theta-not-registered`, where on
 inputs, or a random set of them. A division is one IU, one IU per gate, runs of consecutive gates or a random
 assignment, numbered in a random order; `Γ` is at, below or above the division's largest IU, and `α` at, just below or
 just above its largest NCI, written reduced or not. About a third of the instances are malformed, each in one way the
-check refuses (every code of `NciCheck.Check`). The data ends with `pinned()`'s two instances on the declaration worked
-by hand (`hand()`): θ every input, which the check must refuse, and θ the registered input, which it must accept.
+check refuses (every code of `NciCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
+that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
+their well-typed neighbours. The data ends with `pinned()`'s two instances on the declaration worked by hand (`hand()`):
+θ every input, which the check must refuse, and θ the registered input, which it must accept.
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import random
@@ -37,9 +40,14 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
-_spec = importlib.util.spec_from_file_location("nci_reference", Path(__file__).resolve().parent / "nci_reference.py")
-reference = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(reference)
+def _load(name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+reference = _load("nci_reference")
 
 COUNT = 4000
 WIDTHS = [1, 2, 3, 8, 16, 32]
@@ -406,9 +414,25 @@ def pinned() -> list[dict]:
     ]
 
 
+@functools.cache
+def mistyped() -> list[dict]:
+    """`mistyped_vectors.cases()` as `check` reads them: gate by gate (`nci_reference.expand`) where the Program decodes,
+    else as they are, since a Program the decoder refuses is refused before θ and the owners are read."""
+    desc = _load("desc_difftest_vectors")
+    out = []
+    for inst in _load("mistyped_vectors").cases(desc.instance):
+        try:
+            reference.root_nodes(inst["program"])
+        except (ValueError, KeyError, TypeError, AttributeError):
+            out.append(inst)
+            continue
+        out.append(reference.expand(inst))
+    return out
+
+
 def total(count: int = COUNT) -> int:
-    """How many instances the data has: `count` random ones, then `pinned()`'s."""
-    return count + len(pinned())
+    """How many instances the data has: `count` random ones, then `mistyped()`'s, then `pinned()`'s."""
+    return count + len(mistyped()) + len(pinned())
 
 
 def python_results(inst: dict) -> dict:
@@ -420,11 +444,11 @@ def line(obj) -> str:
 
 
 def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """Both files for instances 0 … count − 1, then `pinned()`'s, under ``out/difftest``."""
+    """Both files for instances 0 … count − 1, then `mistyped()`'s and `pinned()`'s, under ``out/difftest``."""
     d = out / "difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {"difftest/instances.jsonl": d / "instances.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
-    insts = [*(instance(seed)["instance"] for seed in range(count)), *(p["instance"] for p in pinned())]
+    insts = [*(instance(seed)["instance"] for seed in range(count)), *mistyped(), *(p["instance"] for p in pinned())]
     with open(paths["difftest/instances.jsonl"], "w") as fi, open(paths["difftest/python.jsonl"], "w") as fp:
         for inst in insts:
             fi.write(line(inst))
