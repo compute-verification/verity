@@ -110,7 +110,8 @@ def test_a_mirror_that_skips_one_stage_v2_is_caught(server, monkeypatch):
 #: with an answer of its own (the made-up `{"verdict": "accept", …}` the check once read), one whose proof v2 refuses
 #: (a public file or a session record in no blob, units no session proved, a circuit file in no blob), one whose
 #: sessions opened a root other than the registered one, and in the rows form a link-window missing one of its
-#: records' certificates, a registration not under the deployment key, the scan's answer for another window's rows,
+#: records' certificates, one the warden left uncertified for refusing a connection (traffic past its Program slots),
+#: a registration not under the deployment key, the scan's answer for another window's rows,
 #: rows under a schedule whose digest isn't the bound one, and the scan's answer of an honest period, which the check
 #: takes from no one.
 REFUSALS = {
@@ -119,6 +120,7 @@ REFUSALS = {
     "v2-refused": ("one-stage v2: ", "one-stage v2: "),
     "v2-session": ("one-stage v2: the audit's checks failed: roots", "one-stage v2: "),
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
+    "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),

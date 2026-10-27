@@ -18,6 +18,8 @@
 #      --challenger`, pinned on main's first-parent history fetched from the clone's origin; gate: also SC_PEER, this
 #      node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and
 #      SC_GATE_KEY, the lane's gate key)
+#      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
+#      max_child_rss_gb is the largest of every session's so far)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
 # rehearsal's public files go in $OUT/warden, its records and salts (the prover's) nowhere.
@@ -35,6 +37,20 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "sczk: no firewall frame"; exit 7; }
+if [ -n "${SC_RSS:-}" ]; then
+  cat > "$W/flock-circuit-rss" <<EOF
+#!$PY
+import json, resource, subprocess, sys, time
+t = time.monotonic()
+rc = subprocess.call(["$BIN", *sys.argv[1:]])
+with open("$OUT/rss.jsonl", "a") as f:
+    f.write(json.dumps({"command": sys.argv[1:3], "rc": rc, "wall_s": round(time.monotonic() - t, 2),
+                        "peak_gb": round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2 ** 20, 2)}) + "\n")
+sys.exit(rc)
+EOF
+  chmod +x "$W/flock-circuit-rss"
+  BIN=$W/flock-circuit-rss
+fi
 
 if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsing the warden at scan_zk's schedule"
