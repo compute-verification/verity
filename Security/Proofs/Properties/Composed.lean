@@ -78,9 +78,10 @@ theorem checkRegistered_check {id : String} {R : Protocol} {s : String} {cs : Li
   repeat' (split at h)
   all_goals first | (cases h; done) | skip
   all_goals
-    have hrun : Core.Composition.run cs _ _ = _ := by assumption
-    rw [hrun]
-    exact h
+    rename_i answers hrun _
+    first
+    | (rw [hrun]; exact h)
+    | simp_all
 
 /-- **A registered composition with v2 among its components accepts only v2's case `Accepted`.** -/
 theorem registeredAccepted (id : String) (R : Protocol) (s : String) (cs0 : List BlobProtocol)
