@@ -4,8 +4,8 @@ components are integrity by sampled proofs' one-stage audit on the proofs themse
 (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/one-stage/v2`: flock-verify `--zk` run on each session's
 files, which the caller hands in as blobs) and work by proof of useful work (`PouwCheck.protocol`).
 `Core.Composition.sameB` composes them on the caller's blobs: both accept or remote doesn't, and either one's
-rejection rejects remote whatever the other answers. Each one's commitment is the window's registration record, and
-both must commit to the same one: two records' digests reject remote whatever the components answer.
+rejection rejects remote whatever the other answers. Each one's commitment is the window record, and both must commit
+to the same one: two records' digests reject remote whatever the components answer.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases

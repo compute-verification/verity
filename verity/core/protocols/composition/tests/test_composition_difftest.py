@@ -321,7 +321,7 @@ def reference(product: R.Product | R.Registered, seen: collections.Counter):
         if out["verdict"] == R.REJECT and parts and R.REJECT not in parts:
             seen["reject, no component rejected"] += 1
         if isinstance(product, R.Same) and (got := product.committed(case)) and None not in got:
-            seen["two registrations" if len(set(got)) > 1 else "one registration"] += 1
+            seen["two records" if len(set(got)) > 1 else "one record"] += 1
         return out
     return answer
 
@@ -333,7 +333,7 @@ class UndecidedPort(D.ProtocolPort):
 
 
 class RejectingPort(D.ProtocolPort):
-    """A product port whose drawn cases reject: its two components must commit to one registration record, and on one
+    """A product port whose drawn cases reject: its two components must commit to one window record, and on one
     record integrity (v2) refuses PoUW's window (its program reads registered values, outside v2's mirror), so the
     drawn cases don't reach undecided. Its bar is the two ways its components' records meet, counted in `seen`."""
     accepted = R.REJECT
@@ -395,12 +395,12 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
 def test_remote_agrees(remote_server):
     """Remote's components meet on one record (left to the components) and on two (refused), each often."""
     _agree(REMOTE, remote_server, SEEN["remote"], 1000, (R.REJECT, "reject, a component undecided",
-                                                       "reject, no component rejected", "one registration",
-                                                       "two registrations"))
+                                                       "reject, no component rejected", "one record",
+                                                       "two records"))
 
 
 def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
-    """On drawn cases remote's verdict is its product's without the registration check (`Core.Composition.product`,
+    """On drawn cases remote's verdict is its product's without the record check (`Core.Composition.product`,
     remote before it), except where its components committed to two records, which it refuses: the check changes no
     other verdict. Python only: the difftest holds the Lean to it."""
     product = R.Product(R.REMOTE.id, R.REMOTE.components)
@@ -415,7 +415,7 @@ def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
         seen["two" if two else "one"] += 1
         if two:
             assert got["verdict"] == R.REJECT, got
-            assert got["reason"].startswith("registration: ") or was["verdict"] == R.REJECT, (got, was)
+            assert got["reason"].startswith("record: ") or was["verdict"] == R.REJECT, (got, was)
         else:
             assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in was.items() if k != "reason"}
         seen[f"was {was['verdict']}, two" if two else "same"] += 1

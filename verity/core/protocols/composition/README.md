@@ -7,12 +7,12 @@ subprotocols' packages, with no Mathlib:
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
   `registered id R s components`, the same after a registration check `R`, on the registration the subprotocol `s`
-  commits to, and `same id ss components`, the product whose subprotocols `ss` must commit to one registration
+  commits to, and `same id ss components`, the product whose subprotocols `ss` must commit to one record
   (`Registered.lean`); all three over blobs (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s
   that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
   bandwidth (PoUB), network certification and the memory challenger's wipe, after NCI's registration check.
-- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one registration
+- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one window
   record.
 
 The rule and the formats are written once, over any list of subprotocols, and the two products are values of it that
@@ -100,17 +100,17 @@ whatever the subprotocols answer (`mismatch`: `registration: R checked D, s comm
 Otherwise it answers as the product of the subprotocols does under the commitment's first 64 bytes, and the registration
 adds nothing to what is public or kept.
 
-## One registration
+## One record
 
-Every subprotocol whose commitment names a registration must name the composition's one. `same id ss components`
+Every subprotocol whose commitment is a window record must commit to the composition's one. `same id ss components`
 (`sameB` over blobs) is the product of the subprotocols, except that once the cases fit, subprotocols `ss` that didn't
-all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `registration: s committed
-D, t committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Remote
-is one: `sameB "verity/remote/v0" [verity/pouw/v1, verity/sampled-proofs/one-stage/v2] components`, whose PoUW window
-and one-stage audit each commit to the window's registration record. At onsite the one-stage audit commits to the
-registration NCI checked (above). Onsite's PoUW period and network certification name one record a window, in their
-evidence and their period commitment, so they join the check when each window's record names the registration log's
-head (`Core.Registration`, `../interface`), whose head then becomes the one registration.
+all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `record: s committed D, t
+committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Remote is
+one: `sameB "verity/remote/v0" [verity/pouw/v1, verity/sampled-proofs/one-stage/v2] components`, whose PoUW window and
+one-stage audit each commit to the window record. At onsite the one-stage audit commits to the record NCI checked
+(above). Onsite's PoUW period and network certification name one record a window, in their evidence and their period
+commitment, so they join the check when each window's record names the registration log's head (`Core.Registration`,
+`../interface`), which then is the one every subprotocol names.
 
 ## The difftest
 

@@ -355,7 +355,7 @@ class Product:
 @dataclass(frozen=True)
 class Same(Product):
     """`Core.Composition.sameB id ss components`: `product`, except that once the cases fit, the components ``same``
-    (each committing to a registration record) must all have committed to the first one's digest."""
+    (each committing to a window record) must all have committed to the first one's digest."""
 
     same: tuple = ()
 
@@ -367,7 +367,7 @@ class Same(Product):
         if not got or any(d is None for _, d in got):
             return None
         (s, d), rest = got[0], got[1:]
-        return next((f"registration: {s} committed {d}, {t} committed {e}" for t, e in rest if e != d), None)
+        return next((f"record: {s} committed {d}, {t} committed {e}" for t, e in rest if e != d), None)
 
     def check(self, ps, c: bytes, ev, blobs: list[bytes] = ()) -> tuple:
         answers = self.run(ps, ev, blobs)
@@ -463,7 +463,7 @@ class Registered:
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids: remote's two
-#: committing to one registration record, onsite's after its registration check, NCI's, on the registration integrity
+#: committing to one window record, onsite's after its registration check, NCI's, on the registration integrity
 #: (v2) commits to.
 REMOTE = Same("verity/remote/v0", (POUW, SAMPLED_PROOFS), (POUW.id, SAMPLED_PROOFS.id))
 ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,

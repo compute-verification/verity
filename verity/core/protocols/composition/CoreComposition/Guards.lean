@@ -4,7 +4,7 @@ k = 2): every pair of the components' verdicts, reject dominating; a commitment 
 every way the cases can fail to fit the composition. Then the same two after a registration check, a third stub `r`
 (`registered`, on the registration `b` commits to): its refusal refusing the whole, the commitment binding its digest,
 and a registration other than the one `b` committed to refused. Then three stubs `a`, `b` and `c` of which `a` and `c`
-must commit to one registration (`same`): a pair that didn't refused whatever the components answer.
+must commit to one record (`same`): a pair that didn't refused whatever the components answer.
 -/
 import CoreComposition.Cases
 import CoreComposition.Stubs
@@ -155,17 +155,17 @@ private def answerS (xs : List Stubbed) (c : ByteArray := commitmentOf sameToy x
 
 private def stray (x : Stubbed) : Stubbed := { x with root := ⟨(List.replicate 32 9).toArray⟩ }
 
--- `a` and `c` committed to one registration: the verdict is `product`'s, whatever `b` committed to
+-- `a` and `c` committed to one record: the verdict is `product`'s, whatever `b` committed to
 #guard (answerS [accepts "a", accepts "b", accepts "c"]).verdict == .accept
 #guard (answerS [accepts "a", stray (accepts "b"), accepts "c"]).verdict == .accept
 #guard (answerS [accepts "a", undecided "b", accepts "c"]).verdict == .undecided
 #guard (answerS [rejects "a", accepts "b", accepts "c"]).reason == some "a reject: 1 of 2 drawn units failed"
 -- `a` and `c` committed to two: refused once the cases fit, whatever the components answer
 #guard (answerS [accepts "a", accepts "b", stray (accepts "c")]).reason ==
-  some s!"registration: a committed {hex 7}, c committed {hex 9}"
+  some s!"record: a committed {hex 7}, c committed {hex 9}"
 #guard (answerS [accepts "a", undecided "b", stray (undecided "c")]).verdict == .reject
 #guard (answerS [rejects "a", accepts "b", stray (accepts "c")]).reason ==
-  some s!"registration: a committed {hex 7}, c committed {hex 9}"
+  some s!"record: a committed {hex 7}, c committed {hex 9}"
 #guard (answerS [accepts "a", accepts "b", stray (accepts "c")]).published.isNone
 #guard (answerS [accepts "a", stray (accepts "c")]).reason == some "params: b is missing"
 -- a commitment that doesn't decode rejects as its component
