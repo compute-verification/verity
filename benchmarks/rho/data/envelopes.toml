@@ -56,15 +56,16 @@ side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruli
 form = "certified"
 
 # The onsite envelopes with each server's ingress at its inference blocks' declared inputs (NET-92) at the warden form's
-# W63 parameters: a toy cadence (4 lanes, a request a lane every 2.2 s), so its ingress, 0.0203 alpha Phi on an H200
-# server at v4-pro-session, feeds the serving rho credits only if outputs outnumber prompts more than 28:1. A
-# deployment's own cadence replaces it once it feeds that serving. declared_x: a multiple of the declared bound, at most
-# line rate.
+# W63 parameters, in the bound's honest-delta form, with no faulty ingress unit
+# (note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee): a toy cadence (4 lanes, a request a lane
+# every 2.2 s), so its ingress, 0.0204 alpha Phi on an H200 server at v4-pro-session, feeds the serving rho credits only
+# if outputs outnumber prompts more than 28:1. A deployment's own cadence replaces it once it feeds that serving.
+# declared_x: a multiple of the declared bound, at most line rate.
 [regime.onsite-w63]
 base = "onsite"
 declared = true
 cell_bytes = { value = 512, unit = "byte", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class B (WardenParams cell_bytes)", status = "declared" }
-cell_rate = { value = 4, unit = "cell/lane/bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class r", status = "declared" }
+cell_rate = { value = 4, unit = "cell/lane/bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class r (WardenParams slots)", status = "declared" }
 lanes = { value = 4, unit = "lane/server", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class lanes", status = "declared" }
 cells = { value = 47, unit = "cell/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class C (WardenParams ingress_cells)", status = "declared" }
 id_bits = { value = 17, unit = "bit", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class IDB", status = "declared" }
