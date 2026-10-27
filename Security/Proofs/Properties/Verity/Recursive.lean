@@ -181,7 +181,7 @@ theorem statements_pos {sh : Flock.RecVStar.Inner} {vs : Array VStar.Stmt}
   obtain ⟨_, -, _, _, _, _, A, C, -, -, -, -, -, -, -, K, n, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
   rw [hss]
   simp only [Array.size_append]
-  first | omega | simp | (simp; omega)
+  first | omega | (simp; done) | (simp <;> omega)
 
 /-- The verifier's registered reads, as the model's readers take them off the part's `registered` object. -/
 theorem regC_of_part {pr : Option Lean.Json} {registered : Option (Array Flock.Registered.Port)} {complete : Bool}
@@ -199,10 +199,10 @@ theorem regC_of_part {pr : Option Lean.Json} {registered : Option (Array Flock.R
     obtain ⟨own, ho, rfl⟩ := h
     refine ⟨?_, ?_⟩
     · rw [Part.mapM_some_ok ho]
-      rfl
+      try rfl
     · show (VStar.Recursive.registeredOf r).toOption.map (·.1) = some own
       rw [ho]
-      rfl
+      try rfl
 
 /-- **An accepted compiled part sets up as the model's part** (pieces C, D1 and D2 at one part). Where the compiled part
 `j`'s verdict is `.ok ()`, `x`'s inner statement and part `j` are the component's (`InnerNames`, `PartNames`), the staged
@@ -290,6 +290,7 @@ theorem actO_eq {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts : Array 
     (cs : List Coin) (h : setupO xO = some (i, spec, sts)) : actO xO as cs = actAt i.base spec sts as cs := by
   unfold actO
   rw [h]
+  try rfl
 
 /-- `actAt` decides at a last message that reads as the prover's last and a first that reads as the link message. -/
 theorem actAt_decide (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (a₁ : Msg)
@@ -339,6 +340,7 @@ theorem actO_decide_of {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts :
       ((rest.map Prod.fst).dropLast.map List.tail).zip ((rest.map fun m => outCoin m.2).dropLast), ?_⟩
     rw [actO_eq _ _ hset]
     exact actAt_decide i.base spec sts m₀.1 (rest.map Prod.fst) (outCoin m₀.2) (rest.map fun m => outCoin m.2)
+      (a := ml.1) (c := outCoin ml.2)
       (by
         rw [show m₀.1 :: rest.map Prod.fst = (m₀ :: rest).map Prod.fst from rfl, List.getLast?_map, hml]
         try rfl)
