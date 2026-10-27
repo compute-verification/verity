@@ -161,20 +161,19 @@ theorem transcriptAt_heq {o : Option Flock.Bridge.Parsed}
   rfl
 
 /-- **The deployment's extractor** (`Vocab.extract`), from the vocabulary's reading of the files (`read`), its rounds,
-the device's signer and its `ε`, and C-Flock's session at each parse (`A`, `τOf`, `q`, as `SampledDeploy` holds them): at files that parse
+and its `ε`, and C-Flock's session at each parse (`A`, `τOf`, `q`, as `SampledDeploy` holds them): at files that parse
 to `r`, the transcript of the values the session's extractor opens at the strategy the play induces (`LiveAt.valE` at
 `τOf σ`); the empty transcript at files that don't parse. Its type is `Vocab.extract`'s, so a vocabulary can take it as
 its extractor. -/
-noncomputable def extractDep (read : ByteArray → FileRead) (rounds : ByteArray → List ℕ)
-    (sign : ByteArray → ByteArray → List Bool → ByteArray × ByteArray) (εOf : ByteArray → ℝ)
+noncomputable def extractDep (read : ByteArray → FileRead) (rounds : ByteArray → List ℕ) (εOf : ByteArray → ℝ)
     (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg) (q : ByteArray → Claims.Sampling.Query)
-    (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (play (rounds θ) (sign θ) θ F c)) (r : Flock.Bridge.Parsed),
+    (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (play (rounds θ) θ F c)) (r : Flock.Bridge.Parsed),
       Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊εOf θ * r.n⌋₊ + 1) (desc θ))
-    (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) (sign θ) θ F c)) (r : Flock.Bridge.Parsed)
+    (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) θ F c)) (r : Flock.Bridge.Parsed)
       (hr : Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile = some r),
       FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
-    (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) (sign θ) θ F c)) : (read F).circuit.Transcript :=
+    (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) θ F c)) : (read F).circuit.Transcript :=
   transcriptAt (Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile)
     fun r hr => Flock.Bridge.transcriptOf r.D r.hU r.n (A θ F c σ r hr).κ
       ((A θ F c σ r hr).valE (q θ) (τOf θ F c σ r hr))
@@ -189,7 +188,7 @@ theorem unbound_le_of_extract {V : Vocab d α} (kd : ByteArray → ℕ) (desc : 
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
-    (hext : V.extract = extractDep V.read V.rounds V.sign (fun θ => (V.certOf θ).ε) kd desc q A τOf)
+    (hext : V.extract = extractDep V.read V.rounds (fun θ => (V.certOf θ).ε) kd desc q A τOf)
     (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r)
     (O : (g : Fin (Flock.Bridge.circuitOf r.D r.hU r.n).N) → BitVec ((Flock.Bridge.circuitOf r.D r.hU r.n).w g) → Prop)
     (hO : HEq (V.Opens θ F c) O)
@@ -322,6 +321,6 @@ theorem sampledProofsSound' (V : Vocab d α) (Dp : SampledDeploy V) : V.SampledP
       refine (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ).trans ?_
       rw [Game.prob_false]
       exact zero_le
-  · exact (prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ _ h => hreg h.1.1) σ).trans_le zero_le
+  · exact (prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ _ h => hreg h.1.1) σ).trans_le zero_le
 
 end Verity
