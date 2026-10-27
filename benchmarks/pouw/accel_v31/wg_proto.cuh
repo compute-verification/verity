@@ -464,6 +464,10 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
     acc_fence<NA>(d);
     if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
     pump(cg);
+    if (!p.O) {   // the words alone (a served call's segments 1 .. S - 1)
+      post();
+      continue;
+    }
 
     const int row = tm * TM + rloc, col0 = tn * BN + cq;
     // every address below is a base plus a constant (row and col0 are even)

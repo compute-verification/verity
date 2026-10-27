@@ -1907,7 +1907,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_r3; CM 1; the wgl arm keeps RP 0). A served Fill's V31_GEMM 1: its
 // D = a' b'^T on the plain wg GEMM (static schedule), V31_RP 4 hashing the O rows in the GEMM's producer warpgroup
 // (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
-// C > 0: the hash warps' passes over the posted rows, C blocks of each a visit, in place of each row whole in turn).
+// C > 0: the hash warps' passes over the posted rows, C blocks of each a visit, in place of each row whole in turn;
+// V31_WGW 0: the words segments on gemm_kernel<true> rather than the wg protocol GEMM).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
@@ -2339,15 +2340,16 @@ struct Fill {
   uint8_t* obuf = nullptr;
   int ocap = 0;
   // V31_GEMM 1 (served): D = a' b'^T on wg_proto.cuh's plain GEMM (mode 0, static schedule) in place of cuBLASLt; V31_RP 4
-  // hashes its O rows in the GEMM's producer warpgroup, digests to xd[copy] flagged with the launch's epoch xep[copy]
-  bool wg = false;
+  // hashes its O rows in the GEMM's producer warpgroup, digests to xd[copy] flagged with the launch's epoch xep[copy];
+  // wgw (V31_WGW, default 1): the words segments on the wg protocol GEMM too, in place of gemm_kernel<true>
+  bool wg = false, wgw = false;
   int wbn = 0, wgrid = 0, hchunk = 0;
   u64* xd[2] = {nullptr, nullptr};
   u32* xf[2] = {nullptr, nullptr};
   u32 xep[2] = {0, 0}, xctr = 0;
   float *wsa = nullptr, *wsw = nullptr;
 #ifdef V31_WG
-  wgp::Args wa_plain{};
+  wgp::Args wa_plain{}, wa_words{};
 #endif
 
   // "": fine; else why the shape can't be committed
@@ -2504,6 +2506,13 @@ struct Fill {
     CK(cudaMemcpy(wsw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
     wa_plain = wg_args(Ap, Bp, 0);
     wa_plain.hall = env_int("V31_HALL", 0);
+    wgw = wg && Wn > 0 && env_int("V31_WGW", 1) != 0;
+    if (wgw) {   // T_1 .. T_W: mode 1 with no tail and no O over k < W L, gemm_kernel<true>'s words bit for bit
+      wa_words = wg_args(X, W, 1);
+      wa_words.K = Wn * L;
+      wa_words.L = L;
+      wa_words.S = Wn;
+    }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
     if (wg && kn.rp == 4)
       for (int b = 0; b < 2; b++) {
@@ -2572,6 +2581,14 @@ struct Fill {
 #endif
     if (o) lt_run(lt, Ap, Bp, D[b], st);
     if (!Wn) return;
+#ifdef V31_WG
+    if (wgw) {
+      wgp::Args g = wa_words;
+      g.words = words[b];
+      wg_run(st, g);
+      return;
+    }
+#endif
     gemm_launch<true>(pair, grid, st,
                       GArgs{maps, words[b], nullptr, nullptr, m, n, o ? Wn * L : k, L, Wn, 0, 8, lp, 0, kn.dyn ? gctr : nullptr,
                             gbase, 0});
@@ -3321,12 +3338,12 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, "
+           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, "
            "\"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
-           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, fused,
+           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0, fused,
            f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
