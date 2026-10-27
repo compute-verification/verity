@@ -452,7 +452,7 @@ C_WP = ("checkpoint_binding/weights_of_record", "MAN-09 / rev-cb M-0610",
 
 
 def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
-    """The C2-of-record section of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
+    """The C2-of-record section of commit_verdict (lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
     the SAME nesting (a branch v1 never took is not taken here), emitting: local_replay/sampled_replay, /seed_of_record, /population_gaps,
     /population_scope, /attribution, /cublas_route_pin; boundary_linkage/ordered_linkage; checkpoint_binding/weights_of_record."""
     sr, lk, wp = _replay_of(commit), _linkage_of(commit), commit.get("weights_pin")

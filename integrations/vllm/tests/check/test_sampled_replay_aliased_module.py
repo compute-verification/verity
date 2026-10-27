@@ -24,7 +24,7 @@ from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, 
 
 # the rope / attention Program is dense's (ruling R17-9 / R17-11 units, on the int line); a tree without it cannot run this end to end
 pytestmark = pytest.mark.skipif("rope" not in inspect.signature(_program).parameters,
-                                reason="dense's rope/attention test Program (R17-9) is not on this tree; run on the int line")
+                                reason="dense's rope/attention test Program is not on this tree; run on the int line")
 
 CANON = "model.layers.0.self_attn.rotary_emb"
 ALIAS = "model.layers.1.self_attn.rotary_emb"

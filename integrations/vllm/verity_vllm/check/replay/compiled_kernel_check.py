@@ -1,4 +1,4 @@
-"""C2 of record for `Execution=compiled` rows (DECISIONS-2 (1): stratified sampled EXACT VU replay + ordered boundary linkage),
+"""C2 of record for `Execution=compiled` rows (stratified sampled EXACT VU replay + ordered boundary linkage),
 from the committed bytes alone.
 
 VU = one Inductor kernel launch of P_compiled (compiled_relations.relation); its input boundaries are committed under
@@ -409,7 +409,7 @@ class CompiledKernelCheck:
                 res["errors"].append(f"step {s} piece {piece} {kernel}: {e!r}"[:300])
 
     def _link_step(self, s: int, metas: dict[str, Any], lm_head: Any, res: dict[str, Any]) -> None:
-        """Ordered boundary linkage of ONE engine step, per request row range of the step's batched buffers (F-cb-23: the
+        """Ordered boundary linkage of ONE engine step, per request row range of the step's batched buffers (the
         per-(step, request) attribution of the committed rows).  ids(s)[rows of r] == r's token(k-1) (its prefill rows == the DECLARED prompt);
         argmax lm_head(final_norm_out(s)[last row of r]) == r's token(k); the tokens are the engine's own per-request outputs (equal to the
         uninstrumented control arm's).  Runs over EVERY committed step (attribution), the sampled steps included."""

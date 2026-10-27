@@ -255,7 +255,7 @@ def _omitted(rid: str) -> str:
 @pytest.mark.parametrize("requests,shortfall", [((T.R0, T.R1), None),
                                                ((T.R0, T.R1_EOS), "engine steps [2, 3]: live requests observed [1, 0] != programmed [2, 1] -- "
                                                                   "the shortfall is not after a verified EOS (['r1'] stopped early without one): "
-                                                                  "declared schedule not exercised (M-0571 (1))")],
+                                                                  "declared schedule not exercised")],
                          ids=["served to the cap", "eos stop"])
 @pytest.mark.parametrize("tokens_optional", [False, True])
 def test_g6_refuses_a_declared_request_the_driver_omits(memory, tmp_path, requests, shortfall, tokens_optional):
