@@ -1611,7 +1611,7 @@ class Driver:
         """The members the sync moves to the bottom of `next` (`queue.Queue.lift`): each above its lowest Lean change, ``chain[i]``,
         with its ready mark and a land verdict at its head (`_reviewed`'s rule) whose own change is no Lean change, so they land
         this tick instead of waiting for that Lean change's check (CI-172, 27 Oct: #4828 at the bottom held every reviewed member
-        above it 10:52Z-12:20Z).  Only while no Lean check of `next` runs (the caller's) or passed, nor a recorded run covers
+        above it 10:52Z-12:20Z).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a recorded run covers
         ``chain[i]`` (`_cover`), since a rebuild would take its commit off `next`, and not past a Lean change whose own check
         failed: that one waits for its owner's fix or hold, not a check again on every lift."""
         i = next((j for j, m in enumerate(chain) if self._lean_change(m)), None)

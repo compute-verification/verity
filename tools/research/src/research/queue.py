@@ -1232,12 +1232,12 @@ class Queue:
             return next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
 
         k = kept(order)
-        if self._lifted and k < len(self._lifted):
+        if lifted := k < len(self._lifted):
             self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed, no Lean change) go to the bottom of "
                      f"`{self.branch}`, below a Lean change that waits for its Lean check")
         # a lift merges the members above it again in their order: only what comes new goes non-Lean first, so an unreviewed
         # member doesn't go below the Lean change and keep it from its Lean check
-        j = max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0)) if self._lifted else k
+        j = max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0)) if lifted else k
         if len(order) - j > 1 and nonlean():
             order = last(order[:j] + self._nonlean_order(order[j:], heads, entries))
             k = kept(order)
