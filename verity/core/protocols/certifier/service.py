@@ -208,7 +208,7 @@ What that establishes, and what it doesn't: the outcome is accept exactly when t
 registered unit whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
 sync is declared; the outcome record binds the registered root, the draw and the delivered sessions. The verifier of
 record reads no witness but an advised link's clock openings (`certified_clocks`), on the host until N2's advised
-unit opens them (PROTOCOL.md's named gap, "The clock's opening"). The proof opens the head leaves (2, 3) only, so the
+unit opens them. The proof opens the head leaves (2, 3) only, so the
 record leaves (0, 1), which hold each certified record whole, are committed but read by nothing in the verdict, and
 the certificates' signatures are checked
 on the host from their public fields, not in the proof. One clock per spatial unit across links (`Audit.syncs`) is

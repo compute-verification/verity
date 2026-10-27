@@ -16,16 +16,15 @@ charge and no assumption on it (`EncardAccSeqsWithinLeConstantRateV1Whole`).
 symbol's outcomes split that weight, and the finish charges at most what the last state's weight pays for. A whole
 window is a sequence of symbols, each of whose models (its total, and the intervals of its outcomes) the book, the
 carry and the symbols before it fix. Two windows' sequences first differ at a symbol of one model, at disjoint
-intervals: a count before the values it counts, a decision's two outcomes, an integer's bins, a bin's offsets
-(`charge-chain.md`, "The whole window"). So the weights of the window's sequences sum to at most the first state's,
+intervals: a count before the values it counts, a decision's two outcomes, an integer's bins, a bin's offsets.
+So the weights of the window's sequences sum to at most the first state's,
 and the weights `2^(−charge)` of a run's windows to at most 1.
 
 **Scope.** Every advice v1 window, from any carry chained from the book's first (`Book.first`): its decisions, hits
 and order entries, with n_resumes and n_lag sent as 0 (advice v1 never sends resumes or lag bits). Which slots ask is
 not charged, as for `EncardChargedLe`. A `Window` holds each field's values at its enabled slots, in order, so these
 statements count advice values, not slot arrangements. The slice that wires `ChargeLink_v2` takes `hen` and `oen` from
-the replay, as `en` is (enabled slots first, never the prover's), and reads no disabled slot's value (`charge-chain.md`,
-"The slice").
+the replay, as `en` is (enabled slots first, never the prover's), and reads no disabled slot's value.
 
 **What is left, the one hypothesis.** That `ChargeCount_v2`'s circuit computes `WindowCharge.window`. It is not proved
 in Lean: circuit-check holds the circuit to the Python reference (`window_charge.py`'s `reference_window`), and the

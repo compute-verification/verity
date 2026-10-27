@@ -1,8 +1,8 @@
 """The advised link's tie (`advised.IoTieVerdict`), held as regressions. The verdict comes only from IoTieRequest
-proofs the verifier of record verified, so that without them every advised link is refused (PROTOCOL.md, "The tie is
-IoTieRequest's verdict"). Were the verifier to read it off the delivered `LinkAdvice`, with the verdict holding only
-the advice's digest, which the delivered advice fixes, a prover that delivered its own verdict would reopen the
-swapped split's acausal release through the verifier of record. So the advice carries no tie, the verifier takes the
+proofs the verifier of record verified, so that without them every advised link is refused. Were the verifier to
+read it off the delivered `LinkAdvice`, with the verdict holding only the advice's digest, which the delivered
+advice fixes, a prover that delivered its own verdict would reopen the swapped split's acausal release through the
+verifier of record. So the advice carries no tie, the verifier takes the
 verdict only from its own tie source (`LinkWindows.ties`: `tie_service.Ties` in the package, here the stand-in
 `advised_traffic.StandInTie`), and the verdict names the link and its ingress registrations, which `view` holds to the
 verifier's, so one link's verdict isn't another's.
@@ -103,7 +103,7 @@ def test_the_verdict_names_its_link_and_ingress_registrations_and_the_advice_car
 
 
 def test_without_a_tie_source_the_verifier_of_record_refuses_every_window(tmp_path):
-    """PROTOCOL.md's fail closed: the honest advice of a causal release is refused in every window without a tie
+    """Fail closed: the honest advice of a causal release is refused in every window without a tie
     source, as in the package, and accepted in every one under the source on the certified ingress."""
     later = _session((2, 3))
     (tmp_path / "none").mkdir()

@@ -3,7 +3,7 @@ import Definitions.NetworkCertifier.Schedule
 /-!
 # The advice string: its charge per window, the compiled Program, and acceptance within caps
 
-Definitions only (PROTOCOL.md, "Capacity", the advice string's row). The registered thing is a precommitted
+Definitions only. The registered thing is a precommitted
 ahead-of-time compiler. After serving, the prover hands it an **advice string**, which encodes everything serving made
 unpredictable (I1: the requests, each step's batch rows, the release buckets). The compiler turns the advice into the
 Program, which fixes every egress row from the certified ingress. The advice string is the content advice of

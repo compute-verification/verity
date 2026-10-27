@@ -1,6 +1,6 @@
-"""Network certificates (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
-and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
-audit's on every scenario of the audit and commitment tests."""
+"""Network certificates (record v2 on SHA-512): the layout restated from `certificate`'s docstring, the frame
+tree, what the digest and the signed message bind, the signer's refusal failing closed, and the certified audit's
+verdicts against the raw audit's on every scenario of the audit and commitment tests."""
 
 import hashlib
 import itertools
@@ -33,7 +33,7 @@ def block(data: bytes) -> bytes:
 
 
 def test_the_record_is_the_documented_bytes():
-    """PROTOCOL.md's layout, rebuilt field by field with struct, and the tree from its three messages."""
+    """The documented layout, rebuilt field by field with struct, and the tree from its three messages."""
     params = GridParams(buckets=3, allocation=2, frame_bytes=2, bucket_ms=50)
     grid = fill([b"ab", b"cd", b"ef"], [2, 0, 1], 2)
     head = record_head("lnk", INGRESS, 7, grid, Status(Reason.DROPPED), params, PARAMS, deadline=False)

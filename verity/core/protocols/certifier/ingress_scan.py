@@ -104,11 +104,12 @@ and the prompt lengths, which stay private.
 **Where it runs.** `row`, `sin` and `prog` are each a registered read, an input port `Registered.checkPort` accepts:
 `row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog` the Programs'
 row t. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the scan's state row t and o2 as its view
-row t, each registered as a read of its row (`checkPort` accepts a hidden-output statement's output row, the
-verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which read those rows, read what
-bucket t computed: the carried state and the view are wires through the registered roots. The first bucket's unit,
-`IngressScanFirst`, has no `sin`: its S_{−1} is the empty state, constants of the circuit, so no row the prover commits
-stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
+row t, each registered as a read of its row (`checkPort` accepts a hidden-output statement's output row,
+`verity/ml/flock/verifier/PROTOCOL.md` §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which read
+those rows, read what bucket t computed: the carried state and the view are wires through the registered roots. The
+first bucket's unit, `IngressScanFirst`, has no `sin`: its S_{−1} is the empty state, constants of the circuit, so no
+row the prover commits stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1
+and o2 are committed.
 
     IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
         prog: Array<NP>) -> (u16, Array<NS>, Array<NV>)

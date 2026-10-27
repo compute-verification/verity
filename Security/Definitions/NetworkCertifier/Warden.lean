@@ -3,7 +3,7 @@ import Mathlib.Data.Nat.Notation
 /-!
 # The warden: cells on a public schedule, the fail cell, and what the client sees
 
-Definitions only (PROTOCOL.md, "Capacity", the warden's row; design v3). An active **warden** terminates both
+Definitions only (design v3). An active **warden** terminates both
 connections, the client's and the server's, and re-frames every byte into cells of `B` bytes per direction, sent on a
 public schedule: `r` cells per bucket and a latency of `D` buckets. A connection admitted at bucket `s` sends its egress
 cell `j` (its bytes `B·j` to `B·j + B − 1`) in bucket `s + D + ⌊j/r⌋`, so its egress byte `i` goes out in bucket

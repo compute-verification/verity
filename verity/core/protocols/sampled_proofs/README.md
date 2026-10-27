@@ -108,7 +108,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
-  The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
+  The challenger rests on two premises about where it runs, which the network certifier's README and ACCEL's cite by
   name:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the

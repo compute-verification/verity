@@ -82,10 +82,10 @@ is the honest one, byte for byte.
 
 ### With the salt
 
-`run --salt` turns each certifier's per-sampling-period salt on (`Proxy(salt=active.fresh_salt)`, the certifier's
-`PROTOCOL.md`): at each sampling period's first bucket the ingress side puts one salt frame, which carries the sampling
-period's number and the placeholder (64 zero bytes) and never the salt, in the zone's ingress record, and sends the salt
-itself to the zone's server on a connection of its own. Once a zone's run is over, `run` makes the verifier's "reveal"
+`run --salt` turns each certifier's per-sampling-period salt on (`Proxy(salt=active.fresh_salt)`): at each sampling
+period's first bucket the ingress side puts one salt frame, which carries the sampling period's number and the
+placeholder (64 zero bytes) and never the salt, in the zone's ingress record, and sends the salt itself to the zone's
+server on a connection of its own. Once a zone's run is over, `run` makes the verifier's "reveal"
 call to its proxy and keeps the salts in `DIR/b0/salts.json`. The record check declares each ingress sampling period it
 has a salt for with its salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads each sampling
 period's salt frame and the revealed salt's width and counts the salt frames in each ingress sampling period and in
@@ -99,7 +99,7 @@ first four strategies, so it needs `up --blocks 5` and `run --blocks 5`. The zon
 (`active_replay.outage_plan`): no request is enqueued in it, and the plan is refused if anything of sampling period 0
 would still be in flight there. Its proxy serves sampling period 0, then closes the link and stops listening, so for
 sampling period 1 the link is dead and no record is published. Half a sampling period before sampling period 2, a proxy
-back from maintenance (`Proxy(start=2, position=p)`, the certifier's `PROTOCOL.md`) listens on the same port, and the
+back from maintenance (`Proxy(start=2, position=p)`) listens on the same port, and the
 peer connects again. The proxy process stays up through the outage, but the proxy back from it is a new `Proxy` with
 fresh certifiers, so it carries nothing from sampling period 0. The zone's records are declared from its own drained
 plan, the Program its prover registers.
@@ -170,7 +170,7 @@ on each sampling block (`lab_run.n2_verdicts`), and the answers against the Prog
 sampling block declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a Python with torch
 (below). Its tampers are `--tamper b2:late` and `b1:extra`, and their expected verdicts are `run.WORKLOAD`'s.
 
-Every zone's link is served (the certifier's `PROTOCOL.md`, "A served link"): responses padded with empty events to F,
+Every zone's link is served (the certifier's `served`): responses padded with empty events to F,
 requests to F_in frames, and a proxy that admits a request only while its sampling period still ends idle. The proxy
 signs nothing: a stand-in LMS key (`lab_run.n2_verdicts`) signs N2's heads after the run.
 

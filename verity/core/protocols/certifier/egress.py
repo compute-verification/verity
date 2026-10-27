@@ -6,12 +6,13 @@ S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t
 cells the state renders. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when the state renders a
 row and whose other 15 bits are 0, and ``o1``, the row, bit 8k + i bit i of byte k. The row is gates of the circuit,
 never an input: the unit's statement commits o1 under the salt of the warden's egress row t of link ℓ and registers it
-as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output statement's output row, the verifier's
-PROTOCOL.md §16.13; `warden_rows.bucket_port`: unit `reads_from + t` reads row t), so the proof opens the warden's
-registered row only when the row the state renders is it, bit for bit. Only o0 is public: a unit proof's public output
-is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
-nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
-egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
+as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output statement's output row,
+`verity/ml/flock/verifier/PROTOCOL.md` §16.13; `warden_rows.bucket_port`: unit `reads_from + t` reads row t), so
+the proof opens the warden's registered row only when the row the state renders is it, bit for bit. Only o0 is
+public: a unit proof's public output is at most 16 bits, and o1 is committed. Every switch is computed from the
+state, none is witness, so the unit adds nothing to c, and bucket t's egress reads no ingress after bucket t:
+structural Fits (`NetTiming.Layout.Fits`: no egress gate is an input, and none of step t depends on an ingress gate of
+a step t' > t) holds by construction. It
 reads S_t rather than S_{t−1} because the warden's egress row of a connection's admission bucket already holds its
 lane, a `PAD` on its q.
 

@@ -713,7 +713,7 @@ def _tz(x: int) -> int:
 
 
 def test_the_parts_ands():
-    """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
+    """Each composite is its parts: what a cost at another shape extrapolates from."""
     sh, memo = SMALL, {}
     a = lambda fn: HC.ands(fn, memo)  # noqa: E731
     route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))

@@ -1,4 +1,4 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the warden's own ingress: the unit a
+"""IoTieRequest, a prototype on the warden's own ingress: the unit a
 bucket row that binds each request's prompt_len and arrival ordinal to the warden's certified ingress cells, its
 reference in the clear and the Boolean Definitions it is built from. Nothing here is in a Spec or proved.
 

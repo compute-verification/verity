@@ -96,20 +96,20 @@ tie is only IoTieRequest's verdict from the verifier's own tie source (`tie_serv
 ingress registrations it holds, so a verdict on another link or ingress record isn't reused, built from the
 IoTieRequest proofs the verifier of record verified on its own lanes (`tie_service.IngressTie.tie`). No proof of
 an unpinned size class is accepted, and the served size isn't pinned, so there every advised link is refused
-(PROTOCOL.md, fail closed). The floor's syncs are held the same way: a δ below the one the window's traffic was
+(fail closed). The floor's syncs are held the same way: a δ below the one the window's traffic was
 certified under loosens the floor (δ = 0 declared for a window the certifier ran at δ = 1 accepts an output in its
 request's own bucket), so every floor is under the sync the certifier ran, which the verifier takes
 only from its own clock source (`ClockSource`, `service.LinkWindows.clock_source`), never from the prover:
 `SignedClocks`, the sync the certifier signed for each egress window beside its record, salted as a record digest is
 (`certificate.CertifiedClock`), read through its opening against the signed digest under the verifier's own certifier
 key and session; without one every advised link is refused. `view` refuses a window whose declared sync isn't that
-one. The opening is witness, read by the verifier of record on the host until the unit opens it (PROTOCOL.md's named
-gap, "The clock's opening"): on an accepted window the sync it shows is the declared one, a public output already,
+one. The opening is witness, read by the verifier of record on the host until the unit opens it (a named gap): on
+an accepted window the sync it shows is the declared one, a public output already,
 and on a refused one it shows the sync the certifier ran, which the unit's opening would keep hidden. A window's
 declaration moves no floor, so its refusal
 is that window's alone, and the link's verdict, the AND over its windows, refuses the link with it. Neither head signs
-the prompt lengths, so the unit itself doesn't hold them to the record, only the verifier's tie source does:
-PROTOCOL.md's named gap, with its design.
+the prompt lengths, so the unit itself doesn't hold them to the record, only the verifier's tie source does. That
+is a named gap, which the ingress head signing each bucket's completed requests would close.
 
 **Bucket 0** is capped at RIN, which holds the own frame: the ingress certifier releases min(queue, r_in) frames a
 bucket (`grid.Certifier`), its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
@@ -204,8 +204,8 @@ class IoTieVerdict:
     its prompt is v0's `prompt_len` ids long. Only the verifier's own tie source (`TieSource`, `tie_service.Ties`)
     gives one, from IoTieRequest proofs it verified itself (`tie_service.IngressTie.tie`), and `view` holds it to the
     link and the registrations the verifier expects, so a verdict on another link or another ingress record isn't
-    this one's. At a size class with no pinned IoTieRequest digest every window is refused (PROTOCOL.md, fail
-    closed). Construction refuses (`advice.MalformedAdvice`) a `link` that isn't a
+    this one's. At a size class with no pinned IoTieRequest digest every window is refused (fail closed).
+    Construction refuses (`advice.MalformedAdvice`) a `link` that isn't a
     non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't one
     bool a registration."""
 
@@ -236,7 +236,7 @@ class TieSource(Protocol):
     `registrations(link)` is the verifier's record of the link's ingress windows' registrations with the challenger
     (each one's `registration.digest`, in window order), and `verdict(link, advice, profile)` IoTieRequest's verdict
     (`IoTieVerdict`) for `advice` under `profile`, built only from IoTieRequest proofs the verifier verified itself:
-    `tie_service.Ties`. Without one every advised link is refused (PROTOCOL.md, fail closed)."""
+    `tie_service.Ties`. Without one every advised link is refused (fail closed)."""
 
     def registrations(self, link: str) -> Sequence[str]: ...
 
