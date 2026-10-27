@@ -1,4 +1,5 @@
 import Proofs.Properties.Verity.SampledSim
+import Std.Data.String.ToNat
 
 /-!
 # The device's refusals, read in the play
@@ -10,11 +11,55 @@ exactly those the reduction reads as served, each with the requests before it (`
 
 A group's releases, where the log releases its uses one run each and each family's roots are its uses', are the
 uses' runs in turn, each release its family and root (`Challenger.runs_blocks`). What v2's acceptance runs of the
-challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's
-(`OneStageZk.Session0`), the order and groups it asks of them, and every coin a record holds the challenger's.
+challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's (`OneStageZk.Session0`), the
+order and groups it asks of them, every coin a record holds the challenger's, and every later use a later session's
+family (`OneStageZk.sessionUses_label`), which no family of session 0's is (`Hello.slotStream_inj`).
 -/
 
 open Lean (Json)
+
+namespace SampledProofs.Hello
+
+theorem sep_split : ∀ {a b s t : List Char}, '/' ∉ a → '/' ∉ b → a ++ '/' :: s = b ++ '/' :: t → a = b ∧ s = t
+  | [], [], _, _, _, _, h => by simp at h; exact ⟨rfl, h⟩
+  | [], c :: b, _, _, _, hb, h => by
+      simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
+      exact absurd (h.1 ▸ List.mem_cons_self) hb
+  | c :: a, [], _, _, ha, _, h => by
+      simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
+      exact absurd (h.1 ▸ List.mem_cons_self) ha
+  | c :: a, d :: b, _, _, ha, hb, h => by
+      simp only [List.cons_append, List.cons.injEq] at h
+      have := sep_split (fun m => ha (List.mem_cons_of_mem _ m)) (fun m => hb (List.mem_cons_of_mem _ m)) h.2
+      exact ⟨by rw [h.1, this.1], this.2⟩
+
+theorem slash_not_mem_toString (i : Nat) : '/' ∉ (toString i).toList := by
+  intro h
+  rw [Nat.toString_eq_repr, Nat.toList_repr] at h
+  have := Nat.isDigit_of_mem_toDigits (by decide) (by decide) h
+  revert this; decide
+
+/-- **A slot's families are its own**: `slot/<i>/<s>` names `i` and `s`, since `i`'s digits hold no `/`. -/
+theorem slotStream_inj {i j : Nat} {s t : String} : slotStream i s = slotStream j t ↔ i = j ∧ s = t := by
+  constructor
+  · intro h
+    have h' := congrArg String.toList h
+    simp only [slotStream, String.toList_append] at h'
+    have hs : (toString "/").toList = ['/'] := by decide
+    simp only [hs, List.append_assoc, List.singleton_append] at h'
+    have h' := List.append_cancel_left h'
+    have ⟨h1, h2⟩ := sep_split (slash_not_mem_toString i) (slash_not_mem_toString j) h'
+    refine ⟨Nat.repr_injective ?_, ?_⟩
+    · rw [← Nat.toString_eq_repr, ← Nat.toString_eq_repr, ← String.ofList_toList (s := toString i), h1,
+        String.ofList_toList]
+    · rw [← String.ofList_toList (s := s), ← String.ofList_toList (s := t)]
+      exact congrArg _ h2
+  · rintro ⟨rfl, rfl⟩; rfl
+
+theorem slotStream_ne {i j : Nat} {s t : String} (h : i ≠ j) : slotStream i s ≠ slotStream j t :=
+  fun e => h (slotStream_inj.1 e).1
+
+end SampledProofs.Hello
 
 namespace SampledProofs.Challenger
 
@@ -156,6 +201,76 @@ theorem loop_mono {α σ ε : Type} (R : σ → σ → Prop) (hrefl : ∀ s, R s
     | done b => cases hn; exact h1
     | yield b => exact htrans _ _ _ h1 (loop_mono R hrefl htrans f hf l b s' hn)
 
+/-- Every use session `slot` makes of the challenger's coins is of one of its own families, `slot/<slot>/…`. -/
+theorem sessionUses_label {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : sessionUses slot record = .ok us) : ∀ x ∈ us, ∃ n, x.1.label = Hello.slotStream slot n := by
+  let P : List (Challenger.Use × Array String) → Prop := fun l => ∀ x ∈ l, ∃ n, x.1.label = Hello.slotStream slot n
+  have hrefl : ∀ a, P a → P a := fun _ h => h
+  have htrans : ∀ a b c, (P a → P b) → (P b → P c) → P a → P c := fun _ _ _ h1 h2 h => h2 (h1 h)
+  have happ : ∀ a y n, P a → y.1.label = Hello.slotStream slot n → P (a ++ [y]) := by
+    intro a y n ha hy x hx
+    rcases List.mem_append.1 hx with hx | hx
+    · exact ha x hx
+    · rw [List.mem_singleton.1 hx]; exact ⟨n, hy⟩
+  unfold sessionUses at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  rename_i heq
+  cases h
+  rw [← Array.forIn_toList] at heq
+  refine loop_mono (fun a b => P a → P b) hrefl htrans _ ?_ _ _ _ heq ?_
+  · intro x s r hr hs
+    repeat' split at hr
+    all_goals first | (cases hr; done) | (simp [throw, throwThe, MonadExceptOf.throw] at *; done) | skip
+    rename_i heq2
+    cases hr
+    rw [← Array.forIn_toList] at heq2
+    refine loop_mono (fun a b => P a → P b) hrefl htrans _ ?_ _ _ _ heq2 hs
+    intro y t q hq ht
+    repeat' split at hq
+    all_goals first | (cases hq; done) | (simp [throw, throwThe, MonadExceptOf.throw] at *; done) | skip
+    all_goals (cases hq; exact happ _ _ _ ht rfl)
+  · intro x hx
+    rw [List.mem_singleton.1 hx]
+    exact ⟨_, rfl⟩
+
+
+theorem loop_mono_mem {α σ ε : Type} (R : σ → σ → Prop) (hrefl : ∀ s, R s s)
+    (htrans : ∀ a b c, R a b → R b c → R a c) (f : α → σ → Except ε (ForInStep σ)) :
+    ∀ (l : List α), (∀ x ∈ l, ∀ s r, f x s = .ok r → R s r.value) →
+      ∀ (s s' : σ), forIn l s f = .ok s' → R s s'
+  | [], _, s, s', h => by
+    rw [List.forIn_nil] at h
+    cases h
+    exact hrefl s
+  | x :: l, hf, s, s', h => by
+    obtain ⟨r, hr, hn⟩ := loop_cons_ok h
+    have h1 := hf x List.mem_cons_self s r hr
+    cases r with
+    | done b => cases hn; exact h1
+    | yield b =>
+      exact htrans _ _ _ h1 (loop_mono_mem R hrefl htrans f l (fun y hy => hf y (List.mem_cons_of_mem _ hy)) b s' hn)
+
+theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : α} (h : x.mapError f = .ok a) :
+    x = .ok a := by
+  cases x <;> simp_all [Except.mapError]
+
+/-- The loop's uses only grow, by uses of later sessions' families (`slot/<i>/…`, `i ≥ 1`). -/
+def Later (s s' : Array Challenger.Use × Array (Option (String × Array String)) × Array Json ×
+    Array (String × String) × Array (List String)) : Prop :=
+  ∃ t, s'.1 = s.1 ++ t ∧ ∀ u ∈ t, ∃ i n, 1 ≤ i ∧ u.label = Hello.slotStream i n
+
+theorem later_refl (s) : Later s s := ⟨#[], by simp, by simp⟩
+
+theorem later_trans (a b c) (h1 : Later a b) (h2 : Later b c) : Later a c := by
+  obtain ⟨t1, e1, q1⟩ := h1
+  obtain ⟨t2, e2, q2⟩ := h2
+  refine ⟨t1 ++ t2, by rw [e2, e1, Array.append_assoc], fun u hu => ?_⟩
+  rcases Array.mem_append.1 hu with hu | hu
+  · exact q1 u hu
+  · exact q2 u hu
+
 /-- The loop's state only grows: its uses and wants by appending, its order and groups by adding. -/
 def Grows (s s' : Array Challenger.Use × Array (Option (String × Array String)) × Array Json ×
     Array (String × String) × Array (List String)) : Prop :=
@@ -173,7 +288,7 @@ theorem grows_trans (a b c) (h1 : Grows a b) (h2 : Grows b c) : Grows a c := by
 /-- **Session 0's uses, as `roundsWhy` runs them**: its record in the blobs, its uses (`sessionUses 0`), one segment
 each; the uses `roundCoins` reads begin with the draw's, then session 0's in order, each with the coins its record
 holds; the draw is before each of session 0's families and its link points before its other families (`order`), and
-its families are one group (`groups`). -/
+its families are one group (`groups`); every use after them is a later session's (`slot/<i>/…`, `i ≥ 1`). -/
 def Session0 (label : String) (draw : Challenger.Use) (bs : Core.Blobs) (s0 : Session)
     (uses : List Challenger.Use) (wants : List (Option (String × Array String))) (order : List (String × String))
     (groups : List (List String)) : Prop :=
@@ -183,7 +298,8 @@ def Session0 (label : String) (draw : Challenger.Use) (bs : Core.Blobs) (s0 : Se
     (∀ j u, us0[j]? = some u → uses[j + 1]? = some u.1 ∧ ∃ what, wants[j + 1]? = some (some (what, u.2))) ∧
     (∀ ℓ ∈ (us0.map (·.1.label)).eraseDups, (label, ℓ) ∈ order) ∧
     (∀ ℓ ∈ (us0.map (·.1.label)).eraseDups, ℓ ≠ Hello.slotStream 0 POINTS → (Hello.slotStream 0 POINTS, ℓ) ∈ order) ∧
-    (us0.map (·.1.label)).eraseDups ∈ groups
+    (us0.map (·.1.label)).eraseDups ∈ groups ∧
+    ∀ u ∈ uses.drop (us0.length + 1), ∃ i n, 1 ≤ i ∧ u.label = Hello.slotStream i n
 
 /-- **What `roundsWhy` runs, where it names no reason**: v2's parameters name a challenger key and label and a window
 root, the draw's segment opens `opened`, and `roundCoins` returns `ξs` for its uses, order, groups and coins; every coin
@@ -256,7 +372,23 @@ theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs
                                 fun _ h => Array.mem_append_left _ (Array.mem_append_left _ h),
                                 fun _ h => Array.mem_push_of_mem _ h⟩)) _ _ _ hn
                         obtain ⟨⟨t1, e1⟩, ⟨t2, e2⟩, ho, hgr⟩ := hg
-                        refine ⟨b, record, us0, hb, hrec, hus', beq_iff_eq.1 hsz, ?_, ?_, ?_, ?_, ?_, ?_⟩
+                        have hlt := loop_mono_mem Later later_refl later_trans _ _ (fun x hx s r hr => by
+                          obtain ⟨s', i⟩ := x
+                          have hi := (List.mem_zipIdx hx).1
+                          repeat' split at hr
+                          all_goals first
+                            | (cases hr; done)
+                            | (rename_i heq; cases heq; done)
+                            | (cases hr; exact later_refl _)
+                            | skip
+                          rename_i rec _ _ us heq _
+                          cases hr
+                          have hu := mapError_ok heq
+                          refine ⟨_, rfl, fun u hu' => ?_⟩
+                          obtain ⟨y, hy, rfl⟩ := Array.mem_map.1 hu'
+                          obtain ⟨n, hn⟩ := sessionUses_label hu y (by simpa using hy)
+                          exact ⟨i, n, by omega, hn⟩) _ _ hn
+                        refine ⟨b, record, us0, hb, hrec, hus', beq_iff_eq.1 hsz, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
                         · rw [e1]; simp
                         · rw [e2]; simp
                         · intro j u hu
@@ -282,6 +414,11 @@ theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs
                         · apply Array.mem_toList_iff.2
                           apply hgr
                           simp
+                        · obtain ⟨t, et, qt⟩ := hlt
+                          intro u hu
+                          rw [et] at hu
+                          simp at hu
+                          exact qt u (by simpa using hu)
                       · split at hr0
                         · cases hr0
                         · rename_i heq
