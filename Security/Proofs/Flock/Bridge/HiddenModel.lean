@@ -59,10 +59,7 @@ def toyDj : Finset (Fin 1) → Lean.Json := fun _ => Lean.Json.null
 
 /-- `Draw.UnitDraw.ofJson` refuses `null`: a draw is an object. -/
 theorem unitDraw_null :
-    Flock.Draw.UnitDraw.ofJson Lean.Json.null = Except.error "U2: unit_draw is not an object" := by
-  first
-  | rfl
-  | simp [Flock.Draw.UnitDraw.ofJson, Lean.Json.getObj?]
+    Flock.Draw.UnitDraw.ofJson Lean.Json.null = Except.error "U2: unit_draw is not an object" := rfl
 
 /-- Every table's part of the draw `null` is `null` (`partJson` leaves a draw it can't read as it is). -/
 theorem drawJ_null (I : Inputs) (j : ℕ) : drawJ I Lean.Json.null j = Lean.Json.null := by
@@ -78,8 +75,7 @@ theorem toy_tab_refused {I : Inputs} {mPts : ℕ} {Reg : Type} {S₀ : Finset (F
   split
   · rename_i h
     obtain ⟨y⟩ := h
-    have hD := y.x.hD
-    simp only [toyDj] at hD
+    obtain ⟨D, hD⟩ : ∃ D, Flock.Draw.UnitDraw.ofJson (drawJ I Lean.Json.null _) = Except.ok D := ⟨_, y.x.hD⟩
     rw [drawJ_null, unitDraw_null] at hD
     cases hD
   · rfl

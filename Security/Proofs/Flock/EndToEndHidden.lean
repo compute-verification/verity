@@ -21,7 +21,8 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-open FlockSoundness.Discharge FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkHidden in
+open FlockSoundness.Discharge FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec
+  FlockSoundness.Discharge.ZkHidden in
 /-- **C-Flock's one-stage audit under hidden outputs, at the model level.** -/
 theorem EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel := by
   intro n Reg I mPts dj S₀ d₀ y₀ C P decode Dh Hc vb hlow hown L k Rw M hk hRw hM ρ hρ hr K₀ σ
