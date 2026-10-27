@@ -1,5 +1,5 @@
 import Properties.SampledProofs
-import Proofs.Properties.Challenger
+import Proofs.Properties.SampledProofs.Challenger
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 
