@@ -1,4 +1,4 @@
-"""The routed expert GEMMs of a padded static MoE layer as IR composites: one unit per (token slot, top-k slot) pair, the expert
+"""The routed expert GEMMs of a padded static MoE layer as composites: one unit per (token slot, top-k slot) pair, the expert
 a value.
 
     MoeSelectBf16x{E}_v1              (e: i32, column: Array<E, bf16>) -> bf16: column[e] for 0 <= e < E (signed), else 0x7FFF

@@ -20,7 +20,7 @@
     softmax_row  a head's attention scores and their softmax as one Definition, one proof block a head writing its
                  probability row
     rmsnorm      a bf16 row's RMSNorm: one proof block a row where the row fits, and a two-level form where it doesn't
-    rows         `ops.rows`'s row units on bits: the residual add and the greedy argmax, one proof block a row
+    rows         `ops.rows`'s composites on bits: the residual add and the greedy argmax, one proof block a row
     argmax       `ops.argmax`'s chunk and combine Definitions on bits
     quant        `ops.quant`'s per-row s8 quantizer on bits
     s8split      a W8A8 coordinate split along K into Definitions that each output at most 16 bits

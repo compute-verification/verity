@@ -1,4 +1,4 @@
-"""The first campaign subcircuit, frozen: exactly which function the proof backends are asked to prove.  A :class:`Target` is
+"""The first campaign subcircuit, frozen: exactly which function the proof systems are asked to prove.  A :class:`Target` is
 the code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every parameter bound; README Glossary).
 
 Every proof-system experiment in the campaign proves *this* relation until the target is deliberately re-versioned.
@@ -34,7 +34,7 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   unbound family (below).
 * **Saturation is inside the relation (log entry D8).** A finite input whose grouped sum leaves the FP32 range
   yields ``+-inf`` at once, sticky through the remaining group -- the hardware's word on every measured case.  That
-  word is a valid output of a transition and, through the epilogue, of the VU; it is not a finite accumulator, so a
+  word is a valid output of a transition and, through the epilogue, of the proof block; it is not a finite accumulator, so a
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
 * **Statement and binding.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``) whose
@@ -42,20 +42,20 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   Merkle roots (``verity_sp1.proofs.packed``, ``verity.ml.commitments.leaves``).  The guest's public values are
   ``h_O || h_L || verdict`` and are accepted only under the approved verifying key (``verity_sp1.host.APPROVED``).
 
-Transition unit versus verification unit
-========================================
+Transition unit versus proof block
+==================================
 
 Two objects, deliberately distinct:
 
-* The **backend transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
+* The **proof system's transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
   ``tc_dot16(c, x[16s:16s+16], W[16s:16s+16])`` -- two grouped sums, ``c`` joining the first.  A numerical proof
-  backend may take, expose and check these transitions and their intermediate accumulators internally in any
+  system may take, expose and check these transitions and their intermediate accumulators internally in any
   layout it likes; those states are proof-internal auxiliary witness, never new runtime boundaries.
-* The **Verity verification unit** (what the outer sampler selects and what a proof must establish in full) is
+* The **proof block** (what the outer sampler selects and what a proof must establish in full) is
   ``GemmCoordinate<K>``: the chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
 
-Backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
-function and the VU endpoints; they need not agree on auxiliary witness layouts.
+Proof systems must agree on the profile, the input/output bitstrings, the supported domain, the exact
+function and the proof block's endpoints; they need not agree on auxiliary witness layouts.
 
 References and the log of disagreements
 =======================================
@@ -88,7 +88,7 @@ Explicitly unresolved (not part of the target)
   encoding -- NaN, infinities, saturation -- as measured on A100/RTX 4090; no registered gate family binds them
   (no name is reserved: the ``veritor.*`` prefix is frozen, so the total relation takes a fresh id when it is
   declared).  Declaring the total relation is a
-  protocol decision, not a backend optimisation.
+  protocol decision, not a proof-system optimisation.
 * **Hopper.** ``wgmma`` on the H100 is one group of sixteen, a 26-bit adder, floor ``-133``
   (:data:`verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
@@ -100,7 +100,7 @@ Explicitly unresolved (not part of the target)
 Draft targets
 =============
 
-A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every backend proves it, it changes only by
+A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every proof system proves it, it changes only by
 re-versioning) or ``"draft"`` (a relation stated precisely enough to generate vectors against, owned by the silicon
 campaign, not yet bound to a guest or a registered family digest).  Each target names its ``instruction`` in
 :data:`verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; the instruction's status (pinned / hypothesis / unprobed) says how
@@ -155,8 +155,8 @@ on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, 
 -- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
 benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``benchmarks/census/hardware.json``, data read
 by the benchmarks) of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the
-relation's FP32 accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
-VU at a peak is ``2K / flop_per_second``.
+relation's FP32 accumulate width.  One proof block of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
+proof block at a peak is ``2K / flop_per_second``.
 """
 
 from __future__ import annotations
@@ -192,7 +192,7 @@ __all__ = [
     "Target",
 ]
 
-#: The tensor-core gate families' names and versions (the frozen SP1 backend's ``verity_sp1.proofs.families`` builds them).
+#: The tensor-core gate families' names and versions (the archived D-SP1's ``verity_sp1.proofs.families`` builds them).
 #: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN: each spelling is
 #: baked into a ``*_FAMILY_DIGEST`` pin, fixtures and recorded runs, so it stays; no new family is created under
 #: ``veritor.*`` — a new family takes a fresh id, and ``tests/test_targets_frozen_families.py`` fails on any other.
@@ -239,7 +239,7 @@ Status = Literal["frozen", "draft"]
 @dataclass(frozen=True, slots=True)
 class Target:
     """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
-    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
+    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated
     and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.circuits.silicon.instructions.INSTRUCTIONS``)."""
 

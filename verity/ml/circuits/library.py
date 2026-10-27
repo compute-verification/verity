@@ -17,7 +17,7 @@ The library holds the measured MUFU tables only. A table derived from a model's 
 ``gelu_tanh_bf16``, or a software function such as ``tanh_rn``) stays ``program``, a registered input: it names the
 architecture, and a library table is folded in every session whether a unit reads it or not.
 
-**Definitions** are the IR primitives whose circuits are library types: the tensor-core steps and the casts that core
+**Definitions** are the primitives whose circuits are library types: the tensor-core steps and the casts that core
 registers. The row-hashing circuits (``sha512x3``, ``hm96``) join by their type digests once the hierarchical circuit format
 defines them.
 """
@@ -69,7 +69,7 @@ TABLES: tuple[Table, ...] = (
           "6f498dcd26e75335dcec0acdbfadae425c206b36d5a071a417c646db018a53b0b5482455c913c9ed94ab09c0aa5ccbc8d2e4188abae767050df4544ec4d3e550"),
 )
 
-#: The IR primitives whose circuits are library types: the tensor-core steps and the casts `verity.ml.circuits.ops.prims` registers.
+#: The primitives whose circuits are library types: the tensor-core steps and the casts `verity.ml.circuits.ops.prims` registers.
 DEFINITIONS: frozenset[str] = frozenset({
     "AmpereBF16TcDot16_v2", "HopperBF16WgmmaDot16_v1", "HopperE4m3QgmmaDot32_v1",
     "Bf16ToF32_v1", "F32ToBf16Rn_v1", "F2fpBf16_v1", "F32ToE4m3Sat_v1",
@@ -93,7 +93,7 @@ def table_label(sha512: str) -> str:
 
 
 def definition_label(definition_id: str) -> str:
-    """``library`` for a Definition whose circuit is a library type, by its IR id; ``program`` otherwise."""
+    """``library`` for a Definition whose circuit is a library type, by its id; ``program`` otherwise."""
     return LIBRARY if definition_id in DEFINITIONS else PROGRAM
 
 

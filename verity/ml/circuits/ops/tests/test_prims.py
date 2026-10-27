@@ -1,4 +1,4 @@
-"""The IR-registered primitives of `verity.ml.circuits.ops.prims` are exactly the `verity.ml.circuits.silicon` functions, under their registered ids."""
+"""The registered primitives of `verity.ml.circuits.ops.prims` are exactly the `verity.ml.circuits.silicon` functions, under their registered ids."""
 from __future__ import annotations
 
 import random

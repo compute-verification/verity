@@ -1,4 +1,4 @@
-"""IR-registered scalar primitives: the basic integer, bit, select and comparison operations, the FP32 instructions
+"""Registered scalar primitives: the basic integer, bit, select and comparison operations, the FP32 instructions
 whose semantics is a bit operation or an exact comparison on the encoding (`abs`, `neg`, `max`, `min`, `cvt.sat`), and the
 f32 -> s8 rounding cast (`cvt.rni.sat.s8.f32`).
 

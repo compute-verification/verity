@@ -1,4 +1,4 @@
-"""The GEMM coordinate as an IR composite, parameterised by the k16 tensor-core step.
+"""The GEMM coordinate as a composite, parameterised by the k16 tensor-core step.
 
     DotBf16_v2{K, DOT}          f32 accumulator after K/16 `DOT` steps in ascending k from a zero accumulator
     GemmCoordinate_v2{K, DOT}   bf16 word: cvt.rn.bf16.f32(DotBf16)   (Triton `acc.to(bf16)`; the same on sm_80/sm_90)
@@ -48,7 +48,7 @@ K mod k products. The s8 Definitions also refuse K >= `S8_K_LIMIT` = 2^17 (`inte
 leave s32 and the step clamps: below it the accumulator word is the exact sum, in any k order.
 
 There are no `_v1` forms: they named the Ampere step in their bodies, which would now name a different primitive id (see
-`prims.AmpereBF16TcDot16`), and the static form is the definition the proof work targets.
+`prims.AmpereBF16TcDot16`), and the static form is the definition the proofs target.
 """
 from __future__ import annotations
 

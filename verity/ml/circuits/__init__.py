@@ -1,4 +1,4 @@
-"""verity.ml.circuits — the Verity IR core; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
+"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
 
 Semantics packages register their primitives with this core (``codec``'s ``register_lazy_family`` hook for the lazily
 materialised families).

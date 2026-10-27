@@ -1,4 +1,4 @@
-"""IR-registered MUFU primitives: the special-function unit's `ex2`, `rcp`, `sqrt`, `rsqrt` and `tanh` approximations as sm_89
+"""Registered MUFU primitives: the special-function unit's `ex2`, `rcp`, `sqrt`, `rsqrt` and `tanh` approximations as sm_89
 computes them, FA2's inverse sum, and the range scaling `div.full.f32` puts around `rcp`.
 
 Encodings: f32 = `Value<32>`.  Every evaluator is total on encodings except `MufuTanh`, which raises `MufuTanhUnmeasured` on a word

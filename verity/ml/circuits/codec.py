@@ -539,8 +539,8 @@ def descriptor_size(program_or_desc) -> int:
 
 # Primitive families that are materialised on demand (one definition per width / constant / vocab) when a descriptor is
 # decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
-# package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
-# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes the IR's own `Input<w>` or `RegisteredInput<w>`, ahead of
+# package registers its families with `register_lazy_family` (`verity.ml.circuits` never imports a semantics package).  An id matching
+# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes `program`'s own `Input<w>` or `RegisteredInput<w>`, ahead of
 # any registry entry.  A pattern matches the whole id, and the member it makes must carry that id: a family has one spelling
 # per member.
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []

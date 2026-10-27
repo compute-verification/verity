@@ -1,4 +1,4 @@
-"""IR-registered FP32 and BF16 arithmetic primitives: FP32 add/mul/fma/div rounded to nearest even (no ftz), the FTZ family
+"""Registered FP32 and BF16 arithmetic primitives: FP32 add/mul/fma/div rounded to nearest even (no ftz), the FTZ family
 of the fast-math FlashAttention-2 build, `max`, the `-inf` guard, and the BF16 element-wise operations the eager kernels
 compute in FP32 and round once to BF16.
 
