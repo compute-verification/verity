@@ -900,7 +900,7 @@ def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_an
     at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
     challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
 
-    def run(outcomes, wait_s=CO.TUNNEL_WAIT_S):
+    def run(outcomes, wait_s=CO.R.TUNNEL_WAIT_S):
         now, calls, slept = [0.0], [], []
 
         def connect(address, secret):
