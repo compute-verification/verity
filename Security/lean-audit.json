@@ -3264,7 +3264,7 @@
    "FlockSoundness.Accounting.repUp",
    "FlockSoundness.Accounting.sqrtUp"
   ],
-  "Definitions.Flock.Accounting.Padded": ["FlockSoundness.Accounting.Schedule.withQueries₀", "FlockSoundness.Accounting.padTableError"],
+  "Definitions.Flock.Accounting.Padded": ["FlockSoundness.Accounting.padTableError"],
   "Definitions.Flock.Accounting.Schedule": [
    "FlockSoundness.Accounting.Schedule.WellShaped",
    "FlockSoundness.Accounting.instDecidableEqLevel",
@@ -3354,7 +3354,6 @@
    "FlockSoundness.ZK.Table.PadsOnto",
    "FlockSoundness.ZK.Table.Rank",
    "FlockSoundness.ZK.Table.Winv",
-   "FlockSoundness.ZK.Table.preView",
    "FlockSoundness.ZK.Table.xTarget"
   ],
   "Definitions.Nci.CoverFanOutValue": ["Nci.Cover.Keyed.KeyDisjoint"],
