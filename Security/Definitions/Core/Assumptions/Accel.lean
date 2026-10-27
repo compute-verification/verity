@@ -35,7 +35,12 @@ only let a program do more.
 **Exclusions**, units no code here uses because they can't compute a committed word or a hash more cheaply than the
 model prices: the video and JPEG engines, sm_120's RT cores, the texture path's filtering, the copy engines (moves at
 device memory's and the host link's bandwidth) and compute data compression (the committed words are noised). The
-node's host CPUs and links are other devices of the period (`Pouw.Dither.Others`), not units of the card. -/
+node's host CPUs and links are other devices of the period (`Pouw.Dither.Others`), not units of the card.
+
+Open (RT-MODEL-MIN RM4): an exclusion is a second adversary class until it has a rate row or a proof that the model
+dominates it. sm_120's RT cores (at most 58 integer products a SM-clock, 6% of its `s8` rate) and the texture path
+(at most 64 products a SM-clock, 6% on sm_120 and 1.6% on the H200, MODEL-COVER) exceed the headline's served margins,
+3.9% on sm_120 and 2.6% on the H200. -/
 def CardWithinAccel (c : Accel.Card) (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop) : Prop :=
   ∃ x : Accel.Open, c.Exact x ∧ AccelProductForm x ∧
     ∀ f T D, can f T D → ∃ (P : (Accel.Machine.mk c x).Prog ℕ) (sched : List ℕ),

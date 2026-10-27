@@ -20,8 +20,9 @@ maximum on the deployed node, note:20261017T0452Z-draft-eps1-dc). Data-sheet num
 * issue: 4 warp instructions (four schedulers, one a clock each);
 * `alu`, `imad`: 64 lanes each; `shfl` 32 (CALIB); `f64` 64; `sfu` 16 (reciprocal, square root, logarithm,
   exponential, sine and cosine);
-* shared memory: 32 bank words; L2: 512 words read or written (the lane loads' issue bound: θ's `l2.read` row
-  is open);
+* shared memory: 32 bank words; L2: 512 words read or written, a placeholder, neither measured nor a ceiling (the
+  lane loads' issue bound; RM6, open until CALIB's ceiling with its argument replaces it). At 512 a table method that
+  reads a word of L2 a MAC runs at 12.5% of the tensor's `s8` rate (run r20261027-010606-f6d5);
 * HBM: 4.8 TB/s (data sheet), 1.2 · 10¹² words a second.
 -/
 

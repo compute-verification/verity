@@ -66,8 +66,22 @@ products (P2, `ProductForm`).
 | S2R, CS2R (thread and block ids) | `move` from an immediate | a thread's ids are constants of its text |
 
 **Open** (not yet dominated, so outside the premise's claim until added or argued): MATCH (a word compared across 32
-lanes in one instruction); MMAs with f16 accumulators; FP6 and block-scaled FP8 MMAs (`kind::mxf8f6f4`); clock reads
-(`%clock`, time as data); the texture path's filtering (TEX, TLD4, and surfaces); sm_100's tensor memory and `tcgen05`,
-which sm_120 doesn't have. **Excluded** by the premise (no code here uses them, and none computes a committed word or a
-hash more cheaply than the model prices): the video and JPEG engines, sm_120's RT cores, the copy engines and compute
-data compression.
+lanes in one instruction); MMAs with f16 accumulators; FP6 and block-scaled FP8 MMAs (`kind::mxf8f6f4`; `Fmt` lacks
+`e3m2`, `e2m3`, `mxf8`, `mxf6`); clock reads (`%clock`, time as data); the texture path's filtering (TEX, TLD4, and
+surfaces); sm_100's tensor memory and `tcgen05`, which sm_120 doesn't have. From MODEL-COVER's re-key (CMP-166):
+IADD3 at CC 12.0's 128 lanes a SM-clock, twice `alu`'s 64 (two `lane`s, one on each pipe); the uniform datapath's 4
+results a SM-clock beside `alu`'s lanes; BAR.RED, which folds a predicate across the CTA (BAR.SYNC and BAR.ARV have no
+data effect); and the VOTE, REDUX, ELECT row, whose fold on `fma` is free (RT-MODEL-MIN RM7: REDUX shares MATCH's unit
+and VOTE spends 16 `alu` lanes). **Excluded** by the premise (no code here uses them, and none computes a committed
+word or a hash more cheaply than the model prices): the video and JPEG engines, sm_120's RT cores, the copy engines and
+compute data compression. The exclusions are open too (RM4): RT and the texture path each exceed the served margins.
+
+## Open in the statement
+
+- **The card numbers** (RT-MODEL-MIN RM5, RM6): sm_120's table is the ceiling over its editions, but its clock
+  offsets are unmeasured. The H200's L2 row is a placeholder, and sm_120's is one pattern's measurement.
+- **CUDA-core matmul routes** (RM1's residue, RM2, CMP-167): with every register word an `alu` lane, the four-Russians
+  table method pays at least an `alu` lane a MAC, at most 6.25% of the `s8` tensor rate on sm_120 and 1.6% on the
+  H200 through registers, and 12.5% on the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane.
+  None of these is a public route, so `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The
+  algorithmic premise that carries them is SAK-LB's `SAKResidual`, pending Daniel (RM8 restates its falsifier).
