@@ -109,7 +109,7 @@ RESEARCH = TREE / "tools" / "research" / "src"
 
 PORTS = range(7951, 7959)
 """The ports a run listens on, each 127.0.0.1's, the tunnel account's `PermitOpen` (`12-vy-verifier.conf`): outside the
-challenger gate's 7811..7899, which its sessions' `ssh -R` binds here."""
+challenger gate's 7811..7899, which a certifier coin link binds on a serving node."""
 GATE_PORTS = range(7811, 7900)
 PINNED = re.compile(r"[0-9a-f]{40}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")

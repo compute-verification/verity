@@ -64,7 +64,8 @@ class _Coins:
 class _LiveSession:
     """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
-    node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
+    node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through the node's certifier
+    coin link. Reserved at
     construction (`commit_coins.Gate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
     `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the weights' root once they are committed, its
     salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete. Refused before

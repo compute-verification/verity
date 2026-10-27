@@ -1777,7 +1777,7 @@ def main() -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
-                 f"{challengers.GATE_PORTS.stop - 1}), which the host's ssh -R binds on this machine")
+                 f"{challengers.GATE_PORTS.stop - 1}), which this machine's certifier coin link binds")
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
                                     ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
