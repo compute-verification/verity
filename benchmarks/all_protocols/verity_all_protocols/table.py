@@ -9,7 +9,8 @@ A leg is ``benchmarks/all_protocols/legs/<component>.py`` (``-`` as ``_``) defin
 ``pouw/``), with ``period.json`` (`PERIOD`, its name kept for the legs written against it: the window's index as
 ``window``, its place in this run as ``period`` (what a leg serving one session a run indexes it by), the circuit
 the verifier registered before the loop ran, the run root it published, the law, each window's δ and the member cap,
-the built tools, the prover's environment) and ``answers/<component>.json``, the answers of the legs that ran before
+the built tools, the prover's environment, and ``nci``, the deployment's NCI declaration onsite's registration check
+reads, `compose.registration_case`, once an integration states one) and ``answers/<component>.json``, the answers of the legs that ran before
 it (in `TABLE`'s order: integrity first, which PoUW's evidence reads). ``node`` is the machine the loop ran on. ``out`` is
 the leg's own directory, kept in the run's ``$OUT``.
 

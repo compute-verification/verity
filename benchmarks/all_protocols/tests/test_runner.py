@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import stat
 import sys
@@ -28,7 +29,10 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.sampled_proofs.one_stage import registration as SP
 from verity_all_protocols import compose as C, runner as RN, table as T
+
+COMPOSITION_TESTS = C.ROOT / "verity" / "core" / "protocols" / "composition" / "tests"
 
 PROFILE = {"covered": [], "delta": "1/2", "drawn": {"unit": 1},
            "levels": [{"draw": {"subset": 1}, "name": "unit", "query": "p", "size": 4}], "linked": False,
@@ -55,20 +59,28 @@ def fake(verdict: str, case: dict | None = None):
 COMPONENT = {e.name: e.component for e in T.TABLE}
 
 
-def period(tmp_path: Path, tampered: bool = False) -> Path:
+def period(tmp_path: Path, tampered: bool = False, nci: dict | None = None) -> Path:
     d = tmp_path / "w0"
     d.mkdir()
     (d / "period.json").write_text(json.dumps({"window": 0, "period": 0, "node": "test-node", "circuit": "cd" * 64,
                                                "run_root": "ef" * 64, "law": "subset:2", "cap": 8, "tools": {},
-                                               "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}))
+                                               "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
+                                               **({"nci": nci} if nci else {})}))
     return d
 
 
 def decide(tmp_path: Path, **legs) -> dict:
     """`decide` on one window with the legs given by name and every other protocol missing."""
     kw = {k: legs.pop(k) for k in ("onsite", "exe", "table") if k in legs}
+    nci = legs.pop("nci", None)
     by_component = {COMPONENT[n]: f for n, f in legs.items()}
-    return RN.decide(period(tmp_path), "test-node", tmp_path / "out", legs=by_component.get, **kw)
+    return RN.decide(period(tmp_path, nci=nci), "test-node", tmp_path / "out", legs=by_component.get, **kw)
+
+
+#: A deployment's NCI declaration, and a run's registration record integrity's case commits to, with its log.
+NCI = {"alpha": [1, 2], "gamma": 4, "parameters": [], "program": "p", "owner": [], "provenance": [], "theta": []}
+RECORD = {"format": "verity/registration/v1", "previous": None}
+INTEGRITY = {"commitment": C.canonical_json(RECORD).hex(), "evidence": "02", "params": {"k": 1, "log": []}}
 
 
 def test_a_rejecting_leg_rejects_the_composition(tmp_path):
@@ -149,19 +161,39 @@ EVERY_PORT = [x for x in PORTS if x not in ("NetworkCheck.Check.protocol", "Pouw
 
 
 def test_onsite_decides_once_every_component_is_a_port(tmp_path):
+    """Onsite's inputs are its registered composition's: NCI's case on the period's declaration and the record
+    integrity's case commits to, beside the components', and the record's digest after their binding."""
     exe = onsite_exe(tmp_path)
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
-    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
+    every["integrity"] = fake("accept", INTEGRITY)
+    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe), nci=NCI)
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["argv1"] == "check"
     ids = [x["id"] for x in got["evidence"]["components"]]
     assert ids == sorted(C.PORTS[x][1] for x in EVERY_PORT)
-    assert got["commitment"] == C.bind(C.PROTOCOL, [(i, "ab" * 64) for i in ids]).hex()
-    assert got["params"] == {"components": [{"id": i, "params": {"k": 1}} for i in ids]}
-    assert set(r["composed"]["inputs"].values()) == {"leg"}
+    digest = SP.digest(RECORD)
+    assert got["commitment"] == C.bind(C.PROTOCOL, [(i, "ab" * 64) for i in ids]).hex() + digest
+    nci = {"alpha": [1, 2], "gamma": 4, "log": [], "parameters": [], "program": "p"}
+    assert got["params"] == {"components": [{"id": i, "params": INTEGRITY["params"] if i == C.COMMITTER else {"k": 1}}
+                                            for i in ids], "registration": {"id": C.NCI, "params": nci}}
+    assert got["evidence"]["registration"] == {
+        "commitment": INTEGRITY["commitment"], "id": C.NCI, "params": nci,
+        "evidence": C.canonical_json({"owner": [], "provenance": [], "theta": []}).hex()}
+    assert r["composed"]["inputs"] == {**{i: "leg" for i in ids}, C.NCI: "declaration"}
     assert got["blobs"] == []
+
+
+def test_onsite_waits_for_the_deployments_nci_declaration(tmp_path):
+    """With no NCI declaration in ``period.json`` onsite still runs, on a registration NCI refuses, and the composed
+    verdict waits for the declaration, naming it."""
+    every = {e.name: fake("accept", {"commitment": "01", "evidence": "02", "params": {"k": 1}}) for e in T.TABLE}
+    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(onsite_exe(tmp_path)))
+    got = json.loads((tmp_path / "seen.json").read_text())
+    assert got["evidence"]["registration"] == {**C.NO_CASE, "id": C.NCI}
+    assert r["composed"]["inputs"][C.NCI] == "no case (no NCI declaration)"
+    assert r["composed"]["verdict"] == "pending-ports" and "NCI declaration" in r["composed"]["reason"]
 
 
 def test_onsite_reads_the_blobs_a_case_names(tmp_path):
@@ -172,8 +204,8 @@ def test_onsite_reads_the_blobs_a_case_names(tmp_path):
     (tmp_path / "pub.bin").write_bytes(b"public")
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
-    every["integrity"] = fake("accept", case | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
-    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
+    every["integrity"] = fake("accept", INTEGRITY | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
+    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe), nci=NCI)
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["blobs"] == [b"circuit".hex(), b"public".hex()]
@@ -190,7 +222,7 @@ def test_onsite_checks_every_period_beside_stubs_and_missing_cases(tmp_path):
     c = r["composed"]
     assert c["verdict"] == "reject" and c["answer"]["verdict"] == "reject" and c["agree"]
     assert c["inputs"] == {"verity/pouw/v1": "leg", "verity/sampled-proofs/one-stage/v2": "no case (integrity accept)",
-                           "verity/stub/pous/v0": "stub"}
+                           "verity/stub/pous/v0": "stub", C.NCI: "no case (no NCI declaration)"}
     got = {x["id"]: x for x in json.loads((tmp_path / "seen.json").read_text())["evidence"]["components"]}
     assert got["verity/stub/pous/v0"]["evidence"] == C.STUB_CASE["evidence"]
     assert got["verity/sampled-proofs/one-stage/v2"]["commitment"] == ""
@@ -213,8 +245,54 @@ def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_p
     case = {"commitment": "01", "evidence": "02", "params": {}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
     every["bandwidth"] = fake("undecided")
-    r = decide(tmp_path, **every, onsite=["SampledProofs.OneStageZk.protocol"], exe=str(exe), table=OUTSIDE)
+    r = decide(tmp_path, **every, onsite=["SampledProofs.OneStageZk.protocol"], exe=str(exe), table=OUTSIDE, nci=NCI)
     assert r["composed"]["verdict"] == "undecided"
+
+
+def test_onsite_accepts_the_honest_composed_run():
+    """`compose`'s inputs held to onsite's own rule, the composition difftest's `Registered` (`registeredB`, which its
+    Lean is held to), with NCI's check of record and v2's commitment decoder: every component accepting its case and an
+    honest NCI declaration on the record integrity commits to, onsite accepts. A declaration that doesn't comply, one
+    on another record and the product's inputs (no registration) are each refused."""
+    sys.path.insert(0, str(COMPOSITION_TESTS))
+    import reference as R
+
+    def accepts(pid: str):
+        def answer(case: dict) -> dict:
+            c = bytes.fromhex(case["commitment"])
+            d = R.ONE_STAGE.decode_commitment(c)[1] if pid == C.COMMITTER else hashlib.sha512(c).digest()
+            return {"commitment": d.hex(), "profile": {}, "protocol": pid, "public": {}, "reason": None,
+                    "verdict": "accept"}
+        return answer
+
+    ids = [x.id for x in R.ONSITE.product.components]
+    assert ids == sorted(C.component_of(x)[1] for x in C.onsite_components())
+    onsite = R.Registered(C.PROTOCOL, R.NCI_CHECK, C.COMMITTER,
+                          R.Product(C.PROTOCOL, tuple(R.Ported(i, accepts(i)) for i in ids)))
+    s = R.NCI.split(R.NCI.seeds()[0][0])
+    other = R.NCI.split(R.NCI.seeds()[0][1])["record"]
+    declaration = {**{k: s["params"][k] for k in C.NCI_PARAMS}, **s["evidence"]}
+
+    def answer(declaration: dict, registered: dict | None = s["record"]) -> dict:
+        cases = {i: {"commitment": f"{n:02x}", "evidence": "02", "params": {"k": n}} for n, i in enumerate(ids)}
+        cases[C.COMMITTER] = {"commitment": C.canonical_json(s["record"]).hex(), "evidence": "02",
+                              "params": {"k": 0, "log": s["params"]["log"]}}
+        digests = {i: accepts(i)(cases[i])["commitment"] for i in ids}
+        reg = None if registered is None else C.registration_case(
+            declaration, {**cases[C.COMMITTER], "commitment": C.canonical_json(registered).hex()})
+        p, c, e = C.onsite_inputs(cases, digests, registration=reg)
+        return onsite.answer({"blobs": [], "commitment": c.hex(), "evidence": e.hex(), "params": json.loads(p)})
+
+    honest = answer(declaration)
+    assert honest["verdict"] == "accept", honest
+    assert set(honest["public"]) == set(ids)
+    noncompliant = answer({**declaration, "gamma": 0})
+    assert noncompliant["verdict"] == "reject"
+    assert noncompliant["reason"].startswith("registration: verity/nci/v1 reject: the division does not comply")
+    moved = answer(declaration, other)
+    assert moved["verdict"] == "reject" and moved["reason"].startswith("registration: verity/nci/v1 "), moved
+    product = answer(declaration, None)
+    assert product["verdict"] == "reject" and product["reason"].startswith("params: the composition's params: the keys")
 
 
 def test_the_table_names_every_onsite_component_once():

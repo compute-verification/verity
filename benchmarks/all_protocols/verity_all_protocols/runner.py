@@ -179,7 +179,8 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
                        **({"tie": {k: p["tie"][k] for k in ("strategy", "window", "stratum", "root")}}
                           if p.get("tie") else {})},
               "mode": p.get("mode"), "protocols": rows, "seconds": seconds,
-              "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe)}
+              "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe,
+                                     p.get("nci"))}
     out.mkdir(parents=True, exist_ok=True)
     shutil.copytree(period_dir / ANSWERS, out / ANSWERS, dirs_exist_ok=True)
     return report

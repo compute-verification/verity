@@ -13,6 +13,12 @@ accepts only when every component accepts and its commitment binds their digests
   EVIDENCE [BLOB ...]``, the blobs the files integrity's audit on the proofs reads), and its answer is the composed
   verdict.
 
+Onsite is a registered composition (`Core.Composition.registeredB`): before its components it runs NCI's check
+(``verity/nci/v1``, `NciCheck.Protocol`) on the run's registration, the record integrity's case commits to, so its inputs
+carry NCI's case beside the components' (`registration_case`: the deployment's NCI declaration, ``period.json``'s
+``nci``, on that record and its log) and its commitment ends with that record's digest. A period whose ``period.json``
+states no declaration is **pending-ports** too, and onsite runs on `NO_CASE` as the registration, which NCI refuses.
+
 Given onsite's executable, the runner runs ``onsite check`` every period, whatever it decides: each port on its leg's
 case, each stub on a case with no statement yet (`STUB_CASE`, undecided), and a port whose leg wrote no case on one its
 decoders refuse (`NO_CASE`). Its answer is ``answer``, where each component's case came from is ``inputs``, and ``agree``
@@ -34,6 +40,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.ml.circuits.codec import canonical_json
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -72,25 +79,52 @@ def bind(protocol: str, components: Sequence[tuple[str, str]]) -> bytes:
     return hashlib.sha512(protocol.encode() + b"\0" + body).digest()
 
 
-def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
-                  protocol: str = PROTOCOL) -> tuple[bytes, bytes, bytes]:
-    """The product ``protocol``'s (onsite's by default) params, commitment and evidence from each component's case and its
-    commitment's digest (its answer's ``commitment``), both keyed by the component's protocol id: what ``onsite check``
-    and ``product IDS check`` read (the composition README's table)."""
+def registration_case(declaration: Mapping[str, Any], integrity: Mapping[str, Any]) -> dict[str, Any]:
+    """NCI's case for onsite's registration (`NciCheck.Protocol`'s module docstring): the deployment's NCI declaration
+    (`NCI_PARAMS` and `NCI_EVIDENCE`) on the run's own registration record, the commitment of integrity's case, and the
+    log before it, that case's params' ``log``: one registration in both."""
+    p = integrity.get("params")
+    log = p.get("log", []) if isinstance(p, Mapping) else []
+    return {"commitment": integrity["commitment"],
+            "evidence": canonical_json({k: declaration[k] for k in NCI_EVIDENCE}).hex(),
+            "params": {**{k: declaration[k] for k in NCI_PARAMS}, "log": log}}
+
+
+def registration_digest(case: Mapping[str, Any]) -> str:
+    """The digest of the registration record a case commits to (`NciCheck.Baseline.digest`, `registration.digest`), or
+    ``""`` when its commitment is no record, which onsite then refuses."""
+    try:
+        record = json.loads(bytes.fromhex(case["commitment"]))
+    except (KeyError, TypeError, ValueError):
+        return ""
+    return R.digest(record) if isinstance(record, dict) else ""
+
+
+def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str], protocol: str = PROTOCOL,
+                  registration: Mapping[str, Any] | None = None) -> tuple[bytes, bytes, bytes]:
+    """The product ``protocol``'s params, commitment and evidence from each component's case and its commitment's digest
+    (its answer's ``commitment``), both keyed by the component's protocol id: what ``product IDS check`` reads (the
+    composition README's table). With NCI's ``registration`` case, the registered composition's, what ``onsite check``
+    reads: the registration's entry and case beside the components', and its digest after their binding."""
     ids = sorted(cases)
-    params = canonical_json({"components": [{"id": i, "params": cases[i]["params"]} for i in ids]})
+    params: dict[str, Any] = {"components": [{"id": i, "params": cases[i]["params"]} for i in ids]}
     commitment = bind(protocol, [(i, digests[i]) for i in ids])
-    evidence = canonical_json({"components": [{"commitment": cases[i]["commitment"], "evidence": cases[i]["evidence"],
-                                               "id": i, "params": cases[i]["params"]} for i in ids]})
-    return params, commitment, evidence
+    evidence: dict[str, Any] = {"components": [{"commitment": cases[i]["commitment"], "evidence": cases[i]["evidence"],
+                                                "id": i, "params": cases[i]["params"]} for i in ids]}
+    if registration is not None:
+        params["registration"] = {"id": NCI, "params": registration["params"]}
+        evidence["registration"] = {"commitment": registration["commitment"], "evidence": registration["evidence"],
+                                    "id": NCI, "params": registration["params"]}
+        commitment += bytes.fromhex(registration_digest(registration))
+    return canonical_json(params), commitment, canonical_json(evidence)
 
 
 def onsite_check(exe: str | Sequence[str], cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
-                 protocol: str = PROTOCOL) -> dict[str, Any]:
-    """``onsite check`` (or ``product IDS check``: ``exe`` as an argv, with ``protocol`` its product's id) on the
-    components' cases (`onsite_inputs`), with every blob file a case names (``blobs``, the files integrity's audit on the
-    proofs reads) after them: its answer line, parsed."""
-    params, commitment, evidence = onsite_inputs(cases, digests, protocol)
+                 protocol: str = PROTOCOL, registration: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """``onsite check`` (with NCI's ``registration`` case) or ``product IDS check`` (``exe`` as an argv, with
+    ``protocol`` its product's id) on the components' cases (`onsite_inputs`), with every blob file a case names
+    (``blobs``, the files integrity's audit on the proofs reads) after them: its answer line, parsed."""
+    params, commitment, evidence = onsite_inputs(cases, digests, protocol, registration)
     blobs = [str(b) for i in sorted(cases) for b in cases[i].get("blobs") or ()]
     argv = [exe] if isinstance(exe, str) else list(exe)
     with tempfile.TemporaryDirectory() as d:
@@ -120,6 +154,12 @@ PORTS = {
 STUB_CASE = {"commitment": "00" * 32, "evidence": canonical_json({"drawn": 0, "passed": 0}).hex(), "params": {"k": 1}}
 #: The case of a port whose leg wrote none: its own decoders refuse it, so that component rejects.
 NO_CASE = {"commitment": "", "evidence": "", "params": {}}
+#: Onsite's registration check, and the component whose commitment is the run's registration record.
+NCI = "verity/nci/v1"
+COMMITTER = PORTS["SampledProofs.OneStageZk.protocol"][1]
+#: A deployment's NCI declaration (``period.json``'s ``nci``): NCI's params but the log, and its evidence.
+NCI_PARAMS = ("alpha", "gamma", "parameters", "program")
+NCI_EVIDENCE = ("owner", "provenance", "theta")
 
 
 def component_of(name: str) -> tuple[str, str, bool]:
@@ -155,11 +195,12 @@ def onsite_cases(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str,
 
 def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str | None],
              cases: Mapping[str, Mapping[str, Any] | None], onsite: Sequence[str] | None = None,
-             exe: str | None = None) -> dict[str, Any]:
+             exe: str | None = None, declaration: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The composed verdict (module docstring) over the period's rows (by leg name, each with its ``verdict``),
-    ``components`` (leg name -> onsite component, or None), the legs' ``cases`` and onsite's component list. With
-    ``exe``, ``onsite check`` runs on every period (`onsite_cases`), and its answer is ``answer``; ``agree`` says whether
-    it rejected on each leg whose own case rejected."""
+    ``components`` (leg name -> onsite component, or None), the legs' ``cases``, onsite's component list and the
+    deployment's NCI ``declaration``. With ``exe``, ``onsite check`` runs on every period (`onsite_cases`, and NCI's case
+    on integrity's, `registration_case`, else `NO_CASE`), and its answer is ``answer``; ``agree`` says whether it
+    rejected on each leg whose own case rejected."""
     onsite = onsite_components() if onsite is None else list(onsite)
     stubs = sorted(c for c in (stub_component(x) for x in onsite) if c is not None)
     out: dict[str, Any] = {"protocol": PROTOCOL, "onsite_components": onsite, "stubs": stubs,
@@ -167,7 +208,11 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
     got = None
     if exe is not None:
         cs, digests, source, legs = onsite_cases(rows, components, cases, onsite)
-        got = onsite_check(exe, cs, digests)
+        committed = source.get(COMMITTER) == "leg"
+        registration = registration_case(declaration, cs[COMMITTER]) if declaration and committed else NO_CASE
+        source[NCI] = "declaration" if registration is not NO_CASE else \
+            "no case (" + ("no NCI declaration" if not declaration else f"{COMMITTER} has no case") + ")"
+        got = onsite_check(exe, cs, digests, registration=registration)
         mine = [pid for pid, n in legs.items() if rows[n].get("verdict") == "reject"]
         out.update(inputs=source, answer=got, agree=all(
             got["verdict"] == "reject" and f"{pid} reject: " in (got.get("reason") or "") for pid in mine))
@@ -177,6 +222,8 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
     waiting = []
     if stubs:
         waiting.append("onsite's stubs: " + ", ".join(stubs))
+    if not declaration:
+        waiting.append("onsite's registration: period.json states no NCI declaration (nci)")
     for n, r in sorted(rows.items()):
         if r.get("verdict") in ("missing", "error"):
             waiting.append(f"{n} {r['verdict']}")
@@ -253,6 +300,7 @@ def communication(reports: Sequence[Mapping[str, Any]], period_s: float, spans: 
     return out
 
 
-__all__ = ["CERTIFIER", "HORIZON_CONDITION", "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL", "STUB_CASE", "bind",
-           "communication", "component_of", "composed", "fleet", "horizon_leak", "onsite_cases", "onsite_check",
-           "onsite_components", "onsite_inputs", "stub_component"]
+__all__ = ["CERTIFIER", "COMMITTER", "HORIZON_CONDITION", "NCI", "NCI_EVIDENCE", "NCI_PARAMS", "NO_CASE", "OUT_BITS",
+           "PORTS", "PROTOCOL", "STUB_CASE", "bind", "communication", "component_of", "composed", "fleet",
+           "horizon_leak", "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs", "registration_case",
+           "registration_digest", "stub_component"]
