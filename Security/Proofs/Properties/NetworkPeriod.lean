@@ -8,8 +8,9 @@ Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
 
-`RowsTiedDrawn` and `RowsUnwiredRefused` read the check's refusals off its findings: on acceptance every finding is
-none (`firstFinding_none`), a tied audit's among them, and the rows form's `unwired`.
+`RowsTiedDrawn`, `RowsProgWired` and `RowsUntiedRefused` read the check's refusals off its findings: on acceptance
+every finding is none (`firstFinding_none`), a tied audit's among them, each link-window's `wiredCheck` and the rows
+form's `untied`.
 -/
 
 namespace Properties.NetworkPeriod
@@ -114,8 +115,8 @@ theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Publi
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF (findingOf y)
-      (List.mem_append_left _ (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))
+    have h0 := firstFinding_none hF (findingOf y) (List.mem_append_left _ (List.mem_append_left _
+      (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
     cases y with
     | error r => cases h0
     | ok f => exact ⟨f, rfl⟩
@@ -219,9 +220,70 @@ theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
   rw [ha] at this
   simp [Except.toBool] at this
 
+/-! ## The rows form's scan reads a compute audit's slot entries -/
+
+theorem wiredChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Registration} (hreg : c.windows[i]? = some reg) :
+    (wiredChecks p c)[i]? = some (wiredCheck p s c.audits (p.first + i) reg) := by
+  simp [wiredChecks, hform, Array.getElem?_zipIdx, hreg]
+
+theorem rowsProgWired : RowsProgWired := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  have hmem := Array.mem_of_getElem? (wiredChecks_getElem? hform hreg)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _
+      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+    unfold wiredCheck at h0
+    split at h0
+    · assumption
+    · cases h0
+
+/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, and the schedule of one slot a
+window (one lane, T = 1, `every` 1). -/
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1)]⟩
+
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
+
+/-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
+def slotReg : Registration :=
+  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+
+/-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
+is tied to it, so its free inputs are in the link-window's term. -/
+theorem rowsProgWired_honest :
+    wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true ∧ tiedIn #[slotReg] #[tiedWindow] 0 = true := by
+  decide +kernel
+
+theorem tiedWindow_unwired : wired #[] slotSchedule #[] tiedWindow = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsProgWired`'s property** (its nontrivial lemma): such a check
+accepts a rows-form period of one link-window with no audit, whose scan's `prog` is no audit's slot entries. -/
+theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
+  intro h
+  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+  have hw : wired #[] slotSchedule #[] tiedWindow = true :=
+    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+  rw [tiedWindow_unwired] at hw
+  cases hw
+
 /-! ## The rows form accepts no period of a link-window -/
 
-theorem rowsUnwiredRefused : RowsUnwiredRefused := by
+theorem rowsUntiedRefused : RowsUntiedRefused := by
   intro p c e pub prof h s sd scan hform
   unfold check at h
   split at h
@@ -240,14 +302,14 @@ theorem rowsUnwiredRefused : RowsUnwiredRefused := by
     have h0 := firstFinding_none hF _ (List.mem_append_right _ (List.mem_singleton_self _))
     cases hw : p.windows with
     | zero => rfl
-    | succ n => rw [hw] at h0; simp [unwired] at h0
+    | succ n => rw [hw] at h0; simp [untied] at h0
 
 /-- Its honest side: the refusal is the rows form's alone, and refuses no clock-form period. -/
-theorem rowsUnwiredRefused_honest (ss : NetworkCertifier.SyncSet) (n : ℕ) : unwired (.clock ss) n = none := rfl
+theorem rowsUntiedRefused_honest (ss : NetworkCertifier.SyncSet) (n : ℕ) : untied (.clock ss) n = none := rfl
 
-/-- **No period check that accepts every period has `RowsUnwiredRefused`'s property** (its nontrivial lemma): such a
+/-- **No period check that accepts every period has `RowsUntiedRefused`'s property** (its nontrivial lemma): such a
 check accepts a rows-form period of one link-window. -/
-theorem rowsUnwiredRefused_nontrivial : ¬ RowsUnwiredRefusedOf acceptAllRows := by
+theorem rowsUntiedRefused_nontrivial : ¬ RowsUntiedRefusedOf acceptAllRows := by
   intro h
   let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
   let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩

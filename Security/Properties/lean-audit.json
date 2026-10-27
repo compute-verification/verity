@@ -1580,6 +1580,21 @@
    "assumptions": [],
    "type_hash": "9c2d2b9e87028da9d2e41ec888d86584934d9ce56316dae1a6fc0c242db4d385"
   },
+  "Properties.NetworkPeriod.rowsProgWired": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsProgWired : Properties.NetworkPeriod.RowsProgWired"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.NetworkPeriod.rowsProgWired_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.rowsProgWired_nontrivial :",
+    "  Not (Properties.NetworkPeriod.RowsProgWiredOf Properties.NetworkPeriod.acceptAllRows)"
+   ],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Properties.NetworkPeriod.rowsTiedDrawn": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsTiedDrawn : Properties.NetworkPeriod.RowsTiedDrawn"],
@@ -1595,17 +1610,17 @@
    "assumptions": [],
    "type_hash": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd"
   },
-  "Properties.NetworkPeriod.rowsUnwiredRefused": {
+  "Properties.NetworkPeriod.rowsUntiedRefused": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsUnwiredRefused : Properties.NetworkPeriod.RowsUnwiredRefused"],
+   "signature": ["Properties.NetworkPeriod.rowsUntiedRefused : Properties.NetworkPeriod.RowsUntiedRefused"],
    "assumptions": [],
    "type_hash": "e745d6288a00a1ca9bdcce2e2f16a1681880d147d4cafad68c4945d7611f6bec"
   },
-  "Properties.NetworkPeriod.rowsUnwiredRefused_nontrivial": {
+  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
-    "Properties.NetworkPeriod.rowsUnwiredRefused_nontrivial :",
-    "  Not (Properties.NetworkPeriod.RowsUnwiredRefusedOf Properties.NetworkPeriod.acceptAllRows)"
+    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial :",
+    "  Not (Properties.NetworkPeriod.RowsUntiedRefusedOf Properties.NetworkPeriod.acceptAllRows)"
    ],
    "assumptions": [],
    "type_hash": "c08e550456d1943f11c3f5087ce890dd11c31369dda65ec7205c3ee0fd7a8d87"
@@ -3507,7 +3522,11 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
-   "Properties.NetworkPeriod.rowsUnwiredRefused": {
+   "Properties.NetworkPeriod.rowsProgWired": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsUntiedRefused": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
@@ -3597,7 +3616,8 @@
    }
   },
   "frozen": {
-   "Properties.NetworkPeriod.rowsUnwiredRefused_nontrivial": "lemma: RowsUnwiredRefused's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsUnwiredRefusedOf at a rows-form period of one link-window",
+   "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
+   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "lemma: RowsUntiedRefused's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsUntiedRefusedOf at a rows-form period of one link-window",
    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "lemma: RowsTiedDrawn's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsTiedDrawnOf at a rows-form period whose tied audit one-stage didn't answer",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
