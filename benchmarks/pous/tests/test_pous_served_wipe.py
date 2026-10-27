@@ -40,6 +40,13 @@ while [ "$1" != -- ]; do shift; done
 shift
 GPU_LEASE_UUID=GPU-own0 CUDA_VISIBLE_DEVICES=0 exec "$@"
 """
+DEMO_SHIM = """#!/usr/bin/env bash
+[ -z "$FAKE_PYTHONPATH" ] || export PYTHONPATH=$FAKE_PYTHONPATH
+exec {python} {demo} "$OUT" "${{GPU_LEASE_UUID:-}}" "$@"
+"""
+LAUNCH = 'export FAKE_PYTHONPATH="${PYTHONPATH:-}" PATH="$FAKE_BIN:$PATH"; exec bash "$@"'
+"""The stand-ins first on PATH, and the suite's PYTHONPATH (which the wrapper unsets) kept for the stand-in demo.sh's Python,
+so the suite's guard traces what it reads."""
 
 
 def _exe(path: Path, text: str) -> Path:
@@ -55,23 +62,21 @@ def node(tmp_path) -> dict[str, str]:
     bin_.mkdir()
     _exe(bin_ / "nvidia-smi", SMI)
     _exe(bin_ / "gpu-lease", LEASE)
-    pythonpath = os.environ.get("PYTHONPATH")
-    shim = _exe(tmp_path / "demo.sh", "#!/usr/bin/env bash\n" + (f"export PYTHONPATH={shlex.quote(pythonpath)}\n"
-                                                                 if pythonpath else "") +
-                f'exec {shlex.quote(sys.executable)} {shlex.quote(str(FAKE_DEMO))} "$@"\n')
+    shim = _exe(tmp_path / "demo.sh", DEMO_SHIM.format(python=shlex.quote(sys.executable),
+                                                       demo=shlex.quote(str(FAKE_DEMO))))
     key = tmp_path / "vy-auditor2-wipe"
     key.write_text("not a key\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE_", "WIPE_", "CUDA_VISIBLE"))}
-    return env | {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "WIPE_DEMO": str(shim), "WIPE_READS": str(W.READS),
-                  "WIPE_NODE": "vy-dc-h200", "WIPE_COMMAND": f"ssh -i {key} -o BatchMode=yes research@10.96.0.36",
+    return env | {"FAKE_BIN": str(bin_), "WIPE_DEMO": str(shim), "WIPE_READS": str(W.READS), "WIPE_NODE": "vy-dc-h200",
+                  "WIPE_COMMAND": f"ssh -i {key} -o BatchMode=yes research@10.96.0.36",
                   "FAKE_SMI_LOG": str(tmp_path / "smi.log"), "FAKE_SMI_APPS": "", "FAKE_SMI_USED": "0",
                   "FAKE_LEASE_LOG": str(tmp_path / "lease.log")}
 
 
 def _wipe(env: dict[str, str], d: Path, *args: str) -> subprocess.CompletedProcess:
     d.parent.mkdir(parents=True, exist_ok=True)
-    return subprocess.run(["bash", str(WRAPPER), "/srv/serve-run", "3", str(d), *args], env=env, capture_output=True,
-                          text=True, cwd=d.parent)
+    return subprocess.run(["bash", "-c", LAUNCH, "_", str(WRAPPER), "/srv/serve-run", "3", str(d), *args], env=env,
+                          capture_output=True, text=True, cwd=d.parent)
 
 
 def _is_core_answer(a: dict) -> None:
