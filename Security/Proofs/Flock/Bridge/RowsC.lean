@@ -20,7 +20,7 @@ the registrant's rows has one that opens a registered read to another row.
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit ZkSession
+open Game Model Accounting Extract Audit ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
