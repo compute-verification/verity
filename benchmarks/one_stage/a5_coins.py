@@ -101,6 +101,21 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
     more. `coins.draw_first` reads each stream (the law's one, or one per stratum) once, 2 k width(n) + 64 bytes. It reads
     a stream again only when the stream's words run out, which takes k + 1 of them rejected, each with probability below
     2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a draw reads past its need only after two."""
+    reads = _reads(rule, program, query, population, work_table)
+    return -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
+
+
+def draw_coins(rule: str, program: Program, query: Mapping[str, Any], population: int,
+               work_table: Mapping[str, Any] | None = None) -> int:
+    """The coins one rank's draw opens when it rejects no word (`need` without its margin): what a v2 registration names
+    as its draw's size (`proofs.with_draw`), fixed before any coin. A draw that rejects a word opens more, with
+    probability below 2^-64, and v2 refuses it."""
+    return -(-sum(_reads(rule, program, query, population, work_table)) // Ch.COIN_BYTES)
+
+
+def _reads(rule: str, program: Program, query: Mapping[str, Any], population: int,
+           work_table: Mapping[str, Any] | None) -> list[int]:
+    """The byte counts the stream's sampler reads, in order, drawing its window's law on bytes that reject no word."""
     selection = S.Law(rule)
     law = D.derive(program, query, S.selection_law(selection, population), work_table)
     reads: list[int] = []
@@ -109,7 +124,7 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
         reads.append(n)
         return bytes(n)
     S.select_draw(selection, law, population, zeros)
-    return -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
+    return reads
 
 
 def families(needs: Mapping[int, int]) -> list[list[Any]]:

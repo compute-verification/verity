@@ -121,6 +121,17 @@ def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
     assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24
 
 
+def test_the_registered_draw_size_is_the_coins_an_honest_draw_opens():
+    """`draw_coins`, what a v2 registration names as its draw's size (`proofs.with_draw`), is the coins the draw opens
+    when it rejects no word: 24 for the 18-family draw's 1,496 bytes, as many as its segment opens, and 4 for SiluMul's
+    226."""
+    rule = "stratified:1"
+    coins = challenger_coins(AC.families({0: need_of(rule, ALL_FAMILIES)}))
+    S.select_draw(S.Law(rule), law_of(rule, ALL_FAMILIES), sum(ALL_FAMILIES), coins)
+    assert AC.draw_coins(rule, *window(ALL_FAMILIES)) == len(coins.segments[-1].openings) == 24
+    assert AC.draw_coins("stratified:4", *window(SILU_MUL)) == 4
+
+
 def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
     """A window whose first template holds transfer gates (32 units at work 0 and floor 32, drawn whole) beside 8 drawn by
     ``work:2``: its draw reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins, and its reserve

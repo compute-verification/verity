@@ -404,6 +404,65 @@ def public_v2(record: Path, pub: str) -> dict:
         raise LeanError(f"{V2_EXE} public answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
+#: the key of the registration's ``window`` that names how many 64-byte coins its draw opens (Lean
+#: `OneStageZk.DRAW_KEY`)
+DRAW_KEY = "draw_coins"
+#: the most rounds a session's record may hold, over both its rep streams (Lean `OneStageZk.MAX_ROUNDS`)
+MAX_ROUNDS = 4096
+
+
+def registered_draw(record: Mapping[str, Any]) -> int | None:
+    """Lean `OneStageZk.registeredDraw`: how many coins the registration `record` says its draw opens,
+    ``window.draw_coins``, when it names a positive count."""
+    w = record.get("window")
+    m = w.get(DRAW_KEY) if isinstance(w, Mapping) else None
+    return m if type(m) is int and m > 0 else None
+
+
+def draw_why(record: Mapping[str, Any], n: int) -> str | None:
+    """Lean `OneStageZk.drawCountWhy`: why a draw that opens `n` coins is not the one the registration `record` names;
+    None when it is. v2 refuses the evidence then."""
+    m = registered_draw(record)
+    if m is None:
+        return f"the registration names no draw size (window.{DRAW_KEY}, a positive count of 64-byte coins)"
+    return None if n == m else f"the draw opens {n} coins, and the registration names {m}"
+
+
+def with_draw(record: Mapping[str, Any], coins: int) -> dict:
+    """`record` with its window naming the `coins` its draw opens (``window.draw_coins``), as a prover registers its
+    window's draw for v2 before any coin: the coins a draw of the registered law reads when it rejects no word."""
+    return {**record, "window": {**record["window"], DRAW_KEY: coins}}
+
+
+def rounds_why(uses: Sequence[tuple[str, bytes, int, list[str]]]) -> str | None:
+    """Lean `OneStageZk.roundsCapWhy`: why a session's uses (`session_uses`) are past what v2 reads, more than
+    `MAX_ROUNDS` rounds after its link points or a use of 2^64 F128s or more; None when they are not."""
+    if MAX_ROUNDS + 1 < len(uses):
+        return f"{len(uses) - 1} rounds, past the {MAX_ROUNDS} a session may hold"
+    big = next(((label, want) for label, _, _, want in uses if len(want) >= 1 << 64), None)
+    return None if big is None else f"{big[0]} reads {len(big[1])} F128s, past 2^64 - 1"
+
+
+def _v2_line(command: str, *args: str) -> dict:
+    p = subprocess.run([str(v2_executable()), command, *args], capture_output=True, text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} {command} answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+
+
+def draw_v2(record: Path, n: int) -> dict:
+    """`draw_why` by the v2 audit's Lean (`sampled-proofs-one-stage-zk draw`): its line, ``{"why": why | null}`` or
+    ``{"refused": why}``."""
+    return _v2_line("draw", str(record), str(n))
+
+
+def rounds_v2(slot: int, record: Path) -> dict:
+    """`rounds_why` of `session_uses` by the v2 audit's Lean (`sampled-proofs-one-stage-zk rounds`): its line,
+    ``{"why": why | null}`` or ``{"refused": why}``."""
+    return _v2_line("rounds", str(slot), str(record))
+
+
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, registered: Mapping[str, Any] | None,
              coins: Sequence[Sequence[Mapping[str, Any]]] | None = None) -> dict:
@@ -426,7 +485,8 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "PUBLIC_KEY", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2",
-           "evidence_v2", "executable", "file_sha512", "parse_round_request", "proved_units", "public_v2", "public_why",
-           "reads_registered", "registered_public", "round_request", "session_uses", "uses_v2", "v2_executable",
-           "verdicts_v2", "verify", "with_public"]
+__all__ = ["DRAW_KEY", "EXE", "MAX_ROUNDS", "PACKAGE", "PUBLIC_KEY", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError",
+           "Proof", "check_v2", "draw_v2", "draw_why", "evidence_v2", "executable", "file_sha512", "parse_round_request",
+           "proved_units", "public_v2", "public_why", "reads_registered", "registered_draw", "registered_public",
+           "round_request", "rounds_v2", "rounds_why", "session_uses", "uses_v2", "v2_executable", "verdicts_v2", "verify",
+           "with_draw", "with_public"]

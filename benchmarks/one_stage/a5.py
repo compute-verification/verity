@@ -458,8 +458,8 @@ def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf
     partition object, the challenger (its key, the draw's family) and the window root; v1's evidence with the draw's coins;
     the drawn member's statement files; and its session's ``coins``, the held session's segments in `session_uses` order
     (`a5_coins.session_segments`). Then the same audit on that session's coins altered: two rounds' segments swapped, and
-    none at all; and on a registration naming another public file, and none: each to be refused. -> ({accepted,
-    outcome}, the negatives)."""
+    none at all; on a registration naming another public file, and none; and on one naming another draw size, and
+    none: each to be refused. -> ({accepted, outcome}, the negatives)."""
     import replay as RP
 
     published = a.coins.evidence()
@@ -489,6 +489,11 @@ def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf
     unnamed = {k: v for k, v in rec["window"].items() if k != PF.PUBLIC_KEY}
     for name, w in {"v2-unregistered-public": {**unnamed, PF.PUBLIC_KEY: hashlib.sha512(b"").hexdigest()},
                     "v2-no-registered-public": unnamed}.items():
+        o = PF.check_v2(params, {**rec, "window": w}, evidence, proof, coins=[segs], **kw)
+        neg[name] = {"refused": o.get("verdict") not in (None, "accept"), "outcome": o}
+    undrawn = {k: v for k, v in rec["window"].items() if k != PF.DRAW_KEY}
+    for name, w in {"v2-unregistered-draw": {**undrawn, PF.DRAW_KEY: PF.registered_draw(rec) + 1},
+                    "v2-no-registered-draw": undrawn}.items():
         o = PF.check_v2(params, {**rec, "window": w}, evidence, proof, coins=[segs], **kw)
         neg[name] = {"refused": o.get("verdict") not in (None, "accept"), "outcome": o}
     return {"accepted": out.get("verdict") == "accept", "uses": len(segs), "outcome": out}, neg
@@ -694,6 +699,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             print("A5 " + json.dumps(summary["refused"]))
             return summary, False
         rec = PF.with_public(rec, members[0]["st"]["dir"] / f"pub-{members[0]['m'].n}.bin")
+        rec = PF.with_draw(rec, AC.draw_coins(a.rule, program, query, n_all, table))
         (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()

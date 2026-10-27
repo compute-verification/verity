@@ -7,14 +7,17 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   for a program that reads no registered value). The partition must not be null: the sessions are verified against the
   verifier's own partition object;
 * **commitment**: v1's (the registration record), whose window names the public file the statement reads,
-  `window.public_file`: its SHA-512, lowercase hex of 64 bytes (`registeredPublic`);
+  `window.public_file`: its SHA-512, lowercase hex of 64 bytes (`registeredPublic`), and how many 64-byte coins its draw
+  opens, `window.draw_coins`, a positive count (`registeredDraw`);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
   for each of v1's `sessions` in order, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
   `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`);
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
   SHA-512 as `flock-verify --archive` finds them;
 * **check**: a public file other than the one the registration names rejects (`publicWhy`), as does a registration that
-  names none; then `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
+  names none; so does a draw that opens other than the registration's coins, a registration that names no count, or a
+  session past `MAX_ROUNDS` rounds or with a use of `2 ^ 64` F128s or more (`sizesWhy`); then
+  `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
@@ -421,6 +424,70 @@ def publicWhy (c : OneStage.Commitment) (pub : String) : Option String :=
   | none => some s!"the registration names no public file (window.{PUBLIC_KEY}, a SHA-512 digest)"
   | some d => if pub == d then none else some s!"the evidence's public file is not the one the registration names, {d}"
 
+/-- The key of the registration's window that names how many coins its draw opens. -/
+def DRAW_KEY : String := "draw_coins"
+
+/-- The most rounds a session's record may hold, over both its rep streams. -/
+def MAX_ROUNDS : Nat := 4096
+
+/-- How many 64-byte coins the registration `c` says its draw opens, `window.draw_coins`, when it names a positive
+count: the coins a draw of the registered law over the registered population reads when it rejects no word, fixed
+before any coin. -/
+def registeredDraw (c : OneStage.Commitment) : Option Nat :=
+  match nat? (getD (getD c.record "window") DRAW_KEY) with
+  | some m => if 0 < m then some m else none
+  | none => none
+
+/-- Why a draw that opens `n` coins is not the one the registration `c` names (`registeredDraw`); none when it is. -/
+def drawCountWhy (c : OneStage.Commitment) (n : Nat) : Option String :=
+  match registeredDraw c with
+  | none => some s!"the registration names no draw size (window.{DRAW_KEY}, a positive count of 64-byte coins)"
+  | some m => if n == m then none else some s!"the draw opens {n} coins, and the registration names {m}"
+
+/-- Why the evidence's draw does not open the coins the registration names (`drawCountWhy`); none when it does. -/
+def drawWhy (c : OneStage.Commitment) (e : Evidence) : Option String :=
+  match getD (getD e.base.coins "segment") "openings" with
+  | .arr opened => drawCountWhy c opened.size
+  | _ => some "the draw's segment lists no openings"
+
+/-- A use of `2 ^ 64` F128s or more. -/
+def tooWide (x : Challenger.Use × Array String) : Bool := 2 ^ 64 ≤ x.2.size
+
+/-- Why a session's uses of the challenger's coins `us` (`sessionUses`) are past what v2 reads: more than `MAX_ROUNDS`
+rounds after its link points, or a use of `2 ^ 64` F128s or more, whose count a request's eight bytes can't carry;
+none when they are not. -/
+def roundsCapWhy (us : List (Challenger.Use × Array String)) : Option String :=
+  if MAX_ROUNDS + 1 < us.length then some s!"{us.length - 1} rounds, past the {MAX_ROUNDS} a session may hold"
+  else (us.find? tooWide).map fun x => s!"{x.1.label} reads {x.2.size} F128s, past 2^64 - 1"
+
+/-- Why session `s`, at slot `i`, has uses past what v2 reads (`roundsCapWhy`); none when it doesn't, and when its record
+can't be read, which `roundsWhy` refuses. -/
+def sessionSizesWhy (bs : Core.Blobs) (s : Session) (i : Nat) : Option String :=
+  match bs.get s.record s!"session {s.name}'s record" with
+  | .error _ => none
+  | .ok b =>
+    match String.fromUTF8? b with
+    | none => none
+    | some record =>
+      match sessionUses i record with
+      | .error _ => none
+      | .ok us => (roundsCapWhy us).map (s!"session {s.name}: " ++ ·)
+
+/-- The first of the sessions `ss`, from slot `i`, with uses past what v2 reads (`sessionSizesWhy`), and why. -/
+def sessionsSizesWhy (bs : Core.Blobs) : List Session → Nat → Option String
+  | [], _ => none
+  | s :: rest, i =>
+    match sessionSizesWhy bs s i with
+    | some why => some why
+    | none => sessionsSizesWhy bs rest (i + 1)
+
+/-- Why the window's sizes are not the ones v2 reads: the draw's coins the registration's (`drawWhy`), and each
+session's uses within `roundsCapWhy`'s caps (`sessionsSizesWhy`); none when they are. -/
+def sizesWhy (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Option String :=
+  match drawWhy c e with
+  | some why => some why
+  | none => sessionsSizesWhy bs e.sessions.toList 0
+
 /-- v2's check on the statement's files: the sessions' verdicts (`verdicts`), then v1's check at the draw's coins
 (`OneStage.coinsOf`, `OneStage.checkAt`), and an accept only when every coin the window read is the challenger's, one
 release a use (`roundsWhy`). -/
@@ -436,13 +503,16 @@ def checkProofs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core
       | none => .accept x y
     | o => o
 
-/-- v2's check: a refusal when the evidence's public file is not the one the registration names (`publicWhy`), else
-`checkProofs`. -/
+/-- v2's check: a refusal when the evidence's public file is not the one the registration names (`publicWhy`), or when
+the window's sizes are not the ones v2 reads (`sizesWhy`), else `checkProofs`. -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match publicWhy c e.pub with
   | some why => .reject s!"proofs: {why}"
-  | none => checkProofs p c e bs
+  | none =>
+    match sizesWhy c e bs with
+    | some why => .reject s!"proofs: {why}"
+    | none => checkProofs p c e bs
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -467,7 +537,11 @@ difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). `us
 uses of the challenger's coins at slot `SLOT` (`sessionUses`), one line `{"uses": [{after, coins, label, want}, ...]}`
 or `{"refused": why}`, which `one_stage.proofs.session_uses` is held to. `public RECORD DIGEST`: why the public file of
 SHA-512 `DIGEST` is not the one the registration record `RECORD` names (`publicWhy`), one line `{"why": why}` (null
-when it is) or `{"refused": why}` for a record v2 can't decode, which `one_stage.proofs.public_why` is held to. -/
+when it is) or `{"refused": why}` for a record v2 can't decode, which `one_stage.proofs.public_why` is held to.
+`draw RECORD N`: why a draw opening `N` coins is not the one the registration record `RECORD` names (`drawCountWhy`),
+which `one_stage.proofs.draw_why` is held to. `rounds SLOT RECORD`: why the session record's uses at slot `SLOT` are past
+v2's caps (`roundsCapWhy` of `sessionUses`), which `one_stage.proofs.rounds_why` is held to. Both write one line
+`{"why": why}` (null when there is none) or `{"refused": why}`. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -501,6 +575,26 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
+  | ["draw", record, n] =>
+    let bytes ← IO.FS.readBinFile record
+    let r : V (OneStage.Commitment × Nat) := do
+      let some k := n.toNat? | throw "the count is not a natural number"
+      return (← OneStage.commitmentOf bytes, k)
+    let line := match r with
+      | .ok (c, k) => Json.mkObj [("why", match drawCountWhy c k with | some w => Json.str w | none => Json.null)]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
+  | ["rounds", slot, record] =>
+    let text ← IO.FS.readFile record
+    let r : V (List (Challenger.Use × Array String)) := do
+      let some i := slot.toNat? | throw "the slot is not a natural number"
+      sessionUses i text
+    let line := match r with
+      | .ok us => Json.mkObj [("why", match roundsCapWhy us with | some w => Json.str w | none => Json.null)]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
@@ -529,6 +623,19 @@ def main (args : List String) : IO UInt32 := do
 #guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'A' 128))])],
   digest := .empty } ("".pushn 'A' 128)).isSome
 #guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [])], digest := .empty } ("".pushn 'a' 128)).isSome
+
+/-- A registration whose window is `w`. -/
+private def windowed (w : List (String × Json)) : OneStage.Commitment :=
+  { record := Json.mkObj [("window", Json.mkObj w)], digest := .empty }
+
+#guard drawCountWhy (windowed [("draw_coins", Lean.toJson (3 : Nat))]) 3 == none
+#guard (drawCountWhy (windowed [("draw_coins", Lean.toJson (3 : Nat))]) 2).isSome
+#guard (drawCountWhy (windowed [("draw_coins", Lean.toJson (0 : Nat))]) 0).isSome
+#guard (drawCountWhy (windowed [("draw_coins", Json.str "3")]) 3).isSome
+#guard (drawCountWhy (windowed []) 1).isSome
+#guard roundsCapWhy [] == none
+#guard (roundsCapWhy (List.replicate (MAX_ROUNDS + 2) ({ label := "l", after := .empty, coins := 0 }, #[]))).isSome
+#guard roundsCapWhy (List.replicate (MAX_ROUNDS + 1) ({ label := "l", after := .empty, coins := 0 }, #[])) == none
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 

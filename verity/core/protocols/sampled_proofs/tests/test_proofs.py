@@ -375,6 +375,64 @@ def test_public_why_is_the_v2_audits_own(tmp_path):
         assert PF.public_v2(tmp_path / "record.json", pub) == {"why": PF.public_why(rec, pub)}, name
 
 
+#: registrations, the coins a draw opens, and whether v2 takes the draw as the registration's
+DRAWS = {"the registered count": ({"window": {"kind": "stand-in", "draw_coins": 3}}, 3, True),
+         "fewer": ({"window": {"kind": "stand-in", "draw_coins": 3}}, 2, False),
+         "more": ({"window": {"kind": "stand-in", "draw_coins": 3}}, 4, False),
+         "none registered": ({"window": {"kind": "stand-in"}}, 3, False),
+         "a registered zero": ({"window": {"draw_coins": 0}}, 0, False),
+         "a negative registration": ({"window": {"draw_coins": -3}}, 3, False),
+         "a registration not a number": ({"window": {"draw_coins": "3"}}, 3, False),
+         "a registration of true": ({"window": {"draw_coins": True}}, 1, False),
+         "a window not an object": ({"window": 3}, 3, False), "no window": ({"draw_coins": 3}, 3, False)}
+
+
+def test_v2_takes_only_the_draw_the_registration_names():
+    """v2 refuses evidence whose draw opens other than the coins the registration names (`draw_why`, Lean
+    `OneStageZk.drawCountWhy`, before any session is verified), so an accepted draw is the size the statement fixes:
+    the registration's ``window.draw_coins``, a positive count of 64-byte coins. A registration naming none is refused
+    too. `with_draw` registers a count."""
+    for name, (rec, n, ok) in DRAWS.items():
+        assert (PF.draw_why(rec, n) is None) is ok, name
+    rec = PF.with_draw({"window": {"kind": "stand-in", "run": "r"}, "previous": None}, 14)
+    assert rec == {"window": {"kind": "stand-in", "run": "r", "draw_coins": 14}, "previous": None}
+    assert PF.registered_draw(rec) == 14 and PF.draw_why(rec, 14) is None
+
+
+def test_v2_refuses_a_session_past_its_rounds():
+    """`rounds_why` (Lean `OneStageZk.roundsCapWhy`): a session's uses are its link points and then at most
+    `MAX_ROUNDS` rounds, so `MAX_ROUNDS + 1` uses pass and one more is refused."""
+    use = ("slot/0/circuit/rep0", bytes(64), 1, ["0" * 32])
+    assert PF.rounds_why([]) is None and PF.rounds_why(PF.session_uses(0, json.dumps(_record()))) is None
+    assert PF.rounds_why([use] * (PF.MAX_ROUNDS + 1)) is None
+    assert PF.rounds_why([use] * (PF.MAX_ROUNDS + 2)) == f"{PF.MAX_ROUNDS + 1} rounds, past the 4096 a session may hold"
+
+
+def _many_rounds(n: int) -> dict:
+    """`_record` with `n` retained rounds on its first rep stream."""
+    return _record(**{"streams.0.rounds": [{"msg_sha512": "02" * 64, "coins": ["6" * 32] * 4}] * n})
+
+
+@lean
+@pytest.mark.slow
+def test_draw_and_rounds_why_are_the_v2_audits_own(tmp_path):
+    """`draw_why` and `rounds_why` against `sampled-proofs-one-stage-zk draw` and `rounds` (Lean `drawCountWhy` and
+    `roundsCapWhy`, which `sizesWhy` refuses on): the same reason, or none, on each registration and count, and on
+    records of `MAX_ROUNDS` and `MAX_ROUNDS + 1` rounds. Slow for the v2 executable's build, which the v2 tests above
+    share."""
+    for name, (rec, n, _) in DRAWS.items():
+        (tmp_path / "record.json").write_bytes(PF._canonical(rec))
+        assert PF.draw_v2(tmp_path / "record.json", n) == {"why": PF.draw_why(rec, n)}, name
+    assert "refused" in PF.draw_v2(tmp_path / "record.json", -1)
+    for r in (_record(), _many_rounds(PF.MAX_ROUNDS), _many_rounds(PF.MAX_ROUNDS + 1)):
+        text = json.dumps(r)
+        (tmp_path / "session.json").write_text(text)
+        assert PF.rounds_v2(1, tmp_path / "session.json") == {"why": PF.rounds_why(PF.session_uses(1, text))}
+    assert PF.rounds_why(PF.session_uses(1, json.dumps(_many_rounds(PF.MAX_ROUNDS + 1)))) is not None
+    (tmp_path / "session.json").write_text(json.dumps(REFUSED["coins not a list"]))
+    assert "refused" in PF.rounds_v2(1, tmp_path / "session.json")
+
+
 @lean
 @pytest.mark.slow
 def test_session_uses_of_the_fixtures_record_is_the_v2_audits_own(fx):
