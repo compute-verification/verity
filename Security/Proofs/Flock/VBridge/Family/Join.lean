@@ -8,9 +8,9 @@ import Proofs.Flock.VBridge.Algebra.Schedule
 /-!
 # The family's joins
 
-`repOf tf` (Rep.lean) reads each rep's rounds and extra claims from a table's files `tf`, and `filesOf`'s streams (Files.lean) issue
-`F.rep`'s coins, so `files = filesOf …` with `rep₀ = repOf files` is circular. The inner coins are the history's, so
-they are taken from it once:
+`repOf tf` (Rep.lean) reads each rep's rounds and extra claims from a table's files `tf`, and `filesOf`'s streams
+(Files.lean) issue `F.rep`'s coins, so `files = filesOf …` with `rep₀ = repOf files` is circular. The inner coins are
+the history's, so they are taken from it once:
 
 * `coinsOf`: rep `r`'s rounds are the coin steps of the history's coins (`coinSteps`) after the link points and `r`
   reps' rounds, each read as the array of the size `verifierRows` takes there (`roundSizes`, `verifierRows_schedule`);
