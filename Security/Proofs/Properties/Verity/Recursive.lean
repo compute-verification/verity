@@ -31,8 +31,9 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     `live-verifier`'s content at the recursive session (`Assumptions.Zk.RecordCustodyZKJ`).
   - `live-verifier` is admissible here only until ONE-4 (PRF-200) lands. After that, the component reads the session's
     coins through ONE-4's signed device log, `LiveCoins` follows from the log's signatures, and the premise goes.
-* **The target** (`sampledProofsRecursive`): sampled proofs at the recursive configuration, in
-  `Vocab.Target .sampled`'s form (`Properties.Verity.Game`) with the recursive component's verdict (`RecVerdict`).
+* **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
+  proofs at the recursive configuration, in `Vocab.Target .sampled`'s form (`Properties.Verity.Game`) with the
+  recursive component's verdict (`RecVerdict`).
   - The game is causal (R5): the parameters, the registered circuit file and the commitment come first; then the
     device's releases, each after the bytes it answers; and the evidence last.
   - The claim reads one fixed extractor's transcript (R4′, `Vocab.extract`): `Dep.extract`, at each bit of each gate
@@ -728,65 +729,6 @@ noncomputable def err (Sof : (τ : Game.Strategy (V.game θ F c)) → SessionIn 
   if q.FinderCR V (Sof τ) collOf dColl nI vS then q.delta V (Sof τ) dColl δs lam else ⊤
 
 end Dep
-
-/-- **ONE-9p's target: sampled proofs at the recursive configuration**, in Daniel's per-prover form (26 Oct) over the
-causal game (R4′, R5, R6), with the recursive configuration's verdict (`RecVerdict`). At all parameters `θ`, circuit
-files `F` and commitments `c`, and for every strategy `σ`, the probability that the recursive component accepts while
-sampled proofs' claim fails on the extractor's transcript (`¬ Holds .sampled`) is at most `Dep.err` at `σ`, ONE8's
-`condError FinderCR δ σ`: where `FinderCR` holds at the finders built from `σ`,
-`δs + t'(σ) · 2^{-λ} + bits · √(E[bindBudget(σ)] / 2^256)`, and `⊤` elsewhere, with `t'(σ)` the strategy's SHA-512
-calls in one run (`Vocab.cost`) and every finder's budget defined from it. There is no hypothesis on the strategy but
-`live-verifier`.
-
-It takes these hypotheses:
-* `RecursiveKSAt` at the deployed brings (`hKS`), and the honest half (`HonestHalf`, HONESTIV);
-* the decoders meet the list-decoding spec (`hdecI`, `hdecO`);
-* the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), at the dense statements;
-* `K₀` covers the claim's `ε` share (`hK₀`);
-* `Sof` is the coupling at each strategy (ONE-4's projection, `SessionIn`), and its draw misses any `K₀` units with
-  probability at most `δs` (`hdraw`);
-* the vocabulary's extractor is the recursive configuration's (`hX`, `Dep.extract` at `Sof`);
-* the deployment's reading `readX` of a witness in the recursive relation is correct at, and opened by the commitment
-  on, every unit the statement draws (`hread`); and `collOf`, from two such witnesses that read a wire of units drawn
-  in both differently, outputs a SHA-512 collision (`hcoll`);
-* the records hold the run's live coins (`LiveCoins`, `live-verifier`). `live-verifier` is admissible until ONE-4
-  (PRF-200) lands; then the component reads the coins through ONE-4's signed device log and this hypothesis goes. -/
-theorem sampledProofsRecursive (q : Dep)
-    (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
-      q.aux q.nOf q.hd q.recRest)
-    (hHon : HonestHalf q.wE q.w q.b q.aux q.nOf q.hd q.recRest)
-    (hdecI : Claims.Recursion.decOK q.Bd.deploy q.decI)
-    (hdecO : Claims.Recursion.decOK (deployZkRec _root_.Flock.Readable.relation) q.decO)
-    (nI vS : Msg → ℕ) (lam : ℝ)
-    (hn : ∀ x, RecDeploy.DenseAt x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
-    (hv : ∀ x, RecDeploy.DenseAt x → ∀ ps,
-      (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
-    (hlam : ∀ x, RecDeploy.DenseAt x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
-    (V : Vocab d α)
-    (K₀ : ByteArray → ByteArray → ℕ) (δs : ℝ)
-    (hK₀ : ∀ θ F (m : ℕ), (V.certOf θ).ε * V.units F < m → K₀ θ F ≤ m)
-    (Sof : ∀ θ F c (σ : Game.Strategy (V.game θ F c)), SessionIn V q θ F c σ)
-    (hdraw : ∀ θ F c σ (U : Finset (Fin (V.units F))), K₀ θ F ≤ U.card →
-      Claims.Pr (fun ξ : (Sof θ F c σ).Ξ => Disjoint ((Sof θ F c σ).drawOf ξ) U) ≤ δs)
-    (readX : (F : ByteArray) → Msg → Claims.Flock.Wit → (V.circuitOf F).Transcript)
-    (hX : ∀ θ F c σ, V.extract θ F c σ = q.extract V (Sof θ F c σ) (readX F))
-    (hread : ∀ θ F c σ ξ wt, V.Registered θ F → q.R ((Sof θ F c σ).x ξ) wt → ∀ u ∈ (Sof θ F c σ).drawOf ξ,
-      (V.partsOf F).Correct (readX F ((Sof θ F c σ).x ξ) wt) u ∧
-        ∀ g ∈ (V.partsOf F).io u, V.Opens θ F c g (readX F ((Sof θ F c σ).x ξ) wt g))
-    (collOf : ByteArray → Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (hcoll : ∀ θ F c σ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf F).N),
-      q.R ((Sof θ F c σ).x ξ₁) w₁ → q.R ((Sof θ F c σ).x ξ₂) w₂ →
-      (∃ u ∈ (Sof θ F c σ).drawOf ξ₁, g ∈ (V.partsOf F).io u) →
-      (∃ u ∈ (Sof θ F c σ).drawOf ξ₂, g ∈ (V.partsOf F).io u) →
-      readX F ((Sof θ F c σ).x ξ₁) w₁ g ≠ readX F ((Sof θ F c σ).x ξ₂) w₂ g →
-      ∃ m m', collOf F ((Sof θ F c σ).x ξ₁) w₁ ((Sof θ F c σ).x ξ₂) w₂ = some (m, m') ∧
-        Claims.Collision FlockDeploy.sha512 m m')
-    (hlive : ∀ θ F c σ ξ ω r, LiveCoins q.Bd.IVStar q.st ((Sof θ F c σ).x ξ)
-      (Claims.run FlockDeploy.sha512 ((Sof θ F c σ).P ξ) q.D.V ((Sof θ F c σ).x ξ) ω r).seen) :
-    ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
-      Game.prob (fun o => RecVerdict V o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ ≤
-        q.err V (Sof θ F c) (collOf F) dColl nI vS δs lam σ := by
-  sorry
 
 /-- **Its conclusion fails for a verifier that accepts everything**: at a strategy whose extracted transcript fails
 the claim, where the finders built from it meet `FinderCR` and the error's number (`Dep.delta`) is below one. -/
