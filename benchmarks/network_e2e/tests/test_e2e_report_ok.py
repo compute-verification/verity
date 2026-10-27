@@ -1,6 +1,5 @@
-"""Red-team phase 5's cases (note:network-accounting/20261024T0558Z-finding-redteam-v3, branch
-cursor/redteam-phase5-e2e-061a @ c5d32c142b), turned into regressions of what the end-to-end report (`e2e.py`) marks
-OK on the advice profile, each a pure call into the real `report`/`negative`:
+"""Adversarial cases, turned into regressions of what the end-to-end report (`e2e.py`) marks OK on the advice
+profile, each a pure call into the real `report`/`negative`:
 
 1. A negative is refused by the rehearsal's own check only for its own violation (`e2e.OWN_CODE`): a drop the check
    refused for a coverage fault is not drop's refusal.

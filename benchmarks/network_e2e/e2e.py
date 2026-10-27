@@ -106,7 +106,7 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
             "drop": "io:short of max_tokens without EOS"}
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
-ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]  # vllm's #3619
+ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 GATE_HOST = "vy-challenger-1"
 
 CLAIM = {

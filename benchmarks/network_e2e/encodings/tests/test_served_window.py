@@ -58,7 +58,7 @@ def test_the_replay_is_the_served_scheduler(recs):
 
 def test_the_run_serves_without_prefix_caching(recs):
     """8eb1's trace header says it serves without prefix caching, so every window's hits are 0, and the charge chain,
-    which charges the decisions alone, leaves no hit uncharged (REDTEAM phase 18). Its order isn't 0: the run wasn't
+    which charges the decisions alone, leaves no hit uncharged. Its order isn't 0: the run wasn't
     served in release order, and the order's charge is the I/O tie's."""
     header = recs[0]
     assert header["kind"] == "header" and header["config"]["enable_prefix_caching"] is False
