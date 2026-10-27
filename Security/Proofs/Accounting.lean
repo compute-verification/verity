@@ -97,5 +97,6 @@ import Proofs.Accounting.Served
 import Proofs.Accounting.Overhead
 import Proofs.Accounting.ServingBlocks
 import Proofs.Accounting.ServingBlocks.Witnesses
+import Proofs.Accounting.ServingRoute
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/
