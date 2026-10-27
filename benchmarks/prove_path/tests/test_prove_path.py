@@ -1055,7 +1055,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
-    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": 7,
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
              "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
@@ -1116,7 +1116,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny-int8.json", tmp_path / "ck" / "snap"
     run.mkdir()
-    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800", "default_seed": 7,
+    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800", "default_seed": DEFAULT_SEED,
              "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188, "int8_exact": "linears"}}
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps({**TINY, "quantization_config": INT8_V1}))

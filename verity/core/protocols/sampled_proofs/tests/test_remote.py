@@ -1418,3 +1418,53 @@ def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
 def test_an_address_is_host_and_port(address):
     with pytest.raises(ValueError, match="HOST:PORT"):
         R.RemoteChallenger.connect(address)
+
+
+def _clock_and_sleep():
+    now, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    return (lambda: now[0]), sleep, slept
+
+
+def test_a_session_whose_tunnel_listens_late_is_connected_once_it_listens():
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def connect(address, secret):
+        tries.append((address, secret))
+        if len(tries) < 3:
+            raise ConnectionRefusedError(111, "Connection refused")
+        return "client"
+
+    assert R.connect_when_listening("127.0.0.1:7811", b"s", connect, 120, clock, sleep) == "client"
+    assert tries == [("127.0.0.1:7811", b"s")] * 3 and slept == [0.5, 0.5]
+
+
+def test_a_session_that_never_listens_raises_once_its_wait_is_over():
+    clock, sleep, slept = _clock_and_sleep()
+
+    def refused(address, secret):
+        raise ConnectionRefusedError(111, "Connection refused")
+
+    with pytest.raises(C.CoinError, match="nothing listened"):
+        R.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
+    assert slept == [0.5] * 4
+
+
+@pytest.mark.parametrize("error", [C.CoinError("the challenger refused the hello"), ConnectionResetError(104, "reset"),
+                                   ValueError("a challenger's address is HOST:PORT")])
+def test_any_other_failure_to_connect_raises_at_once(error):
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def failing(address, secret):
+        tries.append(address)
+        raise error
+
+    with pytest.raises(type(error)):
+        R.connect_when_listening("127.0.0.1:7811", None, failing, 120, clock, sleep)
+    assert len(tries) == 1 and slept == []
