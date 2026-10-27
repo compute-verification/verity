@@ -222,13 +222,25 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   forward alone 4.182 s) a step takes 6.984 s with 92 such retries in 3 steps, and at 8 SMs 23.288 s with 69. At 64,
   with none, it takes 5.297 s, the forward alone's time and 0.10 s. The forward's host waiting on the side stream's reads
   before it allocates (`--host-lag`, run r20261026-182023-2b8d) leaves 84 to 100 retries (6.878 s at 40 SMs): a table
-  `record_stream`'d to the side stream is released at that stream's tail when the forward frees it, not at its read, so
-  only freeing it after the read (or reusing a ring of buffers) avoids them. The partitions themselves run at once
+  `record_stream`'d to the side stream was released at that stream's tail when the forward freed it, not at its read
+  (the plan now drops it at its read: the next item). The partitions themselves run at once
   (`green_probe.py`, runs r20261026-174052-c188 and r20261026-180440-47aa): the commit on 40 or 64 SMs and int8 GEMMs
   on the others overlap 0.91 to 0.93 (1 at once, 0 in turns), 0.88 to 0.90 coupled as today's loop couples them, and
   0.08 sharing every SM in one context. A plan on N SMs runs on graphs too: a graph captured on its green context's
   stream keeps to those SMs when replayed, rekeyed with that context current (`SmPartition.current`; run
   r20261026-181335-1b14, a `%smid` probe on 16 SMs).
+- **Tables dropped at their read** (no `record_stream`: `Plan.hold` and `Plan.release`, `LAG`; runs
+  r20261026-202804-5282 and r20261026-205702-f655, vy-dc-h200-3). The plan holds each add's tables until the side stream
+  has read them, a thread of its own dropping them as soon as the read passes, and at the next add the producer's stream
+  waits for the read of any still unread. A table the forward has freed so goes back to its stream at the read. With the
+  forward on 92 SMs (`low:shared:3:40r`, CIR-113's 256 B rows) a step takes 4.949 s, +1.672 s (1.76 times CMP-149's
+  0.95 s), with no retry, against 6.939 s and 85 retries for `record_stream`. Circuits' 1 KiB rows had no retries
+  before; there, in one lease, today's loop costs +0.424 s (0.45) against +0.427 s for `record_stream`, and the commit
+  at high priority on 88 SMs +0.352 s (0.37) against +0.323 s, the device's memory at today's loop the same (147.94 GB).
+  Every root equals `record_stream`'s. Those runs started the thread anew at each add, which blocks the forward's host
+  thread; the plan now keeps one thread, not yet timed. Holding tables to the next add without the thread kept a freed
+  group from the forward's allocations in between, 1.76 GB more on the device at today's loop, and holding them two adds
+  ran out of HBM at 256 B.
 
 ## Files
 
