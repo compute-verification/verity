@@ -1,4 +1,4 @@
-"""The review landing (`land = "review"`: PRs land on an eyeball review, and the full check runs after
+"""The review landing (`land = "review"`; Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after
 landing).  A tick lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner,
 a Lean change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
 `main` passed that step before, bisecting when several PRs are implicated."""
@@ -485,7 +485,7 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
 
 
 def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
-    """Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    """Daniel, 25 Oct 11:19 PM PDT: Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
     after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))
