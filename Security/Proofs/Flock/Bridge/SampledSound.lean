@@ -14,6 +14,9 @@ from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads
   SHA-512 evaluations of a run of the strategy `t'` and of a verification `v`), at the parsed circuit file `D` with `n` units, the draw size `kd`, `K₀` and the descriptor `desc`;
   `LiveAt.CR τ`, the two collision-resistance premises `SampledKSLivePub` reads at the finders built from `τ`;
   `LiveAt.ks`, its conclusion where they hold.
+* `LiveAt.wr`, the live audit's record writer, is `canonWr`: a record of the live outcome (`RecordOfZKJ`) flock-verify
+  accepts, where there is one. flock-verify reads a transcript only through its draw, its decoded session and its proof
+  files (`acceptsZK_congr`), and wherever a record of the outcome is accepted, the writer's is (`accepts_canonWr`).
 * `LiveAt.wrongE q τ`: the units wrong in the extractor's transcript at `τ`; `LiveAt.Holds q ε τ`, the claim;
   `LiveAt.bound τ`, `deltaPub` where `CR τ` holds and `⊤` elsewhere.
 * `LiveAt.sound`: at every `τ`, `Pr[flock-verify accepts ∧ ¬ Holds] ≤ bound τ`, where `K₀ − 1 ≤ ε n`.
@@ -56,6 +59,56 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 open Classical
 
+/-- **flock-verify `--zk` reads a transcript only through its draw, its decoded session and its proof files**: the
+statement sets up from the record's draw alone (`setupOf`), and `Flock.Zk.verify` reads the record only through
+`Record.decode`. -/
+theorem acceptsZK_congr {I : Inputs} {t t' : Discharge.Exec.Transcript} (hd : recordDraw t.record = recordDraw t'.record)
+    (hs : ∀ spec, Flock.Record.decode spec t.record = Flock.Record.decode spec t'.record) (hp : t.proofs = t'.proofs)
+    (h : AcceptsZK I t) : AcceptsZK I t' := by
+  obtain ⟨spec, sts, hset, hsh, hv⟩ := h
+  refine ⟨spec, sts, ?_, hsh, ?_⟩
+  · rw [setupOf, ← hd]
+    exact hset
+  · have hver : Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t'.record t'.proofs =
+        Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs := by
+      unfold Flock.Zk.verify
+      rw [← hs spec, ← hp]
+    rw [hver]
+    exact hv
+
+/-- **`t` is the record of the live outcome `o` at the draw `S`**, at `J` tables (`RecordsLiveZKJ`'s conclusion): the
+record carries the draw `dj S`, the proof files are `o`'s, and the record decodes to a session whose link points are
+`o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
+def RecordOfZKJ {n mPts : ℕ} (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (J : ℕ) (S : Finset (Fin n))
+    (o : LiveOutJ J mPts) (t : Discharge.Exec.Transcript) : Prop :=
+  recordDraw t.record = some (dj S) ∧ t.proofs = o.proofs ∧
+    ∀ spec sts sess, setupOf (zkInputs I) t.record = .ok (spec, sts) →
+      Flock.Record.decode spec t.record = .ok sess →
+      FlockSoundness.Refine.ptsOf mPts sess.points = o.pts ∧
+      ∀ j : Fin J, sess.rootB[j.val]! = o.rootB[j.val]! ∧ ∀ r : Fin 2, ∃ s : Flock.StreamRec,
+        sess.streams.find? (fun x => x.name == toString spec.tables[j.val]! ++ toString "/rep" ++ toString r.val) =
+          some s ∧ s.rounds.toList = o.reps j r
+
+/-- **The live audit's record writer**: at the draw `S`, the registration `R` and the live outcome `o`, a transcript
+flock-verify `--zk` accepts that is `o`'s record (`RecordOfZKJ`) where there is one, else one it refuses where there
+is one. It reads nothing but the live outcome, and wherever any record of `o` is accepted, its record is
+(`accepts_canonWr`). -/
+noncomputable def canonWr {n : ℕ} {Reg : Type} (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
+    (Jf : Finset (Fin n) → Reg → ℕ) (mPts : ℕ) (S : Finset (Fin n)) (R : Reg) (o : LiveOutJ (Jf S R) mPts) :
+    Discharge.Exec.Transcript :=
+  if h : ∃ t, RecordOfZKJ I dj (Jf S R) S o t ∧ AcceptsZK I t then Classical.choose h
+  else if h' : ∃ t, ¬ AcceptsZK I t then Classical.choose h' else ⟨"", #[]⟩
+
+/-- **Where a record of the live outcome is accepted, the writer's is.** -/
+theorem accepts_canonWr {n : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
+    {Jf : Finset (Fin n) → Reg → ℕ} {mPts : ℕ} {S : Finset (Fin n)} {R : Reg} {o : LiveOutJ (Jf S R) mPts}
+    {t : Discharge.Exec.Transcript} (hr : RecordOfZKJ I dj (Jf S R) S o t) (ha : AcceptsZK I t) :
+    AcceptsZK I (canonWr I dj Jf mPts S R o) := by
+  unfold canonWr
+  split
+  next h => exact (Classical.choose_spec h).2
+  next h => exact (h ⟨t, hr, ha⟩).elim
+
 /-- **`SampledKSLivePub`'s setting at one session**: at the parsed circuit file `D` (its unit built, `hU`) with `n`
 units, the draw size `kd`, `K₀` and the descriptor `desc`, everything else `SampledKSLivePub` quantifies before its
 collision-resistance premises, named assumption A3 included. `t' τ` bounds the SHA-512 evaluations of one run of the
@@ -81,8 +134,6 @@ structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ 
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
   y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
-  wr : (S : Finset (Fin n)) → (R : Reg) →
-    LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
   N : ℕ
   Ω : Type
@@ -92,7 +143,8 @@ structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ 
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : Assumptions.UniformRandomBytes Lb src
   hTags : TagsOkZHJ I
-  hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd
+  hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length)
+    (canonWr I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) (mPtsOf D.unroll.g (kd / nTab I))) kd
   k : ℕ
   Rw : ℕ
   M : ℕ
@@ -102,7 +154,8 @@ structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ 
   ρ : ℝ
   hρ : ρ < 1
   hρk : rateM1 k ≤ ρ
-  t' : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) → ℝ
+  t' : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N
+    (canonWr I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) (mPtsOf D.unroll.g (kd / nTab I))))) → ℝ
   ht' : ∀ τ, 0 ≤ t' τ
   hK₀ : K₀ ≤ n
   v : ℝ
@@ -114,6 +167,12 @@ namespace LiveAt
 
 variable {n : ℕ} {D : Flock.Desc} {hU : Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg}
   (A : LiveAt n D hU kd K₀ desc)
+
+/-- The live audit's record writer (`canonWr`). -/
+noncomputable abbrev wr : (S : Finset (Fin n)) → (R : A.Reg) →
+    LiveOutJ (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length (mPtsOf D.unroll.g (kd / nTab A.I)) →
+      Discharge.Exec.Transcript :=
+  canonWr A.I A.dj (fun S R => (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length) (mPtsOf D.unroll.g (kd / nTab A.I))
 
 /-- The draw's law: `kd` of the `n` units, from the verifier's bytes. -/
 noncomputable abbrev L : Law n := Law.execOS (n := n) A.src (.subset kd) n
