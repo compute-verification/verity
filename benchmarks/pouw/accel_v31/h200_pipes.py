@@ -10,7 +10,12 @@ use as unchanged by overlap. The weight side (fill_b_kernel, perm_kernel: once a
 left out, as fill-bench's ovl arm forms W' once, and so is everything before the first call's bits_kernel (cuBLASLt's
 algorithm search under V31_LTW).
 
-    python3 h200_pipes.py OUT_DIR    # a markdown table, one row a shape and L
+Where OUT_DIR has `v31 fill-step`'s lines too (fill-step-VTAG-LL.jsonl), a second table gives each pipe's duty over each
+step and N: its calls' busy cycles (each shape's ncu file, its calls the weight side's kernels included, as a step's
+calls form W' each) over the step's cycles at its own SM clock. A pipe's work is the same on any SMs, so one ncu run on
+every SM gives each split's duty.
+
+    python3 h200_pipes.py OUT_DIR    # markdown tables: one row a shape and L; one a step and N
 """
 from __future__ import annotations
 
@@ -76,7 +81,7 @@ def read_ncu(path: Path, skip: tuple[str, ...] = SKIP) -> list[dict]:
             m = PCT.match(c)
             if m:
                 pipes[("cycles" if m.group(3) or m.group(1) == "pipe_" else "issue", m.group(2))] = _num(r[i]) * frac
-        out.append({"name": name, "kind": k, "s": t, "pipes": pipes})
+        out.append({"name": name, "kind": k, "s": t, "cycles": el, "pipes": pipes})
     return out
 
 
@@ -94,8 +99,71 @@ def busy(kernels: list[dict], calls: int) -> tuple[dict, dict]:
     return pipe, kinds
 
 
+def busy_cycles(kernels: list[dict], calls: int) -> dict:
+    """Per call: each pipe's busy cycles of an SM, averaged over the device's (the larger of its issue and cycles-active
+    shares of the kernel's elapsed cycles): the pipe's work, the same on any SMs and at any clock."""
+    pipe = defaultdict(float)
+    for k in kernels:
+        best: dict[str, float] = {}
+        for (_, p), v in k["pipes"].items():
+            if v == v:
+                best[p] = max(best.get(p, 0.0), v)
+        for p, v in best.items():
+            pipe[p] += v / 100 * k["cycles"] / calls
+    return pipe
+
+
 def shown(pipe: dict, names: tuple[str, ...]) -> float:
     return max((pipe.get(n, 0.0) for n in names), default=0.0)
+
+
+def step_duty(out: Path) -> int:
+    """fill-step's lines in out (fill-step-VTAG-LL.jsonl): for each step and N, each pipe's duty over the step, its
+    calls' busy cycles (each shape's ncu-VTAG-LL-SHAPE.raw.csv, else the one ncu file of that L and shape) over the step's
+    cycles (its seconds at its SM clock). A step whose shapes some ncu file lacks is left out. The rows printed."""
+    ncu = {}
+    for f in sorted(out.glob("ncu-*.raw.csv")):
+        m = re.match(r"ncu-(.+)-L(\d+)-(.+)\.raw$", f.stem)
+        if m:
+            ncu.setdefault((int(m.group(2)), m.group(3)), {})[m.group(1)] = f
+    rows = 0
+    for f in sorted(out.glob("fill-step-*.jsonl")):
+        tag = f.stem[len("fill-step-"):]
+        for line in f.read_text().splitlines():
+            if not line.startswith("{"):
+                continue
+            j = json.loads(line)
+            vtag = tag.removesuffix(f"-L{j['L']}")
+            per: dict[str, float] = defaultdict(float)
+            for s in j["shapes"]:
+                by = ncu.get((j["L"], s["shape"]), {})
+                p = by.get(vtag) or (next(iter(by.values())) if len(by) == 1 else None)
+                if p is None:
+                    print(f"{f.name}: no ncu file for L {j['L']} {s['shape']}", file=sys.stderr)
+                    break
+                log = p.with_name(p.name.replace(".raw.csv", ".log"))
+                mc = re.search(r": (\d+) calls\b", log.read_text()) if log.exists() else None
+                for q, v in busy_cycles(read_ncu(p, SKIP_W), int(mc.group(1)) if mc else 6).items():
+                    per[q] += s["calls"] * v
+            else:
+                for g in j["gsms"]:
+                    a = j["arms"].get(f"step_g{g['n']}")
+                    if not a or not a.get("mhz"):
+                        continue
+                    duty = {q: v / (a["ms"] * 1e-3 * a["mhz"] * 1e6) for q, v in per.items()}
+                    cols = [100 * shown(duty, names) for _, names in SHOWN]
+                    named = {n for _, names in SHOWN for n in names}
+                    rest = ", ".join(f"{q} {100 * v:.0f}%" for q, v in sorted(duty.items(), key=lambda x: -x[1])
+                                     if q not in named and v > 0.05)
+                    if not rows:
+                        print("\n| step | L | variant | N | step s | SM MHz | tensor duty | alu | fma | lsu | idle tensor | "
+                              "idle alu | idle fma | idle lsu | other pipes (duty > 5%) |")
+                        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+                    print(f"| {j['step']} | {j['L']} | {vtag} | {g['n']} | {a['ms'] * 1e-3:.3f} | {a['mhz']:.0f} | "
+                          + " | ".join(f"{c:.1f}%" for c in cols) + " | "
+                          + " | ".join(f"{100 - c:.1f}%" for c in cols) + f" | {rest or '-'} |")
+                    rows += 1
+    return rows
 
 
 def main(argv: list[str]) -> int:
@@ -137,6 +205,7 @@ def main(argv: list[str]) -> int:
               f"{cols[2]:.1f}% | {cols[3]:.1f}% | {100 - cols[0]:.1f}% | {1e3 * kinds['gemm']:.3f} | {1e3 * kinds['hash']:.3f} | "
               f"{1e3 * kinds['other']:.3f} | {kt / ovl:.2f} | {rest or '-'} |")
         found += 1
+    found += step_duty(out)
     return 0 if found else 1
 
 

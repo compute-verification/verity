@@ -39,7 +39,7 @@
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
 # timeline`'s .timeline.md. FILL_PROF=1, after the bench, runs Nsight Compute's pipe utilization on `v31 fill-once`
 # (OVL_CALLS overlapped calls, default 4) for the first variant on each shape and L, and h200_pipes.py's duty of each pipe
-# over the overlapped call (pipes.md). FILL_ONE_LEASE=1 runs the gates, nsys, bench and prof under one LEASE after the
+# over the overlapped call and over each FILL_STEPS step (pipes.md). FILL_ONE_LEASE=1 runs the gates, nsys, bench and prof under one LEASE after the
 # builds, in place of a lease each (the GPU's queue between them can be hours long). FILL_STEPS, V31_STEP specs
 # ("q,kv,q,up,down*52+head": a layer's FILL_SHAPES names, the layers, the calls once a step), runs `v31 fill-step` (a
 # build with 8 domain slots) on each, for each variant and L, after the bench: out/fill-step-TAG-L.jsonl, its calls'

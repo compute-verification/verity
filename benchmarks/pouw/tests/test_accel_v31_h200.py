@@ -261,6 +261,43 @@ def test_pipe_duty_on_a_split_is_over_its_overlapped_arm_with_the_weight_side_co
             "2.000 | 1.000 | 1.500 | 2.25 | - |") in capsys.readouterr().out
 
 
+def test_pipe_duty_over_a_step_is_its_calls_busy_cycles_over_the_steps_cycles_at_its_clock(tmp_path, capsys):
+    """fill-step's lines beside ncu's: each shape's busy cycles a call (a pipe's share of the kernel's active cycles, the
+    larger of issue and cycles-active), times its calls a step, over the step's seconds at its own SM clock; an ncu file of
+    another variant serves where it is the one for that L and shape; a step with a shape no ncu file has is left out."""
+    import h200_pipes
+
+    cols = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_active.avg", "sm__cycles_elapsed.avg",
+            "sm__pipe_tensor_op_gmma_cycles_active.avg.pct_of_peak_sustained_active",
+            "sm__inst_executed_pipe_alu.avg.pct_of_peak_sustained_active",
+            "sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active",
+            "sm__inst_executed_pipe_lsu.avg.pct_of_peak_sustained_active"]
+    units = ["", "", "ms", "cycle", "cycle", "%", "%", "%", "%"]
+    a = [["0", "bits_kernel(Seeds, int, unsigned long, unsigned char *)", "0.1", "100", "100", "0", "0", "0", "0"],
+         ["1", "void wgp::gemm<256, 1>(wgp::Args)", "1", "1,000,000", "1,000,000", "80", "0", "0", "0"],
+         ["2", "void leaf_persist<ServedRow>(Persist, int)", "1", "250,000", "500,000", "0", "88", "80", "20"]]
+    b = [["0", "bits_kernel(Seeds, int, unsigned long, unsigned char *)", "0.1", "100", "100", "0", "0", "0", "0"],
+         ["1", "void wgp::gemm<256, 1>(wgp::Args)", "1", "200,000", "200,000", "50", "0", "0", "0"]]
+    for shape, rows, calls in (("a", a, 2), ("b", b, 1)):
+        (tmp_path / f"ncu-v0-L4096-{shape}.raw.csv").write_text(
+            "\n".join(",".join(f'"{c}"' for c in r) for r in [cols, units] + rows) + "\n")
+        (tmp_path / f"ncu-v0-L4096-{shape}.log").write_text(f"{shape}: {calls} calls (2 serial)\n")
+
+    def step(spec: str, shapes: dict[str, int]) -> str:
+        return json.dumps({"fill_step": True, "step": spec, "L": 4096, "shapes": [{"shape": s, "calls": c}
+                                                                                 for s, c in shapes.items()],
+                           "gsms": [{"n": 0, "sms": [132, 132]}, {"n": 64, "sms": [64, 68]}],
+                           "arms": {"step_g0": {"ms": 10.0, "mhz": 1000}, "step_g64": {"ms": 8.0, "mhz": 1500}}})
+
+    (tmp_path / "fill-step-v1-L4096.jsonl").write_text(step("a,b*2", {"a": 2, "b": 1}) + "\n"
+                                                       + step("c", {"c": 1}) + "\n")
+    assert h200_pipes.main(["h200_pipes.py", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "| a,b*2 | 4096 | v1 | 0 | 0.010 | 1000 | 9.0% | 2.2% | 0.0% | 0.5% | 91.0% | 97.8% | 100.0% | 99.5% | - |" in out
+    assert "| a,b*2 | 4096 | v1 | 64 | 0.008 | 1500 | 7.5% | 1.8% | 0.0% | 0.4% | 92.5% | 98.2% | 100.0% | 99.6% | - |" in out
+    assert "| c |" not in out
+
+
 def test_pipe_kinds_read_ncus_demangled_names_and_cublaslts_gemm():
     import h200_pipes
 
