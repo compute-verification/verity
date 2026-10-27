@@ -46174,7 +46174,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Setup": {
-   "digest": "d90ffd07639ad3b5d26dc576bf76dd0c4d705d6aaca9b08ab4ff3b313f80c825",
+   "digest": "c69993e1402ae759fc5b68c82d6227ffa55da87c2ebf6d7bbd4e08f801c3f543",
    "definitions": {
     "FlockSoundness.Discharge.Placed.Accepted": "ec16515e7909d5871eb920dc707b2336094f628e52f5bac7f135561a8f7def23",
     "FlockSoundness.Discharge.Placed.Accepted.cf": "39c9f0d6aee5c8f9bc645eb4a22a9724dfaeef7706914bb73687fe9962dc3e3e",
@@ -46195,11 +46195,8 @@
     "FlockSoundness.Discharge.Placed.Sites.col": "fb849ae6b95c3fcfc10bf0c8235112ca17a6b2e8a8bd4d6ed3ae8b6e4fde53ba",
     "FlockSoundness.Discharge.Placed.Sites.o": "b68a7e5a0e469db657f9c560f87556286818bfe2a06c80c40ba36f7c37971a0c",
     "FlockSoundness.Discharge.Placed.Sites.vu": "83725235a960c0acf0b81edcd8a224da2503ab3ba27c8218d798e94a05e7d813",
-    "FlockSoundness.Discharge.Placed.circuitRows": "9a73797cf46e900e54dacb68f5b473f4138f9a5f3dcc9ab6a29f7e2842ddb0a2",
-    "FlockSoundness.Discharge.Placed.gates": "bc895c8c5f4b47348a2e78f79ede0718f90132a0435361576d615a476a87a58f",
     "FlockSoundness.Discharge.Placed.progPlaces": "d6086693397e4a8ee8f4dbc32fe65ac3291c5c19aebf912887de7a6afb9c44c8",
-    "FlockSoundness.Discharge.Placed.progPlaces_of_layout": "8341655642a49478709b26b56e2202d4ba9aba9d1931d7e7ba60c51cbca2a716",
-    "FlockSoundness.Discharge.Placed.uniform": "65281c0d07e03bc97cfeb4962d95824fd69807a0d84420348f1c8283f4bb3eaa"
+    "FlockSoundness.Discharge.Placed.progPlaces_of_layout": "8341655642a49478709b26b56e2202d4ba9aba9d1931d7e7ba60c51cbca2a716"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -48660,21 +48657,11 @@
    ]
   },
   "Proofs.Flock.Soundness.ExecRows": {
-   "digest": "545d7c069d32d83a66671f3cf5a0a0649b5300724784df7cc90de3b1524236de",
+   "digest": "061d723f9b589b61ed1a77060209807c627d954e805fbf6378b609d524bf58a0",
    "definitions": {
-    "FlockSoundness.Built": "548f5cb7cc68be48e8bf183062c88ea8d4c8d1f5b00cc16dcf13911c3165b96f",
-    "FlockSoundness.InputPadding": "90655896e0b69c43ed0b240ddf87726523d615239c50df90dd5355555681b779",
-    "FlockSoundness.RowOrder": "0c1ac158248321c5526059b2f9caa7758594b2984660462ce14ac8f9e7f825c6",
-    "FlockSoundness.Rows.ofNet": "23d1c631fcc0da0ea198f477bbcdd9577cf50515ad43bc4894d3629d10a83994",
-    "FlockSoundness.Rows.ofOrdered": "c3fefc32b104ca118a908347f82c1870af8825f5239a5a782c17055878892f94",
-    "FlockSoundness.Rows.stack": "2fc6896f53a88d2e73dc3e200856516a3090475ab75617e8ebb9366e225434f4",
-    "FlockSoundness.Rows.stackCol": "b8aea9d80292b824538cbc964879ce32882843ba4ce943d7c9387ec9f68eadd5",
-    "FlockSoundness.Rows.stackRow": "fc1783c15783f9c1a33c229e2544a586e0db1c77252b0a8e3faae9f2588caf02",
-    "FlockSoundness.Rows.stackW": "24e2cb50ee34d50023bf5eaa7eabb3717d42ac4e0e7bce52d5485eba4127b4df",
     "FlockSoundness.posInAt": "d2c0c12a0c86e10bbd7cd97347786b1ad595f7458a87105caf054e0091996cd3",
     "FlockSoundness.stackCopy": "9a0808e97ccd920bab4fd0b27bcabb71af821add25fafad4f885e6b9e2f95a37",
     "FlockSoundness.stackLocal": "80c84caa2ad2bf933038fcceaf7a19bdcd52df479ca3a6283a464a531dfb03fe",
-    "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b",
     "FlockSoundness.stackPlaceAt": "0cb1b45b996faa565031d6498408b260e62206ad73af37905cde9d4bbc3f91f4"
    },
    "guarantees": [
