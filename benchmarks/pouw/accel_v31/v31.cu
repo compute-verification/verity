@@ -1841,11 +1841,12 @@ struct Pieces {
   u32 np, ng;
 };
 // leaf_small (g = 1, no bc, no fused top) a group (or a piece of one) at a time (nvb = ng np units, ng = ceil(n / 128));
-// MINB its CTAs an SM by registers (4: 128 a thread, for a leaf phase that has the SMs to itself)
+// MINB its CTAs an SM by registers (4: 128 a thread, for a leaf phase that has the SMs to itself); fl, the group's levels
+// the CTA folds itself (log2 of its leaves, or 0 when level kernels fold them after, Lanes::lfold)
 template <class Row, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
-                 u64* levels, Pieces pc) {
+                 u64* levels, Pieces pc, int fl) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS), T = row.chunks();
   if (persist_claim(p))
     for (u32 u; (u = persist_next(p)) < p.nvb;) {
@@ -1874,7 +1875,7 @@ __global__ void __launch_bounds__(SMALL_THREADS, MINB)
         }
       }
       if (last) {
-        fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+        fold_vb(dom, levels, width, cnt, fl, vb);
       } else {
         __syncthreads();
         if (threadIdx.x == 0) *reinterpret_cast<volatile u32*>(pc.flag + vb) = p.epoch << 8 | (k + 1);
@@ -2134,14 +2135,16 @@ static std::string env_str(const char* name, const char* dflt) {
 // call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
 // a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks; V31_LPIECES, the
 // pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1);
-// V31_SMINB 4 or 5 (the default), salt_persist's MINB.
+// V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 0, a group's levels (1 .. 7) folded by a level_kernel
+// launch a level after the leaf phase rather than by the group's CTA, whose other warps wait while a few fold.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
       ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
-      full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0), sminb = env_int("V31_SMINB", SMALL_MINB);
+      full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0), sminb = env_int("V31_SMINB", SMALL_MINB),
+      lfold = env_int("V31_LFOLD", 1);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -2174,7 +2177,7 @@ template <class R> static u32 host_chunks(const R& r) { return r.full ? r.row / 
 static u32 host_chunks(const FusedRow&) { return 1; }
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB, lpieces = 0, sminb = SMALL_MINB;
+  int nsm = 1, lminb = SMALL_MINB, lpieces = 0, sminb = SMALL_MINB, lfold = 1;
   u64* xs = nullptr;     // Pieces: a chaining value for each of up to cap_n leaves, a flag a group
   u32* flag = nullptr;
   u64 cap_n = 0;
@@ -2225,25 +2228,33 @@ struct Lanes {
     if (!ccta) {
       cm.leaves(rows, st);
     } else {
-      const u64 ng = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
+      const u64 ng = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS, cnt = std::min<u64>(cm.width, SMALL_THREADS);
       const u32 np = pieces(rows, cm.n, ng, ccta);
       const u64 nu = ng * np;
       const Persist p = persist(nu, ccta);
       const Pieces pc{xs, flag, np, (u32)ng};
       const unsigned g = grid(nu, ccta);
+      int L = 0;
+      while ((1ull << L) < cnt) ++L;
+      const int fl = lfold ? L : 0;
       if (lminb == 4) {
-        leaf_persist<Row, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+        leaf_persist<Row, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
       } else if (lminb == 6 || lminb == 8) {
         if constexpr (std::is_same_v<Row, FusedRow>) {
           fprintf(stderr, "V31_LMINB %d: the fused leaf phase takes 4 or %d\n", lminb, SMALL_MINB);
           exit(2);
         } else if (lminb == 6) {
-          leaf_persist<Row, 6><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+          leaf_persist<Row, 6><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
         } else {
-          leaf_persist<Row, 8><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+          leaf_persist<Row, 8><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
         }
       } else {
-        leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc);
+        leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, pc, fl);
+      }
+      for (int d = fl; d < L; ++d) {
+        const u64 n_out = (ng * cnt) >> (d + 1);
+        level_kernel<<<(unsigned)((n_out + SMALL_THREADS - 1) / SMALL_THREADS), SMALL_THREADS, 0, st>>>(
+            cm.dom, cm.lv[d], cm.lv[d + 1], (ng * cnt) >> d, d);
       }
     }
     cm.nodes(st);
@@ -2665,6 +2676,7 @@ struct Fill {
     }
     if (kn.lpieces < 0 || kn.lpieces > 255) { fprintf(stderr, "V31_LPIECES: 0 to 255\n"); exit(2); }
     if (kn.sminb != 4 && kn.sminb != SMALL_MINB) { fprintf(stderr, "V31_SMINB: 4 or %d\n", SMALL_MINB); exit(2); }
+    if (kn.lfold != 0 && kn.lfold != 1) { fprintf(stderr, "V31_LFOLD: 0 or 1\n"); exit(2); }
     own = !c0;
     if (own) {
       int lo, hi;
@@ -2681,6 +2693,7 @@ struct Fill {
     pl.lminb = kn.lminb;
     pl.lpieces = kn.lpieces;
     pl.sminb = kn.sminb;
+    pl.lfold = kn.lfold;
     if (full_rows()) pl.pieces_init(leaves);
     if (kn.sahead) {
       int pr;
@@ -3089,6 +3102,19 @@ static std::vector<uint8_t> readfile(const std::string& p, size_t want) {
 }
 
 struct KAttr { const char* name; const void* fn; };
+// a kernel's registers, local and static shared bytes; the small path's (leaf_*, salt_*) also its CTAs an SM by resources
+static void kernel_attr(FILE* f, const KAttr& k, bool first) {
+  cudaFuncAttributes a;
+  CK(cudaFuncGetAttributes(&a, k.fn));
+  fprintf(f, "%s\"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu", first ? "" : ", ", k.name, a.numRegs,
+          a.localSizeBytes, a.sharedSizeBytes);
+  if (!strncmp(k.name, "leaf_", 5) || !strncmp(k.name, "salt_", 5)) {
+    int nb = 0;
+    CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&nb, k.fn, SMALL_THREADS, 0));
+    fprintf(f, ", \"ctas_sm\": %d", nb);
+  }
+  fprintf(f, "}");
+}
 static void kernel_attrs(FILE* f) {
   const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true, 1>}, {"gemm_plain", (const void*)gemm_kernel<false, 1>},
                       {"gemm_proto_wide", (const void*)gemm_kernel<true, G_NBW>},
@@ -3103,19 +3129,16 @@ static void kernel_attrs(FILE* f) {
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist<false>},
                       {"salt_persist_ks", (const void*)salt_persist<true>},
+                      {"salt_persist_m4", (const void*)salt_persist<false, 4>},
                       {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>},
                       {"leaf_persist_m6", (const void*)leaf_persist<V31Row, 6>},
                       {"leaf_persist_lt", (const void*)leaf_persist<LtRow>}, {"leaf_persist_lt_m6", (const void*)leaf_persist<LtRow, 6>},
                       {"leaf_persist_served", (const void*)leaf_persist<ServedRow>},
+                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>},
                       {"leaf_persist_served_m6", (const void*)leaf_persist<ServedRow, 6>},
                       {"leaf_persist_served_m8", (const void*)leaf_persist<ServedRow, 8>}};
   fprintf(f, "{");
-  for (size_t i = 0; i < sizeof ks / sizeof ks[0]; i++) {
-    cudaFuncAttributes a;
-    CK(cudaFuncGetAttributes(&a, ks[i].fn));
-    fprintf(f, "%s\"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", i ? ", " : "", ks[i].name, a.numRegs,
-            a.localSizeBytes, a.sharedSizeBytes);
-  }
+  for (size_t i = 0; i < sizeof ks / sizeof ks[0]; i++) kernel_attr(f, ks[i], i == 0);
 #ifdef V31_WG
   const KAttr wk[] = {{"wg_256_c0", (const void*)wgp::gemm<256, 0>}, {"wg_256_c1", (const void*)wgp::gemm<256, 1>},
                       {"wg_128_c0", (const void*)wgp::gemm<128, 0>}, {"wg_128_c1", (const void*)wgp::gemm<128, 1>},
@@ -3123,14 +3146,8 @@ static void kernel_attrs(FILE* f) {
                       {"wg_256_r4", (const void*)wgp::gemm_r4<256, FusedLeaves>},
                       {"wg_128_r4", (const void*)wgp::gemm_r4<128, FusedLeaves>},
                       {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>},
-                      {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>},
-                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>}};
-  for (const KAttr& w : wk) {
-    cudaFuncAttributes a;
-    CK(cudaFuncGetAttributes(&a, w.fn));
-    fprintf(f, ", \"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", w.name, a.numRegs, a.localSizeBytes,
-            a.sharedSizeBytes);
-  }
+                      {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>}};
+  for (const KAttr& w : wk) kernel_attr(f, w, false);
 #endif
   fprintf(f, "}");
 }
@@ -3738,10 +3755,10 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     };
     const double rs = per_cycle("sha", cc.sha), rl = per_cycle("leaf", cc.leaf), rn = per_cycle("leaf_nomem", cc.leaf),
                  rt = per_cycle("salt", cc.salt), rc = per_cycle("commit", cc.leaf + cc.salt);
-    printf("\"sminb\": %d, \"full\": %u, \"lpieces\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, \"per_sm_cycle\": {\"sha\": %s, "
-           "\"leaf\": %s, \"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, \"of_sha\": {\"leaf\": %s, \"leaf_nomem\": %s, "
-           "\"salt\": %s, \"commit\": %s}, ",
-           f.kn.sminb, f.full_rows(), f.leaf_pieces(0), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
+    printf("\"sminb\": %d, \"lfold\": %d, \"full\": %u, \"lpieces\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, "
+           "\"per_sm_cycle\": {\"sha\": %s, \"leaf\": %s, \"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, \"of_sha\": {\"leaf\": %s, "
+           "\"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, ",
+           f.kn.sminb, f.kn.lfold, f.full_rows(), f.leaf_pieces(0), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
            jn(rt).c_str(), jn(rc).c_str(), jn(rl / rs).c_str(), jn(rn / rs).c_str(), jn(rt / rs).c_str(), jn(rc / rs).c_str());
     printf("\"kernels\": ");
     kernel_attrs(stdout);
