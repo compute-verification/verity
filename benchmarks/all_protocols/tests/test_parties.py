@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import json
-import os
 import stat
 import sys
 import tomllib
@@ -22,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_all_protocols import compose as C, parties as P
+from verity_all_protocols import compose as C, parties as P, settings as S
 
 EXAMPLE = P.ROOT / "examples" / "toy_network" / "config.toml"
 SP, CERT = "verity/sampled-proofs/one-stage/v2", "verity/certifier/v0"
@@ -113,7 +112,7 @@ def test_the_verifier_decides_nothing_without_a_challenger_or_a_block(tmp_path, 
     assert "no block was served" in capsys.readouterr().err
 
 
-TOOLS = os.environ.get("VERITY_ALL_PROTOCOLS_TOOLS")
+TOOLS = S.tools()
 
 
 def verdicts(state: Path) -> list[dict]:

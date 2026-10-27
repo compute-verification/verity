@@ -23,7 +23,7 @@ Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --o
 slots on vy-nebius-2, the GPU node, only when no pool slot fits it (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
 its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
 once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
-to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).
+to a run that ends within about 20 minutes (AGENTS.md "Tests": no tool call blocks more than 20 minutes).
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
