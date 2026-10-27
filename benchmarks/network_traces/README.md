@@ -36,6 +36,21 @@ schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. T
 of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
 keeps the wipe uncounted otherwise.
 
+## The served session
+
+`served_session.py` is the runbook of NET-83's session of record, the network certifier in front of a served model.
+`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
+the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+vy-dc-h200-2's `serve-openai` on :18782, at the scan's class: prompts of KI = 1,024 ids from a fresh secret seed, and 64
+ids out a request. It runs at a given UTC time when asked. The lane's fetch, with `witness/`, stays in a 0700
+directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs
+the chain's warden path on the kept fetch, and only from a tree with the record's leak guard. `session --gate local`
+is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins
+gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain runs on (vy-nebius-cpu-2),
+which the challenger's coin link reaches through that node's own line of `/etc/vy/coin-ports`. It refuses the served
+node as the draw's peer, since the gate key and the warden run's witness never go on the prover's machine. Until the
+auditor's node has its line, the chain draws on the verifier's coins (`--coins verifier`, the default).
+
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:
