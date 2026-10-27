@@ -1,5 +1,5 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in C-Flock's statement row leaf
-format (``verity_flock.circuit``'s statement rows, PR #83), with the registration, C-Flock's public and prover files and the
+format (``verity_flock.circuit``'s statement rows), with the registration, C-Flock's public and prover files and the
 labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and

@@ -38,7 +38,7 @@ from shared memory), both operands rounded RNE to TF32, from a zero accumulator,
 `HopperTf32WgmmaDot8_v1`.  A's conversion is unobservable here because widened bf16 has thirteen zero low bits.  The squared sum
 of each block: thread lane e < 4 of a quad adds `fma(x[k], x[k], x[k+4] * x[k+4])`, k = 64 st + 8 i + e, into its own chain
 from +0, and the quad's shuffles add `(v0 + v2) + (v1 + v3)`; these are GPU FMUL/FFMA/FADD operations, whose NaN result is
-0x7FFFFFFF.  Run r20261013-115825-580e's H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
+0x7FFFFFFF.  An H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
 TF32 products.  Core's instruction catalog remains `unprobed` because it has no core-owned model to pin;
 tests/properties/dsv4_mhc_capture_gpu.py reruns the gate.
 
