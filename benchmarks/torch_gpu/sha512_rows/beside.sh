@@ -13,8 +13,9 @@
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/beside.sh
-# STEPS ("lowreg beside"), ROUNDS (3), LAUNCHES (10), TILES (128), SHAPE ("16384 4096 4096": M N K), NCU_RUNS, STEP_S,
-# LEASE_MIN (20), CUDA (the toolkit: default the first of /usr/local/cuda-13.0 and /usr/local/cuda).
+# STEPS ("lowreg beside"), ROUNDS (3), LAUNCHES (10), TILES (128), SHAPE ("16384 4096 4096": M N K), KERNELS (beside's
+# kernels to gate and time: default every one `beside list` names), NCU_RUNS, STEP_S, LEASE_MIN (20), CUDA (the toolkit:
+# default the first of /usr/local/cuda-13.0 and /usr/local/cuda).
 set -uo pipefail
 export O=${OUT:?}
 for c in "${CUDA:-}" /usr/local/cuda-13.0 /usr/local/cuda; do [ -n "$c" ] && [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
@@ -27,7 +28,8 @@ git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:
 nvcc --version > "$O/nvcc.txt" 2>&1
 export STEPS=${STEPS:-lowreg beside} ROUNDS=${ROUNDS:-3} LAUNCHES=${LAUNCHES:-10} TILES=${TILES:-128}
 export SHAPE=${SHAPE:-16384 4096 4096} STEP_S=${STEP_S:-180}
-export NCU_RUNS=${NCU_RUNS:-wgl_n256_s4:mma wgl_n128_s3:mma h72_r:mma h72_r:hash h72_r:free h72_r:handoff h64_rs:free h128_r:free}
+export NCU_RUNS=${NCU_RUNS:-wgl_n256_s4:mma wgl_n128_s3:mma h72_r:mma h72_r:hash h72_r:free h72_r:handoff h64_rs:free \
+h128_r:free h128_r_s4:free h128_r_s4:handoff m1h2_r:mma m1h2_r:free m1h3_rs:free m1h4_rs:free m2h2_r_s4:free} KERNELS=${KERNELS:-}
 SM=90a
 for s in $STEPS; do
   case $s in
@@ -90,7 +92,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
         [ -x "$W/beside" ] || continue
         mkdir -p "$W/gate"
         # a process a kernel, so a kernel that hangs or faults costs only its own gate
-        for k in $("$W/beside" list); do
+        for k in ${KERNELS:-$("$W/beside" list)}; do
           # shellcheck disable=SC2086
           $T "$W/beside" gate $SHAPE "$W/gate" "$k" >> "$O/beside-gate.jsonl" 2>> "$O/beside-gate.err"
           echo "beside gate $k rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"

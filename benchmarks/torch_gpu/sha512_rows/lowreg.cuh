@@ -22,13 +22,14 @@ template <int S> struct Strided {
 };
 
 #ifdef __CUDACC__
-// the 128 bytes at p (16-byte aligned, shared or global) as a chunk's 16 big-endian words, into W[0..15]
+// the 128 bytes at p (16-byte aligned, shared or global) as a chunk's 16 big-endian words, into W[0..15]; the chunk's
+// 16-byte unit i at p + 16 (i ^ sw) (sw < 8: a row stored with its units XOR-swizzled)
 template <class Sched>
-__device__ __forceinline__ void load_chunk(const uint8_t* p, Sched W) {
+__device__ __forceinline__ void load_chunk(const uint8_t* p, Sched W, int sw = 0) {
   const uint4* q = reinterpret_cast<const uint4*>(p);
 #pragma unroll
   for (int i = 0; i < 8; ++i) {
-    const uint4 u = q[i];
+    const uint4 u = q[i ^ sw];
     W[2 * i] = be64(u.x, u.y);
     W[2 * i + 1] = be64(u.z, u.w);
   }

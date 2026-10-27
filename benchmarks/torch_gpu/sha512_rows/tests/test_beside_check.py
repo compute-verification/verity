@@ -61,6 +61,29 @@ def test_a_flipped_byte_fails_its_kernel_alone(tmp_path: Path) -> None:
     assert (tmp_path / "passed.txt").read_text().split() == ["h72_r"]
 
 
+def test_hash_arm_slots_follow_the_cta_tile_and_the_half_buffer(tmp_path: Path) -> None:
+    """Three hash warpgroups on a 64-row tile: slot g hashed row g % 64; the half O buffer: the row's first 256 bytes twice
+    a tile. A digest of the whole row where the half was hashed fails."""
+    g = tmp_path / "gate"
+    g.mkdir()
+    rows = tile_rows(5, 128, 512)
+    (g / "seed.bin").write_bytes(b"".join(rows))
+    head = {"sms": 132, "device": "test", "M": M, "N": N, "K": K, "grid": GRID}
+    m1 = b"".join(stored(row_v2(rows[(i % 384) % 64] * HASH_TILES)) for i in range(GRID * 384))
+    half = b"".join(stored(row_v2(rows[i % 128][:256] * 2 * HASH_TILES)) for i in range(GRID * 128))
+    whole = b"".join(stored(row_v2(rows[i % 128] * HASH_TILES)) for i in range(GRID * 128))
+    (g / "m1h3_rs-hash.digests").write_bytes(m1)
+    (g / "h128_r_s4-hash.digests").write_bytes(half)
+    (g / "h96_r_s4-hash.digests").write_bytes(whole)
+    common = {"arm": "hash", "regs": 96, "local_bytes": 0, "hash_tiles": HASH_TILES, "cells": 0, "cells_wrong": 0}
+    lines = [head, {**common, "kernel": "m1h3_rs", "nm": 1, "nh": 3, "tm": 64, "slots": 384, "half": 0, "rows": GRID * 384},
+             {**common, "kernel": "h128_r_s4", "nm": 2, "nh": 1, "tm": 128, "slots": 128, "half": 1, "rows": GRID * 128},
+             {**common, "kernel": "h96_r_s4", "nm": 2, "nh": 1, "tm": 128, "slots": 128, "half": 1, "rows": GRID * 128}]
+    (tmp_path / "gate.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    assert beside_check.main(str(tmp_path / "gate.jsonl"), str(g), str(tmp_path / "passed.txt")) == 1
+    assert (tmp_path / "passed.txt").read_text().split() == ["m1h3_rs", "h128_r_s4"]
+
+
 def test_summary_reads_the_co_issue_from_the_arms(tmp_path: Path) -> None:
     def arm(kernel: str, name: str, ms: float, mma_us: float, hash_us: float, comps: float, **kw: object) -> dict:
         return {"kernel": kernel, "arm": name, "nwg": 4, "nform": 128, "stages": 3, "P": 24, "Y": 208, "H": 72,
@@ -77,3 +100,21 @@ def test_summary_reads_the_co_issue_from_the_arms(tmp_path: Path) -> None:
     assert "takes 315.0 us against 300.0 us alone (+5.0%)" in out
     assert "1.040x the larger of its GEMM alone" in out
     assert "VERDICT beside budget: the fastest handoff is h72_r, P 24 + 2 x Y 208 + H 72 = 512" in out
+    # served: 4 x 16384 x 4096 / 16384 x 133 = 2,179,072 compressions; 6e5 / 316 us beside the GEMM's 315 us
+    # (1.899 G/s, 598,101 done), the rest at 1e6 / 480 us = 2.083 G/s: 315 + 1,580,971 / 2,083.3 = 1073.9 us
+    assert "VERDICT beside served model h72_r" in out and "2.18 M compressions owed" in out
+    assert "1073.9 us against serial" in out
+
+
+def test_summary_budget_names_every_hash_warpgroup(tmp_path: Path) -> None:
+    rows = [{"sms": 132, "device": "test", "M": 16384, "N": 4096, "K": 4096, "grid": 128},
+            *({"kernel": "m1h3_rs", "arm": a, "nwg": 5, "nm": 1, "nh": 3, "tm": 64, "grid": 132, "nform": 64,
+               "stages": 4, "ot": 1, "P": 24, "Y": 256, "H": 64, "var": "rs", "regs": 96, "local_bytes": 0, "ms": ms,
+               "mma_us": mu, "hash_us": hu, "compressions": c, "tops": 900.0 if mu else 0.0, "hash_gcomp_per_s": 0.0,
+               "mhz": 1980.0, "watts": 500.0, "launches": 10}
+              for a, ms, mu, hu, c in (("mma", 0.7, 690.0, 0.0, 0.0), ("hash", 0.3, 0.0, 290.0, 1.2e6),
+                                       ("free", 0.7, 692.0, 693.0, 2.4e6)))]
+    (tmp_path / "beside-time.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    out = "\n".join(beside_summary.beside(tmp_path, {}))
+    assert "VERDICT beside co-issue m1h3_rs (P 24 + Y 256 + 3 x H 64 = 472 <= 480 registers" in out
+    assert "the GEMM beside 3 hash warpgroup(s)" in out

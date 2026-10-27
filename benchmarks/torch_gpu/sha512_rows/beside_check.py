@@ -2,8 +2,10 @@
 
 For each kernel the gate ran: y at its sampled cells against the host's Definition (the binary's `cells_wrong`, which must be
 0); for its handoff arm, every row's digest against sha512/row/v2 of y's row (2 N bytes, bf16 little-endian), which the hash
-warpgroup chained through the row's O tiles; for its hash arm, every CTA's 128 digests against sha512/row/v2 of the seed tile's
-row repeated hash_tiles times. The seed tile is also drawn here (splitmix64 seed 5, little-endian) and must equal seed.bin.
+warpgroup chained through the row's O tiles; for its hash arm, every CTA's `slots` digests (one a hash thread) against
+sha512/row/v2 of the seed tile's row repeated hash_tiles times, where slot g hashed row g % tm (the CTA tile's rows); a
+kernel with the half-tile O buffer (`half`) hashed the row's first 256 bytes twice a tile. The seed tile is also drawn here
+(splitmix64 seed 5, little-endian, 128 rows) and must equal seed.bin.
 
     python3 beside_check.py GATE.jsonl DIR [PASSED]   # a VERDICT line a kernel and arm, then one for all; exit 1 on any
                                                       # mismatch; PASSED: the kernels whose every arm passed, one a line
@@ -58,9 +60,10 @@ def main(gate: str, d: str, passed: str | None = None) -> int:
             notes.append(f"{ok}/{M} row digests equal hashlib's of y's rows")
         if arm == "hash":
             dig = (root / f"{name}-hash.digests").read_bytes()
-            want = [row_v2(row * r["hash_tiles"]) for row in rows]
-            n = r["rows"]
-            ok = sum(digest_bytes(dig[64 * i:64 * i + 64]) == want[i % TM] for i in range(n))
+            half = r.get("half", 0)
+            want = [row_v2((row[:ROWB // 2] * 2 if half else row) * r["hash_tiles"]) for row in rows]
+            n, slots, tm = r["rows"], r.get("slots", TM), r.get("tm", TM)
+            ok = sum(digest_bytes(dig[64 * i:64 * i + 64]) == want[(i % slots) % tm] for i in range(n))
             good &= ok == n
             notes.append(f"{ok}/{n} digests equal hashlib's of the seed tile's rows x {r['hash_tiles']}")
         failed += not good
