@@ -30,7 +30,7 @@ import re
 from typing import Callable, Any, Iterator
 
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
-                   SpecializedDefinition, bind)
+                   SpecializedDefinition, _static_key, bind)
 from . import ports as P
 from .program import input_id, input_prim, is_input
 from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
@@ -781,6 +781,19 @@ def _build_node(B: Builder, fid: str, k: int, nd: dict, fn: FunctionDefinition, 
         raise ValueError(f"definition {fid!r} node {k}: declares out {out!r}, computes {B.nodes[k].out!r}")
 
 
+def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
+    """A binding record's static value, `_static_json` inverted; ``fn`` resolves each function reference's id."""
+    if isinstance(v, dict) and "fn" in v:
+        return fn(v["fn"])
+    if isinstance(v, dict) and "f64" in v:
+        return float.fromhex(v["f64"])
+    if isinstance(v, dict) and "dict" in v:
+        return {k: _record_value(x, fn) for k, x in v["dict"].items()}
+    if isinstance(v, list):
+        return tuple(_record_value(x, fn) for x in v)
+    return v
+
+
 def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
     schema = desc.get("schema")
     if schema not in SCHEMAS:
@@ -818,19 +831,8 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         cdef = CompositeDefinition(f"{name}", int(ver), statics, lambda S: ((), None), lambda *_: None, register=False)
         sp = SpecializedDefinition(cdef, {}, ())
         built[fid] = sp
-        def static_of(v):
-            if isinstance(v, dict) and "fn" in v:
-                return get(v["fn"])
-            if isinstance(v, dict) and "f64" in v:
-                return float.fromhex(v["f64"])
-            if isinstance(v, dict) and "dict" in v:
-                return {k2: static_of(v2) for k2, v2 in v["dict"].items()}
-            if isinstance(v, list):
-                return tuple(static_of(x) for x in v)
-            return v
-
-        bindings = {k: static_of(v) for k, v in d["bindings"].items()}
-        sp.bindings.update(bindings)
+        sp.bindings.update({k: _record_value(v, get) for k, v in d["bindings"].items()})
+        ours(fid)
         b = d["body"]
         params = tuple((n, _type(t)) for n, t in b["params"])
         ret_type = _type(b["ret_type"])
@@ -865,6 +867,32 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         sp.set_port_types(P.PortTypes.from_json(fid, d["ports"], params, ret_type, outs if fid == desc["root"] else None)
                           if "ports" in d else None)
         return sp
+
+    admitted: dict[str, Any] = {}
+
+    def ours(fid: str):
+        """``fid`` as `bind` would admit it: where the registry holds its composite, that composite specialized at the file's
+        binding record (function references the registry's own where it holds them too), once the composite has every static
+        the record names and its `refuse` has no reason against the record; otherwise the decoded definition. Uncached, so a
+        file's record never enters the registry's binding cache."""
+        if fid in admitted:
+            return admitted[fid]
+        d = ddefs[fid]
+        reg = registry.defs.get(d["id"]) if d["form"] == "composite" else None
+        if not isinstance(reg, CompositeDefinition):
+            admitted[fid] = get(fid)
+            return admitted[fid]
+        record = {k: _record_value(v, ours) for k, v in d["bindings"].items()}
+        if unknown := [k for k in record if k not in reg.statics]:
+            raise ValueError(f"definition {fid!r}: {reg.id} has no static parameter {unknown[0]!r}")
+        try:
+            why = reg.refuse(record) if reg.refuse is not None else None
+        except (TypeError, ValueError, KeyError, IndexError, AttributeError) as e:
+            why = f"{type(e).__name__} judging the record: {e}"
+        if why:
+            raise ValueError(f"definition {fid!r}: {reg.id} refuses this binding: {why}")
+        admitted[fid] = SpecializedDefinition(reg, record, tuple((k, _static_key(record[k])) for k in reg.statics if k in record))
+        return admitted[fid]
 
     root = get(desc["root"])
     if not isinstance(root, SpecializedDefinition) or root.body.params:
