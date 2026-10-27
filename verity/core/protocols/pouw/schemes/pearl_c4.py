@@ -1,5 +1,5 @@
 """``pearl-c-nvfp4-v0``: Pearl-C on sm_120's block-scaled FP4 (``mma.sync kind::mxf4nvf4``), NVFP4 only.  MXFP4
-(``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain (Daniel, 15:34Z): same forming and
+(``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain: same forming and
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
@@ -709,13 +709,11 @@ R1_TOLERANCE = 1e-9
 #: F1′ is charged at 10× that expectation, per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather
 #: B̃, which doesn't pay at n ≤ 2^18).  A stronger search pays past 10× at n ≤ 1,024, which `B_OVF` covers.
 F1_B_OVERFIT = 10
-#: B-OVF, measured, not derived (the assessor's B, 18:45Z): a unit's creditOf is discounted by β(n_b)·mnk, n_b the
+#: B-OVF, measured, not derived: a unit's creditOf is discounted by β(n_b)·mnk, n_b the
 #: largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout annealed and block-optimised after the salt, over
 #: the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ, with a 1.5× margin on the measured gain and made
 #: non-increasing in n.  It is taken on each bucket's own R1 admission boundary at k = 1,024 (``k_min``), where the cap
-#: is largest, and just inside it (the worst family can sit there): the larger of that need, the assessor's boundary
-#: check and the earlier grid's cells under the same cap, never below the grid's table (condition 7;
-#: art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca, beta_final.py).  The fork
+#: is largest, and just inside it (the worst family can sit there), never below the grid's table.  The fork
 #: (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
 B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
          (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
@@ -1120,7 +1118,7 @@ class PearlC4:
         self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
         #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
-        #: D on honest coverage and Pearl-C4 claims NVFP4 alone (the assessor, 15:12Z; Daniel, 15:34Z).
+        #: D on honest coverage and Pearl-C4 claims NVFP4 alone.
         self.contrast = self.fmt is MXFP4
         self.r1_tolerance = R1_TOLERANCE
         self.k_min, self.tile, self.n_min = k_min, tile, n_min
@@ -1163,8 +1161,8 @@ class PearlC4:
                 omega=Fraction(1),
                 claims=(),
                 hypotheses=(),
-                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′ (ratings.md 15:12Z), and "
-                            "Pearl-C4 claims NVFP4 alone (Daniel, 15:34Z)",),
+                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′, and "
+                            "Pearl-C4 claims NVFP4 alone",),
                 parameters=self.certificate.parameters,
             )
 

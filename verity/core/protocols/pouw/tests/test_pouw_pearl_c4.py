@@ -181,7 +181,7 @@ def test_accounting_at_8192():
 
 
 def test_domain_and_registry():
-    """Pearl-C4 claims NVFP4 only (Daniel, 15:34Z): MXFP4 stays constructible as the contrast line, unregistered and with a
+    """Pearl-C4 claims NVFP4 only: MXFP4 stays constructible as the contrast line, unregistered and with a
     certificate that claims nothing."""
     s = get("pearl-c-nvfp4-v0")
     assert isinstance(s, F.PearlC4) and s.fmt is F.NVFP4 and not s.contrast and "tt-out/fp4-sm120" in s.certificate.claims
@@ -201,7 +201,7 @@ def test_domain_and_registry():
 
 
 def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_only():
-    """Daniel's 5:52 PM PDT ruling: the keyed V/O rotation plus the head interleave register inside the keyed 8-block
+    """The keyed V/O rotation plus the head interleave register inside the keyed 8-block
     rotation, and the same transforms on an unrotated checkpoint are refused, curated or not."""
     s = get("pearl-c-nvfp4-v0")
     vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
@@ -214,7 +214,7 @@ def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_on
 
 def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
     """The keyed 8-block rotation is the registered-weights rule, and an unrotated checkpoint registers only from the curated
-    list (Daniel, 1:36 PM PDT).  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
+    list.  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
     s = get("pearl-c-nvfp4-v0")
     s.check_registration((F.ROTATION_8,))
     s.check_registration((), curated=True)

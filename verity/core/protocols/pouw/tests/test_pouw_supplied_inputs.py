@@ -1,4 +1,4 @@
-"""CMP-38 and SERVE-H1's W-a, W-c and W-d: the H1 tile's seed inputs are the verifier's. A compiled Program's `pouw.roots`,
+"""The H1 tile's seed inputs are the verifier's. A compiled Program's `pouw.roots`,
 `pouw.salt` and `pouw.positions` are registered values the one-stage verifier fills itself (`registered.supplied_root`):
 each seed group's roots from the roots the record names for its operands (A's committed tap, B's registered weights,
 which the verifier pins to the root recorded before the salt), the salt from its coin bound to its stream, the prover

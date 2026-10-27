@@ -437,7 +437,7 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
 
 
 def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
-    """Daniel's card a6872606 (a): at the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
+    """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
     cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.30ρ is
     accepted (the ρ row cap refused it), a row at 10.4ρ is refused by the 4ρ row cap, and 16 rows each under 4ρ that
     put the tile over ρ are refused by the tile cap."""

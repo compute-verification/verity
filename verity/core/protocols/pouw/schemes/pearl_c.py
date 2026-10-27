@@ -5,7 +5,8 @@ The design is the cheap-binding lane's: Pearl's H100 product and its output tick
 ("peel") pinned bit for bit, so that the useful output U is a checked value
 and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
 record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
-reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl PR #311 and its ``zk-pow`` verifier.
+reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl's certificate-v4 code and its ``zk-pow``
+verifier.
 
 **The scheme, per 64 x 64 tile** (rows I of A, rows J of B, full k; both operands stored as rows along k):
 
@@ -103,13 +104,13 @@ LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 #: The hashing formats this scheme implements, of the one table (`verity.core.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
 #: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
-#: BLAKE3 -h3 are in ``archive/pouw-blake3/`` (one hash, SHA-512: Daniel, 2026-10-06).
+#: BLAKE3 -h3 are in ``archive/pouw-blake3/`` (one hash, SHA-512).
 HASHINGS = ("h0", "h3")
 #: the formats whose rows seed their own E_A lines (`HashFormat.seed_a` ``row``)
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
-#: the per-row cap at a census k, as a multiple of ρ (Daniel's card a6872606, option (a)): there each credited row's debit
+#: the per-row cap at a census k, as a multiple of ρ: there each credited row's debit
 #: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; γ rests on
 #: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's cap is ρ, (C2)'s
 CENSUS_ROW_CAP = 4
