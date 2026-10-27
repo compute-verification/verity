@@ -2610,6 +2610,7 @@
     "Definitions.Pous.Model.SampledAudit",
     "Definitions.Pous",
     "Definitions.Hash",
+    "Definitions.Claims",
     "Definitions.Accounting"
    ],
    "except": ["Definitions.Accounting.Bandwidth.Game", "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted"],
