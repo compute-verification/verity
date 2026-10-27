@@ -172,10 +172,10 @@ def main() -> int:
     if not (a.commit and a.build_root and a.workload):
         ap.error("--commit, --build-root and --workload, or --estimate")
 
-    from verity_vllm.config import workload_file
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
     from verity_vllm.pipeline.tp import serving_rows as TS
+    from verity_vllm.pipeline.workload_file import workload_file
 
     t0 = time.time()
     rec = TS.record(a.commit)

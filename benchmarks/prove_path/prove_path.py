@@ -1483,7 +1483,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity_vllm.config import workload_file
+    from verity_vllm.pipeline.workload_file import workload_file
 
     def workload_arg(s: str) -> str:
         workload_file(s)

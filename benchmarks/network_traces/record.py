@@ -124,7 +124,7 @@ def parse_mix(text: str) -> list[tuple[str, float]]:
 
 
 def load_workload(name: str) -> list[dict]:
-    from verity_vllm.config import workload_file
+    from verity_vllm.pipeline.workload_file import workload_file
 
     reqs = json.loads(workload_file(WORKLOADS / MIXES[name]).read_text())["requests"]
     return [{"index": r["index"], "offset_s": r["arrival_offset_s"], "prompt": r["prompt_token_ids"],

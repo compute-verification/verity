@@ -33,8 +33,8 @@ def _fetch_from(data: dict[str, bytes], calls: list):
 
 
 def test_every_workload_is_a_fixture_its_directory_lists_and_the_registry_holds():
-    """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (fixtures/artifacts.json), never its bytes (VLLM-132;
-    tests/test_repository.py holds the registered paths gitignored)."""
+    """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (fixtures/artifacts.json), never its bytes
+    (tests/test_repository.py holds the registered paths gitignored)."""
     reg = json.loads((C.REPO / "fixtures" / "artifacts.json").read_text())
     dirs = {os.path.relpath(d, C.REPO) for d in (C.WORKLOADS, EXAMPLE)}
     registered = {v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and os.path.dirname(v) in dirs}
