@@ -27,6 +27,8 @@ import Definitions.Nci.Guarantees.CoverFanOutValue
 import Definitions.Nci.Guarantees.CoverPartialSum
 import Definitions.Nci.Guarantees.CoverTraining
 import Definitions.Nci.Guarantees.CoverChained
+import Definitions.Nci.Guarantees.PartitionCovers
+import Definitions.Nci.Guarantees.CompliesCK
 import Definitions.Nci.Guarantees.Ldl
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
