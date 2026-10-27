@@ -552,6 +552,10 @@ def slot_row(cls: Class, j: int, NP: int) -> list[tuple[int, int]]:
     return [lay[f"{j}.occ"], lay[f"{j}.fields"], *((at + position(cls, p) * cls.IDB, cls.IDB) for p in range(NP))]
 
 
+#: the registered value whose rows are the scan's state rows, as a window circuit reads them (`window_state`)
+SCAN_STATE = "verity/certifier/scan-state/v1"
+
+
 def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: int) -> list[list[int]]:
     """The state rows a window circuit of the link-window of `buckets` buckets from scan bucket t0 reads (the module
     docstring's token-id row), row a the state boundary a's Programs read: the scan's rows t0 − 1 … t0 + buckets − 2
@@ -859,7 +863,7 @@ def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[i
     return [rows, *([list(c[k]) for c in cases] for k in range(1, len(cases[0])))]
 
 
-__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "STATICS", "Slot", "State", "arguments",
-           "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode", "prog_encode",
-           "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row", "view", "view_bits",
-           "view_encode", "window_state"]
+__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "SCAN_STATE", "STATICS", "Slot", "State",
+           "arguments", "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode",
+           "prog_encode", "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row", "view",
+           "view_bits", "view_encode", "window_state"]
