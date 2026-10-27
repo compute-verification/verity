@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Shape
 /-!
 # The static shape of a compiled `--zk` rep
 
-The coin half of R11b (`Exec.Spine`, and `Discharge/PlaysCoin`'s `decodesOfRunsAt`) needs to know where a rep's coins fall
+The coin half of R11b (`Exec.Spine`, and `Discharge/PlaysCoin`'s `decodesOfRunsAt`) needs to know where a rep's coins
+fall
 among its messages. Without `--zk` every run of a rep follows one spine (`Exec.repC_spine`), because a rep returns at a
 reject. The compiled `--zk` rep (`ZkLink.repZCAt`) does not: at an opening reject (an extra claim's ring-switch sum
 fails, which is the prover's choice) `restZC` returns at once and `repZC` goes on to the inner proof, so that run's

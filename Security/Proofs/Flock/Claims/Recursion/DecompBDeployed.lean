@@ -40,7 +40,8 @@ chain's (`Top.accRC rd key`), so `TargetE` is proved (`targetE_accRC`, `rowEHold
   `joint_of_jointP (jointP_of_jointV _)`.
 
 `recKSDecompD_of_leaves` is the same at the layout of record `DeployedR.layR elem`, the side `sideAtR rd` and the
-positions `Rows.posAt`: `TargetDMerkle` proved (`targetDMerkle_PD`), the last message's reading and the record's as stated, `RoundLens` proved (`roundLens`), `SideSchR` proved (`sideSchR_sideAtR`) and `CopyTopR` from
+positions `Rows.posAt`: `TargetDMerkle` proved (`targetDMerkle_PD`), the last message's reading and the record's as
+stated, `RoundLens` proved (`roundLens`), `SideSchR` proved (`sideSchR_sideAtR`) and `CopyTopR` from
 `OutBindR` and `SideCapR` (`capTop_of`).
 -/
 
