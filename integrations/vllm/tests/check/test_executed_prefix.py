@@ -50,7 +50,7 @@ def test_an_early_stop_the_declared_rule_cannot_place_is_refused_by_name_and_kee
     assert not e["ok"] and e["requests"]["r0"]["executed_prefix_len"] == 32 and "declares no LAG" in e["problems"][0] and "never default" in e["problems"][0]
     # no declared stop rule
     e = EP.executed_prefix_of_record(["r0", "r1"], served, caps=caps, eos_of_record=None, lag=1)
-    assert not e["ok"] and "declares no stop rule" in e["problems"][0] and "F-pm-24" in e["problems"][0]
+    assert not e["ok"] and "declares no stop rule" in e["problems"][0] and "fail closed" in e["problems"][0]
     # the last served token is not a declared EOS id (a request that stopped for no declared reason)
     e = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}), caps=caps, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "is not a declared EOS id" in e["problems"][0] and e["requests"]["r0"]["executed_prefix_len"] == 32
@@ -74,7 +74,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
     r0 = e["requests"]["r0"]
     assert r0["first_eos_index"] == 0 and r0["executed_prefix_len"] == 5 and r0["eos_stop"] is None and "lag_steps" not in r0
     assert e["problems"] == [f"r0: {r0['why']}"] and r0["why"].startswith("served past an EOS at index 0: served token 50279 is a declared EOS id but 2 more token(s) were served after it (served 3, cap 5)")
-    assert "stops at the FIRST EOS -- served_output_len would be 1 (F-r17-14)" in r0["why"]
+    assert "stops at the FIRST EOS -- served_output_len would be 1" in r0["why"]
     # an EOS in the middle of a list that reached the cap: also served past the stop (the cap does not launder it)
     ec = EP.executed_prefix_of_record(["r0"], {"r0": [7, EOS, 9]}, caps={"r0": 3}, eos_of_record=[EOS], lag=1)
     assert not ec["ok"] and "served past an EOS at index 1" in ec["problems"][0] and ec["requests"]["r0"]["cap_exhausted"] is None
@@ -167,7 +167,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     rec = EP.reconcile_not_executed(cc2, _population_block(epr, dict(row_fams, input_token_ids=0, fa2_hidden_m1_stream=0)), epr)
     assert rec["ok"] and set(rec["outside_population_reach"]) == {"input_token_ids", "fa2_hidden_m1_stream"}
     o = rec["outside_population_reach"]["input_token_ids"]
-    assert (o["kind"], o["commit"], o["population_N_excluded"], o["population_reaches"]) == (EP.KIND_INPUT, 20, 0, False) and "F-moe-r17-05" in o["pending"]
+    assert (o["kind"], o["commit"], o["population_N_excluded"], o["population_reaches"]) == (EP.KIND_INPUT, 20, 0, False) and "does not reach" in o["pending"]
     assert "input_token_ids" not in rec["by_family"]
     # [reqval 699bf6ee2 / 8eeff13eb / d13ea5153] the population REACHES both kinds: kind_by_family names the named-input family and
     # N_excluded counts it like a row; the batch-level family states its (plane, request) cells -> both reconcile in by_family, nothing
@@ -182,10 +182,10 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     assert rec["by_family"]["input_token_ids"] == {"commit": 20, "population": 20, "equal": True, "kind": EP.KIND_INPUT, "unit": "identities"}
     assert rec["by_family"]["fa2_hidden_m1_stream"] == {"commit": 320, "population": 320, "equal": True, "kind": EP.KIND_BATCH, "unit": "cells", "population_N_excluded": 0}
     rec = EP.reconcile_not_executed(cc2, {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], input_token_ids={"N_excluded": 19})}}, epr)
-    assert not rec["ok"] and "input_token_ids (named-input): the Commit classified 20 not-executed(R17-1) identities, the population excluded 19" in rec["problems"][0]
+    assert not rec["ok"] and "input_token_ids (named-input): the Commit classified 20 not-executed-by-rule identities, the population excluded 19" in rec["problems"][0]
     pb2 = {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], fa2_hidden_m1_stream={"N_excluded": 0, "plane_cells_not_executed": {"identities": 0, "cells": 319}})}}
     rec = EP.reconcile_not_executed(cc2, pb2, epr)
-    assert not rec["ok"] and "fa2_hidden_m1_stream (batch-level): the Commit classified 320 not-executed(R17-1) cells, the population excluded 319" in rec["problems"][0]
+    assert not rec["ok"] and "fa2_hidden_m1_stream (batch-level): the Commit classified 320 not-executed-by-rule cells, the population excluded 319" in rec["problems"][0]
     # the cells statement may also be read from batch_level[fam].cells_not_executed alone (8eeff13eb before d13ea5153)
     pb3 = {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], fa2_hidden_m1_stream={"N_excluded": 0})}}
     rec = EP.reconcile_not_executed(cc2, pb3, epr)
@@ -205,7 +205,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     assert rec["ok"] and rec["schema"].endswith("/v3")
     o = rec["outside_population_reach"]
     assert o["input_token_ids"]["expected_from_population_facts"] == 2 and o["input_token_ids"]["equal"] and o["input_token_ids"]["population_reaches"] is False \
-        and "F-moe-r17-05" in o["input_token_ids"]["pending"] and "input_token_ids" not in rec["by_family"] and rec["total"] is True
+        and "does not reach" in o["input_token_ids"]["pending"] and "input_token_ids" not in rec["by_family"] and rec["total"] is True
     assert o["fa2_hidden_m1_stream"]["expected_from_population_facts"] == plane_cells and o["fa2_hidden_m1_stream"]["equal"] and o["fa2_hidden_m1_stream"]["population_N_excluded"] == 0
     # the Commit's cell count off by one against the population's own n_exec: FAIL by name (both kinds)
     cc4 = {**cc3, "by_family": dict(cc3["by_family"], fa2_hidden_m1_stream=plane_cells + 1)}
