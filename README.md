@@ -59,7 +59,8 @@ which any of them failed:
   gates.
 - **Match**: on every rank, the circuit reproduces every value vLLM served at those boundaries, bit for bit, and the
   ranks agree.
-- **Commit**: every value the circuit requires is committed under SHA-512 roots, and the sampled openings verify.
+- **Commit**: every value the circuit requires is committed, and the sampled openings verify (under SHA-512 roots for
+  GLM-5.3 and DeepSeek-V4-Pro; the Llama-3.2-1B record predates SHA-512 and uses SHA-256).
 
 | Workload | Hardware | Build, Match and Commit | Circuit pinned |
 | --- | --- | --- | --- |
