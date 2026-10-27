@@ -40,12 +40,13 @@ def fs_remote(env):
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
                "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "of-record", "goal", "abandoned", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
-               "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record")
+               "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
-                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged")
+                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
+                 "circuits")
 APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites", "uncites")
 
 

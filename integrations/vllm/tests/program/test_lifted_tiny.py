@@ -795,8 +795,8 @@ def test_lifted_width_summary_is_the_true_width_rule_r17_6b():
     assert r["ok"] and r["w_out_lifted"] == 33 and r["w_out_payload"] == 32 and r["n_out"] == 1 and r["grown_by_bits"] == 1
     assert not r["active_reference_rule_on_lifted_width_ok"]  # the 32-bit rule on the true width fails BY DESIGN — reported, never the verdict
     assert r["kind"] == L.USE_KIND_LIFTED == "vu-partition-lifted" and r["rules_version"] == L.LIFTED_RULES_VERSION == "lifted-v1"
-    # the constant's status is a STATEMENT, never a bare number: accepted by revb (M-0042 B1) on the first real-row use document, the coord ruling
-    # on the value itself still pending -- both named in the string
+    # the constant's status is a STATEMENT, never a bare number: accepted (M-0042 B1) on the first real-row use document, the value
+    # itself proposed and its confirmation pending -- both named in the string
     assert r["w_max_lifted"] == L.W_MAX_LIFTED == 64 and r["w_max_active_reference"] == L.W_MAX == 32
     assert r["w_max_lifted_status"] == L.W_MAX_LIFTED_STATUS and "accepted-revb-M-0042" in r["w_max_lifted_status"] and "pending" in r["w_max_lifted_status"]
     assert L.lifted_width_summary([32, 1])["ok"] and L.lifted_width_summary([32, 1])["w_out_lifted"] == 35  # no payload rule: 35 <= 64
@@ -1071,7 +1071,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     lnode = next(n for n in ldec.body.nodes if getattr(n.fn, "defn", None) is hand)
     assert lnode.fn.bindings == {"N": 3}
     # evaluate the lifted decoded root: its one PARAM is the enable; the decoded root's own `Input33` node (x) is prescribed gate by gate
-    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.evaluation import evaluate_region
     from verity.ml.circuits.layout import resolve
     pd = L.as_program(ldec)
     td = {resolve(pd.circuit.root_scope, pd.input_coll(0).refs[0]): 1}

@@ -41,6 +41,12 @@
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, *-private.bin: the rows and their salts) nor a circuit (its pin is).
+# Stored: each session's circuit.txt files and lookup tables, by SHA-512 (sha512/<hex>, the Lean verifier's --archive layout), as one
+#   fixture/v1 tree with the run's custody key (integrations/vllm/verity_vllm/ops/store_trees.sh), the run labelled `circuits` = its
+#   art id and $OUT/store/NAME.sha512 naming each file's key, so the run can be verified again from the store. A session whose
+#   tree isn't stored and preserved fails the run.
+# A5_DRY=DIR: none of the builds, windows or audits: each session dir DIR/NAME a run's scratch held (a5's --out) is kept and
+#   stored as a run's is.
 # A5_CHALLENGER=local|gate:USER@HOST: each rank draws by its partition file's rule (stratified:K among them) from the auditor's
 #   challenger's coins through its own service.Stream, the proof service's path of record, its outcome held to the Lean's run;
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
@@ -74,14 +80,48 @@
 #   SiluMul_v2{I} (served_tp --template), e.g. STANDIN=256:work:2 A5_TRANSFER_GATES='RoPEHead_v1{D=64}'
 #   A5_SETS='256 rope-head/d64/bf16': the toy's 32 RoPE heads a rank proved whole beside 2 of its 8 SiluMul rows.
 set -uxo pipefail
-REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
+REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; mkdir -p $O
+PY=${PY:-$REPO/.venv/bin/python}; VV=${VV:-$REPO/.venv/bin/verity-vllm}
+if [ -n "${A5_DRY:-}" ]; then W=$A5_DRY; else W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; fi
+
+STORE_RC=0
+store() {  # NAME: $W/NAME's circuit.txt files and lookup tables by SHA-512, one tree through store_trees.sh, the run labelled with it
+  local t=$W/store/$1 f h rc
+  rm -rf $t; mkdir -p $t/sha512 $O/store
+  (cd $W/$1 && find . -type f \( -name circuit.txt -o -path '*/tables/*.u32' \) ! -path '*/archive/*' -print0 | sort -z) \
+    | while IFS= read -r -d '' f; do
+        h=$(sha512sum "$W/$1/$f" | cut -d' ' -f1); [ -e $t/sha512/$h ] || ln "$W/$1/$f" $t/sha512/$h; echo "$h ${f#./}"
+      done > $O/store/$1.sha512
+  [ -s $O/store/$1.sha512 ] || { echo "STORED $1 none: no circuit under $W/$1"; rm -rf $t; return 0; }
+  $PY -c 'import json, sys; n, run, src, keys = sys.argv[1:5]
+print(json.dumps({"name": f"a5-circuits/{n}", "run": run, "source": src, "layout": "sha512/<hex>, the Lean verifier --archive",
+                  "files": dict(reversed(x.split(" ", 1)) for x in open(keys).read().splitlines())}, sort_keys=True))' \
+    $1 "${RESEARCH_RUN_ID:-}" "$(git rev-parse HEAD)" $O/store/$1.sha512 > $O/store/meta-$1.json
+  EV=$O/store VV=$VV LABEL_KEY=circuits LABEL_BY=proofs bash $REPO/integrations/vllm/verity_vllm/ops/store_trees.sh $W/store $1 > $O/store/$1.log 2>&1
+  rc=$?
+  grep -E '^(STORED|PRESERVED-CHECK|LABEL|no custody)' $O/store/$1.log
+  rm -rf $t; rmdir $W/store 2>/dev/null
+  return $rc
+}
+keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circuit with lookups reads: ir_lower.TABLES pins them), and
+          # its circuits and tables into the store
+  mkdir -p $O/$1
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+    ! -path '*/tables/*.u32' -print0 \
+    | xargs -0 -r -I{} cp --parents {} $O/$1/)
+  store $1 || STORE_RC=1
+}
+if [ -n "${A5_DRY:-}" ]; then
+  for d in $W/*/; do n=$(basename $d); [ $n = store ] || keep $n; done
+  exit $STORE_RC
+fi
+
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
-PY=$REPO/.venv/bin/python
 
 (cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -117,11 +157,6 @@ if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
 fi
 
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
-keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circuit with lookups reads: ir_lower.TABLES pins them)
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
-    ! -path '*/tables/*.u32' -print0 \
-    | xargs -0 -r -I{} cp --parents {} $O/$1/)
-}
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
@@ -176,6 +211,7 @@ advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under t
 
 if [ -n "${A5_TP:-}" ]; then
   N=${A5_NAME:-glm}; WIN=$A5_TP/serving-rows; WL=integrations/vllm/workloads/$ROW.json; ADV=()
+  $REPO/.venv/bin/verity-vllm workload-file $WL > /dev/null || exit 8
   if [ -n "${A5_ADVICE:-}" ]; then
     WIN=$W/serving-rows
     advice_pair $A5_TP/commit ${A5_BUILD:-$A5_TP/build} $PART $WL $WIN $O/$N; WL=
@@ -252,4 +288,5 @@ else
     audit standin-i$I $S/commit $S/build "$WL" $S/serving-rows $S/partition.json "${ADV[@]}" || rc=1
   done
 fi
+[ $STORE_RC = 0 ] || { echo "a session's circuits weren't stored and preserved: $O/store/"; rc=1; }
 exit $rc

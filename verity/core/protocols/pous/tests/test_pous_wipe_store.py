@@ -126,7 +126,7 @@ def test_a_host_without_the_cuda_driver_is_refused() -> None:
 
 
 H200_CUDA, H200_NVML = 150_109_880_320, 150_754_820_096
-"""Demo B's H200 (MEM-77): `cuDeviceTotalMem`'s total, and NVML's (`nvidia-smi`'s 143,771 MiB)."""
+"""Demo B's H200: `cuDeviceTotalMem`'s total, and NVML's (`nvidia-smi`'s 143,771 MiB)."""
 RESERVE = H200_NVML - H200_CUDA
 BUS = "0000:1A:00.0"
 
@@ -229,9 +229,9 @@ def test_without_nvmls_total_the_device_is_cudas_and_says_why(monkeypatch) -> No
 @pytest.mark.parametrize("nvml", [True, False], ids=["nvml", "no-nvml"])
 def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
     """The leg on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
-    more by NVML's: the tier declared is NVML's total, so `R`, and `M` with it, counts the reserve (the 5,159,518,208
-    bits MEM-77 found uncounted), and none of the device is undeclared. Without NVML the tier is CUDA's, and the record
-    names the reserve uncertified, with the reason."""
+    more by NVML's: the tier declared is NVML's total, so `R`, and `M` with it, counts the reserve (on Demo B's H200,
+    the 5,159,518,208 bits CUDA's count leaves out), and none of the device is undeclared. Without NVML the tier is
+    CUDA's, and the record names the reserve uncertified, with the reason."""
     cuda = 64 << 20
     tier = cuda + RESERVE if nvml else cuda
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
