@@ -13,7 +13,7 @@ public compression (`CallsAtPub`), with the network certifier's counts and the a
 
 * `WorkSoundAt c pb hr`: at every `x` meeting (P1) and (P2); `WorkSoundH200`, `WorkSoundSm120`.
 * `WorkSoundOnCard c pb hr`: at the card's own `x`, the one `Assumptions.CardWithinAccel` gives with the card's runs as
-  its model's (`CardRunsAt`); `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`. This is where trust base item 1 (the card
+  its model's (`CardRunsAt`); `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`. This is where the card premise (the card
   can do no more than its model) and the product form enter the headline.
 
 `WorkSound` gives each (`Proofs.Pouw.DitherInstance`).
@@ -25,34 +25,32 @@ namespace Pouw.Guarantees.DitherInstance
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
-/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period on the card table `c` at the open
-parameters `x`** (CMP-136, CMP-154; RT-LEAN L3, L4, L9, L31, L32, L33; RT-LEAN-2 L27, L28, L39; RT-MODEL M12; RT-PROTO
-P2, P5, P9; RT-PROTO-2 P13, P18, P25). For every period's devices `D` (`n` cards pooled, at the table's rates, and the
-other devices), every sampling-block protocol `P` and layout `L`, every accelerator `G` of the machine model 𝓜 that is
-`D` at `x` under the resource match `e` (`OnCard`) whose oracle-call step is a public compression on the card
-(`CallsAtPub`), every number `nsb` of sampling blocks, every set `Reg` of registrable instances and registered
-instances `reg`, every service verdict on the transcript and the devices' readings `dev`, and every period `Pd` with
-its dual price `μ` at the registration's honest use: with `WorkSound`'s hypotheses, and
+/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period on the card table `c` at the open parameters
+`x`**. For every period's devices `D` (`n` cards pooled, at the table's rates, and the other devices), every
+sampling-block protocol `P` and layout `L`, every accelerator `G` of the machine model 𝓜 that is `D` at `x` under the
+resource match `e` (`OnCard`) whose oracle-call step is a public compression on the card (`CallsAtPub`), every number
+`nsb` of sampling blocks, every set `Reg` of registrable instances and registered instances `reg`, every service verdict
+on the transcript and the devices' readings `dev`, and every period `Pd` with its dual price `μ` at the registration's
+honest use: with `WorkSound`'s hypotheses, and
 
 * the public bests fixed by the card: instance `a`'s `pub_mm` and `pub_sha` are the cheapest of `pb`'s named programs at
   the period's dual price `μ`, for its honest sampling block's `macs a` MACs and `comps a` compressions (`pubCost`);
 * the cards' hosts in the period's devices at the row `hr`'s AMX and SHA-512 rates (`HostsCounted`), so the honest
-  optimum and the period's capacity count them (RT-UNITS U9);
+  optimum and the period's capacity count them;
 * the network term from the network certifier's counts: it watches the replica's boundary, and the verdict refuses a
   period whose signed counts into or out of the devices pass the caps `E_in`, `E_out` (`Counted`). The certifier counts
   every exchanged bit (`CertifierSeesImports`), so `E = E_in + E_out`, and an exchanged bit replaces at most
-  `β = n_max W_mac` of priced work (`OutsourceWithinEgress`). `W_mac` is the honest sampling block's cost a MAC at
-  every registrable instance (`W_b(a) ≤ W_mac · macs a`, `W_b = W_mm + W_sha + W_ans`: an outside machine that returns
-  the root saves the block's hashing too, RT-PROTO-2 P18). A bit across the boundary carries the coin of at most
-  `n_max` MACs when the challenger issues the dither bits as a signed coin stream (RT-PROTO P2, the coordinator's
-  06:20Z decision; `n_max = N` for a static call, `d_v` for PV). The counts exclude the challenger's signed coin
-  stream, and the caps are set at served traffic (P18). Without a streamed side, about 1 kbit carries a whole sampling
-  block, and `OutsourceWithinEgress` at this `β` is false;
-* the deadlines from the auditor's clocks (`Timed`, RT-PROTO P5, RT-PROTO-2 P13 and P25):
+  `β = n_max W_mac` of priced work (`OutsourceWithinEgress`). `W_mac` is the honest sampling block's cost a MAC at every
+  registrable instance (`W_b(a) ≤ W_mac · macs a`, `W_b = W_mm + W_sha + W_ans`: an outside machine that returns the
+  root saves the block's hashing too). A bit across the boundary carries the coin of at most `n_max` MACs when the
+  challenger issues the dither bits as a signed coin stream (`n_max = N` for a static call, `d_v` for PV). The counts
+  exclude the challenger's signed coin stream, and the caps are set at served traffic. Without a streamed side, about
+  1 kbit carries a whole sampling block, and `OutsourceWithinEgress` at this `β` is false;
+* the deadlines from the auditor's clocks (`Timed`):
   - the challenger issues each sampling block's coins at `t b`, at least `Δ` before the period's end, and the next
     block's only after every root of this one is in;
   - every block's check coin, which carries whether it is selected, is issued at `tc b`, after every root of the
-    block is in (RT-POOL RP22);
+    block is in;
   - only selected sampling blocks (`sel` of the check coin) are answered, each selected block's check coin at least
     `τ_ans` before the end;
   - the period is refused if the network certifier saw a root arrive later than `Δ` after its block's coins, or a
@@ -74,9 +72,9 @@ the selected blocks' honest answers at full weight, and `η_w` is the rate a uni
 period the verdict accepts did its sampling blocks' work within the period's capacity (`TimedWorkFits`), which is
 what the deadlines buy.
 
-The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
+The other devices are resources of `G` at their rates in 𝓜: the honest optimum and the capacity count
 them, and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the
-cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
+cards reach is `Assumptions.PeriodInventory`, open and not read here. `Q` calls use at least the
 capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
 price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
@@ -116,35 +114,36 @@ exactness range (`c.Exact`), and (P2), the product form (`AccelProductForm`). -/
 def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
   ∀ (x : Verity.Accel.Open), c.Exact x → Verity.Assumptions.AccelProductForm x → WorkSoundAtX c pb hr x
 
-/-- **The headline on the card itself** (RT-LEAN L10, L31; RT-LEAN-2's fix): if the card can do no more than its
-accelerator model (`Assumptions.CardWithinAccel c can`, trust base item 1, for the card's computations `can`), then
+/-- **The headline on the card itself**: if the card can do no more than its accelerator model (the card premise,
+`Assumptions.CardWithinAccel c can`, for the card's computations `can`), then
 at some semantics `x` both hold: `x` meets (P1) and (P2) and the card's runs are the machine `⟨c, x⟩`'s programs
 (`CardRunsAt`), and the headline holds at `x` (`WorkSoundAtX`). So the `x` the headline is read at is the card's own,
-the one its runs refine to, and the trust base's model premise is a hypothesis of the theorem and in the lock.
+the one its runs refine to, and the card premise is a hypothesis of the theorem and in the lock.
 
 Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
-whose programs are exactly the card's; the witness that `SAKMatmul` and `ShaSpeed` hold at such a `G`, with free
-guesses (RT-LEAN-2 L38), is WORKSOUND-WIT's. A round's commitment reads the oracle, which the card has no instruction
-for (ABSORB-THM's realization, R-ACCEL-7). -/
+whose programs are exactly the card's; a witness that `SAKMatmul` and `ShaSpeed` hold at such a `G`, with free
+guesses, is open. A round's commitment reads the oracle, which the card has no instruction for, and that the card
+can't query it more cheaply than a public compression is open too. -/
 def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
   ∀ can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop,
     Verity.Assumptions.CardWithinAccel c can →
     ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x
 
-/-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, with D5 v2's public bests on
-the H200 and the H200 node's hosts. -/
+/-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, with the public-best survey's
+public bests on the H200 and the H200 node's hosts. -/
 def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200
 
-/-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, with D5 v2's
-public bests on the RTX PRO 6000 and its node's hosts. -/
+/-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, with the
+public-best survey's public bests on the RTX PRO 6000 and its node's hosts. -/
 def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 /-- **The headline on the H200 SXM itself**: `WorkSoundOnCard` on `Verity.Accel.H200.card`, at the semantics
-`card-within-accel(H200)` gives, with D5 v2's public bests on the H200 and the H200 node's hosts. -/
+`card-within-accel(H200)` gives, with the public-best survey's public bests on the H200 and the H200 node's hosts. -/
 def WorkSoundOnCardH200 : Prop := WorkSoundOnCard Verity.Accel.H200.card pubBestH200 hostH200
 
 /-- **The headline on the RTX PRO 6000 (sm_120) itself**: `WorkSoundOnCard` on `Verity.Accel.Sm120.card`, at the
-semantics `card-within-accel(RTX PRO 6000)` gives, with D5 v2's public bests on it and its node's hosts. -/
+semantics `card-within-accel(RTX PRO 6000)` gives, with the public-best survey's public bests on it and its node's
+hosts. -/
 def WorkSoundOnCardSm120 : Prop := WorkSoundOnCard Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 end Pouw.Guarantees.DitherInstance

@@ -5,7 +5,7 @@ import Definitions.Core.Accel.Card
 
 The machine at a card's numbers `card` and its semantics `sem`. Store `s` is `size s` words (`Loc`). A program is a
 text per thread (`Prog`); a thread runs its text in order (`step`) and the threads share the stores. An instruction
-is an envelope opcode on operands, predicated on a register bit, or a branch on one, the one data-dependent control.
+is an ACCEL op on operands, predicated on a register bit, or a branch on one, the one data-dependent control.
 A run is a function of its initial state and its schedule, the threads stepped one after another (`run`). The schedule
 is fixed with the program, before the content: one chosen after it would be a free lookup table (step, of threads
 writing different constants, the one that writes the answer). A card's data-dependent work is the branches its code

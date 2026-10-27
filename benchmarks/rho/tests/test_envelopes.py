@@ -1,13 +1,14 @@
+import dataclasses
 import importlib.util
 import math
 from pathlib import Path
 
 import pytest
 from rho import envelopes, hardware, lean
-from rho.envelopes import Context, Detection, Onsite, Remote
+from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
-from rho.theorem import Budget, slowdown
+from rho.theorem import Budget, overhead
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -35,7 +36,7 @@ def tiers_context(registry: Registry = REG) -> Context:
 
 
 def tiers_params(ctx: Context) -> dict:
-    """tiers' DEFAULTS with the host share its server's CPUs give (0.11796, which tiers rounds to 0.118)."""
+    """tiers' DEFAULTS with the host share its server's CPUs give (0.12608, which tiers computes the same way)."""
     return T.DEFAULTS | {"host_share": ctx.location.host_phi / ctx.location.phi}
 
 
@@ -75,17 +76,18 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     assert slack["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
-def test_with_nothing_else_bounding_rho_is_lean_remote_dampener_at_full_capacity():
-    """DampenerRemote with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`, against an
-    unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at capacity, so its ρ
-    is the dampener at `MFU₀ = 1`; tiers' dampener at its own MFU is 1 at today's defaults."""
+def test_with_nothing_else_bounding_the_overhead_is_lean_dampener_remote_at_full_capacity():
+    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+    against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
+    capacity, so its overhead is `DampenerRemote`'s at `MFU₀ = 1`; tiers' `dampener` at its own MFU is 1 at today's
+    defaults."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
     remote = envelopes.regime(reg, "remote")
     part = remote.partition(ctx)
     s, u = part.eps_dark, remote.uncertified(ctx)
-    assert slowdown(part, lambda b: 0.0, 0.6).rho == pytest.approx(max(1.0, 1 / (s + (1 - s) * u)), rel=1e-12)
-    assert slowdown(part, lambda b: 0.0, 0.6).rho > 10
+    assert overhead(part, lambda b: 0.0, 0.6).rho == pytest.approx(max(1.0, 1 / (s + (1 - s) * u)), rel=1e-12)
+    assert overhead(part, lambda b: 0.0, 0.6).rho > 10
     ctx = tiers_context()
     today = envelopes.regime(REG, "remote")
     assert all(T.evaluate(tiers_params(ctx), m)["dampener"] == 1.0 for m in T.TIERS.values())
@@ -112,7 +114,7 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     assert set(sampled.slack(ctx)) - set(layout.uncertified) == {"skip.certs", "break.lag", "break.escape",
                                                                  "exfil.faulty"}
     used = ctx.location.phi * ctx.horizon.seconds * ctx.fleet.mfu_train
-    assert layout.uncertified["gap.floor"] == pytest.approx(sampled.pouw.residual * used)
+    assert layout.uncertified["undecl.gpu"] == pytest.approx(sampled.pouw.residual * used)
 
 
 def test_a_regime_inherits_its_base_and_overrides_what_differs():
@@ -139,8 +141,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
 
 
 def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server():
-    """`(c_S, k_S) = (⌊Φ_s Δ_wipe⌋, k_wipe + (r_in + r_side) Δ_wipe)`, `k_wipe` of the server's whole memory (Daniel, 26 Oct
-    12:16 PM PDT)."""
+    """`(c_S, k_S) = (⌊Φ_s Δ_wipe⌋, k_wipe + (r_in + r_side) Δ_wipe)`, `k_wipe` of the server's whole memory (ruled)."""
     ctx = context("reference-h200")
     r = envelopes.regime(REG, "onsite")
     loc, pol, w = ctx.location, ctx.policy, r.wipe.wipe_s
@@ -178,6 +179,87 @@ def test_the_links_form_is_what_windows_proves():
     assert lean.weakest(envelopes.regime(REG, "onsite").cites()) == "draft"
 
 
+def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest_delta_form():
+    """The per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 27, KO 64, τ_b 100 ms,
+    32-bucket link-windows), its `requestBits`, `bucketBits`, `windowRequests` and `windowBits`
+    (`Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`). A request's head leaves 988 bits free
+    (the ordinal, content-length, `max_tokens` and `seed` at 32 each, `temperature` and `top_p` at 24, `model` and
+    `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
+    4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
+    requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
+    warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
+    equals only at T = D + 1. A faulty ingress unit, which this honest-δ form excludes, would add 356,592 bits
+    (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
+    assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
+                                      "temperature": 24, "top_p": 24, "model": 406, "user": 406}
+    c = envelopes.regime(REG, "onsite-w63").certifier
+    assert (c.first_cell_ids, c.ids_per_cell, c.request_ids, c.request_in) == (12, 45, 2_082, 988 + 2_082 * 17)
+    assert (c.request_in, c.bucket_in, c.request_out, c.hold, c.window_buckets) == (36_382, 12, 1_095, 27, 32)
+    assert c.window_bits(32) == (291_440, 8_760) == (8 * 36_382 + 32 * 12, 8 * 1_095)
+    assert (c.r_in, c.r_out) == (pytest.approx(91_075), pytest.approx(8_760 / 3.2))
+    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (91.1, 2.7, 655_360)
+    assert c.faulty_unit_bits == 356_592 and round(c.faulty_unit_bits / c.window_bits(32)[0], 2) == 1.22
+    # a slot is held D + 1 = 28 buckets from its admission, so the ceiling steps past 28
+    assert c.window_bits(28) == (4 * 36_382 + 28 * 12, 4 * 1_095)
+    assert c.window_bits(29) == (8 * 36_382 + 29 * 12, 8 * 1_095)
+    long_run = 4 * 36_382 / 2.8 + 120
+    at = {t: dataclasses.replace(c, window_buckets=t).r_in for t in (28, 32, 600)}
+    assert at[28] == pytest.approx(long_run) and at[32] > at[600] > long_run
+    assert round(long_run / 1e3, 1) == 52.1
+    assert [envelopes.clog2(x) for x in (1, 2, 5, 48, 65)] == [0, 1, 3, 6, 7]
+    assert not envelopes.regime(REG, "onsite").certifier.declared
+    for refused in (lambda: Certifier(declared=True),
+                    lambda: envelopes.regime(REG.override({"regime.onsite.declared": True}), "onsite")):
+        with pytest.raises(ValueError, match=r"declared I/O bound needs \['cell_bytes'"):
+            refused()
+    with pytest.raises(ValueError, match=r"declared I/O bound needs \['window_buckets'\]"):
+        dataclasses.replace(c, window_buckets=math.nan)
+
+
+def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_upper_end():
+    """`regime.onsite`'s certified ingress is `intake · α Φ`, cited to draft:declared-ingress (a server's ingress only
+    its declared inputs, at most α Φ at full use). With `declared` (`regime.onsite-w63`) it is `hosts · r_in`, cited to
+    draft:per-server-ingress too: as an intake `r_in / (α Φ_s)`, 0.0184 at Kimi K2's policy on an H200 server.
+    `declared_x` scales it up to at most the location's links (its high end is line rate, the upper end until Lean
+    proves the per-server bound)."""
+    line = REG.override({"regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
+    on, off, at_line = (envelopes.regime(REG, "onsite-w63"), envelopes.regime(REG, "onsite"),
+                        envelopes.regime(line, "onsite-w63"))
+    c = on.certifier
+    for fleet in ("reference-h200", "reference-gb200"):
+        ctx = context(fleet)
+        loc, alpha_phi = ctx.location, ctx.policy.k / ctx.c * ctx.location.phi
+        assert c.prompts(ctx) == pytest.approx(loc.hosts * c.r_in)
+        assert c.intake_of(ctx) == pytest.approx(loc.hosts * c.r_in / alpha_phi) and c.intake_of(ctx) < 0.02
+        assert on.rate_in(ctx) == pytest.approx(loc.hosts * (c.r_in + c.timing + c.side))
+        assert at_line.rate_in(ctx) == pytest.approx(loc.links + loc.hosts * (c.timing + c.side))
+        assert off.rate_in(ctx) == pytest.approx(alpha_phi + loc.hosts * (c.timing + c.side))
+        assert off.certifier.intake_of(ctx) == 1
+    assert c.intake_of(context("reference-h200")) == pytest.approx(0.01841, rel=1e-3)
+    assert {"draft:declared-ingress", "draft:per-server-ingress"} <= set(on.cites())
+    assert "draft:declared-ingress" in off.cites() and "draft:per-server-ingress" not in off.cites()
+    assert lean.weakest(on.cites()) == lean.weakest(off.cites()) == "draft"
+
+
+def test_onsite_w63_beside_the_reference():
+    """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
+    overhead's lower bound, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best attack at 249
+    and 250; at line rate both fall to remote's (2.75, at the card table's clock). The cadence feeds the serving this
+    package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
+    reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
+    ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
+    inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
+    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.803e10, rel=1e-3)]
+    assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02819, rel=1e-3)
+    assert [(round(r.lo, 1), round(r.attack)) for r in (ref, w63)] == [(98.7, 249), (99.8, 250)]
+    line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
+                         "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
+    at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
+    remote = evaluate_named(reg, "reference-remote-h200").lo
+    assert all(r.lo == pytest.approx(remote, rel=1e-9) for r in at_line) and round(remote, 2) == 2.75
+
+
 def test_four_servers_as_one_location_have_four_times_a_servers_budget():
     r = envelopes.regime(REG, "onsite")
     one, four = r.budget(context("reference-h200")), r.budget(context("reference-h200-rack4"))
@@ -192,6 +274,25 @@ def test_without_pouw_only_the_serving_cut_bounds():
     assert serving.name == "serving"
 
 
+def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_one():
+    """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 1.0705e15
+    MACs/s (the ACCEL card table: 4,096 a SM-clock, 132 SMs, at the clock's 1,980 MHz ceiling) over its 12.60 s (served
+    3.78, its commit 0.42, PoUW's units 5.59 and their commit 2.81). J10-R credits words, and C counts the card at its
+    ceiling, so the clock term is 0. With the hosts (2.9% of the location), `r̂` is 0.987. onsite-today's twin carries
+    the same PoUW envelope, and both differ from remote's in three keys."""
+    remote, today = envelopes.regime(REG, "remote-h200-pouw"), envelopes.regime(REG, "onsite-today-h200-pouw")
+    assert today.pouw == remote.pouw and today.wipe == envelopes.regime(REG, "onsite-today").wipe
+    macs = 4096 * (52 * (2 * 16384**2 + 2 * 16384 * 64 + 2 * 16384 * 65536) + 16384 * 256)
+    assert remote.pouw.residual == pytest.approx(1 - macs / (4096 * 132 * 1.98e9 * (3.78 + 0.42 + 5.59 + 2.81)), abs=5e-4)
+    assert remote.pouw.clock_share == 0
+    p = remote.pouw
+    assert dataclasses.replace(envelopes.regime(REG, "remote").pouw, residual=p.residual, clock_share=p.clock_share,
+                               host=p.host) == p
+    loc = context("reference-h200").location
+    assert p.audited(loc) == pytest.approx(p.residual + loc.host_phi / loc.phi, rel=1e-12) == pytest.approx(0.987, abs=5e-4)
+    assert evaluate_named(REG, "reference-remote-h200-pouw").lo < 1.02
+
+
 def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_device_an_nvl72_rack_does():
     def inputs(registry: Registry, name: str):
         r = evaluate_named(registry, name)
@@ -204,7 +305,14 @@ def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_devi
                                                         inputs(per_device, "onsite-h200-kimi"))
     state = rack.families[0].profile.state_bits
     assert rack_pd_in > state > rack_in > server_pd_in > server_in
-    assert rack_pd.hi < server_pd.hi
+    assert rack_pd.attack < server_pd.attack
+
+
+@pytest.mark.parametrize("name", REG.names("policy"))
+def test_every_policy_states_its_inference_overhead_or_that_it_is_not_modeled(name):
+    v = envelopes.policy(REG, name).inference_overhead
+    p = REG.param(f"policy.{name}.inference_overhead")
+    assert (math.isnan(v) and p.source.startswith("not modeled")) or (v >= 1 and p.status)
 
 
 @pytest.mark.parametrize("name", REG.names("regime"))
@@ -239,7 +347,7 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
 @pytest.mark.parametrize(("scenario", "per"), [("reference-onsite-h200", "hosts"),
                                                ("reference-onsite-nvl72-per-device", "devices")])
 def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scenario, per):
-    """`Σ_i Σ_S δ_i(S)`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
+    """`Σ_a δ_a`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
     server (or, per device, per device) per wipe over the horizon; the certifier adds nothing (it is the auditor's)."""
     s = build(REG, scenario)
     ctx, r = s.context, s.regime
