@@ -67,7 +67,7 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "data", "M1"),
     Entry("sms-m1-instantiation", "assumption",
           "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
-          "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
+          "algebraic; not accepted)", "SMS as M1", "conjectured"),
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
