@@ -58,7 +58,7 @@ markers = [
 # (tests/protocol_options/challenger_host.py) runs infra's model registry (benchmarks/live_challenger/models.py);
 # tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
 # reference decode it imports); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
-# test_repo_ruff.py and test_repo_silent_excepts.py) into the repositories it gates.
+# test_repo_ruff.py, test_repo_silent_excepts.py and test_repo_lane_text.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `remote-audit-verifier`.
@@ -74,6 +74,7 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "benchmarks/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
           "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
+          "tests/lint/test_repo_lane_text.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
