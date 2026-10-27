@@ -11,10 +11,11 @@
 // chains of IADD3, LOP3 and SHF), sha (one SHA-512 compression a thread an iteration), lds (8 LDS.128 a warp an
 // iteration, conflict free), ldg (a 4 GiB buffer streamed with LDG.128 through L2), sleep (nanosleep: the SMs resident
 // and idle), none. MODE: 0 zero operands, 1 random operands held fixed, 2 random operands alternating with their
-// complement from one instruction to the next (the most toggling a fixed program gets). Modes 3-8 shape the s8 operands
+// complement from one instruction to the next (the most toggling a fixed program gets). Modes 3-11 shape the s8 operands
 // (imma, wgmma, dp4a, the shared-memory tiles and the GEMMs; the other roles take them as mode 1), each byte: 3 sparse
 // (random in 1 byte of 8, else 0), 4 four-bit (uniform in [-8, 7]), 5 two-bit ([-2, 1]), 6 weight-like (the sum of four
-// random s8 over 4: about N(0, 37), absmax-quantized weights' shape), 7 the constant 1, 8 ternary ({-1, 0, 1}).
+// random s8 over 4: about N(0, 37), absmax-quantized weights' shape), 7 the constant 1, 8 ternary ({-1, 0, 1}), and
+// signed data offset to non-negative (what a prover gets for a rank-1 correction): 9 [0, 3], 10 [0, 15], 11 [0, 127].
 // SM_FRACTION < 1 launches that share of one block an SM (the rate at a partial load, for linearity).
 //
 // Prints one JSON line: the window's energy (NVML total-energy counter, mJ), its wall time, the operations each role
@@ -71,7 +72,7 @@ struct Args {
   int iters;
   uint32_t zmask;  // 0 in mode 0, else ~0: operands are (random & zmask), so the compiler never sees a constant
   uint32_t tmask;  // ~0 in mode 2, else 0: the second operand set is the first ^ tmask
-  int shape;       // the mode in modes 3-8 (shape_s8), else 0
+  int shape;       // the mode in modes 3-11 (shape_s8), else 0
   u64* counts;     // [2]: warp-iterations done by role A's warps and role B's
   long long* times;  // a block: clock64 and %globaltimer at the start and the end
   uint32_t* smid;
@@ -86,9 +87,9 @@ __host__ __device__ __forceinline__ uint32_t mix32(uint32_t x) {
   x *= 0x846CA68Bu;
   return x ^ (x >> 16);
 }
-// Four random bytes w, reshaped byte by byte to mode m's distribution (modes 3-8; any other m returns w).
+// Four random bytes w, reshaped byte by byte to mode m's distribution (modes 3-11; any other m returns w).
 __host__ __device__ inline uint32_t shape_s8(uint32_t w, int m) {
-  if (m < 3 || m > 8) return w;
+  if (m < 3 || m > 11) return w;
   const uint32_t h = mix32(w ^ 0xA5A5A5A5u), g1 = mix32(w + 1), g2 = mix32(w + 2), g3 = mix32(w + 3);
   uint32_t out = 0;
   for (int i = 0; i < 4; i++) {
@@ -101,7 +102,10 @@ __host__ __device__ inline uint32_t shape_s8(uint32_t w, int m) {
       case 5: v = (int)((b & 3) ^ 2) - 2; break;
       case 6: v = ((int)(int8_t)b + (int8_t)(g1 >> sh) + (int8_t)(g2 >> sh) + (int8_t)(g3 >> sh)) >> 2; break;
       case 7: v = 1; break;
-      default: v = (int)(b % 3) - 1; break;
+      case 8: v = (int)(b % 3) - 1; break;
+      case 9: v = (int)(b & 3); break;
+      case 10: v = (int)(b & 0xF); break;
+      default: v = (int)(b & 0x7F); break;
     }
     out |= (uint32_t)(v & 0xFF) << sh;
   }
@@ -685,8 +689,8 @@ int main(int argc, char** argv) {
     warm = argc > 5 ? atof(argv[5]) : 5.0;
     frac = argc > 6 ? atof(argv[6]) : 1.0;
   }
-  if (mode < 0 || mode > 8) {
-    fprintf(stderr, "MODE is 0-8\n");
+  if (mode < 0 || mode > 11) {
+    fprintf(stderr, "MODE is 0-11\n");
     return 2;
   }
   CK(cudaSetDevice(0));

@@ -145,7 +145,37 @@ def energies(rows: list[dict], every: list[dict] | None = None) -> dict:
     return out
 
 
-def floors(en: dict, modes=(0, 1, 2), clocks: bool = False) -> dict:
+MODES = {0: "zeros", 1: "uniform", 2: "uniform, toggling", 3: "sparse 1/8", 4: "four-bit", 5: "two-bit",
+         6: "weight-like N(0,37)", 7: "constant 1", 8: "ternary", 9: "unsigned [0,3]", 10: "unsigned [0,15]",
+         11: "unsigned [0,127]"}
+ALL_MODES = tuple(MODES)
+
+
+def entropy_table(en: dict) -> list[dict]:
+    """Energy a MAC per operand mode: the tensor role and IDP.4A (marginal over the resident-idle board at the same clock)
+    and the GEMM (marginal over it), at the setting's clock and each locked clock, with each against uniform's (mode 1)."""
+    out = []
+    groups: dict[tuple, dict] = {}
+    for k, r in en["single"].items():
+        role, m = k.rsplit("-", 1)
+        if role in ("imma", "wgmma", "dp4a"):
+            groups.setdefault((role, "run"), {})[int(m)] = r["e"]
+    for k, r in en["lgc"].items():
+        mm = re.fullmatch(r"lgc(\d+)-(imma|wgmma)-(\d+)", k)
+        if mm and "e" in r:
+            groups.setdefault((mm.group(2), mm.group(1)), {})[int(mm.group(3))] = r["e"]
+    for k, g in {**en["gemm"], **en["lgc"]}.items():
+        mm = re.fullmatch(r"(?:lgc(\d+)-)?gemm-(\d+)", k)
+        if mm and "pj_mac_marginal" in g:
+            groups.setdefault(("gemm", mm.group(1) or "run"), {})[int(mm.group(2))] = g["pj_mac_marginal"]
+    for (role, clk), es in sorted(groups.items()):
+        u = es.get(1)
+        for m, e in sorted(es.items()):
+            out.append(dict(role=role, clock=clk, mode=m, operands=MODES[m], pj_mac=e, vs_uniform=e / u if u else None))
+    return out
+
+
+def floors(en: dict, modes=ALL_MODES, clocks: bool = False) -> dict:
     """The least energy a unit of each 𝓜 resource over the operand modes given (pJ), at the run's clock, or with
     `clocks` over the locked clocks too (the sweep measures the tensor pipe only: the lane pipes and shared memory
     take the tensor pipe's ratio of its least to its run-clock energy, an estimate)."""
@@ -160,7 +190,7 @@ def floors(en: dict, modes=(0, 1, 2), clocks: bool = False) -> dict:
         f[res] = min(f.get(res, v), v)
     if clocks:
         mma = "wgmma" if any(k.startswith("wgmma") for k in en["single"]) else "imma"
-        swept = [r["e"] for k, r in en["lgc"].items() if f"-{mma}-" in k and "e" in r and int(k[-1]) in modes]
+        swept = [r["e"] for k, r in en["lgc"].items() if f"-{mma}-" in k and "e" in r and int(k.rsplit("-", 1)[1]) in modes]
         if swept and "tensor" in f:
             ratio = min(swept) / f["tensor"]
             f = {k: v * min(ratio, 1.0) for k, v in f.items()}
@@ -262,8 +292,8 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
                           model=tensor_only / rate["mac_per_s"]))
     stage = c["stage"]
     honest_use = dict(tensor=honest_mac_s, smem=honest_mac_s * stage, issue=honest_mac_s * c["mma_issue"])
-    variants = {"strict over data and clock (zero operands, least clock)": ((0, 1, 2), True),
-                "strict over data, run clock": ((0, 1, 2), False),
+    variants = {"strict over data and clock (zero operands, least clock)": (ALL_MODES, True),
+                "strict over data, run clock": (ALL_MODES, False),
                 "random operands, run clock": ((1,), False)}
     out["power"] = {}
     p0_min = min([r.get("p_sleep_here", 1e9) for r in en["lgc"].values()] + [en.get("p_idle") or 1e9])
@@ -301,7 +331,7 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
     # board at f, all times MARGIN. C(f) = R_h + the hidden work the LP fits beside it at f; C = max over f.
     # A card whose tensor pipe never reaches f_max (the H200 holds about 1825 MHz under it) is also priced at f_max with
     # its top point's energies, which understates them there.
-    rnd_zero = floors(en, (0, 1, 2))
+    rnd_zero = floors(en, ALL_MODES)
     two = {}
     pts = [(k, r) for k, r in en["lgc"].items() if k.endswith(f"-{mma}-1") and "e" in r]
     if pts:
@@ -361,10 +391,10 @@ def main() -> None:
                 continue
             en = energies(rows + lgc, every)
             name = f"{run} ({'default clocks' if st == 'cap' else 'its clocks'})"
-            res = dict(run=name, card=card, energies=en)
+            res = dict(run=name, card=card, energies=en, entropy=entropy_table(en))
             # the honest prover's best setting, any of the repeats: unlocked, or a lock within the card's range (on the
             # RTX a 2430 MHz lock, min = max, runs cuBLASLt's GEMM 21% faster than the default clocks at the same cap)
-            gs = {k: g for k, g in {**en["gemm"], **en["lgc"]}.items() if "mac_per_s" in g and "gemm-1" in k}
+            gs = {k: g for k, g in {**en["gemm"], **en["lgc"]}.items() if "mac_per_s" in g and re.search(r"gemm-1(-again)?$", k)}
             if gs:
                 k, g = max(gs.items(), key=lambda kg: kg[1]["mac_per_s"])
                 mhz, hon = g["mhz"], g["mac_per_s"]
@@ -413,6 +443,14 @@ def print_run(res: dict) -> None:
         elif "e" in g:
             print(f"{k:<18} {g['power_w']:7.1f} W rate {g['rate_a']:.3e} {g['mhz'] or 0:.0f} MHz e {g['e']:.3f} "
                   f"(sleep here {g['p_sleep_here']:.1f} W)")
+    groups: dict[tuple, list] = {}
+    for r in res.get("entropy", []):
+        groups.setdefault((r["role"], r["clock"]), []).append(r)
+    for (role, clk), rs in groups.items():
+        if len(rs) > 3:
+            print(f"entropy {role} at {clk}: " + "; ".join(
+                f"{r['mode']} {r['operands']} {r['pj_mac']:.3f}" + (f" ({r['vs_uniform']:.2f})" if r["vs_uniform"] else "")
+                for r in rs))
     for hk, ep in res.get("epsilon", {}).items():
         t = ep["terms"]
         ro = ep["rates_only"]

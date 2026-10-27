@@ -13,8 +13,8 @@
 # before it, PF_LEASE_ON the GPU to wait for (gpu-lease --on). PF_PLAN=full (the default): every config at the GPU's
 # clocks, then a clock sweep (PF_CLOCKS, MHz); PF_PLAN=cap: the default clocks (nvidia-smi -rgc: the power cap holds the
 # board), then PF_CAP_CLOCKS (2430 2250 2100); PF_PLAN=gemm: the honest GEMMs alone at the default clocks, then locked
-# at PF_CLOCKS (none unless given); PF_PLAN=entropy: the tensor role, IDP.4A and the GEMMs over the operand modes 0-8
-# at the default clocks, then locked at PF_CLOCKS. Clocks change only where `sudo -n nvidia-smi` is allowed, and every exit
+# at PF_CLOCKS (none unless given); PF_PLAN=entropy: the tensor role, IDP.4A and the GEMMs over the operand modes 0-11
+# (PF_MODES, PF_DP4A_MODES, PF_GEMM_MODES) at the default clocks, then locked at PF_CLOCKS. Clocks change only where `sudo -n nvidia-smi` is allowed, and every exit
 # puts the GPU back: locked at PF_RELOCK_MHZ (2100 on the Nebius nodes, vm_setup.sh's vy-clocks), else nvidia-smi -rgc.
 set -uo pipefail
 OUT=${OUT:?run under research run}
