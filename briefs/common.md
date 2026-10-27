@@ -27,7 +27,8 @@
   with a line `Lane soundness` in the body, then (only after its Lean check and quick suites pass, and only if this brief
   or your inbox says you may) `research queue ready N --mark --by soundness`. Don't push to a PR whose head is in a train.
   Before marking, `git grep` across `next` any name you delete or change.
-- **Rules that bind the statement:** one soundness theorem, with no hypothesis on the circuit file or the statement's form;
+- **Name:** `Verity.Soundness` is called *protocol soundness* in prose (Daniel, 7:38 PM PDT), never "the one theorem"; AGENTS.md's rule "Soundness is one theorem" keeps its wording.
+- **Rules that bind the statement:** protocol soundness is one theorem, with no hypothesis on the circuit file or the statement's form;
   the verifier refuses any form the proof doesn't cover and gains no form ahead of its proof; assumptions are named Props
   listed in the lock; no `sorry`, `axiom` or `native_decide`. Never weaken a statement to make it provable: if it's false,
   stop, say why in your note and final message, and propose the restatement.
