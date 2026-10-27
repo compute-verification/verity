@@ -86,6 +86,7 @@
     "PouwCheck.Rounds",
     "PouwWindow.Draw",
     "PouwWindow.Rounds",
+    "SampledProofs.ChallengerCoins",
     "SampledProofs.ChallengerSession",
     "SampledProofs.PyJson",
     "SampledProofs.Registered"
