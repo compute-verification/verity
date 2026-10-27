@@ -12,7 +12,7 @@ import pytest
 
 from verity.errors import InvalidArtifact
 from verity.ml.commitments import layout as L
-from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512_prefix
 
 LAYOUTS = Path(__file__).resolve().parent / "fixtures" / "layouts"
 #: art:16f2faa0…'s file, FAMILIES' shared-row layout at 1 KiB rows (CIR-113), and its sha256
@@ -23,9 +23,12 @@ TODAY = LAYOUTS / "families-today.layout.json", "c3f312ce597f368cb01b7db9c8298ff
 EDGE = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "commit_slots" / "fixtures" / "commit-slots-v1.json"
 
 DIGESTS = {
-    "edge": "eea4be19ce407d924d0ebe1c20eb42d9e050076898ca4a7d8ed2e8c3c705316882ec2ffdb8bd40ae291158e0b1d235cce5a0fe5167fed32a1b41e94c8cbe0c42",
-    "shared": "f8d6252c5933f22c8c276c911a7c22e84c7ea12d846d7de8f9ee90e312c680053d41a525a4350c921f9cf12b80fc0dc9d43d3034c8b7a33f83bc069c1e656a9f",
-    "today": "0" * 128,
+    "edge": "eea4be19ce407d924d0ebe1c20eb42d9e050076898ca4a7d8ed2e8c3c7053168"
+            "82ec2ffdb8bd40ae291158e0b1d235cce5a0fe5167fed32a1b41e94c8cbe0c42",
+    "shared": "f8d6252c5933f22c8c276c911a7c22e84c7ea12d846d7de8f9ee90e312c68005"
+              "3d41a525a4350c921f9cf12b80fc0dc9d43d3034c8b7a33f83bc069c1e656a9f",
+    "today": "e6889bd14d5292ca67c42e92efde4c4fe623cfdbf915f68813d2447cc4d4fb1c"
+             "ae66e51c35750056b289846c2660631ba3e1983dbe0c27dd4762f3f4657a9389",
 }
 
 
@@ -73,7 +76,11 @@ def test_todays_layout_reads_back_and_is_not_shared() -> None:
     assert sum(len(g.units) for g in lay.groups) == 6_102_102
     assert sum(len(u) for g in lay.groups for u in g.units) == 6_102_832
     assert lay.json_digest.hex() == DIGESTS["today"]
-    with pytest.raises(InvalidArtifact, match="are committed twice"):
+    # the file's groups are canonical text already: only the two keys swap
+    i = raw.index(b'","groups":')
+    canonical = b'{"groups":' + raw[i + 11:-2] + b',"name":' + raw[8:i + 1] + b"}"
+    assert lay.json_digest == hashlib.sha512(tagged_sha512_prefix(L.JSON_TAG, len(canonical)) + canonical).digest()
+    with pytest.raises(InvalidArtifact, match=re.escape("group 0 tensor 0: bytes 0..2 are committed twice")):
         L.check_shared(lay)
 
 
