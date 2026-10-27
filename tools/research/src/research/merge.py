@@ -94,6 +94,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
 from .gates import FINDING, OK, REFUSED, git_env, refuse
 
@@ -1377,6 +1378,11 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
     return landed
 
 
+#: the merged PRs most recently updated (a merge updates one), which GitHub reads consistently, as a search doesn't
+MERGED_QUERY = ("query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: MERGED, "
+                "first: 100, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { number headRefName headRefOid } } } }")
+
+
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
     """Close every open pull request whose head is on ``remote``'s ``into``, or whose pinned head a train landed and whose head since
     adds nothing to it (`adds_nothing`; its branch is kept), with a comment naming the commit it landed in, and
@@ -1436,8 +1442,10 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
     # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (17 Oct: 2,119 of the
-    # repository's 3,543 branches were already on main)
-    merged = json.loads(gh("pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName,headRefOid"))
+    # repository's 3,543 branches were already on main); the most recently merged, not created, first (26 Oct: `gh pr list`'s
+    # newest 200 by number left out 20 PRs that waited in the queue, whose branches stayed)
+    merged = json.loads(gh("api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", f"query={MERGED_QUERY}",
+                           "--jq", ".data.repository.pullRequests.nodes"))
     # only a branch still at the merged head: a lease on a branch already gone fails as "stale info" (17 Oct: 58 a tick)
     heads = {ref.removeprefix("refs/heads/"): sha for sha, ref in (
         line.split() for line in _git(repo, "ls-remote", "--heads", remote).stdout.splitlines())}
@@ -1461,36 +1469,45 @@ KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
+#: the most branches one sweep deletes, and the most it archives, the longest idle first: a caller sweeps again for the rest
+SWEEP_LIMIT = 200
 
 
 def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
-                   gh=None, log=print, chunk: int = 100) -> tuple[int, int]:
+                   gh=None, log=print, chunk: int = 100, keep: Iterable[str] = (), limit: int = SWEEP_LIMIT) -> tuple[int, int]:
     """The branch sweep (CI-48, 17 Oct, after Daniel asked why the repository had 4,000 branches): delete each branch whose tip
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
-    run branches (`RUN_BRANCH_RE`) and every branch an open PR uses as its head or base.  Each push leases the tip it saw, so a
-    branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
+    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
+    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
     tip = _git(repo, "rev-parse", f"refs/sweep/{remote}/{into}").stdout.strip()
     prs = json.loads(gh("pr", "list", "--state", "open", "--limit", "1000", "--json", "headRefName,baseRefName"))
-    used = {p["headRefName"] for p in prs} | {p["baseRefName"] for p in prs}
+    used = {p["headRefName"] for p in prs} | {p["baseRefName"] for p in prs} | set(keep)
     rows = _git(repo, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname) %(committerdate:unix)",
                 f"refs/sweep/{remote}/").stdout.splitlines()
     delete, archive = [], []
     for name, sha, when in (r.split() for r in rows):
-        if name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
+        if name == into or name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
             continue
         idle = now - int(when)
         if _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0:
             if idle > MERGED_IDLE_S:
-                delete.append((name, sha))
+                delete.append((idle, name, sha))
         elif idle > UNMERGED_IDLE_S:
-            archive.append((name, sha))
+            archive.append((idle, name, sha))
+    found = len(delete), len(archive)
+    delete, archive = ([(n, s) for _, n, s in sorted(x, key=lambda r: -r[0])[:limit]] for x in (delete, archive))
     verb = "would " if dry_run else ""
-    log(f"research merge: {verb}delete {len(delete)} branch(es) on {into} a day idle, {verb}archive {len(archive)} unmerged "
-        f"branch(es) three days idle to refs/archive/heads/")
+    log(f"research merge: {verb}delete {len(delete)} of {found[0]} branch(es) on {into} a day idle, {verb}archive {len(archive)} "
+        f"of {found[1]} unmerged branch(es) three days idle to refs/archive/heads/")
+    if delete:
+        log(f"research merge: {verb}delete: {' '.join(n for n, _ in delete)}")
+    if archive:
+        log(f"research merge: {verb}archive: {' '.join(n for n, _ in archive)}")
     if not dry_run:
         for i in range(0, len(delete), chunk):
             part = delete[i:i + chunk]

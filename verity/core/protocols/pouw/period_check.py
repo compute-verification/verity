@@ -68,10 +68,11 @@ def _window_form(nm: str, i: int, w: Any) -> str | None:
     h = w.get("descriptor") if isinstance(w, dict) else None
     if not (type(h) is str and Cr._HEX.fullmatch(h)):
         return None
-    try:
-        ok, j = Cr._loads(bytes.fromhex(h).decode())
-    except UnicodeDecodeError:
+    raw = bytes.fromhex(h)
+    text = raw.decode(errors="replace")
+    if text.encode() != raw:  # not UTF-8 (Lean's `String.fromUTF8?` is none)
         return None
+    ok, j = Cr._loads(text)
     fn = j.get("program_fn") if ok and isinstance(j, dict) else None
     if type(fn) is not str:
         return None
