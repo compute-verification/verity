@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import torch
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.definitions.registry import torch_optim as TO
+
+torch = pytest.importorskip("torch")
 
 U32 = np.uint32
 NAN, BF16_NAN = 0x7FFFFFFF, 0x7FFF
@@ -117,6 +118,7 @@ def test_adamw_element_matches_reference(fused: int) -> None:
                               f"v {v[bad[0]]:#x} k {[hex(x) for x in k[bad[0]]]}: {got[bad[0], j]:#x} != {want[j][bad[0]]:#x}")
 
 
+@pytest.mark.slow
 def test_adamw_lerp_branch_edges() -> None:
     """The lerp's branch at |w| = 0.5 and its neighbours, NaN and infinite weights, for each contraction."""
     rng = np.random.default_rng(7)
@@ -134,6 +136,7 @@ def test_adamw_lerp_branch_edges() -> None:
             assert np.array_equal(got[:, j], want[j]), (fused, j, np.flatnonzero(got[:, j] != want[j])[:5])
 
 
+@pytest.mark.slow
 def test_adamw_block_shares_its_scalars() -> None:
     """At N = 4 each element is the N = 1 step under the one k, and the outputs are (p2, m1, v2, bf16) runs of N."""
     rng = np.random.default_rng(11)
