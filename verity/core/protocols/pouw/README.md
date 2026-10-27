@@ -1,13 +1,20 @@
 # PoUW (`verity.core.protocols.pouw`)
 
-Proof of useful work: certifies that a served model's declared matmuls were computed, by sampled proofs over committed,
-noised checked values. One protocol carries several named schemes behind one interface. The proof service registers
-an audit window, draws its proof blocks with live coins, proves and verifies them; PoUW states what each window
-commits, the Program each drawn proof block must pass, and what the outcome credits.
+Proof of useful work: credits a size S of a served model's declared matrix products as verified compute, at least
+(1 − ε_skip)·S of their AND gates right, by sampled proofs over committed, noised checked values. One protocol carries
+several named schemes behind one interface. The proof service registers an audit window, draws its proof blocks with
+live coins, proves and verifies them; PoUW states what each window commits, the Program each drawn proof block must
+pass, and what the outcome credits. Dither (`dither/PROTOCOL.md`) is the no-fold design the served PoUW moves to, and
+it also bounds the free compute on the replica's devices (`WorkSound`).
 
-The verifier of record is Lean: `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window`
-(`pouw-window`), whose verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python modules of the same names
-are their references, held to them by the difftests.
+The verifier is Lean: `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`),
+whose verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python modules of the same names are their
+references, held to them by the difftests.
+
+**Where its challenger sits.** `WorkSound` holds only while no machine outside the replica's boundary holds a coin
+before it enters (`CoinsConfidential`). Onsite, Dither's challenger can sit inside the datacenter, as at the MVP, on
+the network certifier's device at that boundary. For the remote protocol it sits outside the datacenter, and it can
+simply be the network certifier.
 
 ## Where things are
 
@@ -17,7 +24,7 @@ are their references, held to them by the difftests.
 - `schemes/`: the named schemes (`ncp-v1`, `pearl-fp8-v4`, the Pearl-C family, `pearl-c-nvfp4-v0`).
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served
   Program (`compile`), and the draw plan (`plan`). Each Definition has its `circuit-check` sidecar.
-- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier of record, each with its README and difftest.
+- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its README and difftest.
 - `tests/`: the package's suite, with pinned vectors under `tests/vectors`.
 - `benchmarks/pouw/`: the measuring side and the clear reference lifecycle; nothing here imports it.
 
@@ -41,4 +48,4 @@ period = credit.period_credit(...)             # the period a window counts towa
 - `window`: what an audit window makes public, its grid and its draw size.
 - `salt`: PoUW's read of the network certifier's per-window salt.
 - `registration`, `weights`, `operands`: registered weights and a window's committed operand rows.
-- `verifier`: the verifier of record's entry points and its coins.
+- `verifier`: the verifier's entry points and its coins.

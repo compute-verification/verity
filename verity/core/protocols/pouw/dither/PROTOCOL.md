@@ -2,8 +2,8 @@
 
 Dither credits the int8 matmuls of a served model. Each call is computed on dithered and noised operands, its running
 sums are committed while it runs, and live coins pick which of them the developer proves. An accepted monitoring period
-is credited at the public best price of its work, and the work the developer could have done instead is bounded by
-ε_skip·W_reg. This is v3.2: v3.1 with the pooling fixes, written in the shared notation.
+is credited at the public best price of its work, and the free compute on the replica's devices is bounded by
+ε_skip·W_reg. This is v3.2: v3.1 with the pooling fixes, written in the shared notation (`GLOSSARY.md`, Notation).
 
 Its credit at pub(μ°) against W_reg is superseded, tentatively: credit is a sampling block's size in AND gates, a
 statement about values, and 𝓜's resources appear only inside the overhead lower bound (`GLOSSARY.md`, "Size, credit
@@ -100,7 +100,7 @@ compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither 
   The sampled cells are opened after it.
 - The weights are in the period's weight root, bound once a period, before any of the period's coins.
 
-**The value root's layout**, pinned for kernels (KCOMMIT-FB). It is V31-GPU's `v31.py` layout at 16 KiB rows,
+**The value root's layout**, pinned for kernels. It is V31-GPU's `v31.py` layout at 16 KiB rows,
 under Dither's tag and without segment S's rows:
 - A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's cells row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
@@ -116,7 +116,7 @@ under Dither's tag and without segment S's rows:
   label), -1, RangeIndexedDomain(0, leaves), hash="sha512")`, with TAG = `verity/pouw/dither/call/v1` and label
   {m, n, k, lp, t, row, leaves}.
 - A proof block (i, j, s) opens the rows holding T_s (for s < S) and T_{s−1} (for s > 1), and for s = S the row holding
-  O. The filler's leaves are this layout without O's rows (DITHER-FILL, `verity/pouw/dither/fill/v1`).
+  O. The filler's leaves are this layout without O's rows (`verity/pouw/dither/fill/v1`).
 
 **The prover hashes the words on-chip**, in the GEMM's epilogue, and doesn't write them to DRAM: they are 2/L bytes a MAC,
 0.49 tensor-times of the RTX PRO 6000's GDDR7 at L = 1,024, and hashing them from DRAM doubles that. An opened row is
@@ -229,8 +229,9 @@ Otherwise the period is refused. A failed proof is a visible failure and is neve
 **Credit.** An accepted period credits Σ_b pub_μ°(b) over its sampling blocks. It publishes W_reg, q and ε_skip at δ_coin,
 which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 
-**The bound.** Except with probability δ_coin + δ_crypto + k(κ_dmm + κ_dsha), the credited work plus any other work the
-replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
+**The bound** (`WorkSound`'s bound on free compute on the replica's devices). Except with probability
+δ_coin + δ_crypto + k(κ_dmm + κ_dsha), the verified compute of the credited calls plus any free compute on the
+replica's devices in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg. Here:
 - δ_coin is the draw's failure probability;
 - δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
   extraction and in `SAKSha`;
@@ -374,6 +375,8 @@ k_exfil. Dither needs these of the challenger and the certifier:
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
+  - **Inside or outside the datacenter.** Onsite, the challenger can sit inside the datacenter. For the remote
+    protocol it sits outside the datacenter, and it can simply be the network certifier.
 - **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the drawing server's coins are made
   on its certifier's device and are never imports there. Every other server's certifier, and any certifier whose
   challenger has a device of its own, excludes them only so:
@@ -489,9 +492,9 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   the fleet registered before any member's coin (see "The fleet"), and each replica's periods as one sequence. With it,
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
-- **κ's values** (see "Its budget") and the headline's single κ go to Daniel: κ_dmm and κ_dsha are `SAKMatmul`'s and
-  `SAKSha`'s error terms.
-- **The Lean** (WORKSOUND-5, stacked on #4787):
+- **κ's values** (see "Its budget") and the headline's single κ are a claim not yet decided: κ_dmm and κ_dsha are
+  `SAKMatmul`'s and `SAKSha`'s error terms.
+- **The Lean**:
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
     `Timed`, and the phase's oracle calls logged before root b;
   - the budget registration: `reg` adapted, fixed before each round's coins, with k padded to a fixed maximum by empty
@@ -501,16 +504,15 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     the challenger's draw for the weight-side coins (P17's κ_re);
   - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
     η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
-- **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
-  certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
-  implemented.
+- **The challenger's and the certifier's specs**: the challenger on the certifier's device (the MVP), the exact
+  exclusion, re-clocking, one clock and the multi-node private links, as implemented.
 - **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c`, the per-channel premise:
   `verity.ml.crypto.transport`, with `Guarantees.TransportPassiveZk` taking either that premise or `ChannelHides`
   (`Security/Definitions/Core/Guarantees/Transport.lean`). An onsite device holds an imprint key (a shared secret
   installed over the cable once per device, then a SHA-512 ratchet), and a remote party with no cable adds ML-KEM-1024,
-  always XORed with the SHA-512 chain key's PRF output and never on pair links (AGENTS.md, "One hash"). The premise
-  here is the zero-knowledge one: it lets the prover's own machines read a private frame, so where a coin must not
-  reach an outside machine early, `CoinsConfidential` still needs the MVP's placement.
+  the one-hash rule's exception for transport, always XORed with the SHA-512 chain key's PRF output and never on pair
+  links. The premise here is the zero-knowledge one: it lets the prover's own machines read a private frame, so where
+  a coin must not reach an outside machine early, `CoinsConfidential` still needs the MVP's placement.
 - **The firewall** (with C-Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, queued check coins are the
     fix, and `Timed` must then read the check coin's time apart from the selection's;

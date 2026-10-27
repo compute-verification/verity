@@ -137,7 +137,7 @@ least $\delta > 0$ has $c_s \le n_s - k_s$ and $\sum_s k_s c_s / n_s \le \ln(1/\
 $\tau \ln(1/\delta) + \sum_s (n_s - k_s) \max(0, g_s - \tau k_s / n_s)$, weak duality for that fractional knapsack.
 `stratified_isHarmBound_fill`: a fill that some $\tau$ separates attains it, so the greedy fill's value (the sampling
 optimizer's `density_bound`) is a harm bound. `work_isHarmBound_fill` is the work sampling design's, with harm the
-credited work; `stratified_isHarmBound_bits` and `Partition.audit_exfiltration_stratified` are the exfiltration form,
+work the table credits; `stratified_isHarmBound_bits` and `Partition.audit_exfiltration_stratified` are the exfiltration form,
 the floor of the fill's value over output bits as `audit_exfiltration`'s $H$. `stratified_isHarmBound_exact` is the same
 duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`stratumRisk`, at least $k_s c / n_s$ by
 `le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.

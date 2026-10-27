@@ -2,13 +2,15 @@
 
 This package computes, for each scenario and monitoring period, a lower bound on the **overhead** a training run pays
 under the regime: `overhead(𝒢, 𝒜, η)` (`GLOSSARY.md`, Notation), the size of the actual circuit that succeeds at a
-training task over the reference training algorithm's size `T_0`, on the datacenter the adversary actually runs. Beside
+training task over the reference training algorithm's size `T_0` (the code's normalizer, standing for T_ref), on the
+datacenter the adversary actually runs. It is the one overhead calculator: where `benchmarks/nci/tiers.py`'s older
+`dampener` disagrees, this package's number is the one to cite. Beside
 it is the **time to the target** that size implies, at least the overhead times `T_0 / Φ_total` (a slowdown,
 wall-clock). Every number it reads is a parameter with a public source and a status, so a bound is always at some choice
 of every parameter, and the package shows how the bound moves with each one.
 
 A scenario is one choice from every part: a fleet (its location and unregistered hardware's share), a regime (the
-protocols that run, each with its admissible set), the NCI registration policy, a monitoring period (the horizon), a run
+protocols that run, each with its admissible set), the inference-only policy's budgets, a monitoring period, a run
 (the target and its model), the algorithm families the adversary may use, and the bounds and attacks applied. For each
 one the package reports:
 
@@ -60,10 +62,11 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   period (`Horizon`). `Units` is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its
   `units.basis`).
 - **Protocol soundness**, the admissible sets (`envelopes.py`, `data/envelopes.toml`): each protocol (PoUW, detection
-  and sampled proofs, the wipe, the certifier) is one admissible set `𝒜_p` with its parameters, the free gates it
+  and sampled proofs, the memory wipe, network certification) is one admissible set `𝒜_p` with its parameters, the free gates it
   leaves (by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_p`, split into `δ_coin` and
-  `δ_crypto`. The NCI check is the registration (`Policy`). A regime is the protocols that run, and builds the
-  server blocks with their cuts.
+  `δ_crypto`. The inference-only policy is the registration (`Policy`), taken as registered in every scenario though
+  it is not yet a subprotocol of the composites. A regime is the protocols that run, and builds the server blocks with
+  their cuts.
 - **The overhead lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as yields `q(c, k)` of
   a block with budgets `(c, k)`, the attacks as constructions, and the sum over server blocks: each server block's least
   cut (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
@@ -128,9 +131,9 @@ free gates at a structure whose `s_×` is above 1, with the structure's `evidenc
 
 The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, `rho.md`, `rho.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the overhead;
-`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `Nci.Guarantees.DampenerRemote` and
-`tiers.py`'s `dampener` are their owners' names for the remote composition's overhead. The glossary's `ρ` is the ACCEL
-model's resource rate, not this number.
+`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `Nci.Guarantees.DampenerRemote` is an
+older statement of the remote composition's overhead, and `tiers.py`'s `dampener` an older calculator of it, which the
+next code change folds in here. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
 
 ## Extending
 
