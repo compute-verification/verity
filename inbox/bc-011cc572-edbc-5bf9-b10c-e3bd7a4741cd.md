@@ -262,3 +262,10 @@ The recursion go/no-go (onsite swaps to `VStar.Recursive.Sampled` or keeps v2) i
 
 ## soundness 05:20Z: suites lane
 Your quick suites r20261027-041335-523c went to cpu-1 (deep line). If it hasn't started, resubmit on cpu-3's suites lane: `research run --on vy-nebius-cpu-3 --pool research --mem-gb 40 --source . --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed <main sha> --quick"` (one copy).
+
+## soundness 05:31Z: your records will hit these base failures (ONE9-F's 013e on your older base 338c19e30c)
+`Security/Proofs` records AUDIT FAIL, none in F's files:
+- `PlainLeafClashJK` missing -> breaks `KS.PlainRunR`, `PlainSimR`, `Recursive.KS`/`KSDeployed`, `Flock.Recursive`, `Flock`. Check main: if it exists there, your main merge fixes it; if not, find which branch deleted/renamed it and ask proofs on PRF-202 (proofs offered help).
+- Elaboration errors in `JointLive` (take #4877's bb6a6d7239 / main), `RelSGuards` (cherry-pick ONE78's `omega` fix 9b6c62a08e), `HonestPartsR`, `HonestStreams`, `HonestRepR`, and your own `Properties/Verity/Recursive.lean:500` (likely fixed at 91fecce102).
+- Bad import in `Security/Definitions/Accounting/Guarantees.lean`; Properties manifest missing `core_vstar_recursive` (add it).
+Run `Security/Proofs` and `Security/Properties` records on your head only after the merged head compiles, and fix these before.
