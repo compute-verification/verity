@@ -1,5 +1,6 @@
 import Proofs.Properties.Verity.SampledProofs
 import Proofs.Flock.Bridge.PublicDeployed
+import Proofs.Flock.Bridge.Unopened
 
 /-!
 # Sampled proofs' target at the deployment, with no hypothesis on the strategy
@@ -55,6 +56,60 @@ theorem deltaPub_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.u
   exact Flock.Bridge.deltaPub_le_deployed n kd K₀ _ hW
     (show 0 ≤ 2 * A.t' τ + 2 * A.v by linarith) (show 2 * A.t' τ + 2 * A.v ≤ 2 ^ 82 by linarith)
     (show 0 ≤ A.t' τ + A.v by linarith) (show A.t' τ + A.v ≤ 2 ^ 82 by linarith) h0 ht
+
+/-- Equal circuits, unit counts, partitions, openings and transcripts have as many unbound units. -/
+theorem card_unbound_congr {C C' : Verity.Circuit} (hC : C = C') {n n' : ℕ} (hn : n = n')
+    {P : Verity.Partition C n} {P' : Verity.Partition C' n'} (hP : HEq P P')
+    {O : (g : Fin C.N) → BitVec (C.w g) → Prop} {O' : (g : Fin C'.N) → BitVec (C'.w g) → Prop} (hO : HEq O O')
+    {X : C.Transcript} {X' : C'.Transcript} (hX : HEq X X') :
+    (Accounting.unbound P O X).card = (Accounting.unbound P' O' X').card := by
+  subst hC hn
+  obtain rfl := eq_of_heq hP
+  obtain rfl := eq_of_heq hO
+  obtain rfl := eq_of_heq hX
+  rfl
+
+/-- The values the session's extractor opens at `τ`: its witness's openings in the sampling statement. -/
+noncomputable abbrev _root_.Flock.Guarantees.LiveAt.valE {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit}
+    {kd K₀ : ℕ} {desc : Claims.Msg} (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc) (q : Claims.Sampling.Query)
+    (τ : FlockSoundness.Game.Strategy A.G) : ℕ → Option Bool :=
+  (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
+    (Flock.Bridge.stmtOf A.P A.κ kd desc q A.roots)
+
+/-- **`unbound_le` from the extractor and the openings.** Where the vocabulary's extractor is the transcript of the
+values the session's extractor opens (`hX`, ONE-8's `extract`), and the vocabulary's openings are openings `O` of the
+parse's circuit (`hO`) that hold wherever that witness opens a value other than a constant (`hopen`) and at the
+constants (`hconst`) (`place`'s openings bridge, ONE-7's), the unbound units are at most the session's faulty ones
+(`Flock.Bridge.card_unbound_le_faulty`). -/
+theorem unbound_le_of {V : Vocab d α} (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    {r : Flock.Bridge.Parsed} (hr : V.parsed F = some r) {kd K₀ : ℕ} {desc : Claims.Msg}
+    (A : Flock.Guarantees.LiveAt r.n r.D r.hU kd K₀ desc) (q : Claims.Sampling.Query)
+    (τ : FlockSoundness.Game.Strategy A.G)
+    (hX : HEq (V.extract θ F c σ) (Flock.Bridge.transcriptOf r.D r.hU r.n A.κ (A.valE q τ)))
+    (O : (g : Fin (Flock.Bridge.circuitOf r.D r.hU r.n).N) → BitVec ((Flock.Bridge.circuitOf r.D r.hU r.n).w g) → Prop)
+    (hO : HEq (V.Opens θ F c) O)
+    (hopen : ∀ (g : Fin A.Cc.N) (b : Bool),
+      (∀ b', (Flock.Bridge.progOf A.Cc A.κ).gates[Flock.Bridge.posOf A.Cc g]? ≠ some (.const b')) →
+      A.valE q τ (Flock.Bridge.posOf A.Cc g) = some b → O g (BitVec.ofBool b))
+    (hconst : ∀ (g : Fin A.Cc.N) (b : Bool),
+      (Flock.Bridge.progOf A.Cc A.κ).gates[Flock.Bridge.posOf A.Cc g]? = some (.const b) →
+      O g (Flock.Bridge.transcriptOf r.D r.hU r.n A.κ (A.valE q τ) g)) :
+    (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤ (A.faultyE q τ).card := by
+  have hC : V.circuitOf F = Flock.Bridge.circuitOf r.D r.hU r.n := by
+    show Flock.Bridge.Parsed.circuit (V.parsed F) = _
+    rw [hr]
+    rfl
+  have hn : V.units F = r.n := by
+    show Flock.Bridge.Parsed.units (V.parsed F) = _
+    rw [hr]
+    rfl
+  have hP : HEq (V.partsOf F) (Flock.Bridge.partsOf r.D r.hU r.n) := by
+    show HEq (Flock.Bridge.Parsed.parts (V.parsed F)) _
+    rw [hr]
+    rfl
+  refine (card_unbound_congr hC hn hP hO hX).le.trans ?_
+  exact Flock.Bridge.card_unbound_le_faulty A.P A.κ kd desc q A.roots Claims.Sampling.sha512Msg A.Cd
+    (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) O hopen hconst
 
 /-- **Sampled proofs at the deployment.** At files that parse to `r` (`Vocab.parsed`), every `θ`, `c` and strategy
 `σ`: C-Flock's live session at the parse (`A`, `K₀ = ⌊ε n⌋ + 1`, its cost `t'` the strategy's), the session's

@@ -1,3 +1,4 @@
+import Definitions.Accounting.JointLive
 import Proofs.Flock.Bridge.CircuitOf
 
 /-!
@@ -65,5 +66,53 @@ theorem unopened_mem_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (
   rw [rus_partOf_getElem? P u] at hr
   cases Option.some.inj hr
   exact opened_of_progCorrect P u _ ι (hι _ (List.mem_singleton_self _)) hg hio hc hv
+
+/-- **The unbound units are at most the faulty ones**: in the values a witness opens (`openedOf`), under any openings
+`opens` of core's circuit that hold wherever the witness opens a value other than a constant (`hopen`) and at the
+constants (`hconst`), every unit unbound (`Accounting.unbound`: wrong, or with a committed value `opens` doesn't
+open) is faulty in the sampling statement. -/
+theorem card_unbound_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
+    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
+    (w : Wit) (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
+    (hopen : ∀ (g : Fin C.N) (b : Bool), (∀ b', (progOf C κ).gates[posOf C g]? ≠ some (.const b')) →
+      w.val H Cm (stmtOf P κ kd desc q roots) (posOf C g) = some b → opens g (BitVec.ofBool b))
+    (hconst : ∀ (g : Fin C.N) (b : Bool), (progOf C κ).gates[posOf C g]? = some (.const b) →
+      opens g (Verity.Circuit.ofBits (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots))) g)) :
+    (Accounting.unbound (Verity.Partition.ofAudit P) opens
+      (Verity.Circuit.ofBits (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots))))).card ≤
+      ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n)).card := by
+  classical
+  refine Finset.card_le_card_of_injOn (fun u : Fin n => u.val) (fun u hu => ?_) (fun a _ b _ h => Fin.ext h)
+  rw [Finset.mem_coe, Accounting.unbound, Finset.mem_filter] at hu
+  have hu' := hu.2
+  refine Finset.mem_coe.2 (Finset.mem_filter.2 ⟨?_, u.isLt⟩)
+  rcases hu' with hw | ⟨g, hg, hno⟩
+  · have hmem : u ∈ (Verity.Partition.ofAudit P).wrong
+        (Verity.Circuit.ofBits (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))) := by
+      rw [Verity.Partition.mem_wrong]
+      exact hw
+    rw [Verity.Partition.wrong_ofAudit] at hmem
+    exact wrong_subset_faulty P κ kd desc q roots H Cm w hmem
+  · obtain ⟨hgc, hio⟩ := Finset.mem_filter.1 hg
+    have hgc' : g ∈ P.committed := (Verity.Partition.mem_committed_ofAudit P g).1 hgc
+    have hio' : P.unit g = some u ∨ ∃ h' : Fin C.N, P.unit h' = some u ∧ g ∈ (C.op h').args := by
+      rcases hio with h1 | ⟨h', hu1, hr⟩
+      · exact Or.inl h1
+      · rw [Verity.Circuit.ofAudit_reads, List.mem_toFinset] at hr
+        exact Or.inr ⟨h', hu1, hr⟩
+    by_cases hc : ∃ b, (progOf C κ).gates[posOf C g]? = some (.const b)
+    · obtain ⟨b, hb⟩ := hc
+      exact absurd (hconst g b hb) hno
+    · have hc' : ∀ b, (progOf C κ).gates[posOf C g]? ≠ some (.const b) := fun b hb => hc ⟨b, hb⟩
+      cases hv : w.val H Cm (stmtOf P κ kd desc q roots) (posOf C g) with
+      | none => exact unopened_mem_faulty P κ kd desc q roots H Cm w hgc' hio' hc' hv
+      | some b =>
+        refine absurd ?_ hno
+        have hX : Verity.Circuit.ofBits (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots))) g =
+            BitVec.ofBool b := by
+          show BitVec.ofBool (openedOf C κ _ g) = _
+          simp only [openedOf_of_not_const _ hc', hv, Option.getD_some]
+        rw [hX]
+        exact hopen g b hc' hv
 
 end Flock.Bridge
