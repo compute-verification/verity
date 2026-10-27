@@ -15,11 +15,11 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 | Subprotocol | What an accepted run establishes | Where |
 | --- | --- | --- |
-| Sampled proofs | The auditor draws proof blocks of a committed circuit with live coins, and C-Flock proves each drawn block's committed values right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
+| Sampled proofs | The auditor draws proof blocks of a committed circuit with live coins, and C-Flock proves each drawn block's values in the committed trace right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
 | Proofs of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/PROTOCOL.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
 | Proofs of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
 | The remote bandwidth audit | A lower bound on the bits read from a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
-| The network certifier | An auditor-trusted device on each node's uplink certifies that the traffic carried only committed values, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
+| The network certifier | An auditor-trusted device on each node's uplink certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
 | The wipe | A server's life is cut into server-time blocks, each opened by a certified wipe of its memory, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
 | Novel communication intensity (NCI) | Inference rather than training: the committed circuit divides into blocks of bounded size, each reading a bounded amount of novel information. | `verity/core/protocols/network/nci/lean` |
 

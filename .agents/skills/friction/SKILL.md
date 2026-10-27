@@ -157,11 +157,11 @@ Protocols and claims:
   ties them by a premise or trusts them separately.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
-- A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
+- A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
   the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier of record, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
@@ -193,7 +193,7 @@ Protocols and claims:
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are drawn from the OS, not expanded by a PRG.
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
-  implies the verifier of record accepts; completeness stays a test.
+  implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
   pinned key behaves like a fresh one.
 - A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
