@@ -4,9 +4,9 @@
 //   T_s     after the main k-tile that ends segment s, each cell's low 16 bits of X W'^T over the first s L inner indices,
 //           to the words buffer in v31's layout ([128 x 128 tile][s][cell], u16)
 //   O       T_S + 256 dO - Z_X U^T - V Y_W^T mod 2^32, row-major s32
-// The peel's tail rows P_A, P_B (form_a_kernel's and form_b_kernel's, blocks of L') go through the same accumulator, ahead
-// of the main k-tiles, in Horner order: the blocks of the top digit D first (from zero), then acc *= 128 and digit D - 1's
-// blocks, ..., acc *= -128 after digit 1, then the shift-0 blocks (-Z_0 U^T and -V Y_0^T), so acc holds the tail
+// The peel's tail rows P_A, P_B (form_a_kernel's and form_b_kernel's, tail segments of L') go through the same accumulator,
+// ahead of the main k-tiles, in Horner order: the tail segments of the top digit D first (from zero), then acc *= 128 and
+// digit D - 1's, ..., acc *= -128 after digit 1, then the shift-0 tail segments (-Z_0 U^T and -V Y_0^T), so acc holds the tail
 // tau = -Z_X U^T - V Y_W^T when the main k-tiles start and tau + T_S after them. Each segment's word is the low half of
 // acc - tau: tau's low halves are kept (CM 0: packed in 64 registers a thread at BN 256; CM 1: in an L2-resident scratch
 // slot of the CTA's, read back at each segment end), so a tail costs (dz + dy) L' inner indices on the tensor cores and
@@ -41,15 +41,15 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //   RP 4  384 threads at 168, the producer warpgroup at 104 and the consumers at 200: warp 8 issues the loads, warps 9 to
 //         11 (one a sub-partition 1 to 3) hash the rows of the tiles the consumers have stored (gemm_r4's H), so the
 //         commit's compressions run on the ALU while the consumers wait on their MMAs. No back-pressure: when the
-//         consumers are done (static schedule, every gridDim.x-th tile) a hash warp stops within a block, keeping its
-//         rows' chaining values, and the leaf phase hashes on from there (H's flags)
+//         consumers are done (static schedule, every gridDim.x-th tile) a hash warp stops between two chunks, keeping
+//         its rows' chaining values, and the leaf phase hashes on from there (H's flags)
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
-// to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0: the commit's CTAs never
-// landed beside it, r20261027-045150-d9ee.)
+// to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0, and the commit's CTAs
+// never land beside it.)
 template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : 3 * 128; }
 // RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on O row j of commit tile ct (tm N / 128
-// + tn) by at most budget blocks, until stop() holds, and says whether the row is hashed whole; chunk, a visit's budget
-// (0: a row whole at once)
+// + tn) by at most budget SHA-512 chunks, until stop() holds, and says whether the row is hashed whole; chunk, a visit's
+// budget (0: a row whole at once)
 struct NoHash {
   static constexpr unsigned chunk = 0;
   WGD unsigned lpt() const { return 1; }
@@ -149,7 +149,7 @@ template <int NA> WGD void acc_fence(int32_t* d) {
 // ptxas moves no load above a warp barrier, and an empty asm reaches only NVVM
 WGD void ld_fence() { __syncwarp(); }
 
-// the tail's k-tiles in Horner order: digit e of block b (0 for blocks 0 and 1, then Z's digits, then Y's), the top digit
+// the tail's k-tiles in Horner order: digit e of tail segment b (0 for 0 and 1, then Z's digits, then Y's), the top digit
 // D = max(dz, dy) - 1 first; step i < TT is k-tile kt of P's columns, and `end` says the step closes its digit's group
 WGD int digit_of(int b, int dz) { return b < 2 ? 0 : (b <= dz ? b - 1 : b - dz); }
 struct TailStep { int kt; int e; bool end; };
@@ -191,7 +191,7 @@ enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 
 // RP 4's hash warps (warps 9 to 11): warp w takes batches w, w + 3, ..: batch b is the CTA's O rows 32 b .. 32 b + 31 in
 // its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8 warps a tile) every
 // tile the batch reads. h.chunk 0: each batch whole in turn; else passes over the batches posted so far, at most chunk
-// blocks of each a visit, so the rows the leaf phase takes on are left with chains of about one length. Without hall,
+// SHA-512 chunks of each a visit, so the rows the leaf phase takes on are left with chains of about one length. Without hall,
 // nothing starts once the consumers are done, and stop() ends the row's hash where it is.
 template <int BN, class H>
 WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles_m, int tiles_n, int ntile) {
