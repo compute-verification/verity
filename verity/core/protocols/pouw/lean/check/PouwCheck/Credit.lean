@@ -2013,6 +2013,22 @@ def Internal.live (live : Json) (t steps : Nat) (pre program window : String) (e
     unless f.length == want.length && want.all (fun (p, x, r) => opened.get? p == some (x, r)) do
       liveRefuse (otherLiveFinding s m)
 
+/-- `credit._window_drawn`: the units the window's draw coin (`draw`'s `coin`, a live opening) draws over the strata
+`ss` at the period's committed K `k`, its stream the window's root, its registration the draw's root and its receipt
+`{"receipts": …}` (`drawnOf`), else the refusal. -/
+def windowDrawn (window draw k : Json) (ss : Array Flock.Draw.WorkStratum) : R (Array Nat) := do
+  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
+  drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss k
+
+/-- The units a window's draw demands proofs of, from its circuit's descriptor in hex: `windowDrawn` over the strata
+of `layoutOf` of the descriptor's bytes, else the refusal. `windowLayout` draws the same units from the layout it
+read. -/
+def descriptorDrawn (window draw descriptor k : Json) : R (Array Nat) := do
+  let some d := (match descriptor with
+      | .str s => if isHexBytes s then hex? (.str s) else none
+      | _ => none) | layoutRefuse DESCRIPTOR_HEX
+  windowDrawn window draw k (← strata (← layoutOf d))
+
 /-- `credit._window`: `window`'s credited calls (a call with m_s = 0 served rows is none), the layout it read from
 the descriptor and its calls' served rows (`Internal.servedRows`, at most the period's T table rows `rows`, whose
 `slotOf` is the layout's A slot). -/
@@ -2047,9 +2063,7 @@ def windowLayout
   let rows ← Internal.servedRows calls layout log.size t
   let maxTokens ← committedLength ledger name
   Internal.length maxTokens rows layout log.size
-  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
-  proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
-    k) proofs
+  proved (← windowDrawn window draw k ss) proofs
   Internal.registration ((str? (get window "root")).getD "") program ((str? (prefixOf d)).getD "") entries proofs ss
     layout log.size sid
   Internal.live live t log.size ((str? (prefixOf d)).getD "") program ((str? (get window "root")).getD "") entries rows

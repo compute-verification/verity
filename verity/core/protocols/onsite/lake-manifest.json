@@ -76,14 +76,16 @@
    "name": "core_memory_challenger",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../pous/check/../../../devices/memory_challenger/lean",
+   "dir":
+   "../remote_bandwidth/lean/../../pous/check/../../../devices/memory_challenger/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
    "name": "core_identity",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../pous/check/../../../primitives/identity",
+   "dir":
+   "../remote_bandwidth/lean/../../pous/check/../../../primitives/identity",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -91,7 +93,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../pous/check/../../../devices/memory_challenger/lean/../../../primitives/lms/lean",
+   "../remote_bandwidth/lean/../../pous/check/../../../devices/memory_challenger/lean/../../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

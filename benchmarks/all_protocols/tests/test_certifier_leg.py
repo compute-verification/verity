@@ -22,7 +22,10 @@
   units read the same rows off a shared-row member's tables through its refs as off a plain member's bodies (each
   written by `rows.Committed`), and a body of another size or a ref past its table is refused; where #4426's
   registered weights are in the tree, a ``--registered`` period's shared-row members read unit for unit as the plain
-  period's, and its free inputs are `interface.input_count`'s (slow);
+  period's, and its free inputs are `interface.input_count`'s (slow); a wired window gives the leg the per-coordinate
+  window's requests and outputs at a cap that splits its records across members, and a record that spans other than
+  one unit a request is refused; a ``--registered --wired`` period gives it its requests, the stub's outputs (each
+  wired down_proj unit's whole ``o0`` row) and its free inputs, the requests' step-0 inputs alone (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
 * of the windows the runner audits at once, one makes the run's session and the others read it (`once`), and the
@@ -547,7 +550,8 @@ def test_a_failed_relay_or_prove_carries_its_logs_tail_and_keeps_the_log_where_c
     monkeypatch.setattr(TIE, "load", lambda name: L)
     monkeypatch.setattr(TIE, "_loop", lambda: Namespace(H=H))
     with pytest.raises(RuntimeError) as got:
-        TIE.relay(tmp_path / "runner-scratch", [3, 7], STEPS, 1, TOOLS, False, "aa" * 64, out)
+        TIE.relay(tmp_path / "runner-scratch", [3, 7], STEPS, 1, TOOLS, False, TIE.OC.OutShape("aa" * 64, "out", 1, H),
+                  out)
     assert carries_tail(got.value, "certifier_serve.py rehearse exited 3 with no summary",
                         out / L.SESSION / "rehearse.log")
     failing(monkeypatch, {"prove"})
@@ -880,5 +884,55 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     for u, (lab, rows) in want.items():
         assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
     circuit = json.loads((d / "circuit.json").read_text())
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 1024 * (1024 + 32)
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
+
+
+def test_a_wired_windows_requests_and_registered_outputs_are_the_per_coordinate_windows(tmp_path):
+    """The wired circuit records each linear once for all requests (a record's ``requests``, one a unit) and its quantize
+    units carry no layer: the leg reads the same prompts, steps and outputs off it as off the per-coordinate circuit, at
+    a cap that splits each record across members as at one that doesn't; a record whose units aren't one a request is
+    refused."""
+    from verity_torch_loop import serve
+
+    shape = ["--requests", "3,7", "--steps", "2", "--law", "stratified:3", "--run-id", "allp-cert-wired"]
+    assert serve.main([*shape, "--out", str(tmp_path / "coord")]) == 0
+    for cap in (1, 2):
+        assert serve.main([*shape, "--out", str(tmp_path / f"wired{cap}"), "--cap", str(cap), "--wired"]) == 0
+    coord, *wired = (L.loop_units(tmp_path / d) for d in ("coord", "wired1", "wired2"))
+    for cap, units in zip((1, 2), wired):
+        assert L.requests_of(tmp_path / f"wired{cap}", units) == L.requests_of(tmp_path / "coord", coord) == ([3, 7], 2, 128)
+        outputs = L.registered_outputs(units)
+        assert outputs == L.registered_outputs(coord) and sorted(outputs) == [(r, s) for r in ("r0", "r1") for s in (0, 1)]
+        assert all(len(v) == 2 * 128 for v in outputs.values())
+    d = tmp_path / "wired1"
+    index = json.loads((d / "index.json").read_text())
+    index["members"][1]["labels"][0][2]["requests"] = ["r1", "r0"]
+    (d / "index.json").write_text(json.dumps(index))
+    with pytest.raises(ValueError, match=r"spans units \[0\], not one a request of 2"):
+        L.loop_units(d)
+
+
+@pytest.mark.slow
+def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_inputs(tmp_path):
+    from verity.ml.windows import interface as IF
+
+    weights = {"opening": tmp_path / "opening.json", "pin": tmp_path / "pin.json"}
+    RN.serve(["--commit-weights", str(weights["opening"]), "--pin", str(weights["pin"]), "--wired"])
+    a = Namespace(law="work:14", cap=2, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
+                  pouw=None, delta="1/100", start=0, windows=1, weights=weights, session_jobs=1, wired=True)
+    d, _ = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+    circuit = json.loads((d / "circuit.json").read_text())
+    assert circuit["name"] == f"torch-loop/mlp-w8a8-h{H}/wired" and len(circuit["templates"]) == 3
+    units = L.loop_units(d)
+    assert L.requests_of(d, units) == ([3, 7], STEPS, H)
+    outputs = L.registered_outputs(units)
+    model = S.L.Model(h=H)
+    for i, token in enumerate([3, 7]):
+        assert [outputs[f"r{i}", k] for k in range(STEPS)] == S.step_outputs(model, token, STEPS)
+    text = [b"".join(outputs[f"r{i}", k] for k in range(STEPS)).hex().encode() for i in range(2)]
+    events = [t[j:j + L.TOKEN_BYTES] for t in text for j in range(0, len(t), L.TOKEN_BYTES)]
+    assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
+                           STEPS)["equal"]
+    # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 2 * (1024 + 32)

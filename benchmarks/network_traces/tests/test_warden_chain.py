@@ -130,6 +130,22 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
     assert [x["expect"] for x in honest] == [1] * sz.W63.windows and all(not any(x["failed"].values()) for x in honest)
     assert [x["expect"] for x in tampered] == [0] + [1] * (sz.W63.windows - 1)
     assert tampered[0]["failed"] == {"egress": ["signed"], "ingress": []}
+    assert s["draw"]["selection"] == "all" and n2.OTHER not in s["members"]
+
+
+def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_subset(tmp_path):
+    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the draw holds refuse
+    it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
+    run = gate_run(tmp_path)
+    assert n2.main(["prove", "--warden-run", str(run), "--draw", "1", "--dry", "--out", str(tmp_path / "n2")]) == 0
+    s = json.loads((tmp_path / "n2" / "summary.json").read_text())
+    assert (s["draw"]["law"], s["draw"]["k"], s["draw"]["population"]) == ("subset:1", 1, sz.WINDOWS)
+    tampered, other = (s["members"][k]["reference"] for k in ("tampered", n2.OTHER))
+    assert [x["expect"] for x in tampered] == [0] * sz.WINDOWS
+    assert all(x["failed"] == {"egress": ["signed"], "ingress": []} for x in tampered)
+    assert [x["expect"] for x in other] == [1] * sz.WINDOWS
+    with pytest.raises(SystemExit, match="a period draw takes 1 to 2"):
+        n2.main(["prove", "--warden-run", str(run), "--draw", "3", "--dry", "--out", str(tmp_path / "n2x")])
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:

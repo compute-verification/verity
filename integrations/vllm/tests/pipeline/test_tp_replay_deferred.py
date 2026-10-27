@@ -297,7 +297,7 @@ def _bmap(rank, root):
 
 def _cblock(rank, root, bmap):
     return {"run_root": root, "steps": 2, "leaves": 3, "bytes_bound": 516, "tensors": 2, "openings": {"n": 64, "verified": 64},
-            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True}}}
+            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}}}
 
 
 def _in_process(fins):
@@ -565,7 +565,7 @@ def test_a_commit_that_deferred_nothing_is_refused(tmp_path):
 # ------------------------------------------------------------------------------------------------ the rank's process
 
 def _worker(tmp_path, cfg, bmap):
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
         _deferred_replay = W.TP2CaptureWorkerExtension._deferred_replay

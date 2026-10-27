@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads", "deployments")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads", "deployments", "adversary")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -38,6 +38,7 @@ PINNED = {
               "l40s-48gb/e4m3": "L40S"},
     "input_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
                       "bench-instances-nvfp4-sm120-v1"},
+    "adversary": {"world-inference-2027": (9.36e30, 21224489795918368)},
 }
 
 
@@ -52,7 +53,7 @@ def test_every_census_file_validates_against_its_schema_with_unique_ids(name: st
 
 
 def test_the_census_encodes_no_units() -> None:
-    """The census holds workloads and subcircuits, never replay or proof units, which applications choose per run
+    """The census holds workloads and subcircuits, never replay or proof blocks, which applications choose per run
     (``benchmarks/census/README.md``)."""
     text = " ".join((census.ROOT / f"{n}.json").read_text(encoding="utf-8") for n in FILES)
     ids = [e["id"] for n in FILES for e in census.raw(n)]
@@ -73,6 +74,19 @@ def test_ids_are_pinned_with_their_values() -> None:
     assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
     assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
     assert {d["id"]: (d["machines"], d["window_s"]) for d in census.raw("deployments")} == PINNED["deployments"]
+    assert {k: (a.total_flop, a.requests) for k, a in census.load("adversary").items()} == PINNED["adversary"]
+
+
+def test_the_adversary_resource_model_is_the_world_and_its_totals_follow_from_its_parts() -> None:
+    """The figure script's arithmetic: FLOP_REQ = 4500 * 2 * 49e9 and R = int(1e16*104/49) over a year."""
+    models = census.load("adversary")
+    assert [a.id for a in models.values() if a.role == "reference"] == ["world-inference-2027"]
+    for a in models.values():
+        assert a.flop_per_request == a.tokens_per_request * a.flop_per_active_param_per_token * a.active_params, a.id
+        assert a.total_flop == a.requests * a.flop_per_request and a.datatype in census.DATATYPES, a.id
+    world = models["world-inference-2027"]
+    assert world.requests == int(1e16 * 104 / 49) and world.monitoring_period_s == 365 * 86400
+    assert world.h100_hour_flop == 1979e12 * 3600 and world.model == "DeepSeek-V4-Pro"
 
 
 def test_a_datatype_displays_its_common_name_then_its_format_and_every_hardware_dtype_is_one() -> None:
@@ -179,7 +193,7 @@ def test_the_h100_bf16_cells_and_input_set_stand_for_the_wgmma_bf16_subcircuit()
 
 
 def test_workloads_are_the_regression_rows_template_mix() -> None:
-    """Each workload is a served vLLM configuration with its template mix: the proof units per family and bound
+    """Each workload is a served vLLM configuration with its template mix: the proof blocks per family and bound
     parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
     to those expectations, and only families the census has a template for name one."""
     import collections
