@@ -3,7 +3,7 @@ this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
-        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--remote-client HOST:PORT]]
+        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--remote-client HOST:PORT | --client-spin]]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
@@ -39,7 +39,8 @@ Run it inside one `research run --on auto --cpus N`, so the hog loads only the r
 **With `--warden --remote-client HOST:PORT`** the receiver is on another host: `warden_serve.py client-agent` there,
 one session a rehearsal. The stub, the warden, its pacer and the hogs stay here, and the client's offsets are read on
 its clock moved by the offset it measured to this host's. `jitter.json`'s `remote` is the rehearsal's `remote.json`:
-the agent's host, and its clock's offset and round trip before and after.
+the agent's host, and its clock's offset and round trip before and after. `--client-spin` keeps the receiver here but
+its loop never waits in the kernel, so an offset that its wakeup carries is gone from its readings.
 """
 
 from __future__ import annotations
@@ -471,9 +472,14 @@ def main(argv=None) -> int:
                          "receiver; the stub, the warden and the hogs stay on this one")
     ap.add_argument("--remote-wait", type=float, default=1800.0,
                     help="with --remote-client: seconds to keep trying the agent")
+    ap.add_argument("--client-spin", action="store_true",
+                    help="with --warden: the local client's loop never waits in the kernel (warden_serve.py client "
+                         "--spin)")
     a = ap.parse_args(argv)
     if a.remote_client and not a.warden:
         ap.error("--remote-client: with --warden")
+    if a.client_spin and (a.remote_client or not a.warden):
+        ap.error("--client-spin: with --warden and a local client")
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
     bits = SecretBits(a.out / "rehearsal", os.urandom(64), warden=a.warden) if a.secret_bit else None
@@ -486,7 +492,7 @@ def main(argv=None) -> int:
                    str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
                    "--out", str(a.out / "rehearsal"), *paced,
                    *(["--remote-client", a.remote_client, "--remote-wait", str(a.remote_wait)] if a.remote_client
-                     else [])]
+                     else []), *(["--client-spin"] if a.client_spin else [])]
     else:
         command = [sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
                    "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
@@ -504,7 +510,7 @@ def main(argv=None) -> int:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden}
+           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden, "client_spin": a.client_spin}
     run = a.out / "rehearsal" if a.warden else a.out / "rehearsal" / "honest"
     if a.warden and (run / "warden.json").exists():
         doc |= {"rate": a.rate, "window": a.window} | warden_summary(run)
@@ -515,7 +521,8 @@ def main(argv=None) -> int:
                      {g: {k: doc[g][k] for k in ("ticks", "p999_ms", "max_ms")} | {"past_slack": len(doc[g]["past_slack"])}
                       for g in ("egress", "ingress") if g in doc}), flush=True)
     if bits is not None and a.warden and (run / "client.json").exists() and (run / "warden.json").exists():
-        j = warden_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
+        j = warden_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict"),
+                                        "client_spin": a.client_spin}
     elif bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
         j = jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
     else:

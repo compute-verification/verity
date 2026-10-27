@@ -4,12 +4,13 @@ key: the check accepts the run, whose server got each request with its release o
 names, and refuses a record that isn't what was certified, a cell that reached its client in
 another bucket, and a response that isn't the record's; a window in which the warden refused a connection is certified
 and signed nowhere; a window's slow commit, which faults the next window when it runs in the warden's process,
-moves no tick in `serve`'s publisher process; and a client agent on another host reads the warden host's clock over
-its control connection and hands back its session."""
+moves no tick in `serve`'s publisher process; a spinning client reads what the plain one does; and a client agent on
+another host reads the warden host's clock over its control connection and hands back its session."""
 
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import importlib.util
 import json
 import math
@@ -744,6 +745,36 @@ def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_i
     held = sorted(os.listdir("/proc/self/fd"))
     n = ws.reserve_fds(table() + 1)
     assert table() >= n and sorted(os.listdir("/proc/self/fd")) == held
+
+
+def test_a_spinning_client_reads_its_response_over_loopback_and_stops_spinning_when_done(tmp_path):
+    """`client --spin` reads a connection's cells as the plain client does, spinning while it does, and its spinning task
+    ends with it."""
+    response, seen = _response(["a", "b"]), []
+
+    def spinners() -> list[asyncio.Task]:
+        return [t for t in asyncio.all_tasks() if t.get_coro().__name__ == "_spin" and not t.cancelling()]
+
+    async def answer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        while read_cell(await reader.readexactly(PARAMS.cell_bytes), PARAMS.cell_bytes)[0] != END:
+            pass
+        seen.append(len(spinners()))
+        writer.write(cells(response, PARAMS.cell_bytes))
+        await writer.drain()
+        writer.close()
+
+    async def main() -> tuple[dict, int]:
+        server = await asyncio.start_server(answer, "127.0.0.1", 0)
+        deployment = {"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0,
+                      "listen": server.sockets[0].getsockname()[:2], "upstream": ["127.0.0.1", 2]}
+        async with server:
+            doc = await ws.client(deployment, [{"at": 0.0, "body": {"prompt": "x"}}], tmp_path, clock=lambda: 0.0,
+                                  spin=True)
+        return doc, len(spinners())
+
+    doc, left = asyncio.run(main())
+    (got,) = doc["connections"]
+    assert (got["outcome"], got["data_sha256"], seen, left) == ("end", ws._sha(response), [1], 0)
 
 
 def test_a_client_agent_reads_the_warden_hosts_clock_and_hands_back_its_session(tmp_path):

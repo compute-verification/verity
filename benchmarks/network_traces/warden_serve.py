@@ -810,10 +810,25 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
             "response": parse_response(data) if id_payload is None else parse_id_response(data, id_payload)}
 
 
-async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
+async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time, spin: bool = False) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its warden-form id request
-    (`active.id_request`, offset 0) and its response read as id-form."""
+    (`active.id_request`, offset 0) and its response read as id-form. With `spin` the loop never waits in the kernel
+    (a task that only yields), so a cell's arrival never waits for this process's CPU to wake."""
+    spinner = asyncio.create_task(_spin()) if spin else None
+    try:
+        return await _client(deployment, traffic, out, clock)
+    finally:
+        if spinner is not None:
+            spinner.cancel()
+
+
+async def _spin() -> None:
+    while True:
+        await asyncio.sleep(0)
+
+
+async def _client(deployment: dict, traffic: list[dict], out: Path, clock) -> dict:
     params = WardenParams(**deployment["params"])
     origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
@@ -1242,7 +1257,8 @@ def rehearse(args) -> int:
             with open(out / "client.log", "w") as clog:
                 if control is None:
                     client_exit = subprocess.run(me + ["client", "--deployment", str(out / "deployment.json"),
-                                                       "--traffic", str(out / "traffic.json"), "--out", str(out)],
+                                                       "--traffic", str(out / "traffic.json"), "--out", str(out),
+                                                       *(["--spin"] if args.client_spin else [])],
                                                  stdout=clog, stderr=subprocess.STDOUT).returncode
                 else:
                     try:
@@ -1351,6 +1367,8 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--id-payload", type=int, help="answer every request id-form (id_response) at P bytes an event")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
+    c.add_argument("--spin", action="store_true", help="the client's loop never waits in the kernel (client's spin)")
+    r.add_argument("--client-spin", action="store_true", help="the local client with --spin")
     x.add_argument("--run", required=True, type=Path)
     return ap
 
@@ -1405,7 +1423,7 @@ def main(argv=None) -> int:
         ar._quiet_runtime()
         traffic = json.loads(args.traffic.read_text())
         reserve_fds(len(traffic) + FD_MARGIN)
-        asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))
+        asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out, spin=args.spin))
         return 0
     if args.command == "client-agent":
         ar._quiet_runtime()
