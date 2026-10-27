@@ -6,6 +6,8 @@ negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
+- `v2_layout.py`: a v2 window's withheld challenger layout, the draw's family and each session's `slot/<i>/session` and
+  `slot/<i>/<stream>`, sized from the statement's own schedule (`flock-firewall hello` and `session --schedule`).
 - `r2_population.py`: the other population every driver's and `replay.py`'s registration-partition-mismatch negative (R2)
   registers, its first template one instance short, or one over where it has a single instance.
 - `pod.sh`: the entry point on a CPU pod.

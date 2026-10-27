@@ -11,7 +11,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
-# named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
+# named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build;
+# so is the flock package's, whose `flock-firewall` prints the schedule a v2 layout is sized from (`v2_layout.schedule`).
 # `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
@@ -19,7 +20,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # cells of a warden run its tests drive tick by tick (`test_warden_serve._run`).
 # `benchmarks/all_protocols` and `benchmarks/e2e_demo/verity_e2e_demo`: served_verdicts' rows (`runner.row_of`, the
 # integrity leg's answer) and its block record (`block_record`, its schema).
-inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
+inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/service/flock/lakefile.toml",
+          "benchmarks/live_challenger",
           "benchmarks/all_protocols/verity_all_protocols", "benchmarks/all_protocols/legs",
           "benchmarks/e2e_demo/verity_e2e_demo",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
