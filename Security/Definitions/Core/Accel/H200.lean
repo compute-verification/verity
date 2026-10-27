@@ -3,6 +3,9 @@ import Definitions.Core.Accel.Machine
 /-!
 # The H200 SXM's numbers (trusted)
 
+Each number is `verity/hardware/cards/h200-sxm-141gb.toml`'s, with its source and its mark (ceiling, measurement or
+placeholder) there; `verity/hardware/tests/test_lean.py` holds this table to that file number by number.
+
 A table is a SKU's, at its firmware's maximum (RT-MODEL-MIN RM5). This one is the H200 SXM 141 GB (GH100, sm_90a;
 board 692-2G520-0280-001, vBIOS 96.00.A5.00.03, 700 W), the SKU our H200 nodes' cards report (runs
 r20261027-032540-2c81, r20261027-032553-f3b2): 132 SMs (H100 whitepaper V1.04 Table 3, H100 SXM5) at 1980 MHz SM and

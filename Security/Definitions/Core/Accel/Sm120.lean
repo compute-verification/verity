@@ -3,6 +3,9 @@ import Definitions.Core.Accel.Machine
 /-!
 # The RTX PRO 6000 Server Edition's numbers (trusted)
 
+Each number is `verity/hardware/cards/rtx-pro-6000-server.toml`'s, with its source and its mark (ceiling or
+measurement) there; `verity/hardware/tests/test_lean.py` holds this table to that file number by number.
+
 A table is a SKU's, at its firmware's maximum (RT-MODEL-MIN RM5). This one is the RTX PRO 6000 Blackwell Server
 Edition (GB202, sm_120a, 188 SMs; board 900-2G153-0000-000, vBIOS 98.02.8D.00.01), the SKU our sm_120 nodes' cards
 report (run r20261027-015942-eb08): 2430 MHz SM and 12481 MHz GDDR7. Its supported clocks top at those two, and its
