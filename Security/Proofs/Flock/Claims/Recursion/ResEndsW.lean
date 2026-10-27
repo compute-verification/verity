@@ -365,7 +365,7 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
   obtain ⟨hi', hnames, hrow⟩ := copy_rowElems hsh.2 hr hss hsv hpc hxO ht hpar hshp hholo hpart hiN hoN r0
   have hPP : RecVStar.partPorts (DecompBR.shI v.2.1 v.2.2) q.key.1 = .ok P := partPorts_of hS1 hgs hgj
   rw [hshI] at hPP
-  obtain ⟨-, hnm⟩ := hnames P hPP
+  obtain ⟨_hPs, hnm⟩ := hnames P hPP
   rw [← hshI] at hnm
   have hA : P[i] = (_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).size + bb := by
     rw [hPi]
