@@ -22,7 +22,7 @@ import statistics
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hash", "intpipe"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sass_count
 
 CFGS = ("1700-O", "1700-pure", "1710-O", "1710-pure", "1700-O-w4")
