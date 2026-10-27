@@ -323,8 +323,9 @@ def _body(B, S, valid, parent, tok, owner, pfx, r, admit, sent, K, wh, nins, uni
 
 CacheStep = CompositeDefinition(
     "CacheStep", 1, STATICS, _sig, _body, conformance="exact-model-tested",
-    doc="one row's pass over the prefix cache's table (ENC-DERIVED's rules): its hit checked against the cached prefix, "
-        "derived while the pool bound holds, and the units it computes owned or appended (`cache_step.reference`)")
+    doc="one row's pass over the prefix cache's table (the derived encoding's rules): its hit checked against the "
+        "cached prefix, derived while the pool bound holds, and the units it computes owned or appended "
+        "(`cache_step.reference`)")
 
 
 def unit(**st):

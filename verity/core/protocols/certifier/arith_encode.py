@@ -897,28 +897,28 @@ def _sig_charge(S):
 
 ArithEncodeStep = _part(
     "ArithEncodeStep", ("K", "BIN"), _sig_step, _build_step,
-    "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, its output bits checked in the decoder's order against "
+    "one symbol through the 32-bit WNC arithmetic encoder, its output bits checked in the decoder's order against "
     "the window's next K segment bits; the next coder state and the bits consumed, the symbol's charge "
     "(`arith_encode.reference_step`)")
 
 ArithEncodeFinish = _part(
     "ArithEncodeFinish", (), _sig_finish, _build_finish,
-    "ENC-CODE's arithmetic encoder's termination checked against the window's last two segment bits "
+    "the arithmetic encoder's termination checked against the window's last two segment bits "
     "(`arith_encode.reference_finish`)")
 
 KTContext = _part(
     "KTContext", ("C", "NW"), _sig_kt, _build_kt,
-    "ENC-REPLAY's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 did "
+    "the replay's adaptive KT estimate for one decision's context, scaled into the coder's total as advice v1 did "
     "before code_v1, and its counts updated (`arith_encode.reference_kt`)")
 
 ArithCountStep = _part(
     "ArithCountStep", ("K", "BIN", "CW"), _sig_count, _build_count_step,
-    "one symbol through ENC-CODE's 32-bit WNC arithmetic encoder, the bits it puts in the window's segment added to the "
+    "one symbol through the 32-bit WNC arithmetic encoder, the bits it puts in the window's segment added to the "
     "window's count (`arith_encode.reference_count_step`)")
 
 ArithCountFinish = _part(
     "ArithCountFinish", ("CW",), _sig_count_finish, _build_count_finish,
-    "ENC-CODE's arithmetic encoder's termination added to the window's count, held to the declared charge c "
+    "the arithmetic encoder's termination added to the window's count, held to the declared charge c "
     "(`arith_encode.reference_count_finish`)")
 
 BookKT = _part(
