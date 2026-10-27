@@ -5,7 +5,7 @@
 # d2wedit) are separate launches and not in these counts.
 name = "d2s-l7qs"
 status = "measured"
-source = "D2S-KERNEL's d_l7qs at 8192^3, `eps_profile.py OUT --mm benchmarks/pouw/machine_model --toml`, census VF3n-16's classes (note:20261017T0732Z-draft-d2s-kernel, r20261017-074701-cbca)"
+source = "D2S-KERNEL's d_l7qs at 8192^3, `eps_profile.py OUT --mm benchmarks/pouw/machine_model --toml`, census VF3n-16's classes"
 L = 32
 
 [mma]
@@ -28,11 +28,11 @@ VIMNMX = 0.0005
 
 [measured]
 cycles_per_mma = 26.1495        # the hot median at its clock; ncu 26.0065; work bound 20.9768 on JI3n_0 (VF3n-16)
-source = "D2S-KERNEL's d_l7qs at 8192^3 (note:20261017T0732Z-draft-d2s-kernel, r20261017-074701-cbca)"
+source = "D2S-KERNEL's d_l7qs at 8192^3"
 
 [operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
 
 [fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a MMA at L = 32)
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)

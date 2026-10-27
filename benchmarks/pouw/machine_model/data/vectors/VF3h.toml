@@ -2,7 +2,6 @@
 name = "VF3h"
 epoch = "VF3h"
 summary = "Every select-type and returning atomic or reduction family at 32 MACs a word written (RS-W′ round 7)."
-note = "note:20261016T1500Z-draft-rs-pi32-atomics"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

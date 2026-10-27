@@ -1,4 +1,4 @@
-"""Red-team audit of a headline PoUW design against the machine model (RT-DC, campaign cmp-13).
+"""Red-team audit of a headline PoUW design against the machine model (RT-DC).
 
 ε is proved conditional on every facet of Π being a true ceiling (eps.py, facet_break/). This module reads, from a
 device's committed census alone, how much room an adversary has to beat one:
@@ -11,9 +11,8 @@ device's committed census alone, how much room an adversary has to beat one:
 - `margin_audit` runs decision 76's joint margin (every near measured facet moved `m` in the cheater's favour at once,
   default 2%) and names the single row that drives it. A facet's *measured lane coefficient* is the one its CUDA lane
   classes share, so the move leaves the tensor-pipe MMA value alone; the issue slot and the exact operand floor are
-  axioms, not measured rows, so they are
-  left alone too. Moving a whole row's column (the MMA coefficient included) mis-prices the tensor route and is not
-  decision 76 — see note:20261017T2016Z-draft-rt-dc for the round-1 retraction it caused.
+  axioms, not measured rows, so they are left alone too. Moving a whole row's column (the MMA coefficient included)
+  mis-prices the tensor route and is not decision 76: round 1 moved it, and was retracted for it.
 - `least_filler` finds the least verified filler a word (in a class mix) that holds a margin: the cheapest add-on that
   brings the joint margin's worst core back to the design's floor.
 - `uniform_gap` bounds a device whose census has no uniform datapath (no UNI class, as sm_80 has none). A cheater that

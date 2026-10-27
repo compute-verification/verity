@@ -1,8 +1,7 @@
-# VF3s-16: VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL beside an MMA, 2-3 accumulators, 112-128 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-9 (IMMA.SP.16864 loaded JI3s_1 1.0408; IMMA.16832 loaded JI3s_2 1.0131); JI3s_0-17 as JI3t_0-38 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), kept JI3s_18, JI3s_19, JI3s_20
+# VF3s-16: VF3r-16 with RT-FACET's refit of the joint issue rows (runs @JI3t): FMUL beside an MMA, 2-3 accumulators, 112-128 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-9 (IMMA.SP.16864 loaded JI3s_1 1.0408; IMMA.16832 loaded JI3s_2 1.0131); JI3s_0-17 as JI3t_0-38 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), kept JI3s_18, JI3s_19, JI3s_20
 name = "VF3s-16"
 epoch = "VF3s-16"
-summary = "VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL beside an MMA, 2-3 accumulators, 112-128 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-9 (IMMA.SP.16864 loaded JI3s_1 1.0408; IMMA.16832 loaded JI3s_2 1.0131); JI3s_0-17 as JI3t_0-38 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), kept JI3s_18, JI3s_19, JI3s_20"
-note = "note:20261017T1930Z-draft-rt-facet"
+summary = "VF3r-16 with RT-FACET's refit of the joint issue rows (runs @JI3t): FMUL beside an MMA, 2-3 accumulators, 112-128 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-9 (IMMA.SP.16864 loaded JI3s_1 1.0408; IMMA.16832 loaded JI3s_2 1.0131); JI3s_0-17 as JI3t_0-38 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), kept JI3s_18, JI3s_19, JI3s_20"
 rows = [
     "issue", "M", "F", "VMNX", "H", "I", "A", "F2FS",
     "XU", "ER6r0", "ER6r1", "LDSi", "R6w", "L2red", "UP", "IW",

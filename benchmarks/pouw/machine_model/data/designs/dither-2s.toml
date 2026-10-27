@@ -15,8 +15,8 @@ pv = "peel"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
 
 [skip.served]
 eps = 0.00325
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.221 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.325%: its tail 0.233%, the sums DG, S and X(0) 0.0779%, the served epilogue 0.0147%. With P·V's served output checked it is 0.253% (8B) / 0.111% (70B) there. Skip terms: the peel's tail at apv's issue model, 1.57 mainloop MACs a strip product, its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle (note:20261017T0320Z-draft-eps1-calc Round 10)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.221 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.325%: its tail 0.233%, the sums DG, S and X(0) 0.0779%, the served epilogue 0.0147%. With P·V's served output checked it is 0.253% (8B) / 0.111% (70B) there. Skip terms: the peel's tail at apv's issue model, 1.57 mainloop MACs a strip product, its sums by vfold (decision 91) and served epilogue at one an issue cycle"

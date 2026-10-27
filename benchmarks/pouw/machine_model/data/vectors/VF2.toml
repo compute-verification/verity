@@ -2,7 +2,6 @@
 name = "VF2"
 epoch = "VF2"
 summary = "VF with the uniform datapath priced as a kind of its own and JI refitted on ISSUE round 3 (§13)."
-note = "note:20261016T0354Z-draft-issue-ceiling-r3"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "JI3_0",
