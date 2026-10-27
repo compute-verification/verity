@@ -532,9 +532,13 @@ theorem verRowsAt_eq (h : setupOf false xI = some v) (cs : List Coin) (k : ℕ) 
   rfl
 
 theorem combAt_eq (h : setupOf false xI = some v) (cs : List Coin) (k : ℕ) : combAt xI cs k = combV v cs k := by
-  unfold combAt
+  unfold combAt combV
   rw [h, verRowsAt_eq h]
-  rfl
+  cases (rowsV v (cs.headD default) cs.tail (k / 2) k RecCoins.ZERO_COMB).toOption with
+  | none => rfl
+  | some t =>
+    obtain ⟨_, info, _⟩ := t
+    rfl
 
 theorem depOpen_eq (h : setupOf false xI = some v) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128))
     (rep l : ℕ) :
