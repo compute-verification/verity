@@ -448,7 +448,7 @@ def fixture() -> dict[str, Any]:
     h200 = h200_layout()
     return {
         "schema": "verity/commit-slots/fixture/v1",
-        "about": "CMP-95 item 3: a step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
+        "about": "A step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
                  "step tree over slot trees over unit trees over rows (benchmarks/torch_gpu/commit_slots/README.md). The context "
                  "and salt key are public test values.",
         "tags": {"layout": LAYOUT_TAG, "unit": UNIT_TAG, "slot": SLOT_TAG, "step": STEP_TAG, "row_schema": ROW_SCHEMA,

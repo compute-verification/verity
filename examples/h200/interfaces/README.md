@@ -18,8 +18,8 @@ unit trees over rows, only each unit's outputs committed. An output row opens in
 row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
 The bundle builds its step commitments with kernels' CPU reference, `benchmarks/torch_gpu/commit_slots/slots.py`,
-imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json` at the commit `REFERENCE`
-pins, which the reference must reproduce.
+imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json`, which the reference must
+reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 
 `target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`

@@ -1,6 +1,6 @@
 {
  "schema": "verity/commit-slots/fixture/v1",
- "about": "CMP-95 item 3: a step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, step tree over slot trees over unit trees over rows (benchmarks/torch_gpu/commit_slots/README.md). The context and salt key are public test values.",
+ "about": "A step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, step tree over slot trees over unit trees over rows (benchmarks/torch_gpu/commit_slots/README.md). The context and salt key are public test values.",
  "tags": {
   "layout": "verity/commit-slots/layout/v1",
   "unit": "verity/commit-slots/unit/v1",
