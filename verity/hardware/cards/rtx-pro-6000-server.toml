@@ -16,7 +16,7 @@ nodes = "vy-nebius-1: eight cards, all this SKU and vBIOS (r20261027-032043-e2d1
 count = { value = 188, unit = "SM", mark = "ceiling", source = "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4: 188 SMs (the Workstation Edition, the same GB202)" }
 
 [clock]
-sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "r20261027-032043-e2d1 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); r20261027-031620-6643 (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); r20261017-181535-5132 (RT-CLOCK: every lock, application clock and offset above 2430 MHz refused or clamped)" }
+sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "r20261027-032043-e2d1 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); r20261027-031620-6643 (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); r20261017-181535-5132 (every lock, application clock and offset above 2430 MHz refused or clamped)" }
 memory = { value = 12481, unit = "MHz", mark = "ceiling", source = "r20261027-032043-e2d1 (max and application memory clock 12481 MHz); r20261027-031620-6643 (supported memory clocks [12481, 405], offset range [0, 0])" }
 
 [power]
@@ -25,7 +25,7 @@ limit = { value = 600, unit = "W", mark = "ceiling", source = "r20261027-032043-
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "whitepaper v1.1: a 256 KB register file an SM, 64 Ki 32-bit registers" }
-reg_extra = { value = 3371, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 48 warps, 3024 words), the predicates (7 bits a thread at 1536 threads, 336 words) and the uniform predicates (7 bits a warp, 11 words); RT-MODEL M4, commit 7fb33ce8a7" }
+reg_extra = { value = 3371, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 48 warps, 3024 words), the predicates (7 bits a thread at 1536 threads, 336 words) and the uniform predicates (7 bits a warp, 11 words)" }
 smem = { value = 131072, unit = "B/SM", mark = "ceiling", source = "whitepaper v1.1: 128 KB of L1 and shared memory an SM" }
 l2 = { value = 134217728, unit = "B", mark = "ceiling", source = "whitepaper v1.1, Table 4: L2 128 MB, taken as 128 MiB" }
 dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product page, 'GPU Memory 96 GB GDDR7', taken as 96 GiB" }
@@ -40,7 +40,7 @@ shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C+
 f64 = { value = 2, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0: 64-bit floating-point multiply-add 2" }
 sfu = { value = 16, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: reciprocal, square root, logarithm, exponential, sine and cosine 16" }
 smem = { value = 32, unit = "bank word/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9, 'Shared Memory': 32 banks of one 32-bit word a clock" }
-l2 = { value = 5, unit = "word/SM-clock", mark = "measurement", source = "CALIB measured 18.6 bytes an SM-clock of one read pattern at 2092 MHz, r20261017-065855-c8a9, rounded up to 5 words; RT-MODEL-MIN RM6: open until a ceiling with its argument replaces it" }
+l2 = { value = 5, unit = "word/SM-clock", mark = "measurement", source = "measured 18.6 bytes an SM-clock of one read pattern at 2092 MHz, r20261017-065855-c8a9, rounded up to 5 words; open until a ceiling with its argument replaces it" }
 
 [memory]
 bus = { value = 512, unit = "bit", mark = "ceiling", source = "product page: 512-bit GDDR7" }
@@ -70,11 +70,11 @@ instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", sour
 # The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
 [host]
 cpu = "Intel Xeon 6776P (Granite Rapids)"
-source = "HOST-PEAK, CMP-165 comment ef5af72b (lscpu on vy-nebius-1; the VM sees 2 x 48 cores of the physical 2 x 64)"
+source = "lscpu on vy-nebius-1, r20261027-022153-5141: the VM sees 2 x 48 cores of the physical 2 x 64"
 sockets = { value = 2, unit = "socket", mark = "measurement", source = "lscpu on vy-nebius-1's VM, r20261027-022153-5141; the server's own socket count is not attested" }
 cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores)" }
 amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, r20261027-022153-5141" }
 turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
 priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo 4.6 GHz, which the operator may enable in the BIOS" }
 priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
-ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), HOST-PEAK's 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
+ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }

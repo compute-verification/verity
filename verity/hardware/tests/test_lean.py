@@ -2,7 +2,7 @@
 
 Each card file names its Lean table (``lean``). Its ``clock`` and ``card`` definitions are evaluated as exact rationals
 (``^`` a power, ``/`` exact, and a natural-number field refused where Lean's division would truncate) and each arm is
-compared with what the card file gives, for every store, resource and format the envelope ISA declares
+compared with what the card file gives, for every store, resource and format the ACCEL ops are priced in
 (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
 """
 
