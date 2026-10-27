@@ -1,5 +1,6 @@
 import VStar.Trace
 import Flock.ProvedScope
+import Flock.RecCoins
 
 /-!
 # `vstar-trace`: the trace assigner's side of its difftest
@@ -12,7 +13,8 @@ ranges' (`ranges`), hex. `flock-trace` (`verity/ml/flock/live/src/bin/flock-trac
 deployed prover assigns; `tests/test_vstar_trace_difftest.py` holds the two equal.
 
 `vstar-trace --sat --circuit F --public F --instances F [--partition F] [--program F]` checks that trace against the
-table `verify --zk` sets up on the verifier's files (`TablesSat`, below), the witness run `HonestWitSatisfies` cites.
+table `verify --zk` sets up on the verifier's files (`TablesSat`, below), the witness run `HonestWitSatisfies` cites;
+`--session F` sets it up at the draw `verify` reads from that session's record (`RecCoins.recordDraw`).
 -/
 
 namespace VStar.TraceCli
@@ -208,7 +210,7 @@ def jsonArg (args : List String) (k : String) : IO (Except String (Option Json))
 def INFLIGHT : Nat := 256
 
 def satUsage : String :=
-  "usage: vstar-trace --sat --circuit F --public F --instances F [--partition F] [--program F] [--draw F] [--mask zero|SEED] [--flip Q,Q,...]"
+  "usage: vstar-trace --sat --circuit F --public F --instances F [--partition F] [--program F] [--draw F | --session F] [--mask zero|SEED] [--flip Q,Q,...]"
 
 def sat (args : List String) : IO UInt32 := do
   let arg : String → Option String := fun k => match args.dropWhile (· != k) with | _ :: v :: _ => some v | _ => none
@@ -218,6 +220,9 @@ def sat (args : List String) : IO UInt32 := do
   let ib ← IO.FS.readBinFile inf
   let program ← (arg "--program").mapM IO.FS.readBinFile
   let (.ok partition, .ok draw) := (← jsonArg args "--partition", ← jsonArg args "--draw") | IO.eprintln satUsage; return 1
+  let draw ← match arg "--session" with
+    | some f => pure (RecCoins.recordDraw (← IO.FS.readFile f))
+    | none => pure draw
   let mask : Nat → Nat → Bool ← match arg "--mask" with
     | none | some "zero" => pure fun _ _ => false
     | some s => match s.toNat? with
@@ -248,7 +253,7 @@ def sat (args : List String) : IO UInt32 := do
   let shapeOk := (Zk.shapeOk st).toBool
   let tm := Trace.m c pin
   let head := [("m", (st.m : Json)), ("k_log", (kl : Json)), ("pin", (st.pin : Json)), ("trace_m", (tm : Json)), ("trace_k_log", (c.kLog : Json)),
-    ("fits", Json.bool fits), ("shape_ok", Json.bool shapeOk), ("ranges", (st.c.ranges.size : Json)),
+    ("drawn", Json.bool draw.isSome), ("fits", Json.bool fits), ("shape_ok", Json.bool shapeOk), ("ranges", (st.c.ranges.size : Json)),
     ("regions", (st.regions.size : Json)), ("region_bits", ((p.regs.foldl (fun (n : Nat) r => n + r.2.size) 0 : Nat) : Json)),
     ("delta", ((st.da.size + st.db.size : Nat) : Json)), ("flips", (flips.length : Json))]
   if !fits || tm != st.m || c.kLog != kl then

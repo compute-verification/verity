@@ -2,6 +2,7 @@ import Difftest
 import VStar
 import Flock.RecResiduals
 import Flock.RecSetup
+import Flock.RecVStar
 
 /-!
 # V*'s difftest executable
@@ -300,6 +301,43 @@ def partInFn (j : Json) : Except String Json := do
     ("salts", Json.arr (q.rows.map fun (r : In.Row) => short r.salt)), ("refs", natsJson q.refs.toList)]]
   pure (Json.mkObj [("ports", Json.arr (p.map port))])
 
+/-- `RecDeploy.IrShaped`'s clauses on the stager's inputs `src` (whose openings are the inner prover's, `srcOf_openings`)
+at the inner shape `rec_inner` (`verity/rec-inner/v1`, what `verify --rec-inner` reads): both reps have an opening, and
+at each of V*'s level statements `.recOpen l L H n` (`Flock.RecVStar.statements`, `partAt`'s list) level `l`'s openings
+number `n`, each of `L` lanes and `H` siblings, and where `In.topsAt src l` reads the level's tops (the clause is vacuous
+where it refuses, said as `tops_refused`), each opening's top node `T.first[rep] + pos / 2^H` is below `T.rows.size`.
+`tops_at` is `honest_half`'s `hTops` on `src`: at every level above 0 both reps have, their tops differ (`In.sameTop`). -/
+def irShapedFn (j : Json) : Except String Json := do
+  let o ← input' j ["src", "rec_inner"]
+  let src ← srcOf (o "src")
+  let sts ← Flock.RecVStar.statements (← Flock.RecVStar.Inner.ofJson (o "rec_inner"))
+  let reps := #[0, 1].map fun (r : Nat) => (src.openings.filter (·.rep == r)).size
+  let mut ok := reps.all (0 < ·)
+  let mut levels : Array Json := #[]
+  let mut others : Array Json := #[]
+  for s in sts do
+    match s with
+    | .recOpen l L H n =>
+      let qs := src.openings.filter (·.level == l)
+      let shaped := qs.all fun q => q.row.size == L && q.sibs.size == H
+      let (tops, inTops) : List (String × Json) × Bool := match In.topsAt src l with
+        | .ok T =>
+          let top := qs.foldl (fun (m : Nat) q => max m (T.first[q.rep]! + q.pos / 2 ^ H + 1)) 0
+          ([("tops_rows", (T.rows.size : Json)), ("first", natsJson T.first.toList), ("top_end", (top : Json))],
+            qs.all fun q => T.first[q.rep]! + q.pos / 2 ^ H < T.rows.size)
+        | .error e => ([("tops_refused", (e : Json))], true)
+      ok := ok && qs.size == n && shaped && inTops
+      levels := levels.push (Json.mkObj ([("level", (l : Json)), ("LANES", (L : Json)), ("H", (H : Json)), ("n", (n : Json)),
+        ("openings", (qs.size : Json)), ("shaped", Json.bool shaped), ("in_tops", Json.bool inTops)] ++ tops))
+    | s => others := others.push (s.name : Json)
+  let differ := (List.range ((src.tops.getD 0 #[]).size)).filterMap fun l =>
+    match (src.tops.getD 0 #[])[l]?, (src.tops.getD 1 #[])[l]? with
+    | some a, some b => some (l, !In.sameTop a b)
+    | _, _ => none
+  pure (Json.mkObj [("ok", Json.bool ok), ("reps", natsJson reps.toList), ("levels", Json.arr levels),
+    ("others", Json.arr others), ("tops_differ", Json.arr (differ.toArray.map fun (_, d) => Json.bool d)),
+    ("tops_at", Json.bool (differ.all fun (l, d) => l == 0 || d))])
+
 end VStar.DT
 
 open VStar.DT in
@@ -309,4 +347,5 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
-  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn)])
+  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn),
+  ("ir_shaped", irShapedFn)])
