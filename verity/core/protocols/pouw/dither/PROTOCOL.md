@@ -41,8 +41,9 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
   challenge (Daniel, 26 Oct, 11:09 AM PDT). Each of Dither's sampling blocks takes two runs: a dither run, whose response
   is the block's value roots, and a check run, whose commitment they are.
 - **The ACCEL model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
-  slots, shared-memory and register ports, device memory, links), each at its data-sheet rate, and each run's use of
-  each. On the H200 and the RTX PRO 6000 it is read at 𝓜's floors (`Card.floors`, #4662). A price μ ≥ 0 is per unit of
+  slots, shared-memory and register ports, device memory, links), each rate a ceiling, and each run's use of each. On
+  the H200 and the RTX PRO 6000 the ceilings are a data sheet's or a cited measurement's: `Card.floors` bounds the open
+  cost parameters from below (#4662). A price μ ≥ 0 is per unit of
   each resource; a run's cost at μ is Σ_r μ_r u_r.
 - **pub_μ(b)**: sampling block b's least cost at μ over D5 v2.1's menu of public methods, which holds the named matmul
   programs (with route (iii) on the RTX PRO 6000) and the pinned SHA-512 schedules (the Lean's `PubBest`).

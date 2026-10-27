@@ -27,14 +27,14 @@ appear).
 | (c, k), 𝒞_{c,k} | A partition's gates per block, exactly (padded), and unregistered input bits per block, at most: \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the class of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition not yet in Lean (LEAN-63, #4869) |
 | A, x(g), t(g) | The actual circuit: everything run in the period, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
-| W_cert(X, J), U(X, J) | The certified declared gate occurrences at X during J; the uncertified gates, \|A[X, J]\| − \|A[X, J] ∩ W_cert(X, J)\|. | the share 1 − W_cert/C: `Nci.Dampener.residualShare`; the sets not yet in Lean (TRN-1) |
+| W_cert(X, J), U(X, J) | The certified declared gate occurrences at X during J; the uncertified gates, \|A[X, J]\| − \|A[X, J] ∩ W_cert(X, J)\|. | the share 1 − W_cert/C_X (ε_undecl): `Nci.Dampener.residualShare`; the sets not yet in Lean (TRN-1) |
 | s_× | The fewest gates of a counted operation, in the same count: U uncertified gates complete at most U/s_× counted operations. | not yet in Lean (CMP-158) |
 
 **The physical model**
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓜, ρ | The ACCEL model: a period's devices, their resources (tensor cores, issue slots, shared-memory and register ports, device memory, links) and each resource's rate ρ, read at the cards' floors at the firmware maximum. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
+| 𝓜, ρ | The ACCEL model: a period's devices, their resources (tensor cores, issue slots, shared-memory and register ports, device memory, links) and each resource's rate ρ, a ceiling: the most the card does at the firmware maximum (`Card.floors` bounds its open cost parameters from below). | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device` (LEAN-71); `FixedMachine` and `InitialBudget` not yet in Lean (LEAN-70) |
 | server-time block, serving block | A server's gates between two wipes (a server-time block); a serving block is one, its padded size c_S = ⌊Φ_s·Δ_wipe⌋ and its input allowance k_S = k_wipe + (r_in + r_side)·Δ_wipe: what the wipe leaves of M_s (at most 4×10^10 bits plus egress), and the certified ingress and the side channels over the wipe interval Δ_wipe. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the serving-block bound not yet in Lean (TRN-11, #4834) |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its input accounting has not already charged. | not yet in Lean (no issue: TRN-13's list) |
@@ -67,7 +67,7 @@ appear).
 | Symbol | Meaning | Lean |
 |---|---|---|
 | ε_dark | The dark leaves' share of the fleet's capacity, Φ(L_dark) = ε_dark·Φ_total; mainline 10^-3 (Daniel, 26 Oct, 6:55 PM PDT), range 10^-4 to 10^-2. | `Nci.Dampener.unmonitoredShare` |
-| ε_undecl | Monitored capacity running no certified declared work, 1 − \|W_cert\|/(Φ_X·\|J\|) counted in 𝓜's resources at each SKU's ceiling (counted operations, not gates): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl is the number driven to 0; a prover's overhead is certified work, in neither, with γ ≤ 10 allowed (Daniel, 26 Oct, 8:48 PM PDT). | `Nci.Dampener.residualShare` |
+| ε_undecl | Monitored capacity running no certified declared work, 1 − W_cert/C_X: W_cert and C_X, X's capacity over J, both counted in 𝓜's resources at each SKU's ceiling (counted operations, not gates): model slack (the honest cost against the public best), idle or uncredited pipes, the clock above the credited one, and the host CPUs. ε_skip + ε_undecl is the number driven to 0; a prover's overhead is certified work, in neither, with γ ≤ 10 allowed (Daniel, 26 Oct, 8:48 PM PDT). | `Nci.Dampener.residualShare` |
 | ε_skip | Certified work not done: PoUW's ε_W of the certified share, ε_W·(1 − ε_undecl), and the wrong certificates. | `Accounting.Compose` (ε_♭ = ε_skip + ε_cert + ε_route) |
 | ε_break | The gates of the faulty proof blocks F. | `Nci.Guarantees.Dampener` (its χ) |
 
@@ -76,7 +76,8 @@ appear).
 Daniel (26 Oct, 6:40 PM PDT, tentative): credit and all reporting are in circuit size, counted in AND gates.
 
 - **Size** is a circuit's or a region's AND-gate count. AND gates are what C-Flock pays for, so size is the lingua franca
-  every protocol credits in and every result reports computation in, in place of work, FLOPs, MAC-times and pricing. U uncertified
+  every protocol credits in and every result reports computation in, in place of work, FLOPs, MAC-times and pricing
+  (work still names the resources a device spends, in 𝓜's). U uncertified
   gates complete at most U/s_× counted operations, s_× the fewest gates of a counted operation in the same count; this
   replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
@@ -164,7 +165,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/` (`subprotocols/` after Demo B), the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
-| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until CMP-158; W_cert, the Lean's `WorkSound`, `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
+| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits (work for the resources a device spends stays, as do W_cert and `WorkSound`); pub(μ°), μ°, W_reg and W_b in Dither's docs until CMP-158; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
@@ -194,10 +195,8 @@ bake it in, and renaming would invalidate every one of them for no semantic gain
 
 Daniel named them on 26 Oct (7:51 PM PDT):
 
-- **The ACCEL model** 𝓜 is the physical model: a period's devices as the Lean's `Accel` reads them
-  (`Security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
-  device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000. Its
-  parameters, θ, are `benchmarks/pouw/machine_model/`'s data.
+- **The ACCEL model** 𝓜 is the physical model (the Notation's 𝓜 and ρ), its Lean `Security/Definitions/Core/Accel/`,
+  with the H200 and the RTX PRO 6000 as cards. Its parameters, θ, are `benchmarks/pouw/machine_model/`'s data.
 - **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is
   experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt is no-fold (CMP-172): each
   segment's 16-bit noised prefix sums are committed as SHA-512 hiding leaves, hm96 rows of 16 KiB, before the check coin,
