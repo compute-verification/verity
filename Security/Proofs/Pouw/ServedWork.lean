@@ -103,9 +103,9 @@ theorem servedWork : ServedWork := by
       Classical.choose (hSAK g1 g2 p1 p2 a.1 h.1 B St hSt a.2.1 a.2.2 h.2) else fun _ => False
   have hDg : ∀ a, prob (Dg a) ≤ κdeg B := fun a => by
     by_cases h : a.1 ∈ Reg ∧ ∀ i, G.ext a.2.2 i = 0
-    · simp only [Dg, dif_pos h]
+    · simp only [Dg, dite_eq_left h]
       exact (Classical.choose_spec (hSAK g1 g2 p1 p2 a.1 h.1 B St hSt a.2.1 a.2.2 h.2)).1
-    · simp only [Dg, dif_neg h]
+    · simp only [Dg, dite_eq_right h]
       rw [prob_false_eq]
       exact hκ
   have hspec : ∀ x w, ¬ Dg (inst x w, state x w, work x w) (saltCoin hr x w) →
@@ -114,7 +114,7 @@ theorem servedWork : ServedWork := by
           G.cost μ (work x w) (state x w, saltCoin hr x w) := fun x w hd => by
     have h : (inst x w, state x w, work x w).1 ∈ Reg ∧ ∀ i, G.ext (inst x w, state x w, work x w).2.2 i = 0 :=
       ⟨hReg x w, hext x w⟩
-    simp only [Dg, dif_pos h] at hd
+    simp only [Dg, dite_eq_left h] at hd
     exact (Classical.choose_spec (hSAK g1 g2 p1 p2 _ h.1 B St hSt _ _ h.2)).2 _ hd
   have hsub : ∀ x, (Pl.accepts x ∧ ∑ w, G.cost μ (work x w) (state x w, saltCoin hr x w) <
       p * creditPrefix Sc Cd (tileCount σ sT) (ws.prefixLen x) (creditLive Sc Cd Wp ws x) 1 1 (j10rRate (k sT) ρ) δs -

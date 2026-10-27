@@ -113,7 +113,7 @@ def work (c : ℝ) {Ω : Type} {n Np : ℕ} : Paths Ω n → Fin n → (fa c).Mc
 theorem rightWords_hon {Np : ℕ} (wt : Fin Np → ℝ) (d : Bool) :
     Pouw.Assumptions.rightWords hon wt () d (fun _ => d) = ∑ t, wt t := by
   unfold Pouw.Assumptions.rightWords
-  exact Finset.sum_congr rfl fun t _ => if_pos rfl
+  exact Finset.sum_congr rfl fun t _ => ite_eq_left rfl
 
 section Meets
 
@@ -130,7 +130,7 @@ theorem served_meets (n : ℕ) :
       (fun _ => 0) ∧
     (∃ e : Unit → Fin (2 ^ 0), Function.Injective e) ∧
     (∀ (x : Paths (Ω1 σ sT) n) w i, (fa (tileCount σ sT)).ext (work (tileCount σ sT) (Np := tileCount σ sT) x w) i = 0) ∧
-    (∀ (x : Paths (Ω1 σ sT) n) (w : Fin n), () ∈ (Set.univ : Set Unit)) ∧ (0 : ℝ) ≤ 1 ∧
+    (∀ (_x : Paths (Ω1 σ sT) n) (_w : Fin n), () ∈ (Set.univ : Set Unit)) ∧ (0 : ℝ) ≤ 1 ∧
     FixedBeforeSalt (fun (x : Paths (Ω1 σ sT) n) w => ((), (), work (tileCount σ sT) (Np := tileCount σ sT) x w)) ∧
     FixedAreRight (play Unit (tileCount σ sT) (k sT) n) (fun x w => Pouw.Assumptions.rightWords hon
       (fun t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ)) ()
@@ -185,7 +185,7 @@ theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf 
 
 theorem zeroCone_circuit (N : ℕ) : zeroCone Honest.scheme (circuit N) N = 0 := by
   unfold zeroCone
-  exact Finset.sum_eq_zero fun t _ => if_neg (by rw [tileWords_eq]; exact one_ne_zero)
+  exact Finset.sum_eq_zero fun t _ => ite_eq_right (by rw [tileWords_eq]; exact one_ne_zero)
 
 theorem prob_true {Ω : Type} [Fintype Ω] [Nonempty Ω] {P : Ω → Prop} (h : ∀ x, P x) : prob P = 1 := by
   classical
