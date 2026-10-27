@@ -105,10 +105,7 @@ static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time"
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 static_assert(H1C_HB || !H1C_SEGJ, "H1C_SEGJ is H1C_HB's segments kernel's");
 
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
+#include "../../torch_gpu/sha512_rows/sha512x.cuh"
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -161,15 +158,14 @@ struct Hs {
   u64 tot;
 };
 __device__ __forceinline__ void hs_init(Hs& s) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sh::kSha512Iv[j];
+  sx::iv(s.h);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
   s.tot = 0;
 }
 __device__ __forceinline__ void hs_flush(Hs& s) {
-  sh::sha512_compress(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
@@ -213,7 +209,7 @@ __device__ void hs_final(Hs& s, u64 out[8]) {
   ++s.n;
   if (s.n > 112) hs_flush(s);
   s.w[15] = bits;
-  sh::sha512_compress(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) out[j] = s.h[j];
 }
@@ -479,8 +475,7 @@ struct Hb {
   u64 tot;
 };
 __device__ __forceinline__ void hb_init(Hb& s, uint8_t* b) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sh::kSha512Iv[j];
+  sx::iv(s.h);
   s.b = b;
   s.n = 0;
   s.tot = 0;
@@ -504,8 +499,8 @@ __device__ __forceinline__ u64* ap_base(int p) {
   return ap_smem + AP_WORDS * p;
 }
 __device__ __forceinline__ void ap_round(u64& a, u64& b, u64& c, u64& d, u64& e, u64& f, u64& g, u64& h, u64 kw) {
-  const u64 t1 = h + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + kw;
-  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  const u64 t1 = h + (sx::rotr<0, 14>(e) ^ sx::rotr<0, 18>(e) ^ sx::rotr<0, 41>(e)) + ((e & f) ^ (~e & g)) + kw;
+  const u64 t2 = (sx::rotr<0, 28>(a) ^ sx::rotr<0, 34>(a) ^ sx::rotr<0, 39>(a)) + ((a & b) ^ (a & c) ^ (b & c));
   h = g;
   g = f;
   f = e;
@@ -523,7 +518,7 @@ __device__ __noinline__ void ap_cmp(u64* h, const u64* w) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -554,7 +549,7 @@ __device__ __forceinline__ void ap_cmp_in(u64 h[8], const u64 w[16]) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -593,11 +588,11 @@ __device__ void ap_serve(int p) {
 #pragma unroll
       for (int t = 0; t < 16; ++t) {
         const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
-        w[t] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
-                (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
+        w[t] += (sx::rotr<0, 1>(w15) ^ sx::rotr<0, 8>(w15) ^ (w15 >> 7)) + w[(t + 9) & 15] +
+                (sx::rotr<0, 19>(w2) ^ sx::rotr<0, 61>(w2) ^ (w2 >> 6));
       }
 #pragma unroll
-      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sh::kSha512K[16 * q + i] + w[i];
+      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sx::K_DEV[16 * q + i] + w[i];
       ap_arrive(bar + q, 64);
     }
   }
@@ -616,7 +611,7 @@ __device__ __noinline__ void hb_block(u64* h, const uint8_t* b) {
   for (int k = 0; k < 16; ++k) w[k] = (u64)bswap32(q[2 * k]) << 32 | bswap32(q[2 * k + 1]);
 #pragma unroll
   for (int j = 0; j < 8; ++j) v[j] = h[j];
-  sh::sha512_compress(v, w);
+  sx::compress<0, 2>(v, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) h[j] = v[j];
 }
@@ -783,7 +778,7 @@ __device__ __forceinline__ void hb_row(Hb& s, const H1Tab& T, long long i, int o
         w[2 * k] = (u64)bswap32(v.x) << 32 | bswap32(v.y);
         w[2 * k + 1] = (u64)bswap32(v.z) << 32 | bswap32(v.w);
       }
-      sh::sha512_compress(s.h, w);
+      sx::compress<0, 2>(s.h, w);
       s.tot += 128;
       p += 128;
     } else {
@@ -1374,7 +1369,7 @@ __device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, lo
         for (int i = 3; i < 15; ++i) w[i] = 0;
         w[15] = bits;
       }
-      sh::sha512_compress(h, w);
+      sx::compress<0, 2>(h, w);
     }
     u64* o = T.level + 8 * (off + (width >> lv) + idx);
 #pragma unroll
@@ -1637,7 +1632,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
 #pragma unroll
               for (int j = 0; j < 8; ++j) nx[j] = __ldg(q + j);
             }
-            sh::sha512_compress(s.h, w);
+            sx::compress<0, 2>(s.h, w);
             s.tot += 128;
             if (!more) break;
           }

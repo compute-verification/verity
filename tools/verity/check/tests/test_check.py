@@ -254,7 +254,7 @@ def test_the_recorded_check_takes_cpu_only_torch():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     assert tool.CHECK.command[:6] == ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu"], \
-        "every member's own dependencies, not only the root's dev group (CI-36: #2159's new member lacked scipy)"
+        "every member's own dependencies, not only the root's dev group"
     import tomllib
     cpu = [p for p in tomllib.loads((ROOT / "uv.lock").read_text())["package"] if p["name"] == "torch" and "+cpu" in p["version"]]
     assert cpu and all("download.pytorch.org/whl/cpu" in p["source"]["registry"] for p in cpu)
@@ -405,6 +405,14 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
     assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    launched.clear()
+    # drive's after-landing run: circuit-check's passes come from the gathered pack (main imports only theirs)
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(given_to) == 3
+    [cmd] = launched
+    tail = cmd[cmd.index("--") + 1:]
+    assert tail[-4:-2] == ["--no-cache", "--circuit-cache"] and tail[-2] == "--verdicts-in", tail
+    launched.clear()
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
     head = launched[0][:launched[0].index("--")]
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
         "custody uploads the packs however the run ends, never trimming them as undeclared"
@@ -553,7 +561,7 @@ def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(t
 
 
 def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
-    """CI-35: pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
+    """Pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
@@ -633,7 +641,7 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
     assert "--timeouts" in pytest and " --timeouts " in argv[2], \
-        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h (CI-184)"
+        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h"
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):
@@ -826,7 +834,7 @@ def _gone(pid: int) -> None:
 
 
 def test_a_step_that_hangs_writing_nothing_is_stopped_and_fails_as_hung(tmp_path, monkeypatch):
-    """r20261025-021824-ba9f and r20261025-023312-fa65 (CI-184): under --keep-going lean-suites failed, and pytest's suites.py
+    """r20261025-021824-ba9f and r20261025-023312-fa65: under --keep-going lean-suites failed, and pytest's suites.py
     sat 23-24 h on a test that never returned, writing nothing, while circuit-check waited on the grant pytest's end writes and
     the run held its slot.  Here pytest's process waits on a child that never exits; once the watch's clock (injected) has passed
     `IDLE_S` with pytest's outputs unchanged, the child and pytest are stopped, pytest fails as hung, the grant is written and the
@@ -1082,7 +1090,7 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
     assert rec["status"] == "failed" and f"a {kind} result" in rec["detail"]
     rec = step(None)
     assert rec["status"] == "failed" and rec["detail"].startswith("refused: no readable")
-    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check (#966)
+    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check
         rec = step(bad)
         assert rec["status"] == "failed" and "is not an audit's report" in rec["detail"], rec
     rec = step({"passed": True, "failed": [], "packages": [{**full, "seconds": ["replay"]}]})
@@ -1100,6 +1108,24 @@ def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_pa
     assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 3
+
+
+def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
+    """Drive's after-landing run (`--no-cache --circuit-cache`): the suites and the Lean steps run cold, and circuit-check reuses
+    its per-target passes, since a cold `--all` (~4 h) outlasted every after-landing run from 24 Oct.  `--no-cache` alone (the
+    nightly `audit-main`) leaves circuit-check cold too."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+
+    def steps(**kw) -> dict:
+        return {name: argv for g in CHECK.groups(out, 8, **kw) for name, argv, _ in g}
+
+    cached, cold, after = steps(), steps(cache=False), steps(cache=False, circuit_cache=True)
+    cc = ["--cache", str(CHECK.cache_dir() / "circuit-check"), "--catalog-units"]
+    assert " ".join(cc) in " ".join(cached["circuit-check"]) and " ".join(cc) in " ".join(after["circuit-check"])
+    assert "--cache" not in cold["circuit-check"]
+    for s in ("pytest", "lean-suites", "lean-audit"):
+        assert "--fresh" in " ".join(after[s]) and "--fresh" not in " ".join(cached[s]), s
+    assert after["lean-changed"].startswith("skipped: --no-cache")
 
 
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
@@ -1396,6 +1422,10 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     # the flags, the store key
     p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest,circuit-check", "--circuit-cache")
+    assert p.returncode == 2 and "train: --circuit-cache refused without --no-cache" in p.stderr, p.stderr
     p = train("--against", "main")
     assert p.returncode == 2 and "train: --against refused" in p.stderr, p.stderr
 
@@ -1505,6 +1535,10 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     p = train("HEAD", "vy-x", "--agreement")
     args = argv.read_text().split()
     assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
+                                                                     "--circuit-cache", "--no-regenerate"], args
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
     (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
@@ -1513,7 +1547,7 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
-    """infra, 26 Oct 09:54Z (#4657): drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
+    """Drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
     fails one of them with `cannot lock ref`.  It tries twice more, 5 s and then 15 s later, and only then registers no run."""
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
@@ -1618,7 +1652,7 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
 
 
 def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_it(tmp_path, monkeypatch):
-    """CI-64: a train's Lean check passes a package whose only failures are record differences, and drive commits the
+    """A train's Lean check passes a package whose only failures are record differences, and drive commits the
     regenerated locks as it lands. A tree whose lean_audit.py predates `--regenerate` runs as it always did."""
     monkeypatch.setattr(CHECK, "LEAN_JOBS", tmp_path)
     (tmp_path / "lean_audit.py").write_text("ap.add_argument('--fresh')\n")

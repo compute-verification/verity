@@ -6,9 +6,8 @@ and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampl
 workloads.
 
 Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST`. `verity_numerical.reference`
-is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. `security` is the soundness
-calculator for A-GKR and B-Ligero (`accounting`, `census`). The archived systems' exporter, drivers, explorations and
-red-team forgeries were deleted with the archive in `2091252fe3`.
+is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. The archived systems' exporter,
+drivers, explorations and red-team forgeries were deleted with the archive in `2091252fe3`.
 
 ## The subcircuit catalog
 

@@ -113,7 +113,7 @@ def _stored_then_preserved(env: dict[str, str]) -> None:
 
 
 def test_script_parses() -> None:
-    for name in ("epoch_row.sh", "epoch_store.sh", "epoch_failfast.sh"):
+    for name in ("epoch_row.sh", "epoch_store.sh", "store_trees.sh", "epoch_failfast.sh"):
         r = subprocess.run([BASH, "-n", str(SCRIPT.parent / name)], capture_output=True, text=True)
         assert r.returncode == 0, (name, r.stderr)
 

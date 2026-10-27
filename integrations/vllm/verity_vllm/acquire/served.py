@@ -36,12 +36,12 @@ uncaptured.  Each step names the Definitions its batch selects:
 The manifest's identities are compiled.build's: one per (step, request, committed value), the request's rows of the value
 (element_range [0, tokens x width); the logits and the sampled id one row per request), `step` request-relative.  program_digest
 is over the Program (every piece's calls with their Definitions and operands, the attention ops, the logits) and the step plans.
-The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the row's pin.
+The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the workload's pin.
 
     verity-vllm served build --inductor-dir DIR --split-graph computation_graph.py --launch-configs launch_configs.json \\
         --routes routes.json --workload workload.json --capture-sizes 1,2,4,8,16 --max-num-seqs 8 --cc 9.0 --sms 132 --out manifest.json
     verity-vllm served routes --needs manifest.json --out routes.json          (on the serving GPU: the GEMM routes a Build lacks)
-    verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json     (MAN-05)
+    verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity.ml.definitions.registry import b1, cublas_bf16, cublas_gemv
 from verity.ml.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
@@ -722,7 +722,7 @@ class BuildOptions:
     split_graph: str = option("--split-graph", help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone)")
     launch_configs: str = option("--launch-configs", help="ServedCompiledSource.launch_configs() of the serving process (json)")
     routes: str | None = option("--routes", default=None, help="cuBLAS routes of the serving GPU (`served routes`); without, every GEMM is missing")
-    workload: str = option("--workload", help="sweep workload json: the request schedule")
+    workload: str = option("--workload", type=workload_arg, help="sweep workload json: the request schedule")
     steps: int | None = option("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
     capture_sizes: str = option("--capture-sizes", help="compilation_config.cudagraph_capture_sizes, comma-separated")
     max_num_seqs: int = option("--max-num-seqs", type=int)
