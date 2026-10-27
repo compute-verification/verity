@@ -73,7 +73,6 @@ ALLOWED: dict[str, str] = {
 PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
-    "examples/h200/interfaces/README.md": "#4877 and #5170 rewrite its lines",
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
