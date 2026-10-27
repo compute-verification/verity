@@ -275,10 +275,12 @@ theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) 
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
 
-/-- What `--plain-tables` refuses of a statement: hidden outputs (the plain proof at several tables reads public outputs)
-and more than `Tags.MAX_TABLES` tables, what `Stmt.setupTables` sets up. -/
+/-- What `--plain-tables` refuses of a statement: hidden outputs with leaves other than `hm96-sha512/v1` (the plain proof
+at several tables reads hm96 leaves; `check` at one table also passes plain SHA-512 leaves at hidden outputs) and more
+than `Tags.MAX_TABLES` tables, what `Stmt.setupTables` sets up. -/
 def plainTablesWhy (tags : Tags) (count : Nat) : Option String :=
-  if tags.hiddenOutputs then some s!"{tags.name}, a statement with hidden outputs under --plain-tables"
+  if tags.hiddenOutputs && tags.merkleLeaf != "hm96-sha512/v1" then
+    some s!"{tags.name}, a statement with hidden outputs and {tags.merkleLeaf} leaves under --plain-tables"
   else if count ≤ Tags.MAX_TABLES then none
   else some s!"{count} tables in a session under --plain-tables, more than {Tags.MAX_TABLES}"
 
@@ -319,9 +321,9 @@ def programP (parsed : V Circuit) (program : Option ByteArray) : Except String U
     | none => .ok ()
 
 /-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
-session of public outputs at any number of tables up to `Tags.MAX_TABLES`, every condition `check` puts on a one-table
-plain session, and the verifier's own program is the one META binds (`programP`). The one-table plain form keeps `check`
-without the flag. -/
+session of public or hidden outputs at any number of tables up to `Tags.MAX_TABLES`, at hidden outputs with
+`hm96-sha512/v1` leaves, every condition `check` puts on a one-table plain session, and the verifier's own program is
+the one META binds (`programP`). The one-table plain form keeps `check` without the flag. -/
 def checkP (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (program : Option ByteArray) (publicInputs registered : Bool) : Except String Unit :=
   match plainTablesWhy tags count with
@@ -345,8 +347,8 @@ theorem checkP_eq (tags : Tags) (circuitFile publicFile : ByteArray) (tables : L
       = checkPOf (circuitOf tags circuitFile tables) tags publicFile count program publicInputs registered :=
   rfl
 
-/-- **What an accepted `checkP` establishes**: the form at most `Tags.MAX_TABLES` tables of public outputs, `check` at one
-table, and the verifier's own program held to the circuit's. -/
+/-- **What an accepted `checkP` establishes**: the form (at most `Tags.MAX_TABLES` tables, hm96 leaves at hidden outputs),
+`check` at one table, and the verifier's own program held to the circuit's. -/
 theorem checkP_ok {tags : Tags} {circuitFile publicFile : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
     {program : Option ByteArray} {publicInputs registered : Bool}
     (h : checkP tags circuitFile publicFile tables count program publicInputs registered = .ok ()) :

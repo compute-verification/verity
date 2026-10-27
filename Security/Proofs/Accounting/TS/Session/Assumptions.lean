@@ -88,10 +88,9 @@ over the window's paths that flock-verify accepts the session, every drawn unit 
 yet `rows` of the session's value layer is not `pf`'s opening (`pf.opened x w i`: the round's served leaves, committed
 before σ_w) is at most `δs`. It is #2909's `OpenedPlurAt` on those sessions. `EndToEndRegisteredRows` links only
 registered reads, and the served trees are hiding commitments that bind nothing on their own;
-`Flock.SecurityProofs.ServedRowsLinked` links them pointwise, but only at drawn units, at a circuit that names each port
-once, and where the service registers each served tree as a port of `own` (`RowsSession.ServedRegistered`). With a
-`rows` that reads the served reads it gives this at `δs = 0` only under full checking (`kd = n`), port uniqueness and
-`ServedRegistered` at every unit: under a sampled draw nothing proved ties an undrawn unit's value layer to the served
+`Flock.SecurityProofs.ServedRowsLinked` links them pointwise, but only at drawn units, and where the service registers
+each served tree as a port of `own` (`RowsSession.ServedRegistered`). With a `rows` that reads the served reads it gives
+this at `δs = 0` only under full checking (`kd = n`) and `ServedRegistered` at every unit: under a sampled draw nothing proved ties an undrawn unit's value layer to the served
 leaves, and `rows` can't see the draw. -/
 def ServedRootsLinked [Fintype Ω] (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs : ℝ) : Prop :=
