@@ -3,7 +3,7 @@
   "values": {
     "ZK_SESSIONS": {
       "value": 53,
-      "source": "r20261025-230005-b71a out/w30/integrity/audit.log: A5's lean-verify verdicts, one a C-Flock --zk session",
+      "source": "r20261025-230005-b71a `out/w30/integrity/audit.log`: A5's lean-verify verdicts, one a C-Flock --zk session",
       "label": "PyTorch dry run"
     },
     "PROVE_RUN": {
@@ -61,7 +61,7 @@
       "name": "ScaledMmS8Coordinate_v1{K=128}",
       "units": 1024,
       "drawn": 64,
-      "source": "r20261025-230005-b71a out/w30/integrity/audit.log: RECORDS' population and draw_counts",
+      "source": "r20261025-230005-b71a `out/w30/integrity/audit.log`: RECORDS' population and draw_counts",
       "label": "PyTorch dry run"
     }
   ],

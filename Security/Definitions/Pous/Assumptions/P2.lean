@@ -114,6 +114,22 @@ def P2RingRoundSecure (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
           pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
             (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
 
+/-- **`P2RingRoundSecure` to `2^27` blocks (conjectured; unchecked in `N` above `2^25`).** The same statement as
+`P2RingRoundSecure`, at every block count from `2^19` to `2^27`, so that it reaches the demo's store, `1038·2^16 ≈
+2^26.02` blocks (139.7 GB of payload). Nobody has checked the `ε₀` a proof would give against `N` above `2^25`: that
+analysis is pending (the memory-accounting lane's pous-chain report). Its range contains `P2RingRoundSecure`'s, so it
+implies that one (`Pous.SecurityProofs.roundSecure_of_wide`) and every refutation of that one refutes it: the
+falsification tests there (`PousP2Rounds.round_tight`, `PousP2Rounds.round_trunc`) and its scaled-point test. -/
+def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
+  ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
+    ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+      (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+      (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+      ∃ bad : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k → Prop, pr bad ≤ k * ε₀ ∧
+        ∀ j < k, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ →
+          pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
+            (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x)
+
 /-- **`statistical-hiding` (open in Lean): the memory challenger's coin commitments hide its indices, up to `ε`.**
 `com s c I` is what the challenger publishes about the indices `I` before a session `s`, from its fresh coins `c`
 (for the deployed code, `Pous.EndToEnd.coinView`: the coin tree's root and its hm96 key). For every session, and every

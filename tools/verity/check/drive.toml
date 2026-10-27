@@ -20,7 +20,8 @@ first = []
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
 # its merge onto `next` at the sync, which leaves out what they refuse (26 Oct: #4238's merge took AGENTS.md over its cap); the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source (Daniel's delegation to the vLLM
-# coordinator, 25 Oct 09:40Z)
+# coordinator, 25 Oct 09:40Z). A sync's TOP holds every PR below it, so a gate is priced at a sync's N PRs, not one:
+# ratchet_gate caches each change's verdict and judges it once per `main` (26 Oct: uncached, one tick ran over 50 min)
 landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm/tools/ratchet_gate.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); "check", each train on its check

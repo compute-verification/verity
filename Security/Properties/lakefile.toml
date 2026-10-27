@@ -65,18 +65,25 @@ path = "../../verity/core/protocols/remote_bandwidth/lean"
 name = "core_requirement"
 path = "../../verity/core/primitives/requirement"
 
+[[require]]
+name = "core_composition"
+path = "../../verity/core/protocols/composition"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
-  "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci",
-  "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous", "Properties.Pous.TimedAudit",
-  "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Properties.Pous.Period",
-  "Properties.NetworkCertifier", "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
+  "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.Strata", "Properties.Pouw.Credit",
+  "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
+  "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd",
+  "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt",
+  "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.NetworkCertifier",
+  "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
   "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
-  "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords",
+  "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod",
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live",
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"]
+  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.Composition",
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords"]
