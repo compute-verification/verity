@@ -268,8 +268,9 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
     """Lean `OneStageZk.sessionUses`: session `slot`'s uses of the challenger's coins as `(label, after, coins, want)`,
     `want` the record's F128 hex its coins' bytes must begin with: its link points, of family `slot/<slot>/session`
     after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
-    record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
-    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
+    record's order, of family `slot/<slot>/<stream>` after the stream's chain at that round, a_k = SHA-512(a_{k-1} ‖
+    msg_sha512_k) from a_{-1} empty (two rounds of equal bytes are two uses); ceil(n/4) coins of 64 bytes for n F128s.
+    A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
     reads them (`usesOf`) only once the record's link, streams and rounds are what `_rounds_ok` asks. Raises ValueError with
     Lean's reason."""
     j = json.loads(record)
@@ -300,6 +301,7 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
         rounds = s.get("rounds")
         if type(rounds) is not list:
             raise ValueError(f"record: {name}'s rounds are not a list")
+        chain = b""
         for r in rounds:
             sha = r.get("msg_sha512") if isinstance(r, dict) else None
             if type(sha) is not str:
@@ -307,7 +309,8 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
             if len(sha) != 128:
                 raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
             cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
-            out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
+            chain = hashlib.sha512(chain + _unhex(sha)).digest()
+            out.append((f"slot/{slot}/{name}", chain, (len(cs) + 3) // 4, cs))
     _rounds_ok(rbs, streams)
     return out
 
