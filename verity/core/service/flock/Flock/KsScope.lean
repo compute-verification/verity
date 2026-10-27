@@ -147,7 +147,7 @@ theorem sharedWhy_none {tags : Tags} {c : Circuit} {publicFile : ByteArray} (h :
       | some t =>
         cases hc : collidesT c pub t with
         | true => simp [hp, hl, ht, hc] at h
-        | false => exact ⟨pi, pub, t, rfl, hl, ht, hc⟩
+        | false => exact ⟨pi, pub, t, hp, hl, ht, hc⟩
 
 /-- **No collision over a file's tables says each pair of ports with one root has one domain.** -/
 theorem domOf_eq_of_collidesT_false {c : Circuit} {pub : Public} {t : Tables} (h : collidesT c pub t = false)
