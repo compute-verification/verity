@@ -1,5 +1,5 @@
 """The KV cache codec's benchmark on one GPU: `kv.cu`'s libraries (`--lib NAME=PATH`, one per field of `kv.FIELDS`) gated
-against `kv.py`, then timed. Writes `kv-codec.json` and `kv.log` under `--out`, and in a `research run` its `result.json`.
+against `kv.py`, then timed. Writes `kv-codec.json` and `kv.log` under `--out`, and, with `RESEARCH_RUN_DIR` set, its `result.json`.
 
 Nothing is timed before its gate passed, in this order:
 - `gate`: at every k of `--ks`, device encode equals `kv.encode_word` on edge and random payloads at indices from each of
@@ -65,7 +65,7 @@ ATTN_SPLIT_TILES = (1, 8)        # each split at least this many tiles (a split'
 ATTN_RTOL = 1e-3
 ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
 NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1: x's denominator
-CLOCK_LOCKED_MHZ, CLOCK_MAX_MHZ = 2092, 2430  # the nodes' locked SM clock (vy-clocks.service) and the card's max
+CLOCK_LOCKED_MHZ, CLOCK_MAX_MHZ = 2092, 2430  # the nodes' locked SM clock (their clock-locking unit) and the card's max
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 

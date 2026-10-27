@@ -1,11 +1,8 @@
 """The rate audit's frontier (the overnight brief's core plot), rendered on demand from the evidence store.
 
-Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON list of points in the schema below, put with
-
-    research data put --kind codec-frontier-points/v0 --file points.json --preserve \
-      --meta '{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}'
-
-and this script selects them all (`research data select --kind codec-frontier-points/v0`), or reads `--art` ids and
+Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON list of points in the schema below, kept
+with the metadata `{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}`. This script selects them
+all from the store, or reads `--art` ids and
 `--file` paths, adds the tensor-core codec's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
 draws:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
