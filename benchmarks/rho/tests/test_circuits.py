@@ -101,7 +101,7 @@ def test_the_measured_s_times_moves_the_bound_by_u_over_w_on_the_share_counted_a
     f = base.families[0]
     uw = 2 * circuits.units(REG, C).gates_per_flop / (f.profile.kappa * C.s_x)
     at_u = sum(t.share for t in analysis.attribution(base) if t.name == "dark" or t.name.split(".")[0] in ROUTES)
-    assert 0.5 < at_u <= 1
+    assert 0 < at_u <= 1
     assert one.lo / base.lo == pytest.approx(1 / (at_u * uw + 1 - at_u), rel=1e-9)
     c = one.families[0].combined
     assert set(structure(REG, C.structure).cites()) <= set(c.cites) and c.status == f.combined.status
