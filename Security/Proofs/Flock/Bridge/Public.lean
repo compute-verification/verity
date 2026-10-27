@@ -380,10 +380,18 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
           rd.Off o.1) G τ ≤ ENNReal.ofReal x := by
       have hle : prob (fun o : Reg × Finset (Fin n) × Discharge.Exec.Transcript =>
           (LiveAcceptsZKR I own o ∧ OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt) ∧
-            rd.Off o.1) G τ ≤ prob (fun o => StrictCR.IsColl H512 (pk o)) G τ :=
-        prob_mono (fun o ho => (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).isColl
-          (rd.offAt_conflict (checked_of_acceptsHJ I ht own dj y₀ (Flock.Desc.parse_flat hD) hU hpub hscope hTags o
-            ho.1.1 rd ho.1.2) ho.2)) G τ
+            rd.Off o.1) G τ ≤ prob (fun o => StrictCR.IsColl H512 (pk o)) G τ := by
+        refine prob_mono (fun o ho => ?_) G τ
+        obtain ⟨⟨hacc, hown⟩, hof⟩ := ho
+        have hc : rd.Checked o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) :=
+          checked_of_acceptsHJ I ht own dj y₀ (Flock.Desc.parse_flat hD) hU hpub hscope hTags o hacc rd hown
+        have hcf : (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).Conflict :=
+          rd.offAt_conflict hc hof
+        have hcol : StrictCR.IsColl H512
+            (some (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).pair) :=
+          (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).isColl hcf
+        show StrictCR.IsColl H512 (rd.pick o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port))
+        exact hcol
       have heq : (prob (fun o => StrictCR.IsColl H512 (pk o)) G τ).toReal =
           (Bridge.strictComp (StrictCR.oneRun G τ pk) qR).Pr Claims.Sampling.sha512Msg := by
         rw [Bridge.strictComp_Pr, StrictCR.oneRun_ev, prob_toReal]
@@ -443,9 +451,9 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
     refine ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right ?_ h1ρ.le)
     refine le_trans ?_ (mul_le_mul_of_nonneg_right hQs (add_nonneg hx0 hkR))
     rw [Finset.sum_mul]
-    exact Finset.sum_le_sum fun c _ => mul_le_mul_of_nonneg_left
-      (by linarith [Bridge.rowsFinderPrZC_le_mix dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _ hp0
-        hfamR c]) (by positivity)
+    have hrowsF := Bridge.rowsFinderPrZC_le_mix dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _ hp0
+      hfamR
+    exact Finset.sum_le_sum fun c _ => mul_le_mul_of_nonneg_left (by linarith [hrowsF c]) (by positivity)
   refine (prob_mono hsub G τ).trans (hVi.trans ((add_le_add hbase hrowsB).trans ?_))
   refine hfin _ (div_nonneg (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hx0 hkR)) h1ρ.le) ?_
   have e : (Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) =
