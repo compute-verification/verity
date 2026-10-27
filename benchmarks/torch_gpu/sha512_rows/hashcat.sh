@@ -6,7 +6,9 @@
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
 # chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sha512x.cuh's default
 # force-included (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
-# hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib.
+# hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
+# honest chain and -O's shape at each CTA size in SHAPES, in whole waves (commit_gpu's sha launches 8 CTAs of 256 an SM,
+# which an SM holds 3 at a time at its 70 registers, so its last wave is partial).
 # cwd = the source tree's root. Outside the lease: the builds and reference.py's cases. The lease: the SM clock locked at
 # LOCK_MHZ (default 1980) and reset on exit, nvidia-smi every 200 ms, the checks, one warm-up a hashcat setting (its kernel
 # build, Accel/Loops/Thr/Vec and the mask), then ROUNDS rounds with every arm interleaved. After it: the SASS pipe mix of
@@ -15,7 +17,7 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --timeout 90m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
-# ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16).
+# ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16), SHAPES ("128 256 384 512 640 768 1024").
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}
@@ -27,6 +29,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)
 case $CC in 90 | 100 | 120) SM=${CC}a ;; *) SM=$CC ;; esac
 export SM LOCK=${LOCK_MHZ:-1980} ROUNDS=${ROUNDS:-3} LEASE_MIN=${LEASE_MIN:-25} HC_TAG=${HC_TAG:-v7.1.2}
+export SHAPES=${SHAPES:-128 256 384 512 640 768 1024}
 echo "compute_cap $CC sm_$SM" > "$O/arch.txt"
 nvcc --version > "$O/nvcc.txt" 2>&1
 
@@ -127,6 +130,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   for r in $(seq "$ROUNDS"); do
     for t in $TIMED; do ph "sha-$t-$r" "$W/commit_gpu_$t" sha 20 >> "$O/sha-$t.jsonl" 2>> "$O/bench.err"; done
     [ -x "$W/hashcat_forms" ] && ph "forms-$r" "$W/hashcat_forms" time 20 >> "$O/forms.jsonl" 2>> "$O/bench.err"
+    [ -x "$W/hashcat_forms" ] && ph "shapes-$r" "$W/hashcat_forms" shapes 20 $SHAPES >> "$O/shapes.jsonl" 2>> "$O/bench.err"
     for cfg in $CFGS; do
       # shellcheck disable=SC2046
       ph "hc-$cfg-$r" "$HC" $(hcargs "$cfg") $([ -e "$O/force-$cfg" ] && echo --force) --machine-readable \

@@ -6,7 +6,9 @@ compression at the one locked SM clock, the SASS a compression of each, and VERD
 A hashcat benchmark candidate is one SHA-512 block (-m 1700: 7 bytes; -m 1710: 7 bytes and the 12-byte salt; both under
 112 bytes with the padding), so hashcat's H/s is its compressions a second. A rate per SM-clock is compressions a second
 over SMs x MHz x 1e6. Ours is sx0000 (sha512x.cuh's default force-included in commit_gpu), a0r0l is commit_gpu's own
-default build; hashcat_forms is sx0000's compression in hashcat's shapes (its header). Two rates match within 3%.
+default build; hashcat_forms is sx0000's compression in hashcat's shapes (its header), and the honest chain and -O's shape
+at each CTA size in whole waves (shapes.jsonl). Two rates match within 3%; the verdict takes hashcat's best -O setting
+against our best -O-shaped form.
 """
 from __future__ import annotations
 
@@ -184,17 +186,33 @@ def main(out: str) -> None:
             if ftext:
                 forms[f"{form}-roll{roll}"]["sass"] = sass(ftext, f"formsILi{i}ELi{roll}E", 4 if roll else 1, 1)
 
+    grouped: dict[tuple[str, int], list[dict]] = {}
+    for r in jsonl(f"{out}/shapes.jsonl"):
+        if "threads" in r:
+            grouped.setdefault((f"{r['form']}-roll{r['roll']}", r["threads"]), []).append(r)
+    shapes = []
+    for (name, threads), rs in sorted(grouped.items()):
+        g, mhz = med([r["gcomp_per_s"] for r in rs]), med([r["mhz"] for r in rs])
+        shapes.append({"form": name, "threads": threads, "ctas_an_sm": rs[0]["ctas_an_sm"], "warps_an_sm": rs[0]["warps_an_sm"],
+                       "regs": rs[0]["regs"], "rounds": [r["gcomp_per_s"] for r in rs], "gcomp_per_s": g, "mhz": mhz,
+                       "per_sm_clock": per_clock(g, sms, mhz)})
+
     base = ours["sx0000"] if ours["sx0000"]["gcomp_per_s"] else ours["a0r0l"]
     base_name = "sx0000" if base is ours["sx0000"] else "a0r0l"
-    for v in list(hc.values()) + list(forms.values()):
+    for v in list(hc.values()) + list(forms.values()) + shapes:
         v["over_ours"] = ratio(v["gcomp_per_s"], base["gcomp_per_s"])
         v["over_ours_per_sm_clock"] = ratio(v["per_sm_clock"], base["per_sm_clock"])
-    skip = max((forms[k] for k in ("skip-roll0", "skip-roll1")), key=lambda v: v["gcomp_per_s"] or 0)
-    skip_name = "straight-line" if skip is forms["skip-roll0"] else "rolled"
+    skips = [{"name": f"{k} at 8 CTAs of 256 an SM", **forms[k]} for k in ("skip-roll0", "skip-roll1")]
+    skips += [{"name": f"{s['form']} at {s['threads']} a CTA in whole waves", **s} for s in shapes if s["form"].startswith("skip")]
+    skip = max(skips, key=lambda v: v["gcomp_per_s"] or 0)
+    honest = max([{"name": f"{s['form']} at {s['threads']} a CTA in whole waves", **s} for s in shapes
+                  if s["form"].startswith("chain")] or [{"name": None, "gcomp_per_s": None}], key=lambda v: v["gcomp_per_s"] or 0)
+    opt_cfg = max(("1700-O", "1710-O", "1700-O-w4"), key=lambda c: hc[c]["gcomp_per_s"] or 0)
 
     summary = {"sms": sms, "lock_mhz_rc": int(lock.group(1)) if lock else None,
                "clock_mode": mode.group(1) if mode else None, "timed": timed, "forms_check": forms_ok,
-               "base": base_name, "ours": ours, "forms": forms, "forms_clock": forms_clock, "hashcat": hc,
+               "base": base_name, "ours": ours, "forms": forms, "forms_clock": forms_clock, "shapes": shapes,
+               "best_skip": skip["name"], "best_honest": honest["name"], "best_hashcat_O": opt_cfg, "hashcat": hc,
                "hashcat_commit": read(f"{out}/hashcat-commit.txt").strip()}
     with open(f"{out}/summary.json", "w") as f:
         json.dump(summary, f, indent=1)
@@ -233,20 +251,31 @@ def main(out: str) -> None:
               f"{fmt(v['mhz'], '.0f')} MHz, over ours {base_name} {fmt(v['over_ours'])}; SASS a compression "
               f"{brief(v.get('sass'))}")
 
+    for form in sorted({s["form"] for s in shapes}):
+        row = [s for s in shapes if s["form"] == form]
+        print(f"VERDICT ours in whole waves, hashcat_forms shapes {form} (Gcomp/s at a CTA size; resident warps an SM; "
+              f"registers {row[0]['regs']}): "
+              + ", ".join(f"{s['threads']}: {fmt(s['gcomp_per_s'])} ({s['warps_an_sm']} warps)" for s in row)
+              + f"; best over ours {base_name} {fmt(max(s['over_ours'] or 0 for s in row))}")
+
     pure = max((hc[c]["over_ours_per_sm_clock"] or 0 for c in ("1700-pure", "1710-pure")), default=0) or None
-    opt = hc["1700-O"]["gcomp_per_s"]
+    opt = hc[opt_cfg]["gcomp_per_s"]
     opt_shape = ratio(opt, skip["gcomp_per_s"])
+    whole = (f"; our honest compression in whole waves ({honest['name']}) runs {fmt(honest['gcomp_per_s'])} Gcomp/s, "
+             f"{fmt(ratio(honest['gcomp_per_s'], base['gcomp_per_s']))}x ours {base_name} and "
+             f"{fmt(ratio(honest['gcomp_per_s'], opt))}x hashcat's best -O") if honest["gcomp_per_s"] else ""
     if pure is None or opt_shape is None or not forms_ok or not base["timed"]:
         print("VERDICT HASH-24: incomplete (a rate, a check or hashcat_forms is missing; summary.json)")
     elif pure <= SAME and opt_shape <= SAME:
         print(f"VERDICT HASH-24: no faster public SHA-512 compression on this GPU: hashcat's full-digest kernels (pure) "
-              f"run {fmt(pure)}x ours {base_name} per SM-clock, and its -O rate ({fmt(hc['1700-O']['over_ours'])}x ours) "
-              f"is our compression in -O's shape within 3% (-O / hashcat_forms skip {skip_name} = {fmt(opt_shape)}): "
-              f"its lead is OPTI_TYPE_EARLY_SKIP, ZERO_BYTE, PRECOMPUTE_INIT and no feed-forward, which a commitment of "
-              f"variable blocks can't take")
+              f"run {fmt(pure)}x ours {base_name} per SM-clock, and its best -O rate (-m {opt_cfg}, {fmt(opt)} Gcomp/s, "
+              f"{fmt(hc[opt_cfg]['over_ours'])}x ours) is our compression in -O's shape within 3% (-O / hashcat_forms "
+              f"{skip['name']} = {fmt(opt_shape)}){whole}: -O's lead is OPTI_TYPE_EARLY_SKIP, ZERO_BYTE, "
+              f"PRECOMPUTE_INIT and no feed-forward, which a commitment of variable blocks can't take")
     else:
         print(f"VERDICT HASH-24: hashcat is faster per compression: pure / ours {base_name} = {fmt(pure)} per SM-clock, "
-              f"-O / our compression in its shape (skip {skip_name}) = {fmt(opt_shape)}: a port candidate")
+              f"its best -O (-m {opt_cfg}) / our compression in its shape ({skip['name']}) = {fmt(opt_shape)}{whole}: "
+              f"a port candidate")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,10 @@
 //
 // ROLL is sha512x.cuh's (1: rounds 16..79 a loop of 16-round bodies; 0: straight-line, as hashcat's kernel is).
 //
-//   hashcat_forms time REPS      one JSON line a form: compressions a second, the SM clock (NVML) after each launch
+//   hashcat_forms time LAUNCHES  one JSON line a form: compressions a second, the SM clock (NVML) after each launch
+//   hashcat_forms shapes LAUNCHES THREADS...
+//                                chain (both ROLLs) and skip straight-line at each CTA size, in whole waves of the CTAs an
+//                                SM holds (the occupancy API), with their registers and resident warps an SM
 //   hashcat_forms check          the SM count, and every word of iv's first compression in threads 0 and 1 (the 7-byte
 //                                candidates 0 and 2^20, the IV fed forward), for hashcat_summary.py to compare with
 //                                hashlib.sha512
@@ -106,7 +109,8 @@ struct Nv {
 };
 
 template <int FORM, int ROLL>
-static void time_form(const char* name, const u64* tail, u64* out, int launches, int threads, int blocks, int reps, Nv& nv) {
+static void time_form(const char* name, const u64* tail, u64* out, int launches, int threads, int blocks, int reps, Nv& nv,
+                      const char* extra = "") {
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
@@ -121,15 +125,32 @@ static void time_form(const char* name, const u64* tail, u64* out, int launches,
     if (i) { ms.push_back(m); mhz.push_back(nv.sm()); }
   }
   const double comps = (double)threads * blocks * reps, tm = median(ms);
-  printf("{\"form\": \"%s\", \"roll\": %d, \"compressions\": %.0f, \"ms\": %.5f, \"gcomp_per_s\": %.4f, \"mhz\": %.0f}\n", name, ROLL,
-         comps, tm, comps / tm * 1e-6, median(mhz));
+  printf("{\"form\": \"%s\", \"roll\": %d, \"compressions\": %.0f, \"ms\": %.5f, \"gcomp_per_s\": %.4f, \"mhz\": %.0f%s}\n", name,
+         ROLL, comps, tm, comps / tm * 1e-6, median(mhz), extra);
   fflush(stdout);
   CK(cudaEventDestroy(e0));
   CK(cudaEventDestroy(e1));
 }
 
+// the form at `threads` a CTA, in WAVES whole waves of the CTAs an SM holds at once (no partial last wave)
+template <int FORM, int ROLL>
+static void time_shape(const char* name, const u64* tail, u64* out, int launches, int threads, int sms, int reps, Nv& nv) {
+  constexpr int WAVES = 4;
+  int per_sm = 0;
+  cudaFuncAttributes fa;
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, forms<FORM, ROLL>, threads, 0));
+  CK(cudaFuncGetAttributes(&fa, forms<FORM, ROLL>));
+  if (per_sm < 1) return;
+  char extra[160];
+  snprintf(extra, sizeof extra, ", \"threads\": %d, \"ctas_an_sm\": %d, \"warps_an_sm\": %d, \"regs\": %d, \"waves\": %d", threads,
+           per_sm, per_sm * threads / 32, fa.numRegs, WAVES);
+  time_form<FORM, ROLL>(name, tail, out, launches, threads, sms * per_sm * WAVES, reps, nv, extra);
+}
+
+static const char* USAGE = "usage: hashcat_forms time LAUNCHES | shapes LAUNCHES THREADS... | check\n";
+
 int main(int argc, char** argv) {
-  if (argc < 2) { fprintf(stderr, "usage: hashcat_forms time LAUNCHES | check\n"); return 2; }
+  if (argc < 2) { fputs(USAGE, stderr); return 2; }
   int dev;
   cudaDeviceProp prop;
   CK(cudaGetDevice(&dev));
@@ -139,7 +160,18 @@ int main(int argc, char** argv) {
   u64 *tail, *out;
   CK(cudaMalloc(&tail, sizeof tail_h));
   CK(cudaMemcpy(tail, tail_h, sizeof tail_h, cudaMemcpyHostToDevice));
-  CK(cudaMalloc(&out, (size_t)threads * blocks * 8));
+  CK(cudaMalloc(&out, (size_t)prop.multiProcessorCount * 2048 * 4 * 8));
+  if (!strcmp(argv[1], "shapes") && argc >= 4) {
+    const int launches = atoi(argv[2]), sms = prop.multiProcessorCount;
+    Nv nv;
+    for (int a = 3; a < argc; ++a) {
+      const int th = atoi(argv[a]);
+      time_shape<CHAIN, 1>("chain", tail, out, launches, th, sms, reps, nv);
+      time_shape<CHAIN, 0>("chain", tail, out, launches, th, sms, reps, nv);
+      time_shape<SKIP, 0>("skip", tail, out, launches, th, sms, reps, nv);
+    }
+    return 0;
+  }
   if (!strcmp(argv[1], "check")) {
     first<<<1, 2>>>(tail, out);
     CK(cudaGetLastError());
@@ -153,7 +185,7 @@ int main(int argc, char** argv) {
     }
     return 0;
   }
-  if (strcmp(argv[1], "time") || argc < 3) { fprintf(stderr, "usage: hashcat_forms time LAUNCHES | check\n"); return 2; }
+  if (strcmp(argv[1], "time") || argc < 3) { fputs(USAGE, stderr); return 2; }
   const int launches = atoi(argv[2]);
   Nv nv;
   time_form<CHAIN, 1>("chain", tail, out, launches, threads, blocks, reps, nv);
