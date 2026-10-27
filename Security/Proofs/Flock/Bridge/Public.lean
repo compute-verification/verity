@@ -293,7 +293,6 @@ theorem _root_.Flock.Bridge.lossPub_nonneg (k W : ℕ) {ρ p : ℝ} (hρ : ρ < 
     (Real.sqrt_nonneg _)) h) (div_nonneg (mul_nonneg (Nat.cast_nonneg _) hp) h)
 
 open Classical FlockSoundness.Discharge.ZkReg in
-set_option maxHeartbeats 1000000 in
 /-- **`SampledKSLivePub` from `Bridge.SampledKSLiveXr` and `SampledKSLiveV2`.** At `p = K·Pr[B^τ]` each member of
 `B^τ` succeeds with probability at most `p` (`pubFamR_le`), so `pubFinder`'s do (`pubFam_le_R`) and the bound's first
 three terms are at most `δ + f(J²p)` (`Bridge.boundPr_le_pub_of`). The registered reads' leaves are the public file's
@@ -312,7 +311,7 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
     (rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) k).trans hρk
   have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
   set pk := fun o : Reg × Finset (Fin n) × Discharge.Exec.Transcript =>
-    rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)
+    rd.pick o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port)
   rw [mul_assoc ((nTab I : ℝ) ^ 2)]
   have hfamR : ∀ i, (Bridge.pubFamR dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)
       (Bridge.strictComp (StrictCR.oneRun G τ pk) qR) i).Pr Claims.Sampling.sha512Msg ≤
@@ -382,11 +381,9 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
       have hle : prob (fun o : Reg × Finset (Fin n) × Discharge.Exec.Transcript =>
           (LiveAcceptsZKR I own o ∧ OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt) ∧
             rd.Off o.1) G τ ≤ prob (fun o => StrictCR.IsColl H512 (pk o)) G τ :=
-        prob_mono (fun o ho => by
-          have hc := checked_of_acceptsHJ I ht own dj y₀ (Flock.Desc.parse_flat hD) hU hpub hscope hTags o ho.1.1 rd
-            ho.1.2
-          exact (rd.openings o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).isColl
-            (rd.offAt_conflict hc ho.2)) G τ
+        prob_mono (fun o ho => (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).isColl
+          (rd.offAt_conflict (checked_of_acceptsHJ I ht own dj y₀ (Flock.Desc.parse_flat hD) hU hpub hscope hTags o
+            ho.1.1 rd ho.1.2) ho.2)) G τ
       have heq : (prob (fun o => StrictCR.IsColl H512 (pk o)) G τ).toReal =
           (Bridge.strictComp (StrictCR.oneRun G τ pk) qR).Pr Claims.Sampling.sha512Msg := by
         rw [Bridge.strictComp_Pr, StrictCR.oneRun_ev, prob_toReal]
@@ -448,7 +445,7 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
     rw [Finset.sum_mul]
     exact Finset.sum_le_sum fun c _ => mul_le_mul_of_nonneg_left
       (by linarith [Bridge.rowsFinderPrZC_le_mix dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _ hp0
-            hfamR c]) (by positivity)
+        hfamR c]) (by positivity)
   refine (prob_mono hsub G τ).trans (hVi.trans ((add_le_add hbase hrowsB).trans ?_))
   refine hfin _ (div_nonneg (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hx0 hkR)) h1ρ.le) ?_
   have e : (Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) =
