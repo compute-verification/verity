@@ -3,8 +3,9 @@ auditor's ledger, one filler window of Dither calls under its live coins, and `f
 the verifier of record a stand-in.
 
 * **The circuit** is the filler descriptor (`fill.descriptor`) of `CALLS` calls of `SHAPE` (128 × 128 cells, K = 128 in
-  two segments of 64, so each block is `PouwDitherBlock_v1` at FIRST or not), B the torch loop's committed up_proj
-  (`LINEAR`, its int8 codes, pinned by `dither.checkpoint_digest`).
+  two segments of 64, so each block is `PouwDitherBlock_v1` at FIRST or not), B the first n rows of the H200 example's
+  seeded served weights' layer-0 up projection at Phase 1's shape (`e2e_h200.served_weights`, `LINEAR` under `SEED`,
+  its int8 codes, pinned by `dither.checkpoint_digest`).
 * **The gate** is `a5_coins.Local` (`window_salt.local`): `benchmarks/live_challenger/auditor.py`'s verbs on this machine
   under a key made here. It opens the fill period on the circuit with the draw K `DRAW_K`, reserves the window's session
   and opens it on `fill.open_root` of the circuit and the session, with a salt coin, a call coin a call and a draw coin
@@ -31,13 +32,10 @@ import hashlib
 import json
 import os
 import secrets
-import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
@@ -53,9 +51,12 @@ sys.path.insert(0, str(HERE.parent / "window_salt"))
 import window_salt as WS  # noqa: E402
 
 TREE = WS.TREE
-LOOP = TREE / "integrations" / "torch_loop"
+sys.path.insert(0, str(TREE / "examples" / "h200"))
+from e2e_h200 import served_weights as SW  # noqa: E402
+
 STUB = TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"
-LINEAR = "model.layers.0.mlp.up_proj"
+#: B's source: the seeded served weights' layer-0 up projection at Phase 1's shape (512 × 128 int8 codes)
+WEIGHTS, LINEAR, SEED = SW.PHASE1, "l0.wup", b"0"
 SHAPE = D.Shape(128, 128, 128, lp=32, L=64, o=False)
 CALLS = 2
 DRAW_K = 4
@@ -64,19 +65,9 @@ STAND_IN = ("stand-in verifier of record: each drawn block's rows opened at its 
             "checked in the clear on them, the pad row, B's row and the coins (dither.check_block)")
 
 
-def checkpoint(directory: Path) -> None:
-    """The loop's committed checkpoint files copied into `directory` (0755, its files 0644, as the registry takes them)."""
-    directory.mkdir(mode=0o755, parents=True)
-    entry = json.loads((LOOP / "manifests" / "checkpoints-int8.json").read_text())["checkpoints"][0]
-    for n in entry["files"]:
-        shutil.copyfile(LOOP / "checkpoint" / n, directory / n)
-        (directory / n).chmod(0o644)
-
-
-def b_rows(registry: Any, directory: Path) -> list[list[int]]:
-    """`LINEAR`'s int8 codes as the registry reads them, n × K."""
-    ck = registry.Checkpoint(directory, sorted(p.name for p in directory.iterdir()))
-    return np.asarray(ck.tensor(f"{LINEAR}.weight"), np.int8).tolist()
+def b_rows(sh: D.Shape) -> list[list[int]]:
+    """B, n × K: the first n output channels of `LINEAR`'s seeded int8 codes, each its first K inputs."""
+    return SW.generate(WEIGHTS, SEED, LINEAR, range(sh.n))[:, :sh.k].tolist()
 
 
 def call(sh: D.Shape, salt: bytes, coin: bytes, B: list[list[int]], ks: bytes, c: int
@@ -164,9 +155,7 @@ def run(g: Any, main: list[str], out: Path, name: str = "fill-demo") -> dict:
         return doc
 
     out.mkdir(parents=True, exist_ok=True)
-    ck = out / "checkpoint"
-    checkpoint(ck)
-    B = b_rows(A.registry(), ck)
+    B = b_rows(SHAPE)
     desc = F.descriptor(SHAPE, CALLS, D.checkpoint_digest(B))
     (out / "fill-program.json").write_bytes(desc)
     nm = F.period_name(name)
