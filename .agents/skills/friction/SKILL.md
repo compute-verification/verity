@@ -5,8 +5,8 @@ description: >
   coordinator when you can't tell, take only keys, access and claims to Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
-  a step bit you twice or keeps you waiting, you're unsure a change is yours, you just got a ruling from Daniel, you read
-  friction notes, or a command fails for missing credentials.
+  a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
+  ruling from Daniel, you read friction notes, or a command fails for missing credentials.
 ---
 
 # Friction
