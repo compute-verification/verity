@@ -217,7 +217,7 @@ BENCHMARKS_IMPORTERS = {
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
-                    "native_peak, commitments, pouw)"),
+                    "native_peak, commitments, pouw, flock_pod)"),
     # tests and vector scripts that check against a benchmark's reference
     **dict.fromkeys((
         "verity/core/protocols/pouw/tests/epoch_coins_vectors.py", "verity/core/protocols/pouw/tests/test_pouw_audit.py",
@@ -338,6 +338,15 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
             if (_external(name, imported, third_party)
                     or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
+    assert not offenders, "\n".join(offenders)
+
+
+def test_no_verity_source_imports_the_tools() -> None:
+    """``verity`` imports no other distribution of the workspace, its ``SEPARATE`` trees included: a research Tool declaring
+    a job under ``verity/`` sits outside it, beside the job's scripts (``benchmarks/flock_pod/tool.py``)."""
+    files = sorted(p for p in SRC.rglob("*.py") if not {"tests", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts))
+    offenders = [f"{p.relative_to(SRC)}:{line}: {name}" for p in files for name, line, imported in _imports(p)
+                 if imported and name.split(".")[0] in {"research", "cluster"}]
     assert not offenders, "\n".join(offenders)
 
 

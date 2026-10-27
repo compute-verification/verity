@@ -1,5 +1,5 @@
-"""Store declaration for the verifier-of-record agreement job (research.store README §6.1): ``ci-pod.sh`` with its settings as
-``K=V`` arguments, the shipped bundle as its input.
+"""Store declaration for the verifier-of-record agreement job (research.store README §6.1):
+``verity/ml/flock/verifier/ci-pod.sh`` with its settings as ``K=V`` arguments, the shipped bundle as its input.
 
     research run --on M --project verity --source . --send ci-bundle.tar.gz --tool flock_agreement --campaign flock-verifier \\
         --require-result -- bash verity/ml/flock/verifier/ci-pod.sh SEED=20260926 FUZZ=20 JOBS=4

@@ -1521,6 +1521,12 @@
       "paths": {
         "verity/ml/flock/pod/": "benchmarks/flock_pod/"
       }
+    },
+    {
+      "paths": {
+        "verity/ml/flock/tool.py": "benchmarks/flock_pod/tool.py",
+        "verity/ml/flock/verifier/tool.py": "benchmarks/flock_pod/agreement_tool.py"
+      }
     }
   ]
 }
