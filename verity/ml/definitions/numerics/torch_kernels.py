@@ -1,6 +1,7 @@
 """numpy models of the torch 2.13/2.14 CUDA kernels behind the training Definitions (`registry.torch_attention`,
-`registry.torch_loss`, `registry.torch_embedding`), in each kernel's own order, on rows of f32 (u32) and bf16 (u16) words. Every f32 result's NaN is the
-GPU's 0x7FFFFFFF and every rounding to bf16 is F2FP's (`derived_rows.f2fp_bf16`, NaN 0x7FFF); nothing is flushed.
+`registry.torch_loss`, `registry.torch_embedding`), in each kernel's own order, on rows of f32 (u32) and bf16 (u16) words.
+Every f32 result's NaN is the GPU's 0x7FFFFFFF and every rounding to bf16 is F2FP's (`derived_rows.f2fp_bf16`, NaN 0x7FFF);
+nothing is flushed.
 
 These are written from the kernels' source independently of the gates, so a test that compares them checks the gates. The two
 libdevice functions are the exception: ``expf`` evaluates `NvExpf_v2` and ``logf`` `NvLogf_v3`, the Boolean Definitions the

@@ -1,6 +1,6 @@
-"""HF `LlamaAttention`'s eager attention in training, as Boolean Definitions: each is the gates of the torch 2.13/2.14 CUDA kernels
-that compute it (the two versions' kernels are the same at f32 and bf16), every NaN of an f32 operation the GPU's 0x7FFFFFFF
-and every rounding to bf16 F2FP's (`__float2bfloat16`, NaN 0x7FFF), none flushed.
+"""HF `LlamaAttention`'s eager attention in training, as Boolean Definitions: each is the gates of the torch 2.13/2.14 CUDA
+kernels that compute it (the two versions' kernels are the same at f32 and bf16), every NaN of an f32 operation the GPU's
+0x7FFFFFFF and every rounding to bf16 F2FP's (`__float2bfloat16`, NaN 0x7FFF), none flushed.
 
     SoftmaxTorch_v1{N}             (x: Array<N, F32>) -> Array<N, F32>                                     1 <= N <= 2048
     SoftmaxTorchBackward_v1{N}     (g: Array<N, F32>, y: Array<N, F32>) -> Array<N, F32>                   1 <= N <= 1024
