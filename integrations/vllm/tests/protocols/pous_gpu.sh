@@ -32,7 +32,7 @@ grep -qE "^(build|venv) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; exit 2; }
 
 mkdir -p "$HF/hub"
 research keep "$HF" --owner @memory-accounting --expires 2026-11-02 --priority normal \
-  --why "MEM-94: unsloth/Llama-3.2-1B's pin and its int8 pin LLAMA32_1B_INT8, for the PoUS option's GPU smoke" > /dev/null 2>&1
+  --why "unsloth/Llama-3.2-1B's pin and its int8 pin LLAMA32_1B_INT8, for the PoUS option's GPU smoke" > /dev/null 2>&1
 if [ ! -f "$PIN/model.safetensors" ]; then
   "$PY" -c 'import sys; from huggingface_hub import snapshot_download
 print(snapshot_download(sys.argv[1], revision=sys.argv[2], cache_dir=sys.argv[3]))' "$BASE_REPO" "$BASE_REV" "$HF/hub" \
