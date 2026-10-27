@@ -157,11 +157,8 @@ struct Hs {
   int n;
   u64 tot;
 };
-// hs_init and hb_init read the IV from constant memory (sx::IV_DEV): with sx::iv's immediates the receipt trees run
-// 0.4-0.6% slower at T = 64
 __device__ __forceinline__ void hs_init(Hs& s) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sx::IV_DEV[j];
+  sx::iv(s.h);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
@@ -478,8 +475,7 @@ struct Hb {
   u64 tot;
 };
 __device__ __forceinline__ void hb_init(Hb& s, uint8_t* b) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sx::IV_DEV[j];
+  sx::iv(s.h);
   s.b = b;
   s.n = 0;
   s.tot = 0;

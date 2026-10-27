@@ -68,7 +68,7 @@ static const u64 K_HOST[80] = {SX_K_LIST};
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
-// the IV as constant operands, for a caller slower with iv's immediates (dither's h1c, and h1r's noise from a midstate)
+// the IV as constant operands, for a caller slower with iv's immediates (dither's h1r, its noise from a midstate)
 __constant__ u64 IV_DEV[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull,
                               0xa54ff53a5f1d36f1ull, 0x510e527fade682d1ull, 0x9b05688c2b3e6c1full,
                               0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
