@@ -343,7 +343,8 @@ def table(rows: list[list], head: list[str]) -> str:
     rows = [[str(c) for c in r] for r in rows]
     w = [max(len(h), *(len(r[i]) for r in rows)) if rows else len(h) for i, h in enumerate(head)]
     num = [bool(rows) and all(re.match(r"^[-\d,./%]+$", r[i]) for r in rows) for i in range(len(head))]
-    line = lambda r: "  ".join((c.rjust(w[i]) if num[i] else c.ljust(w[i])) for i, c in enumerate(r)).rstrip()
+    def line(r):
+        return "  ".join((c.rjust(w[i]) if num[i] else c.ljust(w[i])) for i, c in enumerate(r)).rstrip()
     return "\n".join([line(head), line(["-" * x for x in w]), *map(line, rows)])
 
 
@@ -415,7 +416,8 @@ DOTTED = re.compile(r"^[A-Z][\w']*(?:\.[\w']+)*$")
 
 def longest(name: str, prefixes) -> str | None:
     """The longest of ``prefixes`` that is ``name`` or a dotted prefix of it, or, for one ending in `*`, a raw prefix."""
-    hit = lambda p: name.startswith(p[:-1]) if p.endswith("*") else name == p or name.startswith(p + ".")
+    def hit(p):
+        return name.startswith(p[:-1]) if p.endswith("*") else name == p or name.startswith(p + ".")
     return max((p for p in prefixes if hit(p)), key=lambda p: len(p.rstrip("*")), default=None)
 
 
@@ -529,7 +531,8 @@ def breakers(nodes: list[str], weight: Counter) -> list[tuple[str, str]]:
     """A minimal set of edges whose removal leaves no cycle, the thinnest first: remove the lightest edge inside a cycle
     until none is left, then put back, heaviest first, each removed edge that closes no cycle."""
     live = {e for e in weight if weight[e] > 0}
-    graph = lambda es: {a: {b for (x, b) in es if x == a} for a in nodes}
+    def graph(es):
+        return {a: {b for (x, b) in es if x == a} for a in nodes}
     removed = []
     while comps := sccs(nodes, graph(live)):
         e = min((e for e in live if any(e[0] in c and e[1] in c for c in comps)), key=lambda e: (weight[e], e))
@@ -724,7 +727,8 @@ def section_c(mods, info, by: str, top: int):
 def section_d(mods, info, top: int):
     print("\n(d) module granularity\n")
     bounds = [50, 100, 200, 500, 1000, 2000, 5000]
-    bucket = lambda n: next((i for i, b in enumerate(bounds) if n <= b), len(bounds))
+    def bucket(n):
+        return next((i for i, b in enumerate(bounds) if n <= b), len(bounds))
     labels = [f"<={b}" for b in bounds] + [f">{bounds[-1]}"]
     by_tree = defaultdict(Counter)
     for n, m in mods.items():
@@ -732,7 +736,8 @@ def section_d(mods, info, top: int):
     rows = [[t, *[by_tree[t][i] for i in range(len(labels))], sum(by_tree[t].values())] for t in COLUMNS]
     print(table(rows, ["lines \\ tree", *labels, "modules"]))
     ls = sorted(m.lines for m in mods.values())
-    q = lambda p: ls[min(len(ls) - 1, int(p * len(ls)))]
+    def q(p):
+        return ls[min(len(ls) - 1, int(p * len(ls)))]
     print(f"\nmodule lines: median {q(.5)}, p90 {q(.9)}, p99 {q(.99)}, max {fmt(ls[-1])}")
     gen = [m for m in mods.values() if m.generated]
     print(f"generated modules: {len(gen)}, {fmt(sum(m.lines for m in gen))} lines")
@@ -879,7 +884,8 @@ def dist(xs: list[int]) -> dict:
     if not xs:
         return {}
     s = sorted(xs)
-    q = lambda p: s[min(len(s) - 1, int(p * len(s)))]
+    def q(p):
+        return s[min(len(s) - 1, int(p * len(s)))]
     return {"n": len(s), "sum": sum(s), "p50": int(statistics.median(s)), "p90": q(0.9), "p99": q(0.99), "max": s[-1]}
 
 
@@ -1053,7 +1059,8 @@ def survey(root: Path, dirs: list[str], top: int) -> dict:
         "files_with_override": len({(h["package"], h["file"]) for h in hb}),
         "max_value": max((h["value"] for h in hb), default=0),
         "worst_files_no_reason": Counter(norm(h["package"], h["file"]) for h in hb if not h["reason"]).most_common(top)}
-    nc_sections = lambda f: sum(m.re is SCOPE and m.group("kw") == "section" and bool(m.group("nc")) for *_, m in f.scan[1])
+    def nc_sections(f):
+        return sum(m.re is SCOPE and m.group("kw") == "section" and bool(m.group("nc")) for *_, m in f.scan[1])
     out["noncomputable"] = {t: {"sections": sum(nc_sections(f) for f in of(t)),
                                 "files_with_section": sum(nc_sections(f) > 0 for f in of(t)),
                                 "decls": sum(d.noncomputable for f in of(t) for d in f.decls)} for t in trees}
@@ -1070,7 +1077,8 @@ def survey(root: Path, dirs: list[str], top: int) -> dict:
                 sigs[d.signature].append((f, d))
             if d.kind in THEOREM_KINDS and d.full:
                 by_name[d.full.split(".")[-1]].append((f, d))
-    spread = lambda xs: len({(x.pkg.dir, x.area) for x, _ in xs}) > 1
+    def spread(xs):
+        return len({(x.pkg.dir, x.area) for x, _ in xs}) > 1
     dup = sorted(((s, xs) for s, xs in sigs.items() if spread(xs)), key=lambda e: -len(e[1]))
     out["duplicates"] = {
         "statements_in_2+_areas": len(dup), "theorems_in_them": sum(len(xs) for _, xs in dup),
@@ -1100,8 +1108,11 @@ def survey(root: Path, dirs: list[str], top: int) -> dict:
         ds = [d for f in fs for d in f.decls if d.kind in DEF_KINDS | TYPE_KINDS and d.name]
         return {"decls": len(ds), "no_docstring": sum(d.doc is None for d in ds)}
 
-    is_g = lambda f: "Guarantees" in f.name.split(".")
-    is_a = lambda f: "Assumptions" in f.name.split(".")
+    def is_g(f):
+        return "Guarantees" in f.name.split(".")
+
+    def is_a(f):
+        return "Assumptions" in f.name.split(".")
     nodoc = Counter(f.file for f in defs_tree for d in f.decls if d.kind in DEF_KINDS | TYPE_KINDS and d.name and d.doc is None)
     out["docstrings"] = {
         "definitions_tree": docs(defs_tree), "guarantees_modules": docs([f for f in defs_tree if is_g(f)]),
@@ -1162,7 +1173,8 @@ def survey(root: Path, dirs: list[str], top: int) -> dict:
 
 def render(r: dict, top: int) -> str:
     L = [f"{r['packages']} packages, {r['files']} files, {r['decls']} declarations (text)"]
-    sec = lambda t: L.append(f"\n== {t}")
+    def sec(t):
+        L.append(f"\n== {t}")
     sec("namespace against module path (declarations; path: one a prefix of the other, the tree root aside)")
     for t, c in r["namespace"]["by_tree"].items():
         n = sum(c.values())
