@@ -739,6 +739,26 @@ def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monke
     assert h.tick().startswith("landed #2") and _main(world) == _tip(world)
 
 
+def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3)
+    reviews = h.d.reviews
+
+    def stale(pr, head):
+        if pr == 3:
+            raise QueueError(f"STALE: the labels of pr:3@{head} weren't pulled from the store's remote")
+        return reviews(pr, head)
+
+    h.d.reviews = stale
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3]
+    assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
+
+
 def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
     h = Review(world, monkeypatch, reviewed_first=False)
     for n, f in ((1, "a.txt"), (2, "b.txt")):

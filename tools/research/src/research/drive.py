@@ -1624,9 +1624,15 @@ class Driver:
         on, lean = {m.commit for m in chain}, drive["lean"]
         if not (nonlean or reviewed) or any(rec.get("state") == "passed" for c, rec in lean.items() if c in on):
             return []
+        if self.q.prefetch is not None:
+            self.q.prefetch([(m.pr, m.head) for m in chain])   # one pull of every member's labels, not three per member
         landing: list[tuple[Member, bool]] = []                 # each member below the first one nothing moves past
         for m in chain:
-            why = unreviewed(self.reviews(m.pr, m.head), self._owners(m)) if self.q.ready(m.pr, m.head) else "withdrawn"
+            try:
+                why = unreviewed(self.reviews(m.pr, m.head), self._owners(m)) if self.q.ready(m.pr, m.head) else "withdrawn"
+            except QueueError as e:                             # its verdict unknown, nothing moves past it
+                self.q.log(f"research queue drive: the lift stops below #{m.pr}: {e}")
+                break
             if why and why.startswith("held") or (lean.get(m.commit) or {}).get("state") == "failed" and self._lean_change(m):
                 break
             landing.append((m, why is None))
