@@ -263,14 +263,14 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
   schedule: it enters the compute audit's terms, which go into JointPeriod.
-- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as a739 registered them,
-  or 32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries. Each entry now carries a
-  read bit as well (`ingress_scan.entry_layout`: a due slot no Program reads is refused), so a scan run today registers
-  NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
+- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
+  32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
+  Each entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused),
+  so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
 - No faulty term with every unit drawn, and D_j = 1.
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,352 bits, and
+- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`, #4326, #4349, #4373, #4370) has no δ term with every unit drawn.
