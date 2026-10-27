@@ -1,5 +1,5 @@
-"""[GLM-5.3] The DSA indexer's top-k of a row past TOPK keys, under Daniel's pattern for data-dependent structure (20:56Z; circuits'
-sign-off for decode past 2048 keys, 18 Oct): a static superset of wires plus selection values computed in the circuit.
+"""[GLM-5.3] The DSA indexer's top-k of a row past TOPK keys, under the pattern for data-dependent structure: a static
+superset of wires plus selection values computed in the circuit.
 
 * The selected-key order is a value: the served kernel's `topk_indices` row, whose order (the above-threshold keys' places come
   from shared-memory atomics) no circuit computes.  The Program takes it from its `run` parameter (`derive.RunInputs`).
@@ -26,11 +26,11 @@ ballot's float order is this key order (±0 never share a bin), so the kernel se
   - more than TOPK keys in the threshold bin (its tie buffer keeps the first TOPK by atomics), or
   - a NaN or an infinity in the threshold bin (the ballot's float comparison is no order there);
 where it does not, the relation refuses the served order: a visible failure, never a wrong acceptance.  `persistent_topk` (more
-than 64 rows) places ties the same way (run r20261018-233053-2502, below); the prefill's `top_k_per_row_prefill` keys by
+than 64 rows) places ties the same way (below); the prefill's `top_k_per_row_prefill` keys by
 `convert_to_uint32_v2` too, but its tie placement is unread.  `top_k_per_row_decode`, which vLLM does not call on sm_90, places
 ties otherwise: the relation refuses its order on rows with ties at the boundary.
 
-On an H200 (sm_90, run r20261018-233053-2502) on synthetic rows of 2049..16384 keys, `cooperative_topk` at 1, 8 and 64 rows a
+On an H200 (sm_90), on synthetic rows of 2049..16384 keys, `cooperative_topk` at 1, 8 and 64 rows a
 call and `persistent_topk` emit orders the relation accepts on every random, bf16-rounded, ballot-tie and signed-zero row, and
 orders it refuses on only the exceptions above (65, 100 and 1000 equal keys straddling the boundary, and a row of 3000 equal
 keys); two identical calls gave different orders on every row.

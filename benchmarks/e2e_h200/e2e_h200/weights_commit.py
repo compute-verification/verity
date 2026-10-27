@@ -1,4 +1,4 @@
-"""The served Program's weights registered at H200 scale (CMP-160): every tensor of `verity_torch_loop.weights` committed as
+"""The served Program's weights registered at H200 scale (CMP-160): every tensor of `e2e_h200.served_weights` committed as
 the registered value the Program reads (core's ``one_stage.registered``), in bounded memory, under the operating system's
 salts, and every row opened later against its root.
 
@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
 
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.commitments import hm96
