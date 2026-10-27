@@ -469,7 +469,8 @@ def memberStep (bs : Core.Blobs) (r : Run) (y : (String × Own) × Member) : V R
 (`runFrom`) on its own inputs and its public file, on one run, so a session's coin-tree key is fresh among every
 earlier member's sessions' too. -/
 def runGroup (ms : Array (String × Own)) (xs : Array Member) (bs : Core.Blobs) : V Run := do
-  if xs.map (·.name) != ms.map (·.1) then throw "the members are not the parameters' members, in order"
+  (if xs.map (·.name) != ms.map (·.1) then throw "the members are not the parameters' members, in order"
+    else pure () : V Unit)
   (ms.zip xs).foldlM (memberStep bs) ⟨#[], #[], #[], true⟩
 
 /-- The group form: the registration's `leaf_layer` is the members' public files' (`leafLayer`), committed before the

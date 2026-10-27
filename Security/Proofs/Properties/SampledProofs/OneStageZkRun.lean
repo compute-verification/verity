@@ -21,6 +21,9 @@ Sampled proofs' one-stage audit on the proofs (`verity/sampled-proofs/one-stage/
 acceptance means for the run `Claims.Sampling`'s bounds count: the run of the deployed sampled verifier
 (`SamplingDeploy.deploy rel cd`) at a checked unit whose session the blobs show accepts.
 
+* `SessionOf`: the session is one of the evidence's, at the inputs it was verified on: the single form's (the
+  parameters' own inputs and the evidence's public file), or, in the group form, a member's (the parameters' inputs
+  for that member and the member's public file).
 * `StmtNames`: the session's statement `xS`, as the deployed Flock verifier reads its bytes (`FlockDeploy.Raw`), is
   `verify --zk` at the component's own inputs: the `verity/flock-circuit` statement, the circuit and public files the
   digests name, the lookup tables the blobs hold, one table, the record's own draw, the verifier's partition, program
@@ -37,8 +40,8 @@ acceptance means for the run `Claims.Sampling`'s bounds count: the run of the de
   sampled run, which `sampling_deployed` takes too. `SamplingDeploy.Code.V` is a field, so nothing else ties the
   sampled verifier's runs to Flock's.
 
-The proof reads the session's verdict off `checkBlobs` (`session_verdict`): `verify --zk` set it up at its record's
-draw (`setupAt`, `sessionAt`, `buildSessionOf`), with the checks `verifyCmd` makes there, and accepted its proof files
+The proof reads the session's verdict off `checkBlobs` (`session_verdict`, through `runFrom_verdict` in the single
+form and `group_verdict` over the members in the group form): `verify --zk` set it up at its record's draw (`setupAt`, `sessionAt`, `buildSessionOf`), with the checks `verifyCmd` makes there, and accepted its proof files
 with the checks after `Zk.verify` (`verdictOf`). Those are the deployed verifier's setup of `xS` (`Ins.setup`, at the
 inputs `StmtNames` decodes, `ins_eq`) and its decision's checks (`FlockDeploy.checks`, with `LiveCoins`' custody), so
 at the run's last message the deployed verifier accepts (`flock_acc`), and `SessionRuns` carries that to the sampled
@@ -92,6 +95,14 @@ noncomputable def LiveCoins (xS : Msg) (v : Claims.Seen) : Prop :=
       FlockDeploy.act true xS (v.msgs.map Prod.fst) (v.msgs.map fun m => RecDeploy.outCoin m.2) =
           .decide i spec sts link c₁ mids f →
         (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()
+
+/-- **The session is one of the evidence's, at the inputs `o` and the public file `pd`**: in the single form (no member
+in the parameters or the evidence), one of the evidence's sessions, at the parameters' own inputs and the evidence's
+public file; in the group form, one of a member's sessions, at the parameters' inputs for that member (its auditor's
+circuit digest and registered file) and the member's public file. -/
+def SessionOf (p : Params) (e : Evidence) (o : Own) (pd : String) (s : Session) : Prop :=
+  (p.members = #[] ∧ e.members = #[] ∧ o = p.own ∧ pd = e.pub ∧ s ∈ e.sessions) ∨
+    ∃ y ∈ p.members.toList.zip e.members.toList, o = y.1.2 ∧ pd = y.2.pub ∧ s ∈ y.2.sessions
 
 namespace Run
 
@@ -230,74 +241,157 @@ theorem fold_verdict {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array Byte
     · exact ⟨_, b, record, hb, hu, hv⟩
     · exact hrest s' hs'
 
-/-- **What v2's acceptance ran on each session**: `run`'s inputs (the statement's tags, the circuit and public files
-the digests name, the verifier's registered reads), and the session's record and verdict on them. -/
+/-- What `runFrom` ran on the session `s`, at the inputs `o` and the public file `pd`: the statement's tags, the circuit
+and public files the digests name, the verifier's registered reads, and the session's record and verdict on them. -/
+def Verdict (o : Own) (pd : String) (blobs : Array ByteArray) (s : Session) : Prop :=
+  ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (rd : Reads), Flock.Tags.find? STATEMENT = some tags0 ∧
+    tags0.plainLeaves = false ∧
+    (Core.Blobs.ofArray blobs).get o.circuit "circuit" = .ok circuitB ∧
+    (Core.Blobs.ofArray blobs).get pd "public file" = .ok pubB ∧ readsOf o.registered = .ok rd ∧
+    ∃ ck b record, (Core.Blobs.ofArray blobs).get s.record s!"session {s.name}'s record" = .ok b ∧
+      String.fromUTF8? b = some record ∧
+      verdictOf (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs))
+        (Flock.ProvedScope.checkOf
+          (Flock.ProvedScope.circuitOf
+            (Flock.Witness.zkTags (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs))) circuitB
+            (tablesOf (Core.Blobs.ofArray blobs)))
+          (Flock.Witness.zkTags (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs))) true pubB 1 false
+          rd.registered.isSome)
+        ck record (Flock.Witness.recordDraw record)
+        (setupAt (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs)) rd
+          (Flock.Witness.recordDraw record))
+        (filesOf (Core.Blobs.ofArray blobs) s
+          (setupAt (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs)) rd
+            (Flock.Witness.recordDraw record)))
+        (coinKeyOf record
+          (setupAt (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs)) rd
+            (Flock.Witness.recordDraw record))) = .ok ()
+
+/-- A `runFrom` that returned an accepting run started from an accepting one and ran each of its sessions
+(`Verdict`). -/
+theorem runFrom_verdict {r0 : Run} {o : Own} {pd : String} {sessions : Array Session} {pu : Option (Array Nat)}
+    {blobs : Array ByteArray} {r : Run} (h : runFrom r0 o pd sessions pu (Core.Blobs.ofArray blobs) = .ok r)
+    (hall : r.all = true) : r0.all = true ∧ ∀ s ∈ sessions, Verdict o pd blobs s := by
+  unfold runFrom at h
+  cases ht : Flock.Tags.find? STATEMENT with
+  | none => simp only [ht] at h <;> cases h
+  | some tags0 =>
+    simp only [ht] at h
+    obtain ⟨u0, hpl, h⟩ := bind_ok h
+    obtain ⟨_, _, h⟩ := bind_ok h
+    obtain ⟨circuitB, hc, h⟩ := bind_ok h
+    obtain ⟨pubB, hpb, h⟩ := bind_ok h
+    obtain ⟨rd, hrd, h⟩ := bind_ok h
+    obtain ⟨r1, hf, h⟩ := bind_ok h
+    rw [← Array.foldlM_toList] at hf
+    have hr1 : r1 = r := by
+      cases pu with
+      | none =>
+        try dsimp only at h
+        cases h
+        rfl
+      | some want =>
+        try dsimp only at h
+        split at h
+        · cases h
+        · cases h
+          rfl
+    subst hr1
+    obtain ⟨hr0, hss⟩ := fold_verdict _ _ _ hf hall
+    have hp : tags0.plainLeaves = false := by
+      cases hp : tags0.plainLeaves
+      · rfl
+      · exfalso
+        first
+        | (rw [hp] at hpl; cases hpl)
+        | (simp only [hp, ↓reduceIte] at hpl; cases hpl)
+        | simp [hp] at hpl
+    exact ⟨hr0, fun s hs => ⟨tags0, circuitB, pubB, rd, rfl, hp, hc, hpb, hrd, hss s (Array.mem_toList_iff.2 hs)⟩⟩
+
+/-- The group form's fold of members that returned an accepting run started from an accepting one and ran each
+member's sessions at the member's inputs and public file. -/
+theorem group_verdict {blobs : Array ByteArray} :
+    ∀ (l : List ((String × Own) × Member)) (r0 r : Run),
+      l.foldlM (memberStep (Core.Blobs.ofArray blobs)) r0 = .ok r → r.all = true →
+      r0.all = true ∧ ∀ y ∈ l, ∀ s ∈ y.2.sessions, Verdict y.1.2 y.2.pub blobs s
+  | [], r0, r, h, hall => by
+    cases h
+    exact ⟨hall, fun y hy => by cases hy⟩
+  | y :: l, r0, r, h, hall => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨r1, h1, h2⟩ := bind_ok h
+    obtain ⟨hr1, hrest⟩ := group_verdict l r1 r h2 hall
+    have h1' : runFrom r0 y.1.2 y.2.pub y.2.sessions none (Core.Blobs.ofArray blobs) = .ok r1 := by
+      unfold memberStep at h1
+      exact mapError_ok h1
+    obtain ⟨hr0, hy⟩ := runFrom_verdict h1' hr1
+    refine ⟨hr0, fun y' hy' => ?_⟩
+    rcases List.mem_cons.1 hy' with rfl | hy'
+    · exact hy
+    · exact hrest y' hy'
+
+/-- **What v2's acceptance ran on each session**: on a session of the evidence at the inputs `o` and the public file
+`pd` (`SessionOf`), `runFrom`'s run (`Verdict`). -/
 theorem session_verdict {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
     {pub : OneStage.Public} {prof : Core.Integrity}
-    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {s : Session} (hs : s ∈ e.sessions) :
-    ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (rd : Reads), Flock.Tags.find? STATEMENT = some tags0 ∧
-      tags0.plainLeaves = false ∧
-      (Core.Blobs.ofArray blobs).get p.own.circuit "circuit" = .ok circuitB ∧
-      (Core.Blobs.ofArray blobs).get e.pub "public file" = .ok pubB ∧ readsOf p.own.registered = .ok rd ∧
-      ∃ ck b record, (Core.Blobs.ofArray blobs).get s.record s!"session {s.name}'s record" = .ok b ∧
-        String.fromUTF8? b = some record ∧
-        verdictOf (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs))
-          (Flock.ProvedScope.checkOf
-            (Flock.ProvedScope.circuitOf
-              (Flock.Witness.zkTags (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs))) circuitB
-              (tablesOf (Core.Blobs.ofArray blobs)))
-            (Flock.Witness.zkTags (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs))) true pubB 1 false
-            rd.registered.isSome)
-          ck record (Flock.Witness.recordDraw record)
-          (setupAt (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs)) rd
-            (Flock.Witness.recordDraw record))
-          (filesOf (Core.Blobs.ofArray blobs) s
-            (setupAt (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs)) rd
-              (Flock.Witness.recordDraw record)))
-          (coinKeyOf record
-            (setupAt (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs)) rd
-              (Flock.Witness.recordDraw record))) = .ok () := by
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {o : Own} {pd : String} {s : Session}
+    (hs : SessionOf p e o pd s) : Verdict o pd blobs s := by
   unfold checkBlobs at hacc
   split at hacc
-  · cases hacc
-  · next r hrun =>
-    split at hacc
-    · next pub' prof' hchk =>
-      by_cases hall : r.all = true
-      · unfold run at hrun
-        cases ht : Flock.Tags.find? STATEMENT with
-        | none => simp only [ht] at hrun <;> cases hrun
-        | some tags0 =>
-          simp only [ht] at hrun
-          obtain ⟨u0, hpl, hrun⟩ := bind_ok hrun
-          obtain ⟨_, _, hrun⟩ := bind_ok hrun
-          obtain ⟨circuitB, hc, hrun⟩ := bind_ok hrun
-          obtain ⟨pubB, hpb, hrun⟩ := bind_ok hrun
-          obtain ⟨rd, hrd, hrun⟩ := bind_ok hrun
-          obtain ⟨r1, hf, hrun⟩ := bind_ok hrun
-          rw [← Array.foldlM_toList] at hf
-          try dsimp only at hrun
-          split at hrun
-          · cases hrun
-          · cases hrun
-            obtain ⟨_, hss⟩ := fold_verdict _ _ _ hf hall
-            have hp : tags0.plainLeaves = false := by
-              cases hp : tags0.plainLeaves
-              · rfl
-              · exfalso
-                first
-                | (rw [hp] at hpl; cases hpl)
-                | (simp only [hp, ↓reduceIte] at hpl; cases hpl)
-                | simp [hp] at hpl
-            exact ⟨tags0, circuitB, pubB, rd, rfl, hp, hc, hpb, hrd, hss s (Array.mem_toList_iff.2 hs)⟩
-      · rw [if_neg hall] at hacc
-        cases hacc
-    · next o hne hchk =>
+  · next hone =>
+    have hone' : p.members = #[] ∧ e.members = #[] := by
       first
-      | exact (hchk _ _ hacc).elim
-      | exact (hchk _ _ (hne ▸ hacc)).elim
-      | exact (hchk _ _ (hne.symm ▸ hacc)).elim
-      | (subst hne; exact (hchk _ _ hacc).elim)
+      | simpa using hone
+      | (simp only [Bool.and_eq_true, Array.isEmpty_iff] at hone; exact hone)
+    unfold checkOne at hacc
+    split at hacc
+    · cases hacc
+    · next r hrun =>
+      split at hacc
+      · next pub' prof' hchk =>
+        by_cases hall : r.all = true
+        · have hrun' : runFrom ⟨#[], #[], #[], true⟩ p.own e.pub e.sessions (some e.base.provedUnits)
+              (Core.Blobs.ofArray blobs) = .ok r := hrun
+          rcases hs with ⟨-, -, rfl, rfl, hs⟩ | ⟨y, hy, -, -, -⟩
+          · exact (runFrom_verdict hrun' hall).2 s hs
+          · rw [hone'.1] at hy
+            simp at hy
+        · rw [if_neg hall] at hacc
+          cases hacc
+      · next o' hne hchk =>
+        first
+        | exact (hchk _ _ hacc).elim
+        | exact (hchk _ _ (hne ▸ hacc)).elim
+        | exact (hchk _ _ (hne.symm ▸ hacc)).elim
+        | (subst hne; exact (hchk _ _ hacc).elim)
+  · next hone =>
+    rcases hs with ⟨hp0, he0, -, -, -⟩ | ⟨y, hy, rfl, rfl, hs⟩
+    · exact absurd (by simp [hp0, he0]) hone
+    unfold checkGroup at hacc
+    split at hacc
+    · cases hacc
+    · split at hacc
+      · cases hacc
+      · split at hacc
+        · cases hacc
+        · next r hrun =>
+          split at hacc
+          · cases hacc
+          · split at hacc
+            · next pub' prof' hchk =>
+              by_cases hall : r.all = true
+              · unfold runGroup at hrun
+                obtain ⟨_, _, hrun⟩ := bind_ok hrun
+                rw [← Array.foldlM_toList, Array.toList_zip] at hrun
+                exact (group_verdict _ _ _ hrun hall).2 y hy s hs
+              · rw [if_neg hall] at hacc
+                cases hacc
+            · next o' hne hchk =>
+              first
+              | exact (hchk _ _ hacc).elim
+              | exact (hchk _ _ (hne ▸ hacc)).elim
+              | exact (hchk _ _ (hne.symm ▸ hacc)).elim
+              | (subst hne; exact (hchk _ _ hacc).elim)
 
 /-- An accepting verdict ran `Zk.verify` on the session's setup and proof files, then the scope check, the draw-less
 session's refusal and the record's canonical text. -/
@@ -787,13 +881,14 @@ theorem flock_acc {Ω : Type} (P : Claims.Prover Ω) {xS : Msg} (ω : Ω)
     rw [hM, e1, hpo]
   exact run_acc_of_get P ω r hget
 
-/-- **The session's run accepts**: where v2 accepted on the blobs and they show a session of the evidence holding its
-live coins, the deployed verifier's run on that session accepts. -/
+/-- **The session's run accepts**: where v2 accepted on the blobs and they show a session of the evidence (`SessionOf`,
+at its inputs and public file) holding its live coins, the deployed verifier's run on that session accepts. -/
 theorem flock_of_shows {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
     {pub : OneStage.Public} {prof : Core.Integrity}
-    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {s : Session} (hs : s ∈ e.sessions)
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {o : Own} {pd : String} {s : Session}
+    (hs : SessionOf p e o pd s)
     {Ω : Type} (P : Claims.Prover Ω) (xS : Msg) (ω : Ω) (r : Fin ((FlockDeploy.V true).k xS) → FlockDeploy.Coin)
-    (hS : Shows p.own e.pub blobs s xS (Claims.run FlockDeploy.sha512 P (FlockDeploy.V true) xS ω r).seen)
+    (hS : Shows o pd blobs s xS (Claims.run FlockDeploy.sha512 P (FlockDeploy.V true) xS ω r).seen)
     (hL : LiveCoins xS (Claims.run FlockDeploy.sha512 P (FlockDeploy.V true) xS ω r).seen) :
     (Claims.run FlockDeploy.sha512 P (FlockDeploy.V true) xS ω r).out = .acc := by
   obtain ⟨tags0, circuitB, pubB, rd, ht, hpl, hcB, hpB, hrd, ck, b, record, hb, hu, hver⟩ := session_verdict hacc hs
@@ -816,13 +911,13 @@ theorem flock_of_shows {p : Params} {c : OneStage.Commitment} {e : Evidence} {bl
   subst hcB' hpB'
   obtain ⟨d, hd, hdn⟩ := map_ok hdw
   obtain ⟨pb, hpw', hpbj⟩ := Option.map_eq_some_iff.1 hpartw
-  have hpart : w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok (some p.own.partition) := by
+  have hpart : w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok (some o.partition) := by
     rw [hpw']
     simp only [Option.mapM_some, hpbj, map_ok']
   have hregE : (w.registered = none ∧ rd.registered = none) ∨ ∃ b j own, w.registered = some b ∧
       FlockDeploy.jsonOf "registered reads" b = .ok j ∧ Flock.Registered.ofJson j = .ok own ∧
       rd.registered = some own := by
-    cases hpr : p.own.registered with
+    cases hpr : o.registered with
     | none =>
       rw [hpr] at hregw hrd
       left
@@ -842,7 +937,7 @@ theorem flock_of_shows {p : Params} {c : OneStage.Commitment} {e : Evidence} {bl
   have hins := ins_eq ht' hpl hzw hosw hd hpart hwt hcl hwk hcnt hprogw hstr hpi hregE
   rw [hdn, htw] at hins
   have hsetup := ins_setup_ok
-    (s := insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) p.own.partition p.own.program
+    (s := insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) o.partition o.program
       (Flock.Witness.recordDraw f.record) rd.registered)
     (by rw [insE_tags]; exact hm96) hin
     (by unfold Flock.Readable.Read.setup; rw [insE_tags, insE_coins]; exact hsetT)
@@ -853,22 +948,22 @@ theorem flock_of_shows {p : Params} {c : OneStage.Commitment} {e : Evidence} {bl
   obtain ⟨hfsz, hfk⟩ := hfiles _ _ _ hset
   have hpf := files_eq hf hfsz hfk
   subst hpf
-  have hchkS : (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) p.own.partition
-      p.own.program (Flock.Witness.recordDraw f.record) rd.registered).read.check = .ok () := by
+  have hchkS : (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) o.partition
+      o.program (Flock.Witness.recordDraw f.record) rd.registered).read.check = .ok () := by
     unfold Flock.Readable.Read.check
     rw [Flock.ProvedScope.check_eq, insE_tags]
     exact hsc
   have h2 : FlockDeploy.drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record)
-      (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) p.own.partition p.own.program
+      (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) o.partition o.program
         (Flock.Witness.recordDraw f.record) rd.registered).read.draw = true := by
     show FlockDeploy.drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record)
       (Flock.Witness.recordDraw f.record) = true
     rw [exec_recordDraw]
     exact FlockDeploy.drawEq_refl _
-  have h5 : (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) p.own.partition p.own.program
+  have h5 : (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs)) o.partition o.program
         (Flock.Witness.recordDraw f.record) rd.registered).read.draw.isNone = true →
       Flock.ProvedScope.drawLaw true (insE tags0 w.circuit w.publicFile (tablesOf (Core.Blobs.ofArray blobs))
-        p.own.partition p.own.program (Flock.Witness.recordDraw f.record) rd.registered).read.tags false none =
+        o.partition o.program (Flock.Witness.recordDraw f.record) rd.registered).read.tags false none =
         .ok () := by
     intro hn
     have hn' : Flock.Witness.recordDraw f.record = none := Option.isNone_iff_eq_none.1 hn
@@ -884,7 +979,8 @@ end Run
 /-- **ONE-3t's property: one-stage v2's acceptance is the sampled model's.** Suppose one-stage v2 accepts
 `(p, c, e, blobs)`, and the deployed sampled verifier (`SamplingDeploy.deploy rel cd`, whose checked units' sessions
 are Flock runs, `SessionRuns`) checks the unit `u` at the coins `r`. If `u`'s session in the run's view shows one of
-the evidence's sessions `s` (`Shows`) and holds its live coins (`LiveCoins`), the run accepts. -/
+the evidence's sessions `s` at its inputs `o` and public file `pd` (`SessionOf`: the single form's, or a member's in the
+group form) (`Shows`) and holds its live coins (`LiveCoins`), the run accepts. -/
 theorem acc_of_accepts (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (cd : SamplingDeploy.Code)
     (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (SamplingDeploy.deploy rel cd))
@@ -894,10 +990,10 @@ theorem acc_of_accepts (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
     (r : Fin ((SamplingDeploy.deploy rel cd).V.k x) → FlockDeploy.Coin) (u : ℕ × ℕ)
     (hu : ∃ q : Fin (Claims.Sampling.nPU (SamplingDeploy.deploy rel cd) x),
       ((SamplingDeploy.deploy rel cd).checked x r)[q.val]? = some u)
-    (s : Session) (hs : s ∈ e.sessions)
+    (o : Own) (pd : String) (s : Session) (hs : SessionOf p e o pd s)
     (hshow : ∀ xS v, (SamplingDeploy.deploy rel cd).session x u
         (Claims.run FlockDeploy.sha512 P (SamplingDeploy.deploy rel cd).V x ω r).seen = some (xS, v) →
-      Shows p.own e.pub blobs s xS v ∧ LiveCoins xS v) :
+      Shows o pd blobs s xS v ∧ LiveCoins xS v) :
     (Claims.run FlockDeploy.sha512 P (SamplingDeploy.deploy rel cd).V x ω r).out = .acc := by
   obtain ⟨xS, emb, P', -, -, hiff, hsess⟩ := hruns x Ω P ω r u hu
   rw [hiff r (fun _ _ => rfl)]

@@ -7,7 +7,8 @@ The property of `SampledProofs.OneStageZk.checkBlobs`, the check onsite's and re
 caller's blobs (`Core.BlobProtocol.on`, so on `Core.Blobs.ofArray blobs`), stated against it as it runs, for every input
 of the types its decoders produce. It takes no premise.
 
-`AcceptMeans`: what v2 accepts on `blobs` has
+`AcceptMeans`: what v2 accepts on `blobs` is `Accepted`, the single form's (`AcceptedOne`) or the group form's
+(`AcceptedGroup`). The single form's has
 
 * **the files the parameters and the evidence commit**: a circuit file, one of the caller's blobs, whose SHA-512 is the
   auditor's committed digest (`proofs.circuit`: the registration check, R6), and a public file, one of the blobs, whose
@@ -25,6 +26,12 @@ of the types its decoders produce. It takes no premise.
   `Properties.SampledProofs.AcceptMeans` gives the registration's R1–R7, the draw of the registered law over the
   registered population, the units proved and served as drawn with the receipt naming the commitment's digest
   (`UnitsProved`: `proved_units` is what the draw proves), and the published bounds and profile.
+
+The group form's has the same for each member, on its own inputs (`MemberAccepted`: the auditor's circuit digest and
+registered file for the member, the group's program and partition object, the member's public file), with **the
+registration's leaf layer naming the members' public files** (`LeafLayer`), **the members' proved units each proved
+once and together the evidence's `proved_units`**, and v1's check accepting the verdicts. `CircuitsHeld` reads R6 off
+either: every committed circuit digest names one of the blobs.
 
 `AcceptsZK` is the model's `ZkExec.AcceptsZK` at `Witness.toExec I` by definition (`Witness.setupOf_eq`), the event
 `SampledKSLive` and its restatements are stated over: `Proofs.Properties.SampledProofs.OneStageZk.acceptsZK_iff`.
@@ -59,12 +66,12 @@ def SessionAccepted (I : Flock.Witness.Inputs) (s : Session) (record : String) (
   (∃ b, Names s.record b ∧ String.fromUTF8? b = some record) ∧ AcceptsZK I record proofs ∧
     provedUnits I.publicFile record = .ok units
 
-/-- What v2 accepted on `blobs`, publishing `pub` and `prof`: the committed circuit and public files; for each of the
-evidence's sessions, in order (`ss`, at least one), its record and proof files flock-verify `--zk` accepts on
-`verify --zk`'s inputs, and the units it proved, which together are the evidence's `proved_units`; the descriptor's
+/-- What the single form accepted on `blobs`, publishing `pub` and `prof`: the committed circuit and public files; for
+each of the evidence's sessions, in order (`ss`, at least one), its record and proof files flock-verify `--zk` accepts
+on `verify --zk`'s inputs, and the units it proved, which together are the evidence's `proved_units`; the descriptor's
 digest the partition object's program; and v1's check accepting the verdicts this run computed, with what it
 publishes. -/
-def Accepted (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray) (pub : OneStage.Public)
+def AcceptedOne (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray) (pub : OneStage.Public)
     (prof : Core.Integrity) : Prop :=
   ∃ (tags : Flock.Tags) (circuitB pubB : ByteArray) (ss : List (String × Array ByteArray × Array Nat))
     (vs : Array (String × Json)),
@@ -75,6 +82,54 @@ def Accepted (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Arra
     (ss.foldl (fun acc x => acc ++ x.2.2) #[]).qsort (· < ·) = e.base.provedUnits ∧
     (∃ h, programDigest p.own.program = some h ∧ (Json.str h == getD p.own.partition "program") = true) ∧
     OneStage.check p.base c { e.base with verdicts := vs } = .accept pub prof
+
+/-- One member as the group form verified it on `blobs`, at the statement's tags `tags`: its circuit file, one of the
+blobs, whose SHA-512 is the member's committed digest (`o.circuit`, the auditor's); its public file, one of the blobs,
+whose SHA-512 is its `public`; for each of its sessions, in order (`ss`), its record and proof files flock-verify
+`--zk` accepts on `verify --zk`'s inputs at the member's own (`inputsOf tags o`: the group's program and partition
+object, the member's circuit and public file), with the units it proved; and, when it has a session, the descriptor's
+digest the partition object's program. -/
+def MemberAccepted (tags : Flock.Tags) (o : Own) (x : Member) (blobs : Array ByteArray)
+    (ss : List (String × Array ByteArray × Array Nat)) : Prop :=
+  ∃ circuitB pubB, Blob blobs o.circuit circuitB ∧ Blob blobs x.pub pubB ∧ ss.length = x.sessions.size ∧
+    (∀ y ∈ x.sessions.toList.zip ss,
+      SessionAccepted (inputsOf tags o circuitB pubB (Core.Blobs.ofArray blobs)) y.1 y.2.1 y.2.2.1 y.2.2.2) ∧
+    (0 < x.sessions.size → ∃ h, programDigest o.program = some h ∧ (Json.str h == getD o.partition "program") = true)
+
+/-- **The registration's leaf layer names the members' public files**: the record's `leaf_layer` is the SHA-512 of the
+canonical object naming each member's public file's digest by the member's name, so the public files the sessions
+were verified on are the ones registered before the draw. -/
+def LeafLayer (c : OneStage.Commitment) (xs : Array Member) : Prop :=
+  ∃ t d, Flock.canon (Json.mkObj (xs.map fun x => (x.name, Json.str x.pub)).toList) = .ok t ∧
+    (getD c.record "leaf_layer" == .str d) = true ∧ Names d t.toUTF8
+
+/-- What the group form accepted on `blobs`, publishing `pub` and `prof`: at least one member, the evidence's members
+the parameters' by name in order; the registration's leaf layer the members' public files' (`LeafLayer`); each member
+accepted on its own inputs (`MemberAccepted`, `sss` its sessions' witnesses), at least one session among them; the
+units the sessions proved, member by member in session order, sorted, the evidence's `proved_units`, which are
+strictly increasing, so no unit is proved twice; and v1's check accepting the verdicts this run computed, with what
+it publishes. -/
+def AcceptedGroup (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray)
+    (pub : OneStage.Public) (prof : Core.Integrity) : Prop :=
+  ∃ (tags : Flock.Tags) (sss : List (List (String × Array ByteArray × Array Nat))) (vs : Array (String × Json)),
+    Flock.Tags.find? STATEMENT = some tags ∧ 0 < p.members.size ∧
+    e.members.map (·.name) = p.members.map (·.1) ∧ LeafLayer c e.members ∧ sss.length = p.members.size ∧
+    (∀ y ∈ (p.members.toList.zip e.members.toList).zip sss, MemberAccepted tags y.1.1.2 y.1.2 blobs y.2) ∧
+    0 < (e.members.toList.map (·.sessions.size)).sum ∧
+    (sss.foldl (fun acc ss => ss.foldl (fun acc x => acc ++ x.2.2) acc) #[]).qsort (· < ·) = e.base.provedUnits ∧
+    increasing e.base.provedUnits.toList = true ∧
+    OneStage.check p.base c { e.base with verdicts := vs } = .accept pub prof
+
+/-- What v2 accepted on `blobs`: the single form's, with no member in the parameters or the evidence, or the group
+form's. -/
+def Accepted (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray) (pub : OneStage.Public)
+    (prof : Core.Integrity) : Prop :=
+  (p.members = #[] ∧ e.members = #[] ∧ AcceptedOne p c e blobs pub prof) ∨ AcceptedGroup p c e blobs pub prof
+
+/-- **The parameters' committed circuit files are blobs**: the single form's circuit digest, and each member's, names
+one of the caller's blobs. -/
+def CircuitsHeld (p : Params) (blobs : Array ByteArray) : Prop :=
+  (p.members = #[] → ∃ F, Blob blobs p.own.circuit F) ∧ ∀ m ∈ p.members, ∃ F, Blob blobs m.2.circuit F
 
 /-- **What v2 accepts on `blobs` is `Accepted`.** -/
 def AcceptMeans : Prop :=

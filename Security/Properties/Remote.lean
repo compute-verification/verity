@@ -11,8 +11,9 @@ one-stage v2.
 * `SampledProofsAccepts`: when remote accepts, its parameters and evidence name a case of one-stage v2
   (`verity/sampled-proofs/one-stage/v2`), under the parameters remote names for it, that v2's decoders read to what is
   `Accepted` on the same blobs (`Properties.Composed.SampledProofsAccepted`).
-* `SampledProofsRegistered`: when remote accepts, the circuit file v2 read is one of the caller's blobs and its SHA-512
-  is the digest v2's parameters commit (`Properties.Composed.SampledProofsRegistered`, R6).
+* `SampledProofsRegistered`: when remote accepts, each circuit file v2 read (the single form's, or each member's) is
+  one of the caller's blobs and its SHA-512 is the digest v2's parameters commit
+  (`Properties.Composed.SampledProofsRegistered`, R6).
 -/
 
 namespace Properties.Remote

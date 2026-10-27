@@ -94,12 +94,12 @@ theorem registeredAccepted (id : String) (R : Protocol) (s : String) (cs0 : List
   exact ⟨r, ps, k, ev, hp, he,
     caseAccepted id cs0 hv2 blobs ps c ev pub prof (checkRegistered_check (id := id) (R := R) (s := s) (cs := cs) hacc)⟩
 
-/-- **v2's case `Accepted` checks the registration**: its circuit file is one of the blobs, named by the parameters'
-digest. -/
+/-- **v2's case `Accepted` checks the registration**: its circuit files are blobs, named by the parameters'
+digests. -/
 theorem caseRegistered {ps : List Named} {ev : List Case} {blobs : Array ByteArray} (h : CaseAccepted ps ev blobs) :
     CaseRegistered ps blobs := by
-  obtain ⟨n, x, hx, hn, _, _, p, _, _, _, _, hp', _, _, ⟨_, circuitB, _, _, _, _, hcirc, _⟩⟩ := h
-  exact ⟨n, p, circuitB, (List.of_mem_zip hx).1, hn, hp', hcirc⟩
+  obtain ⟨n, x, hx, hn, _, _, p, _, _, _, _, hp', _, _, hacc⟩ := h
+  exact ⟨n, p, (List.of_mem_zip hx).1, hn, hp', Properties.SampledProofs.OneStageZk.circuitsHeld hacc⟩
 
 theorem registered {a e : ByteArray} {blobs : Array ByteArray} (h : SampledProofsAccepted a e blobs) :
     SampledProofsRegistered a blobs := by

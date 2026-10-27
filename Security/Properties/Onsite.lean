@@ -16,8 +16,9 @@ against it as it runs. They take no premise.
   of its components accepts, and `Properties.Composition`'s reduction of that to its components' at onsite's
   components is composed with
   `Properties.SampledProofs.OneStageZk.AcceptMeans`.
-* `SampledProofsRegistered`: when onsite accepts, the circuit file v2 read is one of the caller's blobs and its SHA-512
-  is the digest v2's parameters commit (`Properties.Composed.RegisteredSampledProofsRegistered`, R6).
+* `SampledProofsRegistered`: when onsite accepts, each circuit file v2 read (the single form's, or each member's) is
+  one of the caller's blobs and its SHA-512 is the digest v2's parameters commit
+  (`Properties.Composed.RegisteredSampledProofsRegistered`, R6).
 
 That the case's commitment is among those onsite's commitment binds is `Properties.Composition.AcceptMeans`'s.
 -/

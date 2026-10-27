@@ -14,7 +14,8 @@ v2 (`verity/sampled-proofs/one-stage/v2`) as their sampled proofs subprotocol, i
   for it, that v2's decoders read to what is `Accepted` on the caller's blobs. `SampledProofsAccepted` reads them with
   `product`'s decoders, `RegisteredSampledProofsAccepted` with `registered`'s.
 * `CaseRegistered`: the registration check (R6): the components' parameters name v2 with parameters whose committed
-  circuit digest names one of the caller's blobs, the circuit file every session of `Accepted` is verified on.
+  circuit digests (the single form's, or each member's) name the caller's blobs, the circuit files the sessions of
+  `Accepted` are verified on.
   `SampledProofsRegistered` and `RegisteredSampledProofsRegistered` read them as above.
 -/
 
@@ -33,12 +34,13 @@ def CaseAccepted (ps : List Named) (ev : List Case) (blobs : Array ByteArray) : 
       SampledProofs.OneStage.commitmentOf x.commitment = .ok c ∧
       evidenceOf x.evidence = .ok e' ∧ Properties.SampledProofs.OneStageZk.Accepted p c e' blobs pub prof
 
-/-- **The registration check (R6)**: the components' parameters `ps` name v2 with parameters `p`, and `p`'s committed
-circuit digest (`proofs.circuit`) is the SHA-512 of a circuit file `F`, one of the caller's `blobs`. -/
+/-- **The registration check (R6)**: the components' parameters `ps` name v2 with parameters `p`, and each of `p`'s
+committed circuit digests (`proofs.circuit`, or each member's) is the SHA-512 of a circuit file, one of the caller's
+`blobs` (`CircuitsHeld`). -/
 def CaseRegistered (ps : List Named) (blobs : Array ByteArray) : Prop :=
-  ∃ (n : Named) (p : Params) (F : ByteArray), n ∈ ps ∧ n.id = PROTOCOL ∧
+  ∃ (n : Named) (p : Params), n ∈ ps ∧ n.id = PROTOCOL ∧
     (canonicalJson n.params.toUTF8 >>= paramsOfJson) = .ok p ∧
-    Properties.SampledProofs.OneStageZk.Blob blobs p.own.circuit F
+    Properties.SampledProofs.OneStageZk.CircuitsHeld p blobs
 
 /-- `CaseAccepted` of the parameters `a` and evidence `e` as `product` decodes them (`decodeParams`,
 `decodeEvidence`). -/
