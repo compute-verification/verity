@@ -98,6 +98,8 @@ def test_every_hole_says_its_severity_and_the_known_holes_are_closed(cover):
         assert C.row_of(cover, "sm_120", form).mark == mark, form
     assert C.row_of(cover, "sm_120", "OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X").envelope == "mmaSp"
     assert C.row_of(cover, "sm_90", "BMMA.168256.XOR.POPC").mark == "covered"
+    for form in ("MATCH.ANY", "MATCH.ANY.U64", "REDUX.SUM", "VOTE.ANY", "VOTEU.ALL"):
+        assert C.row_of(cover, "sm_90", form).mark == "covered", form
 
 
 def test_rows_on_proposed_entries_are_holes_on_accel_op_alone(cover):
