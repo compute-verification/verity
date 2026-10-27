@@ -1,9 +1,7 @@
-"""verity.ml.circuits — the Verity IR core; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
+"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
 
-Promoted from ``veritor`` ``verity.ir/`` at commit ``eb865ce29``: ``types``, ``refs``, ``defs``, ``program``, ``layout``,
-``evaluate``, ``query`` byte for byte (``plan`` stayed in veritor); ``codec`` with its hard-coded registry families replaced by the
-``register_lazy_family`` hook.  The registry (``b1``, ``hopper``, ``prims``, ...), frontend, and derive tooling stayed behind;
-semantics packages register their primitives with this core.
+Semantics packages register their primitives with this core (``codec``'s ``register_lazy_family`` hook for the lazily
+materialised families).
 
 Invariant (verbatim from IR §C.5; do not paraphrase, do not regress):
 
@@ -36,7 +34,6 @@ from .defs import (PrimitiveDefinition, CompositeDefinition, SpecializedDefiniti
 from .program import Program, input_prim  # noqa: F401
 from .layout import Circuit, GateSelection, Region, FunctionCall, Gate  # noqa: F401
 from .query import query, groups, GapError, QueryError  # noqa: F401
-from .evaluate import evaluate_region, evaluate_call, ExecutionTranscript, MissingValue  # noqa: F401
 from .codec import encode_program, decode_program, program_digest, descriptor_size, canonical_json  # noqa: F401
 from . import boolean  # noqa: F401  (registers the three gates and the constant bits)
 
