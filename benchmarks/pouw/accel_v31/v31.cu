@@ -1932,7 +1932,9 @@ static std::string env_str(const char* name, const char* dflt) {
 // L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 3 the register plan that leaves room for a
 // commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_r3; CM 1; the wgl arm keeps RP 0). A served Fill's V31_GEMM 1: its
 // D = a' b'^T on the plain wg GEMM (static schedule), V31_RP 4 hashing the O rows in the GEMM's producer warpgroup
-// (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
+// (gemm_r4, FusedLeaves), V31_RP 5 in a hash warpgroup beside it too (gemm_r5; V31_R5H, one of wg_proto.cuh's R5_SPLITS:
+// the producer and hash warpgroups' registers, the consumers' 256 less); V31_HALL 1: every row there, past the
+// consumers' end, timing the hash warps alone, -1: none, timing the GEMM alone in that CTA; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
@@ -2382,10 +2384,11 @@ struct Fill {
   uint8_t* obuf = nullptr;
   int ocap = 0;
   // V31_GEMM 1 (served): D = a' b'^T on wg_proto.cuh's plain GEMM (mode 0, static schedule) in place of cuBLASLt; V31_RP 4
-  // hashes its O rows in the GEMM's producer warpgroup, digests to xd[copy] flagged with the launch's epoch xep[copy];
-  // wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM too, in place of gemm_kernel<true>
+  // hashes its O rows in the GEMM's producer warpgroup (5: and a hash warpgroup, its registers r5h), digests to xd[copy]
+  // flagged with the launch's epoch xep[copy]; wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM
+  // too, in place of gemm_kernel<true>
   bool wg = false, wgw = false;
-  int wbn = 0, wgrid = 0, hchunk = 0;
+  int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0;
   u64* xd[2] = {nullptr, nullptr};
   u32* xf[2] = {nullptr, nullptr};
   u32 xep[2] = {0, 0}, xctr = 0;
@@ -2548,7 +2551,9 @@ struct Fill {
   // served: the wg GEMMs' arguments (wgmma.linear, the bench's baseline, in any -DV31_WG build), and V31_GEMM 1's D
   void wg_setup() {
 #ifdef V31_WG
-    if (kn.gemm && kn.rp != 0 && kn.rp != 4) { fprintf(stderr, "a served call's V31_RP is 0 or 4\n"); exit(2); }
+    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5) { fprintf(stderr, "a served call's V31_RP is 0, 4 or 5\n"); exit(2); }
+    r5h = env_int("V31_R5H", wgp::R5_SPLITS[0]);
+    if (!r5_kernel(256)) { fprintf(stderr, "V31_R5H is one of wg_proto.cuh's R5_SPLITS\n"); exit(2); }
     wg = kn.gemm != 0;
     wbn = kn.wgbn == 256 && n % 256 == 0 ? 256 : 128;
     wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
@@ -2567,17 +2572,18 @@ struct Fill {
       wa_words.S = Wn;
     }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
-    if (wg && kn.rp == 4)
+    if (wg && (kn.rp == 4 || kn.rp == 5))
       for (int b = 0; b < 2; b++) {
         xd[b] = dalloc<u64>(8 * (size_t)leaves);
         xf[b] = dalloc<u32>((size_t)leaves);
         CK(cudaMemset(xf[b], 0, 4 * (size_t)leaves));
       }
     const void* ks[] = {(const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 1>,
-                        (const void*)wgp::gemm_r4<256, FusedLeaves>, (const void*)wgp::gemm_r4<128, FusedLeaves>};
-    const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM};
-    for (int i = 0; i < 4; i++) {
-      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, sm[i]));
+                        (const void*)wgp::gemm_r4<256, FusedLeaves>, (const void*)wgp::gemm_r4<128, FusedLeaves>,
+                        r5_kernel(256), r5_kernel(128)};
+    for (int i = 0; i < 6; i++) {
+      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize,
+                              i % 2 ? wgp::Tile<128>::SMEM : wgp::Tile<256>::SMEM));
       if (kn.carve >= 0) CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributePreferredSharedMemoryCarveout, kn.carve));
     }
 #else
@@ -2585,6 +2591,12 @@ struct Fill {
 #endif
   }
 #ifdef V31_WG
+  // RP 5's kernel at split hr (null: not one of R5_SPLITS)
+  template <int BN, int I = 0> static const void* r5_kernel_at(int hr) {
+    if constexpr (I == sizeof wgp::R5_SPLITS / sizeof wgp::R5_SPLITS[0]) return nullptr;
+    else return hr == wgp::R5_SPLITS[I] ? (const void*)wgp::gemm_r5<BN, FusedLeaves, wgp::R5_SPLITS[I]> : r5_kernel_at<BN, I + 1>(hr);
+  }
+  const void* r5_kernel(int bn) const { return bn == 256 ? r5_kernel_at<256>(r5h) : r5_kernel_at<128>(r5h); }
   // mode 0: a b^T (s32) into O; mode 2: wgmma.linear's bf16 values (s_a = s_w = 1/127), gamma's baseline
   wgp::Args wg_args(const int8_t* a, const int8_t* b, int mode) const {
     wgp::Args g{};
@@ -2594,11 +2606,14 @@ struct Fill {
     g.M = m; g.N = n; g.K = k; g.L = k; g.S = 1; g.lp = lp; g.group = kn.wgg; g.mode = mode;
     return g;
   }
-  // RP 0 (wgmma.linear's registers, CM 1's kernel: modes 0 and 2 hold no tail), or RP 4 with h
+  // RP 0 (wgmma.linear's registers, CM 1's kernel: modes 0 and 2 hold no tail), or RP 4 or 5 with h (mode 0)
   void wg_run(cudaStream_t st, const wgp::Args& g, const FusedLeaves* h = nullptr) {
     constexpr int T = wgp::threads<0>();
     const int sm = wbn == 256 ? wgp::Tile<256>::SMEM : wgp::Tile<128>::SMEM;
-    if (h && wbn == 256) wgp::gemm_r4<256, FusedLeaves><<<wgrid, T, sm, st>>>(g, *h);
+    if (h && kn.rp == 5) {
+      void* args[] = {(void*)&g, (void*)h};
+      CK(cudaLaunchKernel(r5_kernel(wbn), dim3(wgrid), dim3(wgp::threads<5>()), args, sm, st));
+    } else if (h && wbn == 256) wgp::gemm_r4<256, FusedLeaves><<<wgrid, T, sm, st>>>(g, *h);
     else if (h) wgp::gemm_r4<128, FusedLeaves><<<wgrid, T, sm, st>>>(g, *h);
     else if (wbn == 256) wgp::gemm<256, 1><<<wgrid, T, sm, st>>>(g);
     else wgp::gemm<128, 1><<<wgrid, T, sm, st>>>(g);
@@ -2623,7 +2638,7 @@ struct Fill {
     if (o && wg) {
       wgp::Args g = wa_plain;
       g.O = D[b];
-      if (kn.rp == 4) {
+      if (kn.rp == 4 || kn.rp == 5) {
         xep[b] = epoch(st);
         const FusedLeaves h = fused_leaves(b);
         wg_run(st, g, &h);
@@ -2874,6 +2889,13 @@ static void kernel_attrs(FILE* f) {
     fprintf(f, ", \"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", w.name, a.numRegs, a.localSizeBytes,
             a.sharedSizeBytes);
   }
+  for (const int hr : wgp::R5_SPLITS)
+    for (const int bn : {256, 128}) {
+      cudaFuncAttributes a;
+      CK(cudaFuncGetAttributes(&a, bn == 256 ? Fill::r5_kernel_at<256>(hr) : Fill::r5_kernel_at<128>(hr)));
+      fprintf(f, ", \"wg_%d_r5_%d\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", bn, hr, a.numRegs,
+              a.localSizeBytes, a.sharedSizeBytes);
+    }
 #endif
   fprintf(f, "}");
 }
@@ -3406,12 +3428,13 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, "
-           "\"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
+           "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"fused_leaves\": %lld, "
+           "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
-           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0,
+           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
+           f.kn.rp == 5 ? f.r5h : 0, f.wgw ? 1 : 0,
            f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
