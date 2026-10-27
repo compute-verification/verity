@@ -10,6 +10,7 @@
   "Flock.Test.RegBudget",
   "Flock.Test.Sha512",
   "Flock.Test.InnerStreams",
+  "Flock.Test.RoundWords",
   "Flock.Test.InnerLink",
   "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
