@@ -385,6 +385,16 @@ def _pipes_rows(**over: dict[str, float]) -> dict[str, dict]:
         "bar_or": {"BAR.RED.OR*": 0.05}, "mix_bar_or_lop3": {"BAR.RED.OR*": 0.04, "LOP3.LUT": 1.9},
         "iadd64": {"IADD.64": 4.0}, "mix_iadd64_lop3": {"IADD.64": 2.0, "LOP3.LUT": 2.0},
         "iabs": {"IABS": 2.0}, "mix_iabs_lop3": {"IABS": 1.0, "LOP3.LUT": 1.0},
+        "dfma": {"DFMA": 0.0625},
+        "mix_f2f64_mufu24": {"F2F.F64.F32": 0.01, "F2F.F32.F64": 0.01, "MUFU.EX2": 0.24},
+        "mix_f2f64_dfma": {"F2F.F64.F32": 0.0145, "F2F.F32.F64": 0.0145, "DFMA": 0.0145},
+        "i2f64": {"I2F.F64": 0.029, "F2I.F64.TRUNC": 0.029},
+        "mix_i2f64_mufu24": {"I2F.F64": 0.01, "F2I.F64.TRUNC": 0.01, "MUFU.EX2": 0.24},
+        "mix_i2f64_dfma": {"I2F.F64": 0.03, "F2I.F64.TRUNC": 0.03, "DFMA": 0.03},
+        "s64": {"I2F.S64": 0.029, "F2I.S64.TRUNC": 0.029},
+        "mix_s64_mufu24": {"I2F.S64": 0.01, "F2I.S64.TRUNC": 0.01, "MUFU.EX2": 0.24},
+        "mix_s64_dfma": {"I2F.S64": 0.0145, "F2I.S64.TRUNC": 0.0145, "DFMA": 0.0145},
+        "bar16": {"BAR.RED.OR*": 0.1}, "mix_bar16_lop3": {"BAR.RED.OR*": 0.1, "LOP3.LUT": 1.9},
     } | over
     return {n: {"probe": n, "binary": "pipes", "rates": {f"0:{k}": v for k, v in r.items()}} for n, r in rates.items()}
 
@@ -397,8 +407,14 @@ def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
     assert "FRND.FLOOR 0.5000 alone, 0.2500 + 0.2500 = 0.5000 beside MUFU" in lines
     assert "BAR.RED.OR 0.0500 alone; LOP3 + BAR/2 = 1.9000 + 0.0400/2 = 1.9200" in lines
     assert "IADD.64 4.0000 alone, 4.0000 with LOP3 (beside alu)" in lines
+    assert ("I2F.F64+F2I.F64.TRUNC 0.0580 alone, 0.0200 + 0.2400 = 0.2600 beside 24 MUFU, 0.0600 + 0.0300 = 0.0900 "
+            "beside DFMA (beside f64)") in lines
+    assert "BAR.RED.OR (16 warps) 0.1000 alone; beside a LOP3 stream LOP3 + BAR/2 = 1.9000 + 0.1000/2 = 1.9500" in lines
     held, lines = pipes_verdict.verdict(_pipes_rows(i2f_f2i={"I2F.U32.RP": 1.0, "F2I.FTZ.U32.TRUNC.NTZ": 1.0}))
     assert not held and lines[0] == "I2F.U32.RP+F2I.FTZ.U32.TRUNC.NTZ alone 2.0000 > sfu's 0.5"
+    held, lines = pipes_verdict.verdict(_pipes_rows(mix_s64_mufu24={"I2F.S64": 0.02, "F2I.S64.TRUNC": 0.02,
+                                                                    "MUFU.EX2": 0.48}))
+    assert not held and lines[0] == "I2F.S64+F2I.S64.TRUNC beside 24 MUFU 0.5200 > sfu's 0.5"
     rows = tmp_path / "rows.jsonl"
     rows.write_text("".join(json.dumps(r) + "\n" for n, r in _pipes_rows().items() if n != "mix_bar_or_lop3"))
     assert pipes_verdict.main([str(rows)]) == 0

@@ -14,21 +14,28 @@
 //                                    with an FADD): each alone and beside 8 MUFU.EX2 (mix_X_mufu); on the XU, each alone
 //                                    and the pair together hold at most 0.5
 //   bar_or, mix_bar_or_lop3          BAR.RED.OR alone and beside 16 LOP3: on the collective at 16 alu lanes, LOP3's rate
-//                                    plus half the barrier's holds at most 2
+//                                    plus half the barrier's holds at most 2 (this mix is barrier-bound)
+//   bar16, mix_bar16_lop3            BAR.RED.OR on named barrier 1 in 16 warps, alone and beside 32 LOP3 a trip in the
+//                                    other 16 (an `until` role, so the LOP3 stream never waits on the barrier)
+//   dfma, f2f64, i2f64, s64          64-bit conversions (f32<->f64, s32<->f64, f32<->s64): each alone, one pair beside 24
+//   mix_X_mufu24, mix_X_dfma         MUFU.EX2 (on a unit of their own, pair and MUFU together would pass 0.5), and two
+//                                    pairs beside 2 DFMA (sharing f64's pipe, they hold 0.0625 together)
 #include "../probe.cuh"
 
 constexpr int TPB = 1024;
 
-// P: 0 none, 1 LOP3, 2 MUFU.EX2, each Q/8 a chain step, on 8 chains of their own.
+// P: 0 none, 1 LOP3, 2 MUFU.EX2, 3 DFMA, each Q/8 a chain step, on 8 chains of their own.
 template <int P, int Q>
 struct Partner {
   uint32_t w[8];
   float f[8];
+  double d[8];
   __device__ __forceinline__ explicit Partner(const OpArgs& a) {
 #pragma unroll
     for (int u = 0; u < 8; u++) {
       w[u] = threadIdx.x * 8u + (unsigned)u + 1u;
       f[u] = -0.001f * (float)(threadIdx.x + (unsigned)u + (unsigned)a.mode);
+      d[u] = 1.0 + 1e-6 * (double)(threadIdx.x + (unsigned)u + (unsigned)a.mode);
     }
   }
   __device__ __forceinline__ void step(int u, uint32_t k1, uint32_t k2) {
@@ -36,12 +43,17 @@ struct Partner {
     for (int q = u * Q / 8; q < (u + 1) * Q / 8; q++) {
       if constexpr (P == 1) asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(w[q & 7]) : "r"(k1), "r"(k2));
       if constexpr (P == 2) asm volatile("ex2.approx.ftz.f32 %0, %0;" : "+f"(f[q & 7]));
+      if constexpr (P == 3)
+        asm volatile("fma.rn.f64 %0, %0, %1, %2;" : "+d"(d[q & 7]) : "d"(0.999), "d"(1e-9));
     }
   }
   __device__ __forceinline__ uint32_t out() const {
     uint32_t s = 0;
 #pragma unroll
-    for (int u = 0; u < 8; u++) s ^= (P == 1 ? w[u] : 0u) ^ (P == 2 ? __float_as_uint(f[u]) : 0u);
+    for (int u = 0; u < 8; u++) {
+      s ^= (P == 1 ? w[u] : 0u) ^ (P == 2 ? __float_as_uint(f[u]) : 0u);
+      if constexpr (P == 3) s ^= (uint32_t)__double_as_longlong(d[u]) ^ (uint32_t)(__double_as_longlong(d[u]) >> 32);
+    }
     return s;
   }
 };
@@ -90,7 +102,17 @@ struct Frnd {
   }
 };
 
-template <typename Op, int P, int Q>
+struct I2fF64 {
+  __device__ __forceinline__ uint32_t operator()(uint32_t x, uint32_t) const {
+    double d;
+    asm volatile("cvt.rn.f64.s32 %0, %1;" : "=d"(d) : "r"(x));
+    asm volatile("cvt.rzi.s32.f64 %0, %1;" : "=r"(x) : "d"(d));
+    return x;
+  }
+};
+
+// N of the 8 chains run the opcode (the rest only the partner's steps).
+template <typename Op, int P, int Q, int N = 8>
 __device__ __forceinline__ void chains(const OpArgs& a, uint32_t start_xor, uint32_t k) {
   uint32_t v[8];
 #pragma unroll
@@ -102,7 +124,7 @@ __device__ __forceinline__ void chains(const OpArgs& a, uint32_t start_xor, uint
   OP_LOOP(it) {
 #pragma unroll
     for (int u = 0; u < 8; u++) {
-      v[u] = op(v[u], k);
+      if (u < N) v[u] = op(v[u], k);
       pt.step(u, k1, k2);
     }
   }
@@ -226,6 +248,65 @@ __device__ __forceinline__ void bar_or_chains(const OpArgs& a) {
   OP_SINK(s)
 }
 
+// f32 <-> s64 conversions on N of 8 chains.
+template <int P, int Q, int N>
+__device__ __forceinline__ void s64_chains(const OpArgs& a) {
+  long long v[8];
+#pragma unroll
+  for (int u = 0; u < 8; u++) v[u] = ((long long)a.iters << 20) + threadIdx.x * 8 + u - 4096;
+  Partner<P, Q> pt(a);
+  const uint32_t k1 = 0x3C013C01u ^ (uint32_t)a.mode, k2 = 0x00010001u ^ (uint32_t)(a.mode << 3);
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int u = 0; u < 8; u++) {
+      if (u < N) {
+        float f;
+        asm volatile("cvt.rn.f32.s64 %0, %1;" : "=f"(f) : "l"(v[u]));
+        asm volatile("cvt.rzi.s64.f32 %0, %1;" : "=l"(v[u]) : "f"(f));
+      }
+      pt.step(u, k1, k2);
+    }
+  }
+  OP_END
+  uint32_t s = pt.out();
+#pragma unroll
+  for (int u = 0; u < 8; u++) s ^= (uint32_t)v[u] ^ (uint32_t)(v[u] >> 32);
+  OP_SINK(s)
+}
+
+// BAR.RED.OR on named barrier 1 in warps 0-15, 8 a trip in one nounroll PTX loop (the predicate stays a predicate), and
+// with Q > 0 Q LOP3 a trip in warps 16-31 for as long as they run (OP_UNTIL): the barrier beside a full ALU stream.
+template <int Q>
+__device__ __forceinline__ void bar_split(const OpArgs& a) {
+  uint32_t s = 0;
+  Partner<1, Q> pt(a);
+  const uint32_t k1 = 0x3C013C01u ^ (uint32_t)a.mode, k2 = 0x00010001u ^ (uint32_t)(a.mode << 3);
+  OP_BEGIN_STOP
+  if ((threadIdx.x >> 5) < 16) {
+    asm volatile(
+        "{\n .reg .pred p, q;\n .reg .u32 n;\n and.b32 n, %1, 1;\n setp.ne.u32 p, n, 0;\n"
+        " mov.u32 n, %2;\n setp.lt.s32 q, n, 1;\n @q bra BS_END;\n"
+        "BS_TOP:\n .pragma \"nounroll\";\n"
+        " bar.red.or.pred p, 1, 512, p;\n bar.red.or.pred p, 1, 512, !p;\n bar.red.or.pred p, 1, 512, p;\n"
+        " bar.red.or.pred p, 1, 512, !p;\n bar.red.or.pred p, 1, 512, p;\n bar.red.or.pred p, 1, 512, !p;\n"
+        " bar.red.or.pred p, 1, 512, p;\n bar.red.or.pred p, 1, 512, !p;\n"
+        " sub.s32 n, n, 1;\n setp.gt.s32 q, n, 0;\n @q bra BS_TOP;\n"
+        "BS_END:\n selp.u32 %0, 1, 0, p;\n}\n"
+        : "=r"(s)
+        : "r"(threadIdx.x ^ (uint32_t)a.mode), "r"(a.iters));
+    OP_DONE
+  } else if constexpr (Q > 0) {
+    OP_UNTIL(n) {
+#pragma unroll
+      for (int u = 0; u < 8; u++) pt.step(u, k1, k2);
+    }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  OP_SINK(s ^ pt.out())
+}
+
 #define KBITS (13u + ((uint32_t)a.mode & 7u))
 #define KHALF (__float_as_uint(0.75f + 1e-3f * (float)a.mode))
 OP_KERNEL(lop3, TPB) { partner_only<1, 8>(a); }
@@ -262,6 +343,17 @@ OP_KERNEL(frnd, TPB) { chains<Frnd, 0, 0>(a, 0x3F800000u, KHALF); }
 OP_KERNEL(mix_frnd_mufu, TPB) { chains<Frnd, 2, 8>(a, 0x3F800000u, KHALF); }
 OP_KERNEL(bar_or, TPB) { bar_or_chains<0, 0>(a); }
 OP_KERNEL(mix_bar_or_lop3, TPB) { bar_or_chains<1, 16>(a); }
+OP_KERNEL(dfma, TPB) { partner_only<3, 8>(a); }
+OP_KERNEL(mix_f2f64_mufu24, TPB) { chains<F2f64, 2, 24, 1>(a, 0x3F800000u, 0u); }
+OP_KERNEL(mix_f2f64_dfma, TPB) { chains<F2f64, 3, 2, 2>(a, 0x3F800000u, 0u); }
+OP_KERNEL(i2f64, TPB) { chains<I2fF64, 0, 0>(a, 0u, 0u); }
+OP_KERNEL(mix_i2f64_mufu24, TPB) { chains<I2fF64, 2, 24, 1>(a, 0u, 0u); }
+OP_KERNEL(mix_i2f64_dfma, TPB) { chains<I2fF64, 3, 2, 2>(a, 0u, 0u); }
+OP_KERNEL(s64, TPB) { s64_chains<0, 0, 8>(a); }
+OP_KERNEL(mix_s64_mufu24, TPB) { s64_chains<2, 24, 1>(a); }
+OP_KERNEL(mix_s64_dfma, TPB) { s64_chains<3, 2, 2>(a); }
+OP_KERNEL(bar16, TPB) { bar_split<0>(a); }
+OP_KERNEL(mix_bar16_lop3, TPB) { bar_split<32>(a); }
 
 #define PR(N, K, E) {.name = N, .kernel = (const void*)K, .tpb = TPB, .expect = E}
 static const OpProbe PROBES[] = {
@@ -287,5 +379,17 @@ static const OpProbe PROBES[] = {
     PR("mix_frnd_mufu", mix_frnd_mufu, "FRND.FLOOR=8,FADD=8,MUFU.EX2=8"),
     PR("bar_or", bar_or, "BAR.RED.OR*=8"),
     PR("mix_bar_or_lop3", mix_bar_or_lop3, "BAR.RED.OR*=8,LOP3.LUT=16"),
+    PR("dfma", dfma, "DFMA=8"),
+    PR("mix_f2f64_mufu24", mix_f2f64_mufu24, "F2F.F64.F32=1,F2F.F32.F64=1,MUFU.EX2=24"),
+    PR("mix_f2f64_dfma", mix_f2f64_dfma, "F2F.F64.F32=2,F2F.F32.F64=2,DFMA=2"),
+    PR("i2f64", i2f64, "I2F.F64=8,F2I.F64.TRUNC=8"),
+    PR("mix_i2f64_mufu24", mix_i2f64_mufu24, "I2F.F64=1,F2I.F64.TRUNC=1,MUFU.EX2=24"),
+    PR("mix_i2f64_dfma", mix_i2f64_dfma, "I2F.F64=2,F2I.F64.TRUNC=2,DFMA=2"),
+    PR("s64", s64, "I2F.S64=8,F2I.S64.TRUNC=8"),
+    PR("mix_s64_mufu24", mix_s64_mufu24, "I2F.S64=1,F2I.S64.TRUNC=1,MUFU.EX2=24"),
+    PR("mix_s64_dfma", mix_s64_dfma, "I2F.S64=2,F2I.S64.TRUNC=2,DFMA=2"),
+    {.name = "bar16", .kernel = (const void*)bar16, .tpb = TPB, .expect = "BAR.RED.OR*=8", .warps = "16"},
+    {.name = "mix_bar16_lop3", .kernel = (const void*)mix_bar16_lop3, .tpb = TPB,
+     .expect = "BAR.RED.OR*=8;LOP3.LUT=32", .warps = "16;16", .until = 2},
 };
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

@@ -3,8 +3,10 @@ sfu (machine_model/data/cover/rows.toml, CMP-166) within that pipe's ρ, alone a
 
     python3 pipes_verdict.py OUT/rows.jsonl
 
-Rates are warp instructions a SM-clock. alu's ρ is 64 lanes (2), sfu's 16 (0.5); a BAR.RED is charged 16 alu lanes,
-half a LOP3. The add rows are on fma, issue-bound (4), so their probes only report where the card runs them.
+Rates are warp instructions a SM-clock. alu's ρ is 64 lanes (2), sfu's 16 (0.5), f64's 2 (0.0625); a BAR.RED is charged
+16 alu lanes, half a LOP3. The add rows are on fma, issue-bound (4), so their probes only report where the card runs
+them. A 64-bit conversion's pair runs beside 24 MUFU.EX2 (on a unit of its own the two would pass 0.5) and beside DFMA
+(reported against f64's ρ). The role-split barrier (mix_bar16_lop3) runs beside a LOP3 stream that isn't waiting on it.
 """
 from __future__ import annotations
 
@@ -13,11 +15,12 @@ import sys
 from pathlib import Path
 
 SLACK = 1.001
-ALU, XU, ISSUE = 2.0, 0.5, 4.0
-PARTNERS = {"LOP3.LUT": "lop3", "MUFU.EX2": "mufu"}
+ALU, XU, F64, ISSUE = 2.0, 0.5, 0.0625, 4.0
+PARTNERS = {"LOP3.LUT": "lop3", "MUFU.EX2": "mufu", "DFMA": "dfma"}
 OFF_PIPE = {"FADD"}
 ON_ALU = ("plop3", "sgxt", "bmsk")
 ON_XU = ("i2f_f2i", "i2f16_f2i16", "f2f64", "frnd")
+ON_XU64 = ("f2f64", "i2f64", "s64")
 ON_FMA = ("iadd64", "iabs")
 
 
@@ -64,6 +67,33 @@ def verdict(rows: dict[str, dict]) -> tuple[bool, list[str]]:
         said.append(f"BAR.RED.OR {x:.4f} alone; LOP3 + BAR/2 = {bp:.4f} + {sum(bx.values()):.4f}/2 = {load:.4f}")
         if load > ALU * SLACK:
             failed.append(f"LOP3 + BAR.RED.OR/2 {load:.4f} > alu's {ALU:g}")
+
+    for name in ON_XU64:
+        alone, xu, f64 = need(name), need(f"mix_{name}_mufu24"), need(f"mix_{name}_dfma")
+        if alone is None or xu is None or f64 is None:
+            continue
+        own, _ = _split(alone)
+        x, what = sum(own.values()), "+".join(own)
+        xx, xm = _split(xu)
+        fx, fd = _split(f64)
+        pair, beside = sum(xx.values()) + xm, sum(fx.values()) + fd
+        where = "on f64" if beside <= F64 * SLACK else "beside f64"
+        said.append(f"{what} {x:.4f} alone, {sum(xx.values()):.4f} + {xm:.4f} = {pair:.4f} beside 24 MUFU, "
+                    f"{sum(fx.values()):.4f} + {fd:.4f} = {beside:.4f} beside DFMA ({where})")
+        if x > XU * SLACK:
+            failed.append(f"{what} alone {x:.4f} > sfu's {XU:g}")
+        if pair > XU * SLACK:
+            failed.append(f"{what} beside 24 MUFU {pair:.4f} > sfu's {XU:g}")
+
+    alone, beside = need("bar16"), need("mix_bar16_lop3")
+    if alone is not None and beside is not None:
+        x = sum(_split(alone)[0].values())
+        bx, bp = _split(beside)
+        load = bp + sum(bx.values()) / 2
+        said.append(f"BAR.RED.OR (16 warps) {x:.4f} alone; beside a LOP3 stream LOP3 + BAR/2 = {bp:.4f} + "
+                    f"{sum(bx.values()):.4f}/2 = {load:.4f}")
+        if load > ALU * SLACK:
+            failed.append(f"LOP3 + BAR.RED.OR/2 {load:.4f} > alu's {ALU:g} beside a LOP3 stream")
 
     for name in ON_FMA:
         alone, beside = need(name), need(f"mix_{name}_lop3")
