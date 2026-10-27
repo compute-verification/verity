@@ -1867,6 +1867,12 @@ class Driver:
         return self._lean_of[m.commit]
 
     def _two_demos(self, m: Member) -> bool:
+        """Whether ``m``'s PR is titled for the two demos now (a PR retitled after its merge onto `next` counts), else as its
+        merge commit's subject has it."""
+        if self._prs is None:
+            self._prs = {p.number: p for p in self.q.github.open_prs()}
+        if m.pr in self._prs:
+            return TWO_DEMOS in self._prs[m.pr].title.lower()
         subject = subprocess.run(["git", "log", "-1", "--format=%s", m.commit], cwd=self.repo, capture_output=True, text=True,
                                  check=False).stdout
         return TWO_DEMOS in subject.lower()
