@@ -30,15 +30,15 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
+FIXTURE = "art:a904a0cde17b0f2991d5afd36b65b9cd89f008de8240bc2a22521bb316bea6d3"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
-           "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
+CS_ROOT = ("3c50291a0c613a410cb46d92f4f07568d67879030fb3f417545513e1f80ff2cb"
+           "d0b043fe97aa3a9f3652dd0ed5c6edccf30634cae35f33e4af8b63b05a55603d")
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
+DRAWN = (0, 1, 2, 5, 6, 7, 10, 11, 13, 15, 16, 17, 24, 26, 27, 28)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
