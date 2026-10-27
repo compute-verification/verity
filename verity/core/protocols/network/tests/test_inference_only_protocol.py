@@ -97,7 +97,7 @@ def reference(case) -> dict:
 
 # --- the cases ------------------------------------------------------------------------------------------------------------
 
-#: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the check of record's code, or
+#: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the policy's check, or
 #: `comply` for a division that fails the policy.
 EXPECT = {"honest": ("accept", "accept"), "refused": ("reject", "code"), "noncompliant": ("reject", "comply"),
           "log-repeat": ("reject", "trusted"), "alpha-den-0": ("reject", "params"), "params-key": ("reject", "params"),
@@ -131,7 +131,7 @@ def split(seed: int) -> dict | None:
 
 @lru_cache(maxsize=None)
 def seeds() -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """The seeds whose split complies, and those whose split the check of record refuses."""
+    """The seeds whose split complies, and those whose split the policy's check refuses."""
     honest, refused = [], []
     for seed in range(SEEDS):
         s = split(seed)
@@ -228,7 +228,7 @@ server = D.server_fixture(PORT)
 
 def test_each_change_takes_its_path():
     """Each change, on the first honest declarations (refused ones for `refused`), gets the verdict and the path it is
-    aimed at in the reference, and an accepted case's profile is the check of record's report."""
+    aimed at in the reference, and an accepted case's profile is the policy's check's report."""
     honest, refused = seeds()
     assert len(honest) >= 20 and len(refused) >= 20, (len(honest), len(refused))
     for m, (verdict, kind) in EXPECT.items():

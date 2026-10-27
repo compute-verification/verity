@@ -29,7 +29,7 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
-# The inference-only policy: its check of record as a core protocol (`NciCheck.Protocol`).
+# The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
 [[require]]
 name = "nci_check"
 path = "../network/nci/lean"

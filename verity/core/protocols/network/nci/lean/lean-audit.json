@@ -85,7 +85,7 @@
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
-   "why": "the inference-only policy as a core protocol is code: the check of record (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+   "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

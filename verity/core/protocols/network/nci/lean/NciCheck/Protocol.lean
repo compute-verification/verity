@@ -6,7 +6,7 @@ import CoreProtocol.Protocol
 
 The inference-only policy (`Nci.Complies Γ α`, `Security/Definitions/Nci.lean`) asks that the declared circuit divide
 into inference blocks of at most `Γ` gates, each reading at most `α` bits of fresh input per gate: input from outside
-the block that is not registered information. `NciCheck.Baseline.evaluate` is its check of record: the policy check at
+the block that is not registered information. `NciCheck.Baseline.evaluate` is the policy's check: the division's check at
 the size of the description (`NciCheck.Desc.evaluate`), then the provenance of the registered information against the
 deployment's registration log. This module makes that check a `Core.Protocol`, a subprotocol of onsite and remote
 (`Core.Onsite.components`, `Core.Remote.components`). It has no rounds and reads no coins: it answers from the declared
@@ -89,12 +89,12 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   pure { owner := Baseline.getD j "owner", provenance := Baseline.getD j "provenance",
          theta := Baseline.getD j "theta" }
 
-/-- The instance the check of record reads. -/
+/-- The instance the policy's check reads. -/
 def instanceOf (p : Params) (e : Evidence) : Json :=
   Json.mkObj [("alpha", p.alpha), ("gamma", p.gamma), ("owner", e.owner), ("program", .str p.program),
     ("provenance", e.provenance), ("theta", e.theta)]
 
-/-- The trusted input the check of record reads: the log through the run's own record, which is the run. -/
+/-- The trusted input the policy's check reads: the log through the run's own record, which is the run. -/
 def trustedOf (p : Params) (c : Commitment) : Json :=
   Json.mkObj [("log", .arr (p.log.push c.record)), ("params", p.parameters), ("run", .str c.hex)]
 

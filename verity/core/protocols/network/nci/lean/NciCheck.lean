@@ -25,7 +25,7 @@ statements their agreement rests on, and the agreement itself. Code: it reads th
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
 
-`NciCheck.Protocol` is the check of record as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
+`NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
 the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).
 
 C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the

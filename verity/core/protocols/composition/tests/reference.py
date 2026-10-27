@@ -72,7 +72,7 @@ POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
-#: The inference-only policy's difftest: `reference` is the check of record's Python (`check_baseline`) behind the
+#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
 #: protocol's decoders, and `drawn` draws a declaration's case with one change.
 INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 

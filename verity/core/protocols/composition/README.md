@@ -49,7 +49,7 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | the network certifier (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| the inference-only policy (its check of record: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
+| the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | the remote bandwidth audit (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 
@@ -64,7 +64,7 @@ subprotocol yet.
 The inference-only policy has no rounds and reads no coins: its case is the declared circuit, the policy's budgets and
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
 sampled proofs' audit commits to) and the declared division with θ and θ's provenance (evidence), and it accepts
-exactly when the check of record (`NciCheck.Baseline.evaluate`) finds that the division complies. The product checks
+exactly when the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. The product checks
 that every subprotocol accepts and that the commitment binds their digests; it doesn't check that the policy's record
 is the one sampled proofs audited, or that its declared circuit is the registered one.
 
@@ -77,7 +77,7 @@ of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
 the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
 certificates and one-stage's answers, on small signed periods from its `build`; the inference-only policy's difftest's
-`reference`, the check of record's Python, `check_baseline`, behind the protocol's decoders, on θ's provenance
+`reference`, the policy's Python check, `check_baseline`, behind the protocol's decoders, on θ's provenance
 difftest's declarations with at most one change, from its `drawn`), which that subprotocol's own difftest holds its
 Lean to; for PoUS and the remote bandwidth audit, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
