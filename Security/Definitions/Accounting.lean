@@ -30,9 +30,9 @@ import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Definitions.Accounting.Memory
-import Definitions.Accounting.Overhead
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
+import Definitions.Accounting.Overhead
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.PouwWork
 import Definitions.Accounting.RateAudit
@@ -76,6 +76,5 @@ run's guarantee per run is, PoUW's verdict, credits and help on one node of the 
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
 its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
-a prover's wipes that the memory cap's lifetime pool is over, the gate model the lower bounds on a declared
-circuit are proved over (`Gates`), and a task's thresholds over classes of computations and the overhead between them
-(`Overhead`). -/
+a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds on a declared
+circuit are proved over (`Gates`). -/
