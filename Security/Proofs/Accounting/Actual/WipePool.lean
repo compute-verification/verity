@@ -1,5 +1,5 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Definitions.Accounting.Actual.WipePool
+import Proofs.Accounting.Defs.Actual.WipePool
 import Proofs.Core.Game.Prob
 
 /-!
