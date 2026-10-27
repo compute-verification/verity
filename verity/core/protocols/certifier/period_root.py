@@ -271,25 +271,27 @@ def refusal(closed: attest.SignedPeriod, liveness: Mapping[int, bytes], entries:
         return f"another period's: attachment {closed.attachment.hex()[:16]}…, link {closed.link!r}, period {closed.period}"
     if closed.root != attest.root(closed.records):
         return "its root isn't its records'"
+    unsigned = "its root's signature doesn't verify under the device's identity"
     try:
         sig = lms.HssSignature.decode(params, closed.signature)
         message = lms.period_root_message(sig.lower[:16], deployment, PARTY, closed.attachment, closed.link,
                                           closed.period, closed.count, closed.root)
         signed = lms.hss_verify(params, identity, deployment, PARTY, sig, message)
-    except ValueError:
-        signed = False
+    except ValueError as err:
+        return f"{unsigned}: {err}"
     if not signed:
-        return "its root's signature doesn't verify under the device's identity"
+        return unsigned
     for b in sorted(set(liveness) - set(range(windows))):
         return f"a liveness record for block {b}, which a period of {windows} hasn't"
     for b in sorted(liveness):
+        dead = f"block {b}'s liveness record doesn't verify under the device's identity"
         try:
             live = lms.verify_liveness(params, identity, deployment, PARTY, closed.attachment, closed.link, period, b,
                                        lms.HssSignature.decode(params, liveness[b]))
-        except ValueError:
-            live = False
+        except ValueError as err:
+            return f"{dead}: {err}"
         if not live:
-            return f"block {b}'s liveness record doesn't verify under the device's identity"
+            return dead
     records, lo = set(closed.records), first + period * windows
     for e in entries:
         what = f"{e.link} {e.direction.value} link-window {e.window}"
@@ -297,12 +299,13 @@ def refusal(closed: attest.SignedPeriod, liveness: Mapping[int, bytes], entries:
             return f"{what}: not a link-window of the period"
         if e.window - lo not in liveness:
             return f"{what}: its block, {e.window - lo}, has no liveness record"
+        unbound = f"{what}: its record isn't its fields' under the root's party key"
         try:
             record = certificate_message(sig.lower[:16], closed.attachment, e.link, e.direction, e.window, e.digest)
-        except ValueError:
-            record = None
+        except ValueError as err:
+            return f"{unbound}: {err}"
         if e.record != record:
-            return f"{what}: its record isn't its fields' under the root's party key"
+            return unbound
         if e.record not in records:
             return f"{what}: not a record of the period"
     return None
