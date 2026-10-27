@@ -32,8 +32,8 @@ where `AdamWScalars` sets a = 1.0 and ``RN(p * 1) = p`` for every word but a NaN
 
 LERP_FMA is the one contraction the source leaves to nvcc: 1 reads step 2's branches as ``fma(w, d, m)`` and
 ``fma(-d, RN(1 - w), g)``, 0 as ``RN(m + RN(w * d))`` and ``RN(g - RN(d * RN(1 - w)))``. The sm_120 SASS of
-``multi_tensor_apply_kernel<…LerpFunctor…>`` in the wheel's libtorch_cuda.so settles it; until then a Program names the one
-its check read.
+``multi_tensor_apply_kernel<…LerpFunctor…>`` in torch 2.14's libtorch_cuda.so has both FFMAs, LERP_FMA = 1
+(r20261027-042723-8ec6).
 
 k is the step's seven f32 scalars, the kernels' ``Scalar::to<float>()`` of the host's Python floats, which
 `AdamWScalars` computes from the private hyperparameters: ``(a, w, b2, c2, s2, e, st) = (f32(1 - lr * lambda), f32(1 - beta1),
@@ -41,8 +41,8 @@ f32(beta2), f32(1 - beta2), f32((1 - beta2 ** t) ** 0.5), f32(eps), f32((lr / (1
 
 `SgdForeach` is ``torch.optim.SGD(foreach=True)`` with momentum 0 and weight decay 0 (`_multi_tensor_sgd`):
 ``_foreach_add_(params, grads, alpha=-lr)``, ForeachFunctors' ``BinaryOpListAlphaFunctor``: ``p + alpha * g`` in f32,
-alpha ``nlr = f32(-lr)``. ALPHA_FMA is that expression's contraction, the second the SASS check settles: 1 is
-``fma(nlr, g, p)``, 0 ``RN(p + RN(nlr * g))``.
+alpha ``nlr = f32(-lr)``. ALPHA_FMA is that expression's contraction: 1 is ``fma(nlr, g, p)``, 0
+``RN(p + RN(nlr * g))``; the same SASS check finds the FFMA, ALPHA_FMA = 1.
 
 The scalars are `_multi_tensor_adam`'s host code (not capturable) in CPython on x86-64 Linux, `host_f64`'s arithmetic, once a
 step for every tensor:

@@ -1,9 +1,12 @@
 """`verity.ml.definitions.registry.torch_train`: the training-step Definitions equal a torch CPU reference composed in the CUDA
 kernels' order (each f32 op one IEEE rounding, as the GPU's ``.rn`` instructions; `Reduce.cuh`'s sum emulated lane by lane;
 ``expf`` the scalar `moe_twins.nv_expf_bits`, the same MUFU.EX2 table the Definitions bind), and the RMSNorm backward equals
-autograd through HF `LlamaRMSNorm`'s forward on inputs where every f32 op is exact. NaN results are compared as the GPU's (every
-bf16 NaN 0x7FFF)."""
+autograd through HF `LlamaRMSNorm`'s forward on inputs where every f32 op is exact. The weight's gradient equals sm_120's words
+(`fixtures/torch_train_wgrad_sm120.npz`) on inputs whose bf16 result shows the order of the f32 sum. NaN results are compared as
+the GPU's (every bf16 NaN 0x7FFF)."""
 from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -194,6 +197,145 @@ def test_rms_backward_refuses_launches_it_does_not_build() -> None:
     for H, lanes in ((100, 32), (130, 32), (128, 64), (128, 12)):
         with pytest.raises(ValueError):
             bind(TT.RmsNormTorchBackward, H=H, LANES=lanes).signature()
+
+
+# --- RMSNorm weight gradient -------------------------------------------------------------------------------------------------
+
+#: w.grad's 576 bf16 words on sm_120 (RTX PRO 6000, torch 2.14.0) for ``(w * hb).backward(dy)`` on `cancel_inputs(M)`, by M
+#: (run r20261027-050613-60d7)
+WGRAD_SM120 = np.load(Path(__file__).parent / "fixtures" / "torch_train_wgrad_sm120.npz")
+#: sm_120's grid over CTAs a column at H = 576: 188 multiprocessors times 1536 / 128 blocks, over 5 blocks of columns
+SM120_GRID_CTAS = 452
+
+
+def cancel_inputs(M: int, H: int = 576) -> tuple[np.ndarray, np.ndarray]:
+    """(dy, hb) bf16 words (M, H) where the f32 order of a column's sum shows in its bf16 result: in each column a random half of
+    the rows are pairs of products +2^e and -2^e (e in 2 .. 10, dy = ±2^a, hb = 2^(e - a)), which cancel exactly, and the rest
+    small products ±2^-12 (1 + j/128)(1 + k/128), which each partial sum absorbs in part. The probe's own copy made the fixture."""
+    rng = np.random.default_rng([117, M])
+    dy, hb = np.empty((M, H), U32), np.empty((M, H), U32)
+    nbig = (M // 2) & ~1
+    for c in range(H):
+        perm = rng.permutation(M)
+        e = rng.integers(2, 11, nbig // 2)
+        a = rng.integers(-4, 3, nbig // 2)
+        sgn = rng.integers(0, 2, nbig // 2).astype(U32) << 15
+        plus, minus = perm[0:nbig:2], perm[1:nbig:2]
+        dy[plus, c] = sgn | ((a + 127).astype(U32) << 7)
+        dy[minus, c] = (sgn ^ 0x8000) | ((a + 127).astype(U32) << 7)
+        hb[plus, c] = hb[minus, c] = (e - a + 127).astype(U32) << 7
+        rest = perm[nbig:]
+        s = rng.integers(0, 2, rest.size).astype(U32) << 15
+        dy[rest, c] = s | U32(127 - 12) << 7 | rng.integers(0, 128, rest.size).astype(U32)
+        hb[rest, c] = U32(127) << 7 | rng.integers(0, 128, rest.size).astype(U32)
+    return dy, hb
+
+
+def column_sum_ref(p: torch.Tensor, ctas: int) -> torch.Tensor:
+    """`Reduce.cuh`'s f32 sum of the columns of p (M, H) at ``ctas`` CTAs a column, torch CPU f32 ops: thread y of CTA c sums
+    rows y + 4c + i stride + 4 stride j into accumulator i (stride 4 ctas), ((a0 + a1) + a2) + a3, then (y0 + y2) + (y1 + y3);
+    the last CTA's thread y adds partials y, y + 4, .. to +0 and reduces again."""
+    M, H = p.shape
+    stride, zero = 4 * ctas, torch.zeros(H, dtype=torch.float32)
+
+    def block_y(ys):
+        return (ys[0] + ys[2]) + (ys[1] + ys[3])
+
+    parts = []
+    for c in range(ctas):
+        ys = []
+        for y in range(4):
+            idx, acc = y + 4 * c, [zero] * 4
+            while idx + 3 * stride < M:
+                acc = [a + p[idx + i * stride] for i, a in enumerate(acc)]
+                idx += 4 * stride
+            for i in range(4):
+                if idx >= M:
+                    break
+                acc[i] = acc[i] + p[idx]
+                idx += stride
+            ys.append(((acc[0] + acc[1]) + acc[2]) + acc[3])
+        parts.append(block_y(ys))
+    if ctas == 1:
+        return parts[0]
+    return block_y([sum((parts[j] for j in range(y, ctas, 4)), zero) for y in range(4)])
+
+
+def ref_weight_grad(dy, hb, ctas: int) -> np.ndarray:
+    return _bits(column_sum_ref(_bf(_bits(_bf(dy) * _bf(hb))), ctas))
+
+
+def test_column_ctas_follows_set_reduce_config() -> None:
+    """The CTAs a column for H = 576: one below 1,024 tokens, ceil(M / 64) from there while that is below sm_120's grid; and the
+    launches the Definition doesn't build."""
+    sizes = (64, 100, 256, 1020, 1021, 1024, 1100, 4096, 16384, 28928)
+    assert [TT.column_ctas(M, 576) for M in sizes] == [1, 1, 1, 1, 16, 16, 18, 64, 256, 452]
+    for M, H in ((28929, 576), (32768, 576), (63, 576), (4096, 100), (4096, 124), (4096, 578)):
+        with pytest.raises(ValueError):
+            TT.column_ctas(M, H)
+
+
+def test_column_sum_reference_is_sm120() -> None:
+    """The reference's order is the GPU's: on `cancel_inputs` it gives sm_120's words at every M of the fixture (one CTA a
+    column, the CTA split with a tail, and at 32,768 tokens the device's grid of 452 CTAs), where a serial sum misses most."""
+    for key in WGRAD_SM120.files:
+        M = int(key[1:])
+        dy, hb = cancel_inputs(M)
+        want = WGRAD_SM120[key].astype(U32)
+        ctas = SM120_GRID_CTAS if M == 32768 else TT.column_ctas(M, 576)
+        got = ref_weight_grad(dy, hb, ctas)
+        assert np.array_equal(got, want), (M, np.flatnonzero(got != want)[:5])
+        serial = np.cumsum(_bf(_bits(_bf(dy) * _bf(hb))).numpy(), axis=0, dtype=np.float32)[-1]
+        assert (_bits(torch.from_numpy(serial.copy())) != want).sum() > 500, M
+
+
+def _check_wgrad(M: int, dy, hb, want) -> None:
+    got = BS.evaluate_words(bind(TT.RmsNormTorchWeightGrad, M=M, H=576), dy.T, hb.T).reshape(-1)
+    bad = np.flatnonzero(got != want)
+    assert not bad.size, f"M = {M}: {bad.size} of {got.size} differ, first column {bad[0]}: {got[bad[0]]:#06x} != {want[bad[0]]:#06x}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("M", [64, 100])
+def test_weight_grad_is_sm120_one_cta(M: int) -> None:
+    """The Definition gives sm_120's words on all 576 columns at one CTA a column, 64 rows (four rounds of four accumulators)
+    and 100 (with the tail loop)."""
+    dy, hb = cancel_inputs(M)
+    _check_wgrad(M, dy, hb, WGRAD_SM120[f"M{M}"].astype(U32))
+
+
+@pytest.mark.slow
+def test_weight_grad_is_sm120_across_ctas() -> None:
+    """The Definition at 1,100 tokens, 18 CTAs a column with a tail, on sm_120's words: the cross-CTA sum, which no 1-CTA size
+    reaches; tracing it takes about a minute."""
+    dy, hb = cancel_inputs(1100)
+    _check_wgrad(1100, dy, hb, WGRAD_SM120["M1100"].astype(U32))
+
+
+@pytest.mark.slow
+def test_weight_grad_on_random_and_special_words() -> None:
+    """Gradient-scale words with raw and special ones (NaN, infinities, subnormals) against the reference at 64 rows."""
+    rng = np.random.default_rng(41)
+    dy = _bf16_words(rng, 64 * 96, 1e-3, raw=0.05, special=0.05).reshape(64, 96)
+    hb = _bf16_words(rng, 64 * 96, 1.0, raw=0.05, special=0.05).reshape(64, 96)
+    _check_wgrad(64, dy, hb, ref_weight_grad(dy, hb, 1))
+
+
+def test_weight_grad_reference_is_autograd_on_exact_rows() -> None:
+    """The reference's chain is the one CPU autograd builds for HF's ``weight * hb`` (MulBackward0's bf16 product, `sum_to_size`
+    to the weight, the bf16 result) on rows where every f32 sum is exact in any order."""
+    rng = np.random.default_rng(43)
+    M, H = 256, 576
+    dy, x, _ = _exact_rows(rng, M, H)
+    w = torch.ones(H, dtype=torch.bfloat16, requires_grad=True)
+    (w * _bf(x).to(torch.bfloat16)[None]).backward(_bf(dy).to(torch.bfloat16)[None])
+    assert np.array_equal(ref_weight_grad(dy, x, TT.column_ctas(M, H)), _bits(w.grad.to(torch.float32)))
+
+
+def test_weight_grad_refuses_launches_it_does_not_build() -> None:
+    for M, H in ((32, 576), (32768, 576), (256, 100)):
+        with pytest.raises(ValueError):
+            bind(TT.RmsNormTorchWeightGrad, M=M, H=H).signature()
 
 
 # --- SiLU ------------------------------------------------------------------------------------------------------------------
