@@ -5886,6 +5886,9 @@
    "assumptions": [],
    "type_hash": "e718471c446e3db3185d1ccd2741bc02613f8bc76f66725264907253b38df8c7"
   },
+  "Flock.SecurityProofs.RecursiveKS": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered"],
