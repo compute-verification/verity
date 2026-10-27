@@ -39,7 +39,7 @@ def test_a_served_challengers_coins_are_the_leans(monkeypatch):
     assert Co.Challenger(3, lambda n: next(replay)).commitment == ch.commitment
     answered.clear()
     live = Wd.live_challenger(3, 2, V.coins)
-    assert len(answered) == 2 * (2 + 2)
+    assert len(answered) == 2 * (1 + 2)
     replay = iter(list(answered))
     assert Wd.live_challenger(3, 2, lambda n: next(replay)).commitment == live.commitment
 
