@@ -1,7 +1,7 @@
-"""The one-use and seed rules (E_COIN_REUSE, `ports._Uses`) at the size of the Program's description (CIR-79): the check
+"""The one-use and seed rules (E_COIN_REUSE, `ports._Uses`) at the size of the Program's description: the check
 simulates a Definition once per pattern of tracked parameter leaves and applies that summary to every batch member and
 scan step, so a batch of N identical units costs the same simulations at any N (counted, never timed). It refuses what the
-flattened walk it replaced refused, which this file keeps as the reference (`OldUses`, main's walk before CIR-79,
+flattened walk it replaced refused, which this file keeps as the reference (`OldUses`, the walk it replaced,
 verbatim but for its names), on every Program of `test_ports.py` and on random small Programs of batches and scans
 nested, seeds, positions and coins shared across members and steps; and a refusal still names its first two readers by
 Definition, node, member and step."""
@@ -29,7 +29,7 @@ _NOISE, _FOLD, _SEED, _OTHER = P._NOISE, P._FOLD, P._SEED, P._OTHER
 V8, V32 = Value(8), Value(32)
 
 
-# --- the reference: the flattened walk before CIR-79 --------------------------------------------------------------------------
+# --- the reference: the flattened walk ----------------------------------------------------------------------------------------
 
 class _OldSummary:
     """One activation of a composite whose parameters' tracked leaves are `pattern`: `reads[(i, leaf)]`, how often parameter

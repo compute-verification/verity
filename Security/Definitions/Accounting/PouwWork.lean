@@ -4,7 +4,7 @@ import Definitions.Pouw.Basic.Prob
 /-!
 # PoUW's work on one node, on the actual circuit (trusted)
 
-The PoUW half of CMP-12's converged GPU model (v3.1, `note:20261015T0717Z-draft-gpu-model-converged`), on the
+The PoUW half of the converged GPU model (v3.1), on the
 actual-circuit model rather than a device model of its own. A strategy `S` maps the verifier's live coins `r : Ω`
 (uniform over a finite `Ω`, `Pouw.pr`) to a run (`Actual.Run`); the node is a location `X`, and the verifier sits at the
 leaves `V`. The coins are the verifier's, so the strategy, fixed before them, is the prover's circuit for every value

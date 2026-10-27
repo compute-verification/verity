@@ -17,9 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "pouw" / "dc"))
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pouw" / "dc"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dgemm_ref as ref
 from hb_kbench import MAX_M, PER, inputs, w_seed, x_seed
 

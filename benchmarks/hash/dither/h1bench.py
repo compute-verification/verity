@@ -6,17 +6,17 @@ at least this noise, so 1 + noise / plain is a lower bound on its gamma.
     python h1bench.py --lib h1noise.so --out OUT [--reps 5] [--ms ...] [--linears ...] [--js 1,4]
 
 Units are the call's full 32 x 32 tiles (`served_h1/receipts.units`); below 32 rows a call has none, so M = 1 is counted
-as one padded row block (an assumption: the padding rule for decode, VLLM-20 ask 3, is open). Every unit is counted live
-(the dead-unit share is compute accounting's: 52.8% of the static window's units were dead). The 4 SHA-512 compressions
-a unit spends on seed_j and sigma_R themselves are not timed (0.7% of its blocks at K = 4096).
+as one padded row tile (an assumption: the padding rule for decode is open). Every unit is counted live (the
+dead-unit share is the credit's to count). The 4 SHA-512 compressions a unit spends on seed_j and sigma_R themselves are
+not timed.
 
 Arms (each one CUDA graph; noise arms launch the seed_j stream then the sigma_R stream):
   ca-sink, ca-write     served_h1/noise.cu's kernel, hashing only (one XOR word a block) / writing the noise
   mid-sink-jJ, mid-write    h1noise.cu's midstate kernel, J blocks a lane
   int_mm, cutlass       the plain call: torch._int_mm (17-row padding below 17) and vLLM's cutlass_scaled_mm
 
-Gates before any timing (a failed gate exits 4 and times nothing): CA's write against hashlib on sampled blocks; mid's
-write equal to CA's on every block; each sink equal to the XOR fold of CA's write; 0xA5 poison before each run and a
+Gates before any timing (a failed gate exits 4 and times nothing): ca-write's noise against hashlib on sampled blocks;
+mid's write equal to ca-write's on every block; each sink equal to the XOR fold of ca-write's; 0xA5 poison before each run and a
 no-write control (a launch over zero units) that must be rejected.
 """
 from __future__ import annotations
@@ -35,9 +35,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
@@ -86,7 +85,7 @@ def xor_halves(blocks: torch.Tensor) -> torch.Tensor:
 
 
 def mid_fold(per_block: torch.Tensor, S: int, nb: int, J: int) -> torch.Tensor:
-    """CA's per-block XOR words (S, nb) folded as mid's sink: per (item, lane), the XOR over its J blocks."""
+    """The ca kernel's per-block XOR words (S, nb) folded as mid's sink: per (item, lane), the XOR over its J blocks."""
     per = 32 * J
     chunks = -(-nb // per)
     pad = torch.zeros((S, chunks * per), dtype=torch.int32, device=per_block.device)

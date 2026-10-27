@@ -18,7 +18,7 @@ budget `b` costs at most `b` on every coin, and commits `A`'s transcript whereve
 model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
 whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
 
-**Pricing.** The machine prices a PoUW run in two parts (Daniel's decision 9, 11 Oct): its arithmetic, at W1's
+**Pricing.** The machine prices a PoUW run in two parts: its arithmetic, at W1's
 instruction prices with no fetch charge and no refund, is charged to the compute account, and every first fetch of a
 pre-salt or supplied byte, deduplicated within the run, to the bandwidth account, at the device's price of a bit read.
 Those accounts are charges; the device model's accounts are who incurs them. A PoUW run is the compute audit's
@@ -102,7 +102,7 @@ namespace Run
 variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (r : Run d α ΩW ΩQ ΩS)
 
 /-- PoUW's reads (`read_pouw`): the bits the compute account read from device memory over the compute window, the
-PoUW run's bandwidth charge (decision 9). -/
+PoUW run's bandwidth charge. -/
 def pouwRead (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).read (r.win .compute) (r.acct .compute)
 
 /-- The bits every account read from device memory over the bandwidth window (`read_total`). -/

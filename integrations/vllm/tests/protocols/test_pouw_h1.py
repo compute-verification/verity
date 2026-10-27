@@ -174,7 +174,7 @@ def test_a_call_past_the_window_or_its_rows_is_refused_and_the_window_is_not_sta
 def test_a_forward_out_of_module_order_sits_each_call_at_its_step_and_linear():
     """GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before its indexer's wq_b, which module order puts
     first; counting steps at linear 0 put each forward's first two calls in the step before (step -1, refused, for the
-    first) and past their round's root (r20261023-224227-ea5a). A step starts at the window's first call and at a linear
+    first) and past their round's root. A step starts at the window's first call and at a linear
     the step already holds: each call sits at (s, w)'s index and position, and round s closes once all of step s's calls
     are in. A step whose order departs from the first step's isn't static."""
     rng = np.random.default_rng(5)
@@ -219,8 +219,8 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
 def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
     """`FILL`: 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
     the 16 served steps carries 64 rows and u = 16/18; the engine runs all 64 in flight with no prefix
-    cache. SERVE-H1's 5 prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
-    tokenizer, r20261020-011113-6876) at the same cap are 44 + 15 x 5 rows: 119/1152."""
+    cache. The 5 batched prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
+    tokenizer) at the same cap are 44 + 15 x 5 rows: 119/1152."""
     assert PH.FILL.schedule() == [64] * 16 + [0, 0] and PH.FILL.u == Fraction(16, 18)
     assert PH.FILL.engine_args() == {"max_num_seqs": 64, "max_num_batched_tokens": 64, "enable_chunked_prefill": True,
                                      "enable_prefix_caching": False}
@@ -950,7 +950,7 @@ def _serve_window(settings):
     return comp.installed[0].commitment(), run
 
 
-#: the challenger gate's open answer for the window (RT4-INT-17): its Commit root and coin commitment (the host's, `_host`)
+#: the challenger gate's open answer for the window: its Commit root and coin commitment (the host's, `_host`)
 SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "root": "ca" * 64, "commitment": "c0" * 64}
 #: the gate's reserve answer for an H1 window (its challenge phase `_host`'s), which the window opens itself (`_gate`)
 RESERVED = {"session": CH.session_id(1), "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
@@ -1129,12 +1129,17 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
             raise ConnectionRefusedError(at)
         return reached(at, secret)
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
+    now = [0.0]
+
+    def wait(s):
+        waits.append(s)
+        now[0] += s
     client, c, opening, salt, carried = PHW.open_session("pouw:test", gate, sid, root, 2, at="vy-challenger-1:1",
-                                                         wait=waits.append)
+                                                         wait=wait, clock=lambda: now[0])
     client.close()
     r = PS.epoch_open_root(root, 2)
     assert host.ended() is None and c == host.challenger.commitment and Wd.salt_epoch_reason(c) is None
-    assert calls == [("open", "--session", sid, "--root", r.hex()), ("status", sid)] and waits == [1.0, 1.0]
+    assert calls == [("open", "--session", sid, "--root", r.hex()), ("status", sid)] and waits == [0.5, 0.5]
     assert LC.live_reason(c, opening, Wd.SALT, 0, r) is None and salt == salt_of(c, opening.coin, root)
     assert R.released_roots(host.directory / R.RELEASES, c) == {Wd.SALT: (r,)}
     assert "secret" not in carried and (carried["session"], carried["root"], carried["port"]) == (sid, r.hex(), 7811)
@@ -1150,6 +1155,32 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
                          root, at=AUDITOR, wait=waits.append)
     assert h1.ended() is None and R.released_roots(h1.directory / R.RELEASES, h1.challenger.commitment) == {
         Wd.SALT: (), Wd.DRAW: (), Wd.ROUND: ()}
+
+
+def test_a_session_whose_tunnel_never_listens_is_refused_by_name_once_its_wait_is_over(monkeypatch):
+    """`pouw_h1_window.opened` on the injected clock: a session the gate opened whose port refuses every connection is
+    tried every half second until `remote.TUNNEL_WAIT_S` has passed, then refused (`CoinError`, naming the address)
+    with no hello sent and no coin opened."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    sid, root, tries, waits, now = CH.session_id(1), PS.epoch_open_root(bytes(range(64)), 0), [], [], [0.0]
+
+    def gate(session, r):
+        return {"session": session, "seq": 0, "root": r, "commitment": "c0" * 64, "port": 7811, "secret": "ab" * 32}
+
+    def refused(cls, at, secret=None):
+        tries.append((at, secret))
+        raise ConnectionRefusedError(at)
+
+    def wait(s):
+        waits.append(s)
+        now[0] += s
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(refused))
+    with pytest.raises(CoinError, match=f"pouw:test: nothing listened at vy-challenger-1:7811 within {R.TUNNEL_WAIT_S} s"):
+        PHW.opened("pouw:test", "vy-challenger-1:1", 0, gate, sid, root, "salt epoch 0's root", wait,
+                   Wd.salt_epoch_reason, lambda: now[0])
+    assert waits == [0.5] * (2 * R.TUNNEL_WAIT_S)
+    assert tries == [("vy-challenger-1:7811", bytes.fromhex("ab" * 32))] * (2 * R.TUNNEL_WAIT_S + 1)
 
 
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):

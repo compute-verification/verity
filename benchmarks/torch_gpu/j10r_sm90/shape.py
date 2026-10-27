@@ -1,22 +1,22 @@
-"""The frozen shape's J10-R calls (HASH-22): the operands, salt, roots and positions of each (linear, M), and the units
+"""The frozen shape's J10-R calls: the operands, salt, roots and positions of each (linear, M), and the proof blocks
 the fixtures sample. Shared by `fixtures.py` (the expected values, CPU), `check.py` and `bench.py` (the GPU).
 
-* **Linears** (`LINEARS`, s8_simple's SHAPES, #4472): the H200 demo's MQA decoder, width 16384, 256 query heads of 64,
+* **Linears** (`LINEARS`): the H200 demo's MQA decoder, width 16384, 256 query heads of 64,
   one KV head, MLP 65536: q, kv (wk's rows then wv's), o, up, down, and the head once a step. A call is A [M, K] (token
-  rows) times B [N, K] (the linear's weight), its units the 32 x 32 tiles, unit u = ri (N / 32) + cj.
-* **B** is layer 0's weight of the demo's served weights: ALLP-IFACE's generator (`verity_torch_loop.weights` on
-  cursor/allp-iface-1de3, shape H200, seed `WEIGHTS_SEED`), restated here for its s8 codes and f32 scales
+  rows) times B [N, K] (the linear's weight), its proof blocks the 32 x 32 tiles, proof block u = ri (N / 32) + cj.
+* **B** is layer 0's weight of the demo's served weights: the seeded generator (`e2e_h200.served_weights`,
+  shape H200, seed `WEIGHTS_SEED`), restated here for its s8 codes and f32 scales
   (`weight_rows`, `weight_scales`): row g of tensor t is the SHA-512 counter stream SHA-512(K_t || u64le(g) || u64le(i)),
   K_t = SHA-512("verity/seeded-weights/v1" 0x00 seed 0x00 t), truncated to the row; tests/ pins its first bytes.
 * **A** is the same generator under `X_SEED`, tensor ``x/<linear>``, row r its token r, with `SPECIAL` code patterns in
-  the first and the last rows of the call (max-magnitude codes, zero rows, sums past 2^24): row block 0 and the last row
-  block, which every sample reads.
-* **Salt, roots, positions**: one live salt for the step (`SALT`, a window's `pouw.salt` stand-in); root(A) per call and
-  root(B) per linear are stand-ins too, SHA-512 of a label (`roots`): the unit reads them only through seed_c and
-  sigma_R, so any 64-byte value checks the same arithmetic. A step's units are numbered in `ORDER`, the call's first unit
-  at `base` (J10-R's ``call``), unit u at base + u.
-* **Samples** (`picks`): the unit grid's four corners, its middle and `PICKS` - 5 drawn units, at most `PICKS` row
-  blocks of 32 rows: 512 of M = 4,096's rows and 512 of 16,384's at the default 16.
+  the first and the last rows of the call (max-magnitude codes, zero rows, sums past 2^24): row tile 0 and the last row
+  tile, which every sample reads.
+* **Salt, roots, positions**: one live salt for the step (`SALT`, a period's `pouw.salt` stand-in); root(A) per call and
+  root(B) per linear are stand-ins too, SHA-512 of a label (`roots`): the proof block reads them only through seed_c and
+  sigma_R, so any 64-byte value checks the same arithmetic. A step's proof blocks are numbered in `ORDER`, the call's first
+  at `base` (J10-R's ``call``), proof block u at base + u.
+* **Samples** (`picks`): the proof-block grid's four corners, its middle and `PICKS` - 5 drawn proof blocks, at most `PICKS` row
+  tiles of 32 rows: 512 of M = 4,096's rows and 512 of 16,384's at the default 16.
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ WEIGHTS_FORMAT = "verity/seeded-weights/v1"
 WEIGHTS_SEED = b"verity/cmp92/h200/weights/v1"
 X_SEED = b"verity/j10r-sm90/activations/v1"
 SALT = hashlib.sha512(b"verity/j10r-sm90/fixture/salt/v1").digest()
-#: the first unit position of each M's step
+#: the first proof block's position in each M's step
 POS0 = {4096: 1 << 40, 16384: 2 << 40}
 T = 32
 PICKS = 16
@@ -61,7 +61,7 @@ def tensor_key(seed: bytes, name: str) -> bytes:
 
 
 def stream_row(seed: bytes, name: str, row: int, n: int) -> bytes:
-    """The first n bytes of generation row `row`'s counter stream of tensor `name` (ALLP-IFACE's `row_bytes`)."""
+    """The first n bytes of generation row `row`'s counter stream of tensor `name` (the generator's `row_bytes`)."""
     key, g, sha = tensor_key(seed, name), row.to_bytes(8, "little"), hashlib.sha512
     return b"".join(sha(key + g + i.to_bytes(8, "little")).digest() for i in range(-(-n // 64)))[:n]
 
@@ -143,7 +143,7 @@ def units(linear: str, m: int) -> int:
 
 
 def base(linear: str, m: int) -> int:
-    """The call's first unit position: the step's units numbered in `ORDER` from POS0[m]."""
+    """The call's first proof-block position: the step's proof blocks numbered in `ORDER` from POS0[m]."""
     return POS0[m] + sum(units(x, m) for x in ORDER[:ORDER.index(linear)])
 
 
@@ -164,7 +164,7 @@ def picks(linear: str, m: int, count: int = PICKS) -> list[int]:
 
 
 def unit_operands(linear: str, m: int, u: int) -> tuple[np.ndarray, np.ndarray]:
-    """Unit u's 32 rows of A and 32 rows of B, s8."""
+    """Proof block u's 32 rows of A and 32 rows of B, s8."""
     ncb = LINEARS[linear][0] // T
     ri, cj = divmod(u, ncb)
     return activation_rows(linear, m, range(T * ri, T * ri + T)), weight_rows(linear, range(T * cj, T * cj + T))
