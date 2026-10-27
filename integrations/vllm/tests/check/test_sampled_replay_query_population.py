@@ -232,7 +232,7 @@ def test_a_required_family_without_a_stated_mechanism_fails_closed(world):
 
 
 def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_excluded_only_when_every_request_is_past_its_stop(world):
-    """[moe F-moe-r17-05 (1)] a BATCH-LEVEL identity (request_id '*', `requests` list, one ENGINE step -- the fa2 hidden plane) is not
+    """A BATCH-LEVEL identity (request_id '*', `requests` list, one ENGINE step -- the fa2 hidden plane) is not
     executed only when EVERY listed request is past its own stop at that engine step (nothing was committed there); a plane some listed
     request still executes EXISTS (smaller composition) and stays REQUIRED -- its per-request slots past the stop are counted beside it
     (`batch_level[fam].request_slots_not_executed`, `by_request[rid].batch_level_slots_not_executed`) for the Commit's per-request
@@ -453,7 +453,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
     a = POP.phase_anchor(cap, edge)
     assert a["anchor"] == "cap - 1" and a["last_step"] == cap - 1 and a["n_exec"] == cap and a["lag_step"] == cap - 1 and "lag step" in a["why"]
     # ...and without LAG the same stop has no lag step; at the cap it 'ran to its cap', at a_r = cap - 1 (EOS at the last slot) the why
-    # says the STOP, not 'ran to its cap' (n-39-2)
+    # says the STOP, not 'ran to its cap'
     edge0 = POP.executed_prefix_of_record("r3", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)
     assert POP.phase_anchor(cap, edge0)["lag_step"] is None and POP.phase_anchor(cap, edge0)["why"] == "the request ran to its cap"
     eos0 = POP.executed_prefix_of_record("r4", a_r=cap - 1, lag=0, cap=cap, eos_declared=True, served_len_commit=cap - 1, **ok)
@@ -587,7 +587,7 @@ def test_r3_the_population_record_names_the_mechanism_per_request(world):
 # ---------------------------------------------------------------------------------------------------------------------------------------
 
 def _with_guard_rows(inst: dict, specs: list[str]) -> dict:
-    """A copy of the world's Program with controller / guard rows appended (the shape pad's lift emits: LBot / LStepLive / LSelect and, under
+    """A copy of the world's Program with controller / guard rows appended (the shape the lift emits: LBot / LStepLive / LSelect and, under
     Continuation_v1, LIsEOS / LEmitNext) -- enough for the replay's OWN count of controller rows; the rows carry no refs so the index
     is untouched (the world's evaluators never see them: no evaluator for a guard family, counted not-evaluated by name)."""
     prog = copy.deepcopy(inst)
@@ -606,7 +606,7 @@ def test_r4_a_lifted_programs_controller_rows_are_named_in_the_population_statem
     # an un-lifted Program: no controller statement (None), nothing in uncovered_by_name under that name
     rep0 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man)
     assert rep0["population"]["controller"] is None and not any(u["family"] == "controller" for u in rep0["population"]["uncovered_by_name"])
-    # the same manifest with a LIFTED query header (pad's lift: the identities are the wrapped Program's, the guard rows carry none) over the
+    # the same manifest with a LIFTED query header (the lift: the identities are the wrapped Program's, the guard rows carry none) over the
     # two request Programs (r0, r1) carrying 7 controller rows EACH: the header is the WORKLOAD Program's traversal, so it names the SUM (14)
     # [revb F-r17b-36]
     man_l = dict(man, query=dict(man["query"], lifted=True, lifted_rows=len(man["identities"]), guard_rows=14,

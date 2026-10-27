@@ -432,7 +432,7 @@ def _biased_linear_match(tmp: str):
 def test_biased_linear_member_is_read_at_the_bias_add_producer_not_the_gemm(tmp_path):
     """[exec M-0528, dense] the manifest's producer for a biased linear's member "0" must be the BiasAdd row.  Required at the Gemm (the
     pre-int-5 rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
-    tensor -- exactly exec's Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
+    tensor -- exactly the Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
     collector bound the GEMM alloc; at the BiasAdd it is the same tensor and the compare is a check (swapped committed bytes still fail)."""
     d, bmap, committed, op, pre = _biased_linear_match(str(tmp_path))
     res_gemm = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers={(op, "0"): {"spec": "Gemm_v1", "ordinal": None, "operand": None}})
@@ -607,7 +607,7 @@ def test_an_unreadable_run_header_is_named_in_the_tie_facts_not_passed_off_as_an
     assert "run_header_unreadable" not in OC.oracle_tie_facts(str(tmp_path / "nowhere"))
 
 
-# ---- [reqval F-moe-r17-06, the ORACLE side] a shared module's invocation k is compared at ITS Program op ---------------------------------
+# ---- the ORACLE side: a shared module's invocation k is compared at ITS Program op -------------------------------------------------------
 ROT = "model.layers.0.self_attn.rotary_emb"
 
 
@@ -670,13 +670,13 @@ def test_f_moe_r17_06_shared_invocations_compare_at_their_program_op(tmp_path):
 
 
 def test_f_moe_r17_06_without_the_alias_table_the_exact_bytes_would_be_a_false_mismatch_so_they_are_not_compared_by_name(tmp_path):
-    """The reader (24df89c50) gives invocation k its OWN bytes; read at the canonical op they would MISMATCH layer 0's oracle value for every
+    """The fixed reader gives invocation k its OWN bytes; read at the canonical op they would MISMATCH layer 0's oracle value for every
     k >= 1 -- a false alarm.  Without the table they are NOT COMPARED, named; invocation 0 compares at its own op."""
     d, vals = _shared_rotary_match(str(tmp_path))
     bmap, rd, aliases = _shared_rotary_bmap(vals)
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd)
     assert res["compared"] == 1 and res["equal"] == 1 and res["mismatch_n"] == 0 and res["complete"] is False
-    assert any("no Program path in the alias table" in k and "F-moe-r17-06" in k for k in res["not_compared"]), res["not_compared"]
+    assert any("no Program path in the alias table" in k and "not compared" in k for k in res["not_compared"]), res["not_compared"]
 
 
 def test_f_moe_r17_06_the_collapse_is_a_named_mismatch_at_the_invocation_not_a_vacuous_equal(tmp_path):
@@ -780,7 +780,7 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     # no oracle on the record: the map/stratum half still runs, the oracle half says absent
     absent = PS.padding_vs_oracle(pp, None, bmap)
     assert absent["ok"] and absent["oracle"].startswith("absent") and absent["map_padding_entries"] == 6 and absent["map_pairs"] == 2
-    # the same map WITHOUT the activity stamp (a pre-B9.1 map) reads as before: partial, the range and the pairs named
+    # the same map WITHOUT the activity stamp (an older map) reads as before: partial, the range and the pairs named
     for e in bmap["entries"]:
         e.pop("activity", None)
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))

@@ -771,8 +771,8 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     On the ORACLE side, a shared module's invocation k >= 1 (the binding map's `invocation`) is a Program op of its own:
     the fold's instances are under the per-layer Program paths, so the oracle is read at the path the manifest's `op_path_aliases`
     (`aliases`, the table the replay resolves through) gives for (canonical op, k) -- `model.layers.k.self_attn.rotary_emb`.  Before this,
-    every invocation was read at the CANONICAL op (= layer 0's fold instance) while the committed side (moe 24df89c50) reads invocation k's
-    own bytes: layers 1..N would compare as FALSE MISMATCHES (and before 24df89c50 they compared EQUAL vacuously, layer 0 against layer 0).
+    every invocation was read at the CANONICAL op (= layer 0's fold instance) while the committed side reads invocation k's
+    own bytes: layers 1..N would compare as FALSE MISMATCHES (and before the reader was fixed they compared EQUAL vacuously, layer 0 against layer 0).
     Without the table, invocation k >= 1 is NOT COMPARED, by name (partial) -- never equal by collapse, never a mismatch by mis-addressing."""
     inv_alias = {(str(v[0]), int(v[1])): str(k) for k, v in (aliases or {}).items()}       # (canonical op, invocation) -> Program op_path
     wcheck = oracle.workload_check(workload)
@@ -795,7 +795,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     pairs_seen: set[tuple[int, str]] = set()
     padding_not_cmp: Counter = Counter()               # [pad B9.1 rev.6 (d)] bot-by-enablement entries per Q(P) family: no execution, no oracle value
     padding_pairs: set[tuple[int, str]] = set()
-    name_inv = same_name_invocations(bmap)                                       # [moe F-moe-r17-06] (step, member name) -> invocations bound
+    name_inv = same_name_invocations(bmap)                                       # (step, member name) -> invocations bound
     for e in bmap.get("entries") or []:
         ident = e.get("identity") or {}
         step = int(ident.get("step", -1))
@@ -835,7 +835,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         eo = int(e.get("element_offset") or 0)
         blo, bhi = (eo + int(lo)) * isz, (eo + int(hi)) * isz
         try:
-            got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)   # [moe F-moe-r17-06] exact invocation
+            got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)   # exact invocation
         except OpeningNotVerified as exc:
             compared += 1
             by_fam_cmp[fam] += 1
@@ -846,13 +846,13 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             not_cmp["committed bytes not retained on host (retain=none, or an excluded family under retain=host + exclude)"] += 1
             not_cmp_fam[fam] += 1
             continue
-        # [reqval F-moe-r17-06] the Program op of THIS invocation: 0 = the op_path itself; k >= 1 = the alias table's path, else not compared
+        # the Program op of THIS invocation: 0 = the op_path itself; k >= 1 = the alias table's path, else not compared
         inv_k = int(ident.get("invocation") or 0)
         op_k = str(ident.get("op_path"))
         if inv_k > 0:
             op_k = inv_alias.get((op_k, inv_k))
             if op_k is None:
-                not_cmp[f"shared-module invocation >= 1 with no Program path in the alias table (op {ident.get('op_path')}): not compared (F-moe-r17-06)"] += 1
+                not_cmp[f"shared-module invocation >= 1 with no Program path in the alias table (op {ident.get('op_path')}): not compared"] += 1
                 not_cmp_fam[fam] += 1
                 shared_inv["not_compared"] += 1
                 continue
