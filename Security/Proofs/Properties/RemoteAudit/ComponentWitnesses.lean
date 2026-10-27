@@ -552,7 +552,8 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
       simp
     · show reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).mem ω 0) ∪
           reIdx _ Toy.node.blocks ((Toy.trace (Ω := Ω)).chip ω 0) = Finset.univ
-      rw [show (Toy.trace (Ω := Ω)).mem ω 0 = Finset.univ from if_pos (by norm_num)]
+      have h0 : (Toy.trace (Ω := Ω)).mem ω 0 = Finset.univ := rfl
+      rw [h0]
       exact present_full le_rfl
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
