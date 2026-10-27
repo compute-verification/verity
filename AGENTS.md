@@ -10,7 +10,7 @@ be older than `main` (a cloud VM boots from a snapshot), so when they differ, `g
 
 Top-level directories (a grouping, not an import name, except `verity/`):
 
-- `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
+- `verity/`: the distribution `verity` (the root `pyproject.toml`), in three parts. The module list is `verity/README.md`.
   Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
   tests sit beside it as their own suite.
   - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Definitions/` states their guarantees, and one whose
@@ -46,6 +46,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
       Rust verifier as a cross-check.
+  - `verity/hardware/` (`verity.hardware`): the card files, one TOML a SKU in `verity/hardware/cards/`, the one source
+    of each card's numbers, every number sourced and marked a ceiling or a measurement. Python reads them through
+    `load(sku)`, and the Lean card tables are held to them number by number (`verity/hardware/tests/test_lean.py`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
@@ -89,8 +92,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
   `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
-- Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
-  `core.claims` import no other unit.
+- Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto`,
+  `core.claims` and `hardware` import no other unit.
 - A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols `ALLOWED` lists for it
   (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
   Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
