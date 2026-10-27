@@ -1,4 +1,4 @@
-"""What circuit-check checks: a Definition id, a subcircuit template (or one of its subcircuits), a served row; and the catalog
+"""What circuit-check checks: a Definition id, a subcircuit template (or one of its subcircuits), a served workload; and the catalog
 the suite runs over, every registered Definition and template at small bindings.
 
     definition  ``F32Add_v1``, ``RMSNormTriton_v1{N=64,EPS=1e-05}``, ``GemmCoordinate_v2{K=64,DOT=AmpereBF16TcDot16_v2}``: a
@@ -6,7 +6,7 @@ the suite runs over, every registered Definition and template at small bindings.
                 digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
-    row         a Build's request Program: its directory or its ``instances.json.gz``
+    row         a served workload's request Program, a Build's: its directory or its ``instances.json.gz``
     sidecar     ``path/to/<module>.circuit-check.py``: the module's own Definitions its bindings reach, and its templates
                 (`sidecar_targets`)
 
@@ -280,7 +280,7 @@ def kind_of(spec: str) -> str:
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64, "QKV": 64, "GU": 64,
         "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 TINY_NOBIAS = {**TINY, "BIAS": False, "KVH": 2, "QKV": 96}
-#: FP8's per-token quantization reads whole 256-thread blocks: every reduction length is at least 256
+#: FP8's per-token quantization reads whole 256-thread CTAs: every reduction length is at least 256
 TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V": 16, "QKV": 512, "GU": 512}
 
 
@@ -416,7 +416,7 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
-    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
+    """The kinds no small table binds (launch tiles and CTA sizes, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
     mHC, FlashMLA, compressors, routers and Marlin MoE; the int8 attention row, whose head dim is a multiple of 32), each at a
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.ml.circuits.boolean.trace import word_of
@@ -466,8 +466,8 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
     `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
+    from verity_vllm import TargetProfile
     from verity_vllm.program.frontend.rules import vocab as V
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity.ml.definitions.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
@@ -475,8 +475,8 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4, "KB": 32, "SWAP": False, "FP8_DOT": BlackwellE4m3QmmaDot32,
              "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default(), "RSF": 2.5, "KERNEL": "block"}
-    wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
-    e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the block-FP8 MoE pair forms: an e4m3 step, one K tile per scale block
+    wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element scale groups and 256-thread quantization
+    e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the MoE pair forms with FP8 scale groups: an e4m3 step, one K tile per scale group
     act = {**small, "G": 8}                                  # the experts' fused activation quant: a scale group dividing I
     served = _served_kind_statics()
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]

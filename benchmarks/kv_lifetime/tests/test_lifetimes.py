@@ -71,7 +71,7 @@ def test_the_recorder_logs_allocations_hits_shares_and_releases():
     clock.now = 3.0
     pool.free_blocks([a])
     clock.now = 4.0
-    pool.touch([a])  # a prefix hit on the cached block
+    pool.touch([a])  # a prefix hit on the cached page
     clock.now = 5.0
     pool.reset_prefix_cache()
     ev = rec.arrays()
@@ -88,11 +88,11 @@ def events(rows):
 
 
 def test_epochs_split_into_held_segments_and_cached_spans():
-    # block 0 unhashed: held [0, 10). block 1 hashed: held [0, 5), cached, hit at 20, held to 30, evicted at 50
+    # page 0 unhashed: held [0, 10). page 1 hashed: held [0, 5), cached, hit at 20, held to 30, evicted at 50
     t, k, b = events([(0, ALLOC, 0), (0, ALLOC, 1), (5, CACHE, 1), (10, FREE, 0), (20, HIT, 1), (30, CACHE, 1),
                       (50, ALLOC, 1)])
     ep = lt.parse(t, k, b, t_end=60.0)
-    assert ep["a"].tolist() == [0.0, 0.0, 50.0]  # block 0's epoch, then block 1's two
+    assert ep["a"].tolist() == [0.0, 0.0, 50.0]  # page 0's epoch, then page 1's two
     assert sorted(zip(ep["a"], ep["held_end"], ep["res_end"], ep["censored"])) == [
         (0.0, 10.0, 10.0, False), (0.0, 30.0, 50.0, False), (50.0, 60.0, 60.0, True)]
     assert sorted(zip(ep["seg_start"], ep["seg_end"])) == [(0, 5), (0, 10), (20, 30), (50, 60)]
@@ -121,7 +121,7 @@ def test_rekey_counts_the_caps_a_resident_block_outlives():
     assert lt.policy(ep, 10.0, 3, 0.0, "rekey")["rekeys"].tolist() == [0]
     ex = lt.policy(ep, 10.0, 1, 0.0, "expire")
     assert ex["rekeys"].tolist() == [0] and ex["cut"].tolist() == [10.0]
-    # a phase moves the windows: windows start at 5 + 10 j, so the block is in window -1 and its caps are at 5 and 15
+    # a phase moves the windows: windows start at 5 + 10 j, so the page is in window -1 and its caps are at 5 and 15
     # (the one at 25 is its eviction)
     assert lt.policy(ep, 10.0, 1, 5.0, "rekey")["rekeys"].tolist() == [2]
 
@@ -163,7 +163,7 @@ def test_a_delayed_append_credits_a_block_only_from_tau_and_never_a_short_one():
     ep = lt.parse(t, k, b, t_end=30.0)
     ed = lt.delay(ep, 5.0)
     assert sorted(ed["a"].tolist()) == [5.0, 5.0]
-    assert list(zip(ed["seg_start"], ed["seg_end"])) == [(5.0, 20.0)]  # block 0 died at 3: never appended
+    assert list(zip(ed["seg_start"], ed["seg_end"])) == [(5.0, 20.0)]  # page 0 died at 3: never appended
     assert lt.policy(ed, 10.0, 1, 0.0, "expire")["cut"].tolist() == [10.0]  # appended at 5 in window 0
 
 
@@ -204,18 +204,18 @@ def test_analyze_reports_lifetimes_occupancy_and_the_frontier():
     assert r["epochs"] == 200
     life = r["held_life_s"]["share_longer_than"]
     assert 0.2 < life["60"] < 0.45 and life["0.5"] == 1.0
-    assert r["stock_age_tail"]["60"] > 0.2  # the 90 s blocks hold most of the stock
+    assert r["stock_age_tail"]["60"] > 0.2  # the 90 s pages hold most of the stock
     fr = r["frontier"]["T=10,L=1"]
     assert fr["rekey"]["credited_before_stock"] == pytest.approx(1.0)
     assert fr["expire"]["credited_before_stock"] < 0.4
     assert fr["rekey"]["rekey_bytes_per_s"] > r["frontier"]["T=10,L=6"]["rekey"]["rekey_bytes_per_s"]
     assert r["delayed"]["5.0"]["append_bytes_per_s"] < r["delayed"]["0.0"]["append_bytes_per_s"]
-    assert r["frontier_origin"] == {}  # no origins logged: the block clock only
+    assert r["frontier_origin"] == {}  # no origins logged: the page clock only
     o = lt.analyze({"t": t, "kind": k, "block": b, "origin": t - 30.0}, steps, 200.0, 2.0, windows=(10.0,),
                    caps_L=(1,), phases=2, taus=(), stocks=[0.0], delays=(0.0, 5.0))
     assert o["frontier"]["T=10,L=1"] == fr
     late = o["frontier"]["T=10,L=1,tau=5"]["rekey"]
-    assert late["append_bytes_per_s"] < fr["rekey"]["append_bytes_per_s"]  # the 1 and 3 s blocks are never appended
+    assert late["append_bytes_per_s"] < fr["rekey"]["append_bytes_per_s"]  # the 1 and 3 s pages are never appended
     assert late["credited_before_stock"] < 1.0
     assert o["frontier_origin"]["T=10,L=1"]["expire"]["credited_before_stock"] == 0.0
     assert o["stock_origin_age_tail"]["20"] == 1.0

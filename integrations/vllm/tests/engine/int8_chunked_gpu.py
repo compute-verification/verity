@@ -1,4 +1,4 @@
-"""VLLM-79 (1) on one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served with
+"""On one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served with
 `TargetProfile.int8_exact` (linears and attention) at ``--mnbt`` = vLLM's max_num_batched_tokens, greedy, on PROMPTS: two
 512-token prompts, a 300-token one and a short one, batched, then the first 512-token prompt alone.  At 64 every long prompt is
 prefilled in 64-row chunks (`engine.int8_ops.paged_attention` serves a request's m rows as the last m of its s-token window); at
@@ -11,7 +11,7 @@ first differ.  A chunk is its own window: an earlier chunk's rows read V scaled 
 whole prompt, so the two serves are equal only where that changes no greedy token.
 
     cd integrations/vllm; . ../../benchmarks/harness/env.sh
-    $VENV/bin/python -m tests.engine.int8_chunked_gpu --mnbt 64 --out DIR --at 2026-10-17T00:00:00Z --by LANE
+    $VENV/bin/python -m tests.engine.int8_chunked_gpu --mnbt 64 --out DIR --at ISO_TIME --by LANE
     $VENV/bin/python -m tests.engine.int8_chunked_gpu --compare DIR/int8_chunked_64.json DIR/int8_chunked_2048.json --out DIR
 """
 from __future__ import annotations

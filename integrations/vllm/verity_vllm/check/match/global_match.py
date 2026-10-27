@@ -87,7 +87,7 @@ from dataclasses import dataclass
 from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import compiler_form as CF
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
 from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import program_loaders as PL
@@ -188,7 +188,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
            "chronology_unit": "engine_step", "request_id_convention": "r<k> (k = manifest position; record UUIDs mapped via workload_request_id)",
            "within_step_criterion": within_step,
            "within_step_note": ("sequence: X-09 instance sequence per request step (r14-v1 verdict)" if within_step == "sequence" else
-                                "dag: criterion of record (COORD ruling M-0177 on DECISION M-0021/M-0031; approved by Daniel 21:33Z, M-0281) -- order-insensitive "
+                                "dag: criterion of record (COORD ruling M-0177 on DECISION M-0021/M-0031) -- order-insensitive "
                                 "Merkle DAG multiset per request step, canonical addressing by structural identity, dependency order enforced "
                                 "(G8); the sequence verdict is recorded beside it under alternate_verdict"),
            "checks": [], "requests": []}
@@ -350,7 +350,7 @@ class Options:
     oracle: str = option("--oracle", help="Match dir: program.json + instances.jsonl + capture/log.jsonl.gz")
     global_program: str | None = option("--global-program", default=None, help="cb-a/global-program/v1 JSON; omit to assemble the mock from --workload + --component")
     gprog: str | None = option("--gprog", default=None, help="lane gprog's workload_program.json (GP-01) -> converted with from_gprog")
-    workload: str | None = option("--workload", default=None, help="workload manifest (for the mock global Program)")
+    workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (for the mock global Program)")
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
     log: str | None = option("--log", default=None)
     tokens: str | None = option("--tokens", default=None)

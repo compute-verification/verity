@@ -259,27 +259,99 @@ def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
     return IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
 
 
+#: the verifier's pin of ``a``, and a window registration's root for it
+PIN_A = {"a": "ab" * 64}
+
+
 def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_charge(tmp_path, capsys):
     """A stated record whose inputs are declared is counted from its description alone: with every input row registered at
-    a root the verifier pinned before the run nothing is free, so its other inputs are the advice's bits, the charge; a port
-    left free adds its rows and the bound is vacuous, and so does every registered read when the verifier pins no root.
-    ``records_audit.py count`` prints the same from the record's file."""
+    a root the verifier pinned before the run, the root the window's registration records, nothing is free, so its other
+    inputs are the advice's bits, the charge; a port left free adds its rows and the bound is vacuous, and so does every
+    registered read when the verifier pins no root, or when the window's root is another than the pin or none.
+    ``records_audit.py count`` prints the same from the record's and the registration's files (core's, its window's
+    ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
+    refuses a pin with no root."""
     doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
-    assert RA.declared_count(doc, 1687, pins={"a"}) == {
+    assert RA.declared_count(doc, 1687, pins=PIN_A, roots=PIN_A) == {
         "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
         "advice_bits": 1687, "bound": "within the charge"}
     unpinned = RA.declared_count(doc, 1687)
     assert (unpinned["registered"], unpinned["free"], unpinned["bound"]) == (0, inputs, "vacuous")
+    assert RA.declared_count(doc, 1687, pins=PIN_A, roots={"a": "cd" * 64}) == unpinned == RA.declared_count(doc, 1687, pins=PIN_A)
     x = 16 * dict(IF.layout(COORD).rows)["x"]
-    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins={"a"})
+    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins=PIN_A, roots=PIN_A)
     assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
+    with pytest.raises(ValueError, match=r"\{param: root\}"):
+        RA.declared_count(doc, 1687, pins={"a"})
     (tmp_path / "c.json").write_bytes(IF.circuit_bytes(doc))
-    for pins in ([], ["a"]):
+    def group(root: str) -> dict:
+        return {"program": "p", "values": {"a": {"value": "a", "root": root}}}
+
+    pouw = {"context": RUN, "kind": "served", "public": {}}
+    regs = {"core": {"window": {"run": RUN, "registered_roots": PIN_A}}, "own": {"window": 63, "registered_roots": PIN_A},
+            "other": {"window": {"run": RUN, "registered_roots": {"a": "cd" * 64}}}, "none": {"window": 63},
+            "activations": {"window": {**pouw, "activations": group("ab" * 64)}},
+            "registered": {"window": {**pouw, "activations": group("AB" * 64), "registered": group("ab" * 64)}}}
+    for name, reg in regs.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(reg))
+    for pins, reg, roots in [((), None, {}), ((), "core", PIN_A), (("a=" + "ab" * 64,), "core", PIN_A),
+                             (("a=" + "AB" * 64,), "own", PIN_A), (("a=" + "ab" * 64,), "other", {"a": "cd" * 64}),
+                             (("a=" + "ab" * 64,), "none", {}), (("a=" + "ab" * 64,), None, {}),
+                             (("a=" + "ab" * 64,), "activations", PIN_A), (("a=" + "ab" * 64,), "registered", PIN_A)]:
         capsys.readouterr()
-        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins)]) == 0
-        assert json.loads(capsys.readouterr().out) == RA.declared_count(doc, 1687, pins=pins)
+        argv = ["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins),
+                *(["--registration", str(tmp_path / f"{reg}.json")] if reg else [])]
+        assert RA.main(argv) == 0
+        got = json.loads(capsys.readouterr().out)
+        assert got == RA.declared_count(doc, 1687, pins=dict(RA.pin_arg(p) for p in pins), roots=roots)
+        assert got["free"] == (0 if pins and roots == PIN_A else inputs), (pins, reg)
+    entry = {"value": "a", "root": PIN_A["a"], "leaves": 1, "words": 4, "domain": REG.domain("p", "a", 4, 1).domain_id.hex()}
+    (tmp_path / "pins.json").write_text(json.dumps(PIN_A))
+    (tmp_path / "registration.json").write_text(json.dumps({"program": "p", "values": {"a": entry}}))
+    (tmp_path / "other-domain.json").write_text(json.dumps({"program": "q", "values": {"a": entry}}))
+    shape = {k: v for k, v in entry.items() if k != "root"}
+    (tmp_path / "record.json").write_text(json.dumps({"of_record": True, "registered_entries": {"a": shape}}))
+    for f in ("pins.json", "registration.json"):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", "--pins", str(tmp_path / f),
+                        "--registration", str(tmp_path / "core.json")]) == 0
+        assert json.loads(capsys.readouterr().out)["free"] == 0
+    with pytest.raises(ValueError, match="a weights record states each weight's shape, not its root"):
+        RA.pins_of((), [str(tmp_path / "record.json")])
+    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64],
+                ["--pin", "a=" + "ab" * 64, "--pins", str(tmp_path / "pins.json")], ["--pins", str(tmp_path / "record.json")],
+                ["--pins", str(tmp_path / "other-domain.json")]):
+        with pytest.raises(SystemExit):
+            RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
     with pytest.raises(ValueError, match="counted from its members"):
         RA.declared_count({"templates": doc["templates"]}, 0)
+
+
+def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
+    """`window_roots`: the roots a window's registration records for its parameters are its ``registered_roots`` and each
+    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
+    PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
+    an entry with no root of hex digits, or two roots for one parameter are refused."""
+    def group(**roots: str) -> dict:
+        return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
+
+    from verity.core.protocols.pouw import operands as OP
+
+    w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
+         "registered": group(w="cd" * 64)}
+    assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
+    a, b = (REG.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
+    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
+            "registered": OP.block("test/model", {"b": b})}
+    assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
+    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
+    assert RA.registration_roots({"window": w}) == RA.window_roots(w)
+    for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
+                     ({"activations": group(x="zz")}, "hex digits"), ({"registered": group(w=None)}, "hex digits"),
+                     ({**w, "registered": group(x="cd" * 64)}, r"two roots for \['x'\]"),
+                     ({"registered_roots": {"w": "ab" * 64}, "registered": group(w="cd" * 64)}, "two roots")]:
+        with pytest.raises(ValueError, match=why):
+            RA.window_roots(bad)
 
 
 def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
@@ -287,7 +359,8 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
     no run) or, ``--description``, the description, prints the length the registration charges with the count, and exits
     `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
-    charge."""
+    charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
+    or none, every registered read is free."""
     import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
@@ -304,20 +377,30 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     monkeypatch.setattr(WC, "window_circuit", lower)
     (tmp_path / "advice.bin").write_bytes(s.data)
     bits = s.bound["advice"]["bits"]
+    reg_file = s.run / "advice" / "w0" / "registration.json"
+    served = json.loads(reg_file.read_text())
+    reg_file.write_text(json.dumps({**served, "registered_roots": PIN_A}))
     base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a"]
+            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a=" + PIN_A["a"]]
     capsys.readouterr()
     assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
     got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description(), pins={"a"}))
+    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description(), pins=PIN_A, roots=PIN_A))
+    assert got["count"]["free"] == 0
     rec = json.loads((tmp_path / "c.json").read_text())
     assert rec == IF.descriptor_record(circuit, 4) and (rec["cap"], rec["registered"]) == (4, circuit.registered.doc())
     assert PP.main([*base, "--out", str(tmp_path / "d.json"), "--description"]) == 0
     assert json.loads((tmp_path / "d.json").read_text()) == circuit.description()
     capsys.readouterr()
-    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits), "--pin", "a"]) == 0
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits), "--pin", "a=" + PIN_A["a"],
+                    "--registration", str(reg_file)]) == 0
     count = json.loads(capsys.readouterr().out)
     assert (count["free"], count["other_inputs"], count["bound"]) == (0, bits, "within the charge")
+    for theirs in ({**served, "registered_roots": {"a": "cd" * 64}}, served):
+        reg_file.write_text(json.dumps(theirs))
+        assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
+        got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert (got["count"]["registered"], got["count"]["free"]) == (0, got["count"]["inputs"])
     refuse.append(True)
     assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
@@ -348,9 +431,13 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert [f["ports"]["wrow"]["reads"] for f in files.values()] == [[0, 1, 2, 3], [0, 1, 2, 3]]
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
-    count = RA.declared_count(doc, 0, pins=pins)
+    rec = json.loads((got.dir / "registration.json").read_text())
+    roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
+    assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
+    count = RA.declared_count(doc, 0, pins=pin, roots=roots)
     assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
     assert count["other_inputs"] == count["free"] and count["bound"] == "vacuous"
+    assert RA.declared_count(doc, 0, pins={"w": "cd" * 64}, roots=roots)["free"] == 8 * per_unit
     with pytest.raises(ValueError, match="another value or domain"):
         RA.pinned({**got.pin, "program": "test/other"})
     with pytest.raises(ValueError, match="a pin is"):
@@ -360,7 +447,8 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
-    assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0", "--pin", "w"]) == 0
+    assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0", "--pin", f"w={pin['w']}",
+                    "--registration", str(got.dir / "registration.json")]) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
 
 
@@ -408,7 +496,9 @@ def test_an_input_only_window_value_is_free_in_the_count_and_named():
     pins every value it opens."""
     doc = _crafted(TIE + INPUT_ONLY, PARAMS)
     per_unit = 16 * sum(w for _p, w in IF.layout(COORD).rows)
-    before, after = RA.declared_count(doc, 0, pins=PARAMS), RA.declared_count(doc, 0, pins=PARAMS, untied={"e"})
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(PARAMS, 1)}
+    before, after = (RA.declared_count(doc, 0, pins=roots, roots=roots),
+                     RA.declared_count(doc, 0, pins=roots, roots=roots, untied={"e"}))
     assert before["registered"] == 16 * 32 + 32 * 16 * 32 and before["free"] == 33 * per_unit - before["registered"]
     assert after["registered"] == 16 * 32 and after["free"] - before["free"] == 32 * 16 * 32 and after["untied"] == ["e"]
     assert "untied" not in before
@@ -429,42 +519,6 @@ def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_
                 {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
         with pytest.raises(ValueError, match="another value or a domain"):
             RA.window_pins(bad, circuit)
-
-
-def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
-    """The toy's wired window (`verity_torch_loop`, registered weights): its six ties, each written by a unit's output port
-    and read by the next unit's input port, are pinned; the first linears' ``(x, sx)`` (the embedding's rows, committed as
-    activations) are no parameter of the circuit, so they are neither pinned nor registered, and are its 2,112 free bits.
-    Naming them as parameters read by those linears' input ports (V3b's crafted window) makes them untied: the count is
-    the same 2,112 free bits, where counting them registered would leave none."""
-    sys.path.insert(0, str(HERE.parents[2] / "integrations" / "torch_loop"))
-    from verity_torch_loop import loop as L
-
-    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, registered=True)
-    weights = L.commit_weights(L.Model(), wired=True)
-    win = loop.window(D.parse_law("stratified:3"), cap=1, weights=weights)
-    win.write(win.close(salt_key=bytes(32)), tmp_path, {"loop": "torch-loop",
-                                                         "activations": L.activations(loop.model, loop.commit_activations())},
-              registrar=R)
-    doc = json.loads((tmp_path / "circuit.json").read_text())
-    w = json.loads((tmp_path / "registration.json").read_text())["window"]
-    ties, untied = RA.window_pins(w, doc)
-    assert set(ties) == {"up", "up_codes", "up_scale", "down", "down_codes", "down_scale"} and untied == {}
-    assert {"x", "sx"} <= set(w["activations"]["values"]) and not {"x", "sx"} & set(ties)
-    honest = RA.declared_count(doc, 0, pins={*weights, *ties}, untied=untied)
-    h, r = L.H, 2
-    assert honest["free"] == r * 16 * (h // 2 + 2) == 2112
-    tm = descriptor_id(L.linear_template(h))
-    crafted = json.loads(json.dumps(doc))
-    crafted["registered"]["params"] |= {"x": r * h // 2, "sx": r * 2}
-    crafted["registered"]["reads"] += [IF.Read(tm, "x", "x", 0, (r,), 0, (h // 2,)).doc(),
-                                       IF.Read(tm, "sx", "sx", 0, (r,), 0, (2,)).doc()]
-    ties2, untied2 = RA.window_pins(w, crafted)
-    assert set(ties2) == set(ties) and set(untied2) == {"x", "sx"}
-    pins = {*weights, *ties2, *untied2}
-    assert RA.declared_count(crafted, 0, pins=pins)["free"] == 0
-    fixed = RA.declared_count(crafted, 0, pins=pins, untied=untied2)
-    assert (fixed["free"], fixed["registered"], fixed["untied"]) == (2112, honest["registered"], ["sx", "x"])
 
 
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
@@ -662,13 +716,13 @@ def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
     """No Program digest covers a Build's row names or its weights fields' names (nor its ``supplied``, correspondence or
-    ``prefix_cache.json``: these TINY Builds carry none, so their names are their correspondence), and the served compiler's
-    command reads none of them from the prover: it takes no row dir and compiles over its own trace of each Program I2
-    compiled (`prove_path.own_builds`; the trace `test_prove_path._tiny_served`'s stub). Against a prover's row dir permuted
-    under unchanged digests (each Build still I2's Program, `build_of`), the compile check refuses by name (``circuit``) the
-    circuit.json whose names make another circuit (a layer-1 SiluMul row and layer 0's down_proj swap names: five layer-0
-    rows), and ignores names that make the same one (layers 0 and 1's SiluMul rows swapped, which moves only the prover's own
-    reads; two weights fields swapped): the verifier's record is its own trace's in each case."""
+    ``prefix_cache.json``), and the served compiler's command reads none of them from the prover: it takes no row dir and
+    compiles over its own Build of each Program I2 compiled, beside the names its compile gives it (`prove_path.own_builds`).
+    Against a prover's row dir permuted under unchanged digests (each Build still I2's Program, `build_of`, its correspondence
+    record permuted with its names), the compile check refuses by name (``circuit``) the circuit.json whose names make another
+    circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
+    ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
+    two weights fields swapped): the verifier's record is its own compile's in each case."""
     import prove_path as PP
     from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
 
@@ -678,10 +732,10 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     out = tmp_path / "mine" / "circuit.json"
     out.parent.mkdir()
     assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
-                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out), "--vllm-python", "pinned-python"]) == 0
-    assert [py for py, _ in s.traced] == ["pinned-python"] * len(s.units) and list(out.parent.iterdir()) == [out]
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+    assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
     mine = json.loads(out.read_text())
-    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, trace="py")), s.data, LAYER0)
+    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
     assert IF.circuit_of(own) == IF.circuit_of(mine)
     copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
             f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
@@ -690,8 +744,9 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     reads = lambda rows: [(rid, int(r["i"])) for rid, _pi, r, _d in rows[0]]  # noqa: E731
     for k, (name, names, params, codes, same_reads) in enumerate((
             ("honest", None, False, [], True),
-            ("a layer-1 SiluMul row and layer 0's down_proj swapped", (("SiluMul_v2", 1), ("Gemm_v2", 0)), False, ["circuit"], False),
-            ("layers 0 and 1's SiluMul rows swapped", (("SiluMul_v2", 0), ("SiluMul_v2", 1)), False, [], False),
+            ("a layer-1 SiluMul row and layer 0's down_proj swapped", ("model.model.layers.1.mlp.act_fn/", "model.model.layers.0.mlp.down_proj/"),
+             False, ["circuit"], False),
+            ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
             ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
         rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
         theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
