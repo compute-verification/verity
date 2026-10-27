@@ -22054,15 +22054,12 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
@@ -22113,35 +22110,13 @@
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole",
     "NetTiming.SecurityProofs.EncardChargedLe",
-    "NetTiming.SecurityProofs.EncardChargedLeCounted",
     "NetTiming.SecurityProofs.EncardChargedLeWhole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole"
-   ]
-  },
-  "Definitions.NetworkCertifier.AdviceV1Counted": {
-   "digest": "266c372bb750fc00fc1fc94fb9d9461477a0dd1fe4542f92fce05cabaaf22f5c",
-   "definitions": {
-    "NetTiming.AdviceV1.CountCode": "1257b21d4f267da02749ac0a8b61e91f4ba28a9772b2a2bba350c66708204856",
-    "NetTiming.AdviceV1.CountCode.len": "03ef3c99c51611ef9d437aea43ab72c5028d9de9698d00e63665aedee35f8d0e",
-    "NetTiming.AdviceV1.StreamsCounted": "197bda59354aba137846a4897771bb71d390c45be576e8778c803726c65f1e9a",
-    "NetTiming.AdviceV1.bitsCounted": "4d0376ceb9e128eef5b1d07d4f1122b6e888320ccc5a4d1353fa813fcccd100f",
-    "NetTiming.AdviceV1.chargesCounted": "f362213e18f86283cd918a700375c5360d557a8e1c5a69b4890aa0900b3e1f01",
-    "NetTiming.AdviceV1.sessionCounted": "5c5c6cb4d94e33216a415d1017907c1a4ccfaccd62e57016dbdd7e938def9379",
-    "NetTiming.AdviceV1.windowCounted": "6576e2e4b8e94cab59ce126f320db38e2ef903267b508358f5936479948bed64"
-   },
-   "guarantees": [
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
-    "NetTiming.SecurityProofs.EncardChargedLeCounted",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
    ]
   },
   "Definitions.NetworkCertifier.Assumptions": {
@@ -22162,10 +22137,8 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
@@ -22187,10 +22160,8 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
@@ -22224,17 +22195,14 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.EncardFifoGrids",
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
@@ -22315,33 +22283,25 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
-   "digest": "04e8744b610cbbbb57edf9066bb6470b706c55fc54dd76e9883819a61db58349",
+   "digest": "4dae539f4da23f0cba7dbce77e282663453b6623e8c40c9638f3eeb1e774a117",
    "definitions": {
     "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1": "7df52819eda592fffba9f6de153943aab07302effecfd68234f83e914f60ed38",
-    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted": "659acc3ad1c2c7d772639cc4e7e50aadd718cb9786eddd36aebaf2a20b570c6c",
-    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1": "d4e9c6adc50d81ffe2a7139c0c6c2d0761b88a34bb88a39a941fd9ebb0531cd1",
-    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted": "062f0a3b200c503c503c0994d227715cf8e8511bc43c41a724ebe6abf7e379d3"
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1": "d4e9c6adc50d81ffe2a7139c0c6c2d0761b88a34bb88a39a941fd9ebb0531cd1"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1Kraft": {
-   "digest": "92990b9f172352984e1d68f31611b5608d746222be1e12753d8ce0ed1392da39",
+   "digest": "1fcd28e8fa747deab3ac260e1821914295e91618c53951b48551742430ce30bd",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1": "f72da5d22ba00982d6046c15c5368b06f2bf7fedb093fb209872842e438f8b8b",
-    "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted": "ba09b395c7dd17b8420c666db51606f4f25459e367da0c096ac431b41249a2b0",
-    "NetTiming.Guarantees.EncardChargedLe": "50969b0712f57bd5911434e144aad2582ab23ae6b092dbe107072c41c08163aa",
-    "NetTiming.Guarantees.EncardChargedLeCounted": "e4967b61666261b8ec244a1f150644e50c3b33bcce1d304798bce73f608e9e8c"
+    "NetTiming.Guarantees.EncardChargedLe": "50969b0712f57bd5911434e144aad2582ab23ae6b092dbe107072c41c08163aa"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
-    "NetTiming.SecurityProofs.EncardChargedLe",
-    "NetTiming.SecurityProofs.EncardChargedLeCounted"
+    "NetTiming.SecurityProofs.EncardChargedLe"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Horizon": {
@@ -22472,17 +22432,14 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
@@ -22585,17 +22542,14 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
