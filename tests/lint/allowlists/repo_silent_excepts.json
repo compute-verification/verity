@@ -123,8 +123,6 @@
     {"file": "benchmarks/pouw/harness/sass_gate.py", "count": 3},
     {"file": "benchmarks/pouw/hidden_zk/summarize.py", "count": 2},
     {"file": "benchmarks/pouw/nvfp4_sm120/nvf4_bench.py", "count": 1},
-    {"file": "benchmarks/pouw/pearl_c4/form_bench.py", "count": 1},
-    {"file": "benchmarks/pouw/pearl_c4/pearl_c4_arm.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_sm120/run.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_sm90/grouped.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_sm90/run.py", "count": 1},
