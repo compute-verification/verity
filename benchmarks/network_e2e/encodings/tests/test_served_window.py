@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).parent
-REPO = HERE.parents[3]
+REPO = Path(__file__).parents[4]
 RUN = HERE / "fixtures" / "vllm-8eb1"
 SLICE = REPO / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "compile_slice_w212.json"
 CLASS = SLICE.with_name("compile_slice_w212_class.json")

@@ -28,7 +28,7 @@ from .block import Context, MemoryNet
 from .hardware import OUTSIDE, Hardware
 
 HERE = Path(__file__).resolve().parent
-DATACENTER = str(HERE.parents[2] / "benchmarks" / "datacenter")
+DATACENTER = str(Path(__file__).resolve().parents[3] / "benchmarks" / "datacenter")
 
 
 def declaration(spec: str):

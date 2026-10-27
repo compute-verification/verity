@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-CENSUS = HERE.parents[1] / "benchmarks" / "census" / "hardware.json"
+CENSUS = Path(__file__).resolve().parents[3] / "benchmarks" / "census" / "hardware.json"
 
 
 @pytest.fixture(scope="module")

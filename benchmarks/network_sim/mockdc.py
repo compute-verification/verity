@@ -90,7 +90,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PATHS = [str(HERE), str(ROOT / "benchmarks" / "network_traces"), str(ROOT / "benchmarks" / "datacenter"), str(ROOT)]
 sys.path[:0] = PATHS
 

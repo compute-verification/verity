@@ -39,7 +39,7 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MOCKDC = [sys.executable, "-B", str(HERE / "mockdc.py")]
 
 STRATEGIES = ("honest", "bits", "late", "extra", "maintenance")  # mockdc's, which its blocks take in turn

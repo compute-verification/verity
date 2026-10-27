@@ -68,7 +68,7 @@ CUT, SLICE_CUT = 64, 14
 #: entries seeded into each decisions stream, since the fixtures' traces send almost none
 WHOLE, SEEDED = (4, 2, 2), (12, 10)
 EOS = 2
-FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
+FIXTURE = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
 
 def _ae() -> Any:

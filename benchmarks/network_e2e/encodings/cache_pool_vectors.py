@@ -45,7 +45,7 @@ from verity.core.protocols.certifier import cache_step_v2 as C2  # noqa: E402
 
 HERE = Path(__file__).parent
 FIXTURES = HERE / "tests" / "fixtures"
-VECTORS = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "cache_step_v2_vectors.json"
+VECTORS = Path(__file__).parents[3] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "cache_step_v2_vectors.json"
 
 #: each trace's slice for the certifier's vectors: its first calls, and the window (L) its requests fit in
 SLICES = {"async-prefix-cache.jsonl": {"calls": 400, "L": 368}, "async-crush.json.gz": {"calls": 160, "L": 1232}}

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).parent
-REPO = HERE.parents[3]
+REPO = Path(__file__).parents[4]
 
 
 def _load(name, path):

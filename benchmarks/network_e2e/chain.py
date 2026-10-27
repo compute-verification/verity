@@ -62,7 +62,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks" / "network_traces"))
 
 import active_replay as ar  # noqa: E402
 import negatives as NG  # noqa: E402

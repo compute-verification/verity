@@ -71,7 +71,7 @@ from pathlib import Path
 import traffic
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 EOS = (128001,)
 #: the integration's engine switches under the bi-eager execution, less VLLM_ENABLE_V1_MULTIPROCESSING (the OpenAI server's
 #: engine core is always its own process)

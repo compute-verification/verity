@@ -83,7 +83,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(HERE), str(ROOT / "benchmarks" / "network_traces")]
 
 import chain  # noqa: E402
