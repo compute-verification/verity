@@ -747,19 +747,24 @@ D6 = {
 
 
 def cmd_table(a: argparse.Namespace) -> int:
-    """`v31 bench`'s JSON lines beside D6's predictions: gamma overlapped (and serial, and the GEMM alone) and the ratio."""
+    """`v31 bench`'s JSON lines beside D6's predictions: gamma overlapped (and serial, and the GEMM alone) and the ratio,
+    with the variant (ROW, the commit stream's priority, the carveout, the GEMM's tile counter) and the arms' ms."""
     rows = []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if line.startswith("{") and '"gamma_ovl"' in line:
                 rows.append(json.loads(line))
-    print("| shape | model | m x N x K | lt ms | ovl ms | gamma ovl | gamma call | gamma gemm | D6 | ovl / D6 | wraps A, B |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| shape | model | m x N x K | variant | lt ms | ovl ms | gamma ovl | gamma call | gamma gemm | D6 | ovl / D6 "
+          "| form, wrap, gemm, commit ms | wraps A, B |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         model, pred = D6.get((r["k"], r["n"]), ("", float("nan")))
-        print(f"| {r['shape']} | {model} | {r['m']} x {r['n']} x {r['k']} | {r['arms']['lt']['ms']:.3f} | {r['arms']['ovl']['ms']:.3f} | "
+        ms = r["arms"]
+        variant = f"r{r.get('row', '?')} {r.get('cprio', 'hi')} c{r.get('carve', -1)} d{r.get('dyn', 0)}"
+        parts = ", ".join(f"{ms[x]['ms']:.3f}" if x in ms else "-" for x in ("form", "wrap", "gemm", "commit"))
+        print(f"| {r['shape']} | {model} | {r['m']} x {r['n']} x {r['k']} | {variant} | {ms['lt']['ms']:.3f} | {ms['ovl']['ms']:.3f} | "
               f"{r['gamma_ovl']:.2f} | {r['gamma_call']:.2f} | {r['gamma_gemm']:.2f} | {pred:.2f} | {r['gamma_ovl'] / pred:.2f} | "
-              f"{100 * r['wrap_rate_A']:.2f}%, {100 * r['wrap_rate_B']:.2f}% |")
+              f"{parts} | {100 * r['wrap_rate_A']:.2f}%, {100 * r['wrap_rate_B']:.2f}% |")
     return 0
 
 

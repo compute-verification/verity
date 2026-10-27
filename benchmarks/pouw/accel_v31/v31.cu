@@ -357,13 +357,17 @@ struct GArgs {
   int* O;            // m x N, row-major (u32 mod 2^32)
   int M, N, K, L, S, TT, group;
   int lp, dz;        // tail stage ts is block ts 128 / L' of P_A P_B^T: Z_b U^T (b < dz) or V Y_{b - dz}^T, at 128^digit
+  u32* ctr;          // the tile counter (null: CTA c takes tiles c, c + grid, ...); a launch advances it by its tiles
+  u32 base;          // ctr's value before this launch
 };
 // 128 x 128 tiles, 8 warps of 64 x 32 (MI = 4 row blocks of 16, NI = 4 column blocks of 8), a 3-stage ring of 128 bytes of
-// depth; thread 0 issues every TMA as the CTA releases its slot (floored_gemm's ML, without its receipts and edits)
+// depth; thread 0 issues every TMA as the CTA releases its slot (floored_gemm's ML, without its receipts and edits). With a
+// counter, a CTA's first tile is its index and each next one the counter's (a CTA that starts late, behind another
+// kernel's CTAs, takes fewer tiles); the issuer writes a tile's index beside its first stage, -1 when none is left.
 struct Ring {
   static constexpr int STAGES = 3, TM = 128, BN = 128, WM = 64, WN = 32, WARPS_N = 4, MI = 4, NI = 4, NCT = 256;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
-  static constexpr int SMEM = STAGES * STAGE + 16 * STAGES + 1024;
+  static constexpr int SMEM = STAGES * STAGE + 16 * STAGES + 16 + 1024;
   uint32_t base, bars;
   int s = 0;
   uint32_t ph = 0;
@@ -371,12 +375,16 @@ struct Ring {
   const Maps* maps;
   int tiles_m, tiles_n, KT, steps, group, pt, pkt = 0, ps = 0;
   uint32_t pph = 0;
-  bool issuer;
-  DEV Ring(uint8_t* smem, const Maps* m, int M, int N, int K, int TT, int grp)
+  bool issuer, fin = false;
+  volatile int* tid;   // [STAGES]: the tile whose first stage the slot holds
+  u32* ctr;
+  u32 cbase;
+  DEV Ring(uint8_t* smem, const Maps* m, int M, int N, int K, int TT, int grp, u32* c, u32 cb)
       : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + TT), group(grp), pt(blockIdx.x),
-        issuer(threadIdx.x == 0) {
+        issuer(threadIdx.x == 0), ctr(c), cbase(cb) {
     base = (smem_u32(smem) + 1023) & ~1023u;
     bars = base + STAGES * STAGE;
+    tid = reinterpret_cast<volatile int*>(smem + (base - smem_u32(smem)) + STAGES * STAGE + 16 * STAGES);
   }
   DEV uint32_t full(int i) const { return bars + 8 * i; }
   DEV uint32_t empty(int i) const { return bars + 8 * (STAGES + i); }
@@ -393,10 +401,17 @@ struct Ring {
   }
   DEV void tile_of(int t, int& tm, int& tn) const { raster(t, tiles_m, tiles_n, group, tm, tn); }
   DEV void issue() {
-    if (pt >= tiles_m * tiles_n) return;
+    if (fin) return;
+    mbar_wait(empty(ps), pph ^ 1);
+    if (pt >= tiles_m * tiles_n) {
+      tid[ps] = -1;
+      asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(full(ps)) : "memory");
+      fin = true;
+      return;
+    }
+    if (pkt == 0) tid[ps] = pt;
     int tm, tn;
     tile_of(pt, tm, tn);
-    mbar_wait(empty(ps), pph ^ 1);
     mbar_expect_tx(full(ps), STAGE);
     if (pkt < KT) {
       tma_load(stage(ps), &maps->a, full(ps), pkt * BK, tm * TM);
@@ -405,7 +420,11 @@ struct Ring {
       tma_load(stage(ps), &maps->pa, full(ps), (pkt - KT) * BK, tm * TM);
       tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), (pkt - KT) * BK, tn * BN);
     }
-    if (++pkt == steps) { pkt = 0; pt += gridDim.x; }
+    if (++pkt == steps) {
+      pkt = 0;
+      const u32 q = ctr ? gridDim.x + (atomicAdd(ctr, 1u) - cbase) : (u32)pt + gridDim.x;
+      pt = q < (u32)(tiles_m * tiles_n) ? (int)q : tiles_m * tiles_n;
+    }
     if (++ps == STAGES) { ps = 0; pph ^= 1; }
   }
   DEV void prologue() {
@@ -528,24 +547,26 @@ DEV void store_words(const int (&acc)[4][4][4], uint16_t* words, size_t tile, in
 template <bool PROTO>
 __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
   extern __shared__ __align__(1024) uint8_t gsm[];
-  Ring R(gsm, a.maps, a.M, a.N, a.K, PROTO ? a.TT : 0, a.group);
+  Ring R(gsm, a.maps, a.M, a.N, a.K, PROTO ? a.TT : 0, a.group, a.ctr, a.base);
   R.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   R.prologue();
   R.consumer_init(warp, lane);
   const int wm = warp / Ring::WARPS_N, wn = warp % Ring::WARPS_N, g = lane >> 2, q = lane & 3;
-  const int KT = a.K / BK, tiles = R.tiles_m * R.tiles_n;
+  const int KT = a.K / BK;
   auto seg = [&](const int (&acc)[4][4][4], size_t tile, int kt) {
     if constexpr (PROTO)
       if (((kt + 1) * BK) % a.L == 0 || kt + 1 == KT) store_words(acc, a.words, tile, a.S, ((kt + 1) * BK + a.L - 1) / a.L, wm, wn, g, q);
   };
-  for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
+  for (;;) {
+    mbar_wait_warp(R.full(R.s), R.ph);
+    const int t = R.tid[R.s];
+    if (t < 0) break;
     int tm, tn;
     R.tile_of(t, tm, tn);
     const size_t tile = (size_t)tm * R.tiles_n + tn;
     int acc[4][4][4];
     uint32_t fa[2][4][4], fb[2][4][2];
-    mbar_wait_warp(R.full(R.s), R.ph);
     R.load(fa[0], fb[0], R.stage(R.s), 0);
     if (KT == 1) {
       R.body<true, true>(acc, fa, fb);
@@ -767,6 +788,30 @@ static Cheat parse_cheat(const std::string& s) {
   exit(2);
 }
 
+static int env_int(const char* name, int dflt) {
+  const char* v = getenv(name);
+  return v && *v ? atoi(v) : dflt;
+}
+static std::string env_str(const char* name, const char* dflt) {
+  const char* v = getenv(name);
+  return v && *v ? v : dflt;
+}
+// The knobs a bench line records. V31_CARVE: every kernel's preferred shared-memory carveout (percent; < 0 leaves the
+// driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
+// its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq).
+struct Knobs {
+  int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1);
+  std::string cprio = env_str("V31_CPRIO", "hi");
+};
+static void set_carveout(int pct) {
+  if (pct < 0) return;
+  const void* ks[] = {(const void*)gemm_kernel<true>, (const void*)gemm_kernel<false>, (const void*)wrap_kernel,
+                      (const void*)form_a_kernel,     (const void*)form_b_kernel,      (const void*)bits_kernel,
+                      (const void*)noise_kernel,      (const void*)perm_kernel,        (const void*)salt_small<true>,
+                      (const void*)leaf_small<V31Row, 0>, (const void*)level_kernel,   (const void*)top_small};
+  for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
+}
+
 // One shape's prover: every buffer of a call, NB copies of the committed values (words, O) for the overlapped arm.
 struct Ctx {
   int m, n, k, lp, t, row, L, S, NT, kb64, dz, dy, TL, TT, tiles, tiles_n, lpt, grid, nsm, capA, capB, nb = 1;
@@ -785,6 +830,9 @@ struct Ctx {
   cudaStream_t s0, s1;
   cudaEvent_t ev_comp[2], ev_done[2];
   int ovl = 0;
+  Knobs kn;
+  u32* gctr = nullptr;
+  u32 gbase = 0;
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
@@ -804,8 +852,12 @@ struct Ctx {
     grid = std::min(tiles, nsm);
     int lo, hi;
     CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
-    CK(cudaStreamCreateWithPriority(&s0, cudaStreamNonBlocking, lo));
-    CK(cudaStreamCreateWithPriority(&s1, cudaStreamNonBlocking, hi));
+    if (kn.cprio != "hi" && kn.cprio != "lo" && kn.cprio != "eq") { fprintf(stderr, "V31_CPRIO: hi, lo or eq\n"); exit(2); }
+    CK(cudaStreamCreateWithPriority(&s0, cudaStreamNonBlocking, kn.cprio == "lo" ? hi : lo));
+    CK(cudaStreamCreateWithPriority(&s1, cudaStreamNonBlocking, kn.cprio == "hi" ? hi : lo));
+    set_carveout(kn.carve);
+    gctr = dalloc<u32>(1);
+    CK(cudaMemset(gctr, 0, 4));
     const size_t mk = (size_t)m * k, nk = (size_t)n * k, mn = (size_t)m * n;
     A = dalloc<int8_t>(mk); B = dalloc<int8_t>(nk); X = dalloc<int8_t>(mk); XT = dalloc<int8_t>(mk); W = dalloc<int8_t>(nk);
     BtT = dalloc<int16_t>(nk);
@@ -853,7 +905,8 @@ struct Ctx {
     return FormArgs{B, dB, U, perm, W, BtT, listB, cntB, PB, flag, n, k, lp, NT, kb64, dz, dy, capB, TL};
   }
   GArgs gargs(int b, bool proto) const {
-    return GArgs{proto ? maps_proto : maps_plain, words[b], dO, O[b], m, n, k, L, S, proto ? TT : 0, 8, lp, dz};
+    return GArgs{proto ? maps_proto : maps_plain, words[b], dO, O[b], m, n, k, L, S, proto ? TT : 0, 8, lp, dz,
+                 kn.dyn ? gctr : nullptr, gbase};
   }
   V31Row rowsrc(int b) const {
     return V31Row{reinterpret_cast<const uint8_t*>(words[b]), reinterpret_cast<const uint8_t*>(O[b]), (u64)lpt,
@@ -875,9 +928,11 @@ struct Ctx {
   void wrap(cudaStream_t st) {
     wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(WrapArgs{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB});
   }
+  // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
   void gemm(cudaStream_t st, int b, bool proto) {
     if (proto) gemm_kernel<true><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, true));
     else gemm_kernel<false><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, false));
+    gbase += (u32)tiles;
   }
   void compute(cudaStream_t st, int b, const Cheat& ch = Cheat{}) {
     coins(st);
@@ -1001,8 +1056,9 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int lp, int t, 
   return fl ? 4 : 0;
 }
 
-// two sampled tiles of a bench shape's checked call, for `v31.py gpu-sample`: their A and B rows, words, O and leaves
-static void dump_samples(Ctx& c, const std::string& dir, const std::string& pfile, u32 pick) {
+// two sampled tiles of a bench shape's checked call (its values in buffer b), for `v31.py gpu-sample`: their A and B rows,
+// words, O and leaves
+static void dump_samples(Ctx& c, const std::string& dir, const std::string& pfile, u32 pick, int b = 0) {
   gk::Dump d(dir);
   std::vector<uint8_t> sd(320);
   for (int s = 0; s < 5; s++)
@@ -1028,10 +1084,10 @@ static void dump_samples(Ctx& c, const std::string& dir, const std::string& pfil
     const std::string s = "t" + std::to_string(i) + "_";
     d.bytes(s + "A", c.A + (size_t)tm * TILE * c.k, (size_t)TILE * c.k, c.s0);
     d.bytes(s + "B", c.B + (size_t)tn * TILE * c.k, (size_t)TILE * c.k, c.s0);
-    d.bytes(s + "words", c.words[0] + (size_t)tile * c.S * TILE * TILE, (size_t)c.S * 32768, c.s0);
+    d.bytes(s + "words", c.words[b] + (size_t)tile * c.S * TILE * TILE, (size_t)c.S * 32768, c.s0);
     std::vector<int> o((size_t)TILE * TILE), row(TILE);
     for (int r = 0; r < TILE; r++)
-      CK(cudaMemcpy(o.data() + (size_t)r * TILE, c.O[0] + (size_t)(tm * TILE + r) * c.n + tn * TILE, TILE * 4, cudaMemcpyDeviceToHost));
+      CK(cudaMemcpy(o.data() + (size_t)r * TILE, c.O[b] + (size_t)(tm * TILE + r) * c.n + tn * TILE, TILE * 4, cudaMemcpyDeviceToHost));
     f = fopen((dir + "/" + s + "O.bin").c_str(), "wb");
     fwrite(o.data(), 4, o.size(), f);
     fclose(f);
@@ -1086,6 +1142,18 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     const gk::Timing tm = gk::timed_items(arms, reps, c.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
+    // the timed schedule's own values: two overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
+    for (int b = 0; b < c.nb; b++) {
+      gk::poison(c.words[b], (size_t)c.tiles * c.S * 32768, c.s0);
+      gk::poison(c.O[b], (size_t)m * n * 4, c.s0);
+    }
+    gk::poison(c.cm.levels, c.levels_count() * 64, c.s0);
+    c.call_ovl(c.s0);
+    c.call_ovl(c.s0);
+    c.ovl_drain(c.s0);
+    CK(cudaStreamSynchronize(c.s0));
+    CK(cudaGetLastError());
+    dump_samples(c, out + "/samples/" + name + "-ovl", pfile, (u32)rng(), c.nb == 2 ? (c.ovl - 1) & 1 : 0);
     std::vector<double> med(arms.size()), mhz(arms.size());
     for (size_t a = 0; a < arms.size(); a++) {
       std::vector<double> v, f;
@@ -1096,10 +1164,11 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     }
     printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"t\": %d, \"row\": %d, \"S\": %d, \"dz\": %d, \"dy\": %d, "
            "\"leaves\": %llu, \"gpu\": \"%s\", \"sms\": %d, \"grid\": %d, \"copies\": %d, \"wrap_rate_A\": %.6f, \"wrap_rate_B\": %.6f, "
-           "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, \"steady\": %s, \"arms\": {",
+           "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, \"steady\": %s, "
+           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"arms\": {",
            name, m, n, k, lp, t, row, c.S, c.dz, c.dy, (unsigned long long)c.leaves, prop.name, c.nsm, c.grid, c.nb,
            (double)wa / ((double)m * k), (double)wbn / ((double)n * k), lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand,
-           tm.steady ? "true" : "false");
+           tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str());
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, \"kernels\": ", med[7] / med[0],
