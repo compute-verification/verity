@@ -8,7 +8,7 @@ Data (`tests/program/data/`, recorded on an H100):
   positions 0, 63, 130; layer 0 qkv_proj): the bf16 norm output `x`, the captured `x_q` and `s_x` (fp8_quant ports 0/1),
   the captured output row, plus eight committed e4m3 weight rows, the committed f32 weight scale and the bf16 bias.
 
-The tests evaluate the registered functions gate by gate (`verity.ml.circuits.evaluate`) and compare words.  Python >= 3.12
+The tests evaluate the registered functions gate by gate (`verity.ml.circuits.evaluation`) and compare words.  Python >= 3.12
 (`veritor.core.silicon_total_fp8`).
 """
 
@@ -25,7 +25,7 @@ if sys.version_info < (3, 12):  # pragma: no cover
 
 from verity.ml.circuits import Program, bind
 from verity_vllm.correspondence.capture_identities import _coll_range
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation import evaluate_region
 from verity.ml.definitions.registry import fp8 as F
 from verity.ml.definitions.numerics import fp8_twins
 from verity.ml.definitions.registry import prims as P
