@@ -15,7 +15,7 @@ from verity.ml.commitments import vllm_v1 as V
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, verify_opening
-from verity.ml.commitments.multiproof import multiproof, verify_multiproof
+from verity.ml.commitments.multiproof import multiproof, multiproof_root
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity_vllm.commit import step_rows as R
 
@@ -107,9 +107,9 @@ def _range_path(lv, lo: int, hi: int) -> tuple:
 
 
 @pytest.mark.parametrize("n", [1, 2, 3, 5, 8, 13])
-def test_range_openings_fold_as_cores_multiproof(n):
-    """A run's boundary siblings, in order, are core's multiproof of its leaves; `fold_range` folds them to the root and refuses a
-    tampered leaf, a sibling missing or extra, a sibling of the wrong size and a run off the tree."""
+def test_range_openings_are_cores_multiproofs(n):
+    """A run's boundary siblings, in order, are core's multiproof of its leaves, which `multiproof_root` folds to the root, and to no
+    root or another with a tampered leaf, a wrong sibling, a node missing or extra, or a bound of the run moved (off the tree, too)."""
     rng = random.Random(100 + n)
     rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n)]
     ks = rng.randbytes(R.KEY_BYTES)
@@ -118,23 +118,19 @@ def test_range_openings_fold_as_cores_multiproof(n):
     hs = [R.hiding_leaf(r, R.salt(ks, i), 8 * R.ROW_BYTES)[1] for i, r in enumerate(rows)]
     tree = MerkleTree(dom, dict(enumerate(hs)), lambda _p: R.SCHEMA)
     root = lv[-1][0]
+
+    def ok(lo, run, proof):
+        return multiproof_root(n, dom.domain_id, {lo + k: R.leaf(dom, lo + k, h) for k, h in enumerate(run)}, proof, "sha512") == root
+
     for lo in range(n):
         for hi in range(lo + 1, n + 1):
-            sibs = _range_path(lv, lo, hi)
-            proof = [s for pair in sibs for s in pair if s is not None]
-            assert proof == multiproof(tree, range(lo, hi))
-            assert verify_multiproof(root, n, dom.domain_id, {i: R.leaf(dom, i, hs[i]) for i in range(lo, hi)}, proof, "sha512")
-            assert R.fold_range(dom, lo, hs[lo:hi], sibs) == root
-            bad = [bytes([hs[lo][0] ^ 1]) + hs[lo][1:]] + hs[lo + 1:hi]
-            assert R.fold_range(dom, lo, bad, sibs) != root
-    sibs = _range_path(lv, 0, 1)
-    assert R.fold_range(dom, 0, [], sibs) is None
-    assert R.fold_range(dom, n, hs[:1], sibs) is None
-    if n > 1:
-        assert R.fold_range(dom, 0, hs[:1], sibs[:-1]) is None
-        assert R.fold_range(dom, 0, hs[:1], ((None, None),) + sibs[1:]) is None
-        assert R.fold_range(dom, 0, hs[:1], ((root, sibs[0][1]),) + sibs[1:]) is None
-        assert R.fold_range(dom, 0, hs[:1], ((None, sibs[0][1][:32]),) + sibs[1:]) is None
+            run, proof = hs[lo:hi], [s for pair in _range_path(lv, lo, hi) for s in pair if s is not None]
+            assert proof == multiproof(tree, range(lo, hi)) and ok(lo, run, proof)
+            refused = [(lo, [bytes([run[0][0] ^ 1]) + run[0][1:]] + run[1:], proof), (lo, run, proof + [root]),
+                       (lo + 1, run, proof), (lo, run[:-1], proof)]
+            if proof:
+                refused += [(lo, run, proof[:-1]), (lo, run, [bytes(R.ROOT_BYTES)] + proof[1:])]
+            assert not any(ok(*r) for r in refused)
 
 
 def test_roots_are_vllm_v1s_under_sha512():

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
+from verity.ml.commitments.multiproof import multiproof_root
 from verity_vllm.commit import scheme, step_rows
 from verity_vllm.commit.merkle import fold_range, range_path_shape
 
@@ -233,13 +234,13 @@ class NativeRangeOpenings:
         sc = run.steps[ro.step]
         if not 0 <= ro.lo < ro.hi <= sc.n_leaves or self._unsalted(ro.step, sc.n_leaves):
             return False
-        if self.rows:
-            return self._verify_rows_range(run, ro, roots)
         try:
-            shape = range_path_shape(sc.n_leaves, ro.lo, ro.hi)
+            shape = (step_rows.range_shape if self.rows else range_path_shape)(sc.n_leaves, ro.lo, ro.hi)
             if len(ro.path) != len(shape) or any((left is None) == need_l or (right is None) == need_r
                                                  for (left, right), (need_l, need_r) in zip(ro.path, shape)):
                 return False
+            if self.rows:
+                return self._verify_rows_range(run, ro, roots)
             leaves = self._range_leaves(ro.step, ro.lo, ro.hi, ro.value, ro.salts)
             if leaves is None:
                 return False
@@ -280,13 +281,18 @@ class NativeRangeOpenings:
         return root == sc.root and len(run.run_root) == step_rows.ROOT_BYTES and self._run_root(run) == run.run_root
 
     def _verify_rows_range(self, run: Any, ro: RangeOpening, roots: dict[int, bytes] | None) -> bool:
-        """rows-sha512's `verify_range`: each row and its salt give its hiding leaf, the run and its boundary siblings fold to the tree root
-        (`step_rows.fold_range`), which binds into the step root, which is in the 64-byte run root."""
+        """rows-sha512's `verify_range`, its path of `step_rows.range_shape`'s shape: each row and its salt give its hiding leaf, and the
+        path's siblings in order are those leaves' multiproof, which core's `multiproof_root` folds to the tree root, which binds into the
+        step root, which is in the 64-byte run root."""
         sc, n, C, y = run.steps[ro.step], ro.hi - ro.lo, step_rows.ROW_BYTES, step_rows.SALT_BYTES
         if ro.step not in self._gpu_blocks or len(ro.value) != n * C or len(ro.salts) != n * y:
             return False
+        dom, proof = self._row_domain(ro.step, sc.n_leaves), [s for pair in ro.path for s in pair if s is not None]
+        if any(type(s) is not bytes or len(s) != dom.digest_bytes for s in proof):
+            return False
         hs = [step_rows.hiding_leaf(ro.value[k * C:(k + 1) * C], ro.salts[k * y:(k + 1) * y], 8 * C)[1] for k in range(n)]
-        merkle = step_rows.fold_range(self._row_domain(ro.step, sc.n_leaves), ro.lo, hs, ro.path)
+        merkle = multiproof_root(sc.n_leaves, dom.domain_id, {ro.lo + k: step_rows.leaf(dom, ro.lo + k, h) for k, h in enumerate(hs)},
+                                 proof, dom.hash)
         if merkle is None:
             return False
         if roots is not None and ro.step in roots:
