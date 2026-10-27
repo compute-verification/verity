@@ -360,7 +360,7 @@ def _settings(**kw):
 def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     assert PH.SCHEME in pouw.schemes() and PH.SCHEME in pouw.EXECUTED and pouw.executes(PH.SCHEME) == ()
     assert pouw.executes("ncp-v2") == pouw.EXECUTES
-    commit = PO.Context(stage="commit", enabled=(_entry(), "sampled-proofs:vllm-v1"), settings=_settings())
+    commit = PO.Context(stage="commit", enabled=(_entry(), "sampled-proofs:rows-sha512"), settings=_settings())
     assert PO.refusals(commit) == ()
     eager = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(), enforce_eager=False)
     assert any("graph-capturable" in r for r in PO.refusals(eager))

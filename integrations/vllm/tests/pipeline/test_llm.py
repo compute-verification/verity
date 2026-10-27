@@ -179,7 +179,7 @@ def test_without_protocols_nothing_is_installed(built):
 
 def test_a_refused_set_raises_before_the_engine_is_built(built):
     with pytest.raises(ValueError, match="sampled proofs runs in the Commit stage"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:vllm-v1")
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:rows-sha512")
     with pytest.raises(ValueError, match="unknown protocol"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols={"zk": "v1"})
     assert built == {}
@@ -191,11 +191,11 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     ("compilation_config", {"mode": 0}),
 ])
 def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(built, option, value):
-    with pytest.raises(ValueError, match=rf"sampled-proofs:vllm-v1: engine overrides {option} .* no longer match its Build"):
+    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: engine overrides {option} .* no longer match its Build"):
         L.LLM(
             LLAMA[0],
             revision=LLAMA[1],
-            protocols="sampled-proofs:vllm-v1",
+            protocols="sampled-proofs:rows-sha512",
             **{option: value},
         )
     assert built == {}
