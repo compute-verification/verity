@@ -48,13 +48,21 @@ def read_gz(path: str) -> str:
         return ""
 
 
+def left_out(path: str, bad: list[tuple[int, str]]) -> None:
+    """Say on stderr how many of path's lines didn't parse (its writers append the tools' stderr too) and the first."""
+    if bad:
+        n, why = bad[0]
+        print(f"hashcat_summary: {path}: {len(bad)} line(s) left out, unparsed (first, line {n}: {why})", file=sys.stderr)
+
+
 def jsonl(path: str) -> list[dict]:
-    out = []
-    for line in read(path).splitlines():
+    out, bad = [], []
+    for n, line in enumerate(read(path).splitlines(), 1):
         try:
             out.append(json.loads(line))
-        except ValueError:
-            pass
+        except ValueError as e:
+            bad.append((n, f"{e}: {line[:80]!r}"))
+    left_out(path, bad)
     return out
 
 
@@ -75,15 +83,16 @@ def fmt(x: float | None, spec: str = ".3f") -> str:
 
 
 def smi_samples(out: str) -> list[tuple[float, float, str]]:
-    samples = []
-    for line in read(f"{out}/smi.csv").splitlines():
+    samples, bad = [], []
+    for n, line in enumerate(read(f"{out}/smi.csv").splitlines(), 1):
         p = [x.strip() for x in line.split(",")]
         try:
             ts, _, frac = p[0].partition(".")
             t = time.mktime(time.strptime(ts, "%Y/%m/%d %H:%M:%S")) + float("0." + (frac or "0"))
             samples.append((t, float(p[1].split()[0]), p[5] if len(p) > 5 else ""))
-        except (ValueError, IndexError):
-            continue
+        except (ValueError, IndexError) as e:
+            bad.append((n, f"{type(e).__name__} {e}: {line[:80]!r}"))
+    left_out(f"{out}/smi.csv", bad)
     return samples
 
 
