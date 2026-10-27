@@ -76,7 +76,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ("nonlean_first = 1", "nonlean_first = 1: true or false"),
                       ('first = ["1858"]', "first = ['1858']: a list of PR numbers"),
                       ('land = "fast"', "land = 'fast': one of review"),
-                      ('land = "check"', "land = 'check': train landing was deleted with its code (#PRNUM): drive lands on "
+                      ('land = "check"', "land = 'check': train landing was deleted with its code (#5070): drive lands on "
                                          "review only"),
                       ("after_landing_no_cache = 1", "after_landing_no_cache = 1: true or false"),
                       ('landing_gates = "g.py"', "landing_gates = 'g.py': a list of Python scripts by their path"),

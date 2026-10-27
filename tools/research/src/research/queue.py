@@ -356,7 +356,7 @@ class Rules:
 
 
 #: drive's ways of landing (`DriveFlags.land`): `check`, which landed trains on their own check, was deleted with
-#: its code (#PRNUM)
+#: its code (#5070)
 LANDINGS = ("review",)
 #: a landing gate's path (`DriveFlags.landing_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
@@ -436,7 +436,7 @@ class DriveFlags:
             got["first"] = tuple(doc["first"])
         if "land" in doc:
             if doc["land"] == "check":
-                raise bad("land", "train landing was deleted with its code (#PRNUM): drive lands on review only; set "
+                raise bad("land", "train landing was deleted with its code (#5070): drive lands on review only; set "
                                   "`land = \"review\"` or remove the key")
             if doc["land"] not in LANDINGS:
                 raise bad("land", f"one of {', '.join(LANDINGS)}")
