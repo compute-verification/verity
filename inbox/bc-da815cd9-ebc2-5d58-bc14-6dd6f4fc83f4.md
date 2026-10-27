@@ -49,3 +49,12 @@ Rerun only those suites, at `--cwd clone`, on one node. Mark #5330 once they're 
 
 ## 20:55Z
 Before you open a PR for b624's refusal (v2 limited to one registered public file per window), check network-accounting's #4873, which runs one-stage v2 on each link-window's proof, and every other caller of `check_v2`/`verdicts_v2`. Confirm each registers one member's public file a window, or would after a one-line change. If any needs several members, make `window.public_file` a list keyed by member instead, before the refusal lands. Note what you found on PRF-205.
+
+## 21:14Z (adds to your rounds_eq/SizesAt brief, in the same file and batch)
+CANON-B's `RecordDrawn` (`SampledCanonDrawAt.lean`, b0f93542d5 on `cursor/soundness-canon-draw-39fe`) needs v2 to check the prover's session-0 record against the verifier's own draw. Ruling: v2 takes exactly one session for now. Add these refusals to v2's check, each with an `_of_accept` lemma:
+- `one-session`: the evidence names exactly one session.
+- `draw-law`: the record's draw decodes to `subset` with the verifier's `kd` over the registered population `n`, compared with the verifier's own values, not the record's.
+- `draw-file`: the record's draw file bytes are the canonical encoding of the verifier's draw (`dj S`, the one file `flock-verify draw` prints), compared byte for byte.
+- `units-identity`: the public file's `units.indices` is the identity.
+- `proved-units`: the evidence's `proved_units` equal the units the record's draw names. Check whether v1's checks already give this; if so, write only the lemma.
+Mirror each refusal in Python and add difftest cases. Check that honest a5 `--v2` still passes, and say so if a check refuses an honest run. Post the lemma names on PRF-199 for CANON-B.
