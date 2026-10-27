@@ -63,10 +63,11 @@ subprotocol yet.
 
 The inference-only policy has no rounds and reads no coins: its case is the declared circuit, the policy's budgets and
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
-sampled proofs' audit commits to) and the declared division with θ and θ's provenance (evidence), and it accepts
-exactly when the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. The product checks
+sampled proofs' audit commits to) and the declared division with θ and θ's provenance (evidence). It accepts exactly
+when the record names the declared circuit (its `program` the circuit's SHA-512, as sampled proofs' audit asks of its
+own record) and the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. The product checks
 that every subprotocol accepts and that the commitment binds their digests; it doesn't check that the policy's record
-is the one sampled proofs audited, or that its declared circuit is the registered one.
+is the one sampled proofs audited, so nothing yet ties the policy's declared circuit to the audited one.
 
 ## The difftest
 
