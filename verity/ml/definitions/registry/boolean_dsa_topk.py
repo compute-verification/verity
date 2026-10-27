@@ -23,8 +23,8 @@ exactly when each precedes every non-member.  A slot past N, a negative one or a
 `DsaWaksmanRows_v2` is `dsa_topk`'s network with each switch a word-wise `SelectBf16_v2` (one AND a bit) and `Xor3x16_v2` (none):
 one AND a payload bit a switch.  `DsaWaksmanOrder_v2` is the same network over the indices' constant bits.
 
-Cost at GLM-5.3's statics (TOPK 2048, rows of kv_lora 512 + rope 64 = 576 bf16; two-input ANDs counted over the bodies, run
-r20261018-232448-2766 for the relation): `DsaTopKOrder_v2{N=2049}` is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and
+Cost at GLM-5.3's statics (TOPK 2048, rows of kv_lora 512 + rope 64 = 576 bf16; two-input ANDs counted over the
+bodies): `DsaTopKOrder_v2{N=2049}` is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and
 2,150 more a key; `DsaWaksmanRows_v2{N=2049,K=2048,W=576,E=16}` is 20,493 switches x 9,216 bits = 188,863,488 and
 `DsaWaksmanOrder_v2{N=2049}` 655,776.  A decode step past an I2048 prompt routes and checks the order on the 21 indexer layers and
 reads its rows on all 78 (the mux it replaces, `Embedding_v2` per slot, was about N + 30 an output bit: 3.06T a step).

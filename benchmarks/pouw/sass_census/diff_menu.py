@@ -145,7 +145,11 @@ def mma_type(op: str) -> str | None:
 
 
 def isa_vocab(family: str) -> dict[str, dict]:
-    t = json.loads((HERE / "data" / "sass_isa_tables.json").read_text())["tables"]
+    p = HERE / "data" / "sass_isa_tables.json"
+    if not p.is_file():
+        raise FileNotFoundError(f"{p} is a fetched fixture and isn't here: "
+                                "`uv run research data fetch-fixtures benchmarks/pouw/sass_census/data`")
+    t = json.loads(p.read_text())["tables"]
     return t.get(ISA_TABLE.get(family, ""), {})
 
 

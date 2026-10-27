@@ -1,6 +1,5 @@
 """x₁, the decode cost a byte and γ at 2^768 − 825 and 2^1024 − 105 beside 2^512 − 569, from this directory's squaring
-rates, priced on ra-codec-mix's table v5 (art:b839fbd0979f4b2a) by its step model (`benchmarks/codec_mix/table.py` on
-cursor/ra-codec-mix-ea59).
+rates, priced on the codec-mix study's table v5 by its step model.
 
 x₁ at b bits is codec-mix's `x1_of`: 175 at p512, scaled by kv.cu's root bytes a second (338.6 at 768, 600 at 1,024).
 Its reference squarer at b, R_ref, runs 5.13e10 times kv.cu's root squarings at b over its own at 512. An adversary's
@@ -26,7 +25,7 @@ from gamma import GPUS, MHZ, MU, REF, REF_MHZ, X1, rate_of_cycles
 C = {512: 569, 768: 825, 1024: 105}
 CORES = 128
 MAX_CLOCK = 1.16
-#: kv.cu as built, at 2,092 MHz (ra-codec-mix's kv-codec.json, r20261012-183859-2055, art:c1625f3cebececb0): roots a
+#: kv.cu as built, at 2,092 MHz (kv-codec.json of r20261012-183859-2055): roots a
 #: second (the fastest build of the width), squarings a second, and decode words a second by (lib, k).
 KV_ROOTS = {512: 1.0592e8, 768: 3.6495e7, 1024: 1.5446e7}
 KV_SQ = {512: 5.6012e10, 768: 2.8977e10, 1024: 1.6003e10}

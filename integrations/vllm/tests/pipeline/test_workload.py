@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.config import (ROOT, TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, UsageError, done_source,
-                                row_file, row_path, row_target, row_world)
+                                row_file, row_path, row_target, row_world, workload_files)
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
 from verity_vllm.pipeline import workload as W
@@ -25,7 +25,7 @@ def is_row_id(name: str) -> bool:
         return False
 
 
-FILES = sorted(WORKLOADS.glob("*.json"))
+FILES = workload_files()
 TP_ROWS = [p for p in FILES if is_row_id(p.stem) and row_world(p.stem) > 1]
 
 

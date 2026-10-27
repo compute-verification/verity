@@ -7,11 +7,11 @@ import Definitions.Pous.Assumptions.P2
 /-!
 # B2: a location as PoUS's responder (trusted)
 
-Obligation B2 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.10), on PoUS's ring model, for a location
+Obligation B2 of the actual-circuit model (v2.10), on PoUS's ring model, for a location
 that does no arithmetic modulo `p` during a window (so no ring answer is in flight at a challenge, the row's `f = 0`;
 where it does, `B2Window` states the oracle-location form's core). A strategy `S` maps PoUS's outcome (the primitive `ω`, the
 encoder's coins, the `k` challenges) to a run, causal from every tick. PoUS sends each challenge when the last answer
-arrives (Daniel's ruling of 12 Oct, decisions item 5), so the challenge ticks are read off the run: challenge `j`
+arrives, so the challenge ticks are read off the run: challenge `j`
 reaches the location `X` at tick `t x j`, the ticks increasing in each run, and `t x (j + 1)` is a function of what
 happened before it (`ArrivalRule`). Its answer is read off what `X` does during window `j`. What `X` does during a
 window includes its state at the window's end (v2.6), so its state at each challenge tick is a function of its state

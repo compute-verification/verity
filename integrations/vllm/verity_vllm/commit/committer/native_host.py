@@ -54,6 +54,7 @@ from verity_vllm import settings
 from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
+from verity_vllm.commit.committer import weights_rows
 from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY
 from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
@@ -272,7 +273,7 @@ class GcPauses:
 
     `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
     sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
-    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce (r20261017-193316-4d59).  Collections never touch a value."""
+    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce.  Collections never touch a value."""
 
     def __init__(self, min_s: float = 1e-3) -> None:
         self.min_s = min_s
@@ -450,7 +451,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
       kept    = raw - hidden                               retain=host with the hidden family excluded: what stays on host (0 for retain=none)
       learn   = learn budget                               the learning steps' transient host windows; the pool keeps their capacity
       replay  = levels + learn + picks x chunk             openings-after-release runs on a FRESH pool that grows like the run's; picks =
-                                                           3 x openings + 64 (after-release + both in-run stages' deferred picks), 256 B each
+                                                           3 x openings + 64 (after-release + both in-run phases' deferred picks), 256 B each
       slack   = engine growth after admission              measured +3,539 MiB (RSS 2,218 -> 5,757 MiB, B1) + pool rounding -> 6 GiB
       pairs   = levels + kept + learn once, for pairs >= 2   a second pair allocates its frozen pool while torch's pinned-host cache still
                                                            holds the first pair's frozen + replay blocks: B1 PAIRS=3 bounded-x (in-process
@@ -517,7 +518,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
         phases["later_pair_replay"] = phase_replay + carry          # pairs >= 1: the residual is already in phase_replay; + the carried pool pages
     peak_phase = max(phases, key=phases.get)
     bound = phases[peak_phase] + int(slack_bytes) + pairs_extra
-    # [R17-29 planner, Daniel M-0309] the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
+    # the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
     # the largest host term, and -- separately -- the largest single materialization of the stream (the whole-step plane the bound keeps
     # OFF the host under retain-exclude, opened by replay), with its step / tokens / bytes from the declared schedule
     _terms = {"engine": int(engine_rss_bytes), "levels": levels, "kept": kept, "learn": learn, "replay": replay, "slack": int(slack_bytes), "pairs": pairs_extra,
@@ -1076,17 +1077,18 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     # ------------------------------------------------------------------ lifecycle
 
     def register_weights(self) -> dict:
-        """Registered input: every parameter + buffer hashed once (chunked pos_leaf leaves, per-tensor subtree, fold of subtree roots).
-        Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
+        """Registered input: every parameter + buffer hashed once (vllm-v1: chunked pos_leaf leaves, per-tensor subtree, fold of subtree
+        roots, SHA-256; rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
         t0 = time.perf_counter()
-        # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
-        # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
-        # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
+        # host (default) | device | device-checked: device hashes the same leaves into the same per-tensor tree on the GPU, rows-sha512's
+        # rows by native_rows.cu (`weights_rows`), vllm-v1's pos_leaf leaves over self.chunk-byte pieces by native_leafhash.cu (`leafhash`);
+        # the weights tree over the tensor roots is built the same either way.  device-checked computes both and refuses a mismatch.
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         LH = None
-        if mode != "host":
+        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None))) if self.rows else None
+        if mode != "host" and WR is None:
             from verity_vllm.commit.committer import leafhash as LH  # noqa: N812
             LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
         roots, names, n_bytes, checked = [], [], 0, 0
@@ -1099,7 +1101,11 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             src = p.detach().contiguous().reshape(-1)          # 0-dim buffers (e.g. scales) -> 1 element
             flat = src.view(torch.uint8) if src.dtype != torch.uint8 else src
             nb = int(flat.numel())
-            if mode == "host" or not flat.is_cuda:
+            entry = [name, _dtype_name(p), list(p.shape), nb]
+            if WR is not None:
+                r, c = WR.root(len(roots), entry, flat, mode)
+                checked += c
+            elif mode == "host" or not flat.is_cuda:
                 host = flat.cpu()                    # blocking D2H, once
                 mv = memoryview(host.numpy()).cast("B")
                 leaves = self._hash_leaves(mv)
@@ -1114,14 +1120,14 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                     checked += 1
             roots.append(r)
             n_bytes += nb
-            names.append([name, _dtype_name(p), list(p.shape), nb])
-        root = scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots)
+            names.append(entry)
         # the tree under the root, kept off the record: a deferred replay opens the weight fields it consumes against it (replay bundle)
-        self.weights_tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root.hex(), "chunk": self.chunk,
-                             "geo_digest": self._geo_digest.hex()}
-        self.weights = {"root": root.hex(), "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
+        self.weights_tree = WR.tree(names, roots) if WR is not None else {
+            "names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots).hex(),
+            "chunk": self.chunk, "geo_digest": self._geo_digest.hex()}
+        self.weights = {"root": self.weights_tree["root"], "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
-                        **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
+                        "scheme": self.commit_scheme, **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
         return self.weights
 
     def attach_source(self, src: Any) -> None:

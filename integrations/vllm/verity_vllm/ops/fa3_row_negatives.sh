@@ -25,6 +25,7 @@ FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetP
 G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as the row selects it
 HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq$G/verity_fa3_matReq$G.so || echo /workspace/cp/fa2/build/matReq$G/verity_fa2_matReq$G.so)}
 CLASS=$([ "$FA_VER" = 3 ] && echo fa3_hidden_m1_stream || echo fa2_hidden_m1_stream)
+"${PY%/*}/verity-vllm" workload-file "$WL" > /dev/null || { echo "NEGATIVES FAIL workload $WL not fetched or not its digest"; exit 2; }
 B=$(python3 -c "import json;print(json.load(open('$WL'))['sweep']['batch'])")
 MML=$(python3 -c "import json;w=json.load(open('$WL'));s=w['sweep'];print(s['max_input']+s['max_output'])")
 log() { echo "$(date -u +%FT%TZ) [neg $ROW] $*" | tee -a "$OUT/negatives.log"; }

@@ -19,7 +19,7 @@ from test_circuit_check import PINS, REPO, TEMPLATES
 SNAPSHOT = json.loads((Path(__file__).parent / "fixtures" / "attention_split_facts.json").read_text())
 PKG = "verity.ml.definitions.registry"
 REGISTRY = REPO / "verity" / "ml" / "definitions" / "registry"
-#: the family's Definition modules (verity#1130's DSA and sparse-MLA ones included), and `hopper`, which the split left as it was
+#: the family's Definition modules (the DSA and sparse-MLA ones included), and `hopper`, which the split left as it was
 MODULES = ("fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa", "boolean_dsa",
            "sparse_mla", "boolean_sparse_mla", "hopper")
 
@@ -97,7 +97,7 @@ def served() -> dict[str, object]:
 
 
 #: the snapshot's Definitions are held to it in this many tests, a slice each, so xdist spreads the digests, each of which builds
-#: its Definition's body (one test took 317 s of a 878 s suite once the catalog built no body, r20261025-215111-f00e)
+#: its Definition's body (as one test, they would be the suite's critical path under xdist)
 PARTS = 8
 
 

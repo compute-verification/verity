@@ -16,16 +16,13 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
     RUN_DIR/fold_summary.json        this module's `FOLD_SUMMARY_SCHEMA` (written twice: `fold_summary_2.json`)
     RUN_DIR/census/census.json       GPU census;  RUN_DIR/census_reconcile.json  its torch-free reconciliation
     RUN_DIR/nonint/noninterference.json
-    RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
-    RUN_DIR/wiring.json              `verity_vllm.check.operand_provenance` (G5: exhaustive operand provenance, D82)
-    RUN_DIR/replay_a.json            `verity_vllm.check.replay.replay --tier a` (verifier-seeded stratified sample + served tokens)
-    RUN_DIR/replay_chain.json        `verity_vllm.check.replay.replay --tier chain` (connected slices with computed intermediates)
-    RUN_DIR/replay_b_step<N>.json    `verity_vllm.check.replay.replay --tier b --step N` — full replay, DIAGNOSTIC ONLY (never gating)
-    RUN_DIR/root_policy.json         `verity_vllm.check.root_policy` (integrator)
     RUN_DIR/golden.json              `verity_vllm.properties.golden --check` (integrator)
     RUN_DIR/quarantine.json          differential tests of newly registered definitions (when the run uses any)
     RUN_DIR/holdouts.json            written by the ORCHESTRATOR: the same gates G1..G6 over holdout workloads
-    RUN_DIR/provenance.json          the sealed verifier's record (`bench/verify_lane.sh`); card top section
+    RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
+    RUN_DIR/wiring.json, replay_a.json, replay_chain.json, replay_b_step<N>.json, root_policy.json, provenance.json
+                                     no producer in this tree: a gate that reads one is skipped with the file missing as
+                                     its reason
 
 Gates:
     G1 observation fidelity    non-interference PASS, tokens equal across a/b/c AND to the control run, every boundary

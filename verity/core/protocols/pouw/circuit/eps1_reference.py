@@ -1,5 +1,4 @@
-"""`eps1-sm120-h1fx1` on words: a non-registered reference for the first EPS1 design, sm_120's H1 + fx1 (decision 102, the
-POUW-SPEC spec note:compute-accounting/20261018T0309Z-draft-pouw-spec).
+"""`eps1-sm120-h1fx1` on words: a non-registered reference for the first EPS1 design, sm_120's H1 + fx1 (decision 102).
 
 The one registered `eps1-sm120-h1fx1` is `h1tile`'s compile-pass scheme (`compile.SCHEMES`); decision 102 is one design across
 schemes, so there is one registration.  This module is kept only as that design on words and on sampled proofs' primitives

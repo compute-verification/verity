@@ -23,7 +23,7 @@ def load(path: str | None):
         try:
             from verity.ml.definitions.numerics import int8_rows
         except ImportError as e:
-            raise SystemExit(f"replay.py: {e}; int8_rows is PR #2694's: pass --evaluators (see the docstring)") from e
+            raise SystemExit(f"replay.py: {e}; install verity, or pass --evaluators (see the docstring)") from e
         return int8_rows
     spec = importlib.util.spec_from_file_location("exactlin_int8_rows", path)
     mod = importlib.util.module_from_spec(spec)

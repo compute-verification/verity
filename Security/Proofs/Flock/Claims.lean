@@ -123,6 +123,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowD
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.RoundWords
 import Proofs.Flock.Claims.Recursion.CoinTie
 import Proofs.Flock.Claims.Recursion.CoinPos
 import Proofs.Flock.Claims.Recursion.CapOpens

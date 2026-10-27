@@ -37,12 +37,11 @@ open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt)
 /-- **No output pair of Δ is at another net's slot**, at output rows that fit: every output row's message bit is an
 input bit of a `sha512x3` or `hm96` slot (`Hidden.Any.msg_at`). -/
 theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.UnitFacts tags st)
-    (hrows : Hidden.Any.OutRowsS st.c) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {n s₀ b : ℕ}
+    (hrows : Hidden.Any.OutRowsP st.c) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {n s₀ b : ℕ}
     (hn : n < st.c.nets.size) (hsha : n ≠ st.c.shaNet) (hhm : n ≠ st.c.hmNet) (hs₀ : s₀ < (st.c.rangeOf n).count)
     (hb : b < 2 ^ (st.c.rangeOf n).slotLog) : q.1 ≠ (st.c.rangeOf n).slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  rw [hrows.size] at hj
   obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
   have R := Hm.RowRanges.ofL L F.parse F.check
   obtain ⟨n', s, off, hn', hat, -⟩ := Hidden.Any.msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
@@ -50,20 +49,14 @@ theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st)
   intro he
   exact Hm.atSlot_ne L F (R.rowNet_lt hn') hn hne hat ⟨hs₀, hb, he⟩
 
-/-- **Δ at the input bits a wire fills, in an accepted hidden-output statement** (`WiredDelta`): its flat twin's
-(`delta_wired`), at output rows that fit. -/
-theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hrows : Hidden.Any.OutRowsS st.c) : WiredDelta st := by
+/-- **Δ at the input bits a wire fills** (`WiredDelta`), at a Δ that is `HmRow.delta`'s, then `outPairs`: its flat
+twin's (`delta_wired`), at output rows that fit. -/
+theorem wiredDelta_out {tags : Tags} {st : Stmt} (Lf : FlockSoundness.Layout (Hidden.flatTwin st))
+    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hrows : Hidden.Any.OutRowsP st.c)
+    (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray) : WiredDelta st := by
   intro n g i o s hn hsha hhm hg hi hf j
-  have sp := Hidden.setupHidden_spec' h
-  have Lf := flat_layout ht h
-  have F := flat_unitFacts ht h
   have P : ParseFacts tags st.c := F.parse
   have C : CheckFacts st.c := F.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [sp.da, Hidden.hidden_delta']
   have hflat := delta_wired Lf F hn hsha hhm hg hi hf j
   obtain ⟨ho, -⟩ := feed_some hf
   obtain ⟨p, tb, hp, htb, hpt⟩ := Aliased.mem_portBits ho
@@ -80,6 +73,16 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     List.count_eq_zero.2 fun hm => outPairs_ne_net Lf F hrows hm hn hsha hhm hs₀ hb (pos_eq st.c g n i o),
     Nat.add_zero]
   exact hflat
+
+/-- **Δ at the input bits a wire fills, in an accepted hidden-output statement without its pinned copies**
+(`wiredDelta_out` at `Hidden.unpin`, whose Δ is `HmRow.delta`'s, then `outPairs`, by definition). -/
+theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
+    (hrows : Hidden.Any.OutRowsP st.c) : WiredDelta (Hidden.unpin st) :=
+  have FL := flat_layout ht h
+  have FU := flat_unitFacts ht h
+  wiredDelta_out (st := Hidden.unpin st) FL FU hrows rfl
 
 /-! ## A composite input's value -/
 
@@ -144,7 +147,7 @@ theorem instCol_val {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) 
 
 /-- **The accepted statement places the template instance's rows at every template instance**, at output rows that
 fit (`placement_instOf`, `wiredDeltaH`). -/
-theorem placement_inst (hrows : Hidden.Any.OutRowsS a.st.c) {g : ℕ} (hg : g < a.st.c.g) :
+theorem placement_inst (hrows : Hidden.Any.OutRowsP a.st.c) {g : ℕ} (hg : g < a.st.c.g) :
     Placement T (instRows a.st.c) (a.instCol hg) :=
   Placed.Accepted.placement_cast a.hT
     (placement_instOf a.L a.regs a.unitFacts.parse a.unitFacts.check (wiredDeltaH a.ht a.h hrows) hg)
@@ -247,8 +250,9 @@ noncomputable def SitesH.progPlaces_instProg : ProgPlaces (instProg c n) outs pl
   inst := Const.Prog.instC (instProg c n) outs
   o := si.o
   col := SitesH.instCol hparse
-  placed S R u h := placement_rows (SitesH.rows_instProg hparse S R u h)
-    ((si.acc S R u h).placement_inst (by rw [(si.acc S R u h).c_eq (hparse S R u h)]; exact hrows) (si.hvu S R u h))
+  placed S R u h := ⟨si.A S R u h, si.B S R u h, placement_rows (SitesH.rows_instProg hparse S R u h)
+    ((si.acc S R u h).placement_inst (by rw [(si.acc S R u h).c_eq (hparse S R u h)]; exact hrows.toP) (si.hvu S R u h)),
+    si.sat S R u h⟩
   aliased S R u h x x' hw hx hx' z hz := by
     have hc := (si.acc S R u h).c_eq (hparse S R u h)
     have e := congrArg Rows.nIn (SitesH.rows_instProg hparse S R u h)
@@ -257,7 +261,7 @@ noncomputable def SitesH.progPlaces_instProg : ProgPlaces (instProg c n) outs pl
     exact (si.acc S R u h).inst_aliased (si.hvu S R u h) (si.o S R u h)
       (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x)
       (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x') (lt_of_lt_of_eq hx e)
-      (lt_of_lt_of_eq hx' e) hk hz
+      (lt_of_lt_of_eq hx' e) hk (si.sat S R u h z hz)
 
 /-- `progPlaces_instProg`'s instance is the program's own. -/
 theorem SitesH.progPlaces_instProg_inst (u : Fin n) :
@@ -290,7 +294,7 @@ theorem zeroCols_instProgH :
     have e := congrArg Rows.nIn (SitesH.rows_instProg hparse S R u h)
     have hkz' : keyOf (si.acc S R u h).st.c x.val = .zero := by rw [hc]; exact hkz
     exact (si.acc S R u h).inst_zero (si.hvu S R u h)
-      (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x) (lt_of_lt_of_eq hx e) hkz' hsat _
+      (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x) (lt_of_lt_of_eq hx e) hkz' (si.sat S R u h z hsat) _
 
 end prog
 
@@ -574,8 +578,7 @@ theorem out_copy_instH {T : Model.Statement} {c : Flock.Circuit} {n : ℕ} (a : 
   have s := Hidden.setupHidden_spec' h
   have L0 := flat_layout ht' h
   have F0 := flat_unitFacts ht' h
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta']
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hmc := Hidden.Any.msg_copyF L L0 F0 hda hrows hz o' hg hjo hkw ht
   generalize o - Hidden.outAt st.c (outPortOf st.c o) = kk at hk hkw hsrc hmc
   have hb' : (16 * kk + t) / 8 = 2 * kk + t / 8 := by omega
@@ -602,7 +605,7 @@ noncomputable def instSaltAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n)
   if h : u ∈ S then
     match q with
     | .inl (_, q) =>
-      siteAddrH (si.acc S R u h) (si.o S R u h) (Hm.saltCol (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val)
+      (siteAddrH (si.acc S R u h) (si.o S R u h) (Hm.saltCol (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val) :)
     | .inr _ => ⟨0, Nat.two_pow_pos _⟩
   else ⟨0, Nat.two_pow_pos _⟩
 
@@ -640,7 +643,7 @@ theorem instProgH_copies : (instReadersH hparse hrf outs popOf).Copies (instPlac
   · have ho' : instOutRowOf c n outs ((Const.Prog.instC (instProg c n) outs u).wire x) = some (u', ⟨q, k⟩) :=
       (instRowOfH_of_none outs hk).symm.trans hr
     obtain ⟨-, o, t, hoc, hb⟩ := instOutRowOf_wire outs x ho'
-    have := out_copy_instH (si.acc S R u hu) hc hrf hM (si.o S R u hu) (si.hvu S R u hu)
+    have := out_copy_instH (si.acc S R u hu) hc hrf (si.sat S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
       (Fin.cast (congrArg Rows.w hrw) x) (o := o) (t := t) hoc hb
     simp only [keyRowAddrH, hu, ↓reduceDIte]
     exact this
@@ -654,7 +657,7 @@ theorem instProgH_copies : (instReadersH hparse hrf outs popOf).Copies (instPlac
       have hv := si.hvu S R u hu
       rw [hc] at hv ⊢
       exact Layout.msgCol_lt_of_parse (hparse S R u hu) hv q.isLt _ _ (Nat.mod_lt _ (by norm_num))
-    have := copy_site_instH (si.acc S R u hu) hM (si.o S R u hu) (si.hvu S R u hu)
+    have := copy_site_instH (si.acc S R u hu) (si.sat S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
       (Fin.cast (congrArg Rows.w hrw) x) (lt_of_lt_of_eq hxn (congrArg Rows.nIn hrw)) hk' hin'
     simp only [keyRowAddrH, hu, ↓reduceDIte]
     exact this
@@ -671,7 +674,7 @@ theorem instProgH_bcPinned
   rw [instRowOfH_wire_unit outs x hr]
   have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
   have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
-  have := bc_site_ofH (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
+  have := bc_site_ofH (hsite S R u hu M hM) (si.sat S R u hu _ hM) (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
   rw [hnp] at this
   unfold keyBcAddrH
   simp only [hu, ↓reduceDIte]
@@ -731,16 +734,16 @@ theorem instRowH_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (
     encPortH c.ports[q.val]! ((instLayoutH hparse hrf outs popOf).row S R u M (.inl (u', q))) =
       Hidden.Any.rowMsg c.ports[q.val]!
         (List.ofFn fun j : Fin (2 * c.ports[q.val]!.words) => byteOf fun t => bit (Binding.wit plan tab S R u M
-          (siteAddrH (si.acc S R u hu) (si.o S R u hu)
-            (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val)))) := by
+          ((siteAddrH (si.acc S R u hu) (si.o S R u hu)
+            (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :)))) := by
   have hle : portRowW c q ≤ Finset.univ.sup (portRowW c) + 1 :=
     (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
   have hbytes : (List.ofFn fun j : Fin (2 * c.ports[q.val]!.words) => byteOf fun t =>
       (bitsAt (Binding.wit plan tab S R u M) fun k : Fin (portRowW c q) => keyRowAddrH si S R u q k.val)
         ⟨8 * j.val + t.val, by omega⟩) =
       List.ofFn fun j : Fin (2 * c.ports[q.val]!.words) => byteOf fun t => bit (Binding.wit plan tab S R u M
-        (siteAddrH (si.acc S R u hu) (si.o S R u hu)
-          (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val))) := by
+        ((siteAddrH (si.acc S R u hu) (si.o S R u hu)
+          (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :))) := by
     refine List.ext_getElem (by simp) fun j h1 h2 => ?_
     simp only [List.getElem_ofFn]
     congr 1
@@ -781,20 +784,20 @@ theorem instRowsH_computes (hupv : 0 < c.upv)
       rfl
     have hbq : c.ports[q.val]!.bits = 16 * c.ports[q.val]!.words :=
       hrf.bits16 _ (by rw [getElem!_pos c.ports q.val q.isLt]; exact Array.getElem_mem_toList q.isLt)
-    have hb := bc_site_commitH (si.acc S R u hu) (by rw [hce]; exact hupv) (by rw [hce]; exact hrf) hM
+    have hb := bc_site_commitH (si.acc S R u hu) (by rw [hce]; exact hupv) (by rw [hce]; exact hrf) (si.sat S R u hu _ hM)
       (si.o S R u hu) (si.hvu S R u hu) hq
     have hpq : (si.acc S R u hu).st.c.ports[q.val]! = c.ports[q.val]! := by rw [hce]
     rw [hpq] at hb
     show Binding.bytesAt _ (keyBcAddrH si S R u q) = Binding.commitString
       (encPortH c.ports[q.val]! ((instLayoutH hparse hrf outs popOf).row S R u M (.inl (u', q))))
       (Binding.bytesAt _ (instSaltAddrH si S R u (.inl (u', q))))
-    have e1 : keyBcAddrH si S R u q = fun (j : Fin 128) (t : Fin 8) => siteAddrH (si.acc S R u hu) (si.o S R u hu)
-        (Layout.bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+    have e1 : keyBcAddrH si S R u q = fun (j : Fin 128) (t : Fin 8) => (siteAddrH (si.acc S R u hu) (si.o S R u hu)
+        (Layout.bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :) := by
       funext j t
       simp only [keyBcAddrH, hu, dite_true]
     have e2 : instSaltAddrH si S R u (.inl (u', q)) = fun (j : Fin 192) (t : Fin 8) =>
-        siteAddrH (si.acc S R u hu) (si.o S R u hu)
-          (Hm.saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+        (siteAddrH (si.acc S R u hu) (si.o S R u hu)
+          (Hm.saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :) := by
       funext j t
       simp only [instSaltAddrH, hu, dite_true]
     rw [instRowH_enc hparse hrf outs popOf hu M u' q hwq hbq, e1, e2]

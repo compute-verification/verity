@@ -303,7 +303,8 @@ its ingress head derives). That fixes the link's timing to the profile. Late, ex
 
 It does not cover:
 
-- **N3, the content.** The bytes and order of the frames inside the counts aren't checked.
+- **N3, the content.** The bytes and order of the frames inside the counts aren't checked. N3 is retired, and the
+  network certifier's step-indexed scan that supersedes it doesn't run here.
 - **The certificates' LMS check and the audit of each record.** Both stay on the host. The proofs cover each end's head
   check only.
 - **A served link's count check, `NetworkServedCounts_v1`.** It has no prover, so a served run gets N2's verdict of

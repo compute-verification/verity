@@ -1,14 +1,14 @@
-"""kv.cu's encode rate in 4 KiB blocks (one Llama-3.1-8B token-layer of bf16 K and V) a second on one GPU, for the
+"""kv.cu's encode rate in 4 KiB chunks (one Llama-3.1-8B token-layer of bf16 K and V) a second on one GPU, for the
 honest cost of appending and re-keying KV: run by `benchmarks/word_codec/run.sh` (KV=1, KV_SCRIPT=
 ../kv_lifetime/encode_rate.py), which builds kv.cu at each of KV_FIELDS and passes `--lib NAME=PATH` for each.
 
 For each library and each k of `--ks`:
   chain    the compute-only rate (`kv_bench.rates`: `kv_chain`), words a second, and the squarings it implies
   store    `kv_encode` over a `--store-gib` store, contiguous (an append at the write, under the seed's key)
-  bound    `kv_encode_bound` over the same store, a random bound offset a token-layer (the appended block's key
+  bound    `kv_encode_bound` over the same store, a random bound offset a token-layer (the appended chunk's key
            b_j(c_a), which a re-key draws afresh)
   rekey    `kv_encode_bound` in place over `--pages` scattered pages of `--page-blocks` token-layers each, one call a
-           page (a vLLM block of 16 tokens is 16 token-layers a layer; the re-key encodes a page where it is)
+           page (a KV page of 16 tokens is 16 token-layers a layer; the re-key encodes a page where it is)
   rekey_streams  the same calls spread round-robin over `--streams` CUDA streams: a page's call is too small to fill
            the GPU (each word is one serial chain of squarings), so one stream runs at the chain's latency
 each checked first: the bound encode decodes back under its offsets. Writes encode_rate.json under `--out`.

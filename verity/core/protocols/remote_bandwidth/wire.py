@@ -6,9 +6,9 @@ no tile.
 
 ~~~text
 body      u32be n ‖ opening × n
-opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖ leaf ‖ leaf salt (192) ‖ payload salt (192)
+opening   u32be pass ‖ u64be position ‖ chunk (4096) ‖ u16be len(leaf) ‖ leaf ‖ leaf salt (192) ‖ payload salt (192)
           ‖ u8 d ‖ d × 64 (receipt path) ‖ u8 d ‖ d × 64 (payload path) ‖ u8 bound (0 or 1) ‖ bound × 64 (d_j for a
-          block appended after the codec seed, none for a registered one)
+          chunk appended after the codec seed, none for a registered one)
 ~~~
 """
 from __future__ import annotations

@@ -766,7 +766,7 @@ def test_fix_e_the_identity_check_reads_a_padding_only_step_as_the_identities_of
 
 
 def test_the_identity_check_counts_the_router_softmax_tap_as_one_more_moe_tensor_of_each_tapped_layer():
-    """The OLMoE sm_120 config run (r20260930-091912-128d) refused every step with moe_layers_bad {L: 7}: under ROUTER_TAP the
+    """An OLMoE sm_120 config run refused every step with moe_layers_bad {L: 7}: under ROUTER_TAP the
     router-softmax source commits `moe/L<k>/router_softmax` beside the block's planes, and the per-layer count expected the block's alone."""
     man_moe = dict(MAN, moe_layers=[0], moe_tensors_per_layer=len(MOE_MEMBERS))
     executed = {0: ["r0"], 1: ["r0"]}

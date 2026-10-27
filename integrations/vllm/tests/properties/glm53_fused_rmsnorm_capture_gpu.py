@@ -72,7 +72,7 @@ PROBE_W = np.arange(0x3F80, 0x4000, dtype=np.uint16)
 TOTALS = ("rows", "words", "mismatch", "reference", "twin_mismatch")
 CASES = ("served", "probe")
 KERNEL = "_fused_norm_rope_kernel"
-#: r20261013-001802-7e95's `_fused_norm_rope_kernel.a3d95dc37831.ptx` (Triton 3.7.1, vLLM d9105ea80), before its first `.file`
+#: a capture's `_fused_norm_rope_kernel.a3d95dc37831.ptx` (Triton 3.7.1, vLLM d9105ea80), before its first `.file`
 PTX_CODE_SHA256 = "2218fc75966f0924bcfac4e4d21f743cd33424d60dcc5c16e6f512a0137d5090"
 PTX_COUNTS = {"div.full.f32": 4, "rsqrt.approx.ftz.f32": 3, "ld.global.v4.b32": 4, "ld.global.v2.b32": 2, "cvt.rn.bf16x2.f32": 10,
               "shfl.sync.bfly.b32": 35}

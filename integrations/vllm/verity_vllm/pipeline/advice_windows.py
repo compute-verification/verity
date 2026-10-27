@@ -61,7 +61,7 @@ from typing import Any
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import advice as AC
 from verity.ml.windows import interface as IF
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
 I1 = "verity.core.protocols.certifier.advice"
@@ -341,7 +341,7 @@ class Options:
     transfer_gate: list[str] = option("--transfer-gate", action="append", default=[],
                                       help="a template the stand-in compiler lists as holding transfer gates, every unit of it proved "
                                            "(repeatable; the partition's law is then work:K)")
-    write_from_workload: str | None = option("--write-from-workload", default=None,
+    write_from_workload: str | None = option("--write-from-workload", type=workload_arg, default=None,
                                              help="first write --advice as the stand-in's advice for this fixed-length workload (`advice_of_workload`)")
     drop: list[str] = option("--drop", action="append", default=[], help="with --write-from-workload: leave this request out (repeatable)")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")

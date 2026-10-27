@@ -753,7 +753,7 @@ class PaddedViewRule(ViewRule):
                     evidence_domain="structural (no gates): a marker's alias is the marker")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.views import _RESHAPE  # noqa: PLC0415
+        from verity_vllm.program.frontend.rules.views import _RESHAPE
         return _RESHAPE
 
     def applies(self, node, ctx):
@@ -762,7 +762,7 @@ class PaddedViewRule(ViewRule):
         v = ctx.val(node.args[0]) if node.args and isinstance(node.args[0], torch.fx.Node) else None
         if not isinstance(v, (PaddedUp, PaddedAct, PaddedDown, PaddedStage)):
             return f"operand is {type(v).__name__}, not a padded-block marker"
-        import math  # noqa: PLC0415
+        import math
         a, b = shape(ctx, node.args[0]), shape(ctx, node)
         if a is None or b is None or math.prod(a) != math.prod(b):
             return f"view {a} -> {b} does not preserve the element count"
@@ -783,7 +783,7 @@ class PaddedSiluAndMulRule(InPlaceRule):
                     evidence_domain="structural; numerics: inside MoeFfnFixedL_v1 (SiluMul_v1{I} of MoeExpertBody_v1)")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for  # noqa: PLC0415
+        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("silu_and_mul")
 
     def applies(self, node, ctx):

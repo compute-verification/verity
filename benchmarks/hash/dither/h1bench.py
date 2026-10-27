@@ -6,9 +6,9 @@ at least this noise, so 1 + noise / plain is a lower bound on its gamma.
     python h1bench.py --lib h1noise.so --out OUT [--reps 5] [--ms ...] [--linears ...] [--js 1,4]
 
 Units are the call's full 32 x 32 tiles (`served_h1/receipts.units`); below 32 rows a call has none, so M = 1 is counted
-as one padded row block (an assumption: the padding rule for decode, VLLM-20 ask 3, is open). Every unit is counted live
-(the dead-unit share is compute accounting's: 52.8% of the static window's units were dead). The 4 SHA-512 compressions
-a unit spends on seed_j and sigma_R themselves are not timed (0.7% of its blocks at K = 4096).
+as one padded row tile (an assumption: the padding rule for decode is open). Every unit is counted live (the
+dead-unit share is the credit's to count). The 4 SHA-512 compressions a unit spends on seed_j and sigma_R themselves are
+not timed.
 
 Arms (each one CUDA graph; noise arms launch the seed_j stream then the sigma_R stream):
   ca-sink, ca-write     served_h1/noise.cu's kernel, hashing only (one XOR word a block) / writing the noise
@@ -35,9 +35,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
 from verity.core.protocols.pouw.circuit import h1tile as HT

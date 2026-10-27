@@ -2,7 +2,7 @@
 
 The Build (`pipeline.build`) traces vLLM's model class on meta with torch.export and lets the binding rules translate each node;
 this module writes the same Program down directly from φ (`phi.Phi`: the checkpoint's `config.json`, the declared target, the
-wrapper shape and the sampling policy), with the same IR calls the derive makes: one `Builder` over the wrapper's user inputs and
+wrapper shape and the sampling policy), with the same circuit-building calls the derive makes: one `Builder` over the wrapper's user inputs and
 the weights record (vLLM's parameters in module order, then its buffers), one call per row of each launch, the vocabulary's kinds
 (`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `frontend.targets`, the flat body wrapped as
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
@@ -32,7 +32,7 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, Callable
 
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
@@ -41,7 +41,8 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, launch_rows, launch_seqlen_q, select_token, served_class
+from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, launch_batch, launch_rows, launch_seqlen_q,
+                     select_token, served_class)
 from .domain import check_phi
 from .phi import Phi
 
@@ -411,6 +412,7 @@ class BuildResult:
     function: str
     n_root_nodes: int
     timings: dict = field(default_factory=dict)
+    named: Any = None     # what a `build_program` `finish` says beside the Program (`naming.Named`)
 
     def summary(self) -> dict:
         return {"wrapper": self.wrapper, "function": self.function, "digest": self.digest,
@@ -673,21 +675,6 @@ class _Decoder:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
-def launch_batch(phi: Phi, LP: int, T: int) -> list | None:
-    """The batch each call of φ's (LP, T) request runs in where its kernel choices read the launch (`launch_context.batch_dispatch`:
-    a target without batch invariance co-scheduling several requests), as the Build is given it (`launch_context.shape_contexts`);
-    None for a request that is its own launch.  Requests of the shape co-scheduled differently have no one Program."""
-    from verity_vllm.pipeline import launch_context as LC
-    w = {"requests": phi.requests, "engine": {"target": {"batch_invariant": phi.target_profile().batch_invariant}}}
-    if not LC.batch_dispatch(w):
-        return None
-    batch = LC.shape_contexts(w).get((int(LP), int(T)))
-    if batch is None or batch == "conflict":
-        raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
-                            f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")
-    return batch
-
-
 def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
           batch: list | None, C: int = 0) -> list[Coll]:
     """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
@@ -706,13 +693,15 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
 
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True, C: int = 0, dead_free: bool = False) -> BuildResult:
+                  with_desc: bool = True, C: int = 0, dead_free: bool = False, finish: Callable | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
     value rows a `prefix` input holds after the request's own; the prefill computes rows C..LP-1. A request on one rank drops its dead
     units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
-    `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread."""
+    `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
+    `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
+    `BuildResult.named`), as `naming.named_program` names a request Program."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
@@ -772,7 +761,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     B.ret_type = out.type
-    body = dead_free_form(B.finish(out))[0] if wrapper == "request" and (world == 1 or dead_free) else B.finish(out)
+    body, names = B.finish(out), None
+    if finish is not None:
+        body, names = finish(body, net, params)
+    elif wrapper == "request" and (world == 1 or dead_free):
+        body = dead_free_form(body)[0]
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
     if world > 1:
@@ -796,4 +789,4 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         timings["encode_digest_s"] = round(time.time() - t2, 3)
     timings["total_s"] = round(time.time() - t0, 3)
     return BuildResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id,
-                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, timings=timings)
+                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, timings=timings, named=names)

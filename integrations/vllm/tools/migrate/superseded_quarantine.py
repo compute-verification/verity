@@ -5,8 +5,7 @@
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py snapshot OUT.json
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py verify BEFORE.json AFTER.json
 
-The plan is note:20261004T2058Z-draft-repo-organization-principles, under Daniel's rulings of 4 Oct 2026: `verity/experimental/` is a
-top-level directory, `verity/` holds only what cited claims depend on, and a superseded catalog Definition version stays only so
+The layout it moves toward: `verity/experimental/` is a top-level directory, `verity/` holds only what cited claims depend on, and a superseded catalog Definition version stays only so
 that old records replay. A superseded version that no kept Program or record names may be deleted, but only after a
 `circuits/<slug>` superseded approach entry citing the last commit that has it is recorded (`commands` prints those entries).
 
@@ -202,7 +201,7 @@ def _lanes(lanes) -> str:
 
 
 PACKAGE_DOC = f'''"""{PACKAGE} — the vLLM registry's quarantine lanes that core does not bind, moved out of
-`{QUARANTINE_MODULE}` (note:20261004T2058Z-draft-repo-organization-principles): {_lanes(MOVE)}.
+`{QUARANTINE_MODULE}`: {_lanes(MOVE)}.
 The lanes core bound ({_lanes(PROMOTED_LANES)}) were promoted into `{REGISTRY_MODULE}`.
 
 Each lane is a sub-package of provisional numerical Definitions pending admission, or of re-exports of Definitions already promoted

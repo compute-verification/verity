@@ -186,7 +186,7 @@ def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
     assert PO.verify(obj, D).ok
 
 
-#: `partition_object.program_sha512` of each, as main computed it at e7b5caa89 before `codec.program_digest` absorbed it
+#: `partition_object.program_sha512` of each, as it was computed before `codec.program_digest` absorbed it
 PROGRAM_SHA512 = {
     ("format_vectors.json", "descriptor"): "8217ea3d075b702f23db9e9a2693cedab39091e7d1f6fd09ae82d42b364d37bd90f27df47ecdbd45bfabd7b0b4ecc1bb219e0fab98e190c83d7fc50c0720876e",
     ("format_vectors.json", "registered_program"): "88ccc55f0fe24f3867b7d668557c042447d688355293adf9a85f283e1376c85a76fbf3cf2bb225d7707b01fe65f9cb99c0be905085cf2597f5705a88b0eca5b6",

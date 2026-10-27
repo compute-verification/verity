@@ -16,7 +16,7 @@ def utilization(step_rows: Sequence[int], rows: int, steps: int) -> Fraction:
 
 @dataclass(frozen=True)
 class Static:
-    """A static H1 window's declaration (VLLM-31's ``sampling.ignore_eos``): requests of ``prompt_lens`` tokens, all admitted
+    """A static H1 window's declaration (the static schedule's ``sampling.ignore_eos``): requests of ``prompt_lens`` tokens, all admitted
     at step 0 and prefilled there in one step, each running exactly ``max_tokens`` steps (no early stop, no preemption, no host
     prefix cache), at T ``rows`` a call and S ``steps``. Each step's rows are then a function of the declaration alone
     (`schedule`), and so is the window's u."""

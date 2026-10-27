@@ -62,7 +62,7 @@ its repair.
 - **The shared definitions it reads.** U is `PeelExact.peelExactVal`, the pinned order of `pearl_c_u.py` at `76134352`:
   it depends on the individual codes through the fused chains, the Gram matrix and P_B's FMA chain, so two operand
   rows with equal exact products can give different U words. The debit's flags are `Skip.unitFlags`, P1's `jointFlags`
-  under G4, whose reference implementation is `pearlc_census.debit` (PR #451, `f6efc6b9`), and `needed` is `Skip.needed`.
+  under G4, whose reference implementation is `pearlc_census.debit` (at `f6efc6b9`), and `needed` is `Skip.needed`.
 - **`sem`.** Its remaining pieces become shared definitions as they land (`Instance.lean`): `noise` (E_A per unit, from
   (salt, A root, B root, unit index); F_A, F_B and E_B per job, from (salt, B root)); `fc`, §5's forming chain; and `alpha`, `beta` and `floor`. P3's salt-dead predicate is the shared `SaltDead.saltDead`.
   `TTOutPearlC` at any other of these is a different assumption; replacing one with the landed definition is a re-grant.

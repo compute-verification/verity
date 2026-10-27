@@ -62,7 +62,7 @@ REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
 (`pous.schemes.p2.ROOT_CALL_NS` is half of it).  Rebuilding a block of `C*` from `W` takes two roots in sequence, so a
 window shorter than one cannot rebuild any block.  The fastest root measured on the RTX PRO 6000 is slower, 18.53 ms
-(floor 2.26 ms, art:f26f917e0605e2974f44a9b0f8ae7f4fe4a78b95181deaf8d8c457ce98c64ad3)."""
+(floor 2.26 ms)."""
 
 FAILURES = ("late", "malformed", "store-path", "tag-path", "tag-mismatch")
 

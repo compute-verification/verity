@@ -1,10 +1,10 @@
 // FIPS 180-4 SHA-512's compression for the serve-time commit (engine.py), on the device and the host, every word a
 // big-endian u64. `compress<V, ROLL>(st, w)` has `sha::compress`'s contract (benchmarks/pouw/commit_gpu/sha512.cuh): it
-// advances the chaining value st by the block w, and the schedule overwrites w.
+// advances the chaining value st by the chunk w, and the schedule overwrites w.
 //
 // The rounds are p2keys4.cuh's (benchmarks/pous/p2_v1/p2keys4.cuh, `chunk`; copied, not included: the names a .. h rotate
 // through the round macro instead of moving, Ch is g ^ (e & (f ^ g)), the schedule runs in place over 16 words), with a
-// whole message schedule instead of P2's mostly zero counter block.
+// whole message schedule instead of P2's mostly zero counter chunk.
 //
 // V picks the pipe of each sigma's shifts, two bits each (S0 | S1 << 2 | s0 << 4 | s1 << 6): 0 funnel shifts on the integer
 // ALU, 1 the high half of each rotation and shift as mul.hi / mad.lo by 2^k on the FMA pipe and the low half a funnel shift,
@@ -14,16 +14,26 @@
 // multiply back into a shift. On the host every V is the plain function.
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
-// instruction fetch), 0 straight-line.
+// instruction fetch), 0 straight-line, 2 all 80 rounds as codec_tensor/sha512.cuh's sha512_compress, statement for
+// statement: two thirds of ROLL 1's SASS, faster than it in dither's h1c and h1r, slower in its h1u.
 #pragma once
 #include <cstdint>
 #include <cstring>
 
+// a host build's own definitions stand (hash_host.cpp's __constant__ is static const)
 #ifndef __CUDACC__
+#ifndef __host__
 #define __host__
+#endif
+#ifndef __device__
 #define __device__
+#endif
+#ifndef __forceinline__
 #define __forceinline__ inline
+#endif
+#ifndef __constant__
 #define __constant__
+#endif
 #endif
 
 #define SX_HD __host__ __device__ __forceinline__
@@ -51,13 +61,17 @@ using u32 = uint32_t;
       0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,   \
       0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull
 
+// SX_K_LIST stays defined for a constexpr copy, whose round constants are immediates (dither's h1sha.cuh)
 __constant__ u64 K_DEV[80] = {SX_K_LIST};
 static const u64 K_HOST[80] = {SX_K_LIST};
-#undef SX_K_LIST
 
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
+// the IV as constant operands, for a caller slower with iv's immediates (dither's h1r, its noise from a midstate)
+__constant__ u64 IV_DEV[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull,
+                              0xa54ff53a5f1d36f1ull, 0x510e527fade682d1ull, 0x9b05688c2b3e6c1full,
+                              0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
 SX_HD const u64* kconst() {
 #ifdef __CUDA_ARCH__
   return K_DEV;
@@ -66,7 +80,11 @@ SX_HD const u64* kconst() {
 #endif
 }
 
-SX_HD void iv(u64* st) {
+// a 64-bit unsigned word type: uint64_t, or unsigned long long where a caller's arrays are that
+template <class W> constexpr bool word64 = sizeof(W) == 8 && W(0) < W(-1);
+
+template <class W> SX_HD void iv(W* st) {
+  static_assert(word64<W>, "64-bit unsigned words");
   st[0] = 0x6a09e667f3bcc908ull; st[1] = 0xbb67ae8584caa73bull; st[2] = 0x3c6ef372fe94f82bull; st[3] = 0xa54ff53a5f1d36f1ull;
   st[4] = 0x510e527fade682d1ull; st[5] = 0x9b05688c2b3e6c1full; st[6] = 0x1f83d9abfb41bd6bull; st[7] = 0x5be0cd19137e2179ull;
 }
@@ -160,8 +178,9 @@ template <int M> SX_HD u64 s1(u64 w) { return rotr<M, 19>(w) ^ rotr<M, 61>(w) ^ 
 SX_HD u64 ch(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
 SX_HD u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
 
-template <int V, int ROLL>
-SX_HD void compress(u64* st, u64* W) {
+template <int V, int ROLL, class Word>
+SX_HD void compress(Word* st, Word* W) {
+  static_assert(word64<Word>, "64-bit unsigned words");
   constexpr int M0 = V & 3, M1 = (V >> 2) & 3, m0 = (V >> 4) & 3, m1 = (V >> 6) & 3;
   const u64* K = kconst();
   u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
@@ -183,25 +202,42 @@ SX_HD void compress(u64* st, u64* W) {
   SX_ROUND(c, d, e, f, g, h, a, b, K[(tk) + 6] + wf((tw) + 6));                                                            \
   SX_ROUND(b, c, d, e, f, g, h, a, K[(tk) + 7] + wf((tw) + 7))
 #define SX_RAW(j) W[(j)]
-  SX_EIGHT(0, 0, SX_RAW);
-  SX_EIGHT(8, 8, SX_RAW);
-  if constexpr (ROLL) {
+  if constexpr (ROLL == 2) {
 #ifdef __CUDA_ARCH__
 #pragma unroll 1
 #endif
-    for (int t = 16; t < 80; t += 16) {
-      SX_EIGHT(t, 0, SX_W);
-      SX_EIGHT(t + 8, 8, SX_W);
+    for (int r = 0; r < 80; r += 16) {
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+      for (int t = 0; t < 16; ++t) {
+        if (r) W[t] += s0<m0>(W[(t + 1) & 15]) + W[(t + 9) & 15] + s1<m1>(W[(t + 14) & 15]);
+        const u64 t1 = h + S1<M1>(e) + ((e & f) ^ (~e & g)) + K[r + t] + W[t];
+        const u64 t2 = S0<M0>(a) + ((a & b) ^ (a & c) ^ (b & c));
+        h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+      }
     }
   } else {
-    SX_EIGHT(16, 0, SX_W);
-    SX_EIGHT(24, 8, SX_W);
-    SX_EIGHT(32, 0, SX_W);
-    SX_EIGHT(40, 8, SX_W);
-    SX_EIGHT(48, 0, SX_W);
-    SX_EIGHT(56, 8, SX_W);
-    SX_EIGHT(64, 0, SX_W);
-    SX_EIGHT(72, 8, SX_W);
+    SX_EIGHT(0, 0, SX_RAW);
+    SX_EIGHT(8, 8, SX_RAW);
+    if constexpr (ROLL) {
+#ifdef __CUDA_ARCH__
+#pragma unroll 1
+#endif
+      for (int t = 16; t < 80; t += 16) {
+        SX_EIGHT(t, 0, SX_W);
+        SX_EIGHT(t + 8, 8, SX_W);
+      }
+    } else {
+      SX_EIGHT(16, 0, SX_W);
+      SX_EIGHT(24, 8, SX_W);
+      SX_EIGHT(32, 0, SX_W);
+      SX_EIGHT(40, 8, SX_W);
+      SX_EIGHT(48, 0, SX_W);
+      SX_EIGHT(56, 8, SX_W);
+      SX_EIGHT(64, 0, SX_W);
+      SX_EIGHT(72, 8, SX_W);
+    }
   }
 #undef SX_RAW
 #undef SX_EIGHT
@@ -210,8 +246,8 @@ SX_HD void compress(u64* st, u64* W) {
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
 
-// K[t] + W[t] for the block that ends a 256-byte message (0x80, zeros, the bit length 2048): every word is a constant, so
-// the whole schedule is (hm96's h ends with this block)
+// K[t] + W[t] for the chunk that ends a 256-byte message (0x80, zeros, the bit length 2048): every word is a constant, so
+// the whole schedule is (hm96's h ends with this chunk)
 #define SX_KW_PAD256_LIST                                                                                              \
   0xc28a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull,                          \
       0x3956c25bf348b538ull, 0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull,                      \
@@ -246,8 +282,8 @@ SX_HD const u64* kw_pad256() {
 #endif
 }
 
-// compress's rounds alone, over a block whose K[t] + W[t] are given (kw_pad256): the chaining value compress gives over that
-// block, without its schedule
+// compress's rounds alone, over a chunk whose K[t] + W[t] are given (kw_pad256): the chaining value compress gives over that
+// chunk, without its schedule
 template <int V, int ROLL>
 SX_HD void compress_kw(u64* st, const u64* KW) {
   constexpr int M0 = V & 3, M1 = (V >> 2) & 3;
@@ -286,6 +322,17 @@ SX_HD void compress_kw(u64* st, const u64* KW) {
 #undef SX_EIGHT_KW
 #undef SX_ROUND
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
+
+// compress_kw's K[t] + W[t] for the block w (w is not changed): for a block that every slot hashes alike, computed once
+SX_HD void kw_of(const u64* w, u64* kw) {
+  const u64* K = kconst();
+  u64 W[16];
+  for (int t = 0; t < 16; ++t) W[t] = w[t];
+  for (int t = 0; t < 80; ++t) {
+    if (t >= 16) W[t & 15] += s1<0>(W[(t + 14) & 15]) + W[(t + 9) & 15] + s0<0>(W[(t + 1) & 15]);
+    kw[t] = K[t] + W[t & 15];
+  }
 }
 
 }  // namespace sx

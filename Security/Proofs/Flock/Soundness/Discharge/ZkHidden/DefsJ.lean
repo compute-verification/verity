@@ -99,11 +99,12 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
   all_goals first
     | (have hdn : draw = none := Tables.draw_none ‹draw.mapM Draw.UnitDraw.ofJson = .ok none›
        exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
-         fun _ => rfl, hpos, hmod, hsz, hall⟩)
+         fun _ => rfl, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩)
     | (have hdu : draw.mapM Draw.UnitDraw.ofJson = .ok (some _) := ‹_›
        obtain ⟨hD1, hD2⟩ := Tables.draw_split hdu
          (by first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, _, by assumption⟩) (by assumption)
-       exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz, hall⟩)
+       exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz,
+         fun j hj => ok_of_refuse (hall j hj)⟩)
 
 end Parts
 
@@ -381,13 +382,22 @@ theorem tableShHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
   · rw [tableShHJ_refused dj y₀ h]
     exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
 
-/-- A hidden-output acceptance at `T`, as one at `T' = T`. -/
-def recastAccH {T T' : Model.Statement} (a : AcceptedH T) (e : T = T') : AcceptedH T' := { a with hT := a.hT.trans e }
+/-- A hidden-output acceptance at `T`'s twin, as one at `T' = T`'s. -/
+def recastAccH {T T' : Model.Statement} {A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)}
+    (a : AcceptedH (HiddenExec.twin T A B)) (e : T = T') :
+    AcceptedH (HiddenExec.twin T' (HiddenExec.castM e A) (HiddenExec.castM e B)) :=
+  { a with hT := a.hT.trans (HiddenExec.twin_cast e A B) }
 
 variable (hscope : Layout.scopeOkH c = true)
 
 /-- **The public plan's sites**: each drawn unit's acceptance, VU and block are its table's public table's. -/
 noncomputable def sitesShHJ : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := HiddenExec.castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
+  B S R u _ := HiddenExec.castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
+  sat S R u _ := HiddenExec.twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _))
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)
       (rowsFit_of_scopeH (zkTyped ht) hc hscope))
@@ -408,7 +418,8 @@ variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) 
   (hpt : pub.tables = none)
 
 omit ht in
-theorem bcSiteH_recast {T T' : Model.Statement} (a : AcceptedH T) (e : T = T') (pop : Public)
+theorem bcSiteH_recast {T T' : Model.Statement} {A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)}
+    (a : AcceptedH (HiddenExec.twin T A B)) (e : T = T') (pop : Public)
     (o : Fin (2 ^ T.nbl)) (h' : 2 ^ T.nbl = 2 ^ T'.nbl) (g u : ℕ) (hs : BcSiteH a pop o g u) :
     BcSiteH (recastAccH a e) pop (Fin.cast h' o) g u :=
   hs

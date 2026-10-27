@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof, env as engine_env, handle
 
 prof.apply_env()
@@ -72,7 +72,7 @@ def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_qwen15_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_qwen15_32x16_1req.json")
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)

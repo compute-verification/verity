@@ -62,7 +62,7 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity.ml.definitions.registry import b1, cublas_bf16, cublas_gemv
 from verity.ml.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
@@ -722,7 +722,7 @@ class BuildOptions:
     split_graph: str = option("--split-graph", help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone)")
     launch_configs: str = option("--launch-configs", help="ServedCompiledSource.launch_configs() of the serving process (json)")
     routes: str | None = option("--routes", default=None, help="cuBLAS routes of the serving GPU (`served routes`); without, every GEMM is missing")
-    workload: str = option("--workload", help="sweep workload json: the request schedule")
+    workload: str = option("--workload", type=workload_arg, help="sweep workload json: the request schedule")
     steps: int | None = option("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
     capture_sizes: str = option("--capture-sizes", help="compilation_config.cudagraph_capture_sizes, comma-separated")
     max_num_seqs: int = option("--max-num-seqs", type=int)

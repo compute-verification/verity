@@ -800,7 +800,7 @@ def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, 
 
 
 def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_session():
-    """CMP-81 under LIVESALT2. An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
+    """An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
     session the auditor's ledger reserved, opened on its salt epoch's root and ended complete, having released that coin
     alone, and the verifier's seeded coins play no part. Refused: a verifier that holds no ledger, the session opened on
     another root (a random one, or H1's window-open root), #3868's session (H1's layout, ended incomplete), an end that

@@ -8,7 +8,7 @@ from verity.ml.circuits import codec
 from verity.ml.circuits import constants as K
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.boolean import is_boolean
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation import evaluate_region
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
 from verity.ml.circuits.refs import tuple_of

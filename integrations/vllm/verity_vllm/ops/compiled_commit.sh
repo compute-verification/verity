@@ -29,6 +29,7 @@ export VERITY_TREE=$TREE_SELF
 cd "$VERITY_TREE" || exit 1
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; mkdir -p "$D"
 WL=workloads/$ROW.json
+"${PY%/*}/verity-vllm" workload-file "$WL" > /dev/null || exit 2
 # [M-0779] fail CLOSED: a bi-compiled row's workload must DECLARE the compiled target (target.compilation, from workload.py --target
 # <device>:piecewise) -- with no target block target_of_workload() returns None, target_mismatches() checks nothing, and the engine
 # (built compiled by the explicit engine args below) would run UNDECLARED: a record without the TargetProfile of record.

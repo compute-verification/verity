@@ -4,7 +4,7 @@ import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Accounting.ComposePeriod.Covers
 
 /-!
-# PoUW's work over an accounting period: proofs
+# PoUW's work over a monitoring period: proofs
 
 `Accounting.Guarantees.ComposePeriod.PeriodBudget` is proved here: a window's `serviceGame` is one round
 `.round d pass (fun _ => .done)`, `periodGame` puts the next window's game in place of its end (`consGame`), and

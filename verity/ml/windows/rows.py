@@ -1,5 +1,5 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in C-Flock's statement row leaf
-format (``verity_flock.circuit``'s statement rows, PR #83), with the registration, C-Flock's public and prover files and the
+format (``verity_flock.circuit``'s statement rows), with the registration, C-Flock's public and prover files and the
 labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
@@ -13,11 +13,12 @@ an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
 consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
-ports in M0's order.  Each output port is a row too, after the member's input rows: its words zero-padded to whole SHA-512
-blocks, committed under its own salt like an input row (an output is a value: no output word is ever public).  A bit-row member
+ports in the order of C-Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
+input rows: its words zero-padded to whole SHA-512 blocks, committed under its own salt like an input row (an output is a
+value: no output word is ever public).  A bit-row member
 (C-Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
 ``…/row-seg/v1``), each output row exactly its words.  Per row of ``hm96-sha512/row/v1``
-(``tests/commit/test_serving_rows.py`` pins it to core and to M0's vector):
+(``tests/commit/test_serving_rows.py`` pins it to core and to the circuit prover's vector):
 
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
@@ -34,9 +35,9 @@ from the registration and the Commit's record (``expected_ports``).  The leaf la
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
 directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here, its SHA-512 in the
 window's provenance), per member
-``m<k>-public.bin`` and ``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``m<k>-units.json``
-(its global unit indices), and ``window.json``; ``flock_inputs.flock_input_files`` wraps
-member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
+``m<k>-public.bin`` and ``m<k>-private.bin`` (the circuit prover's public and prover bodies; the private one is prover
+only) and ``m<k>-units.json`` (its global unit indices), and ``window.json``; ``flock_inputs.flock_input_files`` wraps
+member ``k``'s bodies as the circuit prover's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
 
 A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
@@ -98,6 +99,18 @@ TABLE_SCHEMA, TABLE_PORT, LINKED = SCHEMA_HM96_SHA512_ROW_SEG, "row-table", "x"
 ROOTS_SCHEMA = RT.ROOTS_SCHEMA
 #: ``window.json``'s key for a segment's index in its ``row_table_steps``: its bytes predate the name (a later rename)
 SEGMENT_KEY = "engine_step"
+#: `commit`'s rows of a wired input port given by reference: its writers' output rows (`Member.wired`), their salts and
+#: ``b || c`` taken, never hashed again
+WIRED = "wired"
+
+
+@dataclass(frozen=True)
+class ValueRows:
+    """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
+    (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
+    under the value's salts, so each row's ``b || c`` is the value's."""
+    value: Any
+    positions: tuple[int, ...]
 
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
@@ -206,7 +219,8 @@ _JOB: dict[str, Any] = {}
 
 
 def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
-    """Ranks [start, start + size) of one port (pads past its count) folded to one node; and, for a row port, their ``b || c``."""
+    """Ranks [start, start + size) of one port (pads past its count) folded to one node; and, for a row port, their ``b || c``
+    (a ``string`` port's are given)."""
     port, start, size = task
     j = _JOB["ports"][port]
     fr, n = _Frame(j["domain_id"]), j["count"]
@@ -226,6 +240,9 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
             out += s
             leaves.append(fr.leaf(start + i, schema, _copy_update(leaf_h, s)))
         bc = bytes(out)
+    elif j["kind"] == "string" and hi > start:
+        s, leaf_h = memoryview(j["strings"]), _JOB["leaf_h"]
+        leaves = [fr.leaf(i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
     elif j["kind"] == "word" and hi > start:
         w = j["words"][start:hi].astype(">u2").tobytes()
         leaves = [fr.leaf(start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
@@ -237,9 +254,9 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
 
 @dataclass(frozen=True)
 class Member:
-    """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in M0's
-    order, its instance count and the global index of its first unit.  A template is one member, or consecutive chunks of its
-    units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
+    """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in the
+    circuit prover's order, its instance count and the global index of its first unit.  A template is one member, or
+    consecutive chunks of its units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
     member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, C-Flock's ``row_schemas``), each row the bits
     of its u16 words and each output row exactly its words; else every row is ``hm96-sha512/row/v1``."""
     template: str
@@ -279,13 +296,13 @@ class Member:
 
     @property
     def out_rows(self) -> tuple[tuple[str, int], ...]:
-        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as M0's ``out_row``; a bit-row
-        member's, exactly its words."""
+        """Each output port's row: its words zero-padded to whole SHA-512 blocks (64 words each), as the circuit prover's
+        ``out_row``; a bit-row member's, exactly its words."""
         return tuple((p, w if self.schemas else -(-w // 64) * 64) for p, w in self.outs)
 
     @property
     def all_rows(self) -> tuple[tuple[str, int], ...]:
-        """M0's rows: the input rows, then one output row per output port."""
+        """The circuit prover's rows: the input rows, then one output row per output port."""
         return self.rows + self.out_rows
 
     def schema(self, port: str) -> str:
@@ -293,7 +310,7 @@ class Member:
 
     @property
     def row_schemas(self) -> list[list[Any]] | None:
-        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in M0's order."""
+        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in the circuit prover's order."""
         return [[self.schema(p), 16 * w] for p, w in self.all_rows] if self.schemas else None
 
     def port(self, name: str) -> str:
@@ -440,17 +457,17 @@ class Committed:
     domains: dict[str, CommitmentDomain]
     bc: dict[str, bytes]               # per row port: every row's b || c, concatenated
     salts: dict[str, bytes]            # per row port: every row's salt (private)
-    rows: dict[str, np.ndarray]        # per row port, the output rows included: (n, words) u16 (private)
+    rows: Mapping[str, np.ndarray]     # per row port, the output rows included: (n, words) u16 (private; `_Rows`)
     seconds: dict[str, Any]
     refs: dict[int, np.ndarray] = field(default_factory=dict)   # per shared-row member k: (n, rows) table refs, output rows' own
     table_roots: dict[str, bytes] = field(default_factory=dict)  # per row table port: its root (the segment tree's leaf)
     segment_roots: dict[int, bytes] = field(default_factory=dict)  # per segment: its root (the row-table port's leaf)
 
     def public_body(self, k: int) -> bytes:
-        """Member ``k``'s public body, as M0's ``write()`` lays it out: every instance's ``b || c`` (its input rows, then its
+        """Member ``k``'s public body, as the circuit prover's ``write()`` lays it out: every instance's ``b || c`` (its input rows, then its
         output rows), instance-major; nothing else."""
         m = self.window.members[k]
-        if m.tables:                     # M0's shared-row body: every table row's b || c (port-major), refs (u32, instance-major)
+        if m.tables:                     # the circuit prover's shared-row body: every table row's b || c (port-major), refs (u32, instance-major)
             return b"".join(self.bc[m.port(p)] for p, _ in m.all_rows) + np.ascontiguousarray(self.refs[k]).astype("<u4").tobytes()
         bc = np.concatenate([np.frombuffer(self.bc[m.port(p)], dtype=np.uint8).reshape(m.n, BC_BYTES) for p, _ in m.all_rows], axis=1)
         return bc.tobytes()
@@ -475,7 +492,7 @@ class Committed:
         return np.ascontiguousarray(self.rows[p]).astype("<u2").tobytes() + self.salts[p]
 
     def frame_entry(self, k: int) -> dict[str, Any]:
-        """M0's header ``frame_v3`` entry for member ``k``: its bare port names, as M0's statement reads them."""
+        """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them."""
         m = self.window.members[k]
         names = [p for p, _ in m.all_rows]
         return {"frame": "frame-v3-sha512", "roots": {p: self.roots[m.port(p)].hex() for p in names},
@@ -499,11 +516,18 @@ def _inner(schema: str, words: int) -> Any:
 
 
 def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarray], words: dict[str, np.ndarray], ys: dict[str, bytes], *,
-                 workers: int = 1, chunk: int = CHUNK, schemas: Mapping[str, str] | None = None) -> tuple[dict[str, bytes], dict[str, bytes]]:
-    """Roots of row ports (``rows[p]``: (count, words) u16, salts ``ys[p]``, schema ``schemas[p]``, else ``hm96-sha512/row/v1``)
-    and word ports (``words[p]``: u16, flattened), each under its domain; and every row's ``b || c``.  Equal to core's
-    ``FrameV3.root`` over ``row_leaf`` / word leaves."""
+                 workers: int = 1, chunk: int = CHUNK, schemas: Mapping[str, str] | None = None,
+                 strings: Mapping[str, bytes] | None = None) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """Roots of row ports (``rows[p]``: (count, words) u16, salts ``ys[p]``, schema ``schemas[p]``, else ``hm96-sha512/row/v1``),
+    of row ports whose rows' ``b || c`` are given (``strings[p]``, concatenated) and of word ports (``words[p]``: u16,
+    flattened), each under its domain; and every row's ``b || c``.  Equal to core's ``FrameV3.root`` over ``row_leaf`` / word
+    leaves."""
     ports: dict[str, dict[str, Any]] = {}
+    for p, s in (strings or {}).items():
+        if len(s) != domains[p].count * BC_BYTES:
+            raise ValueError(f"{p}: {len(s)} bytes of strings, not {domains[p].count} rows' b || c")
+        ports[p] = {"kind": "string", "count": domains[p].count, "domain_id": domains[p].domain_id, "strings": bytes(s),
+                    "schema": _part((schemas or {}).get(p, ROW_SCHEMA).encode())}
     for p, r in rows.items():
         r = np.ascontiguousarray(r).astype("<u2")
         s = (schemas or {}).get(p, ROW_SCHEMA)
@@ -534,7 +558,57 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
         roots[p] = _Frame(j["domain_id"]).reduce([node for _, node, _ in mine], 0, (size - 1).bit_length())
         if j["kind"] == "row":
             bc[p] = b"".join(b for _, _, b in mine)
+        elif j["kind"] == "string":
+            bc[p] = j["strings"]
     return roots, bc
+
+
+def _wire(m: Member, port: str) -> tuple[str, str, tuple[int, ...]]:
+    return next(w for w in m.wired if w[0] == port)
+
+
+def _by_reference(members: Sequence[Member], src: Any, ys: Mapping[str, bytes], bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
+    """A port given by reference (`commit`): its rows' salts and ``b || c``, its source's (a `ValueRows`' value's, or a wired
+    port's writers' output rows', from their committed ``ys`` and ``bc``)."""
+    if isinstance(src, ValueRows):
+        v = src.value
+        return b"".join(bytes(v.salts[i]) for i in src.positions), b"".join(bytes(v.bcs[i]) for i in src.positions)
+    m, port = src
+    _p, o, ws = _wire(m, port)
+    y, s = np.empty((m.n, SALT_BYTES), dtype=np.uint8), np.empty((m.n, BC_BYTES), dtype=np.uint8)
+    for wm, mine, theirs in WI._writers(members, ws):
+        y[mine] = np.frombuffer(ys[wm.port(o)], dtype=np.uint8).reshape(wm.n, SALT_BYTES)[theirs]
+        s[mine] = np.frombuffer(bc[wm.port(o)], dtype=np.uint8).reshape(wm.n, BC_BYTES)[theirs]
+    return y.tobytes(), s.tobytes()
+
+
+class _Rows(Mapping):
+    """A commit's rows by port (`commit`): the arrays given, and each port given by reference read off its source when it is
+    read (a value's rows, or a wired port's writers' output rows), never held."""
+
+    def __init__(self, members: Sequence[Member], rows: Mapping[str, np.ndarray], refd: Mapping[str, Any], order: tuple[str, ...]):
+        self._members, self._rows, self._refd, self._order = members, rows, refd, order
+
+    def __getitem__(self, port: str) -> np.ndarray:
+        if port in self._rows:
+            return self._rows[port]
+        src = self._refd[port]
+        if isinstance(src, ValueRows):
+            r, at = src.value.rows, np.asarray(src.positions, dtype=np.int64)
+            a = r[at] if isinstance(r, np.ndarray) else [r[i] for i in src.positions]
+            return np.asarray(a, dtype=np.uint16).reshape(len(src.positions), src.value.words)
+        m, p = src
+        _p, o, ws = _wire(m, p)
+        out = np.empty((m.n, dict(m.rows)[p]), dtype=np.uint16)
+        for wm, mine, theirs in WI._writers(self._members, ws):
+            out[mine] = self[wm.port(o)][theirs]
+        return out
+
+    def __iter__(self) -> Any:
+        return iter(self._order)
+
+    def __len__(self) -> int:
+        return len(self._order)
 
 
 def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarray]:
@@ -562,20 +636,42 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
 
     ``salt_key``: tests only; an integration draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
-    ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`)."""
+    ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
+
+    An input port's rows may be given by reference, in a window with no row tables: `WIRED` for a wired port (its writers'
+    output rows) or a `ValueRows` (rows of a registered value). Their rows are never held or hashed: each row's salt and
+    ``b || c`` are its source's, so the commitment is the one their rows given in full make, and the committed rows (`_Rows`)
+    are read off the sources when a body is written."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
         raise ValueError(f"{sum(m.n for m in ms)} units in {len(ms)} members; the registered population is {window.population}")
-    rows, refs, schemas = {}, {}, {}
+    rows, refs, schemas, counts, refd = {}, {}, {}, {}, {}
     for k, (m, dk) in enumerate(zip(ms, data, strict=True)):
-        count = dict(m.tables)
+        count, wired = dict(m.tables), {p for p, _o, _ws in m.wired}
         for kind, ports in (("rows", m.rows), ("outs", m.outs)):
             if set(dk[kind]) != {p for p, _ in ports}:
                 raise ValueError(f"{m.key}: {kind} {sorted(dk[kind])} are not {[p for p, _ in ports]}")
             for p, words in ports:
-                a = np.asarray(dk[kind][p], dtype=np.uint16)
+                src = dk[kind][p]
                 want = (count.get(p, m.n) if kind == "rows" else m.n, words)
+                schemas[m.port(p)], counts[m.port(p)] = m.schema(p), want[0]
+                if kind == "rows" and (isinstance(src, ValueRows) or (isinstance(src, str) and src == WIRED)):
+                    if isinstance(src, str) and p not in wired:
+                        raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
+                    if isinstance(src, ValueRows):
+                        v, have = src.value, len(src.value.rows)
+                        why = [reason for reason, bad in (
+                            (f"{len(src.positions)} rows, not {want[0]}", len(src.positions) != want[0]),
+                            (f"rows of {v.words} words, not {words}", v.words != words),
+                            (f"{v.word_bits}-bit leaves, not 16", v.word_bits != 16),
+                            (f"{v.schema} rows, not {m.schema(p)}", v.schema != m.schema(p)),
+                            (f"positions outside its {have} rows", not all(0 <= i < have for i in src.positions))) if bad]
+                        if why:
+                            raise ValueError(f"{m.port(p)}: a registered value's rows given by reference: {'; '.join(why)}")
+                    refd[m.port(p)] = src if isinstance(src, ValueRows) else (m, p)
+                    continue
+                a = np.asarray(src, dtype=np.uint16)
                 blocks = kind == "rows" and m.schema(p) == ROW_SCHEMA
                 if a.shape != want or (blocks and (2 * words) % 128):
                     raise ValueError(f"{m.port(p)}: {a.shape} is not {want[0]} x {words}" + (" words of whole SHA-512 blocks" if blocks else ""))
@@ -595,11 +691,15 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     if segment_roots is not None and row_salt_key is None:
         raise ValueError("recorded segment roots are checked under the run's row key: give row_salt_key")
     if any(p not in rows or len(s) != len(rows[p]) * SALT_BYTES for p, s in (salts_of or {}).items()):
-        raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the window's ports")
+        raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the window's ports "
+                         "given in full")
+    if refd and window.row_tables:
+        raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a window with row tables, whose linked "
+                         "members' rows are read off their x tables: give every row")
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
-    ys = {p: (salts_of or {}).get(p) or salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
+    ys = {p: (salts_of or {}).get(p) or salts(key, k, n) for k, (p, n) in enumerate(counts.items()) if p not in refd}
     del key
-    domains = {p: window.domain(p, schemas[p], len(a)) for p, a in rows.items()}
+    domains = {p: window.domain(p, schemas[p], n) for p, n in counts.items()}
     rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
         rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
@@ -611,9 +711,18 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     for m in ms:
         if m.links:
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
-    WI.salts(ms, rows, ys)
+    WI.salts(ms, rows, ys, skip=refd)
     t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
+    if refd:
+        strings = {}
+        for p, src in refd.items():
+            ys[p], strings[p] = _by_reference(ms, src, ys, bc)
+        more, _ = commit_ports(domains, {}, {}, {}, workers=workers, chunk=chunk, schemas=schemas, strings=strings)
+        roots |= more
+        roots = {p: roots[p] for p in counts}
+        bc |= strings
+        rows = _Rows(ms, rows, refd, tuple(counts))
     table_roots = {t.port: roots.pop(t.port) for t in window.row_tables}
     segs = {s: window.segment_root(s, [table_roots[window.row_tables[k].port] for k in ks]) for s, ks in window.segments}
     if segment_roots is not None:

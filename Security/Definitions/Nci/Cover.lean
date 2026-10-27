@@ -10,7 +10,7 @@ at most `s` gates, each reading at most `k` bits besides the registered paramete
 The cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
 training circuit needs many blocks. Nothing here reads what a gate computes, only the wiring.
 
-Daniel's covering bound (`Nci.Guarantees.CoveringBoundTwoCosts`) is stated in `Nci.Covering`'s vocabulary, over a
+The covering bound (`Nci.Guarantees.CoveringBoundTwoCosts`) is stated in `Nci.Covering`'s vocabulary, over a
 declaration's gates. This one is the bare wiring, so that it also reads a declaration bit by bit (`Circuit.ofDecl`), and
 its products carry a use and an updated parameter, so that one parameter's many uses (fan-out) and a token's keyed
 lookups (`Keyed`) can be counted. On a declaration's gates the two agree: its inference blocks and covers are

@@ -2,7 +2,7 @@
 ``the same GEMM inside the replayed model``).
 
 ``independent_gemm(node, opened_inputs) -> bytes`` predicts the committed bytes of one GEMM
-output row (the default VU: one node instance at one position) from the description node and
+output row (the default proof block: one node instance at one position) from the description node and
 the authenticated openings of its inputs, using nothing but the explicit numerical model
 measured in this lane:
 
@@ -20,12 +20,10 @@ The checker never runs the runtime; it is C++/OpenMP over the opened words (``cp
 pure Python for the scalar gate ``independent_gemm_coordinate`` (one output coordinate from the
 opened input row and one opened weight column).
 
-Interface.  W2's harness (``verity_vllm.program.relations``) fills its registered slots ``gemm.bf16.v1`` and
-``lm_head.bf16.v1`` from this module when it loads (`register_with_w2`) and adds ``gemm.bf16.coordinate.v1``; the checkers
-then receive a ``NodeInstance`` and a mapping of
-argument names to authenticated ``Value`` objects.  Without W2's package the same functions
-accept a plain node mapping and ``opened_inputs`` keyed by argument name *or* canonical id, with
-values as ``Value``-likes, ``numpy`` ``uint16`` arrays or raw little-endian bytes.
+Interface.  ``RELATIONS`` maps ``gemm.bf16.v1``, ``lm_head.bf16.v1`` and ``gemm.bf16.coordinate.v1`` to
+their checkers (:func:`register` installs them into a registry).  A checker takes a node (a ``NodeInstance``-like
+or a plain node mapping) and ``opened_inputs`` keyed by argument name *or* canonical id, with values as
+``Value``-likes, ``numpy`` ``uint16`` arrays or raw little-endian bytes.
 
 How the epilogue is chosen (the model must be told, it must not guess by trying both):
 
@@ -41,7 +39,7 @@ How the epilogue is chosen (the model must be told, it must not guess by trying 
 
 W1's GEMM node (``verity.bi_mm``) opens ``x`` = the producer's row (with ``extra["arg_cols"]["x"]``
 = the column slice when the producer is wider) and ``w`` = the *parameter* leaf in its own
-``[N, K]`` layout (the runtime saw ``weight.t()``; W1's own checker transposes back).  The row VU
+``[N, K]`` layout (the runtime saw ``weight.t()``; W1's own checker transposes back).  The row proof block
 is ``M = 1``: one opened input row -> the ``N`` BF16 words of one output row.
 
 A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``attrs.split_k``)
@@ -363,7 +361,7 @@ def coverage(node: Any, opened_inputs: Mapping[str, Any]) -> dict[str, Any]:
     if arch_note is None:
         return {"covered": False, "family": None, "kernel_path": impl, "spec": None, "reason": f"unresolved: no validated per-instruction model for arch {arch!r}"}
     explicit_split = _const(n, opened_inputs, "split_k")
-    # Capture format v2 (W3c): a coordinate VU opens one *row block* of the parameter (a column
+    # Capture format v2 (W3c): a coordinate proof block opens one *row block* of the parameter (a column
     # of W^T), so the opened N is the block height, not the launch's N.  The description declares
     # the launch's N (``consts.N`` or the node's output width) and the family is looked up there;
     # the arithmetic of one column of a single-chain kernel is the same chain.
@@ -475,26 +473,6 @@ RELATION_IDS = {
     "gemm.bf16.coordinate.v1": ("gemm", independent_gemm_coordinate, "Scalar gate: one coordinate of gemm.bf16.v1 from the opened input row and weight column, pure-Python tc_dot chain."),
 }
 RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()}
-
-
-def register_with_w2(R: Any, replace: bool = False) -> list[str]:
-    """Fill W2's slots in ``R`` (``verity_vllm.program.relations``, which calls this when it loads); returns the ids
-    registered."""
-    done = []
-    for rid, (op_type, fn, doc) in RELATION_IDS.items():
-        existing = R.REGISTRY.get(rid)
-        if existing is not None and existing.implemented and not replace:
-            continue
-
-        def _wrap(inst, inputs, _fn=fn):
-            try:
-                return _fn(inst, inputs)
-            except GemmRelationError as error:
-                raise R.RelationError(str(error)) from error
-
-        R.register(rid, klass=R.INDEPENDENT, op_type=op_type, includes_full_op=False, version=MODEL_VERSION, doc=doc, owner="W4", replace=replace)(_wrap)
-        done.append(rid)
-    return done
 
 
 def register(registry: Any) -> None:

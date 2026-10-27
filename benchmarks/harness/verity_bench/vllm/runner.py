@@ -18,8 +18,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
-from verity_vllm.engine.env import INDUCTOR_DIR_MARK
+from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_target
 
+from verity_bench import settings
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
                                     window_steps)
@@ -37,7 +38,7 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8:
 # run's trailing device work is too large to attribute, and the decode metric is dropped.
 DECODE_TAIL_SHARE = 0.01
 # Past a spec's `warmups`, an engine warms until two consecutive runs' wall times differ by at most this share. On a host
-# at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
+# at load 600-900 a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
 # seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
 WARMUP_AGREEMENT = 0.05
 # `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
@@ -297,7 +298,7 @@ def _record(
 def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, max_warmups: int, schedule: list[dict[str, Any]],
           entry: Mapping[str, Any]) -> None:
     """`warmups` discarded runs, then more, up to `max_warmups` in all, until the last two runs' wall times agree within
-    WARMUP_AGREEMENT. An engine whose first runs stall (18 Oct: the bandwidth arms' first prefill step, by seconds,
+    WARMUP_AGREEMENT. An engine whose first runs stall (the bandwidth arms' first prefill step, by seconds,
     for one to three runs after the engine starts) is timed only once it runs as it will keep running. An engine that
     reaches `max_warmups` without settling says so in its last warm-up's schedule entry (`settled: false`)."""
 
@@ -331,7 +332,7 @@ def decode_time_per_token(
     device work left after the last step (`device_tail_s`) exceeds DECODE_TAIL_SHARE of the decode time, which shows
     device work the host step times didn't see. Also None when the steps' decode tokens add up to more than the run
     `generated`: a decode token is one generated token, so a larger total means the counts misclassify prompt tokens
-    as decode (18 Oct: `arrivals.scheduled_tokens` looked prompt lengths up by the submitted request id, which this vLLM
+    as decode (once, `arrivals.scheduled_tokens` looked prompt lengths up by the submitted request id, which this vLLM
     pin renames, so every prompt token counted as decode)."""
 
     if generated is not None and sum(int(s.get("decode_tokens") or 0) for s in steps) > generated:
@@ -775,8 +776,8 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
     free KV blocks, and an arm whose install leaves a different amount of free memory would otherwise get a different
     pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
-    Without a pin the kv-pool gate catches unequal pools. ``attention_backend``, ``attention_config`` and
-    ``moe_backend`` pass to vLLM as set, for a preset whose Build's row declares them (its ``engine.args``)."""
+    Without a pin the kv-pool gate catches unequal pools. ``attention_backend`` and ``attention_config`` pass to vLLM as
+    set, for a preset whose Build's row declares them (the B200's FlashAttention 2)."""
 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
@@ -793,9 +794,8 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     if precision == "fp8":
         engine["quantization"] = "fp8"
     elif precision == "int8_exact":
-        if not eager or settings.get("attention_backend") is not None:
-            raise ValueError("int8_exact runs eagerly only, on its own attention backend: an eager spec with no "
-                             "attention_backend")
+        if not eager:
+            raise ValueError("int8_exact runs eagerly only, on its own attention backend: an eager spec")
         engine["quantization"], engine["attention_backend"] = INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND
     elif precision != "bfloat16":
         engine["dtype"] = precision
@@ -810,9 +810,10 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     kv_pin = settings.get("resident_kv_cache_memory_bytes" if resident else "block_kv_cache_memory_bytes")
     if kv_pin is not None:
         engine["kv_cache_memory_bytes"] = int(kv_pin)
-    for key in ("attention_backend", "attention_config", "moe_backend"):
-        if settings.get(key) is not None:
-            engine[key] = dict(settings[key]) if key == "attention_config" else str(settings[key])
+    if settings.get("attention_backend") is not None:
+        engine["attention_backend"] = str(settings["attention_backend"])
+    if settings.get("attention_config") is not None:
+        engine["attention_config"] = dict(settings["attention_config"])
     return engine
 
 
@@ -820,8 +821,6 @@ class _VllmEngine:
     """One worker process's live vLLM engine."""
 
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
-        if preset.unavailable_reason:
-            raise ValueError(f"preset {preset.id} is unavailable: {preset.unavailable_reason}")
         if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         from verity_vllm.engine import env as engine_env
@@ -872,7 +871,7 @@ class _VllmEngine:
         else:
             config: dict[str, Any] = {}
             if arm.protocols:
-                config = protocols_config(arm, os.environ)
+                config = protocols_config(arm, settings.environ())
             if is_h1(arm):
                 rows = config.get("pouw", {}).get("rows")
                 if rows != engine.get("max_num_batched_tokens"):
@@ -1122,7 +1121,7 @@ class _ProcessEngine:
 
     def _death_report(self, doing: str) -> str:
         """The engine process died under ``doing``: its own last error when it managed to send one, else its exit code,
-        so a kill during a gate surfaces as what it was instead of a connection error (re-baseline bug list, 14 Oct)."""
+        so a kill during a gate surfaces as what it was instead of a connection error."""
         final = None
         try:
             if self.conn.poll(0):
@@ -1196,15 +1195,14 @@ class ProcessEngineFactory:
             if bound:
                 raise ValueError(
                     f"arm {arm.id!r} binds its served kernels to the row's Build ({', '.join(bound)}); CUDA graphs can "
-                    "change the served kernels so they no longer match it: run with --eager (or enforce_eager = true "
-                    "in the preset's engine settings)")
+                    "change the served kernels so they no longer match it: run with --eager (or eager = true in the "
+                    "spec)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
         if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
             # Every arm's process compiles on its own, and the kernel configurations Inductor autotunes reach the numerics
             # (a reduction's block size): one cache directory gives every arm the configurations the first one picked.
-            os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="verity_bench_inductor_")
-            os.environ[INDUCTOR_DIR_MARK] = "1"
+            apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), INDUCTOR_DIR_MARK: "1"})
         parent, child = self.context.Pipe()
         process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()

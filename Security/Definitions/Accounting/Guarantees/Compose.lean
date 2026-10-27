@@ -31,14 +31,14 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
 * (L) `CircuitWork`, the logical layer: an accepted window's run has all but a share of its committed words fixed
   right, at costs `a, b` below `Λ·ln(1/δ_s) + min(a, b)·D₀` (`WorkAt`, `rOf`). It rests on four claims: (H-μ)
   (`OperandHMu`) and B′ (`ReceiptLuckAt`) per tile folded, the whole-unit guess bound (`GuessLuckAt`) per tile whole,
-  at B′'s `½` (ASK-9, card 8b00536a: `2^-64` isn't granted), and the fixed-words claim, #2466's `UnitFixed` with
+  at B′'s `½` (`2^-64` isn't granted), and the fixed-words claim, `UnitFixed` with
   its fold clause at the run's modes (`tileMode`), with the templates' proved luck (`Scheme.LuckProved`), the service's commit order (`LayerCommitted`, in `Scope`), the
-  service's draw and sampled (I8)'s pieces as #2466 states them on the window's proofs (`DrawnLayer.Of`, binding at
+  service's draw and sampled (I8)'s pieces on the window's proofs (`DrawnLayer.Of`, binding at
   `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`Declared.layer`): its slots, writers, cuts, coins and draw are
   defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts (a value only its own unit reads,
   committed later, at its commit coin, which adds no late edge out of its unit), reads each round's coin and has
   every late edge the IR has (`StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`, proved of it), and only its
-  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is #2466's `DrawnRightOff`, one
+  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is `DrawnRightOff`, one
   event of probability `δ_bind + δ_ks` off which every drawn tile is right (RT-I8's `compose_sampled` shape).
 * (P) `CreditOfWork`, the physical layer's step: on the tensor–scalar model of a data sheet, a run with that work takes
   at least `(1 − ε)·T_cred`. Its premises are exactly the machine model's: the model the circuit's on the sheet
@@ -56,7 +56,7 @@ value, and its scope needs each seeded round's seed to name what the round reads
 live luck claims, and the bound is `rOfSeeded`, the live draw's charge on the unlucky share plus each seed group's
 premiums `π* = ln(T_q/δ_g)/θ` from the IR (`premiumOf`), folded and whole at their own rates (`seedTheta`,
 `wholeTheta`). No ruling grants a whole-tile luck per seed query, so the seeded pair's numbers are each labelled by the
-premise its whole rate reads: B′'s `½` a query (ASK-9's live value, which leaves its small-batch decode line above 50%),
+premise its whole rate reads: B′'s `½` a query (the ruled live value, which leaves its small-batch decode line above 50%),
 `GuessLuckAt` at `2^-64` or `WholeEntropyAt` at `K/8` nats a tile, neither granted.
 
 The other guarantees are (L)'s lemmas:
@@ -68,8 +68,8 @@ The other guarantees are (L)'s lemmas:
 * `SplitRateExp`: `SplitRateAt` at the sharp `Λ`, with its `ν, ν₀` in closed form;
 * `SplitRateMerged`: `SplitRate` at `Λ = b(1 + Kρw_max)/(ρK(1 − q))` for any luck at most `q`;
 * `ServiceCovers`: the service's share, each skipped tile's late cone from the IR (`tileCone`), covers every tile that
-  isn't good at any joint run's modes on the IR's layer (#2466's `DrawnLayer.Covers`, from `DrawnLayer.covers_of_cone`);
-* `BindingOfECR`: a prover's `δ_bind` from #2466's `DrawnBindingOfFork`, AM–GM and `ecr/sha-512` on its fork finder
+  isn't good at any joint run's modes on the IR's layer (`DrawnLayer.Covers`, from `DrawnLayer.covers_of_cone`);
+* `BindingOfECR`: a prover's `δ_bind` from `DrawnBindingOfFork`, AM–GM and `ecr/sha-512` on its fork finder
   (RT-DELTA r2), the one reading of binding's number PoUW's per-prover floors share;
 * `WholeLuckOfEntropy`: `SeedLuckAt`'s whole half from `WholeEntropyAt` (the optional entropy premise), at any rate
   whose per-tile moment at that entropy is at most `1`.
@@ -109,8 +109,8 @@ holds at `Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b(1 + Kρw_max)/(ρK(1 − p0
 branch: B1's `max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one draw, with `1/(K(1 − p))` in place of
 `1/(K·ln(1/p))`. The folded branch binds when `b·(1 − p) ≤ a·(1 − p0)`, the whole one otherwise; round 2's `b/(ρK)` at
 `p0 = 0` was for a luck a guess exceeds (R2-B3). At `K_d = 96,000`, `ln(1/δ_s) = ln 2^40`, `a = 0.218`, `b = 0.998`,
-`p = 7/8`, `F = 1` and `Kρw_max = 2/r`, with whole units at `p0 = ½` (B′'s, ASK-9's value for the live line, card
-8b00536a), `b/a = 4.58` exceeds `(1 − p0)/(1 − p) = 4`, so the whole branch binds (the folded one would for
+`p = 7/8`, `F = 1` and `Kρw_max = 2/r`, with whole units at `p0 = ½` (B′'s, the ruled value for the live line),
+`b/a = 4.58` exceeds `(1 − p0)/(1 − p) = 4`, so the whole branch binds (the folded one would for
 `p0 ≤ 0.428`), and the live `ε`'s logical term is 0.173%, 0.231% and 0.346% at `r = 1, 2, 4`. At `p0 = 2^-64`
 (proposed, not granted) the folded branch binds at 0.151%, 0.201% and 0.302%. Proved from `SplitRateExp`: each closed
 branch is at least the sharp one. -/
@@ -172,7 +172,7 @@ collision finder `F` for `H` whose collisions bound the fork event up to `κ` (`
 `Pr[F finds] + κ`: the prover's fork finder, which runs the window twice from the cut and takes both openings with
 C-Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
 `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(F) + κ)`, where `ecr(F)` is `E[cost F]/2^256` if `F` meets `ecr/sha-512`
-(`Claims.ExpectedCR`) and `⊤` if it doesn't. It is #2466's `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
+(`Claims.ExpectedCR`) and `⊤` if it doesn't. It is `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
 with AM–GM (`√(γx) ≤ δ' + γx/(4δ')`), and it assumes no hash: a prover whose fork finder beats `ecr` gets `⊤`, so it
 is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the IR's layer under live coins and on the
 draw's (`Declared.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
@@ -223,7 +223,7 @@ noise's generation. Under:
   words, decision 119; `ρ = 1/(F·r)` at the padding's `r = (N_p/N)·(w_max/w̄)` and `F` the most tiles a late cone
   holds, per kind, `kindF`: `1` for every kind served), every round's detected weight at most `w_max`, and every tile
   whose cone carries work lucky at most `p` folded (`tileLuck`, `μ + (1 − μ)·r_B`) and `p0` whole (`tileLuck0`, the
-  guess bound, `½` under ASK-9);
+  guess bound, `½` as ruled);
 * costs `a, b ≥ 0`, `Λ > 0` and `SplitRate` at them;
 * the play's ideal game the service's at share `1` per unit of each skipped tile's late cone (`tileCone`, tiles of no
   words included), and sampled (I8)'s pieces (decisions 114 and 119) on the window's proofs, the IR's layer
@@ -233,7 +233,7 @@ noise's generation. Under:
   `max_c κ_c + coll`) and `Pins`;
 * the four claims: (H-μ) (`OperandHMu` at its kind's `μ`) and B′ (`ReceiptLuckAt` at its kind's `r_B`) for every
   credited tile folded at its stage, the guess bound (`GuessLuckAt` at its kind's guess) for every one whole, and the
-  fixed-words claim, #2466's `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
+  fixed-words claim, `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
   the tiles' words;
 
 an accepted window's run has all but a share `d_F + d₀` of its committed words fixed right and all but `d₀` folded,
@@ -243,7 +243,7 @@ a machine model or a hash: equivocation on a committed position is a binding fai
 reads its number per prover). The work is the prover system's: no premise ties it to a device.
 
 Its luck line is the live claims' point lucks through `SplitRate`: `p = μ + (1 − μ)·r_B = 7/8` per folded tile, at
-`1/(1 − p) = 8` per unit of unlucky share, and `p0 = ½` per whole tile (ASK-9), at `1/(1 − p0) = 2` per unit at the
+`1/(1 − p) = 8` per unit of unlucky share, and `p0 = ½` per whole tile, at `1/(1 − p0) = 2` per unit at the
 whole cost `b = 4.58·a`, so the whole branch binds: 0.173% at `r = 1` closed (`SplitRateClosed`), 0.110% sharp, where
 the folded branch still binds. The seeded pair's folded branch reads a stronger luck, GRIND's `TemplateMoment` at
 `κ = 4` (each word's row and column bits, `1 + κ = 5` per unit, plus the premium), but its whole skips pay a premium at
@@ -317,13 +317,13 @@ prover budget: at `2^128` a fork finder gives `δ_bind ≈ |L|·2^-64` (`Binding
 Its luck line is per seed group from the IR at GRIND's shapes (every linear its own round, attention uncredited,
 `a = 0.218`, `b = 0.998`, `K_d = 96,000`, `δ_s = 2^-40`, `T_q = 2^128` and `δ_g = 2^-40/(2·rounds)`, so the grinding
 events total `2^-40`), and its whole skips' premium is most of it. No ruling grants a whole-tile luck per seed query
-(ASK-9 decided `½` for the live line only), so each number is conditional on the premise its `wholeTheta` reads:
+(the ruling decided `½` for the live line only), so each number is conditional on the premise its `wholeTheta` reads:
 * at `½` a query (B′'s value read per query, `WholeEntropyAt` at `ln 2`; what the decided value gives here), the
   whole moment `½e^{x₀} + ½e^{−κ₀x₀} ≤ 1` needs `κ₀ > 1` and has `x₀ < ln 2`, so a whole skip costs about 177 tiles a
   seed group: at the best `κ₀` (8.5) the line is 56.1%, 56.3% and 56.8% at `r = 1, 2, 4` for Llama-3.1-8B decode at
   batch up to 32, 8.9% at batch 256, 1.27% at a 2K-token prefill and 35.7% for Llama-3.1-70B decode. With only granted
   premises the seeded pair says nothing useful at small-batch decode;
-* under `GuessLuckAt` at `2^-64` (RT-COMPOSE r6's fix (a), proposed on card 8b00536a, not granted), `κ₀ = 0.092` and
+* under `GuessLuckAt` at `2^-64` (RT-COMPOSE r6's fix (a), proposed, not granted), `κ₀ = 0.092` and
   `x₀ = 44.34` nats a tile, about 2.8 tiles a seed group whatever `K` is: 1.120%, 1.152% and 1.214% at 8B decode up
   to batch 32 (`Π_F` 0.057%, `Π_0` 1.078%), 0.576% at batch 64, 0.168% at 256, 0.048% at prefill and 0.587% for 70B
   decode (0.824% and 0.437% at `T_q = 2^80`);
@@ -390,7 +390,7 @@ window's certificate in device window `win` holds (`certOf` at `.live`): it is a
 `ε = ε_♭ + ε_μ + Λ·ln(1/δ_s) + min(a, b)·D₀` (`rOf`). The certificate also reports the words per kind, `γ_♭` (W1) and
 the coin mode, `live` under `Scope`'s `Declared.Live`: a seeded window's credit is `CircuitCreditSeeded`'s. Its
 `Scope` holds the service's commit order (`LayerCommitted`), which today's code doesn't meet. Its luck line is
-`CircuitWork`'s, the live claims' point lucks `p = 7/8` folded and `p0 = ½` whole (ASK-9; 0.173% at `r = 1` closed,
+`CircuitWork`'s, the live claims' point lucks `p = 7/8` folded and `p0 = ½` whole (as ruled; 0.173% at `r = 1` closed,
 0.110% sharp), and with `ε_♭ = 0.571%` (NOTATION r3's sm_120 sheet, H1 + fx1) and `ε_μ = 0` under FOLD-OPT its `ε` is
 0.744%, 0.801% and 0.917% at `r = 1, 2, 4` closed (0.681%, 0.724% and 0.834% sharp), below EPS1's 1%, with every
 premise it reads granted or #2466's (0.722%, 0.772% and 0.873% closed at the ungranted `p0 = 2^-64`). The seeded
@@ -439,7 +439,7 @@ model (`fiat-shamir`; `SeedExtractedAt` names it), its binding checked at the dr
 the IR (`Declared.atIR`), as `CircuitWorkSeeded`'s, and its luck line is that statement's, conditional as its numbers
 are on the whole-tile luck a query its `wholeTheta` reads. With `ε_♭ = 0.571%` (NOTATION r3's sm_120 sheet, H1 + fx1)
 and `ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
-* at `½` a query (ASK-9's live value; no premise per query is granted): 56.6% for Llama-3.1-8B decode at batch up to
+* at `½` a query (the ruled live value; no premise per query is granted): 56.6% for Llama-3.1-8B decode at batch up to
   32, 9.5% at batch 256, 1.85% at a 2K-token prefill and 36.3% for 70B decode, so with only granted premises a seeded
   window's credit is vacuous at small-batch decode and above 1% even at prefill;
 * under `GuessLuckAt` at `2^-64` (not granted): 1.691% for 8B decode at batch up to 32 (1.395% at `T_q = 2^80`),

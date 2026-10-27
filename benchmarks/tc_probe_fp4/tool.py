@@ -1,4 +1,4 @@
-"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1), lane fp4-5090.
+"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1).
 
     research run --on vy-5090 --project verity --campaign r21-silicon --tool tc_probe_fp4 --source <worktree> \
         --send autoproof/probes/results/probe3_1783788526.json -- \
@@ -7,7 +7,7 @@
 
 Key params follow probe.py's argparse; `--out` and `--procs` never enter the derivation.  Replay files are content-resolved.
 
-`tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py, lane pouw rtx-pro GPU 4); `--out`, `--expect-uuid` and
+`tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py); `--out`, `--expect-uuid` and
 `--max-seconds` are guards and paths, not part of the answer:
 
     research run --on vy-nebius-2 --project verity --campaign pouw --tool tc_price_fp4 --source . --cwd source -- \
@@ -49,8 +49,8 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--families", default=None)
     ap.add_argument("--sass-check", action="store_true")
     ap.add_argument("--library", default=None)                  # a prebuilt library; its sha256 is in the result's nvcc identity
-    ap.add_argument("--chain2", action="store_true")            # lane tcgen05: K=128 chains on the TMEM accumulator
-    ap.add_argument("--smem-strides", default=None)             # lane tcgen05: shared-memory descriptor strides
+    ap.add_argument("--chain2", action="store_true")            # tcgen05: K=128 chains on the TMEM accumulator
+    ap.add_argument("--smem-strides", default=None)             # tcgen05: shared-memory descriptor strides
     ap.add_argument("--chain", type=int, default=1)             # mma.sync: in-register chains of L dependent MMAs
     ap.add_argument("--expect-model", default=None)             # the model whose mismatches gate the run
     ap.add_argument("--corrupt-word", action="store_true")      # the gate's self-test: one flipped word must fail the run

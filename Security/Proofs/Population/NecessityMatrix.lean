@@ -13,23 +13,23 @@ amplification is unbounded).
 * **Integrity.** `integrity_inferred` (tier 1 alone, `π ∝ E`). `integrity_inferred_off`, **what an always-proved set
   buys**: the cone-egress bound is needed only off `A`, so a massive value that fans out costs nothing when it is
   always proved.
-* **Control.** `card_egressWidth_le`, **control at the public widths**: the runs whose wrong units write at most `M`
-  slots in all show at most `#{B : Σ_B w ≤ M} · |V|^M` egress values, with no bound on any unit's width;
+* **Control.** `card_egressWidth_le`, **control at the public widths**: the runs whose faulty proof blocks write at most
+  `M` slots in all show at most `#{B : Σ_B w ≤ M} · |V|^M` egress values, with no bound on any unit's width;
   `card_widthSets_le` counts those sets when every unit writes. `control_inferred`: drawing by width, `w(u) ≤ C · π(u)`,
   an accepted run lies in that set at `M ≥ C ε` but with probability at most `(1 − ε)^k`. `wide_egress`, **what bounded
-  width buys**: under the count draw one wrong unit writing `N` slots shows `2^N` values, so a width bound is what the
-  count draw needs, and the width-weighted draw needs none.
+  width buys**: under the count draw one faulty proof block writing `N` slots shows `2^N` values, so a width bound is
+  what the count draw needs, and the width-weighted draw needs none.
 * **Skippable work.** `fan_skips`, **the late cone is necessary**: in a checked population of `N + 1` unit-weight units,
-  one wrong unit (`x := false`) makes every unit's work skippable with no unit lucky, `N + 1` skipped at wrong weight
-  `1`, which is the cone `F = N + 1` (`fan_down`). `late_operand` and `early_operand`, **commit before the work coin is
-  necessary**: an operand chosen after the coin `c` zeroes `(x + c) · b` at every coin, and one committed before it
-  does so at one coin in `|𝔽|`, the luck rate. `skipped_work_le_wt_off`: the cone bound `F` is needed only off the
+  one faulty proof block (`x := false`) makes every unit's work skippable with no unit lucky, `N + 1` skipped at wrong
+  weight `1`, which is the cone `F = N + 1` (`fan_down`). `late_operand` and `early_operand`, **commit before the work
+  coin is necessary**: an operand chosen after the coin `c` zeroes `(x + c) · b` at every coin, and one committed before
+  it does so at one coin in `|𝔽|`, the luck rate. `skipped_work_le_wt_off`: the cone bound `F` is needed only off the
   always-proved set.
 * **Weight isolation.** `isolation_of_range`, **range restriction suffices**: if a public bound `R u` holds every slot
   unit `u` reads in every admitted run, and no secret is upstream of the egress in `rangeFlow D R`, leakage is at most
   control. Addresses may be computed and corrupted inside their range: uncorruptible addressing (Theorem O1) is the
   case `R` = the padding. Necessity is `DynPopulation.leak_of_moved_read`: a corruptible address that moves a read onto
-  a slot no honest run reads leaks that slot through one wrong unit.
+  a slot no honest run reads leaks that slot through one faulty proof block.
 -/
 
 namespace Population.Iop
@@ -103,7 +103,7 @@ section Control
 
 variable {S : Type} (P : Dataflow U S)
 
-/-- **Control at the public widths**: the runs whose wrong units write at most `M` slots in all show at most
+/-- **Control at the public widths**: the runs whose faulty proof blocks write at most `M` slots in all show at most
 `#{B : Σ_B w ≤ M} · |V|^M` egress values. No unit's width is bounded. -/
 theorem card_egressWidth_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [Nonempty V] (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O) (M : ℕ) :
@@ -181,9 +181,9 @@ def wide (N : ℕ) : Dataflow Unit (Fin N) where
 /-- It writes `false` everywhere. -/
 def wideFns (N : ℕ) : (wide N).Fns Bool := fun _ _ _ => false
 
-/-- **What bounded width buys**: one wrong unit, of count cost `1`, shows every one of `2^N` egress values. The count
-draw's amplification for control is at least `N` bits per wrong unit, unbounded without a width bound; the width draw
-charges this unit `N`. -/
+/-- **What bounded width buys**: one faulty proof block, of count cost `1`, shows every one of `2^N` egress values. The
+count draw's amplification for control is at least `N` bits per faulty proof block, unbounded without a width bound; the
+width draw charges this unit `N`. -/
 theorem wide_egress (N : ℕ) (a : Fin N → Bool) :
     ((wide N).egress (wideFns N) a ∅ univ {()}).card = 2 ^ N := by
   classical
@@ -281,9 +281,9 @@ theorem fan_down (N : ℕ) : (fan N).down {none} = univ := by
   · exact .refl
   · exact .single ⟨Sum.inl none, mem_singleton_self _, by simp [fan]⟩
 
-/-- **The late cone is necessary**: on any inputs `b`, the skipping run holds the inputs, its one wrong unit is `x`, no
-unit is lucky (`SkipsLucky` with nothing computed and nothing lucky), and its outputs are all `false`, read from no
-`bᵢ`. All `N + 1` units' work is skipped at wrong weight `1`, which is exactly `x`'s cone. -/
+/-- **The late cone is necessary**: on any inputs `b`, the skipping run holds the inputs, its one faulty proof block is
+`x`, no unit is lucky (`SkipsLucky` with nothing computed and nothing lucky), and its outputs are all `false`, read from
+no `bᵢ`. All `N + 1` units' work is skipped at wrong weight `1`, which is exactly `x`'s cone. -/
 theorem fan_skips {N : ℕ} (b : Fin N → Bool) :
     (∀ s ∈ (fan N).input, fanSkip b s = fanHonest b s) ∧
       (fan N).wrong (fanFns N) (fanSkip b) = {none} ∧

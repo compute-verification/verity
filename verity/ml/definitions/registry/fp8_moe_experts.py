@@ -183,8 +183,8 @@ def chunk(B, S, xq, sx, e, rest: tuple, row, srow, zero, fmul, ffma, cast):
 
 @composite("MoeExpertFp8CoordinateChunk", 1, CHUNK_STATICS, chunk_sig(), conformance=FM.DOT_CONF)
 def MoeExpertFp8CoordinateChunk(B, S, xq, sx, e, *rest):
-    """K consecutive weights of a w13 coordinate of pair (t, k), a unit M0's block holds where the whole coordinate's [E][K] slab
-    column is too many rows: the K/KB tiles of `MoeExpertFp8BlockCoordinate_v3` over slab[e] and ws[e], into `acc` (+0 when FIRST),
+    """K consecutive weights of a w13 coordinate of pair (t, k), a unit the block of C-Flock's circuit prover holds where the
+    whole coordinate's [E][K] slab column is too many rows: the K/KB tiles of `MoeExpertFp8BlockCoordinate_v3` over slab[e] and ws[e], into `acc` (+0 when FIRST),
     then `cvt.rn.bf16.f32` when LAST, else the f32 accumulator itself, the next chunk's `acc`."""
     return chunk(B, S, xq, sx, e, rest, bind(MoeExpertFp8Row, E=S.E, K=S.K), bind(MoeExpertFp8ScaleRow, E=S.E, K=S.K // S.G),
                  lambda: B.call(b1.ZERO32), P.F32Mul, P.F32Fma, P.F2fpBf16)

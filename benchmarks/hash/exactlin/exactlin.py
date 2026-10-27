@@ -375,7 +375,7 @@ def install() -> None:
     try:
         from verity_vllm.engine import int8_ops
     except ImportError as e:
-        raise SystemExit(f"exactlin.install: {e}; verity_vllm.engine.int8_ops is PR #2694's: run with its branch") from e
+        raise SystemExit(f"exactlin.install: {e}; install integrations/vllm (verity_vllm.engine.int8_ops)") from e
 
     int8_ops.row_quant.register_kernel("cuda")(row_quant)
     int8_ops.scaled_mm.register_kernel("cuda")(product)

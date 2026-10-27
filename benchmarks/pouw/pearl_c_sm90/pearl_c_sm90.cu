@@ -33,7 +33,7 @@ PL_INSTANCE(851)
 // (pd_commit's rows, pd_tree's one, pd_tiles' tiles or PD_GROUP's groups of them); pd_commit_g and pd_commit_gm take a
 // unit's filler rows' digest from its record (pd_commit_t's Z: they are zero rows).  The Args are read through the read-only
 // path, which ptxas reloads after PD_LOOP's called producer (pd_pserve_call); a plain copy stays live across that call and
-// spills (56 bytes of stack in pd_commit_g_851, r20261023-091751-b744)
+// spills (56 bytes of stack in pd_commit_g_851)
 DEV Args pd_unit_at(const Args& g, uint32_t u) {
   const Args* __restrict__ s = reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * u);
   Args a;
