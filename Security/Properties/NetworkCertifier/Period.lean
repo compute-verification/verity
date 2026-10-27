@@ -1,4 +1,5 @@
 import NetworkCheck.Period
+import Lms.Sign
 
 /-!
 # The network certifier over a period: what its Lean code (`NetworkCheck.Period`) establishes of each link-window
@@ -36,9 +37,16 @@ certifier signs about the clock is witness, so the clock is synced as the audito
 
 Comparisons the code makes with a `BEq` instance not known to be lawful (`Json`, `ByteArray`, `String`, the profile's
 levels) are stated as the code's `==` returning `true`.
+
+Beside the property, its two lemmas' objects (LEAN-66): `PeriodAcceptMeansOf`, the property of any period check, and
+`acceptAllPeriod`, a check that accepts every period; and an honest period of one clock-form link-window
+(`honestParams`, `honestCommitment`, `honestEvidence`), its certificates signed with the certifier's key at the deployed
+LMS parameters, with the two named assumptions about code the kernel can't evaluate that its acceptance takes
+(`JsonStrBeq`, `HonestProfileReads`).
 -/
 
 open NetworkCheck.Period
+open NetworkCheck.Check (Certificate)
 open Lean (Json)
 
 namespace Properties.NetworkCertifier
@@ -147,5 +155,101 @@ its clock synced; in the rows form proved, its three records certified and its r
 def PeriodAcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     protocol.check p c e = .accept pub prof → PeriodWindowsAccepted p c e
+
+/-! ## Another period check in the check's place -/
+
+/-- `PeriodAcceptMeans` of a period check `check` in `protocol.check`'s place: whenever `check` accepts a period, every
+one of its link-windows was accepted. At `protocol.check` it is `PeriodAcceptMeans` itself. -/
+def PeriodAcceptMeansOf (check : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → PeriodWindowsAccepted p c e
+
+/-- A period check that accepts every period, publishing the terms of a period with no audit: what
+`PeriodAcceptMeansOf` must fail at for `PeriodAcceptMeans` to say something. -/
+def acceptAllPeriod (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
+  .accept (terms #[] #[] p.cells p.jitter 0 p.windows) { link := p.link, windows := p.windows }
+
+/-! ## An honest period: one clock-form link-window -/
+
+/-- Σ_sync of one sync, δ = 0 and ρ = 1. -/
+def honestSyncs : NetworkCertifier.SyncSet where
+  deltas := [0]
+  rhos := [1]
+  deltas_nonempty := by decide
+  rhos_nonempty := by decide
+  rhos_pos := by decide
+  deltas_nodup := by decide
+  rhos_nodup := by decide
+
+/-- The certifier key's 16-byte LMS identifier. -/
+def honestI : ByteArray := ⟨Array.replicate 16 1⟩
+
+/-- The certifier's key: `Lms.key` at the deployed parameters, which derives it from any 16-byte identifier. Written
+without a `match`: the kernel reduces a `match` on `Lms.key` by building the key's 2^20-leaf tree, so a proof relating
+the key to `Lms.key`'s result must unfold `honestKey` before anything else. -/
+def honestKey : Lms.PrivateKey :=
+  (Lms.key Lms.deployed honestI ⟨Array.replicate 64 2⟩).toOption.getD ⟨Lms.deployed, honestI, .empty, #[]⟩
+
+/-- The certifier's 32-byte session. -/
+def honestSession : ByteArray := ⟨Array.replicate 32 3⟩
+
+/-- The certificate of the link's end `d` at window `w` on the 64-byte digest `x`, signed with the key's one-time key `q`
+over its `certificate_message` (without a `match`, as `honestKey`). -/
+def honestCert (d : NetworkCheck.Direction) (w q : Nat) (x : ByteArray) : Certificate :=
+  { keyId := honestI, link := "link", direction := d, window := w, digest := x,
+    signature := (((NetworkCheck.certificateMessage honestI honestSession "link" d w x).bind
+      (Lms.signAt honestKey q)).toOption.map Lms.Signature.encode).getD .empty }
+
+/-- The period's parameters: the link `link` under N2's Program `program`, one clock-form link-window from window 0, no
+audit, and the certifier's key at the deployed LMS parameters in its session. -/
+def honestParams : Params where
+  audits := #[]
+  cells := #[]
+  first := 0
+  jitter := 0
+  link := "link"
+  lms := Lms.deployed
+  key := honestKey.publicKey
+  session := honestSession
+  program := "program"
+  form := .clock honestSyncs
+  windows := 1
+
+/-- Link-window 0's registration: the link's Program served at window 0. -/
+def honestRegistration : Registration :=
+  ⟨Json.mkObj [("program", .str "program"), ("window", served 0)], ⟨Array.replicate 64 4⟩⟩
+
+/-- One-stage's profile of the link-window's proof: one level of one unit drawn `subset:1`, that unit drawn. -/
+def honestIntegrity : Core.Integrity :=
+  { programs := #[], prescribed := #[], linked := true, covered := #[],
+    levels := #[{ name := unitLevel, query := none, size := 1, draw := some (.subset 1) }], delta := ⟨0, 1⟩,
+    drawn := #[(unitLevel, 1)] }
+
+/-- One-stage's acceptance of the registration, with that profile. -/
+def honestAnswer : Core.Answer :=
+  { protocol := oneStage, verdict := .accept, reason := none, digest := some honestRegistration.digest,
+    published := some (Json.mkObj []), profile := some honestIntegrity.toJson }
+
+/-- Link-window 0 as the evidence answers it: one-stage's acceptance, the certificates of both ends of the link at window
+0 (egress then ingress) and the clock's, each on its own one-time key. -/
+def honestWindow : Window :=
+  { answer := honestAnswer,
+    certificates := #[honestCert .egress 0 0 ⟨Array.replicate 64 5⟩, honestCert .ingress 0 1 ⟨Array.replicate 64 6⟩],
+    shown := .clock (honestCert .egress 0 2 ⟨Array.replicate 64 7⟩) }
+
+def honestCommitment : Commitment := ⟨#[], #[honestRegistration], .empty⟩
+
+def honestEvidence : Evidence := ⟨#[], #[honestWindow]⟩
+
+/-- **Named assumption: `Json`'s `==` is `String`'s on two strings.** Lean core's `Json` `==` is a `partial def`
+(`Json.beq'`), so no proof evaluates it; its case for two strings compares them with `String`'s `==`, as its source
+states. The period check compares a registration's Program with it (`windowCheck`, `rowsWindowCheck`, `auditCheck`); a
+check comparing the Program as a `String` needs no assumption. -/
+def JsonStrBeq : Prop := ∀ s : String, (Json.str s == Json.str s) = true
+
+/-- **Named assumption: the honest profile reads back.** `Core.Integrity.ofJson` reads `honestIntegrity`'s JSON back as
+it: true by evaluation, but `Core.Ratio.ofString` reads δ with `String.splitOn`, `String.all` and `String.toNat!`, which
+recurse well-founded over UTF-8 positions, so the kernel doesn't evaluate them. -/
+def HonestProfileReads : Prop := Core.Integrity.ofJson honestIntegrity.toJson = .ok honestIntegrity
 
 end Properties.NetworkCertifier

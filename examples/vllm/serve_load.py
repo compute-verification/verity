@@ -1,8 +1,8 @@
 """A short varied load on a `verity-vllm serve-openai` endpoint, in bursts the server's idle closes into Commit windows, or
 as network-accounting's varied traffic.
 
-    python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
-    python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
+    python examples/vllm/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
+    python examples/vllm/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
         [--max-tokens 64] [--release RUN] [--jitter-ms 0] [--seed 0] --out FILE
 
 Each burst is ``--per-burst`` concurrent ``/v1/completions`` requests, each with its own ``user`` (``b<burst>-<i>``), a prompt of
@@ -51,9 +51,8 @@ def body(rng: random.Random, model: str, user: str) -> dict:
 
 
 def post(port: int, b: dict, headers: dict | None = None) -> dict:
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", data=json.dumps(b).encode(),
-                                 headers={"content-type": "application/json", **(headers or {})})
-    with urllib.request.urlopen(req, timeout=600) as r:  # noqa: S310  (the local endpoint)
+    with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", data=json.dumps(b).encode(),
+                                headers={"content-type": "application/json", **(headers or {})}), timeout=600) as r:
         raw = r.read()
     if not b.get("stream"):
         return json.loads(raw)
@@ -68,9 +67,9 @@ def post(port: int, b: dict, headers: dict | None = None) -> dict:
 
 
 def tokenize(port: int, model: str, text: str) -> list[int]:
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/tokenize", data=json.dumps({"model": model, "prompt": text}).encode(),
-                                 headers={"content-type": "application/json"})
-    with urllib.request.urlopen(req) as r:  # noqa: S310  (the local endpoint)
+    with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/tokenize",
+                                data=json.dumps({"model": model, "prompt": text}).encode(),
+                                headers={"content-type": "application/json"})) as r:
         return json.loads(r.read())["tokens"]
 
 
@@ -118,9 +117,9 @@ def run_varied(a: argparse.Namespace) -> int:
     for t in ts:
         t.join()
     with open(a.out, "a") as fh:
-        for j, (q, r) in enumerate(zip(reqs, got)):
-            fh.write(json.dumps({"user": q["user"], "release": j if a.release else None, "at_s": q["at_s"], "delay_s": delays[j],
-                                 "prompt": len(q["body"]["prompt"]), "max_tokens": q["body"]["max_tokens"], "response": r}) + "\n")
+        fh.writelines(json.dumps({"user": q["user"], "release": j if a.release else None, "at_s": q["at_s"], "delay_s": delays[j],
+                                  "prompt": len(q["body"]["prompt"]), "max_tokens": q["body"]["max_tokens"], "response": r}) + "\n"
+                      for j, (q, r) in enumerate(zip(reqs, got)))
     print(f"[serve-load] varied: {sum('error' not in (r or {}) for r in got)}/{len(got)} ok, prompts "
           f"{min(len(q['body']['prompt']) for q in reqs)}…{max(len(q['body']['prompt']) for q in reqs)} tokens", flush=True)
     return 0 if all("error" not in (r or {}) for r in got) else 1
@@ -145,24 +144,23 @@ def main() -> int:
     if a.varied:
         return run_varied(a)
     rng = random.Random(a.seed)
+
+    def go(bodies: list[dict], got: list, i: int) -> None:
+        try:
+            got[i] = post(a.port, bodies[i])
+        except Exception as e:  # noqa: BLE001  (recorded with the request)
+            got[i] = {"error": f"{type(e).__name__}: {e}"}
+
     with open(a.out, "a") as fh:
         for k in range(a.bursts):
             bodies = [body(rng, a.model, f"b{k}-{i}") for i in range(a.per_burst)]
             got: list = [None] * len(bodies)
-
-            def go(i: int) -> None:
-                try:
-                    got[i] = post(a.port, bodies[i])
-                except Exception as e:  # noqa: BLE001  (recorded with the request)
-                    got[i] = {"error": f"{type(e).__name__}: {e}"}
-
-            ts = [threading.Thread(target=go, args=(i,)) for i in range(len(bodies))]
+            ts = [threading.Thread(target=go, args=(bodies, got, i)) for i in range(len(bodies))]
             for t in ts:
                 t.start()
             for t in ts:
                 t.join()
-            for b, r in zip(bodies, got):
-                fh.write(json.dumps({"burst": k, "user": b["user"], "body": b, "response": r}) + "\n")
+            fh.writelines(json.dumps({"burst": k, "user": b["user"], "body": b, "response": r}) + "\n" for b, r in zip(bodies, got))
             fh.flush()
             print(f"[serve-load] burst {k}: {sum('error' not in (r or {}) for r in got)}/{len(got)} ok", flush=True)
             time.sleep(a.idle_s)  # the engine idles; the server closes the window at its next idle
