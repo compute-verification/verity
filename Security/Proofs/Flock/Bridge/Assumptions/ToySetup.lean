@@ -19,16 +19,15 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Refi
 whose finder rarely collides.** Some inputs `I` have a hidden-output table `verify --zk` sets up at table 0
 (`DrawSetupZHJ`, at some link points, draw and part of it), and at the toy's tables over it (`planZHJ Bridge.toyDj y₀`)
 the audit game under the law that draws the one unit has a prover `σ` whose finder `B^τ` (at a per-run time `t'` and a
-verification `v`) has `K·Pr[B^τ] ≤ 2^-200`, `K` the number of C-Flock's finders. Every draw flock-verify `--zk` accepts
-gives the setup (`Flock.SecurityProofs.EndToEndHidden_refSetup`), so a run of flock-verify on the deployed files checks
-it; the bound is `cr/sha-512`'s at a prover that finds no collision. -/
+verification `v`) has `J²·K·Pr[B^τ] ≤ 2^-200`, `K` the number of C-Flock's finders and `J` the plan's tables. Every
+draw flock-verify `--zk` accepts gives the setup (`Flock.SecurityProofs.EndToEndHidden_refSetup`), so a run of
+flock-verify on the deployed files checks it; the bound is `cr/sha-512`'s at a prover that finds no collision. -/
 def ToySetupHJ : Prop :=
   ∃ (I : Inputs) (mPts : ℕ) (S₀ : Finset (Fin 1)) (d₀ : Lean.Json) (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (σ : Strategy (audit Bridge.toyLaw Unit (batchedSessionZC execArith hs512 (planZHJ Bridge.toyDj y₀))))
     (t' v : ℝ),
-    (Fintype.card (Bridge.PubIx Bridge.toyDj y₀ Bridge.toyPartition
-        (Bridge.toyBinding execArith (planZHJ Bridge.toyDj y₀) (tabZHJ Bridge.toyDj y₀) H512) Bridge.toyLaw
-        (reg σ)) : ℝ) *
+    (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx Bridge.toyDj y₀ Bridge.toyPartition
+        (Bridge.toyBinding execArith (planZHJ Bridge.toyDj y₀) (tabZHJ Bridge.toyDj y₀) H512) Bridge.toyLaw) *
       (Bridge.pubFinder Bridge.toyDj y₀ Bridge.toyPartition
         (Bridge.toyBinding execArith (planZHJ Bridge.toyDj y₀) (tabZHJ Bridge.toyDj y₀) H512) Bridge.kDep (2 ^ 192)
         (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200

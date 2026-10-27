@@ -1,5 +1,5 @@
 import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Bridge.PubFinder
+import Proofs.Flock.Bridge.PubAvg
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-!
@@ -12,12 +12,13 @@ the probability that one finder `B^τ` built from the prover (`Bridge.pubFinder`
 hash premise. `B^τ` is the uniform mixture of C-Flock's finders at the prover's run (`Bridge.PubFinder`), `K` of them
 (`K = card PubIx`), so each succeeds with probability at most `p = K·Pr[B^τ]` (`Claims.Finder.le_mix`). At that `p`:
 
-* every table's knowledge finders meet `cr/sha-512`'s strict bound at the budget `q = √(p·2^513)` (`tableCRZ_of_mix`),
-  every table of `planZHJ` is at C-Flock ZK's parameters (`planZHJ_M1W`, from what `verify --zk` checks at setup, at
-  every registration: `planZHJ` reads none), so `ε_ks ≤ ksClosedM1 k q q / (1 − ρ)`
-  (`ksAvgStrictZ_planZHJ_le_closed`, its rate `2^23/(ek)` at most `ρ`), and `ksClosedM1 k q q` is
-  `2^-203 + (2·25638 + 2^14 + 2)·√p + p + √(kp)`;
-* each link finder succeeds with probability at most `p` (`linkFinderPrZC_le_mix`), and the draws read at most
+* each table slot's knowledge finder succeeds with probability at most `p` averaged over the verifier's draw, since
+  `B^τ`'s member for that slot draws the draw itself (`tabAvg_of_mix`), and every table of `planZHJ` is at C-Flock ZK's
+  parameters (`planZHJ_M1W`, from what `verify --zk` checks at setup, at every registration: `planZHJ` reads none),
+  so `ε_ks ≤ (2^-203 + J·((2·25638 + 2^14 + 2)·√p + p + √(kp)))/(1 − ρ)` (`ksAvgPrZ_le_avg`: the largest of the
+  `J = nTab I` tables at most their sum, and Jensen under each square root), its rate `2^23/(ek)` at most `ρ`; with
+  `J√p = √(J²p)` and `Jp ≤ J²p` that is at most the knowledge term at `J²p`;
+* each link finder succeeds with probability at most `p ≤ J²p` (`linkFinderPrZC_le_mix`), and the draws read at most
   `W = Σ_u |io u|` commit strings (`Bridge.ioSum`, the committed wires each unit of the circuit's partition computes or
   reads: a draw reads a commit string only through such a wire of a drawn unit, `qs_le_io`). It is `Σ_u`, not
   `k_d · max_u`, because the live subset draw on finite bytes draws every unit when it runs out (`Law.execOS`).
@@ -29,9 +30,10 @@ $$\delta = \binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{2^{-203}}{1-\rho}
 `δ` a function of `n`, `k_d`, `K₀`, the analysis' `k`, `R_w`, `M`, `ρ` and the circuit's partition. `B^τ` runs one of
 C-Flock's finders at its own budget: a rewinding knowledge finder at `2(t' + v)`, the self-clash finder at `t' + v`, a
 link finder at `t'` per run of the prover (`SampledKSLiveV2`'s: the prover's per-run time `t'` and one opening's
-verification `v`). `K` counts every draw's tables and every committed position, so `f(K·Pr[B^τ])` is loose by up to that
-count. The rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other
-hypothesis, named assumption included, is `SampledKSLiveV2`'s.
+verification `v`). `f` is read at `J²·K·Pr[B^τ]`: `K` counts each table's slots, every committed position and one, and
+`J²` is the price of the averaged premise, one factor `J` from the sum over the tables, which `√(J²p) = J√p` folds
+under the square roots. The rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan,
+and every other hypothesis, named assumption included, is `SampledKSLiveV2`'s.
 -/
 
 namespace Flock.Guarantees
@@ -65,10 +67,11 @@ open Classical in
 /-- **The sampled audit's knowledge soundness, live, in the additive form.** `SampledKSLiveV2`'s setting and named
 assumptions, at a rate cap `ρ < 1` with `2^23/(ek) ≤ ρ` (`rateM1`): for every live prover,
 $$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
-  \mathrm{deltaPub}(n, k_d, K_0, k, M, R_w, W, \rho) + \mathrm{lossPub}(k, W, \rho, K\cdot\Pr[B^\tau]),$$
-`W = Σ_u |io u|` over the circuit's partition (`Bridge.ioSum`), `B^τ` the uniform mixture of C-Flock's `K` finders at the
-prover's run (`Bridge.pubFinder`, at budgets `2(t' + v)`, `t' + v` and `t'`: `t'` the prover's per-run time and `v` one
-opening's verification) and `Pr[B^τ]` its probability of outputting a SHA-512 collision. -/
+  \mathrm{deltaPub}(n, k_d, K_0, k, M, R_w, W, \rho) + \mathrm{lossPub}(k, W, \rho, J^2 K\cdot\Pr[B^\tau]),$$
+`J = nTab I` the plan's tables, `W = Σ_u |io u|` over the circuit's partition (`Bridge.ioSum`), `B^τ` the uniform
+mixture of C-Flock's `K` finders at the prover's run (`Bridge.pubFinder`, at budgets `2(t' + v)`, `t' + v` and `t'`:
+`t'` the prover's per-run time and `v` one opening's verification) and `Pr[B^τ]` its probability of outputting a
+SHA-512 collision. -/
 def SampledKSLivePub : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -128,13 +131,13 @@ def SampledKSLivePub : Prop :=
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k M Rw (Bridge.ioSum P) ρ +
         Bridge.lossPub k (Bridge.ioSum P) ρ
-          (Fintype.card (Bridge.PubIx dj y₀ P vb L (reg σ)) * B.Pr Claims.Sampling.sha512Msg))
+          ((nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx dj y₀ P vb L) * B.Pr Claims.Sampling.sha512Msg))
 
-/-- **The additive bound is at most `δ + f(K·Pr[B^τ])`**, with no hash premise: its draw term is `δ`'s first; at
-`p = K·Pr[B^τ]` each of C-Flock's finders succeeds with probability at most `p` (`pubFam_le`), so its knowledge term is
-at most `ksClosedM1 k q q / (1 − ρ)` at `q²/2^513 = p` (`tableCRZ_of_mix`, `ksAvgPrZ_le_strict`,
-`ksAvgStrictZ_planZHJ_le_closed`) and its link term at most `W·(p + 1/(eM) + k/(eR_w))/(1 − ρ)`
-(`linkFinderPrZC_le_mix`, `qs_le_io`). -/
+/-- **The additive bound is at most `δ + f(J²·K·Pr[B^τ])`**, with no hash premise: its draw term is `δ`'s first; at
+`p = K·Pr[B^τ]` each of C-Flock's finders succeeds with probability at most `p` (`pubFam_le`), so each table slot's
+finder does on average over the draw (`tabAvg_of_mix`), its knowledge term is at most
+`(2^-203 + J·((2·25638 + 2^14 + 2)·√p + p + √(kp)))/(1 − ρ)` (`ksAvgPrZ_le_avg`), and its link term at most
+`W·(p + 1/(eM) + k/(eR_w))/(1 − ρ)` (`linkFinderPrZC_le_mix`, `qs_le_io`); both at most their terms at `J²p`. -/
 theorem _root_.Flock.Bridge.boundPr_le_pub {n mPts : ℕ} {Reg : Type} {I : Inputs}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {C : FlockSoundness.Audit.Circuit}
@@ -146,36 +149,50 @@ theorem _root_.Flock.Bridge.boundPr_le_pub {n mPts : ℕ} {Reg : Type} {I : Inpu
     ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) + ksAvgPrZ execArith hs512 (planZHJ dj y₀) k R τ +
         linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ R τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k M Rw (Bridge.ioSum P) ρ +
-        Bridge.lossPub k (Bridge.ioSum P) ρ (Fintype.card (Bridge.PubIx dj y₀ P vb L R) *
+        Bridge.lossPub k (Bridge.ioSum P) ρ ((nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx dj y₀ P vb L) *
           (Bridge.pubFinder dj y₀ P vb k Rw M qF qS t' R τ).Pr Claims.Sampling.sha512Msg)) := by
   have hfam := Bridge.pubFam_le dj y₀ P vb k Rw M qF qS t' R τ
-  have hp0 : (0 : ℝ) ≤ Fintype.card (Bridge.PubIx dj y₀ P vb L R) *
+  have hp0 : (0 : ℝ) ≤ Fintype.card (Bridge.PubIx dj y₀ P vb L) *
       (Bridge.pubFinder dj y₀ P vb k Rw M qF qS t' R τ).Pr Claims.Sampling.sha512Msg :=
     mul_nonneg (Nat.cast_nonneg _) (Claims.Pr_nonneg _)
-  generalize (Fintype.card (Bridge.PubIx dj y₀ P vb L R) : ℝ) *
+  rw [mul_assoc ((nTab I : ℝ) ^ 2)]
+  generalize (Fintype.card (Bridge.PubIx dj y₀ P vb L) : ℝ) *
       (Bridge.pubFinder dj y₀ P vb k Rw M qF qS t' R τ).Pr Claims.Sampling.sha512Msg = p at hfam hp0 ⊢
   have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
-  have hq2 : Real.sqrt (p * 2 ^ (513 : ℝ)) ^ 2 / 2 ^ (513 : ℝ) = p := by
-    rw [Real.sq_sqrt (mul_nonneg hp0 (by positivity)), mul_div_assoc, div_self (by positivity), mul_one]
-  have hksC : ksClosedM1 k (Real.sqrt (p * 2 ^ (513 : ℝ))) (Real.sqrt (p * 2 ^ (513 : ℝ))) =
-      2 ^ (-(203 : ℝ)) + ((2 * 25638 + 2 ^ 14 + 2) * Real.sqrt p + p + Real.sqrt (k * p)) := by
-    unfold ksClosedM1
-    rw [hq2]
-    ring
+  have hJ1 : (1 : ℝ) ≤ nTab I := by exact_mod_cast nTab_pos I
+  have hJ0 : (0 : ℝ) ≤ nTab I := by linarith
+  have hP2 : 0 ≤ (nTab I : ℝ) ^ 2 * p := mul_nonneg (sq_nonneg _) hp0
+  have hpJ : p ≤ (nTab I : ℝ) ^ 2 * p := by
+    calc p = 1 * (1 * p) := by ring
+      _ ≤ (nTab I : ℝ) * ((nTab I : ℝ) * p) :=
+          mul_le_mul hJ1 (mul_le_mul_of_nonneg_right hJ1 hp0) (by linarith) hJ0
+      _ = (nTab I : ℝ) ^ 2 * p := by ring
+  have hpJ' : (nTab I : ℝ) * p ≤ (nTab I : ℝ) ^ 2 * p := by
+    calc (nTab I : ℝ) * p = 1 * ((nTab I : ℝ) * p) := by ring
+      _ ≤ (nTab I : ℝ) * ((nTab I : ℝ) * p) := mul_le_mul_of_nonneg_right hJ1 (mul_nonneg hJ0 hp0)
+      _ = (nTab I : ℝ) ^ 2 * p := by ring
+  have hsq : Real.sqrt ((nTab I : ℝ) ^ 2 * p) = nTab I * Real.sqrt p := by
+    rw [Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq hJ0]
+  have hsqk : Real.sqrt (k * ((nTab I : ℝ) ^ 2 * p)) = nTab I * Real.sqrt (k * p) := by
+    rw [show (k : ℝ) * ((nTab I : ℝ) ^ 2 * p) = (nTab I : ℝ) ^ 2 * (k * p) by ring, Real.sqrt_mul (sq_nonneg _),
+      Real.sqrt_sq hJ0]
   have hks : ksAvgPrZ execArith hs512 (planZHJ dj y₀) k R τ ≤
-      ENNReal.ofReal (ksClosedM1 k (Real.sqrt (p * 2 ^ (513 : ℝ))) (Real.sqrt (p * 2 ^ (513 : ℝ))) / (1 - ρ)) :=
-    (ksAvgPrZ_le_strict execArith hs512 (planZHJ dj y₀) k R τ
-        (Bridge.tableCRZ_of_mix dj y₀ P vb k Rw M qF qS t' R τ hp0 hfam)).trans
-      ((ksAvgStrictZ_planZHJ_le_closed dj y₀ L k _ _ R (hρk.trans_lt hρ)).trans
-        (ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_left (ksClosedM1_nonneg k _ _) h1ρ (by linarith))))
+      ENNReal.ofReal ((2 ^ (-(203 : ℝ)) + ((2 * 25638 + 2 ^ 14 + 2) * Real.sqrt ((nTab I : ℝ) ^ 2 * p) +
+        (nTab I : ℝ) ^ 2 * p + Real.sqrt (k * ((nTab I : ℝ) ^ 2 * p)))) / (1 - ρ)) := by
+    refine (Bridge.ksAvgPrZ_le_avg dj y₀ qF qS R τ hρ hρk hp0
+        fun j s => Bridge.tabAvg_of_mix dj y₀ P vb k Rw M qF qS t' R τ hfam j s).trans
+      (ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right ?_ h1ρ.le))
+    rw [hsq, hsqk]
+    linarith
   have hQs : ∑ c : vb.Pos, (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L c) : ℝ) /
       Fintype.card L.Ω ≤ (Bridge.ioSum P : ℝ) :=
     qs_le_io execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L (Bridge.ioSum P) fun ω =>
       Finset.sum_le_sum_of_subset (Finset.subset_univ _)
-  have hB : 0 ≤ p + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) :=
-    add_nonneg (add_nonneg hp0 (by positivity)) (by positivity)
+  have hB : 0 ≤ (nTab I : ℝ) ^ 2 * p + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) :=
+    add_nonneg (add_nonneg hP2 (by positivity)) (by positivity)
   have hlink : linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ R τ ≤
-      ENNReal.ofReal ((Bridge.ioSum P : ℝ) * (p + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) := by
+      ENNReal.ofReal ((Bridge.ioSum P : ℝ) * ((nTab I : ℝ) ^ 2 * p + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) /
+        (1 - ρ)) := by
     unfold linkPrZC
     refine ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right ?_ h1ρ.le)
     refine le_trans ?_ (mul_le_mul_of_nonneg_right hQs hB)
@@ -187,19 +204,21 @@ theorem _root_.Flock.Bridge.boundPr_le_pub {n mPts : ℕ} {Reg : Type} {I : Inpu
     have hc : (0 : ℝ) < (n.choose kd : ℝ) := by exact_mod_cast Nat.choose_pos hkd
     rw [ENNReal.ofReal_div_of_pos hc, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
   have hx : (0 : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by positivity
-  have hy : 0 ≤ ksClosedM1 k (Real.sqrt (p * 2 ^ (513 : ℝ))) (Real.sqrt (p * 2 ^ (513 : ℝ))) / (1 - ρ) :=
-    div_nonneg (ksClosedM1_nonneg k _ _) h1ρ.le
-  have hz : 0 ≤ (Bridge.ioSum P : ℝ) * (p + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ) :=
+  have hy : 0 ≤ (2 ^ (-(203 : ℝ)) + ((2 * 25638 + 2 ^ 14 + 2) * Real.sqrt ((nTab I : ℝ) ^ 2 * p) +
+      (nTab I : ℝ) ^ 2 * p + Real.sqrt (k * ((nTab I : ℝ) ^ 2 * p)))) / (1 - ρ) :=
+    div_nonneg (add_nonneg (by positivity) (add_nonneg (add_nonneg (by positivity) hP2) (Real.sqrt_nonneg _)))
+      h1ρ.le
+  have hz : 0 ≤ (Bridge.ioSum P : ℝ) * ((nTab I : ℝ) ^ 2 * p + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) /
+      (1 - ρ) :=
     div_nonneg (mul_nonneg (Nat.cast_nonneg _) hB) h1ρ.le
   rw [hmiss]
   refine (add_le_add (add_le_add le_rfl hks) hlink).trans (le_of_eq ?_)
   rw [← ENNReal.ofReal_add hx hy, ← ENNReal.ofReal_add (add_nonneg hx hy) hz]
   congr 1
   unfold Bridge.deltaPub Bridge.lossPub
-  rw [hksC]
   ring
 
-/-- **`SampledKSLiveV2`'s error is at most `δ + f(K·Pr[B^τ])`** (`Bridge.boundPr_le_pub`). -/
+/-- **`SampledKSLiveV2`'s error is at most `δ + f(J²·K·Pr[B^τ])`** (`Bridge.boundPr_le_pub`). -/
 theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
     hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' K₀ hK₀ τ v q L P vb σ Xr δ Cc rows roots Cd κ B

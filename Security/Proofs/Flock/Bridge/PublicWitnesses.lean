@@ -17,10 +17,10 @@ import Proofs.Flock.Soundness.Game.Prob
   probability 1 under every strategy. `SampledKSLivePub`'s and V2's `_nontrivial` read the instance through these.
 * **V2 and V3** (`sampledKSLiveV2_honest`, `sampledKSLiveV2_nontrivial`): their parameter hypotheses hold as
   deployed, and at the verifier that accepts everything their additive bound is below the event's probability, 1, at
-  every prover whose finder `B^τ` has `K·Pr[B^τ] ≤ 2^-200` (`Bridge.boundPr_le_pub`).
+  every prover whose finder `B^τ` has `J²·K·Pr[B^τ] ≤ 2^-200` (`Bridge.boundPr_le_pub`).
 * **Nontrivial** (`sampledKSLivePub_nontrivial`): `SampledKSLivePubAll`, `SampledKSLivePub` at the verifier that
   accepts everything, is false at any setting of its file-level fields whose circuit has no port and computes a
-  returned output, with every unit drawn, at a prover with `K·Pr[B^τ] ≤ 2^-200`. `¬ RelS` is proved there, for every
+  returned output, with every unit drawn, at a prover with `J²·K·Pr[B^τ] ≤ 2^-200`. `¬ RelS` is proved there, for every
   run. What stays a binder is what only the files or a named assumption give: the parses `hD` and `hpub`
   (`Flock.Desc.parse` and `HmOut.loadPublic` read the files through `Lean.Json.parse`, a `partial def` the kernel can't
   unfold, so no proof exhibits a file that parses), the draw setup `y₀` and the records' custody `hCust` (set up from
@@ -274,15 +274,15 @@ def SampledKSLivePubAll : Prop :=
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k M Rw (Bridge.ioSum P) ρ +
         Bridge.lossPub k (Bridge.ioSum P) ρ
-          (Fintype.card (Bridge.PubIx dj y₀ P vb L (reg σ)) * B.Pr Claims.Sampling.sha512Msg))
+          ((nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx dj y₀ P vb L) * B.Pr Claims.Sampling.sha512Msg))
 
 open Classical in
 /-- **`SampledKSLivePub`'s nontrivial lemma**: `SampledKSLivePub` at the verifier that accepts everything is
 false at any setting of its file-level fields whose circuit has no port (so its commitment opens nothing) and returns a
 computed gate, with every unit drawn (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires, the deployed parameters
-(`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`) and a prover whose finder `B^τ` has `K·Pr[B^τ] ≤ 2^-200`. There the
+(`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`) and a prover whose finder `B^τ` has `J²·K·Pr[B^τ] ≤ 2^-200`. There the
 extractor's values fail the claim at every run (`Bridge.not_relS_unopened`), so `Pr[accept ∧ ¬ RelS] = 1`, while
-`δ + f(K·Pr[B^τ]) < 1`. The toy (`Bridge.toy_exceeds`) is such a circuit, built by hand; the binders left are the
+`δ + f(J²·K·Pr[B^τ]) < 1`. The toy (`Bridge.toy_exceeds`) is such a circuit, built by hand; the binders left are the
 files' parses, the draw setup, the records' custody, A3 and `B^τ`'s collision probability. -/
 theorem sampledKSLivePub_nontrivial :
   ∀ (n : ℕ) (Reg : Type)
@@ -320,7 +320,7 @@ theorem sampledKSLivePub_nontrivial :
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     kd = n → 1 ≤ K₀ → D.unroll.ports.size = 0 → (∃ g ∈ Cc.outputs, (Cc.op g).isInput = false) →
     Bridge.ioSum P ≤ 2 ^ 40 →
-    (Fintype.card (Bridge.PubIx dj y₀ P vb L (reg σ)) : ℝ) *
+    (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx dj y₀ P vb L) *
         (Bridge.pubFinder dj y₀ P vb Bridge.kDep (2 ^ 192) (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ)
           (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200 →
     ¬ SampledKSLivePubAll := by
@@ -345,7 +345,7 @@ theorem sampledKSLivePub_nontrivial :
     rw [hkdn]
     exact Nat.le_mul_of_pos_left n hK1
   have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW
-    (mul_nonneg (Nat.cast_nonneg _) (Claims.Pr_nonneg _)) hB
+    (mul_nonneg (mul_nonneg (sq_nonneg _) (Nat.cast_nonneg _)) (Claims.Pr_nonneg _)) hB
   exact not_le.2 (Bridge.exceeds_of_not τ (Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
     (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _ (by positivity) hg hgi) hlt) h
 
@@ -364,8 +364,8 @@ open Classical in
 At any setting of its file-level fields whose circuit has no port and returns a computed gate, with every unit drawn
 (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires and the deployed parameters (`sampledKSLiveV2_honest`), V2's
 additive bound is below `Pr[True ∧ ¬ RelS] = 1` (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`) at every prover
-whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `K·Pr[B^τ] ≤ 2^-200`: there the bound is at
-most `δ + f(K·Pr[B^τ]) < 1` (`Bridge.boundPr_le_pub`). That premise is this lemma's, not V2's: V2 holds at every
+whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `J²·K·Pr[B^τ] ≤ 2^-200`: there the bound is at
+most `δ + f(J²·K·Pr[B^τ]) < 1` (`Bridge.boundPr_le_pub`). That premise is this lemma's, not V2's: V2 holds at every
 prover, and it only places the prover where its bound is below 1. `SampledKSLiveV3`'s bound
 and its event at the verifier that accepts everything are V2's, so this is V3's nontrivial lemma too. The toy
 (`Bridge.toy_exceeds`) is such a circuit, built by hand. -/
@@ -409,7 +409,7 @@ theorem sampledKSLiveV2_nontrivial :
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     kd = n → 1 ≤ K₀ → D.unroll.ports.size = 0 → (∃ g ∈ Cc.outputs, (Cc.op g).isInput = false) →
     Bridge.ioSum P ≤ 2 ^ 40 →
-    (Fintype.card (Bridge.PubIx dj y₀ P vb L (reg σ)) : ℝ) *
+    (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx dj y₀ P vb L) *
         (Bridge.pubFinder dj y₀ P vb Bridge.kDep (2 ^ 192) (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ)
           (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200 →
     ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -437,7 +437,7 @@ theorem sampledKSLiveV2_nontrivial :
     rw [hkdn]
     exact Nat.le_mul_of_pos_left n hK1
   have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW
-    (mul_nonneg (Nat.cast_nonneg _) (Claims.Pr_nonneg _)) hB
+    (mul_nonneg (mul_nonneg (sq_nonneg _) (Nat.cast_nonneg _)) (Claims.Pr_nonneg _)) hB
   have hδ : (0 : ℝ) ≤ δ := by
     show (0 : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
     positivity
