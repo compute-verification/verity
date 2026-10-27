@@ -6,7 +6,7 @@ It checks the compiled `flock-verify` only, on one record. It makes no Lean prem
 records a theorem quantifies over.
 
 The session is rope-head/neox-bf16/pair at n=16, m=25, k_log=22 under `hm96-sha512/v1`, every unit drawn, written by
-`verity/ml/flock/pod/80-rec-inner.sh N=16` (run r20261026-212829-1d52, commit 4331ec922a), whose live verdicts are
+`verity/ml/flock/pod/80-rec-inner.sh N=16` (at commit 4331ec922a), whose live verdicts are
 `run.json`'s. It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so
 a missing fixture fails these tests rather than skipping them. It catches a verifier that refuses an honest plain
 session in full, which `test_lean_forged_proofs.py`'s `--zk` sessions of four units can't."""
