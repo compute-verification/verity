@@ -54,6 +54,9 @@ over the same bytes.
 
 ## 4. `blake3-keyed/row/v2`
 
+Archived: the served path hashes with SHA-512 (§6). The code keeps this schema so that the archived proof systems'
+benchmark results keep verifying.
+
 ~~~text
 key    = ( "verity/blake3-leaf/v1/" ‖ ("x" for role 1 | "w" for role 2) )  zero-padded to 32 bytes
 digest = BLAKE3( row_bytes, key = key )          (standard keyed mode, 32-byte output)
@@ -81,7 +84,7 @@ sha256/row-nvfp4/v1:       digest = SHA-256( prefix ‖ nvfp4_row_bytes )
 blake3-keyed/row-nvfp4/v1: digest = BLAKE3( nvfp4_row_bytes, key = the §4 key for the role )
 ~~~
 
-The SHA-256 prefix binds the role, the 4-bit code width, `k` and the scale count. The BLAKE3 schema uses §4's role keys;
+The SHA-256 prefix binds the role, the 4-bit code width, `k` and the scale count. The BLAKE3 schema (archived, as §4) uses §4's role keys;
 its schema string, which the tree leaf binds, separates it from `blake3-keyed/row/v2`. Reference and conformance
 vectors: `verity.ml.commitments.rowleaf` (`nvfp4_row_bytes`, `sha256_row_nvfp4_digest`, `blake3_row_nvfp4_digest`) and
 `nvfp4_row_v1_vectors.json` beside this file (flock-backend's reference, checked by `test_rowleaf_nvfp4.py`).
@@ -91,7 +94,7 @@ vectors: `verity.ml.commitments.rowleaf` (`nvfp4_row_bytes`, `sha256_row_nvfp4_d
 Table 1 lists these hashes, all of class standard:
 
 - SHA-256, for the frame-v3 leaves, nodes, pads and domain ids, and for `sha256/row/v1` and `sha256/row-nvfp4/v1`;
-- BLAKE3 (keyed), for `blake3-keyed/row/v2` and `blake3-keyed/row-nvfp4/v1`.
+- BLAKE3 (keyed), for the archived `blake3-keyed/row/v2` and `blake3-keyed/row-nvfp4/v1`.
 
 The Poseidon2 row leaf `poseidon2-babybear-w24/row/v2h` (`rowleaf.SCHEMA_ROW`) stays in the code so that recorded
 results keep verifying. It is algebraic, so no core scheme configuration offers it.
@@ -99,7 +102,7 @@ results keep verifying. It is algebraic, so no core scheme configuration offers 
 ## 6. `frame-v3-sha512`
 
 frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, for SHA-512 data commitments
-(SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+(SHA-512 on every commitment path). It is opt-in:
 - a port's domain is `CommitmentDomain(binding, owner, positions, hash="sha512")`;
 - `FrameV3` over such ports is named `frame-v3-sha512`;
 - nothing recorded moves.
@@ -255,8 +258,10 @@ and `test_rowleaf_bits.py` check them.
 
 ## 7. `frame-b3`
 
+Archived: off the served path, which hashes with SHA-512. The code keeps the mode in `verity.ml.commitments.merkle`.
+
 A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
-`verity.ml.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
+`verity.ml.commitments.merkle`, where the module docstring states the layout. Its user was Pearl-C's hashing format `-h1`
 (`verity/core/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
 B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
 

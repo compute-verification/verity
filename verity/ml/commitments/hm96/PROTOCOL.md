@@ -175,7 +175,7 @@ leaf with the key the circuit used.
 
 ## 6. Cost per row
 
-These are analytic, one row of R bytes per leaf, against today's keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`):
+These are analytic, one row of R bytes per leaf, against the archived keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`), for comparison:
 - *stored* is the salt bytes kept beside the row;
 - the *ANDs* are in-circuit, over the block-aligned row digest (`sha256/row/v1` or `sha512/row/v1`; a bit row of R bytes costs the
   same).
@@ -207,7 +207,7 @@ A proof's own Merkle trees, such as Flock's Ligerito column trees, hide their un
 - the key is the instance's pinned key, fixed before the root;
 - the leaf is `tree_leaf`.
 
-Opening a column reveals the column and its salt. Lane flock-circuit's `flock-leaf/hm96-sha256` reserves exactly `hm96-sha256/v1`'s
+Opening a column reveals the column and its salt. `flock-leaf/hm96-sha256` reserves exactly `hm96-sha256/v1`'s
 sizes: a 128-byte salt and a 160-byte key. `hm96-sha512/v1` needs 192 and 256. Salts from the prover's seeded stream, like the
 operating system's, are modelled as uniform, so the leaves hide statistically given uniform salts (section 3). The key is fixed
 before the root and is never a witness (section 5).
