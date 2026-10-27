@@ -35,7 +35,7 @@ What it takes, against `RecursiveAudit`:
   `RecursiveFirewallPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
-shown at one recorded recursive run with a public inner unit (the F1 gate).
+shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
 -/
 
 namespace Flock.Guarantees

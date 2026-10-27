@@ -243,7 +243,7 @@ theorem hm96Hiding_of {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c :
     Claims.Hm96Hiding My c δ₁ :=
   h
 
-/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Claims.Hm96Hiding My c (2^-193)` for the keyed
+/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`**. `Claims.Hm96Hiding My c (2^-193)` for the keyed
 hash `My` of the pinned key `K*` and the salt hash `c`: hm96 §3 shows it fails for at most `2^-64` of the keys
 (`hm96_sha512_bad_keys`), and that the pinned key is not among them is the assumption. It is instantiated at
 hm96-sha512's `ZkView.My` and `ZkView.saltHash`.

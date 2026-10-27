@@ -38,7 +38,7 @@ abbreviates, unchanged.
   and session record the coin server writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).
 
-The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
+The list belongs in `Security/Definitions/`, whose modules import only Mathlib and the spec; C-Flock's
 definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
 -/
 
