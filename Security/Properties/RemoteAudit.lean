@@ -115,12 +115,12 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
       verifyLeaf (w.seedOf i) pr.plan pr.root p o.leaf o.leafSalt o.receiptPath = true ∧
       (∃ payload,
         (j < reg.blocks ∧ Codec.decode o.block j reg.key none = .ok (some payload) ∧
-          FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot j (hidden payload o.payloadSalt) SCHEMA
-            o.payloadPath = true) ∨
+          reg.payloadDomain.verifyOpening reg.payloadRoot reg.payloadDomain.count j (hidden payload o.payloadSalt)
+            SCHEMA o.payloadPath = true) ∨
         (reg.blocks ≤ j ∧ ∃ a, appendOf appends j = some a ∧
           Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
-          FrameV3.verifyOpening (appendDomain reg.digest a.first a.count) a.root j (hidden payload o.payloadSalt)
-            SCHEMA o.payloadPath = true)) ∧
+          (appendDomain reg.digest a.first a.count).verifyOpening a.root (appendDomain reg.digest a.first a.count).count
+            j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
 /-- An accepted window drew `drawn` from its openings coin, has exactly one opening a draw, and each drawn receipt's
