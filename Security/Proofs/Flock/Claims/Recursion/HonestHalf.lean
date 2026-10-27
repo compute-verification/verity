@@ -86,15 +86,15 @@ variable (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (
   (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
 
 /-- The deployed brings at `x` under `deployedB`, with the coin server's record and V\*'s layout's readers. -/
-abbrev bLAt : Brings :=
+noncomputable abbrev bLAt : Brings :=
   { { bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } with
     rd := (DeployedR.layR OpenRows.elemR).readers }
 
 /-- The inner verifier the compiled record runs. -/
-abbrev IAt : Claims.Recursion.Inner Coin Claims.Flock.Wit := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
+noncomputable abbrev IAt : Claims.Recursion.Inner Coin Claims.Flock.Wit := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
 
 /-- `RecursiveKSAt`'s compiled record at the deployed brings at `x`. -/
-abbrev DAt : Claims.Recursion.Deploy Coin :=
+noncomputable abbrev DAt : Claims.Recursion.Deploy Coin :=
   recBound _root_.Flock.Readable.relation
     { bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } (DeployedR.layR OpenRows.elemR)
     DeployedR.bdR.IVStar
