@@ -17,7 +17,9 @@ import Proofs.Flock.VBridge.Family.Encode
 # The record the verdict reads decodes, at a decision of `nextR`
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
-(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, RECINT's `TargetDecode` with `At` unfolded). `jAt` is the reader's record (`recJ`) with its digests and coins
+(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, RECINT's `TargetDecode` with `At` unfolded), with no JSON
+premise: the verifier keeps the public header and the draw normalized, so both are well-formed (`unitDraw_of`,
+`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.os` or `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
@@ -95,11 +97,10 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
-  obtain ⟨dr, hz9, he⟩ := z9
-  rw [hb] at hz9
-  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hz9
-  rw [he, ← hz9]
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  rw [hb] at hm
+  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hm
+  rw [hd9, ← hm]
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
@@ -130,7 +131,7 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.Stmt}
     have h1' := h1
     rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hhid] at h1'
     exact FlockVBridge.Family.spec_regions_le (FlockSoundness.Discharge.Hidden.setupHidden_spec' h1')
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := FlockComplete.JsonRT.setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, -, hct⟩ := FlockComplete.JsonRT.setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := FlockComplete.JsonRT.insOf_false hins
   obtain ⟨hzk, hcoins, hdraw⟩ := FlockComplete.JsonRT.Raw.ins_read hw
   have hz : s.read.zk = false := hzk.trans hwz
@@ -148,17 +149,18 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.Stmt}
     cases e : ProvedScope.lawWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  have hwf := FlockComplete.JsonRT.draw_wf hdraw hdd
   have hg : Good d := by
     rcases FlockComplete.JsonRT.law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact FlockComplete.JsonRT.good_stratified hwf hD hK
-    · exact FlockComplete.JsonRT.good_subset hwf hD hk
+    · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hK
+    · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hk
   have hnn : d ≠ Json.null := by
     intro hn'
     rw [hn'] at hD
     cases hD
   refine ⟨st, st.tags.table, rfl, rfl, ?_, hsig, ?_, ?_, rfl, hreg, by simp [hsch]⟩
-  · refine FlockComplete.JsonRT.ofHello_helloOf ?_ hhello
+  · change st.coinTree = none
+    rw [hct]
+    refine FlockComplete.JsonRT.tree?_none ?_
     simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
     exact hcoins hwz
   · unfold DrawOk
@@ -341,8 +343,7 @@ theorem decode_jAt {rd : Msg → Option FinalP} {x : Msg}
   exact fill_of_live hnd hlv i hi hS k hk
 
 /-- **`TargetDecode`** (RECINT's, `At` unfolded): at a dense inner statement where the last step reads and the base
-checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives, under the JSON library's
-specification. -/
+checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives. -/
 theorem decode_at (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin),

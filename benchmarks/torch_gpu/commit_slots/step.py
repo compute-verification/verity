@@ -1,17 +1,7 @@
 """One streamed step of the commit call at a layout on a CUDA device, timed by phase, its roots checked.
 
-    uv run python benchmarks/torch_gpu/commit_slots/step.py export --shared [--row-bytes B] OUT.json  # the workspace's
     python benchmarks/torch_gpu/commit_slots/step.py count LAYOUT.json --out OUT.count.json          # host twin, any CPU
     python benchmarks/torch_gpu/commit_slots/step.py time LAYOUT.json [...] --out DIR                # on the GPU (gpu.sh)
-
-``export --shared`` writes FAMILIES' layout at the frozen shape (``examples/h200``'s map, ``commit.layout``) with
-CIR-113's shared rows, by circuits' row model: in each table a gather reads, only the gather's units stay, so the producers'
-rows go and each gather's commit unit keeps its place. A slot then commits 102,448 rows in 101,718 units; its digest is that
-of circuits' own export. With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
-shared rows, each the next bytes of one tensor, are cut again into one-row units of B bytes (the last of a run what is
-left), and every other unit stays as circuits has it, so a slot commits the same bytes in fewer rows. The file is in
-``slots._layout_json``'s form, the form circuits' export from its row model takes. ``export`` needs the workspace
-environment, since the map imports ``verity``.
 
 ``count`` commits steps of one and two slots of random outputs with the engine's host twin and reads its counters: the
 compressions and ChaCha20 chunks a slot adds, what a step costs once, the compressions a row-slot (alone, and at a step of
@@ -51,9 +41,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 
 import slots as S  # noqa: E402
@@ -69,48 +59,6 @@ TARGET_S, TARGET_SLOTS = 0.95, 4096
 
 
 # --- layouts -----------------------------------------------------------------------------------------------------------
-
-def shared_layout(row_bytes: int = 0) -> S.Layout:
-    """The families layout at the frozen shape with circuits' shared rows: in every table a gather (``AllGather_v1``) reads, the
-    gather's units alone (circuits' row model). With ``row_bytes``, a synthetic variant:
-    each gather's run of shared rows (one-row units, each the next bytes of its table) cut into rows of ``row_bytes``, the
-    run's last row what is left; every other unit as circuits has it. The same bytes in fewer rows."""
-    sys.path.insert(0, str(ROOT / "examples" / "h200"))
-    from e2e_h200.commit import layout as families
-    from e2e_h200.plan import Map
-    from e2e_h200.shape import FROZEN
-
-    fam, groups, done = families(FROZEN), [], {}
-    for g, entries in zip(fam.groups, Map(FROZEN).groups(), strict=True):
-        if id(g) not in done:
-            keep, k = [], 0
-            for _table, units in entries:
-                gathered = any(u.template == "AllGather_v1" for u in units)
-                for u in units:
-                    if not gathered or u.template == "AllGather_v1":
-                        keep.append([g.units[i] for i in range(k, k + u.count)] if gathered and row_bytes else
-                                    [[g.units[i]] for i in range(k, k + u.count)])
-                    k += u.count
-            if k != len(g.units):
-                raise SystemExit(f"the map's group has {k} units and the layout's {len(g.units)}")
-            done[id(g)] = S.Group(g.sources, tuple(u for run in keep for u in _cut(run, row_bytes)))
-        groups.append(done[id(g)])
-    tag = f"/families-shared-rows-{row_bytes}b/" if row_bytes else "/families-shared-rows/"
-    return S.Layout(fam.name.replace("/families/", tag), tuple(groups))
-
-
-def _cut(run: list, row_bytes: int) -> list[tuple[S.Row, ...]]:
-    """``run``'s units: as they are if each is a list of one (a unit kept whole), else the shared rows' bytes in units of one
-    row of ``row_bytes``."""
-    if all(isinstance(u, list) for u in run):
-        return [u[0] for u in run]
-    parts = [u[0].parts[0] for u in run]
-    if any(len(u) != 1 or len(u[0].parts) != 1 for u in run) or any(
-            a.source != b.source or a.offset + a.nbytes != b.offset for a, b in zip(parts, parts[1:])):
-        raise SystemExit("a gather's shared rows are one-part rows, each the next bytes of one tensor")
-    first, end = parts[0].offset, parts[-1].offset + parts[-1].nbytes
-    return [(S.Row((S.Part(parts[0].source, o, min(row_bytes, end - o)),)),) for o in range(first, end, row_bytes)]
-
 
 def uniform(row_bytes: int, units: int) -> S.Layout:
     """``units`` one-row units of ``row_bytes`` each, the next bytes of one tensor: what a row of that size costs alone."""
@@ -163,16 +111,6 @@ def compressions(layout: S.Layout) -> dict[str, int]:
     out["fold"] = 2 * (n - bin(n).count("1"))
     out["slot_trees"] = 0 if n & (n - 1) == 0 else 2 * (n - 1).bit_length()
     return out
-
-
-def export(a: argparse.Namespace) -> int:
-    t = time.perf_counter()
-    layout = shared_layout(a.row_bytes)
-    a.path.write_text(json.dumps(S._layout_json(layout), separators=(",", ":")) + "\n")
-    doc = {"path": str(a.path), "s": round(time.perf_counter() - t, 1), **describe(layout),
-           "compressions_a_slot": compressions(layout)}
-    print(json.dumps(doc))
-    return 0
 
 
 def count(a: argparse.Namespace) -> int:
@@ -230,7 +168,7 @@ def run(a: argparse.Namespace) -> int:
     ok = all(d["ok"] for d in docs.values())
     line = ("ok: " if ok else "FAILED: ") + "; ".join(verdict(k, d) for k, d in docs.items())
     print(json.dumps({"part": "verdict", "verdict": line}), flush=True)
-    if os.environ.get("RESEARCH_RUN_DIR"):
+    if SHARED.RESEARCH_RUN_DIR:
         result(a, docs, ok, line)
     return 0 if ok else 1
 
@@ -245,7 +183,7 @@ def best_enqueue_s(doc: dict[str, Any], graphs: bool) -> float:
 
 def verdict(name: str, doc: dict[str, Any]) -> str:
     s, slots, ref = best_s(doc), doc["slots"], doc["reference"]
-    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target (CMP-149)" if slots == TARGET_SLOTS else ""
+    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target" if slots == TARGET_SLOTS else ""
     modes = {st["graphs"] for st in doc["steps"]}
     host = "; ".join(f"{'on graphs' if g else 'eager'} {best_s(doc, g):.3f} s with the host enqueueing {best_enqueue_s(doc, g):.3f} s"
                      for g in sorted(modes))
@@ -258,7 +196,7 @@ def verdict(name: str, doc: dict[str, Any]) -> str:
 def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, line: str) -> None:
     """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1): each layout's best step and, from its ``.count.json``, the host
     twin's compressions a row-slot."""
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"])
+    run_dir = Path(SHARED.need("RESEARCH_RUN_DIR"))
     ms = []
     for k, d in docs.items():
         ms.append({"name": f"{k}.step_gpu_s", "value": best_s(d), "unit": "s"})
@@ -269,7 +207,7 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
             ms.append({"name": f"{k}.compressions_a_row_slot", "value": d["count"]["compressions_a_row_slot"],
                        "unit": "compressions"})
     out = os.path.relpath(a.out, run_dir) if a.out.resolve().is_relative_to(run_dir.resolve()) else None
-    doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+    doc = {"schema": "research/result/v0.1", "run_id": SHARED.RESEARCH_RUN_ID or "",
            "workload_fingerprint": {"tool": "commit_slots/step.py", "slots": a.slots,
                                     "layouts": {k: d["layout"]["layout_digest"] for k, d in docs.items()}},
            "validation": {"status": "passed" if ok else "failed", "checker": "step.py (slots.commit_slot, slots.step_tree)",
@@ -452,11 +390,6 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    ex = sub.add_parser("export", help="write a layout in slots._layout_json's form")
-    ex.add_argument("--shared", action="store_true", required=True, help="the families layout with circuits' shared rows")
-    ex.add_argument("--row-bytes", type=int, default=0,
-                    help="cut each gather's shared rows into rows of this many bytes (0: circuits' rows)")
-    ex.add_argument("path", type=Path)
     co = sub.add_parser("count", help="count a layout's compressions with the engine's host twin")
     co.add_argument("layout", type=Path, nargs="?", help="a layout in slots._layout_json's form")
     co.add_argument("--uniform", type=int, metavar="BYTES", help="instead, --units one-row units of BYTES each")
@@ -478,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "count" and (a.layout is None) == (a.uniform is None):
         ap.error("count takes a layout or --uniform BYTES")
-    return {"export": export, "count": count, "time": run}[a.cmd](a)
+    return {"count": count, "time": run}[a.cmd](a)
 
 
 if __name__ == "__main__":

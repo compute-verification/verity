@@ -153,7 +153,7 @@ printable with the prover's nonce put in. -/
 theorem stmtOkZk : StmtOkZk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello, -⟩ := setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := insOf_true (setupOf_some c.setup).1
   obtain ⟨hzk, -, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = true := hzk.trans hwz

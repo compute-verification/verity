@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.DeployChecked
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # `hrest`'s base checks: the verdict's other checks hold off any witnesses
@@ -140,16 +141,29 @@ theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {li
     Bool.false_eq_true, ↓reduceIte]
   try rfl
 
-/-- **The honest record's draw is its session's `unitDraw`**, as `drawOfJ` reads it. -/
+/-- **The honest record's draw is its session's `unitDraw`, rebuilt**, as `drawOfJ` reads it. -/
 theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (points : Array (Array F128)) (streams : Array (Array Flock.Round)) (proofs : Array ByteArray) :
-    drawOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) = drawOfU spec.unitDraw := by
+    drawOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) =
+      (drawOfU spec.unitDraw).map Flock.norm := by
   unfold drawOfJ FlockComplete.JsonRT.recordObj
   rw [FlockComplete.JsonRT.getObjVal?_mkObj (FlockComplete.JsonRT.recordList_distinct spec h rootB points streams
     proofs) (k := "unit_draw") (v := spec.unitDraw.getD Json.null) (by simp [FlockComplete.JsonRT.recordList])]
   cases spec.unitDraw with
   | none => rfl
-  | some d => cases d <;> rfl
+  | some d => cases d <;> first | rfl | exact congrArg some (FlockDeploy.norm_norm _).symm
+
+/-- **Rebuilding one side keeps the draw check** where the other side's draw is already rebuilt. -/
+theorem drawEq_map_norm {a b : Option Json} (hb : ∀ e, b = some e → Flock.norm e = e) (h : drawEq a b = true) :
+    drawEq (a.map Flock.norm) b = true := by
+  rw [FlockDeploy.drawEq_iff] at h ⊢
+  cases h with
+  | none => exact .none
+  | @some a' b' h' =>
+    refine .some ?_
+    show FlockDeploy.JsonEquiv (Flock.norm a') b'
+    rw [FlockDeploy.norm_congr a' b' h', hb b' rfl]
+    exact FlockDeploy.JsonEquiv.refl _
 
 /-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
 passes and which carries a draw, where the reading fixes the last message's statement, the session's draw is the
@@ -174,7 +188,8 @@ theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs 
       rw [hf]
       dsimp only
       rw [FlockDeploy.recJ, drawOfJ_recordObj, ← hspec]
-      exact hud _ _ _ _ hx hq
+      exact drawEq_map_norm (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hx).1 he).1)
+        (hud _ _ _ _ hx hq)
     exact checksAtJ_ok_of (f := ⟨f.stmt, f.j, #[]⟩) (hstmt x as cs _ hd) hD hL hC hq hn
   · trivial
 

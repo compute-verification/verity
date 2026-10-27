@@ -515,7 +515,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     rd = OC.OpenedReader(com, run)
     out = PS.padded_population(sr, pm, rd, epr)
     assert hashlib.sha256(json.dumps([out, sr], sort_keys=True).encode()).hexdigest() == \
-        "f8e698e7bd359beba999dd0580036bfc527f9e2181b5ff64ca37d2ea95ccd9bd", "the record block and the population it rewrites, byte for byte"
+        "a5d7a1f4f51030d83a6cbf083ef69ae44b34e81d91e486a70595a178a3aacd74", "the record block and the population it rewrites, byte for byte"
     assert out["ok"], out["problems"]
     assert out["padding_entries"] == out["checked_entries"] == 35 and out["unread_n"] == 0 and out["mismatches_n"] == 0
     assert out["checked_words"] == sum(int(e["width_bytes"]) // PS.LIFTED_CONTAINER[e["encoding"]["committed_dtype"]][1] for e in pads)
@@ -558,7 +558,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     assert x2["name"] == "model.embed_tokens/in" and x2["identity"]["request_id"] == "r1"
     got = rd(2, x2["name"], 0, 4)
     assert got is not None and got != PS.bot_word("i32")[:4] and len(got) == 4
-    # a padding entry whose committed word is NOT the bot word: named (R17-42 s5)
+    # a padding entry whose committed word is NOT the bot word: named
     def tampered(step, name, lo, hi):
         got = rd(step, name, lo, hi)
         if got is not None and step == 3 and name.startswith("fa2.m1/L0/r0/"):
