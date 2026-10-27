@@ -167,13 +167,12 @@ def smi_samples(path: Path) -> list[tuple[datetime, dict[str, float]]]:
                         ("util", "utilization.gpu"))}
     out = []
     for r in rows[1:]:
-        if len(r) != len(head):
+        if len(r) != len(head) or not re.fullmatch(r"\d{4}/\d\d/\d\d \d\d:\d\d:\d\d\.\d+", r[0].strip()):
             continue
-        try:
+        vals = {k: re.match(r"\s*(\d+(?:\.\d+)?)\b", r[i]) for k, i in col.items() if i is not None}
+        if all(vals.values()):   # a sample nvidia-smi couldn't read ([N/A]) is left out
             ts = datetime.strptime(r[0].strip(), "%Y/%m/%d %H:%M:%S.%f").replace(tzinfo=UTC)
-            out.append((ts, {k: float(r[i].split()[0]) for k, i in col.items() if i is not None}))
-        except ValueError:
-            continue
+            out.append((ts, {k: float(m.group(1)) for k, m in vals.items()}))
     return out
 
 
