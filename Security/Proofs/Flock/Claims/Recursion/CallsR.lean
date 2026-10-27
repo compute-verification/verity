@@ -4,9 +4,10 @@ import Proofs.Flock.Claims.Recursion.CallsDecision
 /-!
 # `c_V` at the decisions the deployed reader makes
 
-`nextR_calls_le` reads `hV` only at a decision `actR` makes and at the session its setup returns, so `hV` need hold only
-there (`nextR_calls_le'`, `innerCalls_R_le_acc'`, `lamLin2_R_ge_acc'`). Over every `f`, no `c_V` bounds `decisionAtS`:
-it digests one file per proof.
+`nextR_calls_le` reads `hV` only at a decision `actR` makes, run at the session its setup returns against `H`, so `hV`
+need hold only there (`nextR_calls_le'`, `innerCalls_R_le_acc'`, `lamLin2_R_ge_acc'`). Over every `f`, no `c_V` bounds
+`decisionAtS`: it digests one file per proof. The session against `H` need not be the decision's own (`setupOf` is at
+SHA-512), so `hV` takes it apart from the decision's.
 -/
 
 namespace RecDeploy
@@ -19,9 +20,10 @@ open FlockDeploy (Coin Ins)
 setup returns. -/
 theorem nextR_calls_le' (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x : Msg) (cB cV : ℕ)
     (hB : ∀ v, FlockDeploy.setupOf false x = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
-    (hV : ∀ as cs s spec sts link c₁ mids f, FlockDeploy.actR rd x as cs = .decide s spec sts link c₁ mids f →
-      ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts) →
-      ((FlockDeploy.decisionAtS s spec sts x link c₁ mids f).run.eval H).2.length ≤ cV)
+    (hV : ∀ as cs s spec sts link c₁ mids f spec' sts',
+      FlockDeploy.actR rd x as cs = .decide s spec sts link c₁ mids f →
+      ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec', sts') →
+      ((FlockDeploy.decisionAtS s spec' sts' x link c₁ mids f).run.eval H).2.length ≤ cV)
     (as : List Msg) (cs : List Coin) : ((FlockDeploy.nextR rd x as cs).eval H).2.length ≤ cB + cV := by
   cases ha : FlockDeploy.actR rd x as cs with
   | rej => simp [FlockDeploy.nextR, ha, Claims.OC.eval]
@@ -47,7 +49,7 @@ theorem nextR_calls_le' (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Ms
     rw [key, List.length_append, hl]
     split
     · rename_i w hw
-      have h2 := hV as cs s w.1 w.2 link c₁ mids f ha (by rw [hw])
+      have h2 := hV as cs s spec sts link c₁ mids f w.1 w.2 ha (by rw [hw])
       omega
     · first | omega | (simp only [List.length_nil, Nat.add_zero]; omega) | (simp; omega)
 
@@ -60,9 +62,10 @@ theorem innerCalls_R_le_acc' (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     {r : Fin ((V IV (deployedB b).st).k x) → Coin} (hacc : (run H' P (V IV (deployedB b).st) x ω r).out = .acc)
     (cB cV : ℕ)
     (hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
-    (hV : ∀ as cs s spec sts link c₁ mids f, FlockDeploy.actR rd (xIOf x) as cs = .decide s spec sts link c₁ mids f →
-      ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts) →
-      ((FlockDeploy.decisionAtS s spec sts (xIOf x) link c₁ mids f).run.eval H).2.length ≤ cV) :
+    (hV : ∀ as cs s spec sts link c₁ mids f spec' sts',
+      FlockDeploy.actR rd (xIOf x) as cs = .decide s spec sts link c₁ mids f →
+      ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec', sts') →
+      ((FlockDeploy.decisionAtS s spec' sts' (xIOf x) link c₁ mids f).run.eval H).2.length ≤ cV) :
     ∀ cs ws, (((recBoundAt rel (deployedB b) L).record
       (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).innerCalls H x cs ws).length ≤
         2 ^ 28 + (cB + cV) :=
@@ -81,9 +84,10 @@ theorem lamLin2_R_ge_acc' (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
     {r : Fin ((V IV (deployedB b).st).k x) → Coin} (hacc : (run H' P (V IV (deployedB b).st) x ω r).out = .acc)
     (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) (ps : List (Msg × Out)) (cB cV : ℕ)
     (hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
-    (hV : ∀ as cs s spec sts link c₁ mids f, FlockDeploy.actR rd (xIOf x) as cs = .decide s spec sts link c₁ mids f →
-      ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts) →
-      ((FlockDeploy.decisionAtS s spec sts (xIOf x) link c₁ mids f).run.eval H).2.length ≤ cV)
+    (hV : ∀ as cs s spec sts link c₁ mids f spec' sts',
+      FlockDeploy.actR rd (xIOf x) as cs = .decide s spec sts link c₁ mids f →
+      ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec', sts') →
+      ((FlockDeploy.decisionAtS s spec' sts' (xIOf x) link c₁ mids f).run.eval H).2.length ≤ cV)
     (hc : 2 ^ 28 + (cB + cV) ≤ 2 ^ 55) :
     (∀ cs ws, (((recBoundAt rel (deployedB b) L).record
       (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).innerCalls H x cs ws).length ≤

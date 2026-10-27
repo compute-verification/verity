@@ -8,9 +8,10 @@ import Proofs.Flock.Claims.NumbersDeploy
 
 At a decision `actR` makes, the record the verdict decodes is the reader's (`recJ`) through the substitutions, whose
 streams are the reps' (`jAt_recJ_streams`): `2·n` of them at `n ≤ 64` tables (`setup_tables`), each of at most its
-rep's rounds, `2200` at a session in scope (`repLens_le_in`); and `readPs` reads `2·n` proofs. So a decision calls
-SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`), and `lamLin2_R_ge_acc'` holds at `c_V = 2^24`
-(`lamLin2_R_ge_in`).
+rep's rounds, `2200` at a session in scope (`repLens_le_in`); and `readPs` reads `2·n` proofs. The verdict runs at the
+session the setup returns against `H`, which has at most `64` tables at any hash too (`setupWith_tables`). So a
+decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`), and `lamLin2_R_ge_acc'` holds at
+`c_V = 2^24` (`lamLin2_R_ge_in`).
 -/
 
 namespace FlockDeploy
@@ -18,6 +19,61 @@ namespace FlockDeploy
 open Flock
 open Lean (Json)
 open FlockComplete.JsonRT (streamObj recordObj)
+
+section Walk
+
+open FlockSoundness.Refine FlockSoundness.Discharge.Exec
+
+set_option maxHeartbeats 4000000 in
+/-- **`setupTables_le` at any hash**: at most `Tags.MAX_TABLES` tables, and the spec names one per statement. -/
+theorem setupTablesWith_le {h₀ : ByteArray → ByteArray} {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
+    {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
+    {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray} {spec : SessionSpec}
+    {sts : Array Stmt}
+    (h : Stmt.setupTablesWith (Flock.Hashes.ofSha512 h₀ : Flock.Hashes V) tags cf pf coins count tables draw partition
+      program work stratified closure publicInputs = .ok (spec, sts)) :
+    sts.size ≤ Tags.MAX_TABLES ∧ spec.tables.size = sts.size := by
+  unfold Stmt.setupTablesWith at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h : jp0 () = .ok (spec, sts) := by
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h : jp1 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp1] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  replace h : jp2 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp2] at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+  all_goals
+    first
+    | (simp [Stmt.spec, Tags.MAX_TABLES]; done)
+    | (obtain ⟨hsz, -⟩ := range_mapM_ok (by assumption)
+       refine ⟨by omega, ?_⟩
+       simp [Tags.tableNames, show ¬ count ≤ 1 by omega, hsz])
+
+end Walk
+
+/-- **A setup at any hash has at most 64 tables, and its spec names one per statement.** -/
+theorem setupWith_tables {h₀ : ByteArray → ByteArray} {r : Readable.Read} {spec : SessionSpec} {sts : Array Stmt}
+    (hr : setupWith h₀ r = .ok (spec, sts)) : sts.size ≤ 64 ∧ spec.tables.size = sts.size := by
+  unfold setupWith setupM at hr
+  have h := setupTablesWith_le hr
+  have hmax : Tags.MAX_TABLES = 64 := rfl
+  exact ⟨by omega, h.2⟩
 
 theorem cutLens_getD_length_le {α : Type} : ∀ (ns : List ℕ) (l : List α) (i : ℕ),
     ((cutLens ns l).getD i []).length ≤ ns.getD i 0
@@ -77,16 +133,16 @@ theorem arr_streams_jAt_ok {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} 
 
 /-- **The decided record's streams at the reader's record**: at most one a rep stream, each of at most `R` rounds where
 every rep has at most `R`. -/
-theorem jAt_recJ_streams {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt}
+theorem jAt_recJ_streams {H : Claims.Msg → Claims.Msg} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {ms : List Claims.Msg} {cs : List Coin}
     {ps : Array Flock.Proof} {mids : List (Claims.Msg × Coin)} {x : Claims.Msg} {R : ℕ}
     (hR : ∀ y ∈ repLens spec sts, y ≤ R) :
-    ∃ sj, Record.arr (jAt H spec sts c₁ mids ⟨x, recJ spec sts link c₁ ms cs ps, ps⟩) "streams" = .ok sj ∧
+    ∃ sj, Record.arr (jAt H spec' sts' c₁ mids ⟨x, recJ spec sts link c₁ ms cs ps, ps⟩) "streams" = .ok sj ∧
       sj.size ≤ spec.repStreams.size ∧ ∀ s ∈ sj, ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R := by
   have h0 : Record.arr (⟨x, recJ spec sts link c₁ ms cs ps, ps⟩ : FinalP).j "streams" =
       .ok ((spec.repStreams.zip (recStreams spec sts ms cs)).map (streamObj spec _ link.1.toArray)) :=
     arr_recordObj_streams _ _ _ _ _ _
-  obtain ⟨sj, hsj⟩ := arr_streams_jAt_ok (H := H) (sts := sts) (c₁ := c₁) (mids := mids) h0
+  obtain ⟨sj, hsj⟩ := arr_streams_jAt_ok (H := H) (spec := spec') (sts := sts') (c₁ := c₁) (mids := mids) h0
   obtain ⟨recs₀, h1, h2⟩ := arr_streams_jAt hsj
   have e := Except.ok.inj (h1.symm.trans h0)
   subst e
@@ -111,27 +167,31 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- **A decision's SHA-512 calls at a plain session in scope, on every run: at most `2^24`**: at most `128` files,
-`128` streams of at most `2200` rounds, and `64` tables of two reps. -/
+/-- **A decision's SHA-512 calls at a plain session in scope, on every run: at most `2^24`**, at the session the setup
+returns against `H`: at most `128` files, `128` streams of at most `2200` rounds, and `64` tables of two reps. -/
 theorem decisionAtS_calls_in {rd : Claims.Msg → Option FinalP} (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
     {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} (hin : PlainIn x s₀ spec₀ sts₀)
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
-    (ha : actR rd x as cs = .decide s spec sts link c₁ mids f) :
-    ((decisionAtS s spec sts x link c₁ mids f).run.eval H).2.length ≤ 2 ^ 24 := by
+    (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
+    (hw : ((setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec', sts')) :
+    ((decisionAtS s spec' sts' x link c₁ mids f).run.eval H).2.length ≤ 2 ^ 24 := by
+  obtain ⟨h64', htab'⟩ := setupWith_tables ((setupM_eval H s.read).1.symm.trans hw)
   obtain ⟨v, c₁', r₀, rss, fl, link', pf, hv, -, -, -, -, hread, he⟩ := decR_some (actR_decide ha)
-  obtain ⟨hs, hspec, hsts, hlink, hc₁, -, hf⟩ := DecR.mk.inj he
+  obtain ⟨hs, -, -, hlink, hc₁, -, hf⟩ := DecR.mk.inj he
   have hv' : v = (s₀, spec₀, sts₀) := Option.some.inj (hv.symm.trans hin.setup)
   subst hv'
-  dsimp only at hs hspec hsts hread hf
-  rw [hs, hspec, hsts, hlink, hc₁, hf]
-  obtain ⟨sj, hsj, hsjs, hR⟩ := jAt_recJ_streams (H := H) (spec := spec₀) (sts := sts₀) (link := link') (c₁ := c₁')
-    (ms := pf.2) (cs := cs.tail.dropLast) (ps := pf.1) (mids := mids) (x := x) (repLens_le_in hin)
-  refine (decisionAtS_calls_le H s₀ spec₀ sts₀ x link' c₁' mids _ sj 2200 hsj hR).trans ?_
+  dsimp only at hs hread hf
+  rw [hs, hlink, hc₁, hf]
+  obtain ⟨sj, hsj, hsjs, hR⟩ := jAt_recJ_streams (H := H) (spec := spec₀) (sts := sts₀) (spec' := spec')
+    (sts' := sts') (link := link') (c₁ := c₁') (ms := pf.2) (cs := cs.tail.dropLast) (ps := pf.1) (mids := mids)
+    (x := x) (repLens_le_in hin)
+  refine (decisionAtS_calls_le H s₀ spec' sts' x link' c₁' mids _ sj 2200 hsj hR).trans ?_
   have hps := (readPs_fits hread).1
   obtain ⟨h64, htab⟩ := setup_tables hin.setup
   have hrs := repStreams_size spec₀
-  have htb : (tabsOf sts₀).size = sts₀.size := by simp [tabsOf]
+  have hrs' := repStreams_size spec'
+  have htb : (tabsOf sts').size = sts'.size := by simp [tabsOf]
   have e16 : (2 : ℕ) ^ 16 = 65536 := rfl
   have e24 : (2 : ℕ) ^ 24 = 16777216 := rfl
   try dsimp only
@@ -173,6 +233,6 @@ theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
         (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).vstar x ps)).length ≤
         2 ^ 55 :=
   lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc hS ps cB (2 ^ 24) hB
-    (fun _ _ _ _ _ _ _ _ _ ha _ => FlockDeploy.KS.decisionAtS_calls_in H hin ha) hc
+    (fun _ _ _ _ _ _ _ _ _ _ _ ha hw => FlockDeploy.KS.decisionAtS_calls_in H hin ha hw) hc
 
 end RecDeploy
