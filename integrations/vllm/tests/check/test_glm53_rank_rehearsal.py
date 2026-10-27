@@ -21,7 +21,7 @@ import pytest
 from tests.observe.test_fold_glm53_defaults import BMM_OUT_SCHEMA, CUDA, FAR_SCHEMA, H200, view
 from verity_vllm.check.match import global_match_fast as GF
 from verity_vllm.check.match import program_compare as CMP
-from verity_vllm.engine.profiles import generic as G
+from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, StorageAlloc, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA
