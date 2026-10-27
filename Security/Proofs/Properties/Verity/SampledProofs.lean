@@ -12,16 +12,17 @@ forged release is charged to the vocabulary's forger (`Vocab.forger`, `Vocab.For
 device's signed log in the outcome) and never reduced to a SHA-512 collision.
 
 * `accept_le`: outside the collision and the forgery, sampled proofs' verdict in the play is at most as likely as
-  flock-verify's acceptance in the session (the projection of the device's releases onto the session's coins, and
+  flock-verify `--registered`'s acceptance in the session (the projection of the device's releases onto the session's coins, and
   `acc_of_accepts`).
 * `break_le`: the collision (`Properties.Challenger.Break` at a `.collision` witness), together with C-Flock's loss
-  at its finder `B^τ` (`LiveAt.pubB`, `Bridge.lossPub` at `J²·K·Pr[B^τ]`), is at most the vocabulary's loss at the
+  at its finder `B^τ` (`LiveAt.pubB`, `Bridge.lossPubR` at `J²·K·Pr[B^τ]`), is at most the vocabulary's loss at the
   probability that its finder outputs a collision, as `Accounting.Live.sound_of_break` charges it. The forgery (its
   `.forgery` witness) is `Vocab.forges`, the forger's success probability in the play.
-* `unbound_le`: the units the vocabulary's extractor leaves unbound are at most those faulty under the session
-  extractor's witness (`LiveAt.faultyE`: wrong, or with a committed value unopened; `place` and
+* `unbound_le`: at each outcome flock-verify `--registered` accepts, the units the vocabulary's extractor leaves
+  unbound are at most those faulty under the session's witness at the claims' values (`LiveAt.faultyE`: wrong, or with
+  a committed value unopened, at the registrant's rows where the verifier can hold the reads to them; `place` and
   `circuitOfFile`).
-* `delta_le`: the published error at the strategy's cost is at least C-Flock's (`Bridge.deltaPub`).
+* `delta_le`: the published error at the strategy's cost is at least C-Flock's (`Bridge.deltaPubR`).
 
 `sampledProofsSound` composes them with `LiveAt.soundF`, whose bound needs no premise on the strategy. Its error is
 the vocabulary's (`Vocab.error`, the conditional form `Accounting.condError`, with the forger's term). `sampledProofsSound_nontrivial` is
@@ -40,7 +41,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι}
 the sampling query `q`; the play's collision event `Brk`; and the four facts the target reads off them: outside the
 collision and the vocabulary's forgery (`Vocab.Forges .sampled`), the play's verdict at most as likely as the session's
 acceptance (`accept_le`), the collision and C-Flock's loss together at most the loss at the finder (`break_le`), the
-vocabulary's unbound units at most the session's faulty ones (`unbound_le`), and the errors (`delta_le`). `K₀` covers the claim's `ε` share (`hε`). -/
+vocabulary's unbound units at most the session's faulty ones at each accepted outcome (`unbound_le`), and the errors (`delta_le`). `K₀` covers the claim's `ε` share (`hε`). -/
 structure SampledIn (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
   n : ℕ
   D : Flock.Desc
@@ -55,12 +56,13 @@ structure SampledIn (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V
   hε : (K₀ : ℝ) - 1 ≤ (V.certOf θ).ε * n
   Brk : Outcome → Prop
   accept_le : Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
-    FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK A.I o) A.G τ
+    FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR A.I A.own o) A.G τ
   break_le : Game.prob Brk (V.game θ F c) σ +
-      ENNReal.ofReal (Flock.Bridge.lossPub A.k (Flock.Bridge.ioSum A.P) A.ρ (A.lossArg τ)) ≤
+      ENNReal.ofReal (Flock.Bridge.lossPubR A.k (Flock.Bridge.ioSum A.P) A.ρ (A.lossArg τ)) ≤
     V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ)
-  unbound_le : (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤ (A.faultyE q τ).card
-  delta_le : ENNReal.ofReal (Flock.Bridge.deltaPub n kd K₀ A.k A.M A.Rw (Flock.Bridge.ioSum A.P) A.ρ) ≤
+  unbound_le : ∀ o, FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR A.I A.own o →
+    (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤ (A.faultyE q τ o).card
+  delta_le : ENNReal.ofReal (Flock.Bridge.deltaPubR n kd K₀ A.k A.M A.Rw (Flock.Bridge.ioSum A.P) A.ρ) ≤
     V.delta θ .sampled (V.cost θ F c σ)
 
 namespace SampledIn
@@ -96,11 +98,12 @@ theorem le_error (S : SampledIn V θ F c σ) :
   · refine (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ).trans ?_
     rw [Game.prob_false]
     exact zero_le
-  · have hA : ¬ S.A.HoldsF S.q (V.certOf θ).ε S.τ := fun h => hH (by
-      have h' : ((S.A.faultyE S.q S.τ).card : ℝ) ≤ (V.certOf θ).ε * S.n := h
+  · have hA : ∀ o, FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR S.A.I S.A.own o →
+        ¬ S.A.HoldsF S.q (V.certOf θ).ε S.τ o := fun o ho h => hH (by
+      have h' : ((S.A.faultyE S.q S.τ o).card : ℝ) ≤ (V.certOf θ).ε * S.n := h
       have hu : ((V.units F : ℕ) : ℝ) = S.n := by exact_mod_cast S.units_eq
       have hw : ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
-          (S.A.faultyE S.q S.τ).card := by exact_mod_cast S.unbound_le
+          (S.A.faultyE S.q S.τ o).card := by exact_mod_cast S.unbound_le o ho
       rw [hu]
       exact hw.trans h')
     calc Game.prob (fun o => V.Verdict .sampled o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ
@@ -112,9 +115,10 @@ theorem le_error (S : SampledIn V θ F c σ) :
             (Game.prob S.Brk (V.game θ F c) σ + V.forges .sampled θ F c σ) :=
           (Game.prob_or_le _ _ _ σ).trans (add_le_add le_rfl (Game.prob_or_le _ _ _ σ))
       _ ≤ FlockSoundness.Game.prob
-            (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK S.A.I o ∧ ¬ S.A.HoldsF S.q (V.certOf θ).ε S.τ)
+            (fun o => FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR S.A.I S.A.own o ∧
+              ¬ S.A.HoldsF S.q (V.certOf θ).ε S.τ o)
             S.A.G S.τ + (Game.prob S.Brk (V.game θ F c) σ + V.forges .sampled θ F c σ) :=
-          add_le_add (S.accept_le.trans (FlockSoundness.Game.prob_mono (fun _ ho => ⟨ho, hA⟩) _ _)) le_rfl
+          add_le_add (S.accept_le.trans (FlockSoundness.Game.prob_mono (fun o ho => ⟨ho, hA o ho⟩) _ _)) le_rfl
       _ ≤ S.A.bound S.τ + Game.prob S.Brk (V.game θ F c) σ + V.forges .sampled θ F c σ := by
           rw [← add_assoc]
           exact add_le_add (add_le_add (S.A.soundF S.q (V.certOf θ).ε S.hε S.τ) le_rfl) le_rfl
