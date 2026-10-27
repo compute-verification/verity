@@ -239,23 +239,22 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
           "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
           "included, carries its state out", "Confined party", "standard"),
+    # Its two Lean forms: per party, `Accounting.Assumptions.Parties.WitnessPathPrivate` (nothing overheard on the
+    # party's path to the prover), and per channel, `Verity.Assumptions.WitnessPathPrivate c`
+    # (Security/Definitions/Core/Assumptions/Transport.lean), which Verity.Guarantees.TransportPassiveZk reads with
+    # `ChannelHides` as its keyed alternative
     Entry("witness-path-private", "assumption",
-          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
-          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
-          "else; they travel unencrypted for now", "Witness path private", "standard"),
+          "Witness path private: every node that can read an auditor party's private messages (its signed roots and "
+          "records, the prover's witness) in transit, over the channel's life, is its auditor end, one of the prover's "
+          "own machines, or an auditor party under Confined p; per party, its path to the prover carries no observer but "
+          "its two endpoints", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # the transport's premises (Security/Definitions/Core/Assumptions/Transport.lean):
-    # `WitnessPathPrivate c` is the per-channel premise beside the per-party `Confined p` and the site's `Covered`, read
-    # by Verity.Guarantees.TransportPassiveZk with `ChannelHides` as its keyed alternative
-    Entry("witness-path-private", "assumption",
-          "Witness path private: every node that can read a private frame of the channel in transit, over its life, is "
-          "its auditor end, one of the prover's own machines, or an auditor party under Confined p",
-          "Witness path private", "standard"),
+    # the transport's other premises (Security/Definitions/Core/Assumptions/Transport.lean), beside `witness-path-private`
     Entry("imprint-path-private", "assumption",
           "Imprint path private: every node that can read the bytes of the channel's one imprint exchange, over the "
           "cable between an onsite auditor device and its server, is its auditor end, one of the prover's own machines, "
