@@ -139,11 +139,11 @@ theorem Witness.acceptsZKRAt_eq {s : V (SessionSpec × Array Stmt)}
     obtain ⟨spec, sts⟩ := r
     show (do
         sts.forM (checkRegistered · (some own))
-        sts.forM fun st => Registered.checkComplete st.c own
+        sts.forM fun (st : Stmt) => Registered.checkComplete st.c own
         sts.forM Zk.shapeOk
         Zk.verify spec (sts.map Setup.ofCircuit) record proofs) = (do
         sts.forM (checkRegistered · (some own))
-        sts.forM fun st => Registered.checkComplete st.c own
+        sts.forM fun (st : Stmt) => Registered.checkComplete st.c own
         sts.forM Zk.shapeOk
         Zk.verifyWith Sha512.hash spec (sts.map Setup.ofCircuit) record proofs)
     rw [Zk.verify_eq_verifyWith_of_returns hs hse]

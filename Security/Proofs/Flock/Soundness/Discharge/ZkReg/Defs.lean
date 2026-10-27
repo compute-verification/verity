@@ -36,7 +36,7 @@ a port of `own` (`Registered.checkComplete`, which flock-verify runs whenever `-
 `Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
 def AcceptsZKR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧ sts.forM (checkRegistered · (some own)) = .ok () ∧
-    sts.forM (fun st => Registered.checkComplete st.c own) = .ok () ∧
+    sts.forM (fun (st : Stmt) => Registered.checkComplete st.c own) = .ok () ∧
     sts.forM Flock.Zk.shapeOk = .ok () ∧ Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
 
 variable {n : ℕ} {Reg : Type}
