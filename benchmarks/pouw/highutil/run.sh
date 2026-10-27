@@ -13,8 +13,10 @@
 # COINS: local (default; a development session on this machine, not of record) or gate:USER@HOST (vy-challenger-1 with
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
-# card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
-# where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. PLAIN (default
+# card file or its SKU, for summary.json's declared utilization (the credited MACs a second over θ at the card's clock
+# ceiling, their MFU) and, with NSYS=1, breakdown.json (breakdown.py: each period's time by resource, the protocol's own
+# kernels by role, the GEMM, idle, the tensor pipe, the clock and the host); nvidia-smi's clock event reasons go to
+# clocks-{before,after}.txt. PLAIN (default
 # lt,int_mm): period.py's --plain, the plain arm's baselines, gamma's first: cuBLASLt (v31's lt_setup) and torch._int_mm. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
 # and L (default 512, 512 and 16384: S = 1 at every layer, down as four K-slices at L' 512; LP_MAX=1024 runs it as two at
@@ -56,7 +58,7 @@ nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
 A=benchmarks/pouw/accel_v31
-sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py $D/pipes.py > "$O/sources.sha256"
+sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --lp-max "$LP_MAX" --L "$L" \
   > "$O/prep.log" 2>&1
@@ -118,22 +120,22 @@ $LEASE bash -c '
       nsys export --type sqlite --force-overwrite true -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
       $PY $D/timeline.py "$O/nsys-$arm.sqlite" > "$O/timeline-$arm.json" 2>> "$O/nsys.log"
     done
-    if [ -s "$O/summary.json" ] && [ -n "$CARD_ARGS" ]; then
-      $PY $D/terms.py "$O/summary.json" "$O/timeline-proto.json" > "$O/terms.json" 2>> "$O/nsys.log"
-      echo "terms rc $?" >> "$O/rc.txt"
-    fi
   fi
   if [ "$NCU" = 1 ]; then
     for arm in plain proto; do
       ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
         --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
-        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
+        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|gemm_kernel|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
         $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks 1 --steps 2 --q 16 --periods 1 \
         --negative "" --arms $arm >> "$O/ncu.log" 2>&1
       echo "ncu $arm rc $?" >> "$O/rc.txt"
       $PY $D/pipes.py "$O/ncu-$arm.csv" $CARD_ARGS > "$O/pipes-$arm.json" 2>> "$O/ncu.log"
       echo "pipes $arm rc $?" >> "$O/rc.txt"
     done
+  fi
+  if [ "$NSYS" = 1 ] && [ -s "$O/summary.json" ] && [ -f "$O/card.toml" ]; then
+    $PY $D/breakdown.py "$O" > "$O/breakdown.json" 2>> "$O/nsys.log"
+    echo "breakdown rc $?" >> "$O/rc.txt"
   fi
   kill $smi 2>/dev/null
   exit $r

@@ -1,6 +1,7 @@
 """HIGHUTIL: an 8B model's linear layers at full batch on one GPU, each call credited through Dither's no-fold receipt
 (CMP-172; v31.py's ``Fill``, under verity/core/protocols/pouw/accel/PROTOCOL.md v3.2's commit phase) on V31-GPU's
-prover, with live coins, and the certified share of the GPU's tensor peak that the periods establish.
+prover, with live coins: the declared utilization the periods establish (the credited MACs a second over the tensor
+pipe's MAC rate at the card's ceiling, their MFU) and the prover overhead γ against plain GEMMs on the same linears.
 
 **The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
 14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back, down as K-slices (`calls`, `lp_of`: Dither's
@@ -39,6 +40,7 @@ the Definition and C-Flock --zk.
     capture.py CFG --checkpoint DIR                                           the activations (on the GPU)
     period.py diag CFG LIB OUT                                                one step's GPU openings against the answers'
     period.py run CFG LIB|ref OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
+    period.py summary OUT [--card SPEC] [--to FILE]                           summary.json again from a run's stored periods
 """
 from __future__ import annotations
 
@@ -976,14 +978,23 @@ def baselines(spec: str) -> list[str]:
     return bases
 
 
+#: a plain period's baseline when its record names none (the runs before --plain timed torch._int_mm alone)
+OLD_BASELINE = "int_mm"
+
+
 def summarize(results: list[dict], plan: Plan, source: dict | None = None, card: dict | None = None,
               lt_algos: dict | None = None) -> dict:
-    """The run's numbers. gamma and the plain share are against the first baseline the run timed (cuBLASLt by default);
-    ``baselines`` has them against each."""
+    """The run's numbers, in the Glossary's words. The declared utilization is the declared work's MACs a second over θ,
+    the tensor pipe's MAC rate at the card's SM-clock ceiling (the work's MFU), and the prover overhead (γ) is the
+    protocol's time a step over the plain arm's; neither is a share of the bound. Both are against the first baseline
+    the run timed (cuBLASLt by default), and ``baselines`` has them against each. The unaccounted share is ε_skip +
+    ε_undecl; ε_undecl is only bounded here (1 - the declared utilization, the protocol's own work uncredited), since the
+    protocol's own work counts as certified at the public best's cost, which breakdown.py's times let CERT-SHARE price."""
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
     plains = [r for r in results if r["arm"] == "plain"]
-    order = list(dict.fromkeys(r.get("baseline", "lt") for r in plains))
-    plain = [r for r in plains if r.get("baseline", "lt") == (order[0] if order else None)]
+    base_of = lambda r: r.get("baseline", OLD_BASELINE)  # noqa: E731
+    order = list(dict.fromkeys(base_of(r) for r in plains))
+    plain = [r for r in plains if base_of(r) == (order[0] if order else None)]
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
     med = lambda v: float(np.median(v)) if v else None  # noqa: E731
     per_step = lambda r: r["wall_s"] / r["steps"]  # noqa: E731
@@ -1001,46 +1012,65 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
         "credited_ands": {"value": credited * ANDS_PER_MAC[0] // ANDS_PER_MAC[1],
                           "lowering": lowering(card), "per_mac": ANDS_PER_MAC[0] / ANDS_PER_MAC[1],
                           "creditsize_pinned": False},
-        "card": None, "peak_macs_s": {}, "certified_share": {}, "plain_share_of_peak": {},
+        "card": None, "peak_macs_s": {}, "declared_utilization": None, "declared_utilization_at_run_clock": None,
+        "declared_utilization_without_protocol": None,
         "proto_s_per_step": med([per_step(r) for r in honest]), "plain_s_per_step": med([per_step(r) for r in plain]),
-        "gamma_wall": None, "gamma_gpu": None,
+        "proto_gpu_s_per_step": med([gpu_step(r) for r in honest]), "plain_gpu_s_per_step": med([gpu_step(r) for r in plain]),
+        "prover_overhead": {"gpu": None, "wall": None},
         "gaps_s": med([g for r in honest for g in r["gaps_s"]]),
         "session_open_s": med([r["session_open_s"] for r in honest]),
         "q": med([r["q"] for r in honest]), "eps_skip": med([r["eps_skip"] for r in honest]), "delta": DELTA,
+        "unaccounted_share": None,
         "sm_mhz_median": med(mhz),
         "verdicts": [r["verdict"] for r in honest + neg],
         "negative_refused": [not r["accepted"] for r in neg],
     }
+    ratio = lambda a, b: a / b if a and b else None  # noqa: E731
     if card:
         out["card"] = {"sku": card["sku"], "clock_mhz": card["clock"]["sm"]["value"], "theta_macs_s": theta(card),
                        "tensor": card["rate"]["tensor"]["value"], "sms": card["sm"]["count"]["value"],
                        "clock_source": card["clock"]["sm"]["source"], "tensor_source": card["rate"]["tensor"]["source"]}
-        for key, clock in (("card", None), ("run_clock", out["sm_mhz_median"])):
-            if key == "run_clock" and not clock:
-                continue
-            peak = theta(card, clock)
-            out["peak_macs_s"][key] = peak
-            out["certified_share"][key] = credited / (peak * wall) if wall else None
-            out["plain_share_of_peak"][key] = med([r["macs"] / r["wall_s"] / peak for r in plain])
-    if out["proto_s_per_step"] and out["plain_s_per_step"]:
-        out["gamma_wall"] = out["proto_s_per_step"] / out["plain_s_per_step"]
-        plain_gpu = out["plain_gpu_s_per_step"] = med([gpu_step(r) for r in plain])
-        out["proto_gpu_s_per_step"] = med([gpu_step(r) for r in honest])
-        out["gamma_gpu"] = out["proto_gpu_s_per_step"] / plain_gpu if plain_gpu else None
+        out["peak_macs_s"]["card"] = theta(card)
+        if out["sm_mhz_median"]:
+            out["peak_macs_s"]["run_clock"] = theta(card, out["sm_mhz_median"])
+            out["declared_utilization_at_run_clock"] = ratio(credited, out["peak_macs_s"]["run_clock"] * wall)
+        out["declared_utilization"] = du = ratio(credited, theta(card) * wall)
+        out["declared_utilization_without_protocol"] = med([r["macs"] / r["wall_s"] / theta(card) for r in plain])
+        if du is not None and out["eps_skip"] is not None:
+            out["unaccounted_share"] = {
+                "eps_skip": out["eps_skip"], "eps_undecl_at_most": 1 - du, "eps_at_most": out["eps_skip"] + 1 - du,
+                "delta": DELTA,
+                "eps_undecl": "1 - the certified share, which counts the protocol's own work at the public best's cost: "
+                              "breakdown.json's times, priced at kernels' public-best rates (CERT-SHARE, CMP-190)"}
+    out["prover_overhead"] = {"gpu": ratio(out["proto_gpu_s_per_step"], out["plain_gpu_s_per_step"]),
+                              "wall": ratio(out["proto_s_per_step"], out["plain_s_per_step"])}
     out["baseline"] = order[0] if order else None
     out["baselines"] = {}
     for base in order:
-        rs = [r for r in plains if r.get("baseline", "lt") == base]
+        rs = [r for r in plains if base_of(r) == base]
         b_wall, b_gpu = med([per_step(r) for r in rs]), med([gpu_step(r) for r in rs])
         out["baselines"][base] = {
             "kernel": BASELINES[base], "plain_s_per_step": b_wall, "plain_gpu_s_per_step": b_gpu,
             "sm_mhz_median": med([b["sm_mhz"] for r in rs for b in r["blocks"] if b["sm_mhz"]]),
-            "gamma_wall": out["proto_s_per_step"] / b_wall if out["proto_s_per_step"] and b_wall else None,
-            "gamma_gpu": out.get("proto_gpu_s_per_step") / b_gpu if out.get("proto_gpu_s_per_step") and b_gpu else None,
-            "plain_share_of_peak": {key: med([r["macs"] / r["wall_s"] / peak for r in rs])
-                                    for key, peak in out["peak_macs_s"].items()},
+            "prover_overhead": {"gpu": ratio(out["proto_gpu_s_per_step"], b_gpu), "wall": ratio(out["proto_s_per_step"], b_wall)},
+            "declared_utilization_without_protocol": med([r["macs"] / r["wall_s"] / theta(card) for r in rs]) if card else None,
             **({"cublaslt_algos": lt_algos} if base == "lt" and lt_algos else {})}
     return out
+
+
+def cmd_summary(a: argparse.Namespace) -> int:
+    """summary.json again from a run's stored periods.jsonl, prep.json and card.toml (the old summary's plan, source and
+    cuBLASLt algorithms carried over), with no GPU: a change to the summary's words or numbers rebuilds a run of record."""
+    out = Path(a.out)
+    configure(json.loads((out / "prep.json").read_text()))
+    old = json.loads((out / "summary.json").read_text())
+    results = [json.loads(x) for x in (out / "periods.jsonl").read_text().splitlines() if x.strip()]
+    card = load_card(a.card or str(out / "card.toml"))
+    summary = summarize(results, Plan(**old["plan"]), old["workload"].get("source"), card,
+                        old.get("baselines", {}).get("lt", {}).get("cublaslt_algos"))
+    (Path(a.to) if a.to else out / "summary.json").write_text(json.dumps(summary, indent=1))
+    print(json.dumps(summary, indent=1))
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -1087,6 +1117,11 @@ def main(argv: list[str]) -> int:
     p.add_argument("out")
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_diag)
+    p = sub.add_parser("summary")
+    p.add_argument("out", help="a run's out directory (periods.jsonl, prep.json, card.toml and the old summary.json)")
+    p.add_argument("--card", help="θ's card (default OUT/card.toml)")
+    p.add_argument("--to", help="where to write it (default OUT/summary.json)")
+    p.set_defaults(fn=cmd_summary)
     a = ap.parse_args(argv)
     return a.fn(a)
 

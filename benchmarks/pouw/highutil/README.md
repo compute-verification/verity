@@ -3,8 +3,11 @@
 Llama-3-8B's four linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x 14336) at
 M = 16,384, s8 x s8 with int32 accumulation, called back to back on one RTX PRO 6000 (sm_120) or H200 (sm_90a). Each call goes through
 Dither's no-fold receipt (CMP-172; v31.py's `Fill`, its shapes and commit phase per `verity/core/protocols/pouw/dither/PROTOCOL.md` v3.2) on V31-GPU's prover, with a live
-challenger session a period. The report is the certified share: credited MACs over θ's INT8 tensor peak times the wall
-time, and γ against plain cuBLASLt on the same calls, interleaved.
+challenger session a period. The report is the declared utilization: the credited MACs a second over θ, the tensor
+pipe's INT8 MAC rate at the card's SM-clock ceiling (the declared work's MFU), and the prover overhead γ against plain
+cuBLASLt on the same calls, interleaved. Neither is a share of the bound. The unaccounted share is ε_skip + ε_undecl, and
+the protocol's own work counts as certified at the public best's cost, so `breakdown.py` gives each period's time by
+resource for pricing it there (CERT-SHARE, CMP-190); `summary.json` only bounds ε_undecl by 1 - the declared utilization.
 
 - `period.py`: the workload, the registration, the coins, the picks, the prover's answers and the verifier (its
   docstring has the protocol and the deviations from v3.2). `period.py run CFG ref OUT` runs it all on the CPU at the
@@ -27,7 +30,10 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   wait), for the roots and the openings after the check coin.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
-  tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `terms.py`: where θ x wall goes.
+  tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `breakdown.py`: each period's GPU time
+  split among the GEMM, the protocol's own kernels (leaf hashing, salts, tree levels, coins, noise, form) and idle, the
+  tensor pipe's idle time, the clocks and power, the host's time, and each call's counted work a step.
+  `period.py summary OUT` and `breakdown.py OUT` rebuild both from a run's stored outputs, with no GPU.
 - The prover is `benchmarks/pouw/accel_v31` (V31-GPU, with kernels' sm_90a port and no-fold fast path, #5118 and #5202):
   `period.py` imports its `v31` and `v31lib`, and `hu_lib.cu` includes its `v31.cu`; `run.sh` records their hashes. It
   builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4`
