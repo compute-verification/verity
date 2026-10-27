@@ -344,10 +344,10 @@ SX_HD void kw_of(const u64* w, u64* kw) {
 
 // --- the committer's forms ------------------------------------------------------------------------------------------
 //
-// Three forms of one compression, all the same function: `compress` (a block of 16 words, the schedule in place),
+// Four forms of one compression, all the same function: `compress` (a block of 16 words, the schedule in place),
 // `compress_from<R0>` (rounds R0..79 from a state advanced through rounds 0..R0-1 of a block whose words 0..R0-1 are fixed,
-// `rounds_prefix`, the feed-forward still adding the chaining value) and `compress_kw` (a fixed block, whose schedule plus
-// round constants are precomputed, `schedule_kw`: no schedule on the device).
+// `rounds_prefix`, the feed-forward still adding the chaining value), `compress_kw` (a fixed block, whose schedule plus
+// round constants are precomputed, `schedule_kw`: no schedule on the device) and `compress_compact` (one round body).
 //
 // SHA_ADD selects how the 64-bit adds are issued: 0 lets ptxas emit IADD.64, 1 issues them as 32-bit pairs (add.cc / addc:
 // IADD3 and IADD3.X). On sm_120 every integer instruction issues at the same rate, so the one-instruction IADD.64 is faster
@@ -384,6 +384,7 @@ SX_HD void kw_of(const u64* w, u64* kw) {
 #ifdef __CUDA_ARCH__
 #define SHA_K_TABLE K_DEV
 #define SHA_UNROLL _Pragma("unroll")
+#define SHA_UNROLL1 _Pragma("unroll 1")
 #if SHA_ROLL
 #define SHA_ROLL_PRAGMA _Pragma("unroll 1")
 #else
@@ -392,6 +393,7 @@ SX_HD void kw_of(const u64* w, u64* kw) {
 #else
 #define SHA_K_TABLE K_HOST
 #define SHA_UNROLL
+#define SHA_UNROLL1
 #define SHA_ROLL_PRAGMA
 #endif
 
@@ -482,6 +484,31 @@ HD void compress_kw(uint64_t* st, const uint64_t* kw) {
     for (int i = 0; i < 16; ++i) {
       const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
       const uint64_t t1b = add(t1, kw[j + i]);
+      const uint64_t mj = maj(a, b, c);
+      h = g; g = f; f = e; e = add(d, t1b);
+      d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+    }
+  }
+  st[0] = add(st[0], a); st[1] = add(st[1], b); st[2] = add(st[2], c); st[3] = add(st[3], d);
+  st[4] = add(st[4], e); st[5] = add(st[5], f); st[6] = add(st[6], g); st[7] = add(st[7], h);
+}
+
+// One 16-round body for all 80 rounds (rounds 0..15 take the block's word where later rounds take the schedule's), so a
+// fold whose CTA has mostly idle warps waits on instruction fetch less. The block m is not changed.
+HD void compress_compact(uint64_t* st, const uint64_t* m) {
+  uint64_t w[16];
+  SHA_UNROLL
+  for (int i = 0; i < 16; ++i) w[i] = m[i];
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  SHA_UNROLL1
+  for (int j = 0; j < 80; j += 16) {
+    SHA_UNROLL
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t sch = add3(add(s1(w[(i - 2) & 15]), w[(i - 7) & 15]), s0(w[(i - 15) & 15]), w[i]);
+      const uint64_t wi = j ? sch : w[i];
+      w[i] = wi;
+      const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+      const uint64_t t1b = add3(t1, SHA_K_TABLE[j + i], wi);
       const uint64_t mj = maj(a, b, c);
       h = g; g = f; f = e; e = add(d, t1b);
       d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
