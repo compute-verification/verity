@@ -5,12 +5,13 @@ import Definitions.Core.Accel.Machine
 
 A table is a SKU's, at its firmware's maximum (RT-MODEL-MIN RM5). This one is the RTX PRO 6000 Blackwell Server
 Edition (GB202, sm_120a, 188 SMs; board 900-2G153-0000-000, vBIOS 98.02.8D.00.01), the SKU our sm_120 nodes' cards
-report (run r20261027-015942-eb08): 2430 MHz SM and 12481 MHz GDDR7. Its supported clocks top at 2430 MHz and its SM
-clock offset range is [0, 0]: every lock, application clock and offset above 2430 MHz is refused or clamped
-(note:20261017T1839Z-draft-rt-clock, run r20261017-181535-5132). Another SKU is another table: the Workstation
-Edition boosts to 2617 MHz with 1792 GB/s, and NVIDIA's family headline (4 PFLOPS sparse FP4) is at about 2600 MHz.
-Which SKU and firmware a node's cards are is part of the premise that reads the table (`Assumptions.CardWithinAccel`);
-nothing the protocol checks attests it (open: an attestation of the SKU and the vBIOS). Data-sheet and CALIB numbers.
+report (run r20261027-015942-eb08): 2430 MHz SM and 12481 MHz GDDR7. Its supported clocks top at those two, and its
+SM and memory clock offset ranges are [0, 0] (run r20261027-031620-6643): every lock, application clock and offset
+above them is refused or clamped (note:20261017T1839Z-draft-rt-clock, run r20261017-181535-5132). Another SKU is
+another table: the Workstation Edition boosts to 2617 MHz with 1792 GB/s, and NVIDIA's family headline (4 PFLOPS
+sparse FP4) is at about 2600 MHz. Which SKU and firmware a node's cards are is part of the premise that reads the table
+(`Assumptions.CardWithinAccel`); nothing the protocol checks attests it (open: an attestation of the SKU and the
+vBIOS). Data-sheet and CALIB numbers.
 
 **Stores** (32-bit words): the register file, 64 Ki registers an SM, plus the uniform registers and the predicates
 (3371 words an SM); shared memory with L1, 128 KB an SM; L2, 128 MiB; GDDR7, 96 GiB.

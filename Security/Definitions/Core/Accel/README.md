@@ -79,8 +79,9 @@ compute data compression. The exclusions are open too (RM4): RT and the texture 
 ## Open in the statement
 
 - **The card numbers** (RT-MODEL-MIN RM5, RM6): each table is a SKU's at its firmware's maximum, the H200 SXM's at
-  1980 MHz and 4.8 TB/s and the RTX PRO 6000 Server Edition's at 2430 MHz and 1597.6 GB/s, so the coverage premise
-  says the cards are that SKU and firmware, and nothing the protocol checks attests it. The H200's L2 row is a
+  1980 MHz and 4.8 TB/s and the RTX PRO 6000 Server Edition's at 2430 MHz and 1597.6 GB/s (its SM and memory clock
+  offset ranges are [0, 0], run r20261027-031620-6643), so the coverage premise says the cards are that SKU and
+  firmware, and nothing the protocol checks attests it. The H200's L2 row is a
   placeholder, and sm_120's is one pattern's measurement.
 - **CUDA-core matmul routes** (RM1's residue, RM2, CMP-167): with every register word an `alu` lane, the four-Russians
   table method pays at least an `alu` lane a MAC, at most 6.25% of the `s8` tensor rate on sm_120 and 1.6% on the
