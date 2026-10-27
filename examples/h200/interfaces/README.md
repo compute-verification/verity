@@ -59,7 +59,7 @@ for one server-time block and what the composed verdict reads. It extends the al
 `check` recomputes every derived field from the subprotocols' entries.
 
     python -m verity_e2e_demo.block_record check tests/fixtures/block-record-r2-period0.json
-    python -m verity_e2e_demo.block_record tonight --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
+    python -m verity_e2e_demo.block_record from-runs --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
 
 The fixtures are records of real runs. `block-record-r2-period0` is one period of an all-protocols run: five
 subprotocols accept, and a wipe is carried but not composed, since it ran on another server. So the verdict is pending,
