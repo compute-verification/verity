@@ -167,7 +167,8 @@ NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2026-03-11"                                    # the first version whose pages take Notion-flavored Markdown
 NOTION_HOSTS = ("notion.so", "www.notion.so", "app.notion.com")  # and any *.notion.site
 AREAS = ("Claim or assumption", "Access or keys", "Machines or spend", "Process", "Research direction")   # the database's Area
-PAGE_SECTIONS = ("## The problem", "## Background", "## Options", "## What happens next", "## Sources")
+PAGE_SECTIONS = ("## The problem", "## Background", "## The design the rules want", "## Options", "## What happens next",
+                 "## Sources")
 REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
                  "\t**Your reply.** Write below this line: a decision, a question or a change. "
                  "Top relays it to the lane, which answers under your text starting with its handle.\n"

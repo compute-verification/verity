@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Recursion.FinOpen
 import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 import Proofs.Flock.Claims.Recursion.BindsDeployed
+import Proofs.Flock.Claims.KS.PlainR
 import Proofs.Flock.Claims.Recursion.LayoutBAcc
 
 /-!
@@ -10,6 +11,9 @@ import Proofs.Flock.Claims.Recursion.LayoutBAcc
 The bound record at the recursive verifier, `bdDeployed rel (nextR rdR) cols wER joinR rowInDeployed finalR wR`, at
 V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the output rows', check 5's and the
 `rec-acc` chain's calls, `moreCalls`), fixes every choice the code side makes:
+
+* **The columns** are the reader's, the trimmed plain record's at `rdR` (`deployPlainTrimR rel rdR`), as
+  `RecursiveKSAt` reads them: `bdR` is `RecDeploy.bdR rdR wER finalR wR`.
 
 * **The weights** (ASK-72): `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
   `wCover`). **The join** is `FlockDeploy.joinR`, the rows' digest input `rowInDeployed`.
@@ -197,7 +201,8 @@ def ElemFramed (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × L
 /-- The deployed bound record at `nextR rdR`. -/
 noncomputable abbrev bdR : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace :=
   bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rdR)
-    (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wER FlockDeploy.joinR rowInDeployed finalR wR
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rdR).cols wER FlockDeploy.joinR rowInDeployed finalR
+    wR
 
 /-! ## The output rows' calls -/
 

@@ -51,6 +51,11 @@ path = "../remote_bandwidth/lean"
 name = "core_vstar_recursive"
 path = "../../service/vstar/recursive"
 
+# NCI's check of record (`NciCheck.Protocol`), the registration check onsite runs before composing.
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
+
 [[lean_lib]]
 name = "CoreOnsite"
 

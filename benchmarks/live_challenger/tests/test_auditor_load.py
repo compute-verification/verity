@@ -174,8 +174,8 @@ def test_a_lane_key_starts_a_load_a_warden_rehearsal_with_its_load_whose_minutes
 
 
 def test_a_loads_minutes_are_its_weights_and_witness_at_the_links_rate_and_the_endpoints_wait():
-    """H200: 139,736,443,904 B of weights and 192 B of salts a leaf (553,933,568 leaves) at 80 MB/s, and 900 s."""
-    assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (67, 16)
+    """H200: 139,736,443,904 B of weights and 192 B of salts a leaf (25,284,864 leaves) at 80 MB/s, and 900 s."""
+    assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (46, 16)
     assert set(A.LOAD_SHAPES) == set(LR.SHAPES) and LR.SALT_BYTES == 192
 
 

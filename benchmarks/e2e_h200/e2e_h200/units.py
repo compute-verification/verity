@@ -39,8 +39,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-import replay as RP
-
+from ._replay import RP
 from .commit import StepTables
 from .plan import Map, Units
 from .shape import EPS, PV_K, Shape
