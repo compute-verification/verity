@@ -36,7 +36,7 @@ variable NAME (the cubin the spec's setup builds, say). The harness gives an arm
 its `coins` (`pouw.challenged`). The adapter ends one Pearl-C pass per model forward itself; the passes'
 counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
 experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
-no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
+no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol-served` has `"none"`). The table is part of the resolved spec
 and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
 
 The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
@@ -62,7 +62,7 @@ invariant (`bi-eager`, `bi-compiled`).
 
 A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
 serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
-arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
+arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled-full`). Its control is the built-in
 unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
 experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
 Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
