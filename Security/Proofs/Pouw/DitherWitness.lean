@@ -269,7 +269,7 @@ theorem twCallCap : twPd.callCap = 8 := by
     refine le_ciInf fun ⟨r, hr⟩ => ?_
     have hr1 : r = 1 := by
       by_contra h
-      have h0 : tw.callUse r = 0 := if_neg h
+      have h0 : tw.callUse r = 0 := ite_eq_right h
       linarith
     subst hr1
     show (8 : ℝ) ≤ 1 * 8 / (if (1 : Fin 3) = 1 then 1 else 0)
