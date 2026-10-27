@@ -73,10 +73,6 @@
    "owner": "@compute-accounting",
    "digest": "e0aa827864a696741c2cb8ba8c9718b34c4e4a3c1ff37866299d9402d025fe1e"
   },
-  "Accounting.Assumptions.StreamedReads": {
-   "owner": "@memory-accounting",
-   "digest": "7ce68ec3aa9b09e22aa366b3bf3084e49f8ffe62cb76a0441fb75c07f82faf87"
-  },
   "Accounting.Assumptions.TS.OperandHMu": {
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc"
@@ -349,9 +345,9 @@
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Accounting.Assumptions.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
    "except": [],
-   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's vocabulary and premise on that device (`Definitions.Accounting.Wipe`, `Definitions.Accounting.Assumptions.Wipe`), never a proof"
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Accounting.Wipe`), never a proof"
   },
   "Properties.Identity": {
    "imports": ["Identity.Tagged"],
@@ -533,6 +529,12 @@
    ],
    "assumptions": [],
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": {
+   "owner": "@memory-accounting"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -3301,6 +3303,8 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session at the bound's 2152 reads and at least one segment with no egress, at eps = 2^-128 and foreign_bits = ceil(M/19), and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill M, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps ceil(2^28/19) bits with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
@@ -4135,13 +4139,6 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
-  },
-  "Definitions.Accounting.Assumptions.Wipe": {
-   "digest": "64130dc6d9db5806916f1d27e5da4795c90653d65e16faf04cd5a28ab0e37e04",
-   "definitions": {
-    "Accounting.Assumptions.StreamedReads": "7ce68ec3aa9b09e22aa366b3bf3084e49f8ffe62cb76a0441fb75c07f82faf87"
-   },
-   "guarantees": ["MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound"]
   },
   "Definitions.Accounting.Carrier": {
    "digest": "515fb74d991ec658d9da8799981ef071e41a1d31601f458632d4793c5fdb94a5",
