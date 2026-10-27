@@ -351,7 +351,7 @@ def steady : Trace Unit where
 
 theorem draws_zero : node.draws = 0 := by decide
 
-instance : IsEmpty (Fin node.draws) := by
+instance instIsEmptyFinDrawsNode : IsEmpty (Fin node.draws) := by
   rw [draws_zero]
   infer_instance
 
