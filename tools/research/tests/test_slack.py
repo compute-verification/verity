@@ -2572,6 +2572,15 @@ def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, re
     assert posts(fake) == []
 
 
+def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
+    """Drive and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    for verb in ("send", "reply"):
+        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--machine", "--text", words(400))
+        assert rc == 0 and "words" not in err
+    assert len(posts(fake)) == 2
+
+
 def test_an_announcement_of_200_words_posts_with_a_note_and_one_of_301_is_refused(fake, registry, capsys):
     head = len(slack.plain(slack.announcement({"handle": "infra"}, [], "", None, [])).split())   # its header's words count too
     rc, _, err = run(capsys, "announce", "--as", "infra", "--text", words(200 - head))
