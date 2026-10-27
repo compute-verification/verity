@@ -62,6 +62,8 @@ theorem Ex_run (f : α → ℝ) (g : Game α) :
   | @coin C iF iN k ih =>
     intro s
     classical
+    haveI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => instFintypeTape (k c) (s c)
+    haveI : ∀ c, Nonempty (Tape (k c) (s c)) := fun c => instNonemptyTape (k c) (s c)
     calc Claims.Ex (fun t : Tape (Game.coin C k) s => f (run (Game.coin C k) s t))
         = @Claims.Ex (C × ((c : C) → Tape (k c) (s c))) inferInstance
             (fun t : C × ((c : C) → Tape (k c) (s c)) => f (run (k t.1) (s t.1) (t.2 t.1))) :=
@@ -81,10 +83,8 @@ theorem Pr_run (p : α → Prop) (g : Game α) (s : Strategy g) :
     Claims.Pr (fun t : Tape g s => p (run g s t)) = (prob p g s).toReal := by
   classical
   rw [prob_toReal, ← Ex_run, ← Claims.Ex_ind]
-  congr 1
-  funext t
-  unfold ind
-  exact if_congr Iff.rfl rfl rfl
+  all_goals congr 1
+  all_goals (funext t; unfold ind; exact if_congr Iff.rfl rfl rfl)
 
 /-- **The play as a `Claims.Finder`**: `s`'s run on a tape, with output `out` and cost `cost` there. -/
 noncomputable def tapeFinder {β : Type} (g : Game β) (s : Strategy g) (out : β → Option (Claims.Msg × Claims.Msg))
