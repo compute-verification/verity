@@ -17,9 +17,10 @@ With `p v` the probability that a trial reads exactly `v`, `s` that it reads two
 (`succ_ge`): disagreeing with the plurality is at most as likely as two readings disagreeing.
 
 Its cost stops at the first further trial that reads anything, so it is at most twice a trial's in
-expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). Under expected-time collision
-resistance for the finder (`Assumptions.SHA512CRExpected`), and when every success outputs a
-collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
+expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). When every success outputs a collision,
+`s + Σ_{v ≠ Xv} p v ≤ Pr[the finder outputs a collision] + 1/(eM)` (`link_mass_le_pr`), and under expected-time
+collision resistance for the finder (`Assumptions.SHA512CRExpected`) that is at most
+`2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
 -/
 
 namespace FlockSoundness
@@ -302,6 +303,23 @@ theorem expect_finderCost_le (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e) (M : ℕ) 
     (mul_le_mul_of_nonneg_right h1r hg0).trans hrg
   nlinarith
 
+/-- **The link mass at the finder's collision probability.** If every success of the finder outputs a collision of
+`Hc`, then `s + Σ_{v ≠ Xv} p v ≤ Pr[the finder outputs a collision of Hc] + 1/(eM)` for the plurality `Xv`. -/
+theorem link_mass_le_pr {Dh : Type} (Hc : List UInt8 → Dh)
+    (out : τ × List τ → Option (List UInt8 × List UInt8)) (M : ℕ) (hM : 1 ≤ M)
+    (hout : ∀ x, Succ rd x → ∃ a b, out x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b)
+    {Xv : Val} (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd Xv) :
+    sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) ≤
+      (prob (fun x => ∃ a b, out x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b) (finderG T M)
+        (finderStrat T sT M)).toReal + 1 / (Real.exp 1 * M) := by
+  have h1 := succ_ge T sT rd hX M hM
+  have h2 : expect (ind (Succ rd)) (finderG T M) (finderStrat T sT M) ≤
+      (prob (fun x => ∃ a b, out x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b) (finderG T M)
+        (finderStrat T sT M)).toReal := by
+    rw [prob_toReal]
+    exact expect_mono (ind_mono hout) _ _
+  linarith
+
 /-- **The link mass under expected-time collision resistance.** If every success of the finder
 outputs a collision of `Hc`, and the finder obeys the generic bound, then
 `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` for the plurality `Xv`. -/
@@ -314,12 +332,7 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     {Xv : Val} (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd Xv) :
     sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) ≤
       2 * expect c T sT / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
-  have h1 := succ_ge T sT rd hX M hM
-  have h2 : expect (ind (Succ rd)) (finderG T M) (finderStrat T sT M) ≤
-      (prob (fun x => ∃ a b, out x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b) (finderG T M)
-        (finderStrat T sT M)).toReal := by
-    rw [prob_toReal]
-    exact expect_mono (ind_mono hout) _ _
+  have h1 := link_mass_le_pr T sT rd Hc out M hM hout hX
   have h3 := hCR
   unfold Assumptions.SHA512CRExpected at h3
   have h4 := expect_finderCost_le T sT rd c hc M
