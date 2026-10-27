@@ -35,7 +35,7 @@ with `NOISE "weight"`, `COMMIT "prefix"` and the byteclamp peel of `U` as its ta
 words `T_0 .. T_{KS-1}` are the receipt the fold reads.  The family is a pure exact matmul: the coin, the noise and the
 limbs are its input values, so the arm's own soundness is the s8 census's exact product.
 
-**The spot check** is PIN's `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`): a thread's whole
+**The spot check** is `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`): a thread's whole
 call against its receipt leaf, every absorbed word recomputed from the committed operand leaves and the public noise, from
 `T_{-1} = 0`.  It takes no prefix word as witness, so a thread's whole call is one unit and the committed receipt is
 binding by SHA-512 alone (a meet-in-the-middle over free witness words, which v2 admits, cannot forge it —
@@ -188,7 +188,7 @@ def arm(k: int):
 
 
 def check(ks: int):
-    """H1 + fx1's spot check, PIN's `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`): a thread's
+    """H1 + fx1's spot check, `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`): a thread's
     whole call against its receipt, every absorbed word recomputed, no prefix word a witness."""
     if ks < 2:
         raise DomainError(f"{SCHEME}: a call checks KS >= 2 (one digit word), not {ks}")

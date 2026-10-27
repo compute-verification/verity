@@ -2,10 +2,10 @@
 (``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain: same forming and
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
-The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
+It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
 inside one atom per element, one noisy cast forms the operand, Pearl's tickets are drawn on C̃, the BF16 clean-up U is
-checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the
-theory lane has stated and nobody has proved.
+checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which is
+stated and not proved.
 
 **Per row x** of either operand (k BF16 words, the model's activation and weight dtype):
 
@@ -49,7 +49,7 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 **Why the chain's exactness matters.**  On the domain the chain is exact, so rounding does not tie a word to its order,
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
 
-**The domain and the debit** are the theory lane's (TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row,
+**The domain and the debit** are TT_OUT-FP4's (``tt-out/fp4-sm120``, proposed).  Admission is per row,
 salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not
 NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted and
 its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
