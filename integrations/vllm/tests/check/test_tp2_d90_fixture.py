@@ -679,7 +679,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
          folded_under=None):
     import hashlib
     from verity_vllm.pipeline.tp import fold_match as FM
-    from verity_vllm.check.fold_compare import summarize
+    from verity_vllm.observe.fold.fold import summarize
     tmp_path = tmp_path / f"case{len(list(tmp_path.iterdir()))}"
     tmp_path.mkdir()
     cap = tmp_path / "capture"
