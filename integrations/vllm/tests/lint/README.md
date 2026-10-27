@@ -3,7 +3,7 @@
 The vLLM integration's quality bar is enforced in code by shrink-only ratchets, which every check runs. Each test's
 failure message carries its fix.
 
-- **The rules** (`test_p01_core_abstractions.py` to `test_p14_one_way.py`, machinery in `_ratchet.py`). Each scans
+- **The rules** (`test_p01_core_abstractions.py` to `test_p16_cli_callers.py`, machinery in `_ratchet.py`). Each scans
  `verity_vllm/` with `ast` and regexes, importing nothing, so the lints need neither torch nor vllm and run in seconds.
  A violation is keyed by file, kind, enclosing symbol and detail, and is compared with `allowlists/pNN_*.json`, the
  violations that existed when the rule came in. The rules cover:
@@ -20,7 +20,9 @@ failure message carries its fix.
  - P11: names;
  - P12: shared keys;
  - P13: duplicate bodies;
- - P14: one way.
+ - P14: one way;
+ - P15: no versioned twins;
+ - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
  counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
