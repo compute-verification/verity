@@ -168,6 +168,8 @@ def test_a_constant_named_outside_keeps_its_module(stand_in):
     for text, cited in (("/-! The bound rests on `Pool.Lemmas.side`. -/\ndef bound : Nat := 1\n", True),
                         ("namespace Pool\n\n/-- By `Lemmas.side`. -/\ndef bound : Nat := 1\n\nend Pool\n", True),
                         ("open Pool.Lemmas in\n/-- By `side`. -/\ndef bound : Nat := 1\n", True),
+                        ("namespace Pool.Lemmas\n\n/-- Each side of it, as words. -/\ndef bound : Nat := 1\n\n"
+                         "end Pool.Lemmas\n", False),
                         ("/-! `Lemmas.side` and `side`, outside its namespace. -/\ndef bound : Nat := 1\n", False)):
         spec.write_text(text)
         got = U.decide(pkg, policy, used, [test, U.rel(spec)], [])

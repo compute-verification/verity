@@ -21,8 +21,8 @@ A module of PKG is kept, with the first reason that holds:
 - `named`: a tracked file other than PKG's Lean sources names it, by its path (from the root, or from the source directory
   as `Proofs/A/B.lean`, quoted parts joined by `/` read as one; a path without `.lean` only where no directory has it: a
   directory's path names no module), its module name, a constant's name one component under it, or one of its
-  constants' full names (read off its source's `namespace`s; a Lean file's names read relative to the namespaces it is in
-  and opens too) or a name under one
+  constants' full names (read off its source's `namespace`s; a name a Lean file writes as code, in backticks, read
+  relative to the namespaces it is in and opens too) or a name under one
   (the move maps of `tools/move/`, `archive/` and the store's `moves.json` aside; a document's mention reads nothing, and
   is listed as `docs`; a Lean file's other than its `import`s is `cited`, below). A module named so must still build, and
   what it needs for that is what its declarations use (`refs`, below), its imports being rewritten as `--delete` does; a
@@ -98,6 +98,8 @@ QUALIFIED = re.compile(r"[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)+")
 NAME = re.compile(r"(?<![\w.'])[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)+")
 #: a name, qualified or not, not the tail of a longer one
 NAME_OR_WORD = re.compile(r"(?<![\w.'])[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)*")
+#: a comment's code span, `x`
+CODE_SPAN = re.compile(r"`([^`\n]+)`")
 #: an `open` command's namespaces (and the words of its `hiding`, `renaming` or `in`, which name none)
 OPEN = re.compile(r"(?m)^[ \t]*open[ \t]+(?:scoped[ \t]+)?([^\n(]*)")
 #: a declaration (comments blanked): its modifiers and its name as written
@@ -269,7 +271,7 @@ def references(files: list[str], pkg: str, mods: dict[str, str],
 
     def mentioned(text: str, within: set[str] = frozenset()) -> dict[str, bool]:
         """{module: whether the text names the module itself (its path or name), not only a constant under it}; a name
-        may be written relative to a namespace of ``within``"""
+        written as code may be relative to a namespace of ``within``"""
         hit: dict[str, bool] = {}
         for found, table, base in ((paths, by_path, ROOT), (local, by_src, src)):
             for p in found.finditer(text):
@@ -283,8 +285,10 @@ def references(files: list[str], pkg: str, mods: dict[str, str],
                 hit[x] = True
             elif x.rsplit(".", 1)[1][:1].islower() and (x := x.rsplit(".", 1)[0]) in mods:
                 hit.setdefault(x, False)
-        for x in (NAME_OR_WORD if within else NAME).findall(text) if consts else ():
-            for full in (x, *(f"{w}.{x}" for w in within)):
+        written = [(x, ()) for x in NAME.findall(text)] if consts else []
+        written += [(x, within) for code in CODE_SPAN.findall(text) for x in NAME_OR_WORD.findall(code)] if within else []
+        for x, under in written:
+            for full in (x, *(f"{w}.{x}" for w in under)):
                 parts = full.split(".")
                 if n := next((n for k in range(len(parts), 1, -1) if (n := ".".join(parts[:k])) in consts), None):
                     for m in consts[n]:
