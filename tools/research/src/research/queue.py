@@ -151,8 +151,8 @@ drive tells each conflict its sync finds, and `eject` posts as its ejector.  Not
 there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit (13 Oct: @lean's
 held notes carried conflict handoffs for ci's and circuits' PRs).
 
-`--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside drive
-with no effect on it; its `drive` still runs only on drive (`--dry-run` shows the same off it).
+`--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
+with no effect on them; its `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
