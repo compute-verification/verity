@@ -1,7 +1,7 @@
-"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
-1-3 and 5, as §8 deploys them) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
-block, its payload, its receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's
-verdict.
+"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`: Lean
+`RemoteAudit.checkOpening`'s shape, receipt-path, decode, payload-path and receipt checks, as `opening.py` deploys them)
+as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the block, its payload, its
+receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's verdict.
 
     BlockOpeningCheck_v1{N, C, K, MASKED, BYTES, ROWS, LEAF, P, DR, DP, DV}
         (j: Array<4, U16>, bound: U16, seed: Array<16, U16>, coin: Array<16, U16>, tau: F, t0: F, c: Array<K, F>, [mask: F,]
