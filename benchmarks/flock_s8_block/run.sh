@@ -2,7 +2,8 @@
 # flock_s8_block: C-Flock --zk's price for proof blocks of ROWS adjacent cells of one int8 GEMM output row (program.py), each
 # instance's rows hashed in the circuit, on one GPU node. Run from the tree (research run --on NODE --cwd source):
 #   1. build    flock-circuit with the CUDA prover (60-circuit.sh MODE=build), outside any lease
-#   2. stage    each K:N of STATEMENTS (class_statement --stage-only, N instances of S8Matmul_v1{N=ROWS, K}), outside any lease
+#   2. stage    each K:N[:R] of STATEMENTS (class_statement --stage-only, N instances of S8Matmul_v1{N=R, K}; R defaults to ROWS),
+#               outside any lease, into data/kK-nN-rR
 #   3. sanity   a loopback --zk session set on the CPU of a K = 64, N = 2 statement (and on the GPU first thing in step 4;
 #               SANITY=0 skips that one)
 #   4. gpu      under one `gpu-lease 1` of at most LEASE_MIN minutes: per statement, a loopback --zk session set (a verifier
@@ -40,11 +41,14 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $PY ] || { $UV venv -q --python 3.12 $(dirname $(dirname $PY)) && $UV pip install -q --python $PY numpy blake3; } || exit 1
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_check/src:$REPO/integrations/vllm
 
-# stage K N: the statement of N instances at K into $FW/data/k$K-n$N (circuit.txt, inst-N.bin, pub-N.bin, rec.json)
+# spec K:N[:R]: "K N R NAME"
+spec() { local k n r; IFS=: read -r k n r <<< "$1"; r=${r:-$ROWS}; echo "$k $n $r k$k-n$n-r$r"; }
+# stage SPEC: the statement of N instances of R rows at K into $FW/data/NAME (circuit.txt, inst-N.bin, pub-N.bin, rec.json)
 stage() {
-  local k=$1 n=$2 d=$FW/data/k$1-n$2 o=$O/stage/k$1-n$2
+  local k n r name; read -r k n r name <<< "$(spec $1)"
+  local d=$FW/data/$name o=$O/stage/$name
   mkdir -p $d $o
-  K=$k ROWS=$ROWS N=$n FLOCK_STAGE_CACHE=$d/cache FLOCK_OWN_ROWS=1 FLOCK_PACK_WORDS=1 /usr/bin/time -v -o $o/time-stage.txt \
+  K=$k ROWS=$r N=$n FLOCK_STAGE_CACHE=$d/cache FLOCK_OWN_ROWS=1 FLOCK_PACK_WORDS=1 /usr/bin/time -v -o $o/time-stage.txt \
     $PY -m verity_flock.class_statement --program-module $REPO/benchmarks/flock_s8_block/program.py:program \
     --partition q-template-instance --out $o/out --stage-only --batch fixed --n $n --max-ands $((1 << 34)) \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1 || { tail -5 $o/stage.log; return 1; }
@@ -54,7 +58,7 @@ stage() {
 }
 if has stage; then
   echo "== stage $(date -u +%T)"
-  for kn in 64:2 $STATEMENTS; do stage ${kn%:*} ${kn#*:} || exit 1; done
+  for kn in 64:2 $STATEMENTS; do stage $kn || exit 1; done
 fi
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
@@ -72,9 +76,10 @@ gpu_sample() {
   done > $1/smi.tsv
   [ -n "$P2" ] && { kill $P2 2>/dev/null; wait $P2 2>/dev/null; }   # dcgmi ends on its next write's SIGPIPE
 }
-# session K N MODE: a verifier process and WARM + RUNS prover sessions against it, into $O/MODE/kK-nN; MODE gpu or cpu
+# session SPEC MODE: a verifier process and WARM + RUNS prover sessions against it, into $O/MODE/NAME; MODE gpu or cpu
 session() {
-  local k=$1 n=$2 mode=$3 d=$FW/data/k$1-n$2 o=$O/$3/k$1-n$2 G=
+  local k n r name mode=$2 G=; read -r k n r name <<< "$(spec $1)"
+  local d=$FW/data/$name o=$O/$2/$name
   [ $mode = gpu ] && G=--gpu
   mkdir -p $o; rm -rf $d/sessions-$mode
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
@@ -86,7 +91,7 @@ session() {
   RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $B prove --zk $G \
     --verifier 127.0.0.1:$PORT --instances $d/inst-$n.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
     2> $o/prove.err | stamp > $o/prove.tsv
-  echo "prove k=$k n=$n $mode exit ${PIPESTATUS[0]}"
+  echo "prove $name $mode exit ${PIPESTATUS[0]}"
   touch $o/stop; wait $GS
   kill $SP; wait $SP 2>/dev/null
   grep -h panicked $o/prove.err | head -3
@@ -94,20 +99,20 @@ session() {
 
 if has sanity; then
   echo "== sanity $(date -u +%T)"
-  session 64 2 cpu || exit 1
+  session 64:2 cpu || exit 1
 fi
 if has gpu; then
   echo "== gpu $(date -u +%T)"
-  export -f session gpu_sample free_port wait_serving stamp
-  export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS SANITY
+  export -f session spec gpu_sample free_port wait_serving stamp
+  export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS SANITY ROWS
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-flock-s8-block} gpu-lease 1 --wait --max-min ${LEASE_MIN:-20} -- bash -c '
     nvidia-smi -L > $O/lease-gpu.txt
-    [ "${SANITY:-1}" = 1 ] && session 64 2 gpu
-    for kn in $STATEMENTS; do session ${kn%:*} ${kn#*:} gpu; done'
+    [ "${SANITY:-1}" = 1 ] && session 64:2 gpu
+    for kn in $STATEMENTS; do session $kn gpu; done'
 fi
 if has cpu; then
   echo "== cpu $(date -u +%T)"
-  for kn in $CPU_STATEMENTS; do session ${kn%:*} ${kn#*:} cpu; done
+  for kn in $CPU_STATEMENTS; do session $kn cpu; done
 fi
 echo "== summary $(date -u +%T)"
 python3 $REPO/benchmarks/flock_s8_block/summary.py $O | tee $O/summary.json
