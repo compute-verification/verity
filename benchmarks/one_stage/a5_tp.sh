@@ -161,7 +161,7 @@ advice_windows() {  # COMMIT BUILD PARTITION OUT ADVICE LOGS [ARGS...]: each ran
 }
 
 rc=0
-PART=${A5_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8.json}
+PART=${A5_PARTITION:-"benchmarks/one_stage/glm53_silu_mul_v2_tp8.json"}
 advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under the workload's advice A into WINDOWS and under A'
                  # (A less its last request) into other-windows beside it, the advice and openings there too; sets ADV, a5's
                  # advice arguments

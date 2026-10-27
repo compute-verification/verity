@@ -216,7 +216,7 @@ FORGE=${PP_FORGE:-0:1}
 if [ -n "${PP_TP:-}" ]; then
   $PP advice --workload integrations/vllm/workloads/$ROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
   GLM="--tp-commit $PP_TP/commit --build-root $PP_TP/build"
-  run glm "$GLM" $W/advice.bin ${PP_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json} "${PP_RANKS:-}" || rc=1
+  run glm "$GLM" $W/advice.bin ${PP_PARTITION:-"benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json"} "${PP_RANKS:-}" || rc=1
   run glm-forged "$GLM" $W/advice.bin benchmarks/prove_path/glm53_silu_mul_v2_i1536_step16_all.json "${PP_FORGED_RANKS:-0}" \
     --forge $FORGE || rc=1
 elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
