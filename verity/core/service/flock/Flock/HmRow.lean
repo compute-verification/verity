@@ -1662,6 +1662,12 @@ def pinnedRefused : String :=
 def pinnedLinear : String :=
   "META: a pinned output's bit is not a linear row (its B the constant alone), which its Δ copy of the forced-zero row pins to zero"
 
+/-- META `pinned_outputs`' names, when it is an array of strings. -/
+def pinnedNames (v : Json) : Option (Array String) :=
+  match v with
+  | .arr a => a.mapM fun x => x.getStr?.toOption
+  | _ => none
+
 /-- META `pinned_outputs` (CMP-149's form B), as the prover's `Composite::parse` reads it: the names of the last output
 ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`, which makes every row a bit row; at least one row) whose padding instance's pinned
 output words are zero; and each pinned bit's row a linear row (`linearRow`, its B the constant alone) of a slot of a net
@@ -1672,9 +1678,7 @@ def checkPinned (c : Circuit) : V Unit := do
   | .error _ => pure ()
   | .ok v =>
     let k := HmRow.pinnedCount c.metaJ
-    let names : Option (Array String) := match v with
-      | .arr a => a.mapM fun x => x.getStr?.toOption
-      | _ => none
+    let names := pinnedNames v
     let w0 := pinnedFrom c
     if k == 0 || k > c.outPorts.size || c.ports.size == 0 || c.ports.any (!·.v2) then
       throw pinnedRefused

@@ -56,7 +56,7 @@ theorem entB_linear {c : Circuit} {n i : ℕ}
   have hs : sparseEntry (netOf c n).b i j = ((((netOf c n).b.row i).toList.count j : ℕ) : ZMod 2) := by
     rcases hk with hk | ⟨nm, tb, nb, lo, bits, hk⟩
     · exact sparseEntry_built_b hk i j
-    · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, hB, -⟩ := build_spec hk
+    · obtain ⟨-, -, -, -, -, d1, d2, r3, -, -, -, -, -, -, hB, -⟩ := build_spec hk
       exact sparseEntry_ofRows hB i j
   unfold entB
   rw [hlk, add_zero, hs, hb, count_singleton_zmod]
