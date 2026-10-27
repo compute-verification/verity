@@ -1458,87 +1458,63 @@
     },
     {
       "paths": {
-        "Security/Definitions/Population.lean": "Security/Definitions/SampledProofs.lean",
-        "Security/Definitions/Population/": "Security/Definitions/SampledProofs/",
-        "Security/Proofs/Population.lean": "Security/Proofs/SampledProofs.lean",
-        "Security/Proofs/Population/": "Security/Proofs/SampledProofs/",
-        "Security/Proofs/Properties/CertifierDevice.lean": "Security/Proofs/Properties/NetworkCertifier/Device.lean",
-        "Security/Proofs/Properties/CertifierDevice/Basic.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Basic.lean",
-        "Security/Proofs/Properties/CertifierDevice/Complete.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Complete.lean",
-        "Security/Proofs/Properties/CertifierDevice/Fifo.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Fifo.lean",
-        "Security/Proofs/Properties/CertifierDevice/Issuer.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Issuer.lean",
-        "Security/Proofs/Properties/CertifierDevice/Late.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Late.lean",
-        "Security/Proofs/Properties/CertifierDevice/Lms.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Lms.lean",
-        "Security/Proofs/Properties/CertifierDevice/Shaper.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Shaper.lean",
-        "Security/Proofs/Properties/CertifierDevice/Step.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Step.lean",
-        "Security/Proofs/Properties/CertifierDevice/Trace.lean": "Security/Proofs/Properties/NetworkCertifier/Device/Trace.lean",
-        "Security/Proofs/Properties/CertifierNetwork.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Accepted.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Accepted.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Bucketer.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Bucketer.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Certify.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Certify.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Defs.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Defs.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Encode.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Encode.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Frames.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Frames.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Instance.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Instance.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Records.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Records.lean",
-        "Security/Proofs/Properties/CertifierNetwork/Runs.lean": "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Runs.lean",
-        "Security/Proofs/Properties/Evaluate.lean": "Security/Proofs/Properties/Core/Evaluate.lean",
-        "Security/Proofs/Properties/Identity.lean": "Security/Proofs/Properties/Hash/Identity.lean",
-        "Security/Proofs/Properties/NetworkCertifier.lean": "Security/Proofs/Properties/NetworkCertifier/Check.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Bytes.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Check.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Check.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Extract.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Extract.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Grid.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Grid.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Instance.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Instance.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Outcomes.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Outcomes.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Run.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Run.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Strings.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Strings.lean",
-        "Security/Proofs/Properties/NetworkCertifier/Tree.lean": "Security/Proofs/Properties/NetworkCertifier/Check/Tree.lean",
-        "Security/Proofs/Properties/NetworkRecords.lean": "Security/Proofs/Properties/NetworkCertifier/Records.lean",
-        "Security/Proofs/Properties/NetworkRecords/Accept.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Accept.lean",
-        "Security/Proofs/Properties/NetworkRecords/Bytes.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Bytes.lean",
-        "Security/Proofs/Properties/NetworkRecords/Check.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Check.lean",
-        "Security/Proofs/Properties/NetworkRecords/Commit.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Commit.lean",
-        "Security/Proofs/Properties/NetworkRecords/Instance.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Instance.lean",
-        "Security/Proofs/Properties/NetworkRecords/NoGrid.lean": "Security/Proofs/Properties/NetworkCertifier/Records/NoGrid.lean",
-        "Security/Proofs/Properties/NetworkRecords/Program.lean": "Security/Proofs/Properties/NetworkCertifier/Records/Program.lean",
-        "Security/Proofs/Properties/RemoteAudit.lean": "Security/Proofs/Properties/Accounting/Remote.lean",
-        "Security/Proofs/Properties/RemoteAudit/Bisect.lean": "Security/Proofs/Properties/Accounting/Remote/Bisect.lean",
-        "Security/Proofs/Properties/RemoteAudit/Coins.lean": "Security/Proofs/Properties/Accounting/Remote/Coins.lean",
-        "Security/Proofs/Properties/RemoteAudit/Draw.lean": "Security/Proofs/Properties/Accounting/Remote/Draw.lean",
-        "Security/Proofs/Properties/RemoteAudit/Frozen.lean": "Security/Proofs/Properties/Accounting/Remote/Frozen.lean",
-        "Security/Proofs/Properties/RemoteAudit/Lifetime.lean": "Security/Proofs/Properties/Accounting/Remote/Lifetime.lean",
-        "Security/Proofs/Properties/RemoteAudit/Line.lean": "Security/Proofs/Properties/Accounting/Remote/Line.lean",
-        "Security/Proofs/Properties/RemoteAudit/Live.lean": "Security/Proofs/Properties/Accounting/Remote/Live.lean",
-        "Security/Proofs/Properties/RemoteAudit/Order.lean": "Security/Proofs/Properties/Accounting/Remote/Order.lean",
-        "Security/Proofs/Properties/RemoteAudit/Plan.lean": "Security/Proofs/Properties/Accounting/Remote/Plan.lean",
-        "Security/Proofs/Properties/RemoteAudit/Pooled.lean": "Security/Proofs/Properties/Accounting/Remote/Pooled.lean",
-        "Security/Proofs/Properties/RemoteAudit/Released.lean": "Security/Proofs/Properties/Accounting/Remote/Released.lean",
-        "Security/Proofs/Properties/RemoteAudit/Schedule.lean": "Security/Proofs/Properties/Accounting/Remote/Schedule.lean",
-        "Security/Proofs/Properties/RemoteAudit/Session.lean": "Security/Proofs/Properties/Accounting/Remote/Session.lean",
-        "Security/Proofs/Properties/RemoteAudit/Shared.lean": "Security/Proofs/Properties/Accounting/Remote/Shared.lean",
-        "Security/Proofs/Properties/RemoteAudit/SharedLink.lean": "Security/Proofs/Properties/Accounting/Remote/SharedLink.lean",
-        "Security/Proofs/Properties/RemoteAudit/Sort.lean": "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
-        "Security/Proofs/Properties/RemoteAudit/Window.lean": "Security/Proofs/Properties/Accounting/Remote/Window.lean",
-        "Security/Properties/CertifierDevice.lean": "Security/Properties/NetworkCertifier/Device.lean",
-        "Security/Properties/CertifierNetwork.lean": "Security/Properties/NetworkCertifier/DeviceOutput.lean",
-        "Security/Properties/CertifierNetwork/Runs.lean": "Security/Properties/NetworkCertifier/DeviceOutput/Runs.lean",
-        "Security/Properties/Evaluate.lean": "Security/Properties/Core/Evaluate.lean",
-        "Security/Properties/Identity.lean": "Security/Properties/Hash/Identity.lean",
-        "Security/Properties/NciDesc.lean": "Security/Properties/Nci/Desc.lean",
-        "Security/Properties/NciDesc/Cover.lean": "Security/Properties/Nci/Desc/Cover.lean",
-        "Security/Properties/NciDesc/Verdict.lean": "Security/Properties/Nci/Desc/Verdict.lean",
-        "Security/Properties/NetworkCertifier.lean": "Security/Properties/NetworkCertifier/Check.lean",
-        "Security/Properties/NetworkRecords.lean": "Security/Properties/NetworkCertifier/Records.lean",
-        "Security/Properties/RemoteAudit.lean": "Security/Properties/Accounting/Remote.lean",
-        "Security/Properties/RemoteAudit/Coins.lean": "Security/Properties/Accounting/Remote/Coins.lean",
-        "Security/Properties/RemoteAudit/Line.lean": "Security/Properties/Accounting/Remote/Line.lean",
-        "Security/Properties/RemoteAudit/Line/Premises.lean": "Security/Properties/Accounting/Remote/Line/Premises.lean",
-        "Security/Properties/RemoteAudit/Line/Record.lean": "Security/Properties/Accounting/Remote/Line/Record.lean",
-        "Security/Properties/RemoteAudit/Live.lean": "Security/Properties/Accounting/Remote/Live.lean",
-        "Security/Properties/RemoteAudit/Pooled.lean": "Security/Properties/Accounting/Remote/Pooled.lean",
-        "Security/Properties/RemoteAudit/Schedule.lean": "Security/Properties/Accounting/Remote/Schedule.lean",
-        "Security/Properties/RemoteAudit/Shared.lean": "Security/Properties/Accounting/Remote/Shared.lean"
+        "integrations/vllm/verity_vllm/engine/capture.py": "integrations/vllm/verity_vllm/observe/capture.py",
+        "integrations/vllm/verity_vllm/engine/pinned.py": "integrations/vllm/verity_vllm/observe/pinned.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/observe/chunks.py": "integrations/vllm/verity_vllm/engine/chunks.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/rank_worker.py": "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/check/kernel_identity.py": "integrations/vllm/verity_vllm/engine/kernel_identity.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
+        "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/profiles/__init__.py": "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py",
+        "integrations/vllm/verity_vllm/engine/profiles/generic.py": "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_softcap_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_llama_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_llama_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ln_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ln_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_marlin_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_mhc_moe.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_mhc_moe.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_easy_family.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_easy_family.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_sampling_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_shared_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_shared_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+        "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py": "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py",
+        "integrations/vllm/verity_vllm/engine/profiles/cases.py": "integrations/vllm/verity_vllm/engine/profiles/cases.py",
+        "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py": "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py",
+        "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py": "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/devices.py": "integrations/vllm/verity_vllm/engine/profiles/devices.py",
+        "integrations/vllm/verity_vllm/engine/profiles/family_facts.py": "integrations/vllm/verity_vllm/engine/profiles/family_facts.py",
+        "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py": "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py",
+        "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
+        "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/e2e_h200/": "examples/h200/",
+        "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
     }
   ]

@@ -6,31 +6,33 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.  A mismatch exits 3 before any launch.
 1. The check, on every case in CHECK (fixture.py's): S and O are filled with 0xA5 and QK^T and PV run on the case's
    inputs; each buffer must equal the fixture's byte for byte (every word the Definition defines, and 0xA5A5 everywhere
-   else).  The tilings are q8 (a block per 8 query rows, head and sequence), at 4, 1 and 8 warps a block, and each head
-   tiling that serves the case (attn.serves: h8 and h16 where 8 or 16 divides the query heads a KV head serves, s16 too
-   where no query sees more than 32 keys and PV's K is at most 32; a block per query row and sequence and Y blocks of head
-   groups), each with one group a block of 1 warp, every 8th group a block of 8 warps, all of them in one block of 4
-   warps, and all of them in one warp: each gives the tiles to other warps, for the same bytes.  Each tiling again at 4
-   warps with S and O starting SHIFTS words into their buffers (1: no word pair 32-bit aligned, 2: no 8-word run 16-byte
-   aligned), so the kernels take their narrower stores.  The SLACK poisoned words around S and O must stay poison in every
-   arm.  A control arm fills the buffers and launches nothing,
-   and must be rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
-   them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests:
-   first over its first FULL_B sequences each (the skeleton's M = 4,096 and the block's 16,384, cases <case>_m<B>: gen.py's
-   words depend only on the flat index, so they are the whole batch's first B), then over the whole batch.
-2. The torch functions (attn.py's qk and pv, attn_ref's and the skeleton's interface), on every decode case (one query a
-   sequence) and FULL's batches: over the whole batch with its lens (S past a length must be the fill, -inf); again into
-   0xA5-poisoned out= buffers with fill 0x1234, other warps and check_lens=False; once per KV length T over the sequences of
-   that length with k and v sliced to their first T keys, p a contiguous (B, H, T) (an odd T's rows are not 32-bit
-   aligned) and no lens, as the skeleton calls them; and, but for FULL, with every 5th sequence given no keys (S all
-   fill, O +0).  Every other word must equal the fixture's; for FULL, each sequence's digests.
-   Exit 4 if any check fails, before anything is timed.
+   else).  The tilings are q8 (a CTA per 8 query rows, head and sequence) and ref (the reference kernels: a CTA per 8
+   columns, KV head and sequence), each at 4, 1 and 8 warps a CTA, and each head tiling that serves the case
+   (attn.serves: h8 and h16 where 8 or 16 divides the query heads a KV head serves, s16 too where no query sees more than
+   32 keys and PV's K is at most 32; a CTA per query row and sequence and Y CTAs of head groups), each with one group
+   a CTA of 1 warp, every 8th group a CTA of 8 warps, all of them in one CTA of 4 warps, and all of them in one
+   warp: each gives the tiles to other warps, for the same bytes.  Each tiling again at 4 warps with S and O starting
+   SHIFTS words into their buffers (1: no word pair 32-bit aligned, 2: no 8-word run 16-byte aligned), so the kernels take
+   their narrower stores.  The SLACK poisoned words around S and O must stay poison in every arm.  A control arm fills the
+   buffers and launches nothing, and must be rejected.  The inputs must come back unchanged.  A FULL case
+   (<case>.full.npz) makes its inputs with gen.py, checks them against the fixture's digests (exit 5 if the generator
+   disagrees), and compares each sequence's S and O digests: first over its first FULL_B sequences each (M = 4,096
+   and 16,384, cases <case>_m<B>: gen.py's words depend only on the flat index, so they are the
+   whole batch's first B), then over the whole batch.
+2. The torch functions (attn.py's qk and pv, the skeleton's interface), through each path (fast, and @ref the reference
+   kernels), on every decode case (one query a sequence) and FULL's batches: over the whole batch with its lens (S past a
+   length must be the fill, -inf); again into 0xA5-poisoned out= buffers with fill 0x1234, other warps and
+   check_lens=False; once per KV length T over the sequences of that length with k and v sliced to their first T keys, p
+   a contiguous (B, H, T) (an odd T's rows are not 32-bit aligned) and no lens, as the skeleton calls them; and, but for
+   FULL, with every 5th sequence given no keys (S all fill, O +0).  Every other word must equal the fixture's; for FULL,
+   each sequence's digests.  Exit 4 if any check fails, before anything is timed.
 3. Diagnostic timing (information only, not a panel row), at the H200 model's decode step for each batch of TIME_B
    sequences (TIME_H query heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here
-   at every launch shape of each head tiling that serves (Y and warps; q8 where none does) and through attn.py (one call,
-   one with lens, and the skeleton's TIME_L decode steps, a call of each op at each KV length 1..TIME_L), each the median of
-   REPS after a warm-up, interleaved rep by rep with torch's SDPA (its default choice of backend, FlashAttention's alone,
-   and its TIME_L steps; all include the softmax these two leave out) and with torch's two bf16 batched matmuls (cuBLAS).
+   at every launch shape of each head tiling that serves (Y and warps; q8 where none does), the reference kernels at 4
+   warps (ref_qk, ref_pv, outside best_ms), and through attn.py (one call, one with lens, and the skeleton's TIME_L decode
+   steps, a call of each op at each KV length 1..TIME_L), each the median of REPS after a warm-up, interleaved rep by rep
+   with torch's SDPA (its default choice of backend, FlashAttention's alone, and its TIME_L steps; all include the softmax
+   these two leave out) and with torch's two bf16 batched matmuls (cuBLAS).
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -156,7 +158,7 @@ class Attn:
         G = self.H // self.Hkv
         assert self.H % self.Hkv == 0 and G & (G - 1) == 0, (self.H, self.Hkv)
         self.gshift = G.bit_length() - 1
-        self.tilings = ("q8", *(t for t in attn.GROUP if attn.serves(t, G, self.Lcap, self.kpv)))
+        self.tilings = ("q8", *(t for t in attn.GROUP if attn.serves(t, G, self.Lcap, self.kpv)), "ref")
         self.s_shape, self.o_shape = (self.B, self.H, self.Mq, self.Lcap), (self.B, self.H, self.Mq, self.D)
         self.dev = {k: cu.put(z[k]) for k in ("Q", "K", "V", "P", "lens", "nq")}
         self.S = cu.alloc((int(np.prod(self.s_shape)) + SLACK) * 2)
@@ -180,20 +182,22 @@ class Attn:
         return self.funcs[attn.kernel(op, self.D, tiling)]
 
     def launch(self, op: str, tiling: str, warps: int, Y: int = 0) -> None:
-        """attn.grid's blocks for ``tiling`` (h8, h16, s16: Y blocks of head groups), of ``warps`` warps."""
+        """attn.grid's CTAs for ``tiling`` (h8, h16, s16: Y CTAs of head groups), of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
         params = (vp * 1)(C.cast(C.pointer(args), vp))
-        self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid(tiling, self.B, self.H, self.Mq, Y), 32 * warps, 1, 1, 0,
-                None, params, None)
+        ctas = grid(tiling, self.B, self.H, self.Mq, Y, self.Lcap if op == "qk" else self.D, self.Hkv)
+        self.cu("cuLaunchKernel", self.kernel(op, tiling), *ctas, 32 * warps, 1, 1, 0, None, params, None)
 
     def shapes(self) -> list[tuple[str, int, int]]:
-        """The check's launches, (tiling, warps, Y): q8 at 4, 1 and 8 warps; each head-group tiling one group a block of
-        1 warp, every 8th group a block of 8 warps, every group in one block of 4 warps, and every group in one warp (s16's
-        reuse of K and V across a warp's groups, and its reload where they change KV head)."""
+        """The check's launches, (tiling, warps, Y): q8 and ref at 4, 1 and 8 warps; each head-group tiling one group a
+        CTA of 1 warp, every 8th group a CTA of 8 warps, every group in one CTA of 4 warps, and every group in one warp
+        (s16's reuse of K and V across a warp's groups, and its reload where they change KV head)."""
         out = [("q8", w, 0) for w in WARPS]
-        for t in self.tilings[1:]:
-            g = self.H // attn.GROUP[t]
-            out += [(t, 1, g), (t, 8, max(1, g // 8)), (t, 4, 1), (t, 1, 1)]
+        for t in self.tilings:
+            if t in attn.GROUP:
+                g = self.H // attn.GROUP[t]
+                out += [(t, 1, g), (t, 8, max(1, g // 8)), (t, 4, 1), (t, 1, 1)]
+        out += [("ref", w, 0) for w in WARPS]
         return list(dict.fromkeys(out))
 
     def poison(self) -> None:
@@ -261,8 +265,8 @@ def check_case(cu: Cuda, funcs: dict, path: str) -> dict:
     for shift in SHIFTS:
         a.shift_outputs(shift)
         for tiling in a.tilings:
-            good, row["arms"][arm_name(tiling, 4, 0 if tiling == "q8" else 1) + f"+{shift}"] = \
-                check_arm(a, z, tiling, 4, 0 if tiling == "q8" else 1)
+            Y = 1 if tiling in attn.GROUP else 0
+            good, row["arms"][arm_name(tiling, 4, Y) + f"+{shift}"] = check_arm(a, z, tiling, 4, Y)
             ok &= good
     a.shift_outputs(0)
     a.poison()
@@ -343,8 +347,8 @@ def api_case(path: str, Bp: int = 0) -> dict | None:
     """attn.qk and attn.pv through torch on a decode case (a FULL one's first Bp sequences): the whole batch with its lens
     (S past them must be the fill); again into poisoned out= buffers with another fill, other warps and check_lens=False;
     each KV length T's sequences with k and v sliced to their first T keys, p a contiguous (B, H, T) and no lens (the
-    skeleton's call); and, but for FULL, every 5th sequence given no keys (S all fill, O +0).  None for a case with prefill
-    rows."""
+    skeleton's call); and, but for FULL, every 5th sequence given no keys (S all fill, O +0).  Each through both paths
+    (attn.PATHS).  None for a case with prefill rows."""
     import torch
 
     full = path.endswith(".full.npz")
@@ -383,35 +387,41 @@ def api_case(path: str, Bp: int = 0) -> dict | None:
         return s
 
     tl = torch.from_numpy(lens.astype(np.int32)).cuda()
-    arms = {"lens": (past(host(attn.qk(q, k, tl)), lens, "lens", attn.NEG_INF), host(attn.pv(p, v, tl, kpv=kpv)))}
-    S0 = torch.full((B, H, Lcap), 0xA5A5 - 0x10000, dtype=torch.int16, device="cuda")
-    O0 = torch.full((B, H, D), 0xA5A5 - 0x10000, dtype=torch.int16, device="cuda")
-    attn.qk(q, k, tl, out=S0, fill=0x1234, warps=1, check_lens=False)
-    attn.pv(p, v, tl, out=O0, kpv=kpv, warps=8, check_lens=False)
-    arms["out_unchecked"] = (past(host(S0), lens, "out_unchecked", 0x1234), host(O0))
-    S2, O2 = np.full((B, H, Lcap), 0xA5A5, np.uint16), np.empty((B, H, D), np.uint16)
-    for T in np.unique(lens).tolist():
-        sel = np.flatnonzero(lens == T)
-        st = torch.from_numpy(sel).cuda()
-        S2[sel, :, :T] = host(attn.qk(q[st], k[st][..., :T, :]))
-        O2[sel] = host(attn.pv(p[st][..., :T].contiguous(), v[st][..., :T, :], kpv=kpv))
-    arms["per_length"] = (S2, O2)
-    row = {"part": "api", "case": name, "B": B, "H": H, "Hkv": Hkv, "D": D, "Lcap": Lcap, "kpv": kpv,
-           "k_form": "(B, T, D)" if Hkv == 1 else "(B, Hkv, T, D)", "arms": {}}
     if not full:  # every 5th sequence with no keys: S all fill, O +0, the rest unchanged
         l0 = lens.copy()
         l0[::5] = 0
         t0 = torch.from_numpy(l0.astype(np.int32)).cuda()
-        arms["lens0"] = (past(host(attn.qk(q, k, t0)), l0, "lens0", attn.NEG_INF), host(attn.pv(p, v, t0, kpv=kpv)))
         wS0, wO0 = wantS.copy(), wantO.copy()
         wS0[::5], wO0[::5] = 0xA5A5, 0
+    arms = {}
+    for via in attn.PATHS:  # each arm through the fast path, and again (@ref) through the reference kernels
+        x = "" if via == "fast" else f"@{via}"
+        arms["lens" + x] = (past(host(attn.qk(q, k, tl, path=via)), lens, "lens" + x, attn.NEG_INF),
+                            host(attn.pv(p, v, tl, kpv=kpv, path=via)))
+        S0 = torch.full((B, H, Lcap), 0xA5A5 - 0x10000, dtype=torch.int16, device="cuda")
+        O0 = torch.full((B, H, D), 0xA5A5 - 0x10000, dtype=torch.int16, device="cuda")
+        attn.qk(q, k, tl, out=S0, fill=0x1234, warps=1, check_lens=False, path=via)
+        attn.pv(p, v, tl, out=O0, kpv=kpv, warps=8, check_lens=False, path=via)
+        arms["out_unchecked" + x] = (past(host(S0), lens, "out_unchecked" + x, 0x1234), host(O0))
+        S2, O2 = np.full((B, H, Lcap), 0xA5A5, np.uint16), np.empty((B, H, D), np.uint16)
+        for T in np.unique(lens).tolist():
+            sel = np.flatnonzero(lens == T)
+            st = torch.from_numpy(sel).cuda()
+            S2[sel, :, :T] = host(attn.qk(q[st], k[st][..., :T, :], path=via))
+            O2[sel] = host(attn.pv(p[st][..., :T].contiguous(), v[st][..., :T, :], kpv=kpv, path=via))
+        arms["per_length" + x] = (S2, O2)
+        if not full:
+            arms["lens0" + x] = (past(host(attn.qk(q, k, t0, path=via)), l0, "lens0" + x, attn.NEG_INF),
+                                 host(attn.pv(p, v, t0, kpv=kpv, path=via)))
+    row = {"part": "api", "case": name, "B": B, "H": H, "Hkv": Hkv, "D": D, "Lcap": Lcap, "kpv": kpv,
+           "k_form": "(B, T, D)" if Hkv == 1 else "(B, Hkv, T, D)", "arms": {}}
     row["fill_past_lens"] = fills
     for arm, (s, o) in arms.items():
         if full:
             row["arms"][arm] = {"S_sequences_differing": int((gen.digests(s[:, :, None]) != f["S"]).any(axis=1).sum()),
                                 "O_sequences_differing": int((gen.digests(o[:, :, None]) != f["O"]).any(axis=1).sum())}
         else:
-            ws, wo = (wS0, wO0) if arm == "lens0" else (wantS, wantO)
+            ws, wo = (wS0, wO0) if arm.startswith("lens0") else (wantS, wantO)
             row["arms"][arm] = {"S_mismatches": int((s != ws).sum()), "O_mismatches": int((o != wo).sum())}
     row["ok"] = all(fills.values()) and not any(n for a in row["arms"].values() for n in a.values())
     return row
@@ -451,15 +461,18 @@ def timing_at(cu: Cuda, funcs: dict, reps: int, z: dict) -> dict:
         return ms.value
 
     arms = {}
-    for t in a.tilings[1:]:  # every launch shape of the head-group kernels: Y blocks of head groups, of 1 to 8 warps
+    heads = [t for t in a.tilings if t in attn.GROUP]
+    for t in heads:  # every launch shape of the head-group kernels: Y CTAs of head groups, of 1 to 8 warps
         g = H // attn.GROUP[t]
         for Y in sorted({max(1, g >> s) for s in range(0, 8)}, reverse=True):
             for w in (1, 2, 4, 8):
                 for op in ("qk", "pv"):
                     arms[f"{op}_{t}@{w}w/y{Y}"] = lambda op=op, t=t, w=w, Y=Y: ours(op, t, w, Y)
-    if len(a.tilings) == 1:  # a warp per key tile of QK^T and per d tile of PV
+    if not heads:  # a warp per key tile of QK^T and per d tile of PV
         arms["qk_q8"] = lambda: ours("qk", "q8", min(8, -(-L // 16)))
         arms["pv_q8"] = lambda: ours("pv", "q8", D // 16)
+    for op in ("qk", "pv"):  # the reference path, named outside best_ms's "qk_" and "pv_"
+        arms[f"ref_{op}"] = lambda op=op: ours(op, "ref", 4)
     out = {"part": "timing", "shape": {"B": B, "H": H, "Hkv": Hkv, "D": D, "L": L, "queries_per_sequence": 1, "kpv": attn.PAD_K},
            "reps": reps, "attn_py_launch": attn.LAUNCH, "note": "diagnostic only; SDPA includes the softmax qk and pv leave out"}
     try:

@@ -46,19 +46,16 @@ in two real runs (`Fork`).
 Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
-One hypothesis no check implies yet: every table's statement avoids the mask slot (`avoidsMask`), until the
-verifier's D11 refusal in `Net.ofRows` discharges it. The rest are an untyped statement and `EndToEndHidden`'s
-reference setup `y₀`: table 0's, at `mPts` link points, at some draw `d₀`, which every draw flock-verify accepts gives
-(`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
+Its hypotheses are an untyped statement and `EndToEndHidden`'s reference setup `y₀`: table 0's, at `mPts` link points,
+at some draw `d₀`, which every draw flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). Every
+table's statement avoids the mask slot, since `verify --zk` refuses one that meets it
+(`FailClosed.DrawSetupZHJ.avoidsMask`). -/
 def ZeroKnowledgeHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type) (P : LigProver)
     -- the session's statement, the record's draw file, and the reference setup
     (I : Inputs) (_ht : I.tags.typed = false)
     (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
-    -- every table's statement avoids the mask slot
-    (_hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
-      (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
     -- a draw at which `verify --zk` sets every table up, and a registration
     (S : Finset (Fin n)) (R : Reg)
     (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),

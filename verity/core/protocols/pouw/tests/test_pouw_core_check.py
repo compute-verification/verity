@@ -144,7 +144,10 @@ EXPECT = {
     "live-layout": "salt: the coin commitment's coins are not a Pearl-C salt session's",
     "salt-missing": f"salt: {CC.NO_WINDOW_SALT}", "salt-type": "evidence: public.salt: not an object",
     "salt-seeded": f"salt: {CC.SEEDED_SALT}", "salt-keys": f"salt: {CC.WINDOW_SALT_FORM}",
-    "salt-no-w": f"salt: {CC.WINDOW_NO_W}", "salt-epoch": f"salt: {CC.WINDOW_EPOCH}",
+    "salt-no-w": f"salt: {CC.WINDOW_NO_W}", "salt-two-w": f"salt: {CC.WINDOW_NO_W}",
+    "salt-no-x": f"salt: {CC.WINDOW_NO_X}", "salt-values-form": f"salt: {CC.WINDOW_NO_X}",
+    "salt-x-after": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-epoch": f"salt: {CC.WINDOW_EPOCH}",
     "salt-other-epoch": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
     "salt-coins-form": "salt: the salt's coins are malformed: ", "salt-coins": f"salt: {CC.WINDOW_NOT_SIGNED}",
     "salt-opening": "salt: the salt's coin does not open against", "salt-value": f"salt: {CC.WINDOW_SALT}",
@@ -797,7 +800,7 @@ def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, 
 
 
 def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_session():
-    """CMP-81 under LIVESALT2. An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
+    """An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
     session the auditor's ledger reserved, opened on its salt epoch's root and ended complete, having released that coin
     alone, and the verifier's seeded coins play no part. Refused: a verifier that holds no ledger, the session opened on
     another root (a random one, or H1's window-open root), #3868's session (H1's layout, ended incomplete), an end that

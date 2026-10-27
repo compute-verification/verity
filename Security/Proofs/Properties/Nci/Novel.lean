@@ -8,10 +8,10 @@ Toward `NovelExact`. A segment names gates with their widths (`Width.segGates`).
 collects, per IU, the segments its root nodes read whose first piece is in a root node of another IU and outside θ's
 nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
 (`ius_snd`, `hashSet_fold_sum'`), and `Desc.novelWidth` sums the widths of the distinct gates of those segments
-(`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here, open
+(`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here
 (`novelExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
 name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
-segment's first piece.
+segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 
 `descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.
@@ -23,7 +23,7 @@ open DescAgree
 open Flock.Program (Prog)
 open Width (pieceGates piecesGates segGates segsGates dedup_sum)
 
-/-- **Open: `analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
+/-- **`analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
 with `NciCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
 gate `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the segment's first piece; and those gates are
 exactly the gates outside node `k` that its gates read. -/

@@ -155,7 +155,7 @@ def load_settings(path: Path) -> None:
 CALLER_ENV = dict(os.environ)   # before dispatch.env: what each of the loop's ticks starts from
 load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
-IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
+IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "verity-sky-gpu:3dbe60044f88c462")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
 CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-127,176-191")
 PROVER_CPUS = os.environ.get("VY_PROVER_CPUS", "128-175")

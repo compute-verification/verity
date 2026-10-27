@@ -23,7 +23,7 @@ versions.json.  Every number is MEASURED unless the key says otherwise.
     PYTHONPATH=. verity-vllm commit \
         --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
 
-PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
+PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-03 verdict)
   Purpose: run the row's workload on ONE engine in interleaved (control, instrumented) pairs; the instrumented arm commits every
     required value through the committer (row_pod: native_collect_v2b + the FA2/FA3 M1 tap); the verdict is then computed from the
     committed bytes -- the checks: required-value coverage (`coverage`), openings, local replay (`C2`: oracle compare vs the Match
@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import time
 
-from verity_vllm.records.commit_run import SCHEMA
+from verity_vllm.records.commit_run import SCHEMA, CommitRun
 
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
@@ -65,7 +65,7 @@ from typing import Any
 from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
-from verity_vllm.config import group, option
+from verity_vllm.config import group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -76,7 +76,7 @@ from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va 
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
@@ -258,7 +258,8 @@ def admission_lag(wl: dict) -> int:
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """[DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
-    checkpoint's generation_config / config + the workload's sampling block (None = undeclared); `lag` = the workload Program's declared
+    checkpoint's generation_config / config + the workload record's sampling block, read from the file `wl` was loaded from, as GP-01
+    reads it (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an
     unattested engine leaves it None (every EOS stop then fails by name) -- never the engine value as the rule, never inferred from the
@@ -267,7 +268,8 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     try:
         from verity_vllm.pipeline import global_program as _GP
         from verity_vllm.program.workload import eos_lag_rows_declared
-        _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
+        from verity_vllm.records.workload import Workload
+        _srule = _GP.stop_rule(eng.cp.get("local_path"), None, Workload.load(wl["source"]).sampling)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
         _decl_lag = _GP.workload_target(wl.get("target")).lag()
@@ -407,6 +409,36 @@ def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str
             except Exception:  # noqa: BLE001
                 pass
     return {"count": len(new), "mib": round(sum(v[0] for v in new.values()) / 2**20, 1), "largest": holders}
+
+
+V1 = "vllm-v1"
+
+
+def scheme_refusal(args: Any, wl: dict[str, Any]) -> str | None:
+    """Why the Commit can't commit under ``--commit-scheme`` (None: it can), serve-openai's rule (`serve_seal.scheme_refusal`):
+    vllm-v1 commits SHA-256 (32-byte roots), which only a recorded run's readers take, so it only commits again the recorded vllm-v1
+    Commit ``--of-record`` names, one whose ``runs.jsonl`` records committed runs under 32-byte run roots alone, of the workload's model."""
+    of_record = getattr(args, "of_record", None)
+    if of_record and args.commit_scheme != V1:
+        return f"--of-record names a recorded {V1} Commit to commit again under --commit-scheme {V1}, not under {args.commit_scheme}"
+    if args.commit_scheme != V1:
+        return None
+    if not of_record:
+        return (f"--commit-scheme {V1} commits SHA-256 (32-byte roots), which only a recorded run's readers take: commit under {SR.NAME}, "
+                f"the default, or name the recorded {V1} Commit this one commits again with --of-record RUN_DIR (its runs.jsonl)")
+    try:
+        runs = [r for r in CommitRun.load_lines(Path(of_record) / "runs.jsonl") if r.commit is not None and r.commit.run_root]
+    except (OSError, ValueError) as e:
+        return f"--of-record {of_record}: not a recorded Commit ({type(e).__name__}: {e})"
+    if not runs:
+        return f"--of-record {of_record}: its runs.jsonl records no committed run"
+    if any(len(r.commit.run_root) != 2 * 32 for r in runs):
+        return (f"--of-record {of_record} committed {SR.NAME} ({SR.ROOT_BYTES}-byte run roots), not {V1}: commit under {SR.NAME} "
+                f"(drop --commit-scheme {V1} and --of-record)")
+    models = {r.entry.get("model") for r in runs}
+    if wl.get("model") and models != {wl["model"]}:
+        return f"--of-record {of_record} committed {sorted(map(str, models))}, not {wl['model']}: a Commit under {V1} commits its recorded run's model again"
+    return None
 
 
 def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
@@ -889,7 +921,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            "deferred_n": len(deferred), "deferred_received_n": len(handed), "deferred_verified": sum(ok[n_sf:]),
            "deferred_families": sorted({value_family(o.identity.get("name", "")) for o in ops[n_sf:]}),
            # [rev F-r17b-13] the received POSITIONS (every one is in `picks`, opened + verified above); the verdict compares the union of the
-           # in-run stages' deferred positions with these, not the counts
+           # in-run phases' deferred positions with these, not the counts
            "deferred_received_positions": [list(p) for p in handed], "deferred_received_digest": _positions_digest(handed),
            "steps_opened": steps_opened, "source": source, "freed": freed, "retained_device_after": retained_after,
            "replay_run_root": replay_root, "replay_root_equal": (replay_root == rc.run_root.hex()) if replay_root else None,
@@ -926,7 +958,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             _st = {l.split(":")[0]: int(l.split()[1]) for l in f if l.startswith(("VmRSS:", "VmHWM:"))}
         res["host_rss_gb_after"] = round(_st["VmRSS"] / 1e6, 2)
         # [R17 fp8, R17-16 (i)] the process's kernel high-water mark AFTER the replay -- the in-process peak the bounded HOST BOUND must
-        # cover (the replay stage is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
+        # cover (the replay phase is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
         res["host_rss_hwm_gb"] = round(_st["VmHWM"] / 1e6, 2)
     except (OSError, StopIteration, KeyError):
         pass
@@ -1016,17 +1048,18 @@ def staging_environ(args: Options) -> None:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_cov_b0_b1_c256.json")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
     committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | native_collect* | native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
-    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, "vllm-v1"), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name (any other committer, an old record's configuration)")
+    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, V1), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name, only to commit again the recorded vllm-v1 Commit --of-record names (`scheme_refusal`)")
+    of_record: str | None = option("--of-record", default=None, metavar="RUN_DIR", help="with --commit-scheme vllm-v1: the recorded vllm-v1 Commit this one commits again (its --out, whose runs.jsonl run roots are 32 bytes), of the workload's model")
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees " "on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows; vllm-v1's pos_leaf leaves by " "native_leafhash.cu, verity_vllm.commit.committer.leafhash), device-checked (both, each tensor's device root compared with its host " "root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     pinned_populate_threads: int | None = option("--pinned-populate-threads", env="VERITY_PINNED_POPULATE_THREADS", type=int, default=None, help="helper threads that fault a fresh exact pinned block's pages in (MADV_POPULATE_WRITE) before the caller registers it (default: commit.committer.pinned_pool.POPULATE_THREADS; recorded as pinned_populate_threads); 0 = the registration faults them in")
     openings: int = option("--openings", type=int, default=64)
@@ -1073,7 +1106,7 @@ class Options:
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
-    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (ssh -R)")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
@@ -1081,7 +1114,7 @@ class Options:
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
-    serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
+    serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer); with --replay-deferred (not slim) at the C2 site, before the bundle is sealed (c2_replay.serving_rows)")
     remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.remote_bandwidth.remote.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
@@ -1212,6 +1245,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
+    if (why := scheme_refusal(args, wl)) is not None:
+        raise SystemExit(why)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
@@ -1240,7 +1275,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings), execution=va.execution_of_workload(wl))
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
     _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --remote-verifier: the session's engine is built here
     _live = (_HOT or {}).get("eng")
     if _live is not None:
@@ -1534,7 +1569,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f" -> peak phase {_admit.get('peak_phase')} MiB; "
                       f"cgroup {((host_cap or 0) >> 20) or None} MiB; margin "
                       f"{(_admit['margin_bytes'] or 0) >> 20 if host_cap else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_cap else None} %)", flush=True)
-                # [R17-29 planner / Daniel M-0309] the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
+                # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
                 print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
                 (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
                 (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
@@ -1597,39 +1632,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
                       f"{wi['largest_tensor_bound'] >> 20} MiB); layout {wi['layout']}; in-place hashing: {wi['in_place_hashing']}", flush=True)
                 (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
-            # [COORD R17-29 planner, RECORD ONLY] the one planner's plan beside the governing admission -- admission_planner_<kind>.json +
-            # its DOMINANT line, printed before the run; it does not refuse or admit tonight (the admission_of_record above governs); every
-            # Commit thereby yields the per-term predicted-vs-measured line (calibrate on verdict.json / footprint.jsonl at the end)
-            try:
-                from verity_vllm.pipeline.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
-                _others = 0
-                with contextlib.suppress(Exception):          # co-tenants: the cgroup's ANON bytes minus this process (file cache is reclaimable)
-                    for _ln in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
-                        if _ln.startswith("anon "):
-                            _others = max(0, int(_ln.split()[1]) - int((rss_kb()[0] or 0) * 1024))
-                _wi = locals().get("wi") or {}
-                _mode = {"retain": getattr(com, "retain", None), "bounded": bool(getattr(com, "bounded", False)),
-                         "retain_exclude": sorted(getattr(com, "retain_exclude", ()) or ()), "open_after_release": bool(getattr(args, "open_after_release", False)),
-                         "openings": int(args.openings), "pairs": int(getattr(args, "pairs", 1) or 1),
-                         "window_bytes": int(_wi.get("window_bytes") or getattr(com, "win_bytes", 0) or (256 << 20)), "slots": int(_wi.get("slots") or 8),
-                         "scratch_bytes": _wi.get("largest_tensor_bound"), "learn_budget_bytes": int(getattr(com, "learn_budget_bytes", 0) or (4 << 30)),
-                         "chunk_bytes": int(getattr(com, "chunk", 256) or 256)}
-                _smp_max = int((sampling or {}).get("max_tokens") or 1)
-                _preqs = [{**r, "max_tokens": int(r.get("max_tokens") or _smp_max)} for r in reqs]
-                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()]
-                _pl = _planner_plan(asz, _preqs, mode=_mode, engine_rss_bytes=int((rss_kb()[0] or 0) * 1024), host_cap_bytes=host_cap,
-                                    host_cap_source=asz.get("host_memory_cap_source"), others_current_bytes=_others,
-                                    max_num_batched_tokens=(asz.get("envelope") or {}).get("max_num_batched_tokens"), calibration=_cal)
-                _pl.pop("_sched", None)
-                _pl["record_only"] = True
-                _pl["governing_admission"] = (asz.get("admission_of_record") or {}).get("governing")
-                _pl["admission_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                (out / f"admission_planner_{kind}.json").write_text(json.dumps(_pl, indent=1, default=str) + "\n")
-                print(f"[delta] PLANNER (R17-29, record only; {_pl['mode_key']}): host bound {_pl['host_bound_mib']} MiB, calibrated {_pl['calibrated_bound_bytes'] >> 20} MiB "
-                      f"(x{_pl['calibration']['factor']:.3f}, {_pl['calibration']['entries']} records), effective cap {((_pl['effective_cap_bytes'] or 0) >> 20) or None} MiB "
-                      f"(co-tenants {_others >> 20} MiB) -> would {_pl['decision']}; DOMINANT: {_pl['dominant']['text']}", flush=True)
-            except Exception as _pe:                          # the planner is on the record tonight, never on the path of the Commit
-                print(f"[delta] PLANNER (record only) not computed: {type(_pe).__name__}: {_pe}", flush=True)
         if args.flip_weight:
             # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it
             _fw = str(args.flip_weight).split(":")
@@ -1752,7 +1754,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     decl = None
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
-    replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
+    replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit phase only)
     deferred: dict[int, dict[str, Any]] = {}          # --replay-deferred: pair -> its replay bundle's context
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
@@ -1788,7 +1790,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
-            t_run0 = time.perf_counter()
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
@@ -2160,7 +2161,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     row["commit"]["value_correspondence"].update(_sc2["value_correspondence"])
                 if getattr(args, "match_dir", None):
-                    # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match stage's
+                    # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match phase's
                     # value record of the SAME attempt (separate process + acquisition path); any mismatch fails the verdict naming the identity.
                     # [rev-cb M-0301 R3] the oracle must be THIS workload's Match record: request ids / prompt lengths / caps are checked by name
                     # before any value compare (a foreign oracle = FAIL 'foreign oracle', never a value mismatch that happens to point the right way).
@@ -2207,7 +2208,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
                 _c2 = C2.Site(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
-                if not (args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started)) and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
+                _c2_deferred = bool(args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started))
+                if _c2_deferred and args.serving_rows:
+                    C2.serving_rows(_c2)
+                elif not _c2_deferred and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
                     C2.run(_c2, replay_cache)
                 if _wor_rec is not None or _live_wd is not None:
                     # [MAN-09] WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
@@ -2333,7 +2337,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
 
-    # [R16 compiled unit B -- Daniel M-0776 (3): repeated graph replay must be covered, not only compilation/warm-up] re-read the code
+    # repeated graph replay must be covered, not only compilation/warm-up: re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
     # the CUDA graphs replay the launchers that existed at capture, so an unchanged executed set (no new module / kernel / binary / config)
     # is the evidence that the artifact identity recorded at build is the identity of every replayed and eager step of every run
@@ -2464,7 +2468,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
     RS.into_verdict(_rs, verdict)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
-    AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
     TL.event("process.end", "mark", rc=(3 if fails else 0), s=round(time.time() - _T_PROCESS0, 3), commit_pass=verdict["commit_pass"])
     if fails:

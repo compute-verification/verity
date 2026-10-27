@@ -6,7 +6,7 @@
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): hb_kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
-#            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
+#            verify.py (the numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
 #            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
@@ -15,7 +15,7 @@
 #            with the exact wrap correction, gated against h1v3_ca.py (H1V3's reference) at small anchors and against
 #            h1zref.cu's z = X·(B + c)ᵀ at the served shapes, receipts against receipts.py, y = dequant(z), the no-write
 #            control and both faults; then timed against its two-launch receipts-only form, the noise floor and plain)
-#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (kernels-j10, measured only: each build's credited one-stream
+#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (measured only: each build's credited one-stream
 #            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone;
 #            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
@@ -236,7 +236,7 @@ for name in $(printf '%s\n' "${NEED[@]}" | sort -u); do
   [ -n "$h" ] && [ "$(srchash $paths)" = "$h" ] || {
     echo "job.sh: $name.so was built (commit $bsha) from sources that differ at $SHA: rebuild" >&2; exit 2; }
 done
-export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$PWD/integrations/vllm:$PWD:$PWD/tools/config${PYTHONPATH:+:$PYTHONPATH}
 printf '%s\n' "${CMDS[@]}" > "$OUT/env/cmds.txt"
 bench='
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid

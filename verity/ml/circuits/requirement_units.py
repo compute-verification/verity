@@ -1,4 +1,4 @@
-"""The requirement's two proof units (I4): the plan unit, which holds a pass's plan to hold every block the declared
+"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the declared
 circuit reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
 blocks a step writes to the circuit's values and every free, of a written block or a registered one, to its values' last
 structural reader (`StoreMatches`' L1, L2 and L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or
@@ -125,7 +125,7 @@ from typing import Sequence
 
 from . import boolean as BL
 from .boolean import trace as TR
-from .boolean.forms import ONE, ZERO, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from .boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array

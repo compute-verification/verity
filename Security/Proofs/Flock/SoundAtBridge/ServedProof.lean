@@ -53,7 +53,7 @@ end RowsSession
 
 /-- **C-Flock's rows link at served roots** (`Flock.Guarantees.ServedRowsLinked`). -/
 theorem servedRowsLinked : Flock.Guarantees.ServedRowsLinked := by
-  intro s _ S R o u hacc hu hS hrows g hg hr
+  intro s S R o u hacc hu hS hrows g hg hr
   exact s.xv_eq_of_rowsAt (s.ownReadsHJ_of_served hacc hu hS) hrows hg hr
 
 end Flock.SoundAtBridge

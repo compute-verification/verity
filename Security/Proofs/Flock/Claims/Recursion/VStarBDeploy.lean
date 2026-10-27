@@ -75,10 +75,10 @@ theorem badRecord_utf8 : String.fromUTF8? badRecord = none := by
   unfold String.fromUTF8?
   rw [dif_neg h]
 
-/-- **A staging message with no public file and the record `badRecord`.** -/
-def badStage : Msg := encStage [] badRecord
+/-- **A staging message with no public file, the record `badRecord` and no shared rows.** -/
+def badStage : Msg := encStage [] badRecord ByteArray.empty
 
-theorem decodeStage_badStage : decodeStage badStage = some ([], badRecord) := by
+theorem decodeStage_badStage : decodeStage badStage = some ([], badRecord, ByteArray.empty) := by
   rfl
 
 /-- **A V\* statement staged at a record that isn't text doesn't set up**: `sourceOf` reads the inner session's record
@@ -163,13 +163,13 @@ theorem vstarShowsB_deployRec_forces {W : Type} {IV : Claims.Verifier Coin} {ivS
     intro heq
     have hk' := congrArg Claims.Recursion.Nums.rounds heq
     change VO.k (staged b.st x (ps a) s) = VO.k (staged b.st x (pick b.st x s) s) at hk'
-    have hl : stageOf (ps a) = some ([], badRecord) := by
+    have hl : stageOf (ps a) = some ([], badRecord, ByteArray.empty) := by
       show decodeStage (((ps a).getLast?.map Prod.fst).getD []) = _
       rw [show (ps a).getLast? = some (badStage, Out.msg []) from List.getLast?_concat]
       exact decodeStage_badStage
     have hbad : setupO (staged b.st x (ps a) s) = none := by
       apply setupO_staged_none
-      show String.fromUTF8? (((stageOf (ps a)).map Prod.snd).getD ByteArray.empty) = none
+      show String.fromUTF8? (((stageOf (ps a)).map (·.2.1)).getD ByteArray.empty) = none
       rw [hl]
       exact badRecord_utf8
     simp only [VO, hbad, ht] at hk' <;> omega
@@ -351,8 +351,8 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 _ _
-      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_eq fun i hi1 _ =>
+        (hrd i (by omega)).trans (hshs.2 i hi1).symm
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd

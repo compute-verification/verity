@@ -5,6 +5,7 @@ import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 import NetworkCheck.RecordsBytes
 import NetworkCheck.Period
+import NetworkCheck.LinkWindow
 
 /-!
 # The network certificate's checks
@@ -23,4 +24,10 @@ with their clocks (the clock form) or the network certifier's own rows, register
 the scan (the rows form), beside its compute audits, and the bound `K` on what left the site, held to its Python mirror
 by `tests/test_network_period_protocol.py`. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
 `Flock.Canon`, and `Flock.Public`'s frame-v3 hash), the core protocol interface, the certifier program and the LMS port.
+-/
+
+/-!
+`NetworkCheck.LinkWindow` is N2's verdict of record on one link-window from its proof (`service.LinkWindows.verify`, the
+`link-window` function of `network-records verdicts`). Beyond the above it imports C-Flock's `Flock.Hm96` and core's
+identity hash (`Identity.Tagged`).
 -/

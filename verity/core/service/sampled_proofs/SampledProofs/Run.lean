@@ -6,7 +6,8 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
   (`Registration.check`) against the challenger's copies under the law the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`countVaries`: `shapes`), and
+  (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`countVaries`: `shapes`), a
+  program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
   population, `Select.resolve`); the coins are what the run's source says (`coinsHold`, code `coins`): from the
@@ -26,6 +27,7 @@ the clock's (`late`).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Select
+import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.ChallengerCoins
 
@@ -109,6 +111,7 @@ def run (i : Input) : V Json := do
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if countVaries law then return refused "register" #["shapes"]
+  if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
