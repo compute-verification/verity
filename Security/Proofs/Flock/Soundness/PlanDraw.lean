@@ -3,14 +3,14 @@ import Randomness
 /-!
 # The PoUW window draw, as a Lean spec
 
-`protocols/pouw/verity_pouw/circuit/plan.py`'s `draw`, which `Traced.draw` calls for each call of a window under
+`protocols/pouw/verity_pouw/circuit/plan.py`'s `draw` (#364), which `Traced.draw` calls for each call of a window under
 the window's one key, and the window around it:
 
 * `context call name`: `plan.draw`'s context for a stratum, `("call", *call, "stratum", name)`, or `("stratum", name)`
   without a call index.
 * `drawn key call strata L`: the units `plan.draw` draws for one call, before sorting: each stratum's
   `Key.subset(k, len(units), context)`, mapped through its units, each swap's stream read to `L` bytes.
-* `window key calls L`: every call admitted, no call index framed twice (the admission inside the draw), then each
+* `window key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the draw), then each
   call's `drawn` under the one key, its units in the window's numbering.
 -/
 
