@@ -5,7 +5,7 @@ One GPU's memory wiped and proved wiped, end to end (MEM-67 3a.2): PoUS's stream
 derived from its own secret into every byte of the device the prover declares, the prover keeps them in device memory
 (`wipe_store.Cuda`: the CUDA driver through ctypes, no toolkit), and the challenger times its spot reads of them and signs
 the session. The Lean (`wipe-protocol`, `verity/core/devices/memory_challenger/lean/`) and the Python
-(`streamed_wipe.verdict`) judge the signed session and must agree. `wipe_period` is the leg, and its summary publishes
+(`streamed_wipe.verdict`) judge the signed session and must agree. `wipe_period` runs the wipe, and its summary publishes
 `foreign_bits`: what of the device could still hold prior content.
 
 - **Protocol:** `pous` (the streamed-label wipe). Its bound is `Pous.Guarantees.StreamedWipe`, and `--reads 5231` is
