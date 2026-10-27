@@ -17,11 +17,12 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --timeout 90m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
-# ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16), SHAPES ("128 256 384 512 640 768 1024").
+# ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16), SHAPES ("128 256 384 512 640 768 1024"),
+# PY (python3; it needs numpy: on a node without it, PY="uv run -q --no-project --with numpy python").
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}
-export D=benchmarks/pouw/commit_gpu I=benchmarks/hash/intpipe X=benchmarks/torch_gpu/sha512_rows PY=python3 PYTHONPATH=.
+export D=benchmarks/pouw/commit_gpu X=benchmarks/torch_gpu/sha512_rows PY=${PY:-python3} PYTHONPATH=.
 W=$(mktemp -d /dev/shm/hashcat24.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
@@ -157,7 +158,7 @@ done < "$O/hashcat-kernels.txt"
 for t in a0r0l sx0000; do
   [ -x "$W/commit_gpu_$t" ] || continue
   cuobjdump -sass "$W/commit_gpu_$t" > "$W/sass-$t.txt" 2>&1
-  $PY $I/sass_count.py "$W/commit_gpu_$t" sha_rate --trip 4 --sass "$W/sass-$t.txt" > "$O/sass-$t.json" 2>> "$O/sass.err"
+  $PY $X/sass_count.py "$W/commit_gpu_$t" sha_rate --trip 4 --sass "$W/sass-$t.txt" > "$O/sass-$t.json" 2>> "$O/sass.err"
   awk '/Function : /{p = /sha_rate/} p' "$W/sass-$t.txt" | gzip -c > "$O/sass-sha_rate-$t.txt.gz"
 done
 [ -x "$W/hashcat_forms" ] && cuobjdump -sass "$W/hashcat_forms" | gzip -c > "$O/sass-forms.txt.gz"
