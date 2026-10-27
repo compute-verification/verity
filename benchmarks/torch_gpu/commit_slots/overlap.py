@@ -55,8 +55,9 @@ from typing import Any
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "e2e_h200"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+E2E = HERE.parents[1] / "e2e_h200"
+sys.path[:0] = [str(HERE), str(E2E)]
 import slots as S
 import slots_gpu as G
 from e2e_h200 import commit as CM
