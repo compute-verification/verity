@@ -40,8 +40,9 @@ the sampled verifier's acceptance of that window's statement on that window's co
 through `ScanScope` (the sampled audit's scope at the scan's layout, with the gates the scan checks committed and each
 its unit's own). The count reads the warden's record (`RecordsCells`), the openings the verifier holds at the scan's
 gates (`OpensPass`, `WardenRowsOpen`, `OkOpens`, and `ChainOpens`, which holds the registered-read chain of parse
-states as equal openings), and `ScanCountsRequests`, the count of one window's frame streams the scan accepts, a
-conjecture on the scan class's Program checked by enumeration at toy classes.
+states as equal openings), and `ScanCountsRequests`, the count of one window's frame streams the scan accepts, an open
+conjecture on the scan class's Program that enumeration at toy classes tries to falsify, so the count is conditional on
+it.
 
 **Adaptive windows.** Each window's prover may read every other window's coins (`WindowTape`), and so may its
 statement: window `i`'s registered statement is a function of its prover's tape, never of its own coins, with a fixed
@@ -260,9 +261,11 @@ def IngressDrawn (s : Schedule) (st : Stmt) (P : Partition) : Prop :=
   ∀ v < P.rus.length, (∃ g ∈ RU.gates (P.rus.getD v []), g ∈ (checksOf s st).1 ∨ ∃ t < s.window,
     g ∈ (layOf s st).ingress t) → v ∈ allSlots st.design P
 
-/-- **The scan counts requests** (named assumption): the frame streams of the windows the scan's
-Program accepts at the statement `st` are at most `scanBound`. A conjecture on the scan's Program, which
-`verity/core/protocols/certifier/tests/test_network_certifier_scan_counts.py` tries to falsify against the scan's
+/-- **The scan counts requests** (open conjecture): the frame streams of the windows the scan's
+Program accepts at the statement `st` are at most `scanBound`. A statement about the scan's own Program, not about the
+world, so not an assumption: the lock lists it under `shape.conjectures`, and `perServerIngress`' count is conditional
+on it while it is open. It is quantified over every statement, partition and `δ`, so no computation decides it;
+`verity/core/protocols/certifier/tests/test_network_certifier_scan_counts.py` tries to falsify it against the scan's
 reference: each term's field checks at their edges, and every window of rows over a cell alphabet at toy classes, from
 the empty state and from a faulty unit's forged states. -/
 def ScanCountsRequests (s : Schedule) (cls : ScanClass) (st : Stmt) (P : Partition) (δ : ℝ) : Prop :=
