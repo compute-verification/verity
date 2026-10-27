@@ -910,6 +910,10 @@
    "owner": "@proofs",
    "digest": "1fc8f000f79cf07496eaedb4efe80b80d2d54748ba31451c82377e28a17e7591"
   },
+  "Flock.Bridge.RootFixesDomainL": {
+   "owner": "@proofs",
+   "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d"
+  },
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
@@ -1057,6 +1061,10 @@
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJLaw": {
    "owner": "@proofs",
    "digest": "cb23603a029f8e6caa09cac7ce2b76a8ab002b205420ea56d5118618243c0741"
+  },
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJP": {
+   "owner": "@proofs",
+   "digest": "8b3614bd64ffd236e49562c00c080248570c91853388717f6959d182677ffc4f"
   },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS": {
    "owner": "@lean",
@@ -2101,14 +2109,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Flock.Bridge.RootFixesDomainL": {
-   "owner": "@proofs",
-   "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d"
-  },
-  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJP": {
-   "owner": "@proofs",
-   "digest": "8b3614bd64ffd236e49562c00c080248570c91853388717f6959d182677ffc4f"
   }
  },
  "meaning": [
