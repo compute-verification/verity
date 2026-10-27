@@ -57,7 +57,7 @@ KEY_COUNTS = {
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
     "verity/ml/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
-    "benchmarks/e2e_h200/e2e_h200/program.py::program":
+    "examples/h200/e2e_h200/program.py::program":
         "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {

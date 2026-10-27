@@ -93,7 +93,8 @@ result, the shape of those stops, is not visible to the watch, so a worker that 
 
 An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator for
 `COORD_SILENT_S` (60 min, its record's `owner` top, whom the relay rings), with no note of
-its (a note whose `origin:` names it, new or changed by its mtime) and no push to its branches. Its branches are the API's
+its (a note whose `origin:` names it, new or changed by its mtime; for a coordinator also any note of its lane, under
+`lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
 head ending in its id's last four characters (a coordinator's `cursor/...-1037`); pushes are read every `HEADS_EVERY_S` with
 `git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
@@ -426,17 +427,21 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
     return out
 
 
-def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]]]:
-    """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name), over the notes `recent_notes`
-    gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code cursor/zk-frame-c7a9`)."""
+def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]], dict[str, float]]:
+    """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name, lane -> its newest note's mtime),
+    over the notes `recent_notes` gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code
+    cursor/zk-frame-c7a9`), and its lane's by its directory under `lanes/` and its `lane:`."""
     heard: dict[str, float] = {}
     named: dict[str, set[str]] = {}
-    for _, mtime, fm in recent_notes(notes, t):
+    lanes: dict[str, float] = {}
+    for p, mtime, fm in recent_notes(notes, t):
         origin = fm.get("origin", "")
         for agent in AGENT_RE.findall(origin):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
-    return heard, named
+        for lane in {p.parent.name, fm.get("lane", "")} - {""}:
+            lanes[lane] = max(lanes.get(lane, mtime), mtime)
+    return heard, named, lanes
 
 
 def pushed_branches(rec: dict) -> set[str]:
@@ -1400,18 +1405,20 @@ class Watch:
             if changed:
                 self.save()
             return
-        heard, named = note_times(self.notes, t)
+        heard, named, lanes = note_times(self.notes, t)
         heads = self.heads.get("heads") or {}
         for agent, k in sorted(known.items()):
+            coord = agent in self.coords
             mine = {*k["branches"], *named.get(agent, ()), *(b for b in heads if b.endswith("-" + agent[-4:]))}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
-            last = max(x for x in (k["since"], heard.get(agent), pushed, self.heads["t0"]) if x is not None)
+            # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
+            lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
+            last = max(x for x in (k["since"], heard.get(agent), lane_note, pushed, self.heads["t0"]) if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
                 s, changed = None, True
             n = s["rings"] if s else 0
-            coord = agent in self.coords
             if n >= SILENT_RINGS:
                 still = max(last, k.get("acted") or last)
                 if s and not s.get("no_step") and t - still >= NO_STEP_S:

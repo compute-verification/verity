@@ -99,7 +99,6 @@ import contextlib
 import ctypes as C
 import dataclasses
 import hashlib
-import os
 import queue
 import threading
 import time
@@ -118,7 +117,9 @@ import h1c as H1CM
 import j10r_ws as JWS
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
 from hb_side import auto_j
+from verity_config.settings import of
 
+settings = of(__file__)
 LIB_ENV = DA.LIB_ENV
 CG = None
 ORDER = "statement (RT4-INT-12): A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
@@ -240,7 +241,7 @@ CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
 
 def keep(x: torch.Tensor) -> torch.Tensor:
     """A capture's copy of x: on the host under CAP_HOST_ENV, else a device clone."""
-    return x.to("cpu") if os.environ.get(CAP_HOST_ENV) == "1" else x.clone()
+    return x.to("cpu") if settings.get(CAP_HOST_ENV) else x.clone()
 
 
 def end_steps(depth: int) -> int:
@@ -296,24 +297,24 @@ class SoWindow(DO.Window):
         self.zlate: tuple | None = None
         self.coin_waits: list[float] = []
         self.order_why = None
-        self.coin_async = int(os.environ.get(COIN_ASYNC_ENV) or 0)
+        self.coin_async = settings.get(COIN_ASYNC_ENV)
         if self.coin_async not in (0, 1, 2):
             raise RuntimeError(f"{COIN_ASYNC_ENV}={self.coin_async}: 0, 1 or 2")
         self.deferred: int | None = None
         self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
-        self.z_side = os.environ.get(ZSIDE_ENV) == "1"
+        self.z_side = settings.get(ZSIDE_ENV)
         self.ev_z = (torch.cuda.Event(), torch.cuda.Event())
         self.late_waits: list[float] = []
-        self.a_step = os.environ.get(DO.A_STEP_ENV) == "1"
+        self.a_step = settings.get(DO.A_STEP_ENV)
         if self.a_step and (self.a_once or self.overlap):
             raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
                                f"the serving stream)")
-        self.dead_once = os.environ.get(DEAD_ONCE_ENV) == "1"
+        self.dead_once = settings.get(DEAD_ONCE_ENV)
         if self.dead_once and self.overlap:
             raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
         self.clean_from: int | None = None
         self.dead_c: int | None = None
-        self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
+        self.put_async = settings.get(PUT_ASYNC_ENV)
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -324,14 +325,14 @@ class SoWindow(DO.Window):
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
         self.ev_fwd = torch.cuda.Event()
         self.tail: H1CM.Tail | None = None
-        tm = os.environ.get(TAIL_ENV) or "0"
+        tm = settings.get(TAIL_ENV)
         if tm not in ("0", "1", "2"):
             raise RuntimeError(f"${TAIL_ENV}={tm}: 0, 1 or 2")
         if tm != "0":
             if self.overlap:
                 raise RuntimeError(f"${TAIL_ENV}={tm} serves an -so arm without -ov (whose rounds build on the sender's ring)")
             self.tail = H1CM.Tail(self.c, self.pre["mid"], self.pre["round"], host_root=tm == "2")
-        self.hmark = os.environ.get(HMARK_ENV) == "1"
+        self.hmark = settings.get(HMARK_ENV)
         if self.hmark:
             self.hm_stream = torch.cuda.Stream()
             # 0 the tail's launch, 1 the root read, 2 + s % 2 step s's units' flag, 4 the root read's return
@@ -339,7 +340,7 @@ class SoWindow(DO.Window):
             self.h_flagged: set[int] = set()
             # perf_counter at dispatch_units' salt and at its SoSide.dispatch call
             self.h_t = [0.0, 0.0]
-        self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
+        self.root_lag = settings.get(ROOT_LAG_ENV)
         if self.root_lag not in (0, 1, 2):
             raise RuntimeError(f"${ROOT_LAG_ENV}={self.root_lag}: 0, 1 or 2")
         self.h2d_pinned = self.root_lag == 2
@@ -367,7 +368,7 @@ class SoWindow(DO.Window):
                             tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, chunks=c,
                             lab=(f"a/{k}@", "")))
             at += n
-        v = os.environ.get(A_LVF_ENV)
+        v = settings.get(A_LVF_ENV)
         lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
         self.pre["ak"] = self.c.set(tabs, lvf=lvf)
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
@@ -671,8 +672,8 @@ class SoWindow(DO.Window):
                           "close": 1e3 * (t_close - t_draw), "record": 1e3 * (t_end - t_close)}}
         e["amortized_ms_per_step"] = e["end_ms"] / n
         self.ends.append(e)
-        if live and os.environ.get(MANIFEST_ENV):
-            e["manifest"] = write_manifest(self, rec, os.environ[MANIFEST_ENV])
+        if live and settings.get(MANIFEST_ENV):
+            e["manifest"] = write_manifest(self, rec, settings.get(MANIFEST_ENV))
         return e
 
     def close(self) -> dict | None:
@@ -1166,7 +1167,8 @@ def _q(xs: list, f: float):
 def rounds_of() -> int:
     """A window's round coins: the session's layout off the node (`$DITHER_ROUNDS`, which its open reserved), else
     DF.ROUNDS."""
-    return int(os.environ.get(ROUNDS_ENV) or DF.ROUNDS)
+    r = settings.get(ROUNDS_ENV)
+    return DF.ROUNDS if r is None else r
 
 
 class SoSide(DA.Side):
@@ -1232,7 +1234,7 @@ class SoSide(DA.Side):
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
-        self.rdead = os.environ.get(RDEAD_ENV) == "1"
+        self.rdead = settings.get(RDEAD_ENV)
         if self.rdead:
             self.r_live, nrb = torch.empty_like(win.live), win.t // 32
             win.rset = win.c.set([dataclasses.replace(t, xd=H1CM.dead_x([bytes(t.length)] * (t.count // nrb), dev),
@@ -1240,21 +1242,21 @@ class SoSide(DA.Side):
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
-        self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
-        self.fused = os.environ.get(FUSED_ENV) == "1"
-        self.units_smq, self.units_smd, self.units_cap = smq_of(os.environ.get(UNITS_SMQ_ENV) or "0")
-        self.units_form = os.environ.get(UNITS_ENV) or "today"
+        self.graph = settings.get(GRAPH_ENV)
+        self.fused = settings.get(FUSED_ENV)
+        self.units_smq, self.units_smd, self.units_cap = smq_of(settings.get(UNITS_SMQ_ENV) or "0")
+        self.units_form = settings.get(UNITS_ENV)
         self.j10r = self.units_form == "j10r"
-        self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
-        self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
+        self.j10r_m = settings.get(J10R_M_ENV)
+        self.j10rc_min_t = settings.get(J10RC_MIN_T_ENV)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
         if self.j10rc_min_t and not self.j10r:
             raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r")
-        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
+        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={settings.raw(UNITS_SMQ_ENV)}",
                         self.units_cap)
-        self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
-        if os.environ.get(SKIP_DEAD_ENV) and not self.j10r:
+        self.skip_dead = not self.j10r or settings.get(SKIP_DEAD_ENV)
+        if settings.is_set(SKIP_DEAD_ENV) and not self.j10r:
             raise ValueError(f"${SKIP_DEAD_ENV}: needs ${UNITS_ENV}=j10r (today's units are PouwH1Tile_v4's, whose dead "
                              "tile is always the zero receipt)")
         if not self.skip_dead and self.rdead:
@@ -1274,7 +1276,7 @@ class SoSide(DA.Side):
                    *(("kh_units_multi_j10r_sm",) if self.units_smq else ()),
                    *(("kh_units_multi_j10rc", "kh_j10r_ws_bytes") if self.j10rc_min_t else ()))
             missing = [f for f in fns if not hasattr(self.h, f)]
-            if not self.fused or missing or os.environ.get(DA.LANE_REFS_ENV) or not os.environ.get(JS.TREE_ENV):
+            if not self.fused or missing or settings.get(DA.LANE_REFS_ENV) or not settings.get(JS.TREE_ENV):
                 raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV} (sbench.sh's "
                                  f"J10R_SHA={JS.J10R_SHA}), no ${DA.LANE_REFS_ENV} (its lane records are today's form) "
                                  f"and an h1u build with {', '.join(fns)} (missing: {missing})")
@@ -1300,7 +1302,7 @@ class SoSide(DA.Side):
             self.unit_next = torch.zeros(words, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
-        self.preq = os.environ.get(PREQ_ENV) == "1"
+        self.preq = settings.get(PREQ_ENV)
         self.queued: dict[int, tuple[int, int]] = {}
         # step -> the salt `stage_salt` wrote into its ring slot's pinned words ahead of its dispatch
         self.staged: dict[int, bytes] = {}
@@ -1966,7 +1968,8 @@ class Spill:
         self.free: list[torch.Tensor] = []
         self.chunks: list[torch.Tensor] = []
         self.at, self.n_chunks, self.grown, self.alloc_ms = 0, 0, 0, 0.0
-        self.max_bytes = int(float(os.environ.get(SPILL_MAX_ENV) or SPILL_MAX_GB) * (1 << 30))
+        gb = settings.get(SPILL_MAX_ENV)
+        self.max_bytes = int((SPILL_MAX_GB if gb is None else gb) * (1 << 30))
         self.held: dict[int, dict] = {}
         self.log: list[tuple] = []
         self.unfinished = {"a": 0, "z": 0}
@@ -2139,7 +2142,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
-    serve_prio = serve_prio or os.environ.get(PRIO_ENV) == "1"
+    serve_prio = serve_prio or settings.get(PRIO_ENV)
     CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     SoWindow.window_end = window_end
@@ -2150,7 +2153,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         # vLLM serves (replays its graphs) on the stream its patched set_stream last recorded
         from vllm.utils import torch_utils  # noqa: F401
         torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
-        if os.environ.get(CAPTURE_PRIO_ENV) == "1":
+        if settings.get(CAPTURE_PRIO_ENV):
             capture_at(-1)
     DO.Window = SoWindow
     DA.side = side
