@@ -32,8 +32,9 @@ alone gives `Verified` (`verified_of_not_readBy`) and the bound holds at any acc
 (`lineHeldAtComponentBy_record`). The nontrivial witnesses therefore replace the verdict and the record with an
 accept-all's as well.
 
-The toy instance (`Toy`) is a node of four windows at four windows a draw, so no draw (`Node.draws` 0), one block of one
-byte, one pass a group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 − 0) = 32` bits read.
+The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a draw, so no
+draw (`Node.draws` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
+group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 − 0) = 32` bits read.
 -/
 
 deriving instance DecidableEq for RemoteAudit.Line.Group
@@ -67,7 +68,7 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   unfold SketchBoundAt Trace.Holds
   refine le_of_eq (Pouw.pr_eq_zero fun ω hω => hω.2 fun p hp j _ => ?_)
   obtain ⟨t, h1, h2, h3⟩ := h ω p hp
-  exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
+  exact ⟨t, h1, h2, mem_union_left _ (by rw [h3]; exact mem_univ j)⟩
 
 theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
     (T : Trace (Coins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
@@ -152,18 +153,20 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
   · intro ω hv
     obtain ⟨hsz, hpass, hmono, hfp, hrun⟩ := hgs ω hv _ rfl
     refine ⟨monotone_nat_of_le_succ fun p => (htick ω p).le, by simp [recordPace, firstPass], ?_,
-      fun g hg => ?_, fun g h hgh => ?_, fun g hg => ?_, fun g hg p h1 h2 => hrun g (by omega) p h1 h2⟩
+      fun g hg => ?_, fun g h hgh => ?_, fun g hg => ?_, fun g hg p h1 h2 => ?_⟩
     · show firstPass _ (node.windows - 1 + 1) ≤ passes
       rw [Nat.sub_add_cancel hW]
       exact hfp
-    · show firstPass _ g < firstPass _ (g + 1)
+    · change g ≤ node.windows - 1 at hg
+      show firstPass _ g < firstPass _ (g + 1)
       rw [firstPass_succ]
       have := (hpass g (by omega)).1
       omega
     · show released _ node.windows g ≤ released _ node.windows h
       unfold released
       exact hmono _ _ (min_le_min_right _ hgh) (by omega)
-    · show released _ node.windows (g + 1) ≤ ended _ g
+    · change g ≤ node.windows - 1 at hg
+      show released _ node.windows (g + 1) ≤ ended _ g
       unfold released ended
       rw [hsz]
       by_cases h1 : g + 1 < node.windows
@@ -171,12 +174,14 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
         exact le_max_right _ _
       · rw [if_neg h1, min_eq_right (by omega : node.windows - 1 ≤ g + 1), (by omega : node.windows - 1 = g)]
         exact (hpass g (by omega)).2
+    · change g ≤ node.windows - 1 at hg
+      exact hrun g (by omega) p h1 h2
   · have e : (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com =
         (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play (Committed.junk com t) := by
       unfold Committed.play
-      congr 1
-      funext t' ω
-      exact Fin.ext (congrArg (min · receiptMax) (hsize _ _ ω ω t'))
+      congr 1 <;> funext t' ω <;> first
+        | exact Fin.ext (congrArg (min · receiptMax) (hsize _ _ ω ω t'))
+        | rfl
     unfold Committed.hide
     rw [← e, tsub_self, tsub_self, add_zero]
 
@@ -205,7 +210,7 @@ the line of any record credits no more bits read than the passes read: every pas
 (`read_full`). -/
 theorem lineHeld_honest (node : Node) {Ω : Type} (passes : ℕ) (tick : Ω → ℕ → ℕ) (rec : Ω → Record)
     (htick : ∀ ω p, tick ω p < tick ω (p + 1)) (ω : Ω) :
-    Quiet (ofRecord (honestTrace node passes tick) node rec) (quietIngress Ω).counted ω ∧
+    Accounting.Remote.Held.Quiet (ofRecord (honestTrace node passes tick) node rec) (quietIngress Ω).counted ω ∧
       ReadAt (ofRecord (honestTrace node passes tick) node rec) ω node (rec ω) := by
   refine ⟨fun _ _ _ _ _ => rfl, fun l hline => ?_⟩
   obtain ⟨sm, gs, ws, -, -, -, hln⟩ := Properties.RemoteAudit.Line.SecurityProofs.lineOf_ok hline
@@ -444,7 +449,10 @@ theorem toy_not_read {Ω : Type} (T : Trace Ω) (ω : Ω) (hr : T.reads ω 4 ≤
 theorem toy_reads {Ω : Type} (ω : Ω) : (Toy.trace (Ω := Ω)).reads ω 4 = 1 := by
   have h0 : ((Toy.trace (Ω := Ω)).read ω 0).card = 1 :=
     read_full _ ω 0 rfl rfl (by show (if 0 = 0 then 0 else 10) < (if 0 + 1 = 0 then 0 else 10); simp)
-      (by show (if (if 0 = 0 then 0 else 10) < 10 then (Finset.univ : Finset (Fin 1)) else ∅) ∪ ∅ = Finset.univ; simp)
+      (Finset.eq_univ_of_forall fun j => Finset.mem_union_left _ (by
+        show j ∈ (if (0 : ℕ) < 10 then Finset.univ else ∅)
+        rw [if_pos (by norm_num : (0 : ℕ) < 10)]
+        exact Finset.mem_univ j))
   have hp : ∀ p, 1 ≤ p → (Toy.trace (Ω := Ω)).read ω p = ∅ := fun p hp => read_absent _ ω p fun t h1 h2 => by
     change (if p = 0 then 0 else 10) ≤ t at h1
     change t < (if p + 1 = 0 then 0 else 10) at h2
@@ -472,6 +480,7 @@ theorem toy_paced {Ω : Type} (ver : Node → Record → Prop) :
   · show released (groupsBy Toy.sum Toy.node Toy.rec) Toy.node.windows a ≤
       released (groupsBy Toy.sum Toy.node Toy.rec) Toy.node.windows b
     unfold released
+    apply le_of_eq
     rw [show Toy.node.windows - 1 = 0 from rfl, Nat.min_zero, Nat.min_zero]
   · change g ≤ 0 at hg
     obtain rfl := Nat.le_zero.1 hg
@@ -500,8 +509,10 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
       simp
     · show 0 < (if 0 + 1 = 0 then 0 else 10)
       simp
-    · show (if (0 : ℕ) < 10 then Finset.univ else ∅) ∪ ∅ = Finset.univ
-      simp
+    · refine Finset.eq_univ_of_forall fun j => Finset.mem_union_left _ ?_
+      show j ∈ (if (0 : ℕ) < 10 then Finset.univ else ∅)
+      rw [if_pos (by norm_num)]
+      exact Finset.mem_univ j
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -527,8 +538,7 @@ theorem lineHeld_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
     (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
-  · simp [binding_empty, toy_delta]
-    norm_num
+  · norm_num [binding_empty, toy_delta]
   · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω ((toy_reads ω).trans_le (by norm_num)) (hq fun _ _ _ _ _ => rfl)⟩
 
 /-- **`LineHeldAtComponent` fails at a verifier that accepts everything.** With an acceptance and a verdict that hold
@@ -545,8 +555,7 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
     (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
-  · simp [binding_empty, toy_delta]
-    norm_num
+  · norm_num [binding_empty, toy_delta]
   · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω ((toy_reads ω).trans_le (by norm_num)) (hq fun _ _ _ _ _ => rfl)⟩
 
 /-- **The line credits only what the passes read**: on one node, record and summary, the line's bits-read claim holds
@@ -561,7 +570,10 @@ theorem lineHeldAtComponent_bites : ∃ (node : Node) (r : Record) (sm : RemoteA
   have hsteady : Toy.steady.reads () 4 = 4 := by simp [Trace.reads, hfull]
   have h0 : (({ Toy.steady with mem := fun _ t => if t < 10 then Finset.univ else ∅ } : Trace Unit).read () 0).card
       = 1 := read_full _ () 0 rfl rfl (by show 10 * 0 < 10 * (0 + 1); omega)
-      (by show (if 10 * 0 < 10 then (Finset.univ : Finset (Fin 1)) else ∅) ∪ ∅ = Finset.univ; simp)
+      (Finset.eq_univ_of_forall fun j => Finset.mem_union_left _ (by
+        show j ∈ (if 10 * 0 < 10 then Finset.univ else ∅)
+        rw [if_pos (by norm_num : 10 * 0 < 10)]
+        exact Finset.mem_univ j))
   have hp : ∀ p, 1 ≤ p →
       ({ Toy.steady with mem := fun _ t => if t < 10 then Finset.univ else ∅ } : Trace Unit).read () p = ∅ :=
     fun p hp => read_absent _ () p fun t h1 _ => by
