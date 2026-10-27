@@ -46,7 +46,7 @@ theorem tt_budget_of_perCoin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
         (1 - γ₀) * ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), ((U.layout.shape u).Wmm : ℝ) ∧
       ¬ Collides x.1 (finderQueries hQ A U x.1 x.2)
   let C : (Q → R) × S → Prop := fun x => Collides x.1 (finderQueries hQ A U x.1 x.2)
-  refine le_trans (pr_mono (P' := fun x => E x ∨ C x) ?_) ((pr_or_le E C).trans (add_le_add_right (h U hU A) _))
+  refine le_trans (pr_mono (P' := fun x => E x ∨ C x) ?_) ((pr_or_le E C).trans (add_le_add (h U hU A) le_rfl))
   rintro ⟨H, s⟩ hx
   dsimp only at hx
   by_cases hc : C (H, s)
@@ -92,8 +92,8 @@ theorem ttPerCoin_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
   refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, ?_⟩).symm h
   · show CM.cost p x.1 U (fun _ => 0) [] x.2 <
       (1 - γ₀) * ∑ u ∈ checkedSet P U x.1 x.2 (CM.run p x.1 U (fun _ => 0) [] x.2), ((U.layout.shape u).Wmm : ℝ)
-    rw [(hp x.1 U _ [] x.2).1, hτ]
-    have := (hp x.1 U _ [] x.2).2.1
+    rw [(hp x.1 U (fun _ => 0) [] x.2).1, hτ]
+    have := (hp x.1 U (fun _ => 0) [] x.2).2.1
     have h1 : 0 < 1 - γ₀ := by linarith
     nlinarith [mul_pos h1 hpos]
   · rintro ⟨y, hy, -⟩
