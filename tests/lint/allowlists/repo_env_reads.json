@@ -4,6 +4,8 @@
     {"file": "benchmarks/all_protocols/legs/certifier.py", "count": 8},
     {"file": "benchmarks/all_protocols/legs/pouw.py", "count": 1},
     {"file": "benchmarks/all_protocols/tests/test_integrity.py", "count": 1},
+    {"file": "benchmarks/all_protocols/tests/test_parties.py", "count": 1},
+    {"file": "benchmarks/all_protocols/verity_all_protocols/parties.py", "count": 5},
     {"file": "benchmarks/all_protocols/verity_all_protocols/runner.py", "count": 7},
     {"file": "benchmarks/circuit_properties/run.py", "count": 1},
     {"file": "benchmarks/codec_tensor/bench.py", "count": 2},
