@@ -11,13 +11,13 @@ value the prover writes at the draw (its commit-coin conjunct, PoUW's seeded sal
 beside `LayerCommitted` on a circuit with a run input any gate reads (`SeededScheduleNotLive`): the live statements need
 the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of it here, per call:
 
-* **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`,
-  #2615, in the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check
-  for `yOpen`, neither variant written yet) on the gates `[start c, start (c + 1))` of the declared circuit; each
-  non-input gate lies in a proof-unit span of a replay unit of that Program's layout, and its declared unit is that
-  replay unit's number shifted by the call's first position (`Layout.base`); each input slot's gate is an input; and
-  every replay unit's number is below the call's unit count (`Layout.unitsOf`), so the calls' units tile the window's
-  positions without overlap (W-a);
+* **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`, in
+  the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check for `yOpen`,
+  neither variant written yet) on the gates `[start c, start (c + 1))` of the declared circuit; each non-input gate lies
+  in a proof-unit span of a replay unit of that Program's layout, and its declared unit is that replay unit's number
+  shifted by the call's first position (`Layout.base`); each input slot's gate is an input; and every replay unit's
+  number is below the call's unit count (`Layout.unitsOf`), so the calls' units tile the window's positions without
+  overlap (W-a);
 * **population** (`ServedUnits`): each linear's Program has the layout's unit count, and the declared circuit's units are
   the window's `population`;
 * **the draw** (`DrawMissesSubset`): the verifier's `subset:K_d` draw over the window's population from `L` uniform bytes

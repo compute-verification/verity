@@ -136,7 +136,7 @@ def test_with_no_nebius_key_here_run_on_asks_the_control_pod_and_waits_for_ssh(p
     """A lane's VM (no NEBIUS_SA_*): `research run --on` asks the control pod, which here is wake.py run in-process."""
     for k in remote.NEBIUS_KEY_ENV:
         monkeypatch.delenv(k, raising=False)
-    answers = iter([1, 0])
+    answers = iter([1, 0, 0])
     monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
     nb, asked, t = Nebius(), [], [0.0]
 

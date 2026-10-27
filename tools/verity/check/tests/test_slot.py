@@ -52,6 +52,15 @@ def outside_a_slot(monkeypatch):
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def no_host_memory(monkeypatch):
+    """A slot with mem= waits on this machine's free memory (`memory_gb()`), which no two hosts share (CI-182): a test that takes
+    such a slot stubs it, and one that would read the host's fails. `memory_gb(root)` over a fake tree still reads that tree."""
+    real = SLOT.memory_gb
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: real(root) if root is not None else pytest.fail(
+        "reads this host's free memory: stub SLOT.memory_gb"))
+
+
 def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
     """19 Oct: a `research run --pool` job whose command was itself `slot.py ... --`: the inner slot.py queued behind its own outer
     lock, and vy-nebius-cpu-1's research pool stood still until it was cancelled."""
@@ -354,7 +363,7 @@ def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
 
 
 def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, monkeypatch, capsys):
-    """INF-278: CHECK_SLOTS named a pool vy-nebius-1 didn't have, and the job ran unpinned beside the GPU jobs."""
+    """A CHECK_SLOTS pool the machine lacks is refused: run anyway, the job would run unpinned beside the GPU jobs."""
     for pool, line in (("proofs", "p0 0-1\n"), ("trains", "t 2 only=trains\n")):
         (tmp_path / pool).mkdir()
         (tmp_path / pool / "slots").write_text(line)
@@ -679,8 +688,8 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
 
 
 def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
-    """CI-110, 19 Oct 19:12Z: the lowest train's resent check waited an hour behind the checks of trains above it, which came
-    first, though only it could land next. drive ranks a train's check by its members above `main`."""
+    """The lowest train's check goes ahead of the checks of trains above it that came first, since only it can land next.
+    drive ranks a train's check by its members above `main`."""
     unranked, u = SLOT.join(tmp_path, priority=True)                        # an older drive's check, with no rank
     high, h = SLOT.join(tmp_path, priority=True, rank=30)                   # a train above, first to arrive
     low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
@@ -751,8 +760,8 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
 
 
 def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_only_when_there_is_none(tmp_path, monkeypatch):
-    """CI-164: n2's and cpu-1's default pools are all only=trains, and the refusal sent a lane check to another machine though
-    each has a lane pool beside it (`gpu/slots`, `research/slots`)."""
+    """A machine whose default pool is all only=trains refuses a lane check naming the lane pool beside it, and names another
+    machine only when there is none (`gpu/slots`, `research/slots`)."""
     (tmp_path / "slots").write_text("d 0 only=trains\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
@@ -899,6 +908,7 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT, "PEERS", tmp_path / "absent-peers")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    here = SLOT.twin_here
     assert SLOT.main(["--twin", "p2@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert (f"slot: not started: twin p2@vy-nebius-1 can't be claimed (vy-nebius-1 isn't in {tmp_path / 'absent-peers'}), "
             "so its twin there runs instead; exit 75") in capsys.readouterr().err
@@ -906,12 +916,7 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
-    monkeypatch.undo()                                                             # undoes any_core's pin too
-    monkeypatch.delenv("CHECK_SLOT", raising=False)                               # and outside_a_slot's
-    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
-    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
-    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
-    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    monkeypatch.setattr(SLOT, "twin_here", here)
     assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
     t = [NOW]
     peeks = []

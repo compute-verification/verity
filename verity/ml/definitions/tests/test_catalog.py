@@ -1,14 +1,8 @@
-"""`catalog.load()` registers exactly the Definitions and primitives the registry held when it moved into
-`verity.ml.definitions` (circuits' condition on the move, CIR-93): a module that stops importing or registering, or one
-that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
+"""`catalog.load()` registers exactly `COUNT` Definitions and primitives: a module that stops importing or registering, or
+one that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
 
-The count is the registry's own: 1,287 on main before the move less PoUW's circuit (the 47 `Ncp*` and `Pouw*` Definitions
-`verity.core.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
-`verity.ml.circuits.ops.ncp`, 1,242 since `AttentionHead_v18` and `Attention_v18` (bcf1e1aade), 1,250 since
-`AttentionHead_v19`, `Attention_v19`, `AttnBlockFirst_v1` and `AttnHeadEnd_v1` (d37b243ac6) and ops' `GemmCoordinatePad_v1`,
-`_v2`, `ScaledMmS8CoordinateRows_v1` and `_v2` (fa7065c758), 1,256 since ops' `F32ToS8RniSat_v1`, `_v2`, `U32Hi16_v1`
-and `_v2` (#4433) and `PvRow_v1` and `_v2` (#4556), 1,257 with `io_shell.TokenFeed_v1`, 1,259 with `io_shell.SlotRow_v1`
-and `SlotMask_v1`, and 1,261 with `fa3_check_inf`'s `AttentionHead_v20` and `Attention_v20`."""
+The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
+registers) is not in it."""
 from __future__ import annotations
 
 import sys
@@ -20,7 +14,21 @@ REPO = Path(__file__).resolve().parents[4]
 
 COUNT = 1261
 
-COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
+COUNT -= 3  # `GeluTanhMulBf16_v2`, `GeluTanhMul_v2` and `GeluTanhMul_v3`, retired once `GeluTanhMul_v4` superseded them
+
+COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
+
+COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
+
+COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
+
+COUNT += 3  # io_shell's `ScanSlots_v1`, `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
+
+COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
+
+COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
+
+COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
 
 def test_the_catalog_loads_every_definition_and_no_other():

@@ -1,6 +1,6 @@
 """Versioned memory model (pure): `(allocation, element interval) -> Refs` with generations.
 
-Implemented by lane L2.  The model maps physical storage to *immutable* source-gate references in the fold's
+The model maps physical storage to *immutable* source-gate references in the fold's
 root body (`("p", i, leaf)` parameters, `("n", k, leaf)` node outputs; see `verity.ir/refs.py`).  Device
 addresses are capture-time information only: once a value is referenced by an instance, that reference never
 changes, whatever later happens to the memory.
@@ -34,8 +34,8 @@ Complexity: per allocation an ordered interval map keyed by byte offset; a write
 runs is O(R log n); reads are O(R log n + parts).  Refs returned are `concat` of run slices, so a contiguous
 read of one producer is a single `Affine`.
 
-Implementation notes (L2)
--------------------------
+Implementation notes
+--------------------
 - Intervals are half-open byte ranges `[lo, hi)` of one allocation, sorted and pairwise disjoint, each holding
   one *primitive* `Refs` part (`Affine` / `Strided` / `Explicit`, never `Concat`) plus the width and dtype it
   was written with.  A write whose refs are a `Concat` is stored as one interval per part, so later row reads
@@ -170,7 +170,7 @@ def _runs_meet(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> bool:
 def address_ordered(view: ViewDesc, refs: Refs) -> tuple[ViewDesc, Refs]:
     """`view` written with `refs` (one producer's leaves base..base+numel in the view's row-major order) as the same element-to-leaf
     map with the axes in decreasing storage stride, so the write covers contiguous address runs: a transposed parameter view
-    (GLM-5.3's absorbed W_UK_T, VLLM-14) writes one run per inner row, not one per element.  Other refs, and a view already in
+    (GLM-5.3's absorbed W_UK_T) writes one run per inner row, not one per element.  Other refs, and a view already in
     address order, pass through."""
     if not isinstance(refs, Affine) or len(view.shape) < 2:
         return view, refs
@@ -302,9 +302,9 @@ class _Interval:
         return f"[{self.lo},{self.hi}) {self.dtype} {self.refs!r}"
 
 
-#: [FOLD-01] distinct gathered-row geometries memoised per allocation; beyond this a geometry's rows are read uncached
+#: distinct gathered-row geometries memoised per allocation; beyond this a geometry's rows are read uncached
 _MAX_ROW_GEOMS = 256
-#: [FOLD-01] a write overlapping more cached rows than this clears the allocation's row cache instead of popping row by row
+#: a write overlapping more cached rows than this clears the allocation's row cache instead of popping row by row
 _ROW_INVALIDATE_SCAN = 4096
 
 
@@ -316,7 +316,7 @@ class _Alloc:
         self.live = True
         self.starts: list[int] = []          # ivs[k].lo, for bisect
         self.ivs: list[_Interval] = []
-        # [FOLD-01] memo of `read(row_view(view, i))` for gathered rows (`read_rows`): `(geometry, i) -> Refs`, where geometry =
+        # memo of `read(row_view(view, i))` for gathered rows (`read_rows`): `(geometry, i) -> Refs`, where geometry =
         # (offset, shape, strides, dtype) of the gathered view within this allocation.  A row's refs are a pure function of the
         # intervals under its byte extent, so an entry stays valid until a write / free / regeneration touches those bytes:
         # `_splice` pops exactly the rows whose extent overlaps the written range (`row_geoms` keeps each geometry's
@@ -325,7 +325,7 @@ class _Alloc:
         # every step (and every query row of a prefill), which made the fold's cost sum(context) x layers x steps.
         self.row_cache: dict[tuple, Refs] = {}
         self.row_geoms: dict[tuple, tuple[int, int, int]] = {}
-        # [VLLM-14] the permuted weight roots written here (`write_root`): (address-ordered root view, space, idx, base, leaf stride per
+        # the permuted weight roots written here (`write_root`): (address-ordered root view, space, idx, base, leaf stride per
         # axis, element runs), each an affine address -> leaf map that answers a read of any sub-box of its axes without slicing
         # intervals; dropped by an ordinary write over its byte extent or a root write over its elements
         self.root_maps: list[tuple[ViewDesc, str, int, int, tuple[int, ...], list[tuple[int, int]]]] = []
@@ -345,7 +345,7 @@ class MemoryModel:
         self._n_allocs = 0
         self._n_writes = self._n_reads = self._n_moves = 0
         self._n_unresolved = self._n_implicit = self._n_generation_drops = self._n_frees = self._n_fast_reads = 0
-        self._n_row_hits = 0   # [FOLD-01] gathered rows served from the per-allocation row cache (counted in `reads` too)
+        self._n_row_hits = 0   # gathered rows served from the per-allocation row cache (counted in `reads` too)
 
     # -- allocations --------------------------------------------------------------------------------------
 
@@ -469,7 +469,7 @@ class MemoryModel:
             self._invalidate_rows(a, lo, hi)
 
     def _invalidate_rows(self, a: _Alloc, lo: int, hi: int) -> None:
-        """[FOLD-01] drop the memoised gathered rows whose byte extent overlaps `[lo, hi)` (the bytes a write just replaced)."""
+        """Drop the memoised gathered rows whose byte extent overlaps `[lo, hi)` (the bytes a write just replaced)."""
         cache = a.row_cache
         for gk, (row0, stride, ext) in a.row_geoms.items():
             # rows i with row0 + i*stride < hi and row0 + i*stride + ext > lo

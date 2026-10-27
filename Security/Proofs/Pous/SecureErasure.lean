@@ -6,7 +6,7 @@ import Proofs.Pous.SecureErasure.Band
 # Secure erasure
 
 * `SecureErasure/Digest.lean`: the fill check's digest is almost universal (`PousDigest.digestAU`), ported from
-  PR #1010 without its bandwidth assumption.
+  the older bandwidth-separated proof without its bandwidth assumption.
 * `SecureErasure/Reduction.lean`: secure erasure from any sequential audit bound, by counting
   (`PousErase.secure_erasure_meets`).
 * `SecureErasure/Band.lean`: the band's audit at `2152` reads and `EraseMeets` at `f = 1/19`, `ε = 2^-128`, for every

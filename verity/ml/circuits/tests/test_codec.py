@@ -1,5 +1,5 @@
-"""Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1), and the
-reference normalisation of `concat`.
+"""Descriptor codec: nested-static dependency discovery, identity conflicts, and the reference normalisation of
+`concat`.
 
 Ported from veritor ``verity.ir/tests/test_codec.py`` (1-114, 131-224).  The tests over veritor's model registry (B1
 attention padding, KV-cache aliasing, the pinned v0 digests) stayed behind; the one `b1.Gemm` reference became a local
@@ -8,13 +8,14 @@ composite."""
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
 from verity.ml.circuits import codec
 from verity.ml.circuits.codec import IdentityConflict
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.defs import CompositeDefinition, same_definition
 
 from test_running_example import Add16, Dot, Id16, Mul16, Relu16
 
@@ -45,7 +46,7 @@ def LinearOps(B, S, x, W):
 @composite("TwoLinears", 1, ["M", "opsA", "opsB"],
            lambda S: ((("x", A2), ("W", Array(S.M, A2))), Array(2, Array(S.M, V16))))
 def TwoLinears(B, S, x, W):
-    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program (ruling §8.3)."""
+    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program."""
     a = B.call(bind(LinearOps, M=S.M, ops=S.opsA), x, W)
     b = B.call(bind(LinearOps, M=S.M, ops=S.opsB), x, W)
     return B.call(bind(Stack2, M=S.M), a, b)
@@ -186,6 +187,64 @@ def test_bind_refuses_a_record_its_composite_refuses_and_caches_none():
     assert program_digest(Program(partial.bind(M=4))) == program_digest(Program(bind(Plain, M=4, ops=ops)))
 
 
+def _flags(v) -> bool:
+    if isinstance(v, (list, tuple)):
+        return all(_flags(x) for x in v)
+    return all(_flags(x) for x in v.values()) if isinstance(v, dict) else type(v) is bool
+
+
+LOOKALIKES = [(True, 1), (False, 0), ((True, False), (1, 0)), ({"a": True}, {"a": 1})]
+
+
+def test_bind_keys_a_bool_static_apart_from_the_int_it_equals():
+    """`True == 1` and `hash(True) == hash(1)`: keyed on the raw value, `FLAG=1` would hit the entry `FLAG=True` made, so
+    `refuse` never saw it and its id said whichever bind came first. Alone or nested in a tuple or a record, the lookalike
+    bound after the accepted form is still refused, and where both are admitted they are two specializations and two ids."""
+    sig, body = (lambda S: ((("x", V16),), V16)), (lambda B, S, x: B.call(Id16, x))
+    Flag = CompositeDefinition("FlagOnly", 1, ("FLAG",), sig, body, register=False,
+                               refuse=lambda b: None if _flags(b["FLAG"]) else f"FLAG={b['FLAG']!r} is not a flag")
+    for accepted, lookalike in LOOKALIKES:
+        assert bind(Flag, FLAG=accepted).bindings["FLAG"] == accepted
+        with pytest.raises(ValueError, match=rf"^FlagOnly_v1 refuses this binding: FLAG={re.escape(repr(lookalike))} is not"):
+            bind(Flag, FLAG=lookalike)
+    Both = CompositeDefinition("AnyFlag", 1, ("FLAG",), sig, body, register=False)
+    for a, b in LOOKALIKES + [(1.0, 1), (1.0, True)]:
+        sa, sb = bind(Both, FLAG=a), bind(Both, FLAG=b)
+        assert sa is not sb and sb is bind(Both, FLAG=b)
+        assert sa.id != sb.id and not same_definition(sa, sb)
+        assert program_digest(Program(sa)) != program_digest(Program(sb))
+    assert (bind(Both, FLAG=True).id, bind(Both, FLAG=1).id) == ("AnyFlag_v1{FLAG=True}", "AnyFlag_v1{FLAG=1}")
+
+
+def test_decode_refuses_a_record_its_registered_composite_refuses():
+    """The decoder holds a binding record of a composite the registry holds to that composite's `refuse`, as `bind` holds a
+    built one: the token feed at FIRST=1, its id, record and body otherwise well formed, is no Program's, so no reader that
+    accepts by id meets it."""
+    from verity.ml.definitions.registry.io_shell import TokenFeed
+
+    feed = bind(TokenFeed, NP=2, FIRST=True)
+    sig = feed.signature()
+    calls = CompositeDefinition("CallsTokenFeed", 1, (), lambda S: sig, lambda B, S, slot: B.call(feed, slot), register=False)
+    text = json.dumps(encode_program(Program(calls)), separators=(",", ":"))
+    assert "TokenFeed_v1{NP=2,FIRST=true}" in text
+    assert program_digest(decode_program(json.loads(text), REGISTRY)) == program_digest(json.loads(text))
+    lookalike = json.loads(text.replace("FIRST=true", "FIRST=1").replace('"FIRST":true', '"FIRST":1'))
+
+    class Lookup:
+        """A registry as the decoder reads one, through `in` and `[]` alone (benchmarks/one_stage/replay.py's stand-ins)."""
+
+        def __contains__(self, fid: str) -> bool:
+            return fid in REGISTRY
+
+        def __getitem__(self, fid: str):
+            return REGISTRY[fid]
+
+    for registry in (REGISTRY, Lookup()):
+        with pytest.raises(ValueError, match=r"^definition 'TokenFeed_v1\{NP=2,FIRST=1\}': TokenFeed_v1 refuses this binding: "
+                                             r"NP must be at least 1 and FIRST a bool \(got NP=2, FIRST=1\)$"):
+            decode_program(lookalike, registry)
+
+
 def test_unbound_composite_as_a_static_value_is_not_encodable():
     @composite("NeedsK", 1, ["K"], lambda S: ((("x", Array(S.K, V16)),), V16))
     def NeedsK(B, S, x):
@@ -225,7 +284,7 @@ def test_a_self_compare_round_trips():
     _same_circuit(P, decode_program(desc, REGISTRY))
 
 
-# -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
+# -- zero-stride broadcasts: `[z, z, z]` compacts, `[z0, z1, z2]` does not ----------------------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
     from verity.ml.circuits.refs import Affine, Concat, Strided, concat, is_broadcast

@@ -1,4 +1,4 @@
-"""VLLM-18 on one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
+"""On one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
 to end on the CPU: the linears against `benchmarks/ppl/steps.py`, the attention against compute accounting's LUT softmax
 (`benchmarks/pouw/edited_gemm/fattn_ref.py`, `apv_ref.py`).
 
@@ -30,7 +30,7 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
             by pg_window, and each decode's window is checked against the K and V written in the earlier steps.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/int8_exact_gpu.py --out DIR --at 2026-10-17T00:00:00Z --by LANE
+    $PY tests/engine/int8_exact_gpu.py --out DIR --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 

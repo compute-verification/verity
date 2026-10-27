@@ -1,4 +1,4 @@
-"""[lane vllm-tp-n] Tensor parallelism at world N (synthetic world 3, offline): the world-parametric Definitions, their identities (world 2
+"""Tensor parallelism at world N (synthetic world 3, offline): the world-parametric Definitions, their identities (world 2
 keeps `AllReduce2_v1{N}` / `AllGather2_v1{N}` -- every recorded rank Program's digest unchanged), the registry-derived family selectors
 the consumers use instead of spelled prefixes, the N-ary collective bus (one peer input per (collective, peer rank), rank order), the
 `tp_links.json` v1 -> v2 reader, the three-rank collective linkage, and the three-rank cross-rank check / commit binding."""
@@ -382,7 +382,7 @@ def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
     """A collective row's operand is `world` equal parts in rank order: rank r's own rows are its part's (N leaves for a per-row
     collective, M * N for a flat one), each named by the node producing it, not only the first (rank 0) or the last (rank W-1) run."""
     from verity_vllm.check.match import rank_match as RMx
-    N, spec = 7, lambda k: f"spec{k}"  # noqa: E731
+    N, spec = 7, lambda k: f"spec{k}"
     runs = [("n" if r % 2 else "p", r, 0, N) for r in range(W)]
     for rank in range(W):
         assert RMx._own_rows(runs, {"rank": rank, "world": W, "N": N}, spec) == ([f"spec{rank}"] if rank % 2 else ["<not-a-node>"])
@@ -398,7 +398,7 @@ def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
 
 def test_a_fused_norm_recorder_row_is_the_collective_its_path_folds_to_and_the_unfused_ones_are_the_commit_s():
     """The recorder files each `fused_allreduce_rms_norm` call as `fused_norm.KIND` over `stack([partial, residual])`: on its unfused path
-    the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance leg leaves the unfused
+    the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance check leaves the unfused
     calls to the Commit's replay, so they count with the checked ones."""
     from verity_vllm.check.match import rank_match as RMx
     from verity_vllm.engine.collectives import fused_norm as FN
