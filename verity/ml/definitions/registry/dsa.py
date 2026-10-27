@@ -68,6 +68,7 @@ from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.fp8 import E4M3
 from verity.ml.definitions.registry.prims import BF16, F32, I32, bits_of
@@ -77,12 +78,13 @@ M32 = 0xFFFFFFFF
 
 _CONF = ("model-untested: read from the Triton kernels and their PTX at the commits the module docstring pins; "
          "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
-_LOGIT_V1_CONF = ("refuted on an H200 (sm_90): property glm53_dsa_capture, run r20261012-222325-ce92 (record 626052b647671ba1), "
+_DSA = EVIDENCE["glm53_dsa_capture"]
+_LOGIT_V1_CONF = (f"refuted on an H200 (sm_90): property glm53_dsa_capture, run {_DSA['run']} (record {_DSA['record']}), "
                   "828 of 19,513 prefill and 354 of 7,292 paged logits differ by 1 to 4 ulps; nvcc contracts each sum's first "
                   "product, DsaMqaLogit_v3")
 _LOGIT_CONF = ("exact-model-tested; H200 (sm_90, 132 SMs; vLLM d9105ea80, DeepGEMM 8b1392b9): the operands and logits of property "
-               "glm53_dsa_capture's run r20261012-222325-ce92, every one of the 19,513 prefill and 7,292 paged logits equal "
-               "(tests/program/data/dsa_h200_logits.npz keeps eight that refute v1)")
+               "glm53_dsa_capture's run {run}, every one of the 19,513 prefill and 7,292 paged logits equal "
+               "(tests/program/data/dsa_h200_logits.npz keeps eight that refute v1)").format(run=_DSA["run"])
 _TOPK_CONF = ("model-untested: read from vLLM d9105ea80 sampler.cu:388-412 and cooperative_topk.cuh:494-501; "
               "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 

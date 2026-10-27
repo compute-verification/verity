@@ -1,4 +1,4 @@
-"""Lane ov-adversarial (Agent 10, swarm 2026-09-17): minimal failing tests for the holes found by mutating the fold's OUTPUT
+"""Minimal failing tests for the holes found by mutating the fold's OUTPUT
 through the patterns — the lever an untrusted adapter author holds — over the trusted record (the synthetic `consistent_toy`:
 log + snapshots derived from the GENUINE Program + toy weights).
 
@@ -48,7 +48,7 @@ def test_premise_mutating_pattern_is_an_ordinary_pattern(toy):
 
 # ---------------------------------------------------------------------------------------------------------
 # HOLE-3: "new semantics" are recognised by the SUBSTRING `quarantine` in the body's module.  A Definition authored in
-# any other lane-writable module (a new profile module, a bench module) is not a quarantine spec: G4 demands no
+# any other author-writable module (a new profile module, a bench module) is not a quarantine spec: G4 demands no
 # differential tests and quarantine_lint never sees it.
 # ---------------------------------------------------------------------------------------------------------
 

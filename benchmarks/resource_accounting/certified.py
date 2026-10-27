@@ -60,10 +60,10 @@ Q_GRANT = "red-team grant at 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 GRANTED_T_NS = 1_200_000
 RESIDUAL = "residual, worst case over the audit's coins (CovertResidual's weak form)"
-PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model (Daniel's "
-           "decision 9; #1821's CovertResidualPerRun, and #1827: BudgetAbort holds for constant-cost models and W1's "
-           "operand refund breaks it), so none is shown")
-FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute (Daniel's ruling); a priced-sum column, "
+PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model "
+           "(CovertResidualPerRun; BudgetAbort holds for constant-cost models and W1's operand refund breaks it), so "
+           "none is shown")
+FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute; a priced-sum column, "
                "compute + p·reads at p the device's DRAM rate in MAC units, waits for compute-accounting's priced lemma "
                "(w1Priced)")
 S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "

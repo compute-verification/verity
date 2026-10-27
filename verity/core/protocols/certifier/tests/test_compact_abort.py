@@ -1,4 +1,4 @@
-"""A client's abort in the I/O tie's compact rule (`active.compact_finish_violations`, NET-67).
+"""A client's abort in the I/O tie's compact rule (`active.compact_finish_violations`).
 
 No compact record says an abort: a response its client aborted ends on an unmarked record, and the certifier can't see
 the abort on the link (one connection, no per-request cancel), so any abort on a certified link comes from the prover's
