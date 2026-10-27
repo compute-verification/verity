@@ -6,9 +6,10 @@ Llama-3.2-1B is 46,028,317 units, and the class's 8 take a pod some 22 minutes a
 projection (`project`) from an exact lowering of one Program of the same registration at a small probe class within one
 key block, which the tests hold to the exact lowering at larger classes:
 
-* every template but the heads is a fixed number of units a position (`TokenFeed_v1` a prompt position past the first;
-  `ScanSlots_v2`, at the class's scan state row, and `SlotEntry_v1` one a Program; `OutCollect_v1` one a position, its first
-  the first's), read off the probe, which is refused unless each divides evenly;
+* every template but the heads is a fixed number of units a position (`projected`), a slot's where it places them
+  (`placed`: `TokenFeed_v1` a prompt position past the first; `ScanSlots_v2`, at the class's scan state row, and
+  `SlotEntry_v1` one a Program; `OutCollect_v1` one a position, its first the first's), read off the probe, which is
+  refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
   ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). A
@@ -74,6 +75,37 @@ def _one(xs: list[Any], what: str) -> Any:
     return xs[0]
 
 
+def placed(lab: str, T: int, P: int) -> int | None:
+    """A Program's units of template ``lab`` at position T of its P, for a slot's template: `TokenFeed_v1` at each of its NP
+    prompt positions past the first, `ScanSlots_v2` at the first, `SlotEntry_v1` at the last and `OutCollect_v1` at each
+    (its first the first's); None for any other, a fixed count at every position."""
+    fam, s = statics(lab)
+    if fam == FEED:
+        return int(1 < T <= s["NP"])
+    if fam == SCAN:
+        return int(T == 1)
+    if fam == ENTRY:
+        return int(T == P)
+    if fam == COLLECT:
+        return int(T == 1) if s["FIRST"] else int(T > 1)
+    return None
+
+
+def projected(lab: str, n: int, at: Any, cls: Any) -> tuple[str, int]:
+    """A template outside the heads, ``n`` units of one Program at the probe's class ``at``, as one Program at class ``cls``
+    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v2` at its scan state row) and
+    `placed`'s units there, any other the probe's fixed count a position at each of the class's, refused unless ``n`` is
+    the probe's by that rule."""
+    if placed(lab, 1, at.positions) is None:
+        if n % at.positions:
+            raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {at.positions} positions")
+        return lab, n // at.positions * cls.positions
+    if n != (want := sum(placed(lab, T, at.positions) or 0 for T in range(1, at.positions + 1))):
+        raise ValueError(f"the probe has {n} {lab} units, not the {want} its slot places")
+    to = label(SS.bridge(cls.scan, cls.prompt)) if lab.startswith(SCAN + "{") else _relabel(lab, NP=cls.prompt, KO=cls.outputs)
+    return to, sum(placed(to, T, cls.positions) or 0 for T in range(1, cls.positions + 1))
+
+
 def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     """One Program's census at class ``cls`` from one Program's ``probe`` census at class ``at`` (`census` of
     ``class_circuit(registered, at, 1)``), the probe's heads within one key block."""
@@ -94,25 +126,9 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
                          f"{BLOCK} unit within one key block")
     out: Counter[str] = Counter()
     for lab, n in probe.items():
-        if lab in hs or lab == end:
-            continue
-        fam, s = statics(lab)
-        if fam == FEED:
-            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += cls.prompt - 1
-            if n != NP0 - 1:
-                raise ValueError(f"the probe has {n} {lab} units, not one a prompt position past the first")
-        elif fam in (SCAN, ENTRY):
-            out[label(SS.bridge(cls.scan, cls.prompt)) if fam == SCAN else _relabel(lab, NP=cls.prompt, KO=cls.outputs)] += 1
-            if n != 1:
-                raise ValueError(f"the probe has {n} {lab} units, not one a Program")
-        elif fam == COLLECT:
-            out[_relabel(lab, KO=cls.outputs)] += 1 if s["FIRST"] else P - 1
-            if n != (1 if s["FIRST"] else P0 - 1):
-                raise ValueError(f"the probe has {n} {lab} units, not one a position")
-        elif n % P0:
-            raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {P0} positions")
-        elif n:
-            out[lab] += n // P0 * P
+        if lab not in hs and lab != end:
+            to, k = projected(lab, n, at, cls)
+            out[to] += k
     for T in range(1, P + 1):
         nb, mf = -(-T // BN), fa2_masked_from(T, 1, 0, BN, False)
         nvis = T - (nb - 1) * BN

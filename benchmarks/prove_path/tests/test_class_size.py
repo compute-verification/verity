@@ -64,7 +64,7 @@ def test_v19s_heads_are_key_blocks():
         CZ.project({**probe, first.format(3): 5}, PROBE, WindowClass(1, 5, 3))
     with pytest.raises(ValueError, match=r"11 AttnHeadEnd_v1\{D=4\} units, not one a head"):
         CZ.project({**probe, "AttnHeadEnd_v1{D=4}": 11}, PROBE, WindowClass(1, 5, 3))
-    with pytest.raises(ValueError, match="not one a prompt position past the first"):
+    with pytest.raises(ValueError, match=r"2 TokenFeed_v1\{NP=2,FIRST=false\} units, not the 1 its slot places"):
         CZ.project({**probe, "TokenFeed_v1{NP=2,FIRST=false}": 2}, PROBE, WindowClass(1, 5, 3))
 
 
