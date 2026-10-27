@@ -105,6 +105,44 @@ def test_the_no_fold_step_is_against_the_lines_own_wgmma_linear(tmp_path, capsys
             "against wgmma.linear's 0.154 s (these lines' wgl), gamma_lt 3.000 against cuBLASLt's 0.128 s") in capsys.readouterr().out
 
 
+def test_a_split_gives_each_ns_step_its_gemms_slowdown_the_hashing_hidden_and_each_calls_best_n(tmp_path, capsys,
+                                                                                                    monkeypatch):
+    """fill-bench's split arms: each N's step from ovl_w_gN over every call, the GEMM alone on N SMs over the whole GPU's,
+    the commit alone on the rest, the hashing hidden (the serial split less the step, over its hashing); each call picks
+    its fastest N; an N some call lacks is left out."""
+    calls = h200_step.MODELS["8b"]
+    lines = [json.loads(_fill_line(n, k, True)) for n, k in calls]
+    for x in lines:
+        g64 = 2.1 if (x["n"], x["k"]) == (4096, 14336) else 1.8
+        x["lp"] = 512
+        x["gsm"], x["gsms"] = 64, [{"n": 0, "sms": [132, 132]}, {"n": 64, "sms": [64, 68]}, {"n": 80, "sms": [80, 52]}]
+        x["arms"] |= {"wgl": {"ms": 1.25, "mhz": 1980}, "ovl_w_g0": {"ms": 2.0, "mhz": 1980},
+                      "ovl_w_g64": {"ms": g64, "mhz": 1980}, "gemm_g64": {"ms": 2.4, "mhz": 1980},
+                      "commit_g64": {"ms": 1.0, "mhz": 1980}}
+    lines[0]["arms"]["ovl_w_g80"] = {"ms": 1.0, "mhz": 1980}
+    f = tmp_path / "fill-bench-served1-gemm1-gsm64-L4096.jsonl"
+    f.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    sp = h200_step.split_steps(h200_step.rows([str(f)]), calls=calls)[(512, 4096, 16384, True, "served1-gemm1-gsm64-L4096")]
+    assert set(sp["n"]) == {0, 64}
+    n64 = sp["n"][64]
+    assert n64["step"] == pytest.approx(32 * 7.5e-3) and n64["sms"] == (64, 68)
+    assert n64["gemm"] == pytest.approx(128 * 2.4e-3) and n64["commit"] == pytest.approx(128 * 1e-3)
+    assert n64["slowdown"] == pytest.approx(1.6) and n64["hidden"] == pytest.approx(0.5)
+    assert sp["n"][0]["gemm"] is None and sp["n"][0]["hidden"] == pytest.approx(0.2 / 0.65)
+    assert sp["pick"] == {"s-6144-4096": 64, "s-4096-4096": 64, "s-28672-4096": 64, "s-4096-14336": 0}
+    assert sp["best"] == pytest.approx(32 * 7.4e-3) and sp["best_hidden"] == pytest.approx(1.4 / 2.6)
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
+    assert h200_step.main() == 0
+    out = capsys.readouterr().out
+    assert "| 512 | 4096 | 16384 | served | served1-gemm1-gsm64-L4096 | 0 | every SM | 0.256 | 1.600 | - | - | - | 30.8% |" in out
+    assert ("| 512 | 4096 | 16384 | served | served1-gemm1-gsm64-L4096 | 64 | 64 + 68 | 0.240 | 1.500 | 0.307 | 1.600 | "
+            "0.128 | 50.0% |") in out
+    assert ("summary: 8b no-fold served split L 4096 L' 512 row 16384 served1-gemm1-gsm64-L4096: best N 64 step 0.240 s, "
+            "gamma_u 1.500, hashing hidden 50.0%; each call's N (s-6144-4096 64, s-4096-4096 64, s-28672-4096 64, "
+            "s-4096-14336 0) step 0.237 s, gamma_u 1.480, hashing hidden 53.8%; serial 0.282 s (hashing 0.083 s), gamma_u "
+            "against these lines' wgl 0.160 s") in out
+
+
 def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):
     """h200_pipes.py: a pipe's busy time is its share of peak over the kernel's elapsed cycles (active / elapsed scales
     it) times the kernel's duration (in ncu's unit, refused when it's none it knows), the larger of its issue and
@@ -139,6 +177,32 @@ def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, 
     bad.write_text(csv_text.replace('"ms"', '"furlong"'))
     with pytest.raises(ValueError, match="furlong"):
         h200_pipes.read_ncu(bad)
+
+
+def test_pipe_duty_on_a_split_is_over_its_overlapped_arm_with_the_weight_side_counted(tmp_path, capsys):
+    """On V31_GSM's split the wall is fill-bench's ovl_w_gN, whose calls form W' each as fill-once's do: fill_b_kernel
+    counts there."""
+    import h200_pipes
+
+    cols = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_active.avg", "sm__cycles_elapsed.avg",
+            "sm__pipe_tensor_op_gmma_cycles_active.avg.pct_of_peak_sustained_active",
+            "sm__inst_executed_pipe_alu.avg.pct_of_peak_sustained_active",
+            "sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active",
+            "sm__inst_executed_pipe_lsu.avg.pct_of_peak_sustained_active"]
+    rows = [["", "", "ms", "cycle", "cycle", "%", "%", "%", "%"],
+            ["0", "bits_kernel(Seeds, int, unsigned long, unsigned char *)", "0.5", "100", "100", "0", "0", "0", "0"],
+            ["1", "void wgp::gemm<256, 1>(wgp::Args)", "2", "1,000", "1,000", "80", "5", "4", "2"],
+            ["2", "fill_b_kernel(signed char const*)", "1", "100", "100", "0", "40", "40", "30"],
+            ["3", "void leaf_persist<ServedRow>(Persist, int)", "1", "50", "100", "0", "90", "80", "20"]]
+    (tmp_path / "ncu-served1-gsm64-L4096-8B-o.raw.csv").write_text(
+        "\n".join(",".join(f'"{c}"' for c in r) for r in [cols] + rows) + "\n")
+    (tmp_path / "ncu-served1-gsm64-L4096-8B-o.log").write_text("8B-o: 1 calls, L 4096 row 16384\n")
+    arms = {"ovl": {"ms": 9.0}, "ovl_w_g64": {"ms": 2.0}, "lt": {"ms": 1.6}}
+    (tmp_path / "fill-bench-served1-gsm64-L4096.jsonl").write_text(
+        json.dumps({"fill": True, "shape": "8B-o", "gsm": 64, "arms": arms}) + "\n")
+    assert h200_pipes.main(["h200_pipes.py", str(tmp_path)]) == 0
+    assert ("| 8B-o | 4096 | served1-gsm64 (ovl_w_g64) | 2.000 | 1.600 | 1.250 | 80.0% | 47.5% | 0.0% | 22.0% | 20.0% | "
+            "2.000 | 1.000 | 1.500 | 2.25 | - |") in capsys.readouterr().out
 
 
 def test_pipe_kinds_read_ncus_demangled_names_and_cublaslts_gemm():
