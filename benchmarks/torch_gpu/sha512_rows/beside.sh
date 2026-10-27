@@ -4,15 +4,17 @@
 # LEASE_MIN minutes, gates before timing:
 #   lowreg   `lowreg check 2` and lowreg_check.py (every kernel's digests against hashlib), then, if it passed, ROUNDS rounds
 #            of `lowreg rates LAUNCHES TILES` (SHA-512's rate against the register cap, 1, 2 and 4 warpgroups an SM)
-#   beside   `beside gate SHAPE` and beside_check.py (y against the Definition, the handoff's row digests and the hash arm's
-#            against hashlib), then, if it passed, ROUNDS rounds of `beside time SHAPE LAUNCHES` (every kernel's arms), then
-#            Nsight Compute (duty.metrics and the chip's tensor pipes, --clock-control none) on NCU_RUNS (KERNEL:ARM ...)
+#   beside   `beside gate SHAPE DIR KERNEL` a kernel and beside_check.py (y against the Definition, the handoff's row digests
+#            and the hash arm's against hashlib), then, for the kernels that passed, ROUNDS rounds of `beside time SHAPE
+#            LAUNCHES KERNEL` (its arms) and Nsight Compute (duty.metrics and the chip's tensor pipes, --clock-control none)
+#            on NCU_RUNS (KERNEL:ARM ...)
+# Every GPU command is under `timeout STEP_S` (180 s), so a kernel that hangs costs its step and not the lease.
 # nvidia-smi samples every 200 ms beside them. BUILD_ONLY=1 stops after the builds (a CPU node with CUDA 13).
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/beside.sh
-# STEPS ("lowreg beside"), ROUNDS (3), LAUNCHES (10), TILES (128), SHAPE ("16384 4096 4096": M N K), NCU_RUNS, LEASE_MIN
-# (20), CUDA (the toolkit: default the first of /usr/local/cuda-13.0 and /usr/local/cuda).
+# STEPS ("lowreg beside"), ROUNDS (3), LAUNCHES (10), TILES (128), SHAPE ("16384 4096 4096": M N K), NCU_RUNS, STEP_S,
+# LEASE_MIN (20), CUDA (the toolkit: default the first of /usr/local/cuda-13.0 and /usr/local/cuda).
 set -uo pipefail
 export O=${OUT:?}
 for c in "${CUDA:-}" /usr/local/cuda-13.0 /usr/local/cuda; do [ -n "$c" ] && [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
@@ -24,7 +26,7 @@ trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$O/commit.txt"
 nvcc --version > "$O/nvcc.txt" 2>&1
 export STEPS=${STEPS:-lowreg beside} ROUNDS=${ROUNDS:-3} LAUNCHES=${LAUNCHES:-10} TILES=${TILES:-128}
-export SHAPE=${SHAPE:-16384 4096 4096}
+export SHAPE=${SHAPE:-16384 4096 4096} STEP_S=${STEP_S:-180}
 export NCU_RUNS=${NCU_RUNS:-wgl_n256_s4:mma wgl_n128_s3:mma h72_r:mma h72_r:hash h72_r:free h72_r:handoff h64_rs:free h128_r:free}
 SM=90a
 for s in $STEPS; do
@@ -69,35 +71,42 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
     --format=csv,noheader -lms 200 -i "$U" > "$O/smi.csv" 2>&1 &
   smi=$!
   start=$SECONDS
+  T="timeout -k 10 $STEP_S"
   for s in $STEPS; do
     case $s in
       lowreg)
         [ -x "$W/lowreg" ] || continue
-        "$W/lowreg" check 2 > "$O/lowreg-check.jsonl" 2> "$O/lowreg-check.err"
+        $T "$W/lowreg" check 2 > "$O/lowreg-check.jsonl" 2> "$O/lowreg-check.err"
         echo "lowreg check rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
         $PY $X/lowreg_check.py "$O/lowreg-check.jsonl" > "$O/lowreg-verdict.txt" 2>&1
         c=$?
         echo "lowreg verdict rc $c" >> "$O/rc.txt"
         [ $c = 0 ] || continue
         for r in $(seq "$ROUNDS"); do
-          "$W/lowreg" rates "$LAUNCHES" "$TILES" >> "$O/lowreg-rates.jsonl" 2>> "$O/lowreg-rates.err"
+          $T "$W/lowreg" rates "$LAUNCHES" "$TILES" >> "$O/lowreg-rates.jsonl" 2>> "$O/lowreg-rates.err"
           echo "lowreg rates round $r rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
         done ;;
       beside)
         [ -x "$W/beside" ] || continue
         mkdir -p "$W/gate"
-        # shellcheck disable=SC2086
-        "$W/beside" gate $SHAPE "$W/gate" > "$O/beside-gate.jsonl" 2> "$O/beside-gate.err"
-        echo "beside gate rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
-        $PY $X/beside_check.py "$O/beside-gate.jsonl" "$W/gate" > "$O/beside-verdict.txt" 2>&1
-        c=$?
-        echo "beside verdict rc $c" >> "$O/rc.txt"
-        rm -rf "$W/gate"
-        [ $c = 0 ] || continue
-        for r in $(seq "$ROUNDS"); do
+        # a process a kernel, so a kernel that hangs or faults costs only its own gate
+        for k in $("$W/beside" list); do
           # shellcheck disable=SC2086
-          "$W/beside" time $SHAPE "$LAUNCHES" >> "$O/beside-time.jsonl" 2>> "$O/beside-time.err"
-          echo "beside time round $r rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+          $T "$W/beside" gate $SHAPE "$W/gate" "$k" >> "$O/beside-gate.jsonl" 2>> "$O/beside-gate.err"
+          echo "beside gate $k rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+        done
+        $PY $X/beside_check.py "$O/beside-gate.jsonl" "$W/gate" "$O/beside-passed.txt" > "$O/beside-verdict.txt" 2>&1
+        echo "beside verdict rc $?: $(wc -l < "$O/beside-passed.txt") kernel(s) passed" >> "$O/rc.txt"
+        rm -rf "$W/gate"
+        # timing and profiles only for the kernels whose own gate passed
+        passed=$(cat "$O/beside-passed.txt")
+        [ -n "$passed" ] || continue
+        for r in $(seq "$ROUNDS"); do
+          for k in $passed; do
+            # shellcheck disable=SC2086
+            $T "$W/beside" time $SHAPE "$LAUNCHES" "$k" >> "$O/beside-time.jsonl" 2>> "$O/beside-time.err"
+            echo "beside time round $r $k rc $? ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+          done
         done
         NCU=$(command -v ncu || ls "$CUDA"/bin/ncu /usr/local/cuda/bin/ncu /usr/local/cuda-*/bin/ncu \
           /opt/nvidia/nsight-compute/*/ncu 2>/dev/null | head -1)
@@ -108,10 +117,11 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -c '
           sed "s/$/.avg.pct_of_peak_sustained_elapsed/" | paste -sd, -)
         base=$(tr -d " \n" < benchmarks/pouw/accel_v31/duty.metrics)
         for kr in $NCU_RUNS; do
+          grep -qx "${kr%%:*}" <<< "$passed" || continue
           f="$O/ncu-${kr%%:*}-${kr##*:}"
           for extra in "${tens:+,$tens}" ""; do
             # shellcheck disable=SC2086
-            "$NCU" --clock-control none --launch-skip 1 --launch-count 1 --metrics "$base$extra" -f -o "$f" \
+            $T "$NCU" --clock-control none --launch-skip 1 --launch-count 1 --metrics "$base$extra" -f -o "$f" \
               "$W/beside" one $SHAPE "${kr%%:*}" "${kr##*:}" 1 > "$f.log" 2>&1
             rc=$?
             [ $rc = 0 ] && break

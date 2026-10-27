@@ -5,7 +5,8 @@ For each kernel the gate ran: y at its sampled cells against the host's Definiti
 warpgroup chained through the row's O tiles; for its hash arm, every CTA's 128 digests against sha512/row/v2 of the seed tile's
 row repeated hash_tiles times. The seed tile is also drawn here (splitmix64 seed 5, little-endian) and must equal seed.bin.
 
-    python3 beside_check.py GATE.jsonl DIR    # a VERDICT line a kernel and arm, then one for all; exit 1 on any mismatch
+    python3 beside_check.py GATE.jsonl DIR [PASSED]   # a VERDICT line a kernel and arm, then one for all; exit 1 on any
+                                                      # mismatch; PASSED: the kernels whose every arm passed, one a line
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ def digest_bytes(words: bytes) -> bytes:
     return b"".join(int.from_bytes(words[8 * i:8 * i + 8], "little").to_bytes(8, "big") for i in range(8))
 
 
-def main(gate: str, d: str) -> int:
+def main(gate: str, d: str, passed: str | None = None) -> int:
     lines = [json.loads(s) for s in open(gate) if s.startswith("{")]
     head, runs = lines[0], [x for x in lines[1:] if "kernel" in x]
     M, N = head["M"], head["N"]
@@ -41,6 +42,7 @@ def main(gate: str, d: str) -> int:
         print(f"reference: rowleaf not imported ({e}); hashlib's P || row alone")
         ref_ok = True
     failed = 0
+    bad_kernels: set[str] = set()
     for r in runs:
         name, arm = r["kernel"], r["arm"]
         notes = []
@@ -62,13 +64,18 @@ def main(gate: str, d: str) -> int:
             good &= ok == n
             notes.append(f"{ok}/{n} digests equal hashlib's of the seed tile's rows x {r['hash_tiles']}")
         failed += not good
+        if not good:
+            bad_kernels.add(name)
         print(f"VERDICT gate {name} {arm}: {'PASS' if good else 'FAIL'} {'; '.join(notes)} (regs {r['regs']}, "
               f"local {r['local_bytes']} B)")
     ok_all = not failed and seed_ok and ref_ok and runs
     print(f"VERDICT beside gate: {'PASS' if ok_all else 'FAIL'} {len(runs) - failed}/{len(runs)} kernel arms exact "
           f"(M {M}, N {N}, K {head['K']})")
+    if passed is not None:
+        good = [] if not (seed_ok and ref_ok) else [k for k in dict.fromkeys(r["kernel"] for r in runs) if k not in bad_kernels]
+        Path(passed).write_text("".join(f"{k}\n" for k in good))
     return 0 if ok_all else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1], sys.argv[2]))
+    sys.exit(main(*sys.argv[1:4]))

@@ -22,8 +22,10 @@
 // tensor pipe's time beside a busy ALU is the GEMM's), handoff (the pipeline: the hash takes each O tile from the
 // epilogue, one tile buffer, the epilogue waiting until the hash has read the last).
 //
-//   beside gate M N K DIR    every kernel's handoff and hash arms once: y at sampled cells against the host's Definition,
-//                            and y, the digests and the seed tile to DIR for beside_check.py (hashlib)
+//   beside list              the kernels' names
+//   beside gate M N K DIR [KERNEL...]
+//                            each kernel's (default every kernel's) handoff and hash arms once: y at sampled cells against
+//                            the host's Definition, and y, the digests and the seed tile to DIR for beside_check.py (hashlib)
 //   beside time M N K LAUNCHES [KERNEL...]
 //                            each kernel's arms in turn, LAUNCHES each: JSON lines (ms, the GEMM's and the hash's spans from
 //                            %globaltimer, compressions, TOPS, the SM clock from NVML)
@@ -547,12 +549,13 @@ static uint16_t ref_cell(const Run& r, int row, int col) {
   return bf16_rn(f);
 }
 
-static int gate(Run& r, const char* dir) {
+static int gate(Run& r, const char* dir, const std::vector<const Kern*>& ks) {
   int bad = 0;
   std::vector<uint16_t> y((size_t)r.M * r.N);
   std::vector<u64> dig((size_t)std::max(r.M, r.grid * TM) * 8);
   write_file(std::string(dir) + "/seed.bin", r.seed.data(), r.seed.size());
-  for (const Kern& k : KERNS) {
+  for (const Kern* kp : ks) {
+    const Kern& k = *kp;
     prepare(k);
     cudaFuncAttributes fa;
     CK(cudaFuncGetAttributes(&fa, k.f));
@@ -640,13 +643,25 @@ static void time_arm(const Kern& k, Run& r, int arm, int launches, Nv& nv) {
 }
 
 static const char* USAGE =
-    "usage: beside gate M N K DIR | time M N K LAUNCHES [KERNEL...] | one M N K KERNEL ARM LAUNCHES\n";
+    "usage: beside list | gate M N K DIR [KERNEL...] | time M N K LAUNCHES [KERNEL...] | one M N K KERNEL ARM LAUNCHES\n";
+
+static std::vector<const Kern*> kernels(int argc, char** argv, int from) {
+  std::vector<const Kern*> ks;
+  for (int a = from; a < argc; ++a) ks.push_back(find(argv[a]));
+  if (ks.empty())
+    for (const Kern& k : KERNS) ks.push_back(&k);
+  return ks;
+}
 
 int main(int argc, char** argv) {
+  if (argc >= 2 && !strcmp(argv[1], "list")) {
+    for (const Kern& k : KERNS) printf("%s\n", k.name);
+    return 0;
+  }
   if (argc < 6) { fputs(USAGE, stderr); return 2; }
   Run r;
   setup(r, atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
-  if (!strcmp(argv[1], "gate")) return gate(r, argv[5]) ? 1 : 0;
+  if (!strcmp(argv[1], "gate")) return gate(r, argv[5], kernels(argc, argv, 6)) ? 1 : 0;
   Nv nv;
   if (!strcmp(argv[1], "one") && argc >= 8) {
     const Kern& k = *find(argv[5]);
@@ -660,11 +675,7 @@ int main(int argc, char** argv) {
   }
   if (strcmp(argv[1], "time")) { fputs(USAGE, stderr); return 2; }
   const int launches = atoi(argv[5]);
-  std::vector<const Kern*> ks;
-  for (int a = 6; a < argc; ++a) ks.push_back(find(argv[a]));
-  if (ks.empty())
-    for (const Kern& k : KERNS) ks.push_back(&k);
-  for (const Kern* k : ks) {
+  for (const Kern* k : kernels(argc, argv, 6)) {
     prepare(*k);
     for (int arm = 0; arm < (k->nwg == 4 ? 4 : 1); ++arm) time_arm(*k, r, arm, launches, nv);
   }
