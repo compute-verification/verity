@@ -4,8 +4,8 @@
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
 #   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
 #          expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch), s8_simple.py (#4472's) as the bench's plain arm, and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h,
-#          sass_gate.py, wgmma.py and configs.py (#4520's) as its wgmma arm, built here by that build.sh. Fixtures not
+#          launch), and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h, sass_gate.py, wgmma.py and configs.py (#4520's) as
+#          the bench's wgmma arm, built here by that build.sh (its plain arm is this tree's s8_linear/int_mm.py). Fixtures not
 #          sent are computed here, the fallback not sent is built here (BUILD_REF=0: not) and with no h1u_*.so sent
 #          h1u_build makes the arms H1U_ARMS names from this tree (BUILD_H1U=0: not), all before the lease, as are the
 #          operands, in a scratch directory removed at exit.
@@ -51,7 +51,7 @@ build() {
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
 H1U_Q=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1
-# HASH-21's kr, kra and kraq, then HASH-22's kraq4 (JCS 4) and kraqwxsc (h1u_jw.patch's JW, JWS and JPC, with JXS)
+# HASH-21's kr, kra and kraq, then HASH-22's kraq4 (JCS 4) and kraqwxsc (JW, JWS and JPC, with JXS)
 H1U_DEFAULT="kr=$H1U_BASE kra=$H1U_A kraq=$H1U_Q,-DH1U_JCS=2 kraq4=$H1U_Q,-DH1U_JCS=4
   kraqwxsc=$H1U_Q,-DH1U_JW=1,-DH1U_JXS=1,-DH1U_JWS=1,-DH1U_JPC=1"
 h1u_build() {
@@ -60,21 +60,14 @@ h1u_build() {
   mkdir -p "$lib"
   local flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode arch=compute_90a,code=sm_90a
                --no-compress)
-  local jw=$S/jw/benchmarks/hash/dither/h1u.cu src
-  case " $arms " in *-DH1U_JW=1*)
-    mkdir -p "$(dirname "$jw")" && cp benchmarks/hash/dither/h1u.cu "$jw" && patch -s -p1 -d "$S/jw" < "$D/h1u_jw.patch" ||
-      { echo "job.sh: h1u_jw.patch does not apply to this tree's h1u.cu" >&2; return 2; } ;;
-  esac
   for v in $arms; do
     arm=${v%%=*}; def=${v#*=}
-    # an arm that sets H1U_JW builds h1u.cu with h1u_jw.patch applied
-    src=benchmarks/hash/dither/h1u.cu; case ",$def," in *,-DH1U_JW=1,*) src=$jw ;; esac
     # shellcheck disable=SC2086
-    "$nv" "${flags[@]}" -I benchmarks/hash/dither ${def//,/ } "$src" -o "$lib/h1u_$arm.so" > "$lib/build-h1u_$arm.log" 2>&1 &
+    "$nv" "${flags[@]}" -I benchmarks/hash/dither ${def//,/ } benchmarks/hash/dither/h1u.cu -o "$lib/h1u_$arm.so" \
+      > "$lib/build-h1u_$arm.log" 2>&1 &
     pids+=($!)
   done
   for p in "${pids[@]}"; do wait "$p" || rc=2; done
-  [ -f "$jw" ] && sha256sum "$jw" "$D/h1u_jw.patch" > "$lib/JW.txt"
   [ $rc = 0 ] || tail -30 "$lib"/build-h1u_*.log
   local deps
   deps=$("$nv" -M -std=c++17 benchmarks/hash/dither/h1u.cu 2>/dev/null | tr ' \\' '\n\n' | grep -v -E ':$|\.o$' | grep . \
@@ -150,7 +143,6 @@ case $WHAT in
     $PY "$D/check.py" --fixtures "$FIX" --out "$OUT" --scratch "$S" --operands-only ${CHECK_ARGS:-} > "$OUT/operands.out" 2>&1
     echo "operands rc $?" >> "$OUT/rc.txt"
     BA=${BENCH_ARGS:-}
-    [ -f "$LIBS/s8_simple.py" ] && BA="--s8-simple $LIBS/s8_simple.py $BA"
     if [ -f "$LIBS/s8_wgmma.cu" ]; then
       W8=$(s8_build 2> "$OUT/s8-build.out"); echo "s8 build rc $?" >> "$OUT/rc.txt"; tail -5 "$OUT/s8-build.out"
       [ -f "$OUT/s8ship/s8_wgmma.cubin" ] && { export S8_WGMMA_CUBIN=$OUT/s8ship/s8_wgmma.cubin; BA="--wgmma $W8 $BA"; }

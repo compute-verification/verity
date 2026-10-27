@@ -16,9 +16,8 @@ on that buffer.
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
   block nonzero past its tensor's end, 0 for the library's own flag.
-- `gemm.py`: `scaled_mm`, which is `torch._int_mm` plus the Definition's epilogue and stands in for HASH-11's
-  KS8-SIMPLE. `twin` checks every output word by an independent exact path, and `definition_words` evaluates
-  `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
+- `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
+  evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
   each batch M). Every staged tensor is held to the stream's bytes and to the weights manifest's SHA-256 (the digests
   memory-accounting held W to). `check.py` runs on the CPU afterwards: every block of the layer against the reference,
@@ -26,7 +25,7 @@ on that buffer.
 - `full.py`: the whole store a step (HASH-6, Demo B's M4): every tensor of the 52 layers and the head staged one at a
   time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
-  KS8-SIMPLE (`s8_simple.linear`) against the twin. `check.py --sample N` checks N blocks of every tensor of the store
+  KS8-SIMPLE (`int_mm.linear`) against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
 - `sketch.py`: the remote bandwidth audit's receipts beside the decode (Demo B's bandwidth leg; the interface is
   `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
@@ -47,4 +46,5 @@ on that buffer.
 
 KP2-DEC (#4453, f254735dd2) staged a layer with its own kernel and measured it beside this path: its `decode_p2v1` arm
 is the same libp2v1 decode plus a payload copy. This directory uses that library unchanged and none of KP2-DEC's kernels.
-`layer.py`'s GEMM is `gemm.scaled_mm`; `full.py`'s is KS8-SIMPLE's `s8_simple.linear` (#4472) with its fused epilogue.
+Both GEMMs are KS8-SIMPLE's `int_mm.linear` (#4472; `benchmarks/torch_gpu/s8_linear/int_mm.py`, the exact W8A8
+linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.
