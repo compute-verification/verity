@@ -182,7 +182,7 @@ theorem periodCredit_honest (key ledger pins main : Json) (name : String) (windo
       refine (bind_ok (mapError_ok ha)).trans ?_
       split
       · rename_i why hwhy
-        exact Option.noConfusion (hp.symm.trans hwhy)
+        cases hp.symm.trans hwhy
       · refine (bind_ok (mapError_ok hwl)).trans ?_
         rfl
     · rename_i hd'
