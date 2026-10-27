@@ -164,8 +164,7 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
 def test_the_windows_descriptor_grows_with_its_calls_and_row_blocks_never_its_tiles():
     """Each call is one batch of K's template, its A rows one repeated run a row block and its B rows the linear's run
     repeated: a linear 32 times as wide, 32 times the tiles, leaves the root's nodes and the descriptor's references as
-    they were (one node a tile made the served Llama-3.2-1B window's build and digest about 167 s a step). A linear one
-    tile wide reads each row block's A rows once, a plain run, so both widths here repeat it."""
+    they were. A linear one tile wide reads each row block's A rows once, a plain run, so both widths here repeat it."""
     def window(n: int) -> tuple[Program, bytes]:
         prog = HW.program((("q_proj", 32, n),), (("q_proj", 0), ("q_proj", 1)), 16, TILE, unit=unit)
         return prog, canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
