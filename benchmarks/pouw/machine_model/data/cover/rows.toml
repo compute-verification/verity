@@ -591,19 +591,19 @@ mark = "coarse"
 envelope = "L"
 rate = "issue"
 cost = "32 L units"
-argument = "the warp's 32 predicates fold into one word in a tree of ≤ 7 L units (each folds ≤ 6 into 1), and the word reaches each lane or the uniform register: ≤ 7 + 16 ≤ 32 units of its slot"
-source = "θ issue"
+argument = "the warp's 32 predicates fold into one word in a tree of ≤ 7 L units (each folds ≤ 6 into 1), and the word reaches each lane or the uniform register: ≤ 7 + 16 ≤ 32 units of its slot, at any rate. sm_120 measured: VOTE.ANY 1.3903 warp instructions a SM-clock alone; beside LOP3 it spends about half a LOP3 of alu (LOP3 + VOTE/2 = 1.930, 1.955, 2.000 at LOP3's cap of 2), so under per-pipe lanes a fold of 16 alu lanes dominates it at the margin; ELECT unmeasured (ptxas merges it)"
+source = "θ issue; collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): VOTE.ANY 1.3903, VOTE.ALL 0.4716 alone; mix_vote_lop3_16, 32, 64"
 
 [[row]]
 ops = ["REDUX", "CREDUX"]
 what = "warp reduction into a uniform register (.SUM, .MIN, .MAX, .AND, .OR, .XOR)"
 kinds = ["REDUX"]
-mark = "coarse"
+mark = "covered"
 envelope = "L"
 rate = "issue"
 cost = "32 L units"
-argument = "32 words fold in a tree of ≤ 7 L units into one uniform word, under the 32 of its slot; CREDUX (CC 10.x only in the corpus) the same"
-source = "θ issue; census REDUX (sm_90)"
+argument = "32 words fold in a tree of ≤ 7 L units into one uniform word, under the 32 of its slot, at any rate; CREDUX (CC 10.x only in the corpus) the same. sm_120 measured: REDUX runs on MATCH.ANY's unit, 0.4990 warp instructions a SM-clock alone and 0.2498 + 0.2498 beside MATCH.ANY, so under per-pipe lanes the two share one `collective` resource of 0.5 (CMP-165); beside LOP3, a 16-lane fold on alu exceeds LOP3's cap by 0.35% at one point (LOP3 + MOV + REDUX/2 = 2.007)"
+source = "θ issue; census REDUX (sm_90); collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64"
 
 [[row]]
 ops = ["MATCH"]
@@ -623,7 +623,7 @@ mark = "hole"
 severity = "medium"
 envelope = "L"
 units = 119
-argument = "L simulates it in 119 units a warp instruction (238 for .U64): the lanes in 11 groups of ≤ 3, a unit for each of the 55 pairs of groups writes the 15 equalities of its 6 words, and 2 units a lane assemble its mask. MATCH.ANY runs at 0.5/k warp instructions a SM-clock for k distinct values (0.25/k .U64) on a unit of its own, beside the issue slots, so it is dominated only while (119 r_MATCH + 32 r_other) / 128 ≤ 1. Beside LOP3 and FFMA at 1.516 each it ran at 0.379: a load of 1.11, 14 L units a SM-clock past ρ_L (11%). At full issue the excess is ≤ (119 − 32) · 0.5 = 43.5 units a SM-clock (51.5 .U64, 40% of ρ_L). A simulation that depends on the data (a round a class: each lane compares with the class's first lane, 5 units fold the 32 bits into its mask, about 38 units a class and 32 to write) gives 0.96 at the measured point and 19 units (15%) at full issue. The fix is a MATCH op in the envelope at its rate, or ρ_L raised by the excess (CMP-165). sm_90's rate isn't measured"
+argument = "L simulates it in 119 units a warp instruction (238 for .U64): the lanes in 11 groups of ≤ 3, a unit for each of the 55 pairs of groups writes the 15 equalities of its 6 words, and 2 units a lane assemble its mask. MATCH.ANY runs at 0.5/k warp instructions a SM-clock for k distinct values (0.25/k .U64) on a unit of its own, beside the issue slots, so it is dominated only while (119 r_MATCH + 32 r_other) / 128 ≤ 1. Beside LOP3 and FFMA at 1.516 each it ran at 0.379: a load of 1.11, 14 L units a SM-clock past ρ_L (11%). At full issue the excess is ≤ (119 − 32) · 0.5 = 43.5 units a SM-clock (51.5 .U64, 40% of ρ_L). A simulation that depends on the data (a round a class: each lane compares with the class's first lane, 5 units fold the 32 bits into its mask, about 38 units a class and 32 to write) gives 0.96 at the measured point and 19 units (15%) at full issue. The fix is a `collective` op at its unit's rate, 0.5 warp instructions a SM-clock, which REDUX shares (0.2498 each beside the other, r20261027-004019-4f84), or ρ_L raised by the excess (CMP-165). sm_90's rate isn't measured"
 source = "opcode_probe/probes/match.cu, r20261027-002237-fa90: alone MATCH.ANY 0.4999 (1 class), 0.24998 (2), 0.12500 (4), 0.01562 (32), .U64 0.24997 (1), 0.00781 (32); beside LOP3 the load is ≤ 0.935 (0.4845 with LOP3 1.938), beside LOP3 and FFMA 1.110 (0.3790 with 1.516 and 1.516, mix_u32_lop3_32_ffma_32); .U64 ≤ 0.953; LOP3 caps at 2.0 a SM-clock; r20261027-001518-aaf8 the same within 0.3%"
 
 [[row]]

@@ -545,13 +545,16 @@ benchmarks/pouw/sass_census/lowering.sh`. It is what shows that f16 accumulators
 sm_120, that OMMA.SF.SP is the native sparse FP4 form, that BMMA's XOR has no native SASS on sm_90a, and that
 tcgen05 and wgmma are absent on sm_120a.
 
-Two GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
+Three GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
 vy-nebius-1 --cwd source` and its verdict line quoted in the row's source once it lands:
 
 - `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4, 2 and 1
   classes, and .U64, alone and beside LOP3 and FFMA. Its hypothesis is the MATCH row's: L's 119-unit simulation (238
   for .U64) dominates it, (119 r_MATCH + 32 (r_LOP3 + r_FFMA)) / 128 ≤ 1 at every point. It failed at one point (1.11),
   which makes MATCH.ANY a hole.
+- `../opcode_probe/probes/collective.cu` times REDUX and VOTE alone, beside LOP3, and REDUX beside MATCH.ANY. Its
+  hypothesis is the REDUX and VOTE rows': each spends at least a fold's 16 alu lanes, so LOP3's rate plus half the
+  collective's stays at most LOP3's cap of 2 a SM-clock. It showed REDUX on MATCH.ANY's unit.
 - `../sass_census/multimem.sh` reads the card's multicast attribute and what `cuMulticastCreate` answers, and runs
   `multimem.ld_reduce` (LDGMC) and `multimem.red` on ordinary memory. Its hypothesis is the sm_120 LDGMC row's: no
   multicast object exists, and on a unicast address LDGMC faults or loads the one copy.
