@@ -1,4 +1,4 @@
-"""``circuit-check --structural UNIT.tmpl TARGET``: a ``flock-ir-tmpl`` unit (`verity_flock.tmpl`) accepted as the C-Flock
+"""``circuit-check --structural UNIT.tmpl TARGET``: a ``flock-ir-tmpl`` template (`verity_flock.tmpl`) accepted as the C-Flock
 lowering of the Definition TARGET, which `verity_flock.ir_lower.lower` lowers flat.
 
 **Syntactic.** Both sides are read into one table of canonical gates: a bit is a GF(2) form over the inputs and the table's
@@ -13,7 +13,7 @@ AND's operands, each of which leaves every bit's value as it was: so it proves, 
 what the lowering computes on every input. It is not complete: one function written as two AND structures is not matched.
 
 A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check draws from the OS's
-random source when it makes the node, since a hash unit's bits are forms of about half the unit's nodes, which no exact
+random source when it makes the node, since a hash proof block's bits are forms of about half its nodes, which no exact
 table of them fits. Which forms a check builds does not depend on the labels (a triple's node is its first writer's pair),
 and two distinct forms share a fingerprint with probability 2^-512 over labels drawn after both are fixed, so among the M
 forms a check builds it identifies two that differ with probability at most M² / 2^513 over its own coins, with no premise
@@ -24,8 +24,9 @@ the report says which output bits differ and both are evaluated, bit-sliced: on 
 `EXHAUSTIVE_BITS` input bits, else on ``vectors`` random inputs, which miss a difference on a fraction ε of the inputs with
 probability (1 − ε)^vectors. An exhaustive pass is a proof too; a random one is a warning, ``structural/random-only``.
 
-**A unit** (`check_unit`): a template on a unit's u16 row ports, as a structural stager writes it (`class_statement.UnitStager`'s
-``structural``), is held the same way to the flat unit the flat stager lays out on those ports
+**A proof block** (`check_unit`): a template on a proof block's u16 row ports, as a structural stager writes it
+(`class_statement.UnitStager`'s ``structural``), is held the same way to the flat proof block the flat stager lays out on
+those ports
 (`class_statement.unit_circuit`), so the class a pin names is accepted as its Definition's lowering on its ports.
 
 Refused by name, since neither comparison covers them: a template one of whose rows reads a column at or past its own that
@@ -109,8 +110,9 @@ class Refused(ValueError):
 
 
 def ports(groups: Sequence[str]) -> tuple[list[list[int]], list[list[int]], list[int]]:
-    """Per input port and per output port of a unit's header (``n_in (col words n bits..).. n_out (col words n bits..)..``),
-    its columns, bit 0 first; and the columns of the groups' words that are no port's bit, which a unit holds at zero."""
+    """Per input port and per output port of a proof block's header (``n_in (col words n bits..).. n_out (col words n
+    bits..)..``), its columns, bit 0 first; and the columns of the groups' words that are no port's bit, which a proof block
+    holds at zero."""
     try:
         g = [int(x) for x in groups]
     except ValueError:
@@ -310,11 +312,11 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
 def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tmpl: Any, *, public: Sequence[str] = (),
                name: str = "unit", exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
                seed: int = CK.Options.seed) -> dict:
-    """``tmpl`` held, as `check` holds it to a Definition's lowering, to the flat unit `class_statement.unit_lowering` lays
-    ``definition`` out as on the u16 row ports ``in_rows`` (``public`` its public ports): `class_statement.unit_circuit`
+    """``tmpl`` held, as `check` holds it to a Definition's lowering, to the flat proof block `class_statement.unit_lowering`
+    lays ``definition`` out as on the u16 row ports ``in_rows`` (``public`` its public ports): `class_statement.unit_circuit`
     on `class_statement.unit_ports`, input ``in{j}`` and output ``out{j}`` the template's ports in order. So a structural
-    stager's unit (`UnitStager`'s ``structural``, `struct_lower` on those ports) is held to the unit the flat stager lays
-    out."""
+    stager's proof block (`UnitStager`'s ``structural``, `struct_lower` on those ports) is held to the proof block the flat
+    stager lays out."""
     from verity_flock import class_statement as CS
 
     from verity.ml.circuits.evaluation.reference import resolve

@@ -1,8 +1,7 @@
 """Every repository path a maintained document names exists, so a move or a deletion that misses a README fails here instead
 of leaving the next reader a path to nowhere.
 
-A document is a tracked `*.md` outside `archive/` (frozen with what it describes), `CHANGELOG.md` aside (history names the
-paths things had then). A path is a relative markdown link target, or a backticked token with a `/` in it; neither may
+A document is a tracked `*.md`, `CHANGELOG.md` aside (history names the paths things had then). A path is a relative markdown link target, or a backticked token with a `/` in it; neither may
 carry a URL scheme or a glob or template character (`* < > { } $ | @ \\`), and a trailing `#anchor`, `::symbol`, `:LINE`
 or punctuation is dropped. It is checked when its first segment is a top-level entry of the tree or a retired one
 (`RETIRED`). A link target is resolved from its document's directory; a backticked path may be written from the root or
@@ -21,7 +20,7 @@ import re
 from test_repository import REGISTRY, ROOT, _tracked
 
 #: Top-level names the tree had before a move, so a mention of one is still read as a path.
-RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends"})
+RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
     ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
@@ -45,8 +44,7 @@ def _tree() -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
 
 
 def documents(files: frozenset[str]) -> list[str]:
-    return sorted(f for f in files if f.endswith(".md") and not f.startswith("archive/")
-                  and posixpath.basename(f) != "CHANGELOG.md")
+    return sorted(f for f in files if f.endswith(".md") and posixpath.basename(f) != "CHANGELOG.md")
 
 
 def mentions(line: str) -> list[tuple[str, str, bool]]:
@@ -113,9 +111,8 @@ def test_not_paths_are_current():
 def test_the_scan_reads_each_form_and_catches_a_dead_path():
     """The rules above, on a toy tree."""
     files = frozenset({"README.md", "tools/x/README.md", "tools/x/tests/test_a.py", "verity/primitives/b.py",
-                       "archive/old/README.md", "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py"})
-    dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "archive", "archive/old", "fixtures",
-                      "tests"})
+                       "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py"})
+    dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "fixtures", "tests"})
     tree = (files, dirs, frozenset({"tools/x/tests/fixtures/big"}))
     docs = {
         "README.md": ("`tools/x/tests/test_a.py:12` `verity/primitives/b.py::f` `tools/x/`, `verity/partition/v1` "
@@ -123,7 +120,6 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
                       "`tools/*.py` `pods/nebius/` `verity/primitives/gone.py` `art:abc/def` [d](#anchor) `notatop/x`"),
         "tools/x/README.md": ("`tests/test_a.py` `tests/test_b.py` [e](tests/test_a.py) [f](../../README.md) [g](gone.md) "
                               "`tools/x/tests/fixtures/big/a.bin`"),
-        "archive/old/README.md": "`tools/gone.py`",
         "tools/x/CHANGELOG.md": "`tools/gone.py`",
     }
     assert documents(files) == ["README.md", "tools/x/README.md"]

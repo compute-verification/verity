@@ -8,7 +8,7 @@
 #                         recorded and never refusing: 13.0.1-sm_90a excepts the H200's MUFU.EX2, and no toolkit excepts
 #                         sm_120a's MUFU.EX2 or the sweep's bare MUFU.RSQ (ops 9 and 10) yet
 #   check/                fixture.py's pools, words and sweep digests from the twins (needs verity: run under uv); REPLAY
-#                         names the CMP-96 replay for fixture.py's cross-check (default the tree's benchmarks/e2e_h200/replay.py),
+#                         names the CPU replay for fixture.py's cross-check (default the tree's benchmarks/e2e_h200/replay.py),
 #                         ROWS an ops/rows.py to load in place of the installed one
 #   the unit modules, lib.py, bench.py, check.py, toolchain.txt (nvcc --version and the command lines), source.txt (the
 #   commit), MANIFEST.sha256

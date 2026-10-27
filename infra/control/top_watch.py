@@ -384,7 +384,8 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         for raw in log_path.read_text().splitlines() if log_path.is_file() else []:
             try:
                 x = json.loads(raw)
-            except ValueError:
+            except ValueError as e:
+                log(f"linear: skipped a log line that isn't JSON ({e}): {raw[:80]!r}")
                 continue
             if str(x.get("t", "")) <= iso(now - DAY_BEFORE_S):
                 earlier = x
