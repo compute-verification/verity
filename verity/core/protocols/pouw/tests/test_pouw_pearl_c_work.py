@@ -1,4 +1,4 @@
-"""Pearl-C's work law (`pearl_c_work`; statement review item 5, red team F1, F2, F5–F8): splits bounded by 1% of k, credit
+"""Pearl-C's work law (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
 excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's draw coin
 after the commitment, and the audit."""

@@ -1,4 +1,4 @@
-"""A window's admission from its committed request queue (PADCREDIT's admit, coordinator 01:10Z on 19 Oct): slot s of a call
+"""A window's admission from its committed request queue (PADCREDIT's admit): slot s of a call
 at step t is selected iff the queue assigns it a request live at t, computed from the queue alone, and admitted iff it is
 selected and its row's committed scale is nonzero, so a selected slot holding the canonical empty row (K zero bytes, scale 0)
 is not admitted.

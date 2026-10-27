@@ -1,7 +1,7 @@
 """``pearl-c-h100-v0``, ``pearl-c-h100-v1``, ``pearl-c-h100-v1-h3``, ``pearl-c-sm120-v1`` and ``pearl-c-sm120-v1-h3``:
 Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on the RTX PRO 6000 Blackwell.
 
-The design is the cheap-binding lane's: Pearl's H100 product and its output tickets, plus #311's noisy clean-up
+The design is Pearl's H100 product and its output tickets, plus Pearl v4's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
 and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
 record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
@@ -17,7 +17,7 @@ seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/
           (-h3, SHA-512 throughout: every H_ℓ `s512` (SHA-512 after a 128-byte label block, 32 bytes kept), the line rule
           `sample_line`'s 32 bytes of H_"line" for BLAKE3's, and row i's E_A line 0 of its own seed, `row_seed` keyed on
           the row's `sha512/row-seg/v1` digest; the tickets keep seed_A)
-forming  v0, #311's as ported (`pearl_kw`): FP10 rows -> BF16 X, exact norms, α, β, N = E·Fᵀ on the H100 atom,
+forming  v0, Pearl v4's as ported (`pearl_kw`): FP10 rows -> BF16 X, exact norms, α, β, N = E·Fᵀ on the H100 atom,
           X̃ = fp8(clamp(fma(α, X, β·N), ±448));  A′ = X̃_A, B̃ = X̃_B
 chain     C̃_ij = the H100 replay of A′_i · B̃_j: every 128 products a fresh accumulator at +0 chains four
           HOPPER_E4M3_K32 atoms, and one FP32 nearest-even add promotes it into the total (−0 becomes +0)
@@ -39,10 +39,10 @@ useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 
 **The clean-up's algebra.**  With N_A = E_A·F_Aᵀ and N_B = E_B·F_Bᵀ, A′ ≈ α_A·A + β_A⊙N_A and B̃ ≈ α_B·B + β_B⊙N_B, and
 (A′ − β_A⊙N_A)(B̃ − β_B⊙N_B)ᵀ = C̃ + (β_A⊙E_A)·[(β_B⊙E_B)·G − B̃·F_A]ᵀ + (A′·F_B)·(−β_B⊙E_B)ᵀ with G = F_Bᵀ·F_A, which is
-the rank-64 BF16 product P_A·P_Bᵀ.  #311 runs G and the B-side factor on a tolerance path; here both are pinned.
+the rank-64 BF16 product P_A·P_Bᵀ.  Pearl v4 runs G and the B-side factor on a tolerance path; here both are pinned.
 
-**Two formings.**  ``pearl-c-h100-v0`` keeps #311's FP10 decode and exact norms (the port), whose 176–256 A-only units
-the red team counts as skippable (X-PC-2).  ``pearl-c-h100-v1`` is the rework, on rows of FP32
+**Two formings.**  ``pearl-c-h100-v0`` keeps Pearl v4's FP10 decode and exact norms (the port), whose 176–256 A-only units
+are skippable.  ``pearl-c-h100-v1`` is the rework, on rows of FP32
 words x, with every rounding pinned here:
 
 ~~~text
@@ -116,7 +116,7 @@ TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 CENSUS_ROW_CAP = 4
 
 
-#: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
+#: Forming v0 (Pearl v4's, as ported) per operand element: 240–320 for the port, at the upper end
 #: of the H100's prices; v0 is priced on the H100 only
 FORMING_V0_UNITS = 320
 #: F's line norm under v1 (E keeps Pearl's 256)

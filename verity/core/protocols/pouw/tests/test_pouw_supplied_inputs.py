@@ -3,7 +3,7 @@
 each seed group's roots from the roots the record names for its operands (A's committed tap, B's registered weights,
 which the verifier pins to the root recorded before the salt), the salt from its coin bound to its stream, the prover
 and the record's window, and each unit's position after every unit of the log's earlier records. A registration that names any other commitment of
-them is refused (`R7-supplied`), so the red team's witnesses (`benchmarks/rate_redteam/pouw_roots_unbound.py`, roots fixed
+them is refused (`R7-supplied`), so the attack witnesses (`benchmarks/rate_redteam/pouw_roots_unbound.py`, roots fixed
 at zero and A = -b under them; `h1_position_replay.py`, one computed unit at one position under one salt credited twice)
 no longer have a tile to serve."""
 from __future__ import annotations
