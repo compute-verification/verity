@@ -11,8 +11,8 @@ window root and `roundCoins` returns under that key on that window (`OneStageZk.
 v2's parameters are the registration's entry for v2's id: onsite composes one component of that id, the parameters name
 the components in order (`Properties.Composition.Fits`), so the entry sampled proofs' case reads is the one `find?`
 names (`OnsiteIds.find_of_unique`), and its challenger is the key v2's compiled check reads from the registered
-parameters (`Properties.Challenger.keyOfParams`). So where the device's key at `θ` is that registered key
-(`Vocab.KeyRegistered`), sampled proofs' verdict runs `roundCoins` under it (`Vocab.roundCoins_at_verdict`).
+parameters (`Properties.Challenger.keyOfParams`), the device's registered key at `θ` (`registeredKey`). So sampled proofs' verdict
+runs `roundCoins` under the device's registered key (`Vocab.roundCoins_at_verdict`).
 -/
 
 open Lean (Json)
@@ -95,23 +95,16 @@ open Accounting Core
 
 variable {ι α : Type} [Fintype α] {d : Device ι}
 
-/-- **The device's key at `θ` is the registered one**: wherever `θ` decodes under onsite's registered composition, the
-device's key at `θ` is the challenger key v2's compiled check reads from the registered components' parameters
-(`Properties.Challenger.keyOfParams`), as LMS's parameters and public key. -/
-def Vocab.KeyRegistered (V : Vocab d α) (θ : ByteArray) : Prop :=
-  ∀ n ps, (Core.canonicalJson θ >>= Core.Composition.decodeRegisteredParams) = .ok (n, ps) →
-    V.key θ = Properties.Challenger.lmsKey (Properties.Challenger.keyOfParams ps)
-
 /-- **v2's accept runs the round coins under the registered key**: where sampled proofs' verdict accepts the play that
-ended with `o` after `θ`, and the device's key at `θ` is the registered one, v2 accepts its case, whose parameters name
-a challenger key, with the device's LMS parameters and public key at `θ`, and a window root, and `roundCoins` returns
-under that key on that window. -/
+ended with `o` after `θ`, v2 accepts its case, whose parameters name a challenger key, with the LMS parameters and
+public key of the device's registered key at `θ` (`registeredKey`), and a window root, and `roundCoins` returns under
+that key on that window. -/
 theorem Vocab.roundCoins_at_verdict (V : Vocab d α) {θ : ByteArray} {o : Outcome} (hθ : o.params = θ)
-    (hK : V.KeyRegistered θ) (hv : V.Verdict .sampled o) :
+    (hv : V.Verdict .sampled o) :
     ∃ p c e pub prof, SampledCase o.sent p c e ∧
       SampledProofs.OneStageZk.checkBlobs p c e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof ∧
       ∃ key label w us order groups coins ξs, p.base.challenger = some (key, label) ∧
-        p.base.verifier.windowRoot = some w ∧ key.params = (V.key θ).1 ∧ key.pub = (V.key θ).2 ∧
+        p.base.verifier.windowRoot = some w ∧ key.params = (registeredKey θ).1 ∧ key.pub = (registeredKey θ).2 ∧
         SampledProofs.Challenger.roundCoins key w us order groups coins = .ok ξs := by
   obtain ⟨-, hra, hca⟩ := hv
   obtain ⟨p, c, e, pub, prof, hcase, hacc⟩ := componentAccepts_sampled hca
@@ -131,8 +124,10 @@ theorem Vocab.roundCoins_at_verdict (V : Vocab d α) {θ : ByteArray} {o : Outco
   have hd : (Core.canonicalJson θ >>= Core.Composition.decodeRegisteredParams) = .ok (n, ps) := by
     rw [← hθ]
     exact hD.1
-  have hk := hK n ps hd
-  rw [hkey] at hk
+  have hk : registeredKey θ = Properties.Challenger.lmsKey (some key) := by
+    unfold registeredKey
+    rw [hd, ← hkey]
+    rfl
   exact ⟨key, label, w, us, order, groups, coins, ξs, hc, hw, by simp only [hk, Properties.Challenger.lmsKey],
     by simp only [hk, Properties.Challenger.lmsKey], hr⟩
 
