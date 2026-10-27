@@ -83,3 +83,26 @@ Yes, and it's a small change, done on `cursor/proofs-kslock-4929` @ d9c1d1ba85 (
 - Build: r20261027-010308-729e on cpu-3, building KSDeployed and KSV plus axioms and the closure counts. ETA ~01:30–01:45Z (that copy last built tieprem).
 
 - 02:46Z RECE (kslock): kslock-4929 is at c4403584dc: 1d0ce8ab97 (RecursiveKS proved, 8530 green on the standard axioms) merged with rowsfit-3a9d 7682f6090f (honfix, honest_half_fixture), ksnontriv-27b2 53a30ae7bc and kswit-00fe 8b53bc6c71, plus `Flock.SecurityProofs.RecursiveKS` (@proofs) listed under `guarantees`. r20261027-024405-7f27 (cpu-3) builds KSProved, HonestHalfFixture and KSNontrivial and prints their axioms. The one records run (--update) follows once 7f27 is green and KSNONTRIV's own green run id is posted. Please push no further changes to the merged branches without telling me.
+- 02:50Z KSNONTRIV: the fixture is redesigned and built clean. Branch `cursor/proofs-ksnontriv-27b2` @ 53a30ae7bc; build
+  r20261027-023911-64d4 (cpu-3): BUILD_RC=0, FINAL_RC=0, 11 lemmas on [propext, Classical.choice, Quot.sound].
+  The rowView form (01974bba54, also clean in r20261027-022228-aa96) could not be witnessed.
+  The probe r20261027-021317-15ee, a compiled lean_exe over core Flock on rec-coins/16-16-8-n64, found 0 of 6144
+  fixed positions with a zero A row. The deployed form's fixed bits are hm96 digest bits on the pinned net (ranges
+  can't overlap, and checkNets pins the net) or public-input self rows. So falsity of a deployed inner statement is a
+  preimage question that the kernel can't settle.
+  The new proof needs no false statement:
+  - At accept-all the record stages no V* statement, so each session's statement is `[]`.
+  - The outer parser refuses `[]` (`RecDeploy.zkRec_parse_nil`, via DeployScope's `insO_nil`).
+  - So E_O assembles nothing, the inner view is ⟨[], rej⟩, and E* returns none (`E_none_of_vstar_nil`).
+  - `prBad_acc` takes "E returns none" in place of "no witness".
+  - The general form is `not_ksLin2On_acceptAll … (hk : 0 < V.k x) (hS : 0 < nS x) (hP : DO.parse [] = none) (hκ)`.
+  Statement (unchanged head):
+    recursiveKS_nontrivial (h : RecDeploy.KSFixture) : ∃ aux nOf hd recRest, ∀ b, ¬ KSLin2On sha512
+      (recBoundAt relation {deployedB b with tr := recTr …} (layR elemR)).acceptAll (bdDeployed …) (deployZkRec relation) CpDep DenseAt
+  The one named assumption: `KSFixture := ∃ x aux nOf hd recRest, DeployedParses x ∧ PartsInScope x (recTr …)`, where
+  `DeployedParses x := (parse x).map (holo, sparse) = some (false, none) ∧ 0 < nS x ∧ (setupOf false (xIOf x)).map setupView = some true`.
+  An honest inner statement now witnesses it: rec-coins plus V* staging, with the inner at m 27, kLog 22, 3 regions,
+  mPts 29 and 2 points, which is inside setupView.
+  The witness run is next. It needs a compiled exe over Security/Proofs (parse/nS/setupOf are Mathlib-importing
+  modules), or Flock as a dynlib under the interpreter. `pick` in PartsInScope is still Classical.choose.
+  RECE has merged 53a30ae7bc into kslock-4929 (c4403584dc). I'll push nothing more to ksnontriv-27b2 without telling RECE.
