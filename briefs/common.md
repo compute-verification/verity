@@ -65,3 +65,6 @@ Daniel is restructuring the repository himself today: no directory moves or rena
 
 ## Use --cwd clone for build-and-test jobs (27 Oct, 20:50Z)
 Runs of one commit with --cwd source share a source tree, and two lake builds there at once delete each other's .oleans (suites then stop with no Lean error). Until infra fixes it, launch any job that builds Lean or runs suites with --cwd clone, so it gets its own tree.
+
+## Deslop is the priority (27 Oct, 23:00Z)
+Daniel made the deslop refactor top priority. Every PR of ours must add no internal text to science paths: no "Daniel", no ruling dates, no Linear, PR, note, run or art ids, and no lane names, in code, docstrings, Lean comments, Markdown or lock reasons. Before each push, grep your diff against origin/main for them and state each rule as itself. Don't rename or move anything: top runs the renames Wednesday morning, after the PROTOCOL.md deletions land.
