@@ -13,6 +13,11 @@ check accepts there makes the layout the slot of the schedule's `cap + 1` padded
 (`SketchSummarySession.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
 events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the draws are `G`'s on a session the check
 accepts at every pass, and its correct receipts on one it refuses, which no shortfall reaches.
+
+Its honest lemma is `Properties.RemoteAudit.scheduled_meets` (the check accepts gate run 7's T=1s session shape at 792
+bits; the rest of its premises are `G`'s, whose honest lemma is `G`'s), and its nontrivial one is
+`Properties.RemoteAudit.steered_of_checked_fails`: without the check's acceptance, a layout that follows a three-way
+coin is the verifier's and is the slot of no one-bit summary.
 -/
 
 namespace Accounting.RateSketch.SketchSummarySession

@@ -40,6 +40,10 @@ credit is counted there: the event, an accepted audit whose reads fall short of 
 every pass of the session. The bound is `G`'s over the accepted sessions; a prover may run any layout on the coins the
 check refuses.
 
+The check's premise holds at gate run 7's T=1s session shape, at 792 bits (`Properties.RemoteAudit.scheduled_meets`;
+`G`'s premises are `G`'s honest lemma's). Without it the steering fails: a layout that follows a three-way coin is
+the verifier's and is the slot of no one-bit summary (`Properties.RemoteAudit.steered_of_checked_fails`).
+
 The pass devices are told `steer c y`, any `a` bits, as in `G`. The layout's summary is the schedule's, which they are
 told only through `steer`, so the union in `G`'s query term runs over both summaries: `2^(a + (cap + 1))` in place of
 `G`'s `2^a`. At `a = 0`, devices told nothing past the session's coins before their pass, it is `G`'s bound at

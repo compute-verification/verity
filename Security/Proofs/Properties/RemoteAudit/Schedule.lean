@@ -42,8 +42,11 @@ The collapse it rules out: `coinLayout` puts a pass's one block where a coin bit
 (`coinLayout_steered`), as every layout is at `a = |Y|`, and `ScheduleDeterministic` at no `a` under a schedule that
 fixes the layout (`coinLayout_not_scheduled`). In the code: the published schedule `honest` keeps block 12 resident
 from step 3, so a session whose third pass's plan drops it, as a coin might say, is refused, and the honest one passes
-at 200 bits under a cap of 200 and is refused under 199 (the examples at the end; `test_schedule.py` plays the same
-session in Python).
+at 200 bits under a cap of 200 and is refused under 199 (`coinPasses_refused`, `coinPasses_accepted`,
+`coinPasses_overCap`; `test_schedule.py` plays the same session in Python).
+
+Each guarantee's premises hold at gate run 7's deployed shape, one pass over all 130023424 blocks (the `_meets` lemmas),
+and each conclusion is false for some input a verifier that accepted everything would take (the `_fails` lemmas).
 -/
 
 open RemoteAudit

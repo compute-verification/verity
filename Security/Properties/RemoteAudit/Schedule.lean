@@ -30,6 +30,10 @@ block's position, in that tree). `ScheduleLayoutGap`, that the layout is a map o
 `a` and `SteeredLayout` at `a + 1` (`scheduleDeterministic_of_checked`, `steered_of_checked`). The cap is fixed
 before the coins, so it is one `a` at every coin, where the bits of the schedule published after them can follow the
 coins.
+
+Each property's premises hold at gate run 7's deployed shape (`planBlocks_meets`, `codeLayoutTiles_meets`,
+`opensAtPosition_meets`), and each conclusion fails for an input an accept-all verifier would take (`planBlocks_fails`,
+`codeLayoutTiles_fails`, `opensAtPosition_fails`), in `Proofs.Properties.RemoteAudit.Schedule`.
 -/
 
 open RemoteAudit
