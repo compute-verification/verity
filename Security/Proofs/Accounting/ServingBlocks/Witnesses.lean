@@ -91,7 +91,7 @@ theorem card_block : ∀ S, (block A X κ S).card = 1 :=
 
 /-- Gate 2's operation is assigned to the serving block after the wipe and computed wholly inside none of its blocks. -/
 theorem straddles : J.outside (block A X κ ⟨(), 1⟩) (inf ⟨(), 1⟩) = 1 := by
-  simp only [inf, block_one, Counted.outside, Finset.sum_const, nsmul_eq_mul, mul_one, Nat.cast_eq_one]
+  simp only [Honest.inf, block_one, Counted.outside, Finset.sum_const, nsmul_eq_mul, mul_one, Nat.cast_eq_one]
   decide
 
 end Honest
@@ -130,7 +130,7 @@ theorem blocks (S : Block κ) : A.size (block A X κ S) ≤ 1 ∧ A.width (A.int
   decide
 
 theorem inside_block (S : Block κ) : J.outside (block A X κ S) (inf S) = 0 := by
-  simp only [inf, block_eq, Counted.outside, Finset.sum_const, nsmul_eq_mul, mul_one, Nat.cast_eq_zero]
+  simp only [Counter.inf, block_eq, Counted.outside, Finset.sum_const, nsmul_eq_mul, mul_one, Nat.cast_eq_zero]
   decide
 
 theorem outside_dark : J.outside (A.region dark Set.univ) (Fin.elim0 : Fin 0 → Finset (Fin A.N)) = 0 := by
