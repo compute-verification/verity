@@ -23,7 +23,8 @@ def utc(s: str) -> datetime:
 
 
 def test_each_landed_pr_is_split_into_its_five_steps(tmp_path):
-    """19 Oct: Daniel asked why `main` is a bottleneck; a PR waited 11 h from its mark, under 1.5 h of it in machines and checks."""
+    """Where a PR's wait from its mark goes, to see why `main` is a bottleneck: a wait of hours can have little of it in
+    machines and checks."""
     d = tmp_path / "r20261019-103100-0002"
     d.mkdir()
     (d / "slot.json").write_text(json.dumps({"state": "held", "took": "2026-10-19T10:40:00Z"}))
@@ -60,8 +61,8 @@ def test_a_landing_outside_the_window_or_a_missing_record_counts_as_no_data(tmp_
 
 
 def test_the_control_pods_log_stamps_a_landing_with_the_end_of_its_tick():
-    """drive.sh on the control pod writes `<time> tick rc=N <sha>` after each tick, not a time before it: from 20 Oct `stats`
-    found no tick, so no landing (22 Oct: '0 PR(s) landed' over a day of landings)."""
+    """drive.sh on the control pod writes `<time> tick rc=N <sha>` after each tick, not a time before it: `stats` reading the
+    wrong stamp finds no tick, so no landing ('0 PR(s) landed' over a day of landings)."""
     pod = """\
 research queue drive: checking bbbbbbbbbbbb (#1 #2 #3): r20261019-103100-0002 with agreement
 2026-10-19T10:32:00Z tick rc=0 5d78b25b1
@@ -76,7 +77,7 @@ research queue drive: landed #4 on `main` at cccccccccccc (check r20261019-12000
 
 
 def test_rows_read_each_landings_record_and_each_prs_mark_once_and_at_once(tmp_path):
-    """22 Oct: read one at a time, a day of 30 landings and 134 PRs took over 20 min. Each is read once, from `READ_JOBS` threads,
+    """Read one at a time, a day of tens of landings and over a hundred PRs takes over 20 min. Each is read once, from `READ_JOBS` threads,
     however many of its PRs or repeated landings name it."""
     import threading
 
