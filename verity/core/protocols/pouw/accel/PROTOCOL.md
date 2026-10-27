@@ -298,6 +298,14 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
     across hosts the prover controls is the secure-transport workstream's. A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
+  - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
+    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
+      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
+      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
+      none of its own coins.
+    - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
+      and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
+      It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
