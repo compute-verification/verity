@@ -1134,7 +1134,7 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
     client.close()
     r = PS.epoch_open_root(root, 2)
     assert host.ended() is None and c == host.challenger.commitment and Wd.salt_epoch_reason(c) is None
-    assert calls == [("open", "--session", sid, "--root", r.hex()), ("status", sid)] and waits == [1.0, 1.0]
+    assert calls == [("open", "--session", sid, "--root", r.hex()), ("status", sid)] and waits == [0.5, 0.5]
     assert LC.live_reason(c, opening, Wd.SALT, 0, r) is None and salt == salt_of(c, opening.coin, root)
     assert R.released_roots(host.directory / R.RELEASES, c) == {Wd.SALT: (r,)}
     assert "secret" not in carried and (carried["session"], carried["root"], carried["port"]) == (sid, r.hex(), 7811)
