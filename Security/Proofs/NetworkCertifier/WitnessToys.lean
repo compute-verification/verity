@@ -5,6 +5,7 @@ import Definitions.NetworkCertifier.TapRows
 import Definitions.NetworkCertifier.SampledAudit
 import Definitions.NetworkCertifier.SampledReg
 import Definitions.NetworkCertifier.Schedule
+import Definitions.NetworkCertifier.Assumptions
 
 /-!
 # The instances the network certifier's witnesses are stated at
@@ -30,6 +31,9 @@ witnesses):
   (`fxHonest_accepted`). `AccSeqsAt acc` is `AccSeqs` with `acc` in place of the Program's acceptance, and at the
   verifier that accepts everything, `acceptAll`, one step's sequences are infinitely many
   (`accSeqsAt_acceptAll_infinite`).
+* `fxHonestI`: the honest certifier at `fxRate`, whose first step is `fxHonest` (`fxHonestI_obsRun`), and `fxLeakI`, a
+  sender whose secret is its one frame's length, which `fxLeakDec` reads back from the wire. Both meet W2 with the wire
+  their record and J at `D = 1` (`fx_wire`), and at `acceptAll` every secret of `fxLeakI` is decoded (`fxLeak_not_le`).
 -/
 
 namespace NetTiming.Witness
@@ -431,6 +435,51 @@ theorem accSeqsAt_acceptAll_infinite : (AccSeqsAt (acceptAll (L := 1) (K := 1) (
 /-- No finite count bounds `AccSeqsAt acceptAll` at one step. -/
 theorem accSeqsAt_acceptAll_not_le (N : ℕ) : ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).encard ≤ N := by
   rw [accSeqsAt_acceptAll_infinite.encard_eq]
+  simp
+
+/-- **The honest certifier at `fxRate`**: at each step it records and puts on the wire `fxRate`'s row under the
+advice `((), syncOne0)`, jitter class 0 and its one status complete, whatever the sender does. -/
+def fxHonestI : Interaction 1 1 1 Unit Unit Unit (Obs 1 1 1) where
+  certifier :=
+    { obs := fun k xs _ => ⟨fxRate.rows k xs ((), fun _ => syncOne0), 0, fun _ => .complete⟩
+      wire := fun k xs _ => ⟨fxRate.rows k xs ((), fun _ => syncOne0), 0, fun _ => .complete⟩
+      fault := fun _ => False }
+  op := fxOp
+  snd := fun _ _ _ => ()
+
+/-- **A sender whose secret shows**: its secret `z` is its action, and the certifier records and puts on the wire one
+frame of `z` bits, jitter class 0, its one status complete. -/
+def fxLeakI : Interaction 1 1 1 ℕ Unit ℕ (Obs 1 1 1) where
+  certifier :=
+    { obs := fun _ _ as => ⟨fun _ _ => some (List.replicate (as.getLast?.getD 0) true), 0, fun _ => .complete⟩
+      wire := fun _ _ as => ⟨fun _ _ => some (List.replicate (as.getLast?.getD 0) true), 0, fun _ => .complete⟩
+      fault := fun _ => False }
+  op := fxOp
+  snd := fun z _ _ => z
+
+/-- `fxLeakI`'s decoder: the first step's frame's length. -/
+def fxLeakDec (w : List (Obs 1 1 1)) : ℕ := ((w.head?.bind fun o => o.rows 0 0).map List.length).getD 0
+
+/-- Both instances meet W2, the wire a function of the record (the identity), and J at `D = 1`. -/
+theorem fx_wire : Regenerates fxHonestI.certifier (fun _ o => o) ∧ JitterBounded fxHonestI.certifier 1 ∧
+    Regenerates fxLeakI.certifier (fun _ o => o) ∧ JitterBounded fxLeakI.certifier 1 :=
+  ⟨fun _ _ _ => rfl, fun _ _ _ => Nat.one_pos, fun _ _ _ => rfl, fun _ _ _ => Nat.one_pos⟩
+
+/-- `fxHonestI`'s first step is `fxHonest`. -/
+theorem fxHonestI_obsRun : fxHonestI.obsRun () 1 = fxHonest := rfl
+
+/-- **At the verifier that accepts everything, every secret of `fxLeakI` is accepted and decoded.** -/
+theorem fxLeak_decodes (z : ℕ) : acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.wireRun z 1) = z := by
+  refine ⟨trivial, ?_⟩
+  simp [fxLeakDec, fxLeakI, Interaction.wireRun, Interaction.trace]
+
+/-- No finite count bounds the secrets of `fxLeakI` that the verifier that accepts everything passes and its decoder
+recovers. -/
+theorem fxLeak_not_le (N : ℕ) :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.wireRun z 1) = z}.encard ≤ N := by
+  have : {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.wireRun z 1) = z} = Set.univ :=
+    Set.eq_univ_of_forall fun z => fxLeak_decodes z
+  rw [this, Set.encard_univ, ENat.card_eq_top_of_infinite]
   simp
 
 end NetTiming.Witness
