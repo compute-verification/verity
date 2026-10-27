@@ -157,7 +157,7 @@ def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     """The network certifier at step 0 (module docstring): the run's periods relayed through it before the workers
     serve, each period's requests in a link-window of their own, and each link-window's output committed at the
     reading circuit's out shape (``serve --circuit-only --tie``) and signed under its session's key."""
-    S.setdefault(S.CERTIFIER)
+    S.certifier_defaults()
     run, a = run_of(state), _loop(cfg, state, True)
     shape = RN.serve([*RN.shape_of(0, run["run"], a), "--circuit-only"])["out_shape"]
     (state / BLOCKS).mkdir(parents=True, exist_ok=True)
@@ -176,7 +176,7 @@ def certifier_check(cfg: Mapping[str, Any], state: Path, i: int) -> tuple[dict[s
     communication leg (`legs/certifier.py`) on its window, after the period's sampled-proofs audit, whose answer it
     reads; its answer and case, also in ``record/w<I>/certifier/``. A leg that raises leaves its error there
     (``error.txt``) and is the period's ``error``, with no case."""
-    S.setdefault(S.RUST)
+    S.prover_defaults()
     block, rec = state / BLOCKS / f"w{i}", state / RECORD / f"w{i}"
     out = rec / "certifier"
     out.mkdir(parents=True, exist_ok=True)

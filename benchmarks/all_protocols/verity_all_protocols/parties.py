@@ -42,7 +42,7 @@ from verity.core.protocols.sampled_proofs import parties as SP, remote as R
 from verity.core.wire import Refused
 from verity.ml.crypto import lms
 
-from . import compose as C, runner as RN
+from . import compose as C, runner as RN, settings as S
 from .table import load
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -155,7 +155,7 @@ class Machine:
                             tamper=set(w["tamper"]), windows=w["blocks"], node=os.uname().nodename, delta=None, tools=t)
         (self.state / "blocks").mkdir(parents=True, exist_ok=True)
         try:
-            RN.loop_window(i, os.environ.get("RESEARCH_RUN_ID") or "local", a, self.state / "blocks",
+            RN.loop_window(i, S.run_id(), a, self.state / "blocks",
                            self.state / "public" / f"w{i}")
             return (self.state / "blocks" / f"w{i}" / "registration.json").read_bytes()
         except FAILED as e:
@@ -185,8 +185,7 @@ class Machine:
             raise SP.Unavailable(f"{block}/registration.json is not the registration the workers sent")
         out = self.state / "record" / f"w{i}" / "sampled-proofs"
         out.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("RAYON_NUM_THREADS", str(os.cpu_count() or 1))
-        os.environ.setdefault("RUST_MIN_STACK", str(64 << 20))
+        S.prover_defaults()
         try:
             ans = load("sampled-proofs").leg(block, os.uname().nodename, out, challenger={
                 "mode": "loopback:" + challenger["address"], "main": str(main_history(self.state))})
@@ -274,7 +273,7 @@ def run_parties(config: Mapping[str, Any], state: Path, here: Sequence[str], *, 
                   file=sys.stderr)
     if SP.VERIFIER not in here:
         return r, 0 if all(o["refused"] is None for o in r.outcomes.values()) else 2
-    lines = [{**x, "run": os.environ.get("RESEARCH_RUN_ID") or "local"}
+    lines = [{**x, "run": S.run_id()}
              for x in (r.outcomes[SP.VERIFIER]["outcome"] or {}).get("verdicts", [])]
     (state / "record").mkdir(parents=True, exist_ok=True)
     for line in lines:
