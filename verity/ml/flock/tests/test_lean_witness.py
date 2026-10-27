@@ -6,8 +6,9 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
 * `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
   `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; its outer session was proved before #1677 (art:225370f8… is the level proved again with
-  #1677's OS masks, by `r20261010-212517-4f68`, and accepted by today's verifier). The inner description is not
+  `verity/flock-circuit`; its outer session was proved before #1677's OS masks and before #4319's coin schedule, so
+  every identity refuses it at its Hello, and only the checks that don't read the Hello are asserted on it. The inner
+  description is not
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
   public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
@@ -61,9 +62,6 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 STATEMENT = "verity/flock-circuit"
-#: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before #1677 put the OS's masks in its
-#: identity
-PROVED = "verity/flock-circuit@cec3e347"
 #: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
@@ -160,13 +158,10 @@ def test_the_recorded_level_meets(outer, check):
     assert outer[check]["ok"], outer[check].get("why")
 
 
-def test_the_recorded_level_was_proved_before_the_os_masks(outer, level):
-    """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello (its re-record's prover,
-    505b9bfb1, lacked #1677's `osMasks`) and accepts it as `PROVED`. Holds as `verity/flock-circuit` once the fixture
-    takes the level proved again with the OS-masks prover (art:225370f8…)."""
+def test_the_recorded_level_is_refused_at_its_hello(outer):
+    """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello: its prover (505b9bfb1) lacked
+    #1677's `osMasks` and drew coins at the schedule before #4319's."""
     assert (outer["accepts_zkr"]["ok"], outer["accepts_zkr"].get("why")) == (False, S2_R7)
-    c = _witness("session", "--statement", PROVED, *level)["accepts_zkr"]
-    assert c["ok"], c.get("why")
 
 
 def test_the_recorded_level_fails_scope_z(outer):
