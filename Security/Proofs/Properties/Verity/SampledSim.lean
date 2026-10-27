@@ -225,7 +225,7 @@ theorem dom_tail {a : α} {s : Strategy (Game.ret a)} (x : Xd) (rB : Array ByteA
 /-- **The live state the reduction reaches** after the play's releases `hs` (each its bit count, the bytes it answers
 and its bits): the plan run over them from before the draw. -/
 def reached (hs : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool))) : St J mPts (F := F) (Rd := Rd) m :=
-  run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at .pre) hs
+  runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at .pre) hs
 
 /-- **The play's rounds driven through the live audit**: a strategy of the play (its rounds `ns` of released bits,
 then a message `e` and its outcome `outc log e`) is dominated by the live audit after the draw, wherever every outcome
@@ -245,7 +245,7 @@ theorem dom_live {ρ E : Type} (mk : ByteArray → List Bool → ρ) (outc : Lis
   by_cases hp : p (outc (hs.map (recOf mk) ++ []) s'.1)
   · rw [List.append_nil] at hp
     obtain ⟨x, rB, pts, N', rs, hst, hq⟩ := hok hs s'.1 hp
-    rw [show run _ _ hs = _ from hst]
+    rw [show runPlan _ _ hs = _ from hst]
     exact dom_tail nOf app J mPts out x rB pts (pfOf s'.1) N' rs fun _ => hq
   · exact dom_ret_not hp _ (stratG nOf app J mPts N out t m _)
 
@@ -270,7 +270,7 @@ theorem plan_self (st : St J mPts (F := F) (Rd := Rd) m) (b : ByteArray) :
 /-- **An untagged release never moves the reduction**: the live state the play's releases reach is the one their
 tagged releases reach. -/
 theorem run_filter : ∀ (st : St J mPts (F := F) (Rd := Rd) m) (hs : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool))),
-    run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st hs = run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st (hs.filter (Tagged m tagOf))
+    runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st hs = runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st (hs.filter (Tagged m tagOf))
   | _, [] => rfl
   | st, ⟨m', b, x⟩ :: hs => by
     by_cases hz : Tagged m tagOf ⟨m', b, x⟩ = true
@@ -285,7 +285,7 @@ theorem run_filter : ∀ (st : St J mPts (F := F) (Rd := Rd) m) (hs : List (Σ m
           have hb := hz rfl
           rcases st with ((_ | _ | ⟨_, _, _, _ | _, _⟩) | ⟨_, _, _, _⟩) <;> simp [move, hb, Move.next]
         · simp [plan, hm, Move.next]
-      show run _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf st m' b).next x) hs = _
+      show runPlan _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf st m' b).next x) hs = _
       rw [hst]
       exact run_filter st hs
 
@@ -295,7 +295,7 @@ theorem reached_filter (hs : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool)))
   run_filter nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf _ hs
 
 theorem run_append' (st : St J mPts (F := F) (Rd := Rd) m) :
-    ∀ hs hs' : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool)), run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st (hs ++ hs') = run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st hs) hs'
+    ∀ hs hs' : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool)), runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st (hs ++ hs') = runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) st hs) hs'
   | [], _ => rfl
   | ⟨_, _, _⟩ :: hs, hs' => run_append' _ hs hs'
 
@@ -303,10 +303,10 @@ theorem run_append' (st : St J mPts (F := F) (Rd := Rd) m) :
 back to. -/
 theorem run_mid (tg : Tag) : ∀ (cs : List (Chunk m)) (k : Chunks cs → Phase J mPts (F := F) (Rd := Rd))
     (rels : List (ByteArray × (Fin m → Bool))), rels.length = cs.length → (∀ z ∈ rels, tagOf z.1 = some tg) →
-    run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (St.after J mPts m tg cs k) (rels.map (rel m)) = .at (k (decChunks m cs (rels.map Prod.snd)))
+    runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (St.after J mPts m tg cs k) (rels.map (rel m)) = .at (k (decChunks m cs (rels.map Prod.snd)))
   | [], _, [], _, _ => rfl
   | c :: cs, k, (b, x) :: rels, hl, htg => by
-    show run _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.mid tg c cs k) m b).next x) (rels.map (rel m)) = _
+    show runPlan _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.mid tg c cs k) m b).next x) (rels.map (rel m)) = _
     rw [plan_self]
     simp only [move, htg (b, x) List.mem_cons_self, ↓reduceIte]
     exact run_mid tg cs (fun r => k (c.dec x, r)) rels (by simpa using hl)
@@ -329,8 +329,8 @@ def Block.Fits {Y : Type} (k : Block m) (tg : Tag) (sp : Split Y m) : Prop :=
 
 /-- The draw's block, before the session: the reduction reaches the session at the draw it reads back to. -/
 theorem run_draw (k : Block m) (hk : k.Fits m tagOf .draw spΩ) :
-    run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at .pre) (k.rels.map (rel m)) = .at (.sess (spΩ.e (decChunks m _ k.bits))) := by
-  show run _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.at .pre) m k.b).next k.x) (k.rest.map (rel m)) = _
+    runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at .pre) (k.rels.map (rel m)) = .at (.sess (spΩ.e (decChunks m _ k.bits))) := by
+  show runPlan _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.at .pre) m k.b).next k.x) (k.rest.map (rel m)) = _
   rw [plan_self]
   simp only [move, hk.1 (k.b, k.x) List.mem_cons_self, ↓reduceIte]
   exact run_mid nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf .draw spΩ.rest _ k.rest hk.2
@@ -339,9 +339,9 @@ theorem run_draw (k : Block m) (hk : k.Fits m tagOf .draw spΩ) :
 /-- The link points' block, at the session: the reduction reaches the rounds after the roots its first release answers,
 at the points it reads back to. -/
 theorem run_points (x : Xd) (k : Block m) (hk : k.Fits m tagOf .points spP) :
-    run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.sess x)) (k.rels.map (rel m)) =
+    runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.sess x)) (k.rels.map (rel m)) =
       .at (.rnds x (rootOf k.b) (spP.e (decChunks m _ k.bits)) N fun _ _ => []) := by
-  show run _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.at (.sess x)) m k.b).next k.x) (k.rest.map (rel m)) = _
+  show runPlan _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.at (.sess x)) m k.b).next k.x) (k.rest.map (rel m)) = _
   rw [plan_self]
   simp only [move, hk.1 (k.b, k.x) List.mem_cons_self, ↓reduceIte]
   exact run_mid nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf .points spP.rest _ k.rest hk.2
@@ -374,16 +374,16 @@ def roundsOf (x : Xd) : List (RoundBlock m) → (Fin (J x) → Fin 2 → List Rd
 theorem run_rounds (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts → F) :
     ∀ (rds : List (RoundBlock m)) (N' : ℕ) (rs : Fin (J x) → Fin 2 → List Rd), rds.length ≤ N' →
       (∀ r ∈ rds, r.Fits nOf mkS J m tagOf spR bytesOf x) →
-      run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.rnds x rB pts N' rs)) ((rds.flatMap fun r => r.k.rels).map (rel m)) =
+      runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.rnds x rB pts N' rs)) ((rds.flatMap fun r => r.k.rels).map (rel m)) =
         .at (.rnds x rB pts (N' - rds.length) (roundsOf nOf mkS app J m spR bytesOf x rds rs))
-  | [], N', rs, _, _ => by simp [roundsOf, run]
+  | [], N', rs, _, _ => by simp [roundsOf, runPlan]
   | r :: rds, N', rs, hl, hf => by
     obtain ⟨N'', rfl⟩ : ∃ N'', N' = N'' + 1 := ⟨N' - 1, by simp at hl; omega⟩
     obtain ⟨h, hk⟩ := hf r List.mem_cons_self
-    have h1 : run (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.rnds x rB pts (N'' + 1) rs)) (r.k.rels.map (rel m)) =
+    have h1 : runPlan (plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf) (.at (.rnds x rB pts (N'' + 1) rs)) (r.k.rels.map (rel m)) =
         .at (.rnds x rB pts N'' (app (r.sub mkS J m bytesOf x h)
           ((spR (nOf (r.sub mkS J m bytesOf x h))).e (decChunks m _ r.k.bits)) rs)) := by
-      show run _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.at (.rnds x rB pts (N'' + 1) rs)) m r.k.b).next r.k.x) (r.k.rest.map (rel m)) = _
+      show runPlan _ ((plan (q := q) nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.at (.rnds x rB pts (N'' + 1) rs)) m r.k.b).next r.k.x) (r.k.rest.map (rel m)) = _
       rw [plan_self]
       simp only [move, hk.1 (r.k.b, r.k.x) List.mem_cons_self, h, ↓reduceDIte]
       exact run_mid nOf mkS app J mPts N out t m ht tagOf spΩ spP spR rootOf bytesOf (.round r.tab r.rep r.n) _ _ r.k.rest hk.2
