@@ -32,6 +32,12 @@ they read back to (`reached_canon`); and the record is the live audit's transcri
 `Drive` bundles the reduction at one live session of `SampledDeploy.A` (the coupling's `proj` and `covers`, how it
 reads the releases, and those refusals), and gives the strategy `Drive.τ` and the coupling `Drive.coupling`.
 `accept_le_of_drives` is `SampledDeploy.accept_le` at `τOf := (Dr …).τ`.
+
+What the reduction reads off a release is its request's (`tagOfRequest`, `rootOfRequest`, `bytesOfRequest`, over
+`PlayDevice.requestParts`). The break is the play's: `Vocab.colAt` and `Vocab.forgerAt` read the challenger's finder's
+valid witness off the records the uses name (`Vocab.breakAt`, `Vocab.recsOf`), so a break from a use's record
+(`Vocab.rounds_at_play`'s second case) is the collision `col` counts or the forger's success
+(`Vocab.use_break_counted`).
 -/
 
 namespace Verity.Game.LiveDrive
@@ -651,5 +657,123 @@ theorem accept_le_of_drives {V : Vocab d α} (kd : ByteArray → ℕ) (desc : By
           (A θ F c σ r hr).G (Dr θ F c σ r hr).τ :=
   accept_le_of_couplings kd desc A (fun θ F c σ r hr => (Dr θ F c σ r hr).τ) col
     fun θ F c σ r hr _ => (Dr θ F c σ r hr).coupling
+
+/-! ## What the reduction reads off a release's request
+
+A release answers a request (`PlayDevice.requestParts`): a family's label, then the bytes the coin is released after.
+v2's families are the draw's (the registration's challenger label), session `i`'s link points
+(`slot/i/session`, after its `root_B` digests in turn) and its streams' rounds (`slot/i/<stream>`, after the round's
+message). Only session 0's are tagged. -/
+
+/-- The 64-byte digests a request's bytes hold in turn. -/
+def digestsOf (x : ByteArray) : Array ByteArray :=
+  ((List.range (x.size / 64)).map fun i => x.extract (64 * i) (64 * i + 64)).toArray
+
+/-- **What a release is to the reduction, from its request**: the draw's family `draw`, session 0's link points, or a
+round of one of session 0's streams, as `round` reads the round's label and bytes (its table, rep and coin count);
+nothing for any other request. -/
+def tagOfRequest (draw : String) (round : String → ByteArray → Option (ℕ × Fin 2 × ℕ)) (b : ByteArray) :
+    Option Game.LiveDrive.Tag :=
+  match PlayDevice.requestParts b with
+  | none => none
+  | some (l, x) =>
+    if l = draw then some .draw
+    else if l = _root_.SampledProofs.Hello.slotStream 0 _root_.SampledProofs.OneStageZk.POINTS then some .points
+    else (round l x).map fun (t, r, n) => Game.LiveDrive.Tag.round t r n
+
+/-- The roots a release's request holds: the `root_B` digests the link points are released after. -/
+def rootOfRequest (b : ByteArray) : Array ByteArray :=
+  ((PlayDevice.requestParts b).map fun p => digestsOf p.2).getD #[]
+
+/-- The bytes a release's request holds: the round's message a round's coins are released after. -/
+def bytesOfRequest (b : ByteArray) : ByteArray :=
+  ((PlayDevice.requestParts b).map (·.2)).getD .empty
+
+/-! ## The play's break: the finder's collision or forgery at the play's device -/
+
+/-- Two different byte strings with one SHA-512 digest are a collision of `sha512Msg` on their bytes. -/
+theorem collision_sha512Msg {x y : ByteArray} (hne : x ≠ y) (hh : Flock.Sha512.hash x = Flock.Sha512.hash y) :
+    Claims.Collision sha512Msg x.data.toList y.data.toList := by
+  refine ⟨fun e => hne (ByteArray.ext (Array.ext' e)), ?_⟩
+  have hx : (⟨x.data.toList.toArray⟩ : ByteArray) = x := by cases x; simp
+  have hy : (⟨y.data.toList.toArray⟩ : ByteArray) = y := by cases y; simp
+  show (Flock.Sha512.hash ⟨x.data.toList.toArray⟩).data.toList = (Flock.Sha512.hash ⟨y.data.toList.toArray⟩).data.toList
+  rw [hx, hy, hh]
+
+namespace Vocab
+
+variable (V : Vocab d α)
+
+/-- The play's device's registered key at `θ`, as the challenger's checks read it. -/
+def keyAt (θ : ByteArray) : _root_.SampledProofs.Challenger.ChallengerKey := ⟨(V.key θ).1, (V.key θ).2⟩
+
+/-- The records the finder runs on for the uses `us` of `coins`: each use's family and its record (`useCoins`), as
+`RoundsByDevice`'s break names them. -/
+def recsOf (us : List _root_.SampledProofs.Challenger.Use) (coins : Lean.Json) : List (String × Lean.Json) :=
+  (List.range us.length).filterMap fun i => us[i]?.map fun u => (u.label, Properties.Challenger.useCoins coins i)
+
+open Classical in
+/-- **The play's break at the records `recs`**: a valid witness the challenger's finder (`findBreak`) outputs on one of
+the records `recs θ o`, at the play's device under its registered key; none when it outputs none. -/
+noncomputable def breakAt (recs : ByteArray → Outcome → List (String × Lean.Json)) (θ : ByteArray) (o : Outcome) :
+    Option Properties.Challenger.Witness :=
+  if h : ∃ w, (∃ r ∈ recs θ o, Properties.Challenger.findBreak (V.deviceOf θ o) (V.keyAt θ) r.1 r.2 = some w) ∧
+      w.Valid (V.deviceOf θ o) (V.keyAt θ) then some (Classical.choose h) else none
+
+/-- **The collision `col` counts**: the play's break where it is a SHA-512 collision, on its strings' bytes. -/
+noncomputable def colAt (recs : ByteArray → Outcome → List (String × Lean.Json)) (θ : ByteArray) (o : Outcome) :
+    Option (Claims.Msg × Claims.Msg) :=
+  match V.breakAt recs θ o with
+  | some (.collision x y) => some (x.data.toList, y.data.toList)
+  | _ => none
+
+/-- **The forgery the sampled-proofs forger outputs**: the play's break where it is a forgery. -/
+noncomputable def forgerAt (recs : ByteArray → Outcome → List (String × Lean.Json)) (θ : ByteArray) (o : Outcome) :
+    Option (ByteArray × ByteArray) :=
+  match V.breakAt recs θ o with
+  | some (.forgery m sig) => some (m, sig)
+  | _ => none
+
+/-- **A break on a record the finder runs on is counted**: where the sampled-proofs forger is `forgerAt` (`hf`), a
+break at the play's device under its registered key on a record of `recs θ o` is the collision `colAt` reads off the
+outcome or the forger's success. -/
+theorem break_counted {recs : ByteArray → Outcome → List (String × Lean.Json)} {θ : ByteArray} {o : Outcome}
+    (hf : V.forger .sampled θ o = V.forgerAt recs θ o) {l : String} {j : Lean.Json} (hm : (l, j) ∈ recs θ o)
+    (hb : Properties.Challenger.Break (V.deviceOf θ o) (V.keyAt θ) l j) :
+    ColEvent (V.colAt recs θ) o ∨ V.Forges .sampled θ o := by
+  obtain ⟨w, hw, hv⟩ := hb
+  have h : ∃ w, (∃ r ∈ recs θ o, Properties.Challenger.findBreak (V.deviceOf θ o) (V.keyAt θ) r.1 r.2 = some w) ∧
+      w.Valid (V.deviceOf θ o) (V.keyAt θ) := ⟨w, ⟨(l, j), hm, hw⟩, hv⟩
+  have hB : V.breakAt recs θ o = some (Classical.choose h) := by
+    unfold breakAt
+    exact dite_eq_left h
+  have hV := (Classical.choose_spec h).2
+  generalize Classical.choose h = w' at hB hV
+  cases w' with
+  | collision x y =>
+    obtain ⟨hne, hh⟩ : x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := hV
+    refine .inl ⟨x.data.toList, y.data.toList, ?_, collision_sha512Msg hne hh⟩
+    simp only [colAt, hB]
+  | forgery m sig =>
+    refine .inr ⟨m, sig, ?_, hV⟩
+    rw [hf]
+    simp only [forgerAt, hB]
+
+/-- **A break at one of the uses is counted**: where the finder runs on the records of the uses `us` of `coins`
+(`hrec`) and the sampled-proofs forger is `forgerAt`, a break from one use's record (`RoundsByDevice`'s second case,
+`rounds_at_play`) is the collision `colAt` reads off the outcome or the forger's success. -/
+theorem use_break_counted {recs : ByteArray → Outcome → List (String × Lean.Json)} {θ : ByteArray} {o : Outcome}
+    (hf : V.forger .sampled θ o = V.forgerAt recs θ o) {us : List _root_.SampledProofs.Challenger.Use}
+    {coins : Lean.Json} (hrec : recs θ o = recsOf us coins)
+    (hb : ∃ (i : Nat) (u : _root_.SampledProofs.Challenger.Use), us[i]? = some u ∧
+      Properties.Challenger.Break (V.deviceOf θ o) (V.keyAt θ) u.label (Properties.Challenger.useCoins coins i)) :
+    ColEvent (V.colAt recs θ) o ∨ V.Forges .sampled θ o := by
+  obtain ⟨i, u, hu, hb⟩ := hb
+  obtain ⟨hi, -⟩ := List.getElem?_eq_some_iff.1 hu
+  refine V.break_counted hf ?_ hb
+  rw [hrec, recsOf]
+  exact List.mem_filterMap.2 ⟨i, List.mem_range.2 hi, by simp [hu]⟩
+
+end Vocab
 
 end Verity

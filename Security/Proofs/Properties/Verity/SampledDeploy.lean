@@ -285,7 +285,7 @@ theorem correct_extractOf (read : ByteArray → FileRead) (rounds : ByteArray �
       wrong_evalAudit] <;> exact Finset.card_empty
   intro u
   by_contra hu
-  have hmem := ((read F).parts.mem_wrong (u := u) (X := extractOf read rounds vals θ F c σ)).2 hu
+  have hmem : u ∈ (read F).parts.wrong (extractOf read rounds vals θ F c σ) := ((read F).parts.mem_wrong).2 hu
   rw [Finset.card_eq_zero.1 hw] at hmem
   exact Finset.notMem_empty u hmem
 
