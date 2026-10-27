@@ -404,9 +404,11 @@ def transpose(B, x: Coll, R: int, C: int) -> Coll:
     return transposes(B, x, R, C, (0,), C)[0]
 
 
-def _bmm(heads: int, K: int, N: int) -> Any:
-    """torch.bmm's row over the heads: `BatchedGemm_v2{heads, K, N}` on the k16 step `HopperBF16WgmmaDot16_v2`."""
-    return bind(CB.BatchedGemm, B=heads, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)
+def _bmm(op: str, heads: int, N: int, D: int) -> Any:
+    """torch.bmm ``op``'s row over the heads at N tokens (`cublas_bf16.TRAIN_BMM`): `BatchedGemm_v2{heads, K, N}` on the k16
+    step `HopperBF16WgmmaDot16_v2`, the very binding `cublas_bf16.attention_bmm` makes at the (N, D) its capture covers."""
+    k, n = CB.TRAIN_BMM[op][2](N, D)
+    return bind(CB.BatchedGemm, B=heads, K=k, N=n, DOT=BG.HopperBF16WgmmaDot16)
 
 
 def _heads(x: Coll, N: int, NH: int, KVH: int, D: int) -> Coll:
@@ -448,31 +450,31 @@ def _attention(B, S, q, k, v, cs, n):
     R = NH // KVH
     qe = _each_head(B, RopeHf, q, cs, N, NH, D)
     ke = _each_head(B, RopeHf, k, cs, N, KVH, D)
-    s = B.batch(_bmm(NH, D, N), qe.reshape(Array(N, Array(NH, Array(D, BF16)))), _heads(ke, N, NH, KVH, D), axes=(0, None))
+    s = B.batch(_bmm("qk", NH, N, D), qe.reshape(Array(N, Array(NH, Array(D, BF16)))), _heads(ke, N, NH, KVH, D), axes=(0, None))
     ns = Coll(Array(N * NH, U16), concat([n[i].refs for i in range(N) for _ in range(NH)]))
     sm = B.batch(bind(EagerSoftmax, N=N, D=D), s.reshape(Array(N * NH, Array(N, BF16))), ns, axes=(0, 0))
     F, H = F32.leaves * N, BF16.leaves * N
     y = Coll(Array(N, Array(NH, Array(N, F32))), strided_view(sm, 0, F, F + H, 1, N * NH * F))
     p = Coll(Array(N, Array(NH, Array(N, BF16))), strided_view(sm, F, H, F + H, 1, N * NH * H))
     vt = transposes(B, v, N, D, [g * D for g in range(KVH)], KVH * D)
-    o = B.batch(_bmm(NH, N, D), p, _stack(vt, [h // R for h in range(NH)]), axes=(0, None))
+    o = B.batch(_bmm("pv", NH, N, D), p, _stack(vt, [h // R for h in range(NH)]), axes=(0, None))
     return tuple_of(o.reshape(Array(N, Array(NH * D, BF16))), qe, ke, y, p)
 
 
 def _attention_backward(B, S, do, qe, ke, v, y, p, cs):
     N, NH, KVH, D = S.N, S.NH, S.KVH, S.D
     R = NH // KVH
-    dp = B.batch(_bmm(NH, D, N), do.reshape(Array(N, Array(NH, Array(D, BF16)))), _heads(v, N, NH, KVH, D), axes=(0, None))
+    dp = B.batch(_bmm("dp", NH, N, D), do.reshape(Array(N, Array(NH, Array(D, BF16)))), _heads(v, N, NH, KVH, D), axes=(0, None))
     ds = B.batch(bind(EagerSoftmaxBackward, N=N, D=D), dp.reshape(Array(N * NH, Array(N, BF16))),
                  y.reshape(Array(N * NH, Array(N, F32))), axes=(0, 0))
     by_head = [h * N for h in range(NH)]
     qh = [h * D for h in range(NH)]
     kvh = [g * D for g in range(KVH)]
-    dv = B.batch(_bmm(NH, N, D), _rows_of(transposes(B, p, N, N, by_head, NH * N)),
+    dv = B.batch(_bmm("dv", NH, N, D), _rows_of(transposes(B, p, N, N, by_head, NH * N)),
                  _stack(transposes(B, do, N, D, qh, NH * D), range(NH)), axes=(0, None))
-    dq = B.batch(_bmm(NH, N, D), ds.reshape(Array(N, Array(NH, Array(N, BF16)))),
+    dq = B.batch(_bmm("dq", NH, N, D), ds.reshape(Array(N, Array(NH, Array(N, BF16)))),
                  _stack(transposes(B, ke, N, D, kvh, KVH * D), [h // R for h in range(NH)]), axes=(0, None))
-    dk = B.batch(_bmm(NH, N, D), _rows_of(transposes(B, ds, N, N, by_head, NH * N)),
+    dk = B.batch(_bmm("dk", NH, N, D), _rows_of(transposes(B, ds, N, N, by_head, NH * N)),
                  _stack(transposes(B, qe, N, D, qh, NH * D), range(NH)), axes=(0, None))
     return tuple_of(_each_head(B, RopeHfBackward, dq, cs, N, NH, D),
                     _each_head(B, RopeHfBackward, _sum_heads(B, dk, N, KVH, R, D), cs, N, KVH, D),
@@ -520,14 +522,14 @@ def _attention_backward_sig(S):
     return (("do", q), ("qe", q), ("ke", kv), ("v", kv), ("y", y), ("p", p), ("cs", cs)), Tuple(q, kv, kv)
 
 
-_BLOCK = ("exact-model-tested; against the model composed of its Definitions' models at N = 16 (tests/test_torch_attention.py), "
-          "which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of the 2-layer "
-          "smollm2-135m step r20261027-031630-ce8e at S = 256 (difftest r20261027-051850-ed47, 10,452,992 words): sm_120 "
-          "(RTX PRO 6000, torch 2.14.0+cu130), 0 mismatches")
+_BLOCK = (f"exact-model-tested; against the model composed of its Definitions' models at N = 16 (tests/test_torch_attention.py), "
+          f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {SM120_RUN} "
+          f"at S = 256 (difftest r20261027-051850-ed47, 10,452,992 words): {SM120_GPU}, 0 mismatches; its bmm's are "
+          f"cublas_bf16.attention_bmm's wherever that binds (S = 256 and 512 at D = 64, TRAIN_CAPTURE)")
 
 EagerAttentionTorch = CompositeDefinition(
     "EagerAttentionTorch", 1, _BLOCK_KEYS, _attention_sig, _attention,
-    doc="HF LlamaAttention's eager forward on one sequence of N tokens, NH query heads on KVH KV heads of D: RopeHf_v1 on each "
+    doc="HF's eager attention forward on one sequence of N tokens, NH query heads on KVH KV heads of D: RopeHf_v1 on each "
         "head of q and k, each query row's bmm against its heads' keys (BatchedGemm_v2), EagerSoftmax_v1 on each (row, head) "
         "with row i seeing n[i] keys, then P's row against Vᵀ (Transpose_v1 tiles); o_proj's input and what autograd saves",
     conformance=_BLOCK, refuse=_block_refuse(MAX_FORWARD), ports=_POSITION)

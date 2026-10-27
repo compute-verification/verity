@@ -13,6 +13,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.types import Array
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import torch_attention as TA
 
 F32_SPECIALS = np.array([0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000,
@@ -230,6 +231,13 @@ def test_the_attention_blocks_are_their_definitions_models(NH, KVH) -> None:
     got = evaluate_words(bind(TA.EagerAttentionTorchBackward, **st), *(a[None] for a in (do, qe, ke, v, y, p, cs)))
     for g, w in zip(_split(got, *(w.shape for w in want)), want, strict=True):
         _same(g, w)
+
+
+@pytest.mark.parametrize("S,D", CB.TRAIN_BMM_SHAPES)
+def test_the_blocks_bmms_are_the_captured_bindings(S, D) -> None:
+    """Wherever `cublas_bf16.attention_bmm` binds, each of the blocks' six bmm's is that binding itself."""
+    for op in CB.TRAIN_BMM:
+        assert TA._bmm(op, 9, S, D) is CB.attention_bmm(op, S, D, B=9)
 
 
 # --- the models against torch's CPU autograd ---------------------------------------------------------------------------------
