@@ -491,8 +491,6 @@ over and archived as `infra/cursor/README.md` says.
   `environment: "cloud"`; Daniel's ruling, 18 Oct 10:20 AM PDT) or as a detached `research run`. A local subagent is only
   for a short read-only lookup. A coordinator's foreground local Task is refused (#2510), and heavy work never runs on an
   agent VM (the shell hook refuses it).
-- **No step waits long.** No tool call blocks for more than about 20 minutes: launch detached, end the step, and check
-  back on the run.
 - **Workers restart from notes.** Each brief asks for a checkpoint note before long work and every 3 to 4 hours, and
   words red-team work neutrally. A worker resumed twice, or whose base branch was deleted, is relaunched fresh from its
   last note.
@@ -516,8 +514,8 @@ over and archived as `infra/cursor/README.md` says.
     at each hourly checkpoint (`git fetch -q origin B && git show origin/B:inbox/<agent-id>.md`), which gets changes to
     it within the hour. Larger changes go in when you resume it (Task's `resume`, with the `bc-…` id the launch
     returned) after its turn ends.
-  - It stays reachable as below: when it would wait on a run, it ends its turn naming the run id and ETA, and its
-    launcher resumes it. A running turn holds one of the team's concurrent cloud-agent slots.
+  - It stays reachable (below), and its launcher resumes it. A running turn holds one of the team's concurrent
+    cloud-agent slots.
   - It opens its own PR from its VM (`research queue open`), and syncs its notes like any worker. Where that fails, it
     reports its branch and SHA and the launcher opens the PR for it. Its final message goes to whoever launched it.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
@@ -537,8 +535,7 @@ over and archived as `infra/cursor/README.md` says.
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research. A reviewer ci staffs writes its verdict, a lock or code Lean change waits for its Lean check, and the full check
-  runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
+  research. The rest is Checking and merging's, and you hear back only if yours is held, ejected or reverted. Before
   marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
   source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"` (main's SHA, expanded in your checkout: a shipped tree may hold no
