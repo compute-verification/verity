@@ -44,6 +44,8 @@ PUBLIC = {
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
+    "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
+                                               "values (VLLM-125)",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.

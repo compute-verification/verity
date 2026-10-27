@@ -51,6 +51,9 @@ Two kinds of committed run:
         [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
+        --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
+        [--workers N] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -102,6 +105,15 @@ Two kinds of committed run:
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
   requests).
+* **window-commit** (the prover, V3c): the served window committed as that Circuit's units (`window_commit_of_advice`):
+  slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
+  record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
+  checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints`` where given) and opened against the committed weights
+  root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
+  **weights-registration** committed them under it before the first window's coins (``--registration``, which the
+  verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
+  any other's reads are free; the slot rows a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
+  class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -1316,6 +1328,109 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
+def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
+    """A served window committed as its window class's one Circuit (V3c, module docstring): the class lowered
+    (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
+    the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
+    under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
+    ``--registration`` (`weights-registration`, before the first window's coins) committed them, the slot rows the window's
+    own value. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
+    population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
+    are free (``free``), and the seconds each part took."""
+    import numpy as np
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.check.oracle_compare import OpenedReader
+    from verity_vllm.check.replay.index import ProgramIndex
+    from verity_vllm.check.replay.opening import CommittedStore
+    from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_rows as WRS
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.steps import compile_steps
+    from verity.core.protocols.sampled_proofs.one_stage import draw as DR
+    from verity.core.protocols.sampled_proofs.one_stage import registered as CR
+
+    seconds: dict[str, float] = {}
+    t = time.time()
+
+    def lap(what: str) -> None:
+        nonlocal t
+        seconds[what], t = round(time.time() - t, 1), time.time()
+
+    key = committer_key(Path(a.key))
+    compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
+    requests = compile_advice(compiler, data)
+    registered, cls = compiler.inner.registered, window_class_of(a.window_class)
+    try:
+        compiled = compile_steps(registered, data, compiler.inner.ingress)
+        WC.takes(compiled, cls)
+        low = WC.lower(registered, cls)
+    except Unexpressible as e:
+        raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
+    lap("lower")
+    r = record1(str(a.bundle), str(a.row_dir))
+    run = bytes(r.run.run_root).hex()
+    p = compiler.load(0, 1, requests)
+    k0 = next(iter(p.progs))
+    tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
+    model = registered.phi.model
+    ck = WR.CheckpointIndex(a.checkpoint_dir, checkpoints_manifest=a.checkpoints, model=model["repo"], revision=model["revision"])
+    opened = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), ck)
+    read = CPU.provider(opened, ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, set())
+    sizes = {label: ty.leaves for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields}
+
+    def weights(label: str, lo: int, hi: int) -> np.ndarray:
+        w = read(label, lo, hi)
+        if w is None:
+            raise ValueError(f"weight {label}: no tensor of the committed weights holds its elements [{lo}, {hi})")
+        return w
+
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
+    units = [u for u in compiled.requests if u is not None]
+    slots, rows = [], []
+    for k in range(cls.slots):
+        u = units[k] if k < len(units) else None
+        if u is None:
+            row, served_ = [0] * (cls.prompt + 2), None
+        else:
+            ids = [int(x) for x in compiler.inner.ingress[u.id]["prompt"]]
+            row = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
+            pi = ProgramIndex(p.progs[u.id], program_dir=p.dirs[u.id])
+            served_ = WRS.Served.of_record(pi, store, u.id, p.arrivals[u.id])
+        slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
+        rows.append(row)
+    lap("slots")
+    reg = WW.WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
+    if (reg.repo, reg.revision) != (model["repo"], model["revision"]):
+        raise ValueError(f"{a.registration} registers {reg.repo}@{reg.revision}'s weights, not the served "
+                         f"{model['repo']}@{model['revision']}'s")
+    served = {label: weights(label, 0, n) for label, n in sizes.items()}
+    values = {**WW.weight_values(registered, served, key, keep_rows=True),
+              WC.SLOT_ROWS: WRS.slot_rows_value(WC.NAME, rows, key, int(a.window), window=run)}
+    held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
+    lap("weights")
+    filled = WRS.Rows(low, slots, values)
+    lap("rows")
+    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values)
+    win.supply(CR)
+    filled.record(win)
+    lap("record")
+    c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
+    lap("close")
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window),
+                               "requests": [u.id for u in units]},
+            "activations": {"program": WC.NAME, "values": {WC.SLOT_ROWS: values[WC.SLOT_ROWS].entry()}}}
+    win.write(c, a.out, prov, registrar=R)
+    lap("write")
+    sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
+    return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
+            "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
+            "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
+            "seconds": seconds}
+
+
 def standin_brought(body: Mapping[str, Any], seed: int) -> dict[str, Any]:
     """What a stand-in request's ingress brought: the record's body without its prompt, a stochastic one that names no seed
     bringing the declared run's default ``seed``, since the stand-in's server fills in the public one (`registered_seed`)."""
@@ -1461,7 +1576,22 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
-    for name in ("window-circuit", "class-size"):
+    p = sub.add_parser("window-commit", help="a served window committed as its window class's one Circuit's units (V3c)")
+    for flag in ("--serve-run", "--row-dir", "--advice", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--window", type=int, required=True)
+    p.add_argument("--key", required=True, help="the committer's secret key (32 bytes, the prover's private file; made "
+                   "0600 where it doesn't exist), the same every window of a period")
+    p.add_argument("--registration", required=True, help="the committer's weights registration under --key "
+                   "(weights-registration), the verifier's pins (records_audit.py audit --registered)")
+    p.add_argument("--checkpoint-dir", required=True, help="the served checkpoint, whose tensors the served weights are "
+                   "opened from against the committed weights root")
+    p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
+                   "held to its committed tensor root either way)")
+    p.add_argument("--law", default="subset:1", help="the proof service's law of the window")
+    p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
+    p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
+    for name in ("window-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
     sub.choices["audit"].add_argument("--builds", help="with --bundle or --serve-run: where the verifier traces its own Build of "
@@ -1469,18 +1599,20 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("audit", "circuit"):
         sub.choices[name].add_argument("--vllm-python", default=sys.executable, help="the interpreter the verifier's own Builds "
                                        "are traced with, holding the pinned vLLM (CPU, on meta; default this one)")
-    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size"):
+    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    for name in ("compiler", "circuit", "window-circuit", "class-size"):
+    for name in ("compiler", "circuit", "window-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
         return 0
-    if a.cmd in ("circuit", "window-circuit", "class-size", "weights-registration"):
+    if a.cmd == "window-commit":
+        a.bundle = str(Path(a.row_dir) / "commit" / "replay_bundle_p0")
+    if a.cmd in ("circuit", "window-circuit", "class-size", "window-commit", "weights-registration"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice,
-                    "weights-registration": weights_registration_of_serve}
+                    "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:
