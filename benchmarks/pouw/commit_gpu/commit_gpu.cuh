@@ -41,7 +41,7 @@
 #include <string>
 #include <vector>
 
-#include "sha512.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 using u64 = uint64_t;
 using u32 = uint32_t;
