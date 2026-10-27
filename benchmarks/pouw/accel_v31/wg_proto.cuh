@@ -51,6 +51,9 @@ struct alignas(128) Args {
   CUtensorMap q;              // KQ > 0: -2 w_W (BN rows), whose KQ k-tiles against X's add 256 X w_W^T into O
   uint16_t* words;
   const int* dO;
+  const int *lA, *cA;         // wrap 7: X's wraps a row (form_a's list: k << 1 | negative) and their count, for w_X B~^T
+  const int16_t* bt;          // wrap 7: B~^T (K x N), form_b's
+  int capA;
   int* O;                     // mode 0, 1: s32 cells; mode 2: bf16 words
   uint32_t* cbuf;             // CM 1: a slot of TM x BN / 2 words a CTA
   const float *sa, *sw;       // mode 2's scales
@@ -314,7 +317,30 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
       }
       continue;
     }
-    const bool add = proto && !(p.diag & 4);
+    if (proto && p.lA && !(p.diag & 4)) {
+      // w_X B~^T a wrap at a time (wrap 7, in place of dO): each of the thread's two rows' wraps adds s 256 B~[col, k] to
+      // its cells, B~^T's row k two columns a load. The loop runs to the warp's most wraps (ld_fence is a warp barrier),
+      // a lane's loads predicated on its own row's count.
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        const int r = row + 8 * h, na = p.cA[r], nmax = __reduce_max_sync(0xFFFFFFFFu, na);
+        const int* const la = p.lA + (size_t)r * p.capA;
+        for (int q = 0; q < nmax; q++) {
+          const bool on = q < na;
+          const int e = on ? __ldg(la + q) : 0;
+          const uint32_t* const b = reinterpret_cast<const uint32_t*>(p.bt + (size_t)(e >> 1) * N + col0);
+          const uint32_t s = !on ? 0u : e & 1 ? 0u - 256u : 256u;
+#pragma unroll
+          for (int j = 0; j < NA / 4; j++) {
+            const uint32_t v = on ? __ldg(b + 4 * j) : 0u;
+            d[4 * j + 2 * h] = (int32_t)((uint32_t)d[4 * j + 2 * h] + s * (uint32_t)(int32_t)(int16_t)(v & 0xFFFF));
+            d[4 * j + 2 * h + 1] = (int32_t)((uint32_t)d[4 * j + 2 * h + 1] + s * (uint32_t)(int32_t)(int16_t)(v >> 16));
+            if (j % 8 == 7) ld_fence();
+          }
+        }
+      }
+    }
+    const bool add = proto && !(p.diag & 4) && !p.lA;
     int* const o0 = p.O + (size_t)row * N + col0;
     int* const o1 = o0 + (size_t)8 * N;
     const int* const e0p = p.dO + (size_t)row * N + col0;

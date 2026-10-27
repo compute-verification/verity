@@ -1325,7 +1325,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel, 4: wrap4_kernel; 5: X w_W^T on the
 // tensor cores, gemm_kernel<false> on X and w_W (form_b writes w_W), then wrap_a_kernel; 6, V31_GEMM 1 only: X w_W^T in
 // the protocol GEMM's own accumulator, as X (-2 w_W)^T k-tiles before its tail's x(-128), and wrap_a_kernel stores the
-// rest, w_X B~^T, as dO), V31_WCW its columns a CTA (256 where N allows, or 128; 1 to 4);
+// rest, w_X B~^T, as dO; 7: as 6, and w_X B~^T in the GEMM's epilogue too, a wrap of X at a time from form_a's lists,
+// so no wrap kernel runs and no dO is read), V31_WCW its columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
@@ -1440,8 +1441,8 @@ struct Ctx {
     maps_proto = dalloc<Maps>(1); maps_plain = dalloc<Maps>(1);
     CK(cudaMemcpy(maps_proto, &mp, sizeof mp, cudaMemcpyHostToDevice));
     CK(cudaMemcpy(maps_plain, &mq, sizeof mq, cudaMemcpyHostToDevice));
-    if (kn.wrap == 6 && !kn.gemm) { fprintf(stderr, "V31_WRAP 6 needs V31_GEMM 1\n"); exit(2); }
-    if (kn.wrap == 6) WW = dalloc<int8_t>(nk);
+    if (kn.wrap >= 6 && !kn.gemm) { fprintf(stderr, "V31_WRAP 6 and 7 need V31_GEMM 1\n"); exit(2); }
+    if (kn.wrap >= 6) WW = dalloc<int8_t>(nk);
     if (kn.wrap == 5) {
       WW = dalloc<int8_t>(nk);
       const Maps mw{tmap(X, k, m, TILE), tmap(WW, k, n, TILE), tmap(PA, TL, m, TILE), tmap(PB, TL, n, TILE)};
@@ -1494,13 +1495,14 @@ struct Ctx {
   }
   void form(cudaStream_t st) {
     form_a_kernel<<<m / 16, lp, 16 * lp * 4, st>>>(fa());
-    if (kn.wrap == 6) form_b_kernel<2><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
+    if (kn.wrap >= 6) form_b_kernel<2><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
     else if (WW) form_b_kernel<1><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
     else form_b_kernel<0><<<n / 16, lp, 16 * lp, st>>>(fb(), nullptr);
   }
   void wrap(cudaStream_t st) {
     const WrapArgs w{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB, offB, lp, NT};
-    if (kn.wrap == 6) {
+    if (kn.wrap == 7) {
+    } else if (kn.wrap == 6) {
       wrap_a_kernel<true><<<dim3(n / TILE, m / TILE), 256, 0, st>>>(w);
     } else if (kn.wrap == 5) {
       gemm_kernel<false><<<grid, Ring::NCT, Ring::SMEM, st>>>(
@@ -1522,7 +1524,7 @@ struct Ctx {
     wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
     if (kn.rp != 0 && kn.rp != 2) { fprintf(stderr, "V31_RP is 0 or 2 (wg_proto.cuh's register plans)\n"); exit(2); }
     if (kn.rp && !kn.cm) { fprintf(stderr, "V31_RP 2 needs V31_CM 1\n"); exit(2); }
-    const int KQ = kn.wrap == 6 ? k / wgp::BK : 0;
+    const int KQ = kn.wrap >= 6 ? k / wgp::BK : 0;
     if (TT + KQ > wgp::MAX_TT) {
       fprintf(stderr, "the tail's %d k-tiles exceed wg_proto.cuh's MAX_TT %d\n", TT + KQ, wgp::MAX_TT);
       exit(2);
@@ -1540,6 +1542,7 @@ struct Ctx {
       g.dO = dO; g.cbuf = cbuf; g.sa = sa; g.sw = sw;
       g.M = m; g.N = n; g.K = k; g.L = L; g.S = S; g.lp = lp; g.dz = dz; g.dy = dy; g.TT = TT; g.group = kn.wgg; g.mode = mode;
       g.KQ = mode == 1 ? KQ : 0;
+      if (mode == 1 && kn.wrap == 7) { g.lA = listA; g.cA = cntA; g.bt = BtT; g.capA = capA; }
       return g;
     };
     wa_proto = mk(X, W, 1); wa_plain = mk(X, W, 0); wa_wgl = mk(A, B, 2);
