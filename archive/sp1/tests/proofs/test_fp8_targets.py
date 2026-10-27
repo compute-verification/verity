@@ -49,7 +49,7 @@ def test_first_is_frozen_and_the_fp8_targets_are_drafts_over_pinned_instructions
 def test_every_target_names_its_conformance_anchor_and_accumulates_in_fp32() -> None:
     """The overhead reference is the census line of the anchor device and operand dtype (outside core); core names the device."""
 
-    anchors = {FIRST: "A100", BF16_HOPPER: "H100", FP8_HOPPER_WGMMA: "H100", FP8_ADA_MMA: "4090"}
+    anchors = {FIRST: "a100", BF16_HOPPER: "h100", FP8_HOPPER_WGMMA: "h100", FP8_ADA_MMA: "4090"}
     for t, device in anchors.items():
         assert device in t.anchor_device and INSTRUCTIONS[t.instruction].acc_dtype == "f32"
 

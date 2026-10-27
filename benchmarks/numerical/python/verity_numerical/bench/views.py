@@ -922,7 +922,7 @@ INPUT_SET_KINDS = ("input-set/v1", "vllm-vu-set/v1")
 #: Hardware lines no target anchors: a target's instruction on another device (``README.md``'s Glossary, "Cell": prover
 #: hardware is its own axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
 #: a line is a statement of its own (:func:`result_subcircuit`), so the line has rows only where it has results.
-L40S_BF16 = dataclasses.replace(FIRST, name="l40s-48gb/bf16/sm80.mma.m16n8k16.bf16", anchor_device="NVIDIA L40S 48GB", status="draft", dossier=None)
+L40S_BF16 = dataclasses.replace(FIRST, name="l40s-48gb/bf16/sm80.mma.m16n8k16.bf16", anchor_device="l40s-48gb", status="draft", dossier=None)
 #: Every Table 2 line by name: the targets, then the hardware-only lines.
 LINES: dict[str, Target] = {**TARGETS, L40S_BF16.name: L40S_BF16}
 

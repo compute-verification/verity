@@ -100,10 +100,11 @@ STABLE_MIN_ELEMENTS = 1_000
 DOSSIER_KIND = "trust-dossier/v1"
 DOSSIER_SCHEMA = "verity/trust-dossier/v1"
 
-#: SKU string -> family (the same table as ``research.env.SKU_FAMILY``; the anchor is a *family*: any A100 is the A100 anchor).
+#: SKU string -> family (the rows of ``research.env.SKU_FAMILY``, matched case-blind; the anchor is a *family*: any A100 is the
+#: A100 anchor).  A SKU string is a device name (``NVIDIA GeForce RTX 4090``) or a SKU id (``rtx-4090``, a Target's anchor).
 SKU_FAMILY: tuple[tuple[str, str], ...] = (
     (r"\bH200\b", "h200"), (r"\bH100\b", "h100"), (r"\bB200\b", "b200"), (r"\bA100\b", "a100"), (r"\bL40S\b", "l40s"), (r"\bL40\b", "l40"),
-    (r"\bRTX\s*4090\b", "rtx4090"), (r"\bRTX\s*5090\b", "rtx5090"), (r"\bRTX\s*PRO\s*6000\b", "rtxpro6000"),
+    (r"\bRTX[\s-]*4090\b", "rtx4090"), (r"\bRTX[\s-]*5090\b", "rtx5090"), (r"\bRTX[\s-]*PRO[\s-]*6000\b", "rtxpro6000"),
 )
 
 #: The anchor SKU of an architecture when neither a Target nor the instruction names one (a Target's anchor is its
@@ -271,11 +272,11 @@ RELITIGATION_PROCEDURE: tuple[str, ...] = (
 
 
 def sku_family(sku: str | None) -> str | None:
-    """SKU string -> family name (``NVIDIA A100 80GB PCIe`` -> ``a100``); None when no row matches."""
+    """SKU string -> family name (``NVIDIA A100 80GB PCIe`` and ``a100-sxm4-80gb`` -> ``a100``); None when no row matches."""
     if not sku:
         return None
     for pat, fam in SKU_FAMILY:
-        if re.search(pat, sku):
+        if re.search(pat, sku, re.IGNORECASE):
             return fam
     return None
 

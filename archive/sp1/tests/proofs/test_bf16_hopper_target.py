@@ -52,7 +52,7 @@ def test_program_domain_and_epilogue_are_firsts() -> None:
 
 
 def test_the_anchor_is_the_h100() -> None:
-    assert BF16_HOPPER.anchor_device == "NVIDIA H100 SXM5 80GB"
+    assert BF16_HOPPER.anchor_device == "h100-sxm5-80gb"
 
 
 def test_the_family_is_firsts_vocabulary_on_the_hopper_pipeline() -> None:

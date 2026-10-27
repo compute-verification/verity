@@ -664,7 +664,9 @@ def test_the_sm120_fp8_steps_are_anchored_on_the_pro_6000_and_the_arch_default_i
     for name in ("fp8-sm120-mma-draft/2026-09-30", "sm120.mma.m16n8k32.e4m3"):
         s = trust.subjects(name)
         assert s.model is BLACKWELL_SM120_E4M3_M16N8K32 and s.instruction == "sm120.mma.m16n8k32.e4m3"
-        assert s.anchor_sku == "NVIDIA RTX PRO 6000 Blackwell Server Edition" and trust.sku_family(s.anchor_sku) == "rtxpro6000"
+        assert trust.sku_family(s.anchor_sku) == "rtxpro6000"
+    assert trust.subjects("fp8-sm120-mma-draft/2026-09-30").anchor_sku == "rtx-pro-6000-server"
+    assert trust.sku_family("NVIDIA RTX PRO 6000 Blackwell Server Edition") == "rtxpro6000"
     assert trust.subjects("sm120.mma.m16n8k32.e5m2").anchor_family == "rtxpro6000"
     assert trust.subjects("sm120.mma.m16n8k64.e2m1.mxf4").anchor_family == "rtx5090"
     assert trust.ANCHOR_SKU["sm_120"] == "NVIDIA GeForce RTX 5090" and trust.sku_family(trust.ANCHOR_SKU["sm_120"]) == "rtx5090"

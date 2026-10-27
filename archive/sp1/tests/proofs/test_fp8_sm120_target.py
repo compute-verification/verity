@@ -23,7 +23,7 @@ def vector(name: str) -> dict:
 
 def test_the_target_is_a_draft_on_the_pro_6000_over_the_one_group_26_bit_pipeline():
     assert TARGETS[T.name] is T and T.status == "draft" and T.instruction == "sm120.mma.m16n8k32.e4m3"
-    assert T.anchor_device == "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+    assert T.anchor_device == "rtx-pro-6000-server"
     assert T.dossier == "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89"
     ins = INSTRUCTIONS[T.instruction]
     assert ins.status == "pinned" and ins.model is T.pipeline and ins.dossier == T.dossier
