@@ -69,14 +69,16 @@ theorem need_ok {b : Bool} {why : String} {u : Unit} (h : VStar.Recursive.need b
   · rfl
 
 /-- `partVerdicts` returning only accepting verdicts: the inner session held, V\*'s statements at its shape, the shape
-dense, one part of each side per statement, and each part's verdict `.ok (.ok ())`. -/
+dense, one part of each side per statement, each part's verdict `.ok (.ok ())`, and the statement the inputs name under
+`FIELD_MAX` bytes. -/
 theorem partVerdicts_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {hd : VStar.Recursive.InnerHeld} {parts : Array (String × Flock.V Unit)}
     (hv : VStar.Recursive.partVerdicts o pr bs = .ok (hd, parts)) (hall : ∀ x ∈ parts, x.2.toBool = true) :
     ∃ ss, VStar.Recursive.innerHeld o pr bs = .ok hd ∧ Flock.RecVStar.statements hd.shape = .ok ss ∧
       VStar.Recursive.dense hd.shape = true ∧ o.parts.size = ss.size ∧ pr.parts.size = ss.size ∧
-      ∀ (j : Nat) (ho : j < o.parts.size) (hp : j < pr.parts.size),
-        VStar.Recursive.partVerdict hd j o.parts[j] pr.parts[j] bs = .ok (.ok ()) := by
+      (∀ (j : Nat) (ho : j < o.parts.size) (hp : j < pr.parts.size),
+        VStar.Recursive.partVerdict hd j o.parts[j] pr.parts[j] bs = .ok (.ok ())) ∧
+      VStar.Recursive.statementFits VStar.Recursive.FIELD_MAX hd o pr bs = .ok () := by
   unfold VStar.Recursive.partVerdicts at hv
   obtain ⟨h, hh, hv⟩ := bind_ok hv
   obtain ⟨ss, hs, hv⟩ := bind_ok hv
@@ -84,12 +86,13 @@ theorem partVerdicts_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
   obtain ⟨_, hd2, hv⟩ := bind_ok hv
   obtain ⟨_, hd3, hv⟩ := bind_ok hv
   obtain ⟨l, hl, hv⟩ := bind_ok hv
+  obtain ⟨⟨⟩, hfit, hv⟩ := bind_ok hv
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hv)
   have h1 := need_ok hd1
   have h2 := need_ok hd2
   have h3 := need_ok hd3
   simp only [beq_iff_eq] at h2 h3
-  refine ⟨ss, hh, hs, h1, h2, h3, fun j ho hp => ?_⟩
+  refine ⟨ss, hh, hs, h1, h2, h3, fun j ho hp => ?_, hfit⟩
   obtain ⟨p, s, hp', hs', hpv⟩ := partsAt_ok h ss o pr bs (List.range ss.size) l hl
     (fun x hx => hall x (by simpa using hx)) j (List.mem_range.2 (h2 ▸ ho))
   rw [Array.getElem?_eq_getElem ho] at hp'
@@ -119,7 +122,8 @@ namespace Verity.Recursive
 open Compiled in
 /-- **Piece A: the compiled component's acceptance, unfolded.** If `VStar.Recursive.checkBlobs` accepts, then the inner
 session is held off the blobs at a dense shape `h.shape` with V\*'s statements `ss`, the verifier's parts and the evidence's part
-sessions are one per statement, every part's verdict is set up and accepts (`.ok (.ok ())`), and one-stage's check
+sessions are one per statement, every part's verdict is set up and accepts (`.ok (.ok ())`), the statement the inputs
+name is under `FIELD_MAX` bytes (`statementFits`), and one-stage's check
 accepted the evidence with the verdict of record `verdicts` computed on the evidence's one session. -/
 theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} {e : VStar.Recursive.Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
@@ -129,6 +133,7 @@ theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} 
       VStar.Recursive.dense h.shape = true ∧ p.own.parts.size = ss.size ∧ e.proofs.parts.size = ss.size ∧
       (∀ (j : Nat) (ho : j < p.own.parts.size) (hp : j < e.proofs.parts.size),
         VStar.Recursive.partVerdict h j p.own.parts[j] e.proofs.parts[j] bs = .ok (.ok ())) ∧
+      VStar.Recursive.statementFits VStar.Recursive.FIELD_MAX h p.own e.proofs bs = .ok () ∧
       ∃ session vs, e.base.sessions[0]? = some session ∧
         VStar.Recursive.verdicts p.own session e.proofs (some e.base.provedUnits) bs = .ok vs ∧
         OneStage.check p.base c { e.base with verdicts := vs } = .accept pub prof := by
@@ -149,7 +154,7 @@ theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} 
         simp only [VStar.Recursive.verdictJson_accepted] at hx
         exact jeq_true (hx (by simp))
       have hall : ∀ x ∈ parts, x.2.toBool = true := fun x hx => (Array.all_eq_true'.1 hok) x hx
-      obtain ⟨ss, hh, hss, hdn, h1, h2, hparts⟩ := partVerdicts_ok hpv hall
-      exact ⟨hd, ss, hh, hss, hdn, h1, h2, hparts, session, vs, hs, hv, hacc⟩
+      obtain ⟨ss, hh, hss, hdn, h1, h2, hparts, hfit⟩ := partVerdicts_ok hpv hall
+      exact ⟨hd, ss, hh, hss, hdn, h1, h2, hparts, hfit, session, vs, hs, hv, hacc⟩
 
 end Verity.Recursive

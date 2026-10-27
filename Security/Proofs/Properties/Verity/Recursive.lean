@@ -158,13 +158,11 @@ theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω
     exact hacc s hs
 
 /-- **What the compiled component refuses, as the model states it** (PRF-201): Flock's own checks on the inner
-statement (`InnerOkAt`, the compiled `innerOk`), plain SHA-512 leaves under `--zk` at the part statement's tags (its
-`need (!tags0.plainLeaves)`), and files too long for their length words (its `fits` at `2^56`): `x` with each part's
-public file, the inner session's record, the coin server's transcript and V\*'s staged rows, at the inner rounds
+statement (`InnerOkAt`, the compiled `innerOk`) and files too long for their length words (its `fits` at `2^56`):
+`x` with each part's public file, the inner session's record, the coin server's transcript and V\*'s staged rows, at the inner rounds
 `ms`. -/
 structure Refusals (x : Msg) (st : Stage) (ms : List (Msg × Out)) : Prop where
   innerOk : InnerOkAt x
-  plain : ∀ t, Flock.Tags.find? VStar.Recursive.STATEMENT = some t → t.plainLeaves = false
   pub : ∀ s < nS x, x.length + (st.pub x ms s).size < 2 ^ 64
   record : (st.record x ms).size < 2 ^ 64
   transcript : (st.transcript x ms).size < 2 ^ 64
@@ -462,7 +460,7 @@ that run's records hold its live coins (`LiveCoins`).
 Then `x` is dense (`RecDeploy.DenseAt`, the statements `RecursiveKSAt` covers), and the run accepts.
 
 The proof is `acc_of_accepts_of` but for `Refusals`: the model's statement of what the compiled component refuses
-(`innerOk`, `need (!tags0.plainLeaves)`, `fits`), which is still to be read off its check. -/
+(`innerOk`, `fits`), which is still to be read off its check. -/
 theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (p : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment) (e : VStar.Recursive.Evidence)

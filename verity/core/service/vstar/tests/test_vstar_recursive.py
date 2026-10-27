@@ -17,7 +17,9 @@ The refusals the compiled check adds to `flock-verify`'s per-part path are each 
 statement under Flock's plain verifier (`innerOk`, here an inner draw that does not parse), and plain SHA-512 leaves under
 `--zk` (`verifyCmd`'s message, which `partVerdict` gives word for word; its statement is the constant
 `verity/flock-circuit`, so only `flock-verify`'s side is driven). `fits`' bound, `2^56` bytes, is past any file a test can
-stage."""
+stage; `statementFits`, the same bound on the whole statement the inputs name, is driven at a limit of the honest
+statement's own size (`vstar-recursive statement LIMIT`), which also checks that each parsed field's canonical bytes
+parse back to what the check read, the `Names` pins at the honest session."""
 
 from __future__ import annotations
 
@@ -117,6 +119,19 @@ def lean_verdicts(exe: Path, inner: Inner, parts: list[Part], tmp: Path) -> dict
     out = json.loads(lines[0])
     assert p.returncode == (0 if "parts" in out and all(x["accepted"] for x in out["parts"]) else 1), out
     return out
+
+
+def lean_statement(exe: Path, inner: Inner, parts: list[Part], tmp: Path, limit: int) -> dict:
+    """`vstar-recursive statement LIMIT`' line: the statement's size (`statementSize`), whether each parsed field's
+    canonical bytes parse back to what the check read (`roundTrips`), and `statementFits LIMIT`'s refusal ("" if none)."""
+    own, proofs = tmp / "own.json", tmp / "proofs.json"
+    own.write_text(D.canonical(own_json(inner, parts)))
+    proofs.write_text(D.canonical(proofs_json(inner, parts)))
+    p = subprocess.run([str(exe), "statement", str(limit), str(own), str(proofs), *map(str, blobs(inner, parts))],
+                       capture_output=True, text=True, check=False)
+    lines = p.stdout.splitlines()
+    assert p.returncode == 0 and len(lines) == 1, (p.returncode, p.stdout[-2000:], p.stderr[-2000:])
+    return json.loads(lines[0])
 
 
 def flock_verdict(exe: Path, inner: Inner, rec_inner: Path, j: int, p: Part) -> dict:
@@ -267,6 +282,22 @@ def test_the_honest_recursive_session_is_accepted_part_for_part(session, tmp_pat
     """Every part of the honest session is accepted by V*'s compiled check, as by `flock-verify` at its flags."""
     got = session.check(session.inner, session.parts, tmp_path)
     assert all(a for _, a in got), got
+
+
+@pytest.mark.slow
+@DEPLOYED
+def test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size(session, tmp_path):
+    """`statementFits`: the statement the honest session's inputs name (`statementSize`) is under `FIELD_MAX` (`2^56`)
+    bytes, and every parsed field it carries as canonical bytes parses back to what the check read (`roundTrips`: the
+    `Names` pins hold at the honest session). A statement of `2^56` bytes can't be staged, so the oversized case is the
+    honest statement at a limit of exactly its size: refused, and accepted one byte above."""
+    got = lean_statement(session.exe, session.inner, session.parts, tmp_path, 2 ** 56)
+    assert got.get("round_trips") is True and 0 < got["size"] < 2 ** 56 and got["fits"] == "", got
+    n = got["size"]
+    assert lean_statement(session.exe, session.inner, session.parts, tmp_path, n + 1)["fits"] == ""
+    over = lean_statement(session.exe, session.inner, session.parts, tmp_path, n)
+    assert over["fits"] == f"the statement the inputs name is {n} bytes, {n} or more", over
+    print(json.dumps({"size": n, "round_trips": got["round_trips"]}))
 
 
 @pytest.mark.slow
