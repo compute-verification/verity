@@ -7,6 +7,10 @@ research run, times each stage on the smallest real input (K = 4096, N = 2), rep
 whether the run was one whole recursive session and whether it was accepted. Speed work measures each cut before and after
 with it.
 
+This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
+`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/ml/flock/pod/88-rec-c3-inner.sh`; this runner doesn't
+time it yet.
+
 ~~~text
 verity bench recursion_e2e plan  [POINT]                          the stages, each statement's lease, the launch command
 verity bench recursion_e2e run   [POINT] [--e2e] [--dry-run] [--here]
