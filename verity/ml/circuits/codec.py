@@ -24,6 +24,7 @@ descriptors denote the same circuit (veritor's docs/vllm-poc/descriptor-codec.md
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import re
@@ -520,10 +521,18 @@ def program_digest(program_or_desc) -> str:
     """SHA-512 of the descriptor's canonical JSON without ``annotations``; a program's is streamed (`descriptor_chunks`)."""
     if isinstance(program_or_desc, dict):
         return hashlib.sha512(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"})).hexdigest()
-    h = hashlib.sha512()
-    for chunk in descriptor_chunks(program_or_desc):
-        h.update(chunk)
-    return h.hexdigest()
+    # The cyclic collector stays off while streaming: encoding frees its pieces by reference counting, and the collector's
+    # passes over a big program's live bodies cost more than the encoding itself.
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        h = hashlib.sha512()
+        for chunk in descriptor_chunks(program_or_desc):
+            h.update(chunk)
+        return h.hexdigest()
+    finally:
+        if on:
+            gc.enable()
 
 
 def descriptor_size(program_or_desc) -> int:
