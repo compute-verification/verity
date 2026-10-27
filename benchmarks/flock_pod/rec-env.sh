@@ -27,7 +27,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
 LP=$!
 
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
+KEY=$(cat benchmarks/flock_pod/20-gpu-link.sh benchmarks/flock_pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g0-sm$SM; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
@@ -35,7 +35,7 @@ if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found
   rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
 fi
 if [ ! -x $BIN/flock-circuit ]; then
-  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 SM=$SM bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 SM=$SM bash benchmarks/flock_pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
   mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
 fi
 exec 8>&-

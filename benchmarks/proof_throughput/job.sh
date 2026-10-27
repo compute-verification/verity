@@ -41,7 +41,7 @@ for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
 done
 [ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node (71-gemm-slowdown.sh unpacks it)"; exit 1; }
 export PT_CUDA=13.3
-SWEEP=verity/ml/flock/pod/70-class-sweep.sh
+SWEEP=benchmarks/flock_pod/70-class-sweep.sh
 # this run's records the bundle carries for verify.sh, beside the circuit, the public file and the sessions
 BUNDLED="results.jsonl law.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
 stage-rec.json phases.tsv point.json index.jsonl"

@@ -192,7 +192,7 @@ BENCHMARKS_IMPORTERS = {
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
     # C-Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
     **dict.fromkeys((
-        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py", "verity/ml/flock/pod/rec_inner.py",
+        "benchmarks/flock_pod/gemm_hill.py", "benchmarks/flock_pod/read_gadget.py", "benchmarks/flock_pod/rec_inner.py",
         "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
         "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",

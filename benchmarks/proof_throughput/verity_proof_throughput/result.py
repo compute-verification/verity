@@ -51,7 +51,7 @@ PHASES = ("t.link", "t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito", 
 
 def statement_seconds(lv: Mapping[str, Any]) -> float:
     """A statement's steady-state prover seconds from its median timed LIVE record: the witness wait plus both reps, or the
-    pipelined witness builds' share when they are slower (``verity/ml/flock/pod/gemm_slowdown.statement_seconds``)."""
+    pipelined witness builds' share when they are slower (``benchmarks/flock_pod/gemm_slowdown.statement_seconds``)."""
     full = (lv.get("witness_s") or 0.0) + lv["prove_total_s"]
     if lv.get("witness_prebuilt_s") is not None and lv.get("pipeline_depth"):
         full = max(full, lv["witness_prebuilt_s"] / lv["pipeline_depth"])

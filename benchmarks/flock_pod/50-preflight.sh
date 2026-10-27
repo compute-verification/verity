@@ -9,7 +9,7 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/flock-preflight}/out; W=/workspace/flock-backend; mkdir -p $O $W
 SM=${SM:-89}; SELF=${SELF:-8 64}; GPU_REL=${GPU_REL:-fp8-ada}; RELS=${RELS:-bf16-hopper fp8-ada fp8-hopper bf16-ampere}
-MODE=build GPU=1 SM=$SM bash verity/ml/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+MODE=build GPU=1 SM=$SM bash benchmarks/flock_pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 F=/workspace/flock-gpu-link/flock
 (cd $F && cargo build --release -p flock-live --features gpu --bin flock-vllm-v1) >> $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }

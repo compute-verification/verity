@@ -261,7 +261,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
-  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6
+  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash benchmarks/flock_pod/60-circuit.sh || return 6
 }
 ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
 BUILD=$!

@@ -12,7 +12,7 @@ REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${RESEARCH_RUN_DIR:-/tmp/flock-circui
 ROLE=${ROLE:-prover}; TEMPLATE=${TEMPLATE:?}; POINTS=${POINTS:?}; PER=${PER:-1073741824}; RUNS=${RUNS:-5}
 G=1; [ $ROLE = verifier ] && G=0
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
-MODE=build GPU=$G bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+MODE=build GPU=$G bash benchmarks/flock_pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER_=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000); }
 # one core under the quota's floor: the host witness (row inputs, hm96 slots) runs beside the CUDA driver's threads, and a

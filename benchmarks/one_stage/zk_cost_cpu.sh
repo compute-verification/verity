@@ -25,7 +25,7 @@ log "zk-cost-cpu: source $(git rev-parse HEAD), builds in $W"
 (cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash benchmarks/flock_pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }

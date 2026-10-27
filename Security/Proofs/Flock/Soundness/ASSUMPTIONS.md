@@ -249,7 +249,7 @@ Boolean-semantics lemma replaces the per-template `RowsCert`.
 drawn after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session draws them under
 `FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
 then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
-`PROTOCOL.md` §7.1). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
+`PROTOCOL.md` §7.1). The benches run M0 so by default (`benchmarks/flock_pod/70-class-sweep.sh`, `60-circuit.sh`,
 `61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
 from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
 That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited

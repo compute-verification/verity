@@ -31,7 +31,7 @@ PY=$REPO/.venv/bin/python
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash benchmarks/flock_pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }

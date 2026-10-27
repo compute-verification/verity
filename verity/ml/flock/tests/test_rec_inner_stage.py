@@ -13,7 +13,7 @@ from test_rec_outer import BIN
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.codec import program_digest
 
-POD = Path(__file__).resolve().parents[1] / "pod"
+POD = Path(__file__).resolve().parents[4] / "benchmarks" / "flock_pod"
 
 
 def _rec_inner():

@@ -117,7 +117,7 @@ def defs(a) -> None:
         Path(a.out).write_text(json.dumps({f'Gemm_v2{{K={a.K},N={n},DOT={{"fn":"{DTYPES["bf16"][1]}"}}}}': 1}) + "\n")
         print(n, f"DEFS={a.out}")
     else:
-        print(n, f"PROGRAM=verity/ml/flock/pod/gemm_fp.py:{a.dtype}_K{a.K}_N{n}")
+        print(n, f"PROGRAM=benchmarks/flock_pod/gemm_fp.py:{a.dtype}_K{a.K}_N{n}")
 
 
 def fill(a) -> None:

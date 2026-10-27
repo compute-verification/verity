@@ -1,4 +1,4 @@
-# Dropped into a flock b684b12 checkout as crates/flock-live (verity/ml/flock/pod/*.sh do it) and added to its
+# Dropped into a flock b684b12 checkout as crates/flock-live (benchmarks/flock_pod/*.sh do it) and added to its
 # workspace members; the path dependencies are relative to that location.
 [package]
 name = "flock-live"

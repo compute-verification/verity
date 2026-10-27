@@ -28,7 +28,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
   done
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   G=${RESEARCH_RUN_DIR:?}/out/build-gpu; mkdir -p "$G"
-  OUT=$G bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-120} > "$G/build.txt" 2>&1
+  OUT=$G bash benchmarks/flock_pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-120} > "$G/build.txt" 2>&1
   FLOCK_PROVE=$(sed -n 's/^BINARY=//p' "$G/build.txt" | tail -1)
   FLOCK_SELFTEST=$(sed -n 's/^SELFTEST_BINARY=//p' "$G/build.txt" | tail -1)
   [ -x "$FLOCK_PROVE" ] || { tail -30 "$G/build.txt"; echo "no CUDA flock-circuit" >&2; exit 7; }

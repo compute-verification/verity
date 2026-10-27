@@ -38,7 +38,7 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
   free -g | head -2; cat /proc/loadavg; nvidia-smi -L 2>/dev/null; } > $O/host-$STEP.txt 2>&1
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time" >&2; exit 1; }
 
-KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
+KEY=$(cat benchmarks/flock_pod/20-gpu-link.sh benchmarks/flock_pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BUILDS=${BUILDS:-$KEY}
 bin() { echo $W/bin-$1-g1-sm$SM/flock-circuit; }
@@ -245,7 +245,7 @@ EOF
     exec 8>$W/build.lock; flock 8
     if [ ! -x $B ] || [ ! -x $BS ]; then
       [ -d $F ] || { du -sh ${WARM_FROM:-/workspace/jobs/rec-reprice/flock-gpu-link}; cp -a ${WARM_FROM:-/workspace/jobs/rec-reprice/flock-gpu-link} $FW/flock-gpu-link; }
-      RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=1 SM=$SM bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
+      RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=1 SM=$SM bash benchmarks/flock_pod/60-circuit.sh > $O/build.log 2>&1 \
         || { tail -40 $O/build.log; tail -40 $O/build/out/build-circuit.txt 2>/dev/null; exit 1; }
       mkdir -p $(dirname $B) && cp $F/target/release/flock-circuit $B
       # the selftests' build of the same checkout (60-circuit.sh MODE=selftest's features), for prover_is_deterministic
@@ -291,7 +291,7 @@ lean)
     [ -f $DD/sess/$b-zk/session.json ] || { echo "build $b: no --zk session of k$K (run STEP=prove first)"; continue; }
     echo "/usr/bin/time -v -o $O/lean/time-$b.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --program $D/program.json --session $DD/sess/$b-zk > $O/lean/$b.log 2> $O/lean/$b.err; echo $b lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-2} -I{} sh -c "{}"
-  python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $BUILDS; LEAN_RC=$?
+  python3 benchmarks/flock_pod/lean_verdicts.py $O/lean $BUILDS; LEAN_RC=$?
   ;;
 esac
 summary

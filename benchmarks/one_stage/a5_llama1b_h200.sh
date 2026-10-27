@@ -37,7 +37,7 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW"
   uv sync --all-packages --extra torch-cpu || exit 5
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) || exit 7
   (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || exit 7
-  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh || exit 6
+  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash benchmarks/flock_pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
 

@@ -1,8 +1,8 @@
-"""Store declaration for the Flock backend's runs (research.store README §6.1): ``verity/ml/flock/pod/20-pure.sh`` with its
+"""Store declaration for the Flock backend's runs (research.store README §6.1): ``benchmarks/flock_pod/20-pure.sh`` with its
 settings as ``K=V`` arguments.
 
     research run --on M --project verity --source . --cwd source --tool flock_pure --campaign flock-backend -- \\
-        bash verity/ml/flock/pod/20-pure.sh REL=bf16-hopper "MODE=selftest sweep" START=1024 RUNS=5
+        bash benchmarks/flock_pod/20-pure.sh REL=bf16-hopper "MODE=selftest sweep" START=1024 RUNS=5
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def parse(argv: list[str]) -> dict:
 
 FLOCK_PURE = Tool(
     name="flock_pure", version="1",
-    command=["bash", "verity/ml/flock/pod/20-pure.sh"],
+    command=["bash", "benchmarks/flock_pod/20-pure.sh"],
     closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/**", *CORE],
     key_params=["REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS"],
     key_conditions=["hw.family"],
@@ -50,12 +50,12 @@ def parse_class_sweep(argv: list[str]) -> dict:
     return out
 
 
-#: ``verity/ml/flock/pod/70-class-sweep.sh``: unit shapes of a served row's Q_word partition (its program graph, or a list of Call
+#: ``benchmarks/flock_pod/70-class-sweep.sh``: unit shapes of a served row's Q_word partition (its program graph, or a list of Call
 #: Definitions), each a verity/flock-circuit statement proved on the pod (verity_flock.class_statement); GRAPH, DEFS and SHAPES name
 #: content (their files' digests key the run).
 FLOCK_CLASS_SWEEP = Tool(
     name="flock_class_sweep", version="1",
-    command=["bash", "verity/ml/flock/pod/70-class-sweep.sh"],
+    command=["bash", "benchmarks/flock_pod/70-class-sweep.sh"],
     closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/python/**", *CORE,
              "integrations/vllm/verity_vllm/**", "tools/verity/circuit_check/src/**"],
     key_params=list(CLASS_SWEEP_KEYS),

@@ -1,4 +1,4 @@
-"""The BF16 hillclimb's records (`verity/ml/flock/pod/gemm_hill.py`, `gemm_slowdown.py`): the preflight check's verdict as a
+"""The BF16 hillclimb's records (`benchmarks/flock_pod/gemm_hill.py`, `gemm_slowdown.py`): the preflight check's verdict as a
 point reads it, the readers of records written before the check was named, and a GPU session's points, each citing the
 session's one preflight check and refused when its key differs from the check's."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-POD = Path(__file__).resolve().parents[1] / "pod"
+POD = Path(__file__).resolve().parents[4] / "benchmarks" / "flock_pod"
 sys.path.insert(0, str(POD))
 import gemm_hill as GH  # noqa: E402
 import gemm_slowdown as GS  # noqa: E402

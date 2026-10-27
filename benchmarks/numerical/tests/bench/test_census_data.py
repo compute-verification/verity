@@ -125,7 +125,7 @@ def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or
         assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
     used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
     # the L40S FP8 line serves no row yet; the RTX PRO 6000 lines serve the POUS bench's --hardware and the GemmCoordinate
-    # hillclimbs (verity/ml/flock/pod/gemm_hill.py)
+    # hillclimbs (benchmarks/flock_pod/gemm_hill.py)
     rtx_pro = {f"rtx-pro-6000-server/{d}" for d in ("bf16", "e4m3", "e2m1")}
     assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3"} | rtx_pro
     sets = [s.target for s in census.INPUT_SETS.values()]

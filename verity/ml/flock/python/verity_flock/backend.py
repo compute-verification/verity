@@ -9,7 +9,7 @@ units are the pinned lowering of :mod:`verity_flock.lowering`, wired in the same
 bytes are hashed from. Coins are the live verifier's (flock-128-r2: Fast100, two reps on one root).
 
 Prover and verifier are ``flock-pure`` (``verity/ml/flock/live/src/bin/flock-pure.rs``, built into a flock b684b12
-checkout with ``flock-link-b684b12.patch``; ``verity/ml/flock/pod/20-pure.sh``).
+checkout with ``flock-link-b684b12.patch``; ``benchmarks/flock_pod/20-pure.sh``).
 """
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ class Flock:
         if sub.k != 1536:
             return Unsupported(f"K = {sub.k}: the instance sets are K = 1536")
         if shutil.which(self.binary) is None:
-            return Unavailable(f"{self.binary} isn't built on this machine (verity/ml/flock/pod/20-pure.sh)")
+            return Unavailable(f"{self.binary} isn't built on this machine (benchmarks/flock_pod/20-pure.sh)")
         return Supported(relation)
 
     def lower(self, sub: GemmSub) -> dict:
