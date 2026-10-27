@@ -1,6 +1,6 @@
 """`verity.ml.circuits.ops.boolean.softmax_row`: `SoftmaxRow_v1{N}` is its stated dataflow, the word primitives each step names
 composed in order (`F32Add_v2`, `F32Mul_v2`, `F32Div_v2`, `MufuEx2Ftz_v1`, `F2fpBf16_v1`), on rows of scores, uniform words,
-special words and ties, at N = 1 up to CMP-92's context of 32; it is within bf16's rounding of the exact softmax; and
+special words and ties, at N = 1 up to the e2e demo's context of 32; it is within bf16's rounding of the exact softmax; and
 `QkSoftmaxRow_v1{T, D=64}` on the H200's step is `GemmCoordinate_v2{K=64}`'s words over the key rows followed by that
 composition. Each is Boolean with one 16-bit output a key, and a row of no words, no keys or a D off the step is refused.
 
@@ -104,7 +104,7 @@ def test_the_row_is_the_dataflow_of_its_word_primitives(N: int) -> None:
 
 @pytest.mark.slow
 def test_the_row_at_the_context_length_is_the_dataflow_of_its_word_primitives() -> None:
-    """N = 32, CMP-92's longest row: the sum's order over 32 terms, which shorter rows can't show."""
+    """N = 32, the e2e demo's longest row: the sum's order over 32 terms, which shorter rows can't show."""
     rng = np.random.default_rng(132)
     rows = np.concatenate([_scores(rng, (200, 32)), _rows(rng, 100, 32), _ties(rng, 50, 32)])
     assert np.array_equal(_row(rows), _softmax_words(rows))
@@ -165,7 +165,7 @@ def test_the_fused_unit_is_gemm_coordinate_words_then_the_softmax_composition(T:
 
 @pytest.mark.slow
 def test_the_fused_unit_at_the_context_length_is_gemm_coordinate_words_then_the_softmax_composition() -> None:
-    """T = 32, CMP-92's longest attention row, which the sidecar binds."""
+    """T = 32, the e2e demo's longest attention row, which the sidecar binds."""
     rng = np.random.default_rng(632)
     q, k = _heads(rng, 90, 32)
     assert np.array_equal(_fused(q, k), _softmax_words(_scores_words(q, k)))
