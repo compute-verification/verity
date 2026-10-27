@@ -100,7 +100,7 @@ def _from_records(cache: Path) -> Catalog | None:
     """The catalog from the bindings' records (`units.plan`), each suite target made along the path its record lists; None when
     no record counts or one is stale.  A target is taken as its record describes it, as `cli._planned` takes a target whose
     result it reuses: holding each one to its descriptor (`cache.descriptor`, as `cli._planned` does for one it checks) walks
-    all it reaches, which over the suite took longer than making it (past 15 minutes, against 426 s, r20261022-005352-48a5)."""
+    all it reaches, which over the suite takes longer than making it."""
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}

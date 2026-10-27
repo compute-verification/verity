@@ -649,7 +649,7 @@ def update_pins(rep: dict) -> dict:
 
 
 #: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
-#: isolated `--all` run (`run`'s scheduling; it counts that task list, 26.7 GiB on 17 Oct).  The commit that writes a peak
+#: isolated `--all` run (`run`'s scheduling; it counts that task list).  The commit that writes a peak
 #: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
 #: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
 HEAVY = CC.HEAVY
@@ -662,8 +662,8 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 
 
 def slot_gb() -> int | None:
-    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (CIR-21: two runs in one
-    node's slots each budgeted the whole machine's MemAvailable and took it down)."""
+    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (else two runs in
+    one node's slots each budget the whole machine's MemAvailable and take it down)."""
     v = os.environ.get(SLOT_MEM_ENV, "")
     return int(v) if v.isdigit() else None
 
@@ -693,18 +693,16 @@ def heavy() -> dict[str, float]:
         return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
 
 
-#: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
-#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct); a cold `--all` at 7 workers in
-#: vy-n2's 900 GiB session scope grew them to 107-155 GiB and was OOM-killed (r20261009-061009-1b4d, 9 Oct)
+#: the memory a worker counts on: a cold `--all` grows some workers to 40-155 GiB, and two `--all -j 0` runs, ~130 workers
+#: each, took 1.4 TB of a 1.6 TB user slice
 GB_PER_JOB = 160
 
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's session
     scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's inactive_file (its memory.stat) is in
-    its memory.current but the kernel reclaims it at the limit, so it counts as left: on vy-nebius-cpu-3 a user slice at 462 of
-    its 463 GiB, 278 GiB of it page cache, left a budget of ~0 and the targets ran one at a time, 0.06 a second
-    (r20261021-101535-85fb)."""
+    its memory.current but the kernel reclaims it at the limit, so it counts as left: otherwise a user slice that page
+    cache fills leaves a budget of ~0, and the targets run one at a time."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()

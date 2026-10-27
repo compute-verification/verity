@@ -185,7 +185,7 @@ DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHe
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkeypatch):
-    """CIR-30: a targeted run built the whole catalog (`call_families`) before checking a target, 75 minutes at #2397.  The same
+    """A targeted run does not build the whole catalog (`call_families`) before checking a target.  The same
     targets checked with each `as_call` read off `call_families` and with it decided by `is_call` without the catalog get the
     same report."""
     from circuit_check import cli
@@ -584,7 +584,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
     smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
     only Calls that are still over it.  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has
-    no body built, and building every Call's took 1,653 s (r20261022-011739-f87f)."""
+    no body built, and building every Call's would take about half an hour."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
     suite = catalog.suite
@@ -989,8 +989,8 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
 
 
 def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
-    """16 Oct, r20261016-231951-72a9: two checks on one node stored the same entry; they shared its temporary file, and the second's
-    rename found it gone (FileNotFoundError), which failed the whole check."""
+    """Two checks on one node that store the same entry don't share its temporary file, where the second's rename would find
+    it gone (FileNotFoundError) and fail the whole check."""
     import subprocess
 
     from circuit_check import cache as CC
