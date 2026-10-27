@@ -50,8 +50,8 @@ PROTOCOL_SIZE_CAP = 256 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
-#: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
-#: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
+#: Skills over SKILL_SIZE_CAP when it was set, each capped at its size then (the largest at any open PR's head, rounded up,
+#: plus 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
 #: compacts it.
 OVERSIZE_SKILLS: dict[str, int] = {}
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
@@ -74,7 +74,7 @@ AUDIT_RECORD = "lean-audit.json"
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
-#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB since 26 Oct:
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB:
 #: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"

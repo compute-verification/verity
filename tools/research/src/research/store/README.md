@@ -369,7 +369,7 @@ algorithm: `remote-replicas/README.md`.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
-Blobs that only uncited artifacts past their kind's TTL hold leave the remote (Daniel, 26 Oct: the store grew ~840 GiB a day).
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
 TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1 and vllm-replay-bundle/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
@@ -419,7 +419,7 @@ prints the table; the groups are:
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for),
+  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for), `run_of_record` (the table record a run or artifact is, by the record's name),
   `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
@@ -470,8 +470,8 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids to the export bucket (§7.3)
+research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones

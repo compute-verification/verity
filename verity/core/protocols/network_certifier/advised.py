@@ -88,17 +88,17 @@ released its request's `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlie
 are the link's first j + 1 requests whole because v0's prompt lengths are theirs, in arrival order: the tie,
 IoTieRequest's verdict for the same advice digest. Without it, a prover who splits the same request frames among the
 requests otherwise (a short prompt and a long one swapped) lowers an early request's end, and so the floor, on the
-same certified record: REDTEAM phase 6's case. The certified prompts are witness, so the verifier can't derive the
-tie from them on the host, and a tie the prover states is no tie (REDTEAM phase 7: one stating the swapped split
-reopens phase 6's acausal release), nor is a verdict it delivers (REDTEAM phase 10: a verdict built from its own
-advice's digest, every window accepted, reopened it through the verifier of record), so `LinkAdvice` carries none. The
+same certified record: the swapped split. The certified prompts are witness, so the verifier can't derive the tie
+from them on the host, and a tie the prover states is no tie (one stating the swapped split reopens its acausal
+release), nor is a verdict it delivers (a verdict built from its own advice's digest, every window accepted, would
+reopen it through the verifier of record), so `LinkAdvice` carries none. The
 tie is only IoTieRequest's verdict from the verifier's own tie source (`tie_service.Ties`), on the link and the
 ingress registrations it holds, so a verdict on another link or ingress record isn't reused, built from the
 IoTieRequest proofs the verifier of record verified on its own lanes (`tie_service.IngressTie.tie`). No proof of
 an unpinned size class is accepted, and the served size isn't pinned, so there every advised link is refused
 (PROTOCOL.md, fail closed). The floor's syncs are held the same way: a δ below the one the window's traffic was
-certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a window the certifier ran at δ = 1 accepted
-an output in its request's own bucket), so every floor is under the sync the certifier ran, which the verifier takes
+certified under loosens the floor (δ = 0 declared for a window the certifier ran at δ = 1 accepts an output in its
+request's own bucket), so every floor is under the sync the certifier ran, which the verifier takes
 only from its own clock source (`ClockSource`, `service.LinkWindows.clock_source`), never from the prover:
 `SignedClocks`, the sync the certifier signed for each egress window beside its record, salted as a record digest is
 (`certificate.CertifiedClock`), read through its opening against the signed digest under the verifier's own certifier
@@ -316,8 +316,8 @@ class SignedClocks:
 class LinkAdvice:
     """What the prover delivers on an advised link beside its public profile and syncs: I1's advice and `received[w]`,
     window w's request frames, which the unit holds to the certified ingress head. It carries no tie: one delivered
-    beside the advice is the prover's (REDTEAM phase 10: a verdict built from its own advice's digest reopened phase
-    6), so `ends` and `view` take IoTieRequest's verdict apart, from the verifier's own tie source (`TieSource`).
+    beside the advice is the prover's (a verdict built from its own advice's digest reopens the swapped split), so
+    `ends` and `view` take IoTieRequest's verdict apart, from the verifier's own tie source (`TieSource`).
     Construction refuses (`advice.MalformedAdvice`) an advice that isn't an `advice.Advice` and a `received` that
     isn't u32s."""
 
