@@ -28,7 +28,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
   blocks: [{block, root, domain, steps: [{step, root, domain}]}]}``: the run's 64-byte context, the step layout (groups of
   units of rows of byte ranges, `layout_json`), and per server-time block every step's root (what went to the challenger
   before the step's live coin) under this bundle's block tree over them (`block_domain`).
-* ``members``: per member with a drawn unit, what C-Flock's ``--zk`` session reads today (`benchmarks/one_stage/a5.py`): its
+* ``members``: per member with a drawn unit, what C-Flock's ``--zk`` session reads today (`examples/one_stage/a5.py`): its
   key, template, base and count, the drawn units' local indices and the session's subset draw over them, its header's
   ``frame_v3`` entry, its public body's SHA-512 and row schemas. The prover's input file is
   ``flock_inputs.flock_input_files(window, k, circuit, out, write=("inst",))`` under the circuit the verifier composed for

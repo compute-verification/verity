@@ -11,7 +11,7 @@ at a small static (T = 40 keys in splits of 16, 16 and 8, two heads):
 
 `test_a_window_of_one_row_commits_and_its_wires_hold` takes about two minutes, all of it the window's population program
 lowering the three templates: it is the one test of the committed window and its public bodies, which the others reach only
-through the rows.  `benchmarks/one_stage/a5_sparse_mla.py` audits the same window (`window`, `Served`).
+through the rows.  `examples/one_stage/a5_sparse_mla.py` audits the same window (`window`, `Served`).
 """
 from __future__ import annotations
 

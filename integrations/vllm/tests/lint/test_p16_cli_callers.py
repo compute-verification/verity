@@ -31,17 +31,17 @@ SCRIPTS = frozenset({".sh", ".toml", ".yaml", ".yml"})
 #: commands run from outside integrations/vllm, each with one caller
 PUBLIC_COMMANDS: dict[str, str] = {
     "advice": "benchmarks/network_e2e/e2e.py (ADVICE)",
-    "advice-windows": "benchmarks/one_stage/a5_tp.sh",
+    "advice-windows": "examples/one_stage/a5_tp.sh",
     "build": "benchmarks/stacked_share/job.sh",
-    "epoch": "benchmarks/one_stage/llama1b_tp1_commit.sh",
+    "epoch": "examples/one_stage/llama1b_tp1_commit.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
-    "serve-openai": "benchmarks/one_stage/llama1b_serve_seal.sh",
+    "serve-openai": "examples/one_stage/llama1b_serve_seal.sh",
     "served-match": "benchmarks/hash/maxtput/build_job.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
-    "serving-rows": "benchmarks/one_stage/a5.sh",
+    "serving-rows": "examples/one_stage/a5.sh",
     "sweep": "an operator's night (`verity-vllm sweep plan`, tools/research/src/research/pods/nebius/sky/submit.sh)",
-    "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
+    "tp-serving-rows": "examples/one_stage/a5_tp.sh",
     "workload": "benchmarks/stacked_share/job.sh",
 }
 
