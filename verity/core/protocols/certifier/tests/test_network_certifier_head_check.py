@@ -6,10 +6,12 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from verity.ml.circuits.census import census
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.ml.circuits.program import Program
 from verity.ml.commitments.identity import tagged_sha512
-from verity.core.protocols.certifier import head_check as HC
+from verity.core.protocols.certifier import head_check as HC, io_ids as IDS, served as SV
 from verity.core.protocols.certifier.certificate import RECORD_TAG, CertifiedRecord, certificate_digest, parameters_digest
 from verity.core.protocols.certifier.grid import Reason, Status
 
@@ -86,6 +88,15 @@ def test_the_count_check_is_32t_minus_1_ands_and_the_fields_736_plus_8l_minus_1(
         assert HC.ands(bind(HC.NetworkHeadCounts, T=T)) == 32 * T - 1
     for L in (1, 9, 40):
         assert HC.ands(bind(HC.NetworkHeadFields, L=L)) == 736 + 8 * L - 1
+
+
+def test_the_ands_are_the_censuss():
+    """`ands` against the ANDs of each Definition's Boolean work in its census, every facet's, on calls and primitives
+    (the head check's parts), a batch (`IoTieIdsChain`) and scans (the served counts)."""
+    for fn in (bind(HC.NetworkHeadCounts, T=600), bind(HC.NetworkHeadFields, L=9), bind(IDS.IoTieIdsChain, CB=3, D2=3),
+               SV.unit(8, 3, 1, 2, 2, 0)):
+        work = census(Program(fn), boolean=True)["totals"]["work"]
+        assert HC.ands(fn) == sum(f["and"] for f in work.values()) > 0, fn.id
 
 
 def test_each_part_is_its_reference_and_each_wrong_input_is_refused_where_it_belongs(cases, bare):
