@@ -163,16 +163,17 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
 
 def test_the_windows_descriptor_grows_with_its_calls_and_row_blocks_never_its_tiles():
     """Each call is one batch of K's template, its A rows one repeated run a row block and its B rows the linear's run
-    repeated: a linear 64 times as wide, 64 times the tiles, leaves the root's nodes and the descriptor's references as
-    they were (one node a tile made the served Llama-3.2-1B window's build and digest about 167 s a step)."""
+    repeated: a linear 32 times as wide, 32 times the tiles, leaves the root's nodes and the descriptor's references as
+    they were (one node a tile made the served Llama-3.2-1B window's build and digest about 167 s a step). A linear one
+    tile wide reads each row block's A rows once, a plain run, so both widths here repeat it."""
     def window(n: int) -> tuple[Program, bytes]:
         prog = HW.program((("q_proj", 32, n),), (("q_proj", 0), ("q_proj", 1)), 16, TILE, unit=unit)
         return prog, canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
 
-    (small, a), (wide, b) = window(C), window(64 * C)
-    assert P.evaluate(wide, HW.query(wide)).population == 64 * P.evaluate(small, HW.query(small)).population == 64 * 8
+    (small, a), (wide, b) = window(2 * C), window(64 * C)
+    assert P.evaluate(wide, HW.query(wide)).population == 32 * P.evaluate(small, HW.query(small)).population == 32 * 16
     assert len(wide.root.body.nodes) == len(small.root.body.nodes)
-    assert len(a) <= len(b) < len(a) + 64, "only the sizes' digits differ"
+    assert len(a) <= len(b) < len(a) + 256, "only the sizes' digits and the type table's distinct sizes differ"
 
 
 def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds_them():
@@ -597,14 +598,15 @@ def test_the_parameters_take_the_names_a_served_path_gives_them():
 def test_the_windows_result_is_a_sink_so_the_window_is_no_seed():
     """With the salt its coin port and the positions its position port, a window whose return held no sink would be a
     seed, whose body no port rule follows (`ports._coin_role`), and the tiles' coin flow would go unchecked: its whole
-    result, the Program's outputs, is declared one sink run, whatever its tiles declare, so its declaration is no
-    function of the tile count."""
+    result, the Program's outputs, is declared one sink run, so its declaration is no function of the tile count. A tile
+    that returns its receipt without declaring it a sink is refused by the port rules at the tile."""
+    prog = HW.program(LINEARS, CALLS, 8, TILE, unit=unit)
+    ret = PT.port_types(prog.fn).ret
+    assert [(lo, hi, o.sink) for lo, hi, o, _w in ret] == [(0, prog.fn.signature()[1].leaves, True)]
+    assert PT._coin_role(prog.fn) is None
     bare = _test_tile("H1WindowTestBareTile", ports=Ports(params={"salt": In(kind="coin")}))
-    for make in (unit, lambda k: bind(bare, K=k, R=R, C=C)):
-        prog = HW.program(LINEARS, CALLS, 8, TILE, unit=make)
-        ret = PT.port_types(prog.fn).ret
-        assert [(lo, hi, o.sink) for lo, hi, o, _w in ret] == [(0, prog.fn.signature()[1].leaves, True)]
-        assert PT._coin_role(prog.fn) is None
+    with pytest.raises(PT.PortError, match="E_PORT_SINK: H1WindowTestBareTile"):
+        PT.port_types(HW.program(LINEARS, CALLS, 8, TILE, unit=lambda k: bind(bare, K=k, R=R, C=C)).fn)
 
 
 def test_the_slot_is_a_power_of_two_of_at_least_the_tiles_rows():
