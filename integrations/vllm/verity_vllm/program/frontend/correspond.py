@@ -1,4 +1,4 @@
-"""Program correspondence across reference encodings (frontend rulings, §8.5).
+"""Program correspondence across reference encodings.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
