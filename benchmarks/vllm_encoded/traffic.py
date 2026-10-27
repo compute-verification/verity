@@ -61,10 +61,7 @@ def main() -> int:
             continue
         inst = a["install"]
         weights = inst["store_bytes"] if a["arm"] in compare.ENCODED else inst["plain_bytes"]
-        cod = inst.get("codec") or {}
         for pt, w in zip(a["profiled"], ws):
-            tags = ((compare.tag_bytes(cod, pt["batch"]) if "tag_blocks" in cod else inst["plain_bytes"] // 8)
-                    if compare.codec_tag(a) else 0)
             graphs = sum(r["read"] >= GRAPH_MIN for r in w)
             if not graphs:
                 fails.append(f"{a['tag']} {pt}: no decode graph in the window")
@@ -73,7 +70,7 @@ def main() -> int:
             total = rd + wr
             timed = next((p for p in a["points"] if p["batch"] == pt["batch"] and p["context"] == pt["context"]), {})
             analytic = compare.working_set(a["model_shape"], pt["batch"], pt["context"] + timed.get("max_tokens", 0) / 2,
-                                           weights, a["arm"] != "stock", tags)
+                                           weights, a["arm"] != "stock")
             result.append({
                 "tag": a["tag"], "arm": a["arm"], "k": a["k"], "compiled": bool(a.get("compiled")), **pt,
                 "graphs": graphs, "results": len(w), "read_bytes": rd, "write_bytes": wr, "total_bytes": total,
