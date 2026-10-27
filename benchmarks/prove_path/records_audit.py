@@ -63,8 +63,9 @@ and only where the window's registration (``--registration``) records that root 
 ``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
 window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
 `verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
-and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has no root,
-so its reads stay free.
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has a root
+only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
+free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names

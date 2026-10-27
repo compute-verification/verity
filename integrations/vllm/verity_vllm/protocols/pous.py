@@ -23,7 +23,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
 * **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
-  point no certificate covers).  In the leg the memory challenger runs at ``period.json``'s ``challenger_host``
+  point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
   (`challenger_party.Party.of`) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
