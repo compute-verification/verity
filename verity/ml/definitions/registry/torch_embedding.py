@@ -425,7 +425,7 @@ EmbeddingBackwardSwap = specialized(
         "and its row come first", refuse=_refuse_ranges(("KB", 1, 64), ("H", 1, M_MAX)), conformance=f"exact-model-tested; {_V2}")
 
 
-def _sort_v2(B, S, t, g):
+def _sort_once(B, S, t, g):
     M, H, NP = S.M, S.H, position_bits(S.M)
     KB = NP + id_bits(S.V)
     ids = B.batch(bind(EmbeddingBackwardKey, V=S.V), t, axes=(0,))
@@ -449,7 +449,7 @@ def _sort_signature(S: Any):
 
 
 EmbeddingBackwardSort = CompositeDefinition(
-    "EmbeddingBackwardSort", 1, ("M", "V", "H"), _sort_signature, _sort_v2,
+    "EmbeddingBackwardSort", 1, ("M", "V", "H"), _sort_signature, _sort_once,
     doc="the M tokens' rows of g sorted by (id, position), each with its key: the position's bits, then "
         "EmbeddingBackwardKey_v1's; EmbeddingBackwardSwap_v1 on each comparator of sort_net(M)'s stages, a batch a stage",
     conformance=f"exact-model-tested; {_V2}", refuse=_refuse_all("M", "V", "H"))
@@ -634,7 +634,7 @@ EmbeddingBackwardRoute = CompositeDefinition(
     conformance=f"exact-model-tested; {_V2}", refuse=_refuse_all("M", "V", "H"))
 
 
-def _tied_v2(B, S, t, g, w):
+def _tied_sorted(B, S, t, g, w):
     M, V, H = S.M, S.V, S.H
     NP, NV, F = position_bits(M), id_bits(V), int(M <= FEATURE_MAX)
     KB, runs = NP + NV, [(a, min(RUN, M - a)) for a in range(0, M, RUN)]
@@ -668,7 +668,7 @@ def _tied_v2(B, S, t, g, w):
 
 
 EmbeddingBackwardTiedV2 = CompositeDefinition(
-    "EmbeddingBackwardTied", 2, ("M", "V", "H"), EmbeddingBackwardTied.signature, _tied_v2,
+    "EmbeddingBackwardTied", 2, ("M", "V", "H"), EmbeddingBackwardTied.signature, _tied_sorted,
     doc="EmbeddingBackwardTied_v1's function with the ids sorted once: EmbeddingBackwardSort_v1, "
         "EmbeddingBackwardSegmentRun_v1 over the sorted ids, the sorted rows' transpose, EmbeddingBackwardSortedRun_v1 on "
         "each feature's column (the sort path above 3072 tokens, else the feature kernel), its outs transposed back, "

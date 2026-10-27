@@ -226,7 +226,7 @@ def test_the_sort_path_definition_is_the_gpus(shapes) -> None:
     _same(np.asarray(got).reshape(len(vs), F), rows[pick])
 
 
-def _tied_v2(t, g, V: int):
+def _sorted_tied(t, g, V: int):
     """`EmbeddingBackwardTied_v2{M, V, H}` on ids t and gradients g, with a head gradient of random bf16 words: its V rows and
     that head gradient."""
     w = TK.bf16(np.asarray(np.random.default_rng(0).normal(0, 1, (V, g.shape[1])), np.float32).view(np.uint32))
@@ -244,7 +244,7 @@ def test_the_sorted_tied_gradient_is_the_gpus(step) -> None:
     """`EmbeddingBackwardTied_v2{M=256, V=253, H=13}`, the ids sorted once and routed, on the step's 13 features of its 253
     entries, the ids renumbered by rank: the feature kernel's order per entry."""
     ids, t = _by_rank(step["emb_t"])
-    got, w = _tied_v2(t, step["emb_g"], len(ids))
+    got, w = _sorted_tied(t, step["emb_g"], len(ids))
     _same(got, TK.bf16_add(w, step["emb_rows"]))
 
 
@@ -253,7 +253,7 @@ def test_the_sorted_tied_gradient_at_the_gpus_vocabulary_is_the_gpus(step) -> No
     """The same at the GPU's own V = 49,152 on the first feature: the route's 16 expansion stages, and the rows no token holds.
     About 23 s."""
     t, rows = step["emb_t"], step["emb_rows"][:, :1]
-    got, w = _tied_v2(t, step["emb_g"][:, :1], V)
+    got, w = _sorted_tied(t, step["emb_g"][:, :1], V)
     dense = np.zeros_like(w)
     dense[np.unique(t)] = rows
     _same(got, TK.bf16_add(w, dense))
@@ -264,7 +264,7 @@ def test_the_sorted_tied_sort_path_is_the_gpus(shapes) -> None:
     """`EmbeddingBackwardTied_v2{M=4096, V=3859, H=8}`, the ids renumbered by rank, on the 37 entries kept: the sort path's
     partials of 10 after the one sort, at the GPU's M. About 40 s."""
     ids, t = _by_rank(shapes["emb_t"])
-    got, w = _tied_v2(t, shapes["emb_g"], len(ids))
+    got, w = _sorted_tied(t, shapes["emb_g"], len(ids))
     at = np.searchsorted(ids, shapes["emb_vocab"])
     _same(got[at], TK.bf16_add(w[at], shapes["emb_rows"]))
 
