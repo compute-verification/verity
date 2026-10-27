@@ -50,9 +50,7 @@
 
 #include "../commit_gpu/commit_gpu.cuh"
 #include "../gpu_kit/bench.cuh"
-#ifdef V31_CUTLASS
 #include "../harness/native/cutlass_api.h"
-#endif
 
 #define CL(x)                                                                                  \
   do {                                                                                         \
