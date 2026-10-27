@@ -314,14 +314,13 @@ registered root, leaf count, row width and domain, and the position each unit re
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
-the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
-statement (`Registered.completeOf`, `Registered.checkComplete`), and the rows `KnownRead.check` holds every statement
-to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
+the root of that content (`Registered.checkKnownAll`). Beside the ports, the rows `KnownRead.check` holds every
+statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
 the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
-    IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) ×
+    IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
       Array String))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
@@ -335,12 +334,11 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        let r : V (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
+        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j),
-            ← Registered.paramsOf j)
+          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -728,7 +726,9 @@ with `--rec-part J` its part (`rec_part`) and with `--rec-rows F` the SHA-512 of
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
-than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
+than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`), and one whose registered
+reads exceed the recursion's call bound: more than 4096 ports, a tree of more than 64 levels or a table of more than 65536
+instances, or whose inner shape's V* list holds more than 4096 statements (`RecBudget`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
@@ -805,8 +805,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let (registered, complete, known, params) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
+  let (registered, known, params) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2)).getD #[])
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -862,14 +862,17 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         Registered.checkProgram program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
+        RecBudget.regs recInner registered
+        RecBudget.statements recInner
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
+        if let some own := registered then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c own
         r.2.forM fun (st : Stmt) => Registered.checkCover st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
         RecSetup.oneFull recInner r.2
+        RecBudget.table recInner r.2
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
           (RecSetup.c3 recInner recCommits))
@@ -1004,8 +1007,8 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let (registered, complete, known) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2.1)).getD #[])
+  let (registered, known) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[])
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -1040,11 +1043,14 @@ def statementCmd (args : List String) : IO UInt32 := do
   let c3 := RecSetup.c3 recInner recCommits
   match (do
       RecSetup.checkInner recInner recCoins recBound
+      RecBudget.regs recInner registered
+      RecBudget.statements recInner
       let st ← (if templated then buildStmtTmpl tags circuitB pubB compB coins tables partition program registered
           publicInputs (identifier.map Prod.snd)
         else buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
           (identifier.map Prod.snd))
-      if complete then Registered.checkComplete st.c (registered.getD #[])
+      RecBudget.table recInner #[st]
+      if let some own := registered then Registered.checkComplete st.c own
       KnownRead.check st.c known
       if recInner.isSome then
         RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart

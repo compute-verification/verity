@@ -3,8 +3,7 @@
 The network certifier's measured runs and their zero-knowledge proofs: the certifier in front of a served endpoint
 (`certifier_serve.py`), the network certifier functioning as an active warden (`warden_serve.py`), N2's units proved by C-Flock `--zk` (`n2_zk.py`,
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
-driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
-runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
+driver's docstring says what it runs and what its verifier receives.
 
 ## The demo's load
 
@@ -74,6 +73,17 @@ The pieces not yet on `main` change only the commands the job runs. N2's sampled
 `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own `client/`.
 A step on a stand-in (the scan on its own synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report
 accepted, and a step that fails or doesn't run says why.
+
+**The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
+each gate sent under `inputs/` to the quarantine once it is unpacked, and on every exit runs the guard on the run dir.
+The guard moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file
+that holds a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an
+aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
+The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
+files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
+`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
+excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
+guard that can't run, withholds `out/`, `inputs/` and the logs whole.
 
 **The warden path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the active warden's own run (the
 gate's `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a network certifier rehearsal's run,
@@ -265,10 +275,11 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1.
+- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
+  which the certifier doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,352 bits, and
+- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`, #4326, #4349, #4373, #4370) has no δ term with every unit drawn.
@@ -280,7 +291,7 @@ The scale:
 - Each machine has one network certifier in front of all its compute, serving at the run's rate.
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
-**`prog` as registered today (the record's K)**, bits, and the share of the weights:
+**`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -295,7 +306,7 @@ As registered today, K passes the size of the weights within one machine-week, s
 monitoring period.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)**, bits, and the share of
-the weights:
+the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -315,6 +326,8 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
+- The jitter term is 0 at D_j = 1, assumed (J), which the certifier doesn't meet: an offset the prover chooses within
+  a bucket reaches the client.
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
@@ -344,6 +357,9 @@ Pr[window i accepted ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind,
 and the secrets of a covert sender whose every window meets `WindowGood` number at most 2^K, where
 
 K = log2 #S_s + Σ_c log2(cap_c + 1) + Σ_i [#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 D_j].
+
+The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, which the certifier
+doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
 
 `NetTiming.periodLeak_le_sum` (#4324) sums the windows' failures by a union bound:
 

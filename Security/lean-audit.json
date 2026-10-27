@@ -840,51 +840,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "b07d45f580fe8915928133c05f96ef4a5fb8bbde4e8fba3a6c5c1649ac1fa7e9"
+   "digest": "c07e4b128f91398d9b24bec333ec1d5bd8246fb714a404492350a7b513923ef3"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "087b293f7e7ce4857868936b265b1f04dae21708b6b07fbb41a47aa1c3a7f1dc"
+   "digest": "1ca13486b1d5ff3caa8e56ec77e43cdfbcaf6bdf2c4a42710c20a0f6d9025c09"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "404f443546b31ded8e3aefe68aac41bef18a05a25f65eab5294b00ceb8b3e39e"
+   "digest": "2f574fa29109d274784c9addd37c8f3080543af48b478d598c6e643617341f87"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "1a36e5a85862552211e7fced9b8c8a95a15409500b10ccf04c8f9b55ce350f5b"
+   "digest": "47793597d5204ff8f2a0aeff86533ea4d4a24b6efd8f32ead409032a0a25b08d"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "98b47104e8d8ea8d7fe3619be795c2a5eca355768fe900c1dfa133136137f8dd"
+   "digest": "4ec78d939d2467a731527d51328bd38e22b013d357492a460df788724c50ec43"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "cdd6ecd84f99ce4654dcd313ab1d7b8f08127ac2f4330ba3bfc8051cc9872151"
+   "digest": "a1821f4867885bb509a86b1f420b273bb854bcb236232e676c313f1f78a4efc3"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "b60d112d4ad93e12682cbefa3b6e1b20001e68c20b9dd40bf349b3850c74545e"
+   "digest": "09fc5b6e78760e6f03954cf76a3c287ff81f4008a054ac18ca5bbd60281ea4b8"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "8ea48ead8da339a89ac177e3903ee80495251dd7581a5d91fb9d1e2fce66f34c"
+   "digest": "5e3daed2d3936e7fa8bed951b52cdfa2897d57bb8b05eef6764accb70bfd9ab5"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "85a00b9b0bd423e102cbc74370d65f9c96358958d15bda0b5f900b085e12655a"
+   "digest": "992735b985e4e66070b388e9de33bb7365f33ab881883519da6c2fd4f05d1c76"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "a595c4427c1703b0d8bdbba46f1195b6bc617b3e4cdc582b14609b290fb2b990"
+   "digest": "b0058c45b4f9a7dde707bbce6b94d07bdeb2c22cc5132d086dfc6081b2eb6e73"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "0cc6744924cc693905839117194060397cc9b573ddc7c79c24ea991d7c9ab5a0"
+   "digest": "fc2b08bcbf404976bdc636b9fa705eca90c35b34fdb935e28e98074df5e5fa67"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "a775bd72ae51f05772d1d28b1e047d9f92df61ed9d3a99f226f10b950ae59007"
+   "digest": "ce23ada52fbd67f4a84875d02b79ea92d1973c7b181c104aa8c5299eaf78207b"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -902,13 +902,17 @@
    "owner": "@proofs",
    "digest": "1fc8f000f79cf07496eaedb4efe80b80d2d54748ba31451c82377e28a17e7591"
   },
+  "Flock.Bridge.Assumptions.ServedFilesParse": {
+   "owner": "@proofs",
+   "digest": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
+  },
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "77aa23afc79b785063dacce061647b47995044e24b3ae56bc1d2a44c74658da0"
+   "digest": "3320596b6e52983ae7a93859f6fa2cd4b7adc736b1174dafbcb7392f5b35ec20"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -932,43 +936,43 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "a918fa32167d3a6c127d230f378fe43d4276d4422473cbdd50de8d89a5299e8c"
+   "digest": "3a4d07ced63ecc57163a9da4b2b7f5755d8a19a3864a3493a7159fd8b778e02e"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "ecbc529b099a8aa00b09b942d4fe06b7c511df996d13f5689e377f45c54f5cdf"
+   "digest": "d6f361db30cef941a3306d37f8e3b1d46f06798d6e43e01205db1aee4bbb1f74"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "39ea9f79c2f3da06a723b72aad102cc967e38360df832af4783ea0d864db9eed"
+   "digest": "a313c56c6a06820f9c0cc260ad04577ae216cf3ee848099254d14911e994413c"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "d1935f7385e4b2dbc197c9bf395d192565c79244dca220329e200e77f08ac728"
+   "digest": "eb8b1a2522cb263a165f239cc01d70af5919e55318a112864734cad0c6c5abb9"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "9df29122f0033a4fde74a1878c6563d284e21196c428682b0f4312e42ef3d545"
+   "digest": "363d70913153c29b61a63f18c9c4e6ee36274cad99b2cd9f2a84e031c9fcf945"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "6756b9fdcc861618dcbd7e583ff0d21cd232d414975243e561b3e3a1921ea77d"
+   "digest": "f0fa189646babf94ea8dca800e32b8d90f6b9691aed059f9fd1adeee82b623c7"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "df617727f7d2aa618faa227f5eb0b3931172d497cddb9517bb4c658db55c32ff"
+   "digest": "2bcc141e10ddc5f2571be035fd2358d24ca75071a5cc5d0a53355f450b044c09"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "b5adc5fcdef4ba6834b2c70d72e54e4ebce3d880592d8746934de5fcad08666f"
+   "digest": "a2d06afb4d420a4619ea5bae09f6153ad41c16fc4dd97a480db31ac9dcd36a6f"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
-   "digest": "7416959c11bafe4fef2b52ca1d1c70692b5c6cc74d3f86c5f91e872d4b921b62"
+   "digest": "e316755c15960d18dbf08c598ae2f00108f637598b255e630b2ce2e9885e468d"
   },
   "FlockDeploy.ZkIn": {
    "owner": "@proofs",
-   "digest": "cc3be5e67300b223b31586ba3a6d49ec1d009fa808e823416a0cae25f002a06c"
+   "digest": "50868818e612c5901bf0faa4c6718e5dde9566e064f93322a7f0b3a0e88cd555"
   },
   "FlockSoundness.Accounting.Stmt.InRange": {
    "owner": "@proofs",
@@ -1984,11 +1988,11 @@
   },
   "RecDeploy.PartIn": {
    "owner": "@proofs",
-   "digest": "c1c288f09054b981774f910f09f133597047125d711df9ebd5e914e8a5b50fbc"
+   "digest": "0cb3f5804131dcc2c391f929fffaf51388ee26f3e8e0f45aa4155009472455e6"
   },
   "RecDeploy.PlainLeavesAdmitted": {
    "owner": "@proofs",
-   "digest": "69c2b16c85e66fe5e7b5f3105af20635fa88d1cfcc4e03f4c98ba6b70d50671c"
+   "digest": "4eed94fc448ddcb7f6d5c37d23d5cb31c7dcb25dadfd8c525df255b4bc94b420"
   },
   "Verity.Advice.Framing.Separated": {
    "owner": "@proofs",
@@ -2614,10 +2618,11 @@
     "Definitions.Pous.Model.SampledAudit",
     "Definitions.Pous",
     "Definitions.Hash",
+    "Definitions.Claims",
     "Definitions.Accounting"
    ],
    "except": ["Definitions.Accounting.Bandwidth.Game", "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted"],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash)"
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash); a period of the causal game reads its subprotocols' collision finders and their success (Definitions.Claims' Finder, Finder.Pr), as the claims state them"
   },
   "Definitions.Accounting.Guarantees": {
    "imports": [
@@ -5965,6 +5970,9 @@
    "assumptions": [],
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b"
   },
+  "Flock.SecurityProofs.EndToEndHiddenModel": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.EndToEndHidden_refSetup": {
    "owner": "@proofs",
    "signature": [
@@ -6182,6 +6190,12 @@
    "signature": ["Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK"],
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
+  },
+  "Flock.SecurityProofs.SampledKSLiveHonest": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest"],
+   "assumptions": [],
+   "type_hash": "fdf9776391fc68898ff4a46a061525b81c502e54db3384f10cb2287de0633554"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "owner": "@proofs",
@@ -11379,8 +11393,9 @@
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndHidden": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndHiddenDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndHiddenModel": "frozen (scope): It is the count curve over the values the verifier parses, so its hypotheses are the layer's (LoweringSoundZK, ReadsOwn, OpeningsCanon), the count curve's numeric conditions and the tables' rate, none of them a premise or an acceptance; its registered reads and their openings are any, and \"wrong\" is wrongRegZc ∪ rowsWrongZ; its event's acceptance is the audit game's verdict (o.1 = true), not a function of the code. EndToEndHidden is its corollary at the deployed files, with no registered read.",
+   "Flock.SecurityProofs.EndToEndHidden": "frozen (world-unlisted,scope): Its knowledge and link terms are the table and link finders' collision probabilities (ksAvgPrZ, linkPrZC, the additive form), so it takes no collision-resistance hypothesis; it takes three premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform), live-verifier custody (RecordCustodyZKJ) and deployed-files (DeployedFilesHJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndHiddenDrawn": "frozen (world-unlisted,scope): Its knowledge and link terms are the table and link finders' collision probabilities (ksAvgPrZ, linkPrZC, the additive form), so it takes no collision-resistance hypothesis; it takes live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHidden_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -12002,8 +12017,8 @@
    "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for.",
    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf": "frozen (no-function): WipeReadHeld on the deployed labels prf s; its acceptance, the challenger's verdict Ch j on its view, is inside the event of a distinguisher (Actual.heldDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does.",
    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw": "frozen (no-function): WipeReadHeldPrf on the deployed index draw, the rejection sampler on keyed words of the challenger's coin secret; its acceptance, the challenger's verdict Ch j on its view, is inside the events of two distinguishers (Actual.heldDistinguisher and Actual.drawDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does.",
-   "Flock.SecurityProofs.EndToEndHiddenFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndHiddenDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndHiddenFlat": "frozen (world-unlisted,scope): Its knowledge and link terms are the table and link finders' collision probabilities (ksAvgPrZ, linkPrZC, the additive form), so it takes no collision-resistance hypothesis; it takes two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndHiddenDrawnFlat": "frozen (world-unlisted,scope): Its knowledge and link terms are the table and link finders' collision probabilities (ksAvgPrZ, linkPrZC, the additive form), so it takes no collision-resistance hypothesis; it takes live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -12140,28 +12155,24 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
    "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
-   "Flock.SecurityProofs.IntegrityPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityHorizon": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityPeriodLog": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, with EndToEndHidden's additive knowledge and link terms read at their closed forms, so it takes the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, and what EndToEndHidden takes: two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityHorizon": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, with EndToEndHidden's additive knowledge and link terms read at their closed forms, so it takes the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, and what EndToEndHidden takes: two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityPeriodLog": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, with EndToEndHidden's additive knowledge and link terms read at their closed forms, so it takes the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, and what EndToEndHidden takes: two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, with EndToEndHidden's additive knowledge and link terms read at their closed forms, so it takes the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, and what EndToEndHidden takes: two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, with EndToEndHidden's additive knowledge and link terms read at their closed forms, so it takes the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, and what EndToEndHidden takes: two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, with EndToEndHidden's additive knowledge and link terms read at their closed forms, so it takes the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, and what EndToEndHidden takes: two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
    "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
-   "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the sampled statement at RowsOk circuit files (row/v1, row/v2 and row-seg/v1 ports) at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
+   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriodStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.DampenerRemotePeriod, so the lock records its text, and it leaves when DampenerRemotePeriod's own theorem is proved and listed.",
@@ -12176,14 +12187,17 @@
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "frozen (verdict): as WorkSoundOnCardH200, on the RTX PRO 6000 (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136).",
-   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_tap: RLeakTap, the observations the network certifier registers at the transfer gates under the statement's roots, TapOpens, with Claims.Sampling.KS and Commitment.Binds at each deployment) with the read-back of its record (tap_cells_read), over the network certifier's code (tapCode: the active warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.tapRecord) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (TapOpens, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakTap at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
-   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.HorizonLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬HorizonGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting HorizonGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
    "Flock.SecurityProofs.JointStratified": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizon": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizonMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
+   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_tap: RLeakTap, the observations the network certifier registers at the transfer gates under the statement's roots, TapOpens, with Claims.Sampling.KS and Commitment.Binds at each deployment) with the read-back of its record (tap_cells_read), over the network certifier's code (tapCode: the active warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.tapRecord) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (TapOpens, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakTap at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
+   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
+   "NetTiming.SecurityProofs.HorizonLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬HorizonGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting HorizonGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
+   "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Nci.Ldl.SecurityProofs.BlockDescription": "frozen (no-function): It is about an arbitrary declaration, a registration of it (its registered values and a Verity.Partition into blocks) and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
    "Nci.Ldl.SecurityProofs.Counting": "frozen (no-function): It is stated over an arbitrary circuit, a Verity.Partition of it into blocks of exactly c gates and counting weights on its operation gates (Security/Definitions/Nci/Ldl.lean), and is a counting fact, not a Lean function's acceptance.",
    "Nci.Ldl.SecurityProofs.FanOutBound": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it, counted product occurrences with activation fan-out at most e and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks and ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
@@ -12199,13 +12213,18 @@
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text."
+   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub + lossPub(p) < 1 for every p ≤ 2^-200; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
+   "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 in the additive form, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub + lossPub(K·Pr[B^τ]), deltaPub read off public parameters and B^τ the uniform mixture of C-Flock's K finders (Bridge.pubFinder), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
+   "Accounting.SecurityProofs.JointPeriodLiveECR": "frozen (no-function): Like JointPeriodLive, with ecr/sha-512 asked of each subprotocol's finder: its per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointPeriodLive_honest": "lemma: JointPeriodLive's honest witness, soundness's ask (LEAN-64): an honest prover meets every claim, so the joint event is empty at it; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
+   "Accounting.SecurityProofs.JointPeriodLive_nontrivial": "lemma: JointPeriodLive's failing witness, soundness's ask (LEAN-64): a one-gate period whose extractor reads the wrong bit fails the integrity claim with probability 1, so the bound is not vacuous; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
-    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean). Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
+    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean); and, at k = 105, from L >= 2^169 with D >= 2 and Q >= 2 (Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc, Security/Proofs/Pous/PeriodDeployed.lean: 501,819 blocks without their low 168 bits), so the deployed budget (16,446, 2^20, 2^64) lies outside every refuted region. Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    },
    "Pous.P2.Assumptions.P2RingReducesToM1p": {
     "status": "open",
@@ -31056,6 +31075,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31145,6 +31165,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31315,6 +31336,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31450,6 +31472,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31544,6 +31567,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31649,6 +31673,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31728,6 +31753,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -31881,6 +31907,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32001,6 +32028,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32065,6 +32093,7 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32442,6 +32471,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32638,6 +32668,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32758,6 +32789,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32932,6 +32964,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32976,7 +33009,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "4a41a483b020725cda97d1243bf548f35479b22a10bd69019a3502fce746d98e",
+   "digest": "10d2a055e105e63c3b70df97a7b09b6f6354479281f88114597d05346f127ad1",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -32986,13 +33019,14 @@
     "Flock.HmIn.Ports.words": "207aff2cf0c1d25ed1a1d905adca903ff6457af960e651a17356fc28d4637a92",
     "Flock.HmIn.blocks": "fbfb3d63991c60c2f580fc78d186b7213997228203e60c200bc473aa76a2cdfa",
     "Flock.HmIn.checkOwn": "ef85440ea2bab6a8e76af46777f56d939ff61ea7e3f72b239d70c051cfe956c4",
+    "Flock.HmIn.checkReads": "081fec6baed2d7910f4d768ce1976b7cf1f08ae6489e19e11b80eddd1cbe2033",
     "Flock.HmIn.delta": "16a090b689529b0c7f587074352cc4be87cdc1a3bd4609e54f7763ea8d8bce55",
     "Flock.HmIn.drawn": "ffdc6a35a7eec7aaf8cd26ba6d7fe18a23401bac812c80b0d1a76066b174a3e7",
     "Flock.HmIn.inRegions": "cf95e3ed9b8717347c57a0f9891da3b02d1b662a655fa6f3646286480fc15ab8",
-    "Flock.HmIn.loadPublic": "308f89c27905f8bed89f2694a54d26de740f856b015fb5a66a11feb676b28db6",
+    "Flock.HmIn.loadPublic": "264b42ab3acffedbe0ee097b6cf2ad797804dff6259cd9228c0157fad6f652dd",
     "Flock.HmIn.loadPublic._sparseCasesOn_1": "f10966ccde6e5e1635aaffcf3a00df4f6be65f291ea9e66b688e32c4999cba2d",
     "Flock.HmIn.loadPublic._sparseCasesOn_2": "de3924f5ddc80363f527454b7efaa01bfd282647852ca9f8af975f8ea0cfa543",
-    "Flock.HmIn.parse": "62ec2c999e796dbcf94b838ec4024d563247e24463882f0b9fb1e425b9cec84e",
+    "Flock.HmIn.parse": "5caabed8bda2e9e5ebf0244f9ebfc636e09523f2e6bbbac6f3bc4c63edf5e504",
     "Flock.HmIn.publicCol": "5525adb8700fbbecc21452f3ae264074537d55fbad5b86f0d3a5c3408f58a776",
     "Flock.HmIn.regions": "31f8e0e6ec39ea75f093c4288f26eb3cecfcf3115c77d684ea6fda090ecba70d",
     "Flock.HmIn.words": "aa45cdf856ae6425d897c5d01c00eb6d6eb0d44e305eee9d08b7c81a955042d0",
@@ -33117,7 +33151,7 @@
     "Flock.Stmt.setupH": "03851d5cef424a2669e8283c06476b616860761edf5055ccfaae563b9eefd3c7",
     "Flock.Stmt.setupH._sparseCasesOn_5": "d7fa2775d3f894d247b591b627dbe1dd5ebfde6070f3edf2d7aa1afbbfa0d77b",
     "Flock.Stmt.setupHidden": "740f3d08c1f4ba6145070e9c89797a58c12879e50b4fb479bfd4b1b3d6164a0e",
-    "Flock.Stmt.setupTables": "1892c2067f50db6d4f9360503c0a58eb235013e0f1f02283b9f40b066842dff4",
+    "Flock.Stmt.setupTables": "a35273580d80eb8a258b0d7e080f89dd83b5b0b03456246b5ae8b733f5082a19",
     "Flock.Stmt.setupTables._sparseCasesOn_16": "abecbf134d8566d384a2419a9a8480800ecc94399c74983a3f0c0cbb769cddc2",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
     "_private.Flock.HmRow.0.Flock.HmRow.ctx": "be137ad375de546cbbc26a3840c9dda721fa5d02e7a0e715321bc4d87666e495",
@@ -33161,6 +33195,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33350,6 +33385,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33436,6 +33472,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33557,6 +33594,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33652,6 +33690,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33879,6 +33918,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33979,6 +34019,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34131,6 +34172,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34353,6 +34395,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34779,6 +34822,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34810,7 +34854,7 @@
    ]
   },
   "Flock.ProvedScope": {
-   "digest": "547ca9ef8c9522785a3d255bd6ebda5759e955aaad63a3effaef06aee733efb1",
+   "digest": "9de0b92be28c4415224b5998e0a4970bd9b6dacd5fd27e279af5186c8675c4c0",
    "definitions": {
     "Flock.ProvedScope.NO_PROGRAM": "c1e8296485c16b9065ec7619c59042d2c85b28a452c8a0fc69bb424a18799cd8",
     "Flock.ProvedScope.bitRows": "d74e0d1cd6dda8ca99a69595e7e2c1c076d95dbafbd867f2238ae2c3b9e6b92c",
@@ -34835,6 +34879,7 @@
     "Flock.ProvedScope.publicOf": "1cf3af4729961209d3a2cdfe2a31f3ff7351b6b5c7d6380bc22d521c590ad6da",
     "Flock.ProvedScope.refusal": "825013eb2e7fcf7cf668deb72b0a838e2af81bbac7061848510c14e2a42ac571",
     "Flock.ProvedScope.scopeOk": "eb7436b3a4d9fccbfa5fc528f8a9d1f2f320f5b20afd5f81b920f71a6eb3c51c",
+    "Flock.ProvedScope.scopeOkH": "318d23b0bc53a7169e9218a78b16323fb5415e33f63a941d2d1c7d36cd75bf95",
     "Flock.ProvedScope.scopeOkI": "45924f746076eabf0813ad43bb244b5af5658dd6426f9724d2fd76db2ff71cb5",
     "Flock.ProvedScope.scopeWhy": "6e5c9db98882c521caea612c1108a7f70e0c04bc16f3de1941bfff684bfa8d40",
     "Flock.ProvedScope.segRow": "33846aadab03ac3d93cfc33f65bf3a02b008237bfb0a6f9cf0b5735a9f9ddc0a",
@@ -34851,6 +34896,7 @@
     "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -34925,6 +34971,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35467,6 +35514,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35718,6 +35766,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35826,6 +35875,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35944,6 +35994,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36067,6 +36118,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36098,7 +36150,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "36e65c49ad1d026d367006198b6c741f48ad20a88e34caaa02c650ec4a43d974",
+   "digest": "026a37c6723f6b2d46eab843406395b8308a24b1410423e73073e40580b5787f",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -36176,7 +36228,8 @@
     "Flock.RecVStar.checkParsed": "46e874f42003ce15fe4f334dde9537e4ca5aa836d0adeb9925c9a52c0f3b6e5c",
     "Flock.RecVStar.checkPart": "5c4416d63af56dbaeb089282242bd701d42dab2dfbe4395d83d69c83d71ebae1",
     "Flock.RecVStar.checkPubRows": "811eadfee32ba65232e45371ba6ebd9afaecb75624b24cb3b0759612c0af07ad",
-    "Flock.RecVStar.checkRoundsListed": "0564edc9b5c97e36c07e373a45d17165457bf5dac6ce47dee490fa876e82d8ad",
+    "Flock.RecVStar.checkRoundWords": "36b80936b7ac0cb2669e4c2d65c67e57da41533eb9fbb7982a625976b574507f",
+    "Flock.RecVStar.checkRoundsListed": "946e949fd443883a5db5a7c3ce7b15d55071c4c08cb0e59e4511c5b3b43da36f",
     "Flock.RecVStar.checkRows": "d7bbf004f2ea230d7ff114671294fb50278b0eac9cddd19a99ba322800865906",
     "Flock.RecVStar.checkShared": "76d2ad3b040389a02e58ac30dff98d0393e040531e3dd298bd25265feef19a9f",
     "Flock.RecVStar.checkSparseCoins": "402e49aa8c36fb0d8ba081fad1764c5b56488532d938961d7eedd67be32735f9",
@@ -36216,6 +36269,8 @@
     "Flock.RecVStar.openingPortName": "2316902adfd1c0ed7761e02db5e6e82f0407e5b4eaaa569121a46df988c9529f",
     "Flock.RecVStar.opensBelow": "9baa6453d2437cc2b389173e6622b4db73716f38f7a11cadb9a5c400d358d2ab",
     "Flock.RecVStar.ownPorts": "ef7ba5d6cb47cf04ecaf1d9be13e73b8c2b8d5198fcf1e034ca4eaaf09e4aba0",
+    "Flock.RecVStar.ownWords": "48b1010325dcc6c49c0488bc474b157efe7ad6e2478a41a7ca3b15c6e72b29f5",
+    "Flock.RecVStar.ownWords._sparseCasesOn_1": "99776e46f30a01372dad1295c9d4f4dba7b15b2c8c57eef0704f896908861539",
     "Flock.RecVStar.partHolo": "a700377a687467ee27214a6167b81e60263f26317f68f6831dcbad5578003da0",
     "Flock.RecVStar.partPorts": "f9669c07a7c4302403e9c5f40f41d514b2078b6d22035ec844cd66a2491cd5c3",
     "Flock.RecVStar.population": "2a41ae08f10ede678cf208852812d2048e712c9c726ed84cd5caaf3a38cd6c94",
@@ -36228,6 +36283,8 @@
     "Flock.RecVStar.repCoins": "97e9cefb9ea0f5f3af73da75fb0f6000b4fff4c5235459e9b7216e6d82669d61",
     "Flock.RecVStar.repRounds": "88a1197d665ba0d98a8caea04e876e983889a9617ab3cb4e864ee9484e7f1f02",
     "Flock.RecVStar.roundListed": "8ff1e7473317d0a8e68c3e42f6a55d50fd7a8845895f041046d2e57dc652e467",
+    "Flock.RecVStar.roundPorts": "2a0b67a7a111e1b9e72a7bb11878283951d81a776fcb91aaf675e1201139a3ba",
+    "Flock.RecVStar.roundWordsWhy": "f000e456d3d1a3cf61b563e1f4c948de27fe5972ce975f228bc00b3af8d78d0b",
     "Flock.RecVStar.rowPorts": "0396f2eb149f7003f46dc2c117dee64e3eaab89dd243c97b047855e90f324240",
     "Flock.RecVStar.schedOf": "e8813dac25aafe4a1d50a3a7816f53b0af91f2129e67796d3b77671d6c147b60",
     "Flock.RecVStar.showPort": "d69b99beea1be78574295a455a98f21432097de3fb4b597f321569edfeed48b3",
@@ -36620,6 +36677,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36756,6 +36814,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36984,6 +37043,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37218,6 +37278,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37300,6 +37361,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37387,6 +37449,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37580,6 +37643,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37683,6 +37747,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37857,6 +37922,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38071,6 +38137,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38184,6 +38251,18 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Flock.Witness": {
+   "digest": "fc3eb8fafb57b8a28c0945b731953dc03eef305ae433cfb8ad52591fe4353fda",
+   "definitions": {
+    "Flock.Witness.Inputs": "178be9150b934b9af8a07491a225661dd3a0b878c85ee116e7de181897b3ffeb",
+    "Flock.Witness.Inputs.circuitFile": "df0c373a125b8aa3a9cdcd5004cc47edcf9e4a8d966b60ae70f998eca139b789",
+    "Flock.Witness.Inputs.count": "e6c17a95ae787cdf39ea1c2d801c5cfd0b51a9345d897f6ed281cc190458d803",
+    "Flock.Witness.Inputs.tags": "6fafc9a6767b896f11452c0485f46c9c1f011d445eeb5a8a18df1bb4e07e0a1a",
+    "Flock.Witness.zkCoins": "761e46bcb1e3e9ae603b91a89a1eaac627f4b766d8d75187e0f443866e0890bb",
+    "Flock.Witness.zkTags": "cc4bb0ccb0bf52949c8ad6e6faa296983f0b4e2210aaed4746d5dc4e12a131aa"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
   "Flock.Zk": {
    "digest": "02d9257ecdcee3b034471e7f07c82442729e93143a3ca81f20bc634298724920",
    "definitions": {
@@ -38296,6 +38375,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38850,6 +38930,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
+  "Proofs.Flock.Bridge.Assumptions.Served": {
+   "digest": "b09a381f9f9ff31506ad28a9f07a85eacb3385b5ba84aba9f3c8d53e5f191ca5",
+   "definitions": {
+    "Flock.Bridge.Assumptions.ServedFilesParse": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
   "Proofs.Flock.Bridge.Canon": {
    "digest": "d939cd06ed2fdae7c8f9ecf0ac1e031a1b542be22820deaf488ba4ad63e43752",
    "definitions": {
@@ -38914,6 +39001,13 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3"
    ]
+  },
+  "Proofs.Flock.Bridge.Honest": {
+   "digest": "0b798ba5631315260eae644e8baef5564c4225ea63f1b48a210f046e45d85bd8",
+   "definitions": {
+    "Flock.Guarantees.SampledKSLiveHonest": "441d88d32209934ccf332d6ba598fd870a07e73c4ed5ec47a3059af6ba8dd6b1"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
   },
   "Proofs.Flock.Bridge.PopMatches": {
    "digest": "49a2b0b289df53170e9bb92599ea422908b51c5d7777b63ec40d86fabf6b8273",
@@ -42613,6 +42707,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -44695,6 +44790,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -45453,6 +45549,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -45772,6 +45869,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -47225,6 +47323,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -47346,6 +47445,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",

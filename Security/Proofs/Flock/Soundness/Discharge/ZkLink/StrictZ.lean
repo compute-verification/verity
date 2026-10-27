@@ -12,10 +12,13 @@ count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_coll
 `op₀Z_conflict_collision`, `SelfClashZ.collision`). A cap's finder counts every pair, accepting or not, so it bounds
 `advRSZ`, which counts only runs accepting every table up to the table's (`forkE_capAcc_le`). So:
 
+* `ksBoundAccZ_le_pr`, `ksPrZ`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`'s shape with each
+  finder's collision probability in place of its `q²/2^513`, with no hash premise; `ksAvgZC_le_pr`, `ksAvgPrZ`: the
+  compiled audit's knowledge term at those, averaged over the draw (the additive form);
 * `ksBoundAccZ_le_strict`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`, at finders that
-  satisfy `SHA512CRStrict` at budgets `qF` (rewinding) and `qS` (self-clash);
+  satisfy `SHA512CRStrict` at budgets `qF` (rewinding) and `qS` (self-clash) (`ksPrZ_le_strict`);
 * `ksAvgZC_le_strict`: the compiled audit's knowledge term is at most `ksAvgStrictZ`, which reads only the plan, the
-  law and the budgets;
+  law and the budgets (`ksAvgPrZ_le_strict`);
 * `zk_flock_countC_execOS_ks` and `zk_flock_countC_execOS_strict`: the compiled count curve at the live draw with
   `JointZC` discharged (`jointZC_ksBound`), and with `ε_ks` in closed form under A1;
 * `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `δ_link` and `δ_tree` rest on A1,
@@ -99,53 +102,71 @@ structure SessCRZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) 
   level0 : (adv₀SFinderZ A Hs T pre post cap₀ σ).CR Hs.H qF
   self : (selfSFinderZ A Hs T pre post cap₀ σ).CR Hs.H qS
 
-theorem advRSZ_le_strict (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
-    (h : (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).CR Hs.H q) :
-    advRSZ A Hs T pre post cap₀ r ℓ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  ((forkE_capAcc_le Hs T (plurSZ Hs T pre.length) (slotOf r ℓ + 4) pre.length r ℓ
+theorem advRSZ_le_pr (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    advRSZ A Hs T pre post cap₀ r ℓ σ ≤ (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).ev (ind (IsColl Hs.H)) :=
+  (forkE_capAcc_le Hs T (plurSZ Hs T pre.length) (slotOf r ℓ + 4) pre.length r ℓ
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) (slotOf r ℓ + 4)
     (fun d (outs : List (OutZC F D Sl)) => opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d (outs.getD pre.length dfltOutZC))
     (fun _ x _ h => opRZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
-    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ))).trans h.le
+    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ))
 
-theorem advPadsSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
-    (h : (advPadsSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H q) :
-    advPadsSZ A Hs T pre post cap₀ r σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) r
+theorem advPadsSZ_le_pr (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    advPadsSZ A Hs T pre post cap₀ r σ ≤ (advPadsSFinderZ A Hs T pre post cap₀ r σ).ev (ind (IsColl Hs.H)) :=
+  forkE_conflict_le Hs.H (plurSZ Hs T pre.length) r
     (fun d (outs : List (OutZC F D Sl)) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
     (fun _ x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
-    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
+    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-theorem advTauSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
-    (h : (advTauSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H q) :
-    advTauSZ A Hs T pre post cap₀ r σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) (2 + r)
+theorem advTauSZ_le_pr (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    advTauSZ A Hs T pre post cap₀ r σ ≤ (advTauSFinderZ A Hs T pre post cap₀ r σ).ev (ind (IsColl Hs.H)) :=
+  forkE_conflict_le Hs.H (plurSZ Hs T pre.length) (2 + r)
     (fun d (outs : List (OutZC F D Sl)) => opTauZ Hs r d (outs.getD pre.length dfltOutZC))
     (fun _ x _ h => opTauZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
-    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
+    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
 omit [Fintype K] in
-theorem adv₀SZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
-    (h : (adv₀SFinderZ A Hs T pre post cap₀ σ).CR Hs.H q) :
-    adv₀SZ A Hs T pre post cap₀ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (expect₂_conflict_le Hs.H (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ
+theorem adv₀SZ_le_pr (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    adv₀SZ A Hs T pre post cap₀ σ ≤ (adv₀SFinderZ A Hs T pre post cap₀ σ).ev (ind (IsColl Hs.H)) :=
+  expect₂_conflict_le Hs.H (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ
     (fun outs : List (OutZC F D Sl) => op₀Z Hs.H Hs.E Hs.Lf T cap₀ (outs.getD pre.length dfltOutZC))
-    fun x _ h => op₀Z_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h).trans
-    h.le
+    fun x _ h => op₀Z_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h
 
 omit [Fintype K] in
-theorem selfSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
-    (h : (selfSFinderZ A Hs T pre post cap₀ σ).CR Hs.H q) :
+theorem selfSZ_le_pr (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
     expect (ind fun outs : List (OutZC F D Sl) => SelfClashZ Hs T (outs.getD pre.length dfltOutZC))
-      (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (expect_one_le Hs.H _ σ (fun outs : List (OutZC F D Sl) => SelfClashZ Hs T (outs.getD pre.length dfltOutZC))
-    fun _ h => h.collision).trans h.le
+      (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ ≤ (selfSFinderZ A Hs T pre post cap₀ σ).ev (ind (IsColl Hs.H)) :=
+  expect_one_le Hs.H _ σ (fun outs : List (OutZC F D Sl) => SelfClashZ Hs T (outs.getD pre.length dfltOutZC))
+    fun _ h => h.collision
 
-/-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
-theorem epsSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {qF qS : ℝ}
+/-- **`ε_c⁻` in the session at its finders' collision probabilities**: `epsSZ` with each knowledge term replaced by
+the probability that its finder (`advRSFinderZ`, `advPadsSFinderZ`, `advTauSFinderZ`, `selfSFinderZ`) outputs a
+collision of `H`. -/
+noncomputable def epsPrZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
+  T.bound.toReal +
+    ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
+      Real.sqrt (2 ^ (lvOf T.sch ℓ).logLen * (lvOf T.sch ℓ).queries *
+        (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).ev (ind (IsColl Hs.H))) +
+    ∑ r ∈ Finset.range 2,
+      Real.sqrt (T.N * T.N * (advPadsSFinderZ A Hs T pre post cap₀ r σ).ev (ind (IsColl Hs.H))) +
+    ∑ r ∈ Finset.range 2, Real.sqrt ((advTauSFinderZ A Hs T pre post cap₀ r σ).ev (ind (IsColl Hs.H))) +
+    (selfSFinderZ A Hs T pre post cap₀ σ).ev (ind (IsColl Hs.H))
+
+/-- **`ε_c⁻` in the session is at most its finders' collision probabilities' bound**, with no hash premise. -/
+theorem epsSZ_le_pr (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    epsSZ A Hs T pre post cap₀ σ ≤ epsPrZ A Hs T pre post cap₀ σ :=
+  add_le_add (add_le_add (add_le_add (add_le_add le_rfl
+      (Finset.sum_le_sum fun r _ => Finset.sum_le_sum fun ℓ _ => Real.sqrt_le_sqrt
+        (mul_le_mul_of_nonneg_left (advRSZ_le_pr A Hs T pre post cap₀ r ℓ σ) (by positivity))))
+      (Finset.sum_le_sum fun r _ => Real.sqrt_le_sqrt
+        (mul_le_mul_of_nonneg_left (advPadsSZ_le_pr A Hs T pre post cap₀ r σ) (by positivity))))
+      (Finset.sum_le_sum fun r _ => Real.sqrt_le_sqrt (advTauSZ_le_pr A Hs T pre post cap₀ r σ)))
+    (selfSZ_le_pr A Hs T pre post cap₀ σ)
+
+/-- **`epsPrZ` under `SHA512CRStrict`.** -/
+theorem epsPrZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {qF qS : ℝ}
     (h : SessCRZ A Hs T pre post cap₀ σ qF qS) :
-    epsSZ A Hs T pre post cap₀ σ ≤
+    epsPrZ A Hs T pre post cap₀ σ ≤
       T.bound.toReal +
         ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
           Real.sqrt (2 ^ (lvOf T.sch ℓ).logLen * (lvOf T.sch ℓ).queries * (qF ^ 2 / 2 ^ (513 : ℝ))) +
@@ -154,12 +175,11 @@ theorem epsSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap�
         qS ^ 2 / 2 ^ (513 : ℝ) :=
   add_le_add (add_le_add (add_le_add (add_le_add le_rfl
       (Finset.sum_le_sum fun r hr => Finset.sum_le_sum fun ℓ hℓ => Real.sqrt_le_sqrt
-        (mul_le_mul_of_nonneg_left (advRSZ_le_strict A Hs T pre post cap₀ r ℓ σ (h.fork r hr ℓ hℓ))
-          (by positivity))))
+        (mul_le_mul_of_nonneg_left (h.fork r hr ℓ hℓ).le (by positivity))))
       (Finset.sum_le_sum fun r hr => Real.sqrt_le_sqrt
-        (mul_le_mul_of_nonneg_left (advPadsSZ_le_strict A Hs T pre post cap₀ r σ (h.pads r hr)) (by positivity))))
-      (Finset.sum_le_sum fun r hr => Real.sqrt_le_sqrt (advTauSZ_le_strict A Hs T pre post cap₀ r σ (h.tau r hr))))
-    (selfSZ_le_strict A Hs T pre post cap₀ σ h.self)
+        (mul_le_mul_of_nonneg_left (h.pads r hr).le (by positivity))))
+      (Finset.sum_le_sum fun r hr => Real.sqrt_le_sqrt (h.tau r hr).le))
+    h.self.le
 
 end Session
 
@@ -193,31 +213,75 @@ abbrev TableCRZ (ts : List (TabZK F mPts)) (j : Fin ts.length) (τ : Strategy (s
   SessCRZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
     (stratZ A Hs ts j τ) qF qS
 
+/-- **A `--zk` table's knowledge bound at its finders' collision probabilities**: `ksBoundAccZ` with each knowledge
+term replaced by the probability that its finder outputs a collision of `H` (`epsPrZ`, and `adv₀SFinderZ`'s). -/
+noncomputable def ksPrZ (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts)) :
+    ℝ :=
+  epsPrZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
+      (stratZ A Hs ts j τ) +
+    Real.sqrt (k * (adv₀SFinderZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1))
+      (τ.1 j) (stratZ A Hs ts j τ)).ev (ind (IsColl Hs.H)))
+
+theorem ksBoundAccZ_le_pr (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ)
+    (τ : Strategy (sessionZC A Hs ts)) : ksBoundAccZ A Hs ts j k τ ≤ ksPrZ A Hs ts j k τ :=
+  add_le_add
+    (epsSZ_le_pr A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
+      (stratZ A Hs ts j τ))
+    (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
+      (adv₀SZ_le_pr A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
+        (stratZ A Hs ts j τ))
+      (Nat.cast_nonneg k)))
+
+theorem ksPrZ_le_strict (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ)
+    (τ : Strategy (sessionZC A Hs ts)) {qF qS : ℝ} (h : TableCRZ A Hs ts j τ qF qS) :
+    ksPrZ A Hs ts j k τ ≤ ksStrictZ ts j k qF qS :=
+  add_le_add
+    (epsPrZ_le_strict A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
+      (stratZ A Hs ts j τ) h)
+    (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left h.level0.le (Nat.cast_nonneg k)))
+
 theorem ksBoundAccZ_le_strict (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ)
     (τ : Strategy (sessionZC A Hs ts)) {qF qS : ℝ} (h : TableCRZ A Hs ts j τ qF qS) :
     ksBoundAccZ A Hs ts j k τ ≤ ksStrictZ ts j k qF qS :=
-  add_le_add
-    (epsSZ_le_strict A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
-      (stratZ A Hs ts j τ) h)
-    (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
-      (adv₀SZ_le_strict A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
-        (stratZ A Hs ts j τ) h.level0)
-      (Nat.cast_nonneg k)))
+  (ksBoundAccZ_le_pr A Hs ts j k τ).trans (ksPrZ_le_strict A Hs ts j k τ h)
+
+/-- **The compiled `--zk` knowledge term at the finders' collision probabilities**: `ksAvgZC` at `ksPrZ`. -/
+noncomputable def ksAvgPrZ {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : Law n}
+    (k : ℕ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) : ℝ≥0∞ :=
+  ksAvgZC A Hs planZ k (fun S R τ j => ksPrZ A Hs (planZ S R) j k τ) R τ
+
+private theorem ofReal_div_one_sub_mono {a b r : ℝ} (ha : 0 ≤ a) (hab : a ≤ b) :
+    ENNReal.ofReal (a / (1 - r)) ≤ ENNReal.ofReal (b / (1 - r)) := by
+  rcases le_or_gt (1 - r) 0 with h0 | h0
+  · exact (le_of_eq (ENNReal.ofReal_of_nonpos (div_nonpos_of_nonneg_of_nonpos ha h0))).trans zero_le
+  · exact ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right hab h0.le)
+
+/-- **The compiled knowledge term is at most its finders' collision probabilities' term**, with no hash premise:
+`ksAvgZC` at the knowledge bound `ksBoundAccZ` is at most `ksAvgPrZ`. -/
+theorem ksAvgZC_le_pr {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : Law n}
+    (k : ℕ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) :
+    ksAvgZC A Hs planZ k (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ) R τ ≤ ksAvgPrZ A Hs planZ k R τ :=
+  avg_mono fun ω => iSup_mono fun j => ofReal_div_one_sub_mono
+    (ksBoundAccZ_nonneg A Hs (planZ (L.draw ω) R) j k _) (ksBoundAccZ_le_pr A Hs (planZ (L.draw ω) R) j k _)
+
+/-- **`ksAvgPrZ` under `SHA512CRStrict`**: at most `ksAvgStrictZ`, at a prover each of whose tables' finders, after each
+draw, satisfies `SHA512CRStrict` at budgets `qF`, `qS` (`TableCRZ`). -/
+theorem ksAvgPrZ_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : Law n}
+    (k : ℕ) {qF qS : ℝ} (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) R) j (zcStrat A Hs planZ (τ ω)) qF qS) :
+    ksAvgPrZ A Hs planZ k R τ ≤ ksAvgStrictZ planZ L k qF qS R :=
+  avg_mono fun ω => iSup_mono fun j => ofReal_div_one_sub_mono
+    ((ksBoundAccZ_nonneg A Hs (planZ (L.draw ω) R) j k _).trans (ksBoundAccZ_le_pr A Hs (planZ (L.draw ω) R) j k _))
+    (ksPrZ_le_strict A Hs (planZ (L.draw ω) R) j k _ (hCR ω j))
 
 /-- **The compiled knowledge term under `SHA512CRStrict`**: `ksAvgZC` at the knowledge bound `ksBoundAccZ` is at most
-`ksAvgStrictZ`, at a prover each of whose tables' finders, after each draw, satisfies `SHA512CRStrict` at budgets `qF`,
-`qS` (`TableCRZ`). -/
+`ksAvgStrictZ` (`ksAvgZC_le_pr`, then `ksAvgPrZ_le_strict`). -/
 theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : Law n}
     (k : ℕ) {qF qS : ℝ} (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
     (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) R) j (zcStrat A Hs planZ (τ ω)) qF qS) :
     ksAvgZC A Hs planZ k (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ) R τ ≤
-      ksAvgStrictZ planZ L k qF qS R := by
-  refine avg_mono fun ω => iSup_mono fun j => ?_
-  have ha := ksBoundAccZ_nonneg A Hs (planZ (L.draw ω) R) j k (zcStrat A Hs planZ (τ ω))
-  rcases le_or_gt (1 - rateZ (planZ (L.draw ω) R) j k) 0 with h0 | h0
-  · exact (le_of_eq (ENNReal.ofReal_of_nonpos (div_nonpos_of_nonneg_of_nonpos ha h0))).trans zero_le
-  · exact ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right
-      (ksBoundAccZ_le_strict A Hs (planZ (L.draw ω) R) j k _ (hCR ω j)) h0.le)
+      ksAvgStrictZ planZ L k qF qS R :=
+  (ksAvgZC_le_pr A Hs planZ k R τ).trans (ksAvgPrZ_le_strict A Hs planZ k R τ hCR)
 
 end Batch
 

@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Event
 /-!
 # A causal strategy's projection onto the live audit
 
-R5's game is causal: the prover's strategy is a tree over the coins released so far, and the sampled proofs session
+The audit's game is causal: the prover's strategy is a tree over the coins released so far, and the sampled proofs session
 (`FlockSoundness.Discharge.Exec.auditLive`, C-Flock's game) runs inside it beside the other subprotocols' rounds. A
 bound on the session's event at every strategy of `auditLive` holds at every strategy of the game it runs in:
 

@@ -1,5 +1,6 @@
 import Definitions.Claims.Sampling
 import Definitions.Flock.Circuit
+import Properties.Flock.Circuit.Opened
 
 /-!
 # C-Flock's session as a sampling statement
@@ -29,18 +30,6 @@ The C-Flock session's units, read as the sampling claims' statement, partition, 
 namespace Flock.Bridge
 
 open FlockSoundness.Audit
-
-/-- The Boolean-profile gates one C-Flock gate lowers to: three for a row, one for any other. -/
-def gateSize {N : ℕ} : Op N → ℕ
-  | .row _ _ => 3
-  | _ => 1
-
-/-- Where wire `g`'s lowered gates start: the lowered sizes of the gates before it. -/
-def off (C : Circuit) (g : ℕ) : ℕ :=
-  (((List.finRange C.N).filter fun h => decide (h.val < g)).map fun h => gateSize (C.op h)).sum
-
-/-- **Wire `g`'s position** in the lowered program: its last lowered gate. -/
-def posOf (C : Circuit) (g : Fin C.N) : ℕ := off C g.val + gateSize (C.op g) - 1
 
 /-- Gate `g` lowered: a row to the XOR of its first list, the XOR of its second, and their AND; an input the
 constants `κ` fix to `b` to `.const b`. -/

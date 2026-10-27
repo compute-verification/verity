@@ -37,14 +37,16 @@ to Python.
 * a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
   `coin`, `round`, `root`).
 * a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
-  records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); `field_of` (those,
-  `lane` null for the combine, and `path`); `wires` (those); `wire_of` (those and `wire`).
+  records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); a J10-R leaf's
+  `j10r_lane_ports` (`r`, `c`, `k`, `n` the lane's chunks, `lane`, `chunk`) and `j10r_combine_ports` (`r`, `c`, `k`,
+  `n`); `field_of` (those, `lane` null for the combine, `n` null or absent for v1's, and `path`); `wires` (those);
+  `wire_of` (those and `wire`).
 * a drawn leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
   `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
   combine): each known port's rows' words.
 * a drawn leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
   `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
-  `r`, `c`, `k`, `lane` or null, `known` an object of ports, `complete`); `leaf_own` (those records, the tile and
+  `r`, `c`, `k`, `lane` or null, `known` an object of ports); `leaf_own` (those records, the tile and
   statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
   (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its draw, a reject where it
   refuses.
@@ -141,11 +143,20 @@ def ofN {α : Type} [ToJson α] (f : Nat → Int → Except String α) : _root_.
 
 def leafTile (j : Json) : Except String Lanes.Tile := do pure ⟨← nat j "r", ← nat j "c", ← nat j "k"⟩
 
-/-- A lane's ports (`lane` its index), or the combine's (`lane` null). -/
-def leafPorts (j : Json) : Except String (List Lanes.Port) := do
+/-- A J10-R leaf's chunk of a lane (`lane` its index, `chunk` its chunk of `n`), or its combine (`lane` null). -/
+def j10rPorts (j : Json) : Except String (List Lanes.Port) := do
   match field? j "lane" with
-  | none | some .null => Lanes.combine? (← leafTile j)
-  | some _ => Lanes.lane? (← leafTile j) (← nat j "lane")
+  | none | some .null => Lanes.combine2? (← leafTile j) (← nat j "n")
+  | some _ => Lanes.chunk? (← leafTile j) (← nat j "n") (← nat j "lane") (← nat j "chunk")
+
+/-- A lane's ports (`lane` its index), or the combine's (`lane` null); a J10-R leaf's (`j10rPorts`) where `n` is given. -/
+def leafPorts (j : Json) : Except String (List Lanes.Port) := do
+  match field? j "n" with
+  | some .null | none =>
+    match field? j "lane" with
+    | none | some .null => Lanes.combine? (← leafTile j)
+    | some _ => Lanes.lane? (← leafTile j) (← nat j "lane")
+  | some _ => j10rPorts j
 
 def sourceJson : Lanes.Source → Json
   | .read v r => Json.mkObj [("read", toJson v), ("row", toJson r)]
@@ -194,15 +205,13 @@ def leafPlace (j : Json) : Except String (String → String × Nat) := do
   | some _ => throw "the input's place is not an object"
 
 /-- `registered_file`: statement `lane`'s `--registered` file at the roots of `registration` and `produced` and the
-placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known` and
-`complete`. -/
+placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known`. -/
 def registeredFileJson (j : Json) : Except String Json := do
   let T ← leafTile j
   let _ ← leafPorts j
   let rs ← Lanes.roots? (← get j "registration") (← get j "produced") T.lanes (2 * T.nw) Flock.HmRow.ROW_SCHEMA_V2
   let .obj known ← get j "known" | throw "the input's known is not an object"
-  let .bool complete ← get j "complete" | throw "the input's complete is not a boolean"
-  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList complete
+  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),
@@ -294,6 +303,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("lane_ports", fun j => do
     pure (Json.arr ((← Lanes.lane? (← leafTile j) (← nat j "lane")).map leafPortJson).toArray)),
   ("combine_ports", fun j => do pure (Json.arr ((← Lanes.combine? (← leafTile j)).map leafPortJson).toArray)),
+  ("j10r_lane_ports", fun j => do
+    pure (Json.arr ((← Lanes.chunk? (← leafTile j) (← nat j "n") (← nat j "lane") (← nat j "chunk")).map
+      leafPortJson).toArray)),
+  ("j10r_combine_ports", fun j => do
+    pure (Json.arr ((← Lanes.combine2? (← leafTile j) (← nat j "n")).map leafPortJson).toArray)),
   ("field_of", fun j => do
     let path ← str j "path"
     pure <| match Lanes.fieldOf? (← leafPorts j) path with

@@ -211,4 +211,17 @@ noncomputable def witDep (C : FlockSoundness.Audit.Circuit) (Cm : Commitment Boo
       ⟨posOf C g, C.eval xv g, Classical.choose h⟩
     else ⟨posOf C g, C.eval xv g, []⟩⟩
 
+open Classical in
+/-- **Wire values as claims openings**: at each wire `g`, the value `v g`, with data its position passes `Cm` under
+`roots` at, where some does. `witDep` is it at an evaluation (`witDep_eq_witRows`). -/
+noncomputable def witRows (C : FlockSoundness.Audit.Circuit) (Cm : Commitment Bool) (H : Msg → Msg) (roots : List Msg)
+    (v : Fin C.N → Bool) : Wit :=
+  ⟨(List.finRange C.N).map fun g =>
+    if h : ∃ d : Msg, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true then
+      ⟨posOf C g, v g, Classical.choose h⟩
+    else ⟨posOf C g, v g, []⟩⟩
+
+theorem witDep_eq_witRows (C : FlockSoundness.Audit.Circuit) (Cm : Commitment Bool) (H : Msg → Msg)
+    (roots : List Msg) (xv : Fin C.N → Bool) : witDep C Cm H roots xv = witRows C Cm H roots (C.eval xv) := rfl
+
 end Flock.Bridge

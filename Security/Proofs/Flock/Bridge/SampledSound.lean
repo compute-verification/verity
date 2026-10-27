@@ -5,23 +5,26 @@ import Proofs.Flock.Bridge.CircuitOf
 # Sampled proofs' soundness at C-Flock's live audit, prover by prover
 
 Sampled proofs' claim reads the transcript of one fixed extractor, the one `SampledKSLivePub` is stated with
-(`XplurZC`, through `witDep`): at most an `ε` share of the circuit's units are wrong in it (R4′). Its bound holds at
-every prover `τ` with no hypothesis on `τ`: `ecr/sha-512` and cr/sha-512 are asked only of the finders C-Flock builds
-from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads its collision premise (`linkBoundZC`).
+(`XplurZC`, through `witDep`): at most an `ε` share of the circuit's units are wrong in it. Its bound holds at
+every prover `τ` with no hypothesis on `τ`, in `SampledKSLivePub`'s additive form: a public error plus a loss in the
+probability that one finder built from `τ` outputs a SHA-512 collision. No collision-resistance premise enters.
 
 * `Flock.Guarantees.LiveAt n D hU kd K₀ desc`: `SampledKSLivePub`'s setting at one session (the inputs flock-verify
   reads, the registration, the draw's setup, the verifier's bytes and A3, the analysis' `k`, `R_w`, `M`, `ρ`, and the
   SHA-512 evaluations of a run of the strategy `t'` and of a verification `v`), at the parsed circuit file `D` with `n` units, the draw size `kd`, `K₀` and the descriptor `desc`;
-  `LiveAt.CR τ`, the two collision-resistance premises `SampledKSLivePub` reads at the finders built from `τ`;
-  `LiveAt.ks`, its conclusion where they hold.
+  `LiveAt.pubB τ`, `SampledKSLivePub`'s finder `B^τ` at `τ` (C-Flock's `K = LiveAt.K` finders, `Bridge.pubFinder`);
+  `LiveAt.ks`, its conclusion at `τ`.
 * `LiveAt.wrongE q τ`: the units wrong in the extractor's transcript at `τ`; `LiveAt.Holds q ε τ`, the claim;
-  `LiveAt.bound τ`, `deltaPub` where `CR τ` holds and `⊤` elsewhere.
+  `LiveAt.bound τ`, `deltaPub + lossPub(J²·K·Pr[B^τ])` (`LiveAt.err`, its loss's argument `LiveAt.lossArg`), `J` the
+  session's tables (`LiveAt.J`); `lossPub` is monotone (`Bridge.lossPub_mono`).
 * `LiveAt.sound`: at every `τ`, `Pr[flock-verify accepts ∧ ¬ Holds] ≤ bound τ`, where `K₀ − 1 ≤ ε n`.
 * `LiveAt.faultyE q τ`, `LiveAt.HoldsF`, `LiveAt.soundF`: the same on the units faulty in the sampling statement (wrong,
   or with a committed value unopened), a superset of `wrongE` (`wrongE_card_le`), from `Bridge.card_faulty_lt_of_relS`.
 * `LiveAt.sound_honest`: `K₀ = ⌊ε n⌋ + 1` meets that hypothesis. `LiveAt.sound_nontrivial`: an accept-everything
-  verifier breaks the bound at a prover whose extracted transcript fails the claim, where the finders meet the premises
-  and `deltaPub < 1`.
+  verifier breaks the bound at a prover whose extracted transcript fails the claim, where `err τ < 1`.
+* `LiveAt.crFinder τ extra`: C-Flock's finders with `extra` in `B^τ`'s spare slot, so that one finder bounds both
+  `B^τ` (`pubB_le_crFinder`) and `extra` (`extra_le`, at most `K` times as often); a deployment puts the play's replay
+  finder there.
 -/
 
 namespace Flock.Bridge
@@ -45,6 +48,21 @@ theorem card_faulty_lt_of_relS {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P :
     gcongr
   linarith
 
+/-- **`lossPub` is monotone** in the committed wires `W` and in the bound `p ≥ 0`, at a rate `ρ < 1`. -/
+theorem lossPub_mono {k W W' : ℕ} {ρ p p' : ℝ} (hρ : ρ < 1) (hW : W ≤ W') (hp0 : 0 ≤ p) (hp : p ≤ p') :
+    lossPub k W ρ p ≤ lossPub k W' ρ p' := by
+  unfold lossPub
+  have h1 : 0 < 1 - ρ := by linarith
+  have hs : Real.sqrt p ≤ Real.sqrt p' := Real.sqrt_le_sqrt hp
+  have hks : Real.sqrt (k * p) ≤ Real.sqrt (k * p') :=
+    Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hp (Nat.cast_nonneg k))
+  have hW' : (W : ℝ) ≤ W' := by exact_mod_cast hW
+  have hWp : (W : ℝ) * p ≤ W' * p' := mul_le_mul hW' hp hp0 (Nat.cast_nonneg _)
+  have hc : (0 : ℝ) ≤ 2 * 25638 + 2 ^ 14 + 2 := by norm_num
+  have hcs := mul_le_mul_of_nonneg_left hs hc
+  refine add_le_add (div_le_div_of_nonneg_right ?_ h1.le) (div_le_div_of_nonneg_right hWp h1.le)
+  linarith
+
 end Flock.Bridge
 
 namespace Flock.Guarantees
@@ -57,10 +75,10 @@ open scoped ENNReal
 open Classical
 
 /-- **`SampledKSLivePub`'s setting at one session**: at the parsed circuit file `D` (its unit built, `hU`) with `n`
-units, the draw size `kd`, `K₀` and the descriptor `desc`, everything else `SampledKSLivePub` quantifies before its
-collision-resistance premises, named assumption A3 included. `t' τ` bounds the SHA-512 evaluations of one run of the
-strategy `τ`, and `v` those of one verification, public; every finder's budget is a function of the two (`qF`, `qS`),
-so the bound at `τ` is at `τ`'s own cost. -/
+units, the draw size `kd`, `K₀` and the descriptor `desc`, everything else `SampledKSLivePub` quantifies before the
+strategy, named assumption A3 included. `t' τ` bounds the SHA-512 evaluations of one run of the strategy `τ`, and `v`
+those of one verification, public; every finder's budget is a function of the two (`qF`, `qS`), so the bound at `τ` is
+at `τ`'s own cost. -/
 structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ : ℕ) (desc : Claims.Msg) where
   Reg : Type
   I : Inputs
@@ -164,43 +182,79 @@ noncomputable def qF (τ : Strategy A.G) : ℝ := 2 * (A.t' τ + A.v)
 /-- **The self-clash finder's budget at `τ`**: one run of `τ` and one further verification. -/
 noncomputable def qS (τ : Strategy A.G) : ℝ := A.t' τ + A.v
 
-/-- **The collision-resistance premises at a strategy**, each a bound on the probability that a finder C-Flock builds
-from `τ` outputs a SHA-512 collision, at that finder's cost as a function of `τ`'s: each table's knowledge finders, at
-most `q²/2^513` at the budget `q = qF τ = 2 (t' τ + v)` or `qS τ = t' τ + v` (cr/sha-512, `SHA512CRStrict`); each
-committed position's link finder, at most its expected cost over `2^256`, its cost `t' τ` per run of `τ` it plays, so
-at most `t' τ · (1 + k)` per trial (ecr/sha-512, `SHA512CRExpected`; `expect_cT_leZC`). -/
-def CR (τ : Strategy A.G) : Prop :=
-  (∀ ω j, TableCRZ execArith hs512 (planZHJ A.dj A.y₀ (A.L.draw ω) (reg (A.sim τ))) j
-    (zcStrat execArith hs512 (planZHJ A.dj A.y₀) (cont (A.sim τ) ω)) (A.qF τ) (A.qS τ)) ∧
-  LinkCRZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) A.k A.Rw
-    A.M (A.t' τ)
+/-- **The session's tables**, `J`. -/
+abbrev J : ℕ := nTab A.I
 
-/-- **The link finders' cost at `τ`**: a trial for any committed position plays `τ` at most `1 + k` times in
-expectation, so its expected SHA-512 evaluations are at most `t' τ · (1 + k)`, the cost `LinkCRZC` reads. -/
-theorem linkCost_le (τ : Strategy A.G) (c : A.vb.Pos)
-    [Nonempty (ΩcZ execArith A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb A.L c)] :
-    expect (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ))
-      (trialGZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
-        A.k A.Rw)
-      (trialStratZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
-        A.k A.Rw) ≤
-      A.t' τ * (1 + A.k) :=
-  expect_cT_leZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
-    A.k A.Rw (A.ht' τ)
+/-- **C-Flock's finders' index** at the session (`Bridge.PubIx`): each table's knowledge finder slots, every committed
+position some draw reads, and one spare. -/
+abbrev Ix := Bridge.PubIx A.dj A.y₀ A.P A.vb A.L
+
+/-- **The number of C-Flock's finders**, `K`. -/
+noncomputable abbrev K : ℕ := Fintype.card A.Ix
+
+/-- **`K ≤ 20 J + |Pos| + 1`** (`Bridge.card_PubIx_le`), `J` the session's tables and `Pos` the committed positions:
+no draw, registration or strategy is in the bound. -/
+theorem K_le : A.K ≤ 20 * A.J + Fintype.card A.vb.Pos + 1 :=
+  Bridge.card_PubIx_le A.dj A.y₀ A.P A.vb A.L
+
+/-- **`SampledKSLivePub`'s finder `B^τ` at `τ`** (`Bridge.pubFinder`): one of C-Flock's finders at the prover's run,
+picked uniformly, at the budgets `qF τ`, `qS τ` and `t' τ`. -/
+noncomputable abbrev pubB (τ : Strategy A.G) : Claims.Finder :=
+  Bridge.pubFinder A.dj A.y₀ A.P A.vb A.k A.Rw A.M (A.qF τ) (A.qS τ) (A.t' τ) (reg (A.sim τ)) (cont (A.sim τ))
+
+/-- **The loss's argument at `τ`**: `J²·K·Pr[B^τ]`. -/
+noncomputable abbrev lossArg (τ : Strategy A.G) : ℝ :=
+  (A.J : ℝ) ^ 2 * A.K * (A.pubB τ).Pr Claims.Sampling.sha512Msg
+
+theorem lossArg_nonneg (τ : Strategy A.G) : 0 ≤ A.lossArg τ :=
+  mul_nonneg (by positivity) (Claims.Pr_nonneg _)
+
+/-- **The session's error at `τ`**: `SampledKSLivePub`'s `δ + f(J²·K·Pr[B^τ])`. -/
+noncomputable def err (τ : Strategy A.G) : ℝ :=
+  Bridge.deltaPub n kd K₀ A.k A.M A.Rw (Bridge.ioSum A.P) A.ρ +
+    Bridge.lossPub A.k (Bridge.ioSum A.P) A.ρ (A.lossArg τ)
 
 set_option maxHeartbeats 1000000 in
-/-- **`SampledKSLivePub` at the session**: at a strategy where the premises hold, flock-verify accepts with the
-extracted witness outside the sampling relation with probability at most `deltaPub`. -/
-theorem ks (q : Claims.Sampling.Query) (τ : Strategy A.G) (hCR : A.CR τ) :
+/-- **`SampledKSLivePub` at the session**: at every strategy, flock-verify accepts with the extracted witness outside
+the sampling relation with probability at most `err τ`. -/
+theorem ks (q : Claims.Sampling.Query) (τ : Strategy A.G) :
     prob (fun o => LiveAcceptsZK A.I o ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
           (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (Bridge.stmtOf A.P A.κ kd desc q A.roots) (Bridge.partOf A.P)
           (Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)))
-      A.G τ ≤
-      ENNReal.ofReal (Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw (Bridge.ioSum A.P) A.ρ) :=
+      A.G τ ≤ ENNReal.ofReal (A.err τ) :=
   Flock.SecurityProofs.SampledKSLivePub n A.Reg A.I A.ht D A.hD hU A.pub A.hpub A.hpt A.hscope A.hrows A.hdup A.hroots
     desc A.qr A.hpop kd A.hkd A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 A.hTags A.hCust A.k A.Rw A.M
-    A.hk A.hRw A.hM A.ρ A.hρ A.hρk (A.t' τ) (A.ht' τ) K₀ A.hK₀ τ A.v q hCR.1 hCR.2
+    A.hk A.hRw A.hM A.ρ A.hρ A.hρk (A.t' τ) K₀ A.hK₀ τ A.v q
+
+/-- **C-Flock's finders at `τ`, with `extra` in the spare slot** (`Bridge.pubFam` elsewhere). -/
+noncomputable def crFam (τ : Strategy A.G) (extra : Claims.Finder) : A.Ix → Claims.Finder
+  | none => extra
+  | some i => Bridge.pubFam A.dj A.y₀ A.P A.vb A.k A.Rw A.M (A.qF τ) (A.qS τ) (A.t' τ) (reg (A.sim τ)) (cont (A.sim τ))
+      (some i)
+
+/-- **`B^τ` with `extra` in its spare slot**: one of `crFam τ extra`, picked uniformly with its own coins. -/
+noncomputable def crFinder (τ : Strategy A.G) (extra : Claims.Finder) : Claims.Finder :=
+  Claims.Finder.mix (A.crFam τ extra)
+
+/-- **`extra` succeeds at most `K` times as often as `crFinder τ extra`** (`Claims.Finder.le_mix`). -/
+theorem extra_le (H : Claims.Msg → Claims.Msg) (τ : Strategy A.G) (extra : Claims.Finder) :
+    extra.Pr H ≤ A.K * (A.crFinder τ extra).Pr H :=
+  Claims.Finder.le_mix H (A.crFam τ extra) none
+
+/-- **`B^τ` succeeds at most as often as `crFinder τ extra`**: they differ only in the spare slot, where `B^τ` outputs
+nothing (`Claims.Finder.mix_Pr`). -/
+theorem pubB_le_crFinder (H : Claims.Msg → Claims.Msg) (τ : Strategy A.G) (extra : Claims.Finder) :
+    (A.pubB τ).Pr H ≤ (A.crFinder τ extra).Pr H := by
+  unfold pubB Bridge.pubFinder crFinder
+  rw [Claims.Finder.mix_Pr, Claims.Finder.mix_Pr]
+  refine Claims.Ex_mono fun i => ?_
+  rcases i with _ | i
+  · have h0 : Claims.Finder.null.Pr H = 0 := by
+      unfold Claims.Finder.Pr
+      exact (Claims.Pr_congr (q := fun _ => False) fun _ => by simp [Claims.Finder.null]).trans Claims.Pr_false
+    exact h0.le.trans (Claims.Pr_nonneg _)
+  · exact le_rfl
 
 open Classical in
 /-- **The units the fixed extractor's transcript has wrong** at `τ`: the wire values the witness `witDep` builds from
@@ -210,33 +264,26 @@ noncomputable def wrongE (q : Claims.Sampling.Query) (τ : Strategy A.G) : Finse
     ((Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val
       Claims.Sampling.sha512Msg A.Cd (Bridge.stmtOf A.P A.κ kd desc q A.roots)))
 
-/-- **Sampled proofs' claim at `τ`** (R4′): at most an `ε` share of the `n` units are wrong in the extractor's
+/-- **Sampled proofs' claim at `τ`**: at most an `ε` share of the `n` units are wrong in the extractor's
 transcript. -/
 def Holds (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) : Prop :=
   ((A.wrongE q τ).card : ℝ) ≤ ε * n
 
-/-- **The bound at `τ`**: `deltaPub` where the finders built from `τ` meet the collision-resistance premises, `⊤`
-elsewhere. -/
-noncomputable def bound (τ : Strategy A.G) : ℝ≥0∞ :=
-  if A.CR τ then
-    ENNReal.ofReal (Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw (Bridge.ioSum A.P) A.ρ)
-  else ⊤
+/-- **The bound at `τ`**: `err τ`, `δ + f(J²·K·Pr[B^τ])`. -/
+noncomputable def bound (τ : Strategy A.G) : ℝ≥0∞ := ENNReal.ofReal (A.err τ)
 
 /-- **Sampled proofs' soundness at the live audit, prover by prover**: at every prover `τ`, flock-verify accepts while
 the extractor's transcript has more than an `ε` share of the units wrong with probability at most `bound τ`, where
 `K₀ − 1 ≤ ε n`. -/
 theorem sound (q : Claims.Sampling.Query) (ε : ℝ) (hε : (K₀ : ℝ) - 1 ≤ ε * n) (τ : Strategy A.G) :
     prob (fun o => LiveAcceptsZK A.I o ∧ ¬ A.Holds q ε τ) A.G τ ≤ A.bound τ := by
-  unfold bound
-  split_ifs with hCR
-  · refine (prob_mono (fun o ho => ⟨ho.1, fun hR => ho.2 ?_⟩) _ _).trans (A.ks q τ hCR)
-    have hlt := Bridge.card_wrong_lt_of_relS A.P A.κ kd K₀ desc q A.roots
-      Claims.Sampling.sha512Msg A.Cd _ hR
-    have hlt' : (A.wrongE q τ).card < K₀ := hlt
-    have h1 : ((A.wrongE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
-    show ((A.wrongE q τ).card : ℝ) ≤ ε * n
-    linarith
-  · exact le_top
+  refine (prob_mono (fun o ho => ⟨ho.1, fun hR => ho.2 ?_⟩) _ _).trans (A.ks q τ)
+  have hlt := Bridge.card_wrong_lt_of_relS A.P A.κ kd K₀ desc q A.roots
+    Claims.Sampling.sha512Msg A.Cd _ hR
+  have hlt' : (A.wrongE q τ).card < K₀ := hlt
+  have h1 : ((A.wrongE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
+  show ((A.wrongE q τ).card : ℝ) ≤ ε * n
+  linarith
 
 /-- **The units faulty in the session's sampling statement** at `τ`, under the fixed extractor's witness (`witDep` of
 `XplurZC`): wrong in the values it opens, or with a committed value it reads or writes unopened. They include the
@@ -257,16 +304,13 @@ def HoldsF (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) : Prop :=
 units are faulty under the extractor's witness with probability at most `bound τ`, where `K₀ − 1 ≤ ε n`. -/
 theorem soundF (q : Claims.Sampling.Query) (ε : ℝ) (hε : (K₀ : ℝ) - 1 ≤ ε * n) (τ : Strategy A.G) :
     prob (fun o => LiveAcceptsZK A.I o ∧ ¬ A.HoldsF q ε τ) A.G τ ≤ A.bound τ := by
-  unfold bound
-  split_ifs with hCR
-  · refine (prob_mono (fun o ho => ⟨ho.1, fun hR => ho.2 ?_⟩) _ _).trans (A.ks q τ hCR)
-    have hlt := Bridge.card_faulty_lt_of_relS A.P A.κ kd K₀ desc q A.roots
-      Claims.Sampling.sha512Msg A.Cd _ hR
-    have hlt' : (A.faultyE q τ).card < K₀ := hlt
-    have h1 : ((A.faultyE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
-    show ((A.faultyE q τ).card : ℝ) ≤ ε * n
-    linarith
-  · exact le_top
+  refine (prob_mono (fun o ho => ⟨ho.1, fun hR => ho.2 ?_⟩) _ _).trans (A.ks q τ)
+  have hlt := Bridge.card_faulty_lt_of_relS A.P A.κ kd K₀ desc q A.roots
+    Claims.Sampling.sha512Msg A.Cd _ hR
+  have hlt' : (A.faultyE q τ).card < K₀ := hlt
+  have h1 : ((A.faultyE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
+  show ((A.faultyE q τ).card : ℝ) ≤ ε * n
+  linarith
 
 /-- **`sound`'s hypothesis holds at the deployed choice** `K₀ = ⌊ε n⌋ + 1`. -/
 theorem sound_honest (ε : ℝ) (hεn : 0 ≤ ε * n) : (((⌊ε * n⌋₊ + 1 : ℕ) : ℝ)) - 1 ≤ ε * n := by
@@ -274,15 +318,13 @@ theorem sound_honest (ε : ℝ) (hεn : 0 ≤ ε * n) : (((⌊ε * n⌋₊ + 1 :
   linarith [Nat.floor_le hεn]
 
 /-- **`sound` is not trivial**: for a verifier that accepts everything, its bound fails at a prover whose extracted
-transcript fails the claim, where the finders built from it meet the premises and `deltaPub < 1`. -/
-theorem sound_nontrivial (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) (hCR : A.CR τ)
-    (hbad : ¬ A.Holds q ε τ)
-    (h1 : Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw (Bridge.ioSum A.P) A.ρ < 1) :
+transcript fails the claim, where `err τ < 1`. -/
+theorem sound_nontrivial (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) (hbad : ¬ A.Holds q ε τ)
+    (h1 : A.err τ < 1) :
     ¬ prob (fun _ => True ∧ ¬ A.Holds q ε τ) A.G τ ≤ A.bound τ := by
   intro h
   have h2 := (prob_true A.G τ).symm.le.trans
     ((prob_mono (p := fun _ => True) (q := fun _ => True ∧ ¬ A.Holds q ε τ) (fun _ _ => ⟨trivial, hbad⟩) A.G τ).trans h)
-  rw [bound, ite_eq_left hCR] at h2
   exact not_le.2 (ENNReal.ofReal_lt_one.2 h1) h2
 
 end LiveAt
