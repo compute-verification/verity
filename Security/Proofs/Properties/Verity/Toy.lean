@@ -26,9 +26,16 @@ variable {ι α : Type} [Fintype α] {d : Device ι}
 theorem comp_mem (k : Index) : comp k ∈ Core.Toy.components := by
   cases k <;> simp [comp, Core.Toy.components]
 
+theorem ofAudit_sampled : ofAudit .sampled = some .sampled := rfl
+theorem ofAudit_network : ofAudit .network = some .network := rfl
+theorem ofAudit_pouw : ofAudit .pouw = none := rfl
+theorem ofAudit_pous : ofAudit .pous = none := rfl
+theorem ofAudit_poub : ofAudit .poub = none := rfl
+
 /-- The toy decides exactly sampled proofs' and the network certifier's claims. -/
 theorem decides_iff (a : Audit) : deployment.Decides a ↔ a = .sampled ∨ a = .network := by
-  cases a <;> simp [Deployment.Decides, deployment, ofAudit]
+  cases a <;> simp [Deployment.Decides, deployment, ofAudit_sampled, ofAudit_network, ofAudit_pouw, ofAudit_pous,
+    ofAudit_poub]
 
 /-- **Sampled proofs' claim at the honest deployed instance**, from the honest prover's case. -/
 theorem honestHoldsAt_sampled (G : Given d α) (h : SampledHonest G) :
