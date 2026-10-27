@@ -894,10 +894,6 @@
    "owner": "@proofs",
    "digest": "ce23ada52fbd67f4a84875d02b79ea92d1973c7b181c104aa8c5299eaf78207b"
   },
-  "Flock.Assumptions.PinnedWindowDraws": {
-   "owner": "@training",
-   "digest": "4ffcc86392c72b696e7d4e1e144c051d1043b2cb5162d6511ae1fb68514c1e8e"
-  },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
    "digest": "c9624861b2572dfa4fe1887a5972b0d62070ac779fbebd0f5f6a0782ee367024"
@@ -997,6 +993,10 @@
   "FlockSoundness.Assumptions.LinkCRAt": {
    "owner": "@proofs",
    "digest": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30"
+  },
+  "FlockSoundness.Assumptions.PinnedWindowDraws": {
+   "owner": "@training",
+   "digest": "4ffcc86392c72b696e7d4e1e144c051d1043b2cb5162d6511ae1fb68514c1e8e"
   },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
    "owner": "@proofs",
@@ -2645,12 +2645,6 @@
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Flock.Guarantees"],
    "except": [],
    "why": "a guarantee is a Prop over Mathlib, never over a proof",
-   "sealed": true
-  },
-  "Definitions.Flock.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Flock", "Definitions.Flock.Assumptions"],
-   "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof",
    "sealed": true
   },
   "Definitions.Accounting": {
@@ -12297,7 +12291,7 @@
    "Flock.SecurityProofs.WindowDraw": "frozen (no-function): The decomposition of a window's stratified law at a member, and the service's split of a draw file into the members' session files (Member.sessionFile, a model of benchmarks/one_stage/a5.py's split in Security/Definitions/Flock/Audit/Window rather than executable code): a statement about a law and a model, with no acceptance of a function to take.",
    "Flock.SecurityProofs.WindowBound": "frozen (no-function): The union bound of a window's members' session bounds, over any window body and members' events: it takes each member's bound in its own subset session game as a hypothesis (what a member's session guarantee gives once its strategy runs the rest of the window around the session) and composes them, with no acceptance of a function to take.",
    "Flock.SecurityProofs.WindowBound_honest": "completeness: the honest lemma of WindowDraw and WindowBound: at the deployed window, through the one premise PinnedWindowDraws (its draw file and its three sessions' draw files by SHA-512), the window's draw is a draw of its stratified law (3744 units, strata of 2496, 624 and 624 units, one unit each), its thirteen members tile it inside their strata, the service's split of its draw file is the three pinned session files, every share has at most one unit, and the composed bound is at most 3 b when every member's session bound is at most b",
-   "Flock.SecurityProofs.WindowBound_nontrivial": "completeness: the nontrivial lemma of WindowBound: at a window of 3 units in two strata drawing one unit each, with one member across both whose event is a share of two units, every hypothesis but the member's being inside its stratum holds (its session bound is 0), and the window's event is above the composed bound 0",
+   "Flock.SecurityProofs.WindowBound_nontrivial": "completeness: the nontrivial lemma of WindowBound, its conclusion negated at a closed toy: at a window of 3 units in two strata drawing one unit each, with one member across both whose event is a share of two units and whose session bound is 0, the window's event is above the composed bound 0; WindowBound's other premises hold at the toy and the member's being inside its stratum fails, by helper lemmas outside the record",
    "Flock.SecurityProofs.JointStratified": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizon": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizonMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -20314,13 +20308,6 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
    ]
-  },
-  "Definitions.Flock.Assumptions": {
-   "digest": "f9d5dcb229332bc1e83a23b7b0fd31664ffd4fb021f159f51568d1ff3fe66ea0",
-   "definitions": {
-    "Flock.Assumptions.PinnedWindowDraws": "4ffcc86392c72b696e7d4e1e144c051d1043b2cb5162d6511ae1fb68514c1e8e"
-   },
-   "guarantees": ["Flock.SecurityProofs.WindowBound_honest"]
   },
   "Definitions.Flock.Audit.Harm": {
    "digest": "fb39d42f1ac4a65d12a78b1a11b110699184d1362cc111473e751ea4fcd11cc3",

@@ -501,8 +501,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
-    # `Flock.Assumptions.PinnedWindowDraws` (Security/Definitions/Flock/Assumptions.lean) is its Lean form, the premise of
-    # Flock.Guarantees.WindowBound_honest; falsified by hashing and parsing the recorded draw files
+    # `FlockSoundness.Assumptions.PinnedWindowDraws` (Security/Proofs/Flock/Soundness/Assumptions/WindowDraws.lean) is its
+    # Lean form, the premise of Flock.Guarantees.WindowBound_honest; falsified by hashing and parsing the recorded draw files
     Entry("flock-window-draws-pinned", "assumption",
           "The deployed sampling window's draw file and its three sessions' draw files, named by their SHA-512 digests, "
           "read as recorded: the window's stratified draw of one unit from each of its three strata (units 421, 2824 "

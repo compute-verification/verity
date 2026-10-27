@@ -4,12 +4,14 @@ import Proofs.Flock.EndToEnd.WindowDraw.Bound
 # `WindowBound`'s witnesses
 
 `WindowBound_honest`, the deployed window: its draw file and its three sessions' draw files read as pinned
-(`Flock.Assumptions.PinnedWindowDraws`); its strata are `[0, 2496)`, `[2496, 3120)` and `[3120, 3744)`, of 2496, 624
-and 624 units (`card0`, `card1`, `card2`); its thirteen members tile it (`tile`), each inside its stratum (`inside`);
-the service's split of its draw file is the three pinned session files; and the members' sizes over their strata's sum
-to one per stratum (`share_sum`), so the composed bound is at most `3 · b`.
+(`FlockSoundness.Assumptions.PinnedWindowDraws`); its strata are `[0, 2496)`, `[2496, 3120)` and `[3120, 3744)`, of
+2496, 624 and 624 units (`card0`, `card1`, `card2`); its thirteen members tile it (`tile`), each inside its stratum
+(`inside`); the service's split of its draw file is the three pinned session files; and the members' sizes over their
+strata's sum to one per stratum (`share_sum`), so the composed bound is at most `3 · b`.
 
-`WindowBound_nontrivial`: a member across two strata, whose composed bound fails.
+`WindowBound_nontrivial`: a member across two strata, whose composed bound fails. Every premise of `WindowBound` but
+the member's units in its stratum holds at the toy (`WindowToy.fit_holds`, `event_nonempty_holds`,
+`session_bound_holds`, with the law's `Flock.Guarantees.WindowToy.hk`), and that one fails (`in_stratum_fails`).
 -/
 
 namespace Flock.SecurityProofs
@@ -84,7 +86,7 @@ theorem share_sum :
 
 end WindowDeployed
 
-/-- **`WindowBound`'s honest lemma: the deployed window**, through `Flock.Assumptions.PinnedWindowDraws`. -/
+/-- **`WindowBound`'s honest lemma: the deployed window**, through `FlockSoundness.Assumptions.PinnedWindowDraws`. -/
 theorem WindowBound_honest : Flock.Guarantees.WindowBound_honest := by
   intro files hpin
   obtain ⟨hW, h1, h10, h12⟩ := hpin
@@ -137,55 +139,82 @@ theorem WindowBound_honest : Flock.Guarantees.WindowBound_honest := by
               ℝ≥0∞) * b := sum_le_sum fun j _ => by gcongr; exact hβ j
         _ = 3 * b := by rw [← sum_mul, WindowDeployed.share_sum]
 
+namespace WindowToy
+
+/-- `WindowBound`'s premise that each member is inside the window holds at the toy. -/
+theorem fit_holds : Flock.Guarantees.WindowToy.member.base + Flock.Guarantees.WindowToy.member.size ≤ 3 := by
+  decide
+
+/-- `WindowBound`'s premise that each member's event happens only at a nonempty share holds at the toy's event, a share
+of two units. -/
+theorem event_nonempty_holds : ∀ o : Unit × Finset (Fin 3) × Unit,
+    (Flock.Guarantees.WindowToy.member.share o.2.1).card = 2 → (Flock.Guarantees.WindowToy.member.share o.2.1).Nonempty :=
+  fun _ h => card_pos.1 (by omega)
+
+/-- `WindowBound`'s premise on each member's session bound holds at the toy with `β = 0`: at its one share size, the
+member's own `subset` session draws one of its units, so its share never has two. -/
+theorem session_bound_holds : ∀ κ (hκ : κ ≤ Flock.Guarantees.WindowToy.member.size), 1 ≤ κ →
+    κ ≤ Flock.Guarantees.WindowToy.k 0 →
+    ∀ ctx : Finset (Fin 3), Disjoint ctx Flock.Guarantees.WindowToy.member.range →
+    ∀ τ : Strategy (audit (Law.subset Flock.Guarantees.WindowToy.member.size κ hκ) Unit
+        fun S R => Flock.Guarantees.WindowToy.body (ctx ∪ Flock.Guarantees.WindowToy.member.unshift S) R),
+      prob (fun o => (Flock.Guarantees.WindowToy.member.share
+          (ctx ∪ Flock.Guarantees.WindowToy.member.unshift o.2.1)).card = 2)
+        (audit (Law.subset Flock.Guarantees.WindowToy.member.size κ hκ) Unit
+          fun S R => Flock.Guarantees.WindowToy.body (ctx ∪ Flock.Guarantees.WindowToy.member.unshift S) R) τ ≤ 0 := by
+  intro κ hκ h1 hk1 ctx hctx τ
+  rw [prob_audit, avg]
+  refine le_of_eq (sum_eq_zero fun S _ => ?_)
+  rw [prob_map]
+  refine mul_eq_zero_of_right _ (le_antisymm ((prob_mono (q := fun _ => False) (fun a ha => ?_) _ _).trans
+    (prob_false _ _).le) zero_le)
+  have ha' : (Flock.Guarantees.WindowToy.member.share
+      (ctx ∪ Flock.Guarantees.WindowToy.member.unshift ((Law.subset _ κ hκ).draw S))).card = 2 := ha
+  have hc : ((Law.subset _ κ hκ).draw S).card = κ := S.2
+  rw [Member.share_union_unshift fit_holds ctx _ hctx, hc] at ha'
+  have : κ ≤ 1 := hk1
+  omega
+
+/-- `WindowBound`'s premise that each member's units are in its stratum fails at the toy: the member `[0, 2)`, taken
+in stratum 0, has unit 1, of stratum 1. -/
+theorem in_stratum_fails : ¬ ∀ u : Fin 3, Flock.Guarantees.WindowToy.member.base ≤ u.val →
+    u.val < Flock.Guarantees.WindowToy.member.base + Flock.Guarantees.WindowToy.member.size →
+    Flock.Guarantees.WindowToy.strata u = 0 :=
+  fun h => absurd (h 1 (by decide) (by decide)) (by decide)
+
+end WindowToy
+
 /-- **`WindowBound`'s nontrivial lemma**: without its members inside their strata, the composed bound fails. -/
 theorem WindowBound_nontrivial : Flock.Guarantees.WindowBound_nontrivial := by
-  have hfit : Flock.Guarantees.WindowToy.member.base + Flock.Guarantees.WindowToy.member.size ≤ 3 := by decide
-  refine ⟨by decide, hfit, ?_, ?_, ?_, ?_⟩
-  · intro o h
-    exact card_pos.1 (by omega)
-  · intro κ hκ h1 hk1 ctx hctx τ
-    rw [prob_audit, avg]
-    refine le_of_eq (sum_eq_zero fun S _ => ?_)
-    rw [prob_map]
-    refine mul_eq_zero_of_right _ (le_antisymm ((prob_mono (q := fun _ => False) (fun a ha => ?_) _ _).trans
-      (prob_false _ _).le) zero_le)
-    have hS := Member.share_union_unshift hfit ctx ((Law.subset _ κ hκ).draw S) hctx
-    unfold Flock.Guarantees.WindowToy.E at ha
-    simp only at ha
-    have hc : ((Law.subset _ κ hκ).draw S).card = κ := S.2
-    rw [hS, hc] at ha
-    have : κ ≤ 1 := hk1
-    omega
-  · intro h
-    exact absurd (h 1 (by decide) (by decide)) (by decide)
-  · intro hk hall
-    let τ₀ : Strategy (audit (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k hk) Unit
-      Flock.Guarantees.WindowToy.body) := ⟨(), fun _ => PUnit.unit⟩
-    have h := hall τ₀
-    simp only [mul_zero, sum_const_zero, nonpos_iff_eq_zero] at h
-    rw [prob_audit, avg] at h
-    have hpick : ∀ s, ({(![0, 1] : Fin 2 → Fin 3) s} : Finset (Fin 3)) ∈
-        (Law.stratum Flock.Guarantees.WindowToy.strata s).powersetCard (Flock.Guarantees.WindowToy.k s) := by
-      intro s
-      rw [mem_powersetCard, singleton_subset_iff, card_singleton, Law.mem_stratum]
-      fin_cases s <;> exact ⟨rfl, rfl⟩
-    let ω₀ : (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k hk).Ω :=
-      fun s => ⟨{(![0, 1] : Fin 2 → Fin 3) s}, hpick s⟩
-    have hd : (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k hk).draw ω₀ = {0, 1} := by
-      show univ.biUnion (fun s => ({(![0, 1] : Fin 2 → Fin 3) s} : Finset (Fin 3))) = {0, 1}
-      decide
-    have hE : Flock.Guarantees.WindowToy.E
-        ((), (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k hk).draw ω₀, ()) := by
-      unfold Flock.Guarantees.WindowToy.E
-      rw [hd]
-      decide
-    have h' := (sum_eq_zero_iff.1 h) ω₀ (mem_univ _)
-    rw [prob_map] at h'
-    rcases mul_eq_zero.1 h' with h0 | h0
-    · exact ENNReal.inv_ne_zero.2 (ENNReal.natCast_ne_top _) h0
-    · simp only [Flock.Guarantees.WindowToy.body, prob] at h0
-      split_ifs at h0 with hc
-      · exact one_ne_zero h0
-      · exact hc ⟨(), mem_univ _, hE⟩
+  intro hall
+  let τ₀ : Strategy (audit (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k
+    Flock.Guarantees.WindowToy.hk) Unit Flock.Guarantees.WindowToy.body) := ⟨(), fun _ => PUnit.unit⟩
+  have h := hall τ₀
+  simp only [mul_zero, sum_const_zero, nonpos_iff_eq_zero] at h
+  rw [prob_audit, avg] at h
+  have hpick : ∀ s, ({(![0, 1] : Fin 2 → Fin 3) s} : Finset (Fin 3)) ∈
+      (Law.stratum Flock.Guarantees.WindowToy.strata s).powersetCard (Flock.Guarantees.WindowToy.k s) := by
+    intro s
+    rw [mem_powersetCard, singleton_subset_iff, card_singleton, Law.mem_stratum]
+    fin_cases s <;> exact ⟨rfl, rfl⟩
+  let ω₀ : (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k
+      Flock.Guarantees.WindowToy.hk).Ω :=
+    fun s => ⟨{(![0, 1] : Fin 2 → Fin 3) s}, hpick s⟩
+  have hd : (Law.stratified Flock.Guarantees.WindowToy.strata Flock.Guarantees.WindowToy.k
+      Flock.Guarantees.WindowToy.hk).draw ω₀ = {0, 1} := by
+    show univ.biUnion (fun s => ({(![0, 1] : Fin 2 → Fin 3) s} : Finset (Fin 3))) = {0, 1}
+    decide
+  have hE : (Flock.Guarantees.WindowToy.member.share ((Law.stratified Flock.Guarantees.WindowToy.strata
+      Flock.Guarantees.WindowToy.k Flock.Guarantees.WindowToy.hk).draw ω₀)).card = 2 := by
+    rw [hd]
+    decide
+  have h' := (sum_eq_zero_iff.1 h) ω₀ (mem_univ _)
+  rw [prob_map] at h'
+  rcases mul_eq_zero.1 h' with h0 | h0
+  · exact ENNReal.inv_ne_zero.2 (ENNReal.natCast_ne_top _) h0
+  · simp only [Flock.Guarantees.WindowToy.body, prob] at h0
+    split_ifs at h0 with hc
+    · exact one_ne_zero h0
+    · exact hc ⟨(), mem_univ _, hE⟩
 
 end Flock.SecurityProofs

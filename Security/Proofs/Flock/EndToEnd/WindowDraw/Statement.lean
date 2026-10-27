@@ -1,5 +1,5 @@
 import Mathlib.Data.Fin.VecNotation
-import Definitions.Flock.Assumptions
+import Proofs.Flock.Soundness.Assumptions.WindowDraws
 import Proofs.Flock.Soundness.Audit.Stratified
 
 /-!
@@ -18,7 +18,7 @@ there are none (`benchmarks/one_stage/a5.py`'s split, `Member.sessionFile`).
 * `WindowBound`, the composed bound: a bound on each member's event in its own `subset` session game, at each share
   size, bounds the window's, by the union bound over the members: at most `∑_j ∑_κ Pr[|share_j| = κ] · β_j(κ)`, which
   is `∑_j size_j / n_{s_j} · β_j(1)` at `k = 1`.
-* `WindowBound_honest`: the deployed window, its draw files pinned (`Flock.Assumptions.PinnedWindowDraws`).
+* `WindowBound_honest`: the deployed window, its draw files pinned (`FlockSoundness.Assumptions.PinnedWindowDraws`).
 * `WindowBound_nontrivial`: with a member across two strata, the composed bound fails.
 -/
 
@@ -142,9 +142,9 @@ def k : Fin 3 → ℕ := fun _ => 1
 end WindowDeployed
 
 /-- **`WindowBound`'s honest lemma: the deployed window.** For every reading `files` of draw files by their SHA-512
-digests at which the deployed window's four draw files read as recorded (`Flock.Assumptions.PinnedWindowDraws`), the
-window's draw file `W` gives `WindowDraw` and `WindowBound` their hypotheses, and the service's split of it is the
-three pinned session files:
+digests at which the deployed window's four draw files read as recorded
+(`FlockSoundness.Assumptions.PinnedWindowDraws`), the window's draw file `W` gives `WindowDraw` and `WindowBound` their
+hypotheses, and the service's split of it is the three pinned session files:
 
 * `W` is a `stratified` draw over 3744 units whose strata are `WindowDeployed.strata`'s (`DrawFile.stratumOf`), of 2496,
   624 and 624 units, each drawing `WindowDeployed.k = 1`, as `W`'s strata say; and `W`'s units are a draw of that law;
@@ -156,7 +156,7 @@ three pinned session files:
 * for every window body, members' events and session bounds as in `WindowBound`, the deployed window's event has
   probability at most `∑_j size_j / n_{str j} · β j 1`, and at most `3 · b` when every `β j 1 ≤ b`. -/
 def WindowBound_honest : Prop :=
-  ∀ files : String → Option DrawFile, Assumptions.PinnedWindowDraws files →
+  ∀ files : String → Option DrawFile, FlockSoundness.Assumptions.PinnedWindowDraws files →
     ∃ W : DrawFile, files WindowDeployed.drawDigest = some W ∧
       W.law = "stratified" ∧ W.population = 3744 ∧ W.units.Nodup ∧
       (∀ u : Fin 3744, (WindowDeployed.strata u).val = W.stratumOf u.val) ∧
@@ -204,11 +204,12 @@ def strata : Fin 3 → Fin 2 := ![0, 1, 1]
 /-- Each stratum draws one unit. -/
 def k : Fin 2 → ℕ := fun _ => 1
 
+/-- Each stratum has at least its one drawn unit, so `Law.stratified strata k` is a law. -/
+theorem hk : ∀ s, k s ≤ (Law.stratum strata s).card := by
+  decide
+
 /-- The instance's one member, the units `[0, 2)`, across both strata. -/
 def member : Member := ⟨0, 2⟩
-
-/-- The member's event: its share has two units. -/
-def E (o : Unit × Finset (Fin 3) × Unit) : Prop := (member.share o.2.1).card = 2
 
 /-- The window's body: nothing runs. -/
 def body : Finset (Fin 3) → Unit → Game Unit := fun _ _ => .ret ()
@@ -217,30 +218,17 @@ end WindowToy
 
 /-- **`WindowBound`'s nontrivial lemma**: its hypothesis that each member's units are in its stratum can't be dropped.
 At a window of 3 units in two strata (`WindowToy.strata`: unit 0, then units 1 and 2), each drawing one unit, with one
-member, the units `[0, 2)` taken in stratum 0, whose event is that its share has two units: the law is a stratified law,
-the member is inside the window, its event needs a nonempty share, and its event has probability `0` in its own
-`subset` session game at its one share size (so `β = 0` bounds it); but the member is not inside stratum 0, and the
-window's event, probability `1/2`, is above the composed bound `0`. -/
+member, the units `[0, 2)` taken in stratum 0, whose event is that its share has two units, and session bound `β = 0`,
+the composed bound's conclusion fails: the window's event, probability `1/2`, is above the composed bound `0`.
+The premise dropped is the member's units in its stratum (`SecurityProofs.WindowToy.in_stratum_fails`); `WindowBound`'s
+others hold at the toy (`WindowToy.hk`, `SecurityProofs.WindowToy.fit_holds`, `event_nonempty_holds` and
+`session_bound_holds`). -/
 def WindowBound_nontrivial : Prop :=
-  (∀ s, WindowToy.k s ≤ (Law.stratum WindowToy.strata s).card) ∧
-  WindowToy.member.base + WindowToy.member.size ≤ 3 ∧
-  (∀ o : Unit × Finset (Fin 3) × Unit, (WindowToy.member.share o.2.1).card = 2 →
-    (WindowToy.member.share o.2.1).Nonempty) ∧
-  (∀ κ (hκ : κ ≤ WindowToy.member.size), 1 ≤ κ → κ ≤ WindowToy.k 0 →
-    ∀ ctx : Finset (Fin 3), Disjoint ctx WindowToy.member.range →
-    ∀ τ : Strategy (audit (Law.subset WindowToy.member.size κ hκ) Unit
-        fun S R => WindowToy.body (ctx ∪ WindowToy.member.unshift S) R),
-      prob (fun o => WindowToy.E (o.1, ctx ∪ WindowToy.member.unshift o.2.1, o.2.2))
-        (audit (Law.subset WindowToy.member.size κ hκ) Unit
-          fun S R => WindowToy.body (ctx ∪ WindowToy.member.unshift S) R) τ ≤ 0) ∧
-  ¬ (∀ u : Fin 3, WindowToy.member.base ≤ u.val → u.val < WindowToy.member.base + WindowToy.member.size →
-    WindowToy.strata u = 0) ∧
-  ∀ hk : (∀ s, WindowToy.k s ≤ (Law.stratum WindowToy.strata s).card),
-    ¬ ∀ τ : Strategy (audit (Law.stratified WindowToy.strata WindowToy.k hk) Unit WindowToy.body),
-      prob (fun o => ∃ _ ∈ (Finset.univ : Finset Unit), WindowToy.E o)
-          (audit (Law.stratified WindowToy.strata WindowToy.k hk) Unit WindowToy.body) τ ≤
-        ∑ _j ∈ (Finset.univ : Finset Unit), ∑ κ ∈ Finset.Icc 1 (WindowToy.k 0),
-          prCoin (fun ω => (WindowToy.member.share ((Law.stratified WindowToy.strata WindowToy.k hk).draw ω)).card = κ) *
-            0
+  ¬ ∀ τ : Strategy (audit (Law.stratified WindowToy.strata WindowToy.k WindowToy.hk) Unit WindowToy.body),
+    prob (fun o => ∃ _ ∈ (Finset.univ : Finset Unit), (WindowToy.member.share o.2.1).card = 2)
+        (audit (Law.stratified WindowToy.strata WindowToy.k WindowToy.hk) Unit WindowToy.body) τ ≤
+      ∑ _j ∈ (Finset.univ : Finset Unit), ∑ κ ∈ Finset.Icc 1 (WindowToy.k 0),
+        prCoin (fun ω =>
+          (WindowToy.member.share ((Law.stratified WindowToy.strata WindowToy.k WindowToy.hk).draw ω)).card = κ) * 0
 
 end Flock.Guarantees

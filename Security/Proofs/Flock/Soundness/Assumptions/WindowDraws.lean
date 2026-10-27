@@ -1,19 +1,20 @@
 import Definitions.Flock.Audit.Window
 
 /-!
-# C-Flock's named assumptions over its definitions
+# The deployed sampling window's draw files
 
-* `PinnedWindowDraws`: the draw files of one deployed sampling window, pinned by their SHA-512 digests, and what they
-  read as. The window decomposition's honest lemma (`Proofs/Flock/EndToEnd/WindowDraw`) takes it.
+Assumption (`flock-window-draws-pinned`): the draw files of one deployed sampling window, named by their SHA-512 digests,
+read as the run recorded them. It is a parse premise: Lean doesn't read the files' bytes, so what they read as is
+assumed, and hashing and parsing them checks it. `PinnedWindowDraws` states it, and the window decomposition's honest
+lemma (`Flock.Guarantees.WindowBound_honest`, `Proofs/Flock/EndToEnd/WindowDraw`) takes it.
 -/
 
-namespace Flock.Assumptions
+namespace FlockSoundness.Assumptions
 
 open FlockSoundness.Audit.Window
 
-/-- `flock-window-draws-pinned` (the deployed window's draw files are these). **The draw files of the deployed
-sampling window read as recorded**: `files d` is the draw file whose bytes have SHA-512 digest `d` (lowercase hex), as
-`json.loads` reads it.
+/-- **The draw files of the deployed sampling window read as recorded** (`flock-window-draws-pinned`): `files d` is the
+draw file whose bytes have SHA-512 digest `d` (lowercase hex), as `json.loads` reads it.
 
 * The window's draw file (`rank0/draw.json`) is the window's one draw: `stratified`, population 3744, one unit from each
   of three strata, the `SparseMlaSplitPart_v1` units at `T=64` (`[0, 2496)`), at `T=16` (`[2496, 3120)`) and the
@@ -40,4 +41,4 @@ def PinnedWindowDraws (files : String → Option DrawFile) : Prop :=
     files "bb1690fe0ceed558c068e1d2ced851113d4a46a8d9067760fde29bdbc2abcbd9b9aa110142b079fc8afa59f2070f7caba3eaf3ffcf3831992a054a2c06a37763" =
       some ⟨"subset", 624, 1, [], [150]⟩
 
-end Flock.Assumptions
+end FlockSoundness.Assumptions
