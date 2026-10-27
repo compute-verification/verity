@@ -1,24 +1,30 @@
 #!/usr/bin/env bash
-# The units' session on one H200, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
+# The units' session on one H200 or RTX PRO 6000, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/units-ship.tar .
 #   research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send /tmp/units-ship.tar [--send /tmp/units-old.tar] -- bash benchmarks/torch_gpu/units/session.sh
+#   (the RTX PRO 6000: --on vy-nebius-2; --env SWEEP_ONLY=1 for the sweeps alone)
 #
 # Outside the lease: the ship (units-ship.tar) unpacked into a scratch directory and held to its MANIFEST.sha256, the
 # build's records and the fixture's summary copied to $OUT, the card and the Python recorded; units-old.tar, another
 # build's ship, likewise.  Under one lease of at most 30 minutes: check.py (the sweeps, the check, then bench.py's timing)
-# on the shipped cubin, its JSON lines in $OUT/check.jsonl; then, with units-old.tar, bench.py on the old ship's modules and
-# cubin ($OUT/bench-old.jsonl), so both builds are timed by one ruler on one card.  Every step's exit code is in
-# $OUT/rc.txt; exits non-zero if any failed.
-# VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default /workspace/cp/venv312, else /workspace/jobs/venv312);
-# GPU_LEASE_WHO the lease's holder (default kernels-kattnref); LEASE_MIN the lease's bound (default 30).
+# on the shipped cubin of the card's arch, its JSON lines in $OUT/check.jsonl; then, with units-old.tar, bench.py on the old
+# ship's modules and cubin ($OUT/bench-old.jsonl), so both builds are timed by one ruler on one card.  Every step's exit
+# code is in $OUT/rc.txt; exits non-zero if any failed.
+# VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default the first of /workspace/cp/venv312,
+# /workspace/venv312 and /workspace/jobs/venv312); GPU_LEASE_WHO the lease's holder (default kernels-kattnref); LEASE_MIN
+# the lease's bound (default 30); check.py's environment (SWEEP_ONLY, BATCHES, ...) passes through.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 export O GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-kattnref}
 V=${VERITY_BENCH_VENV:-}
-if [ -z "$V" ]; then for c in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -x "$c/bin/python" ] && V=$c && break; done; fi
+if [ -z "$V" ]; then
+  for c in /workspace/cp/venv312 /workspace/venv312 /workspace/jobs/venv312; do [ -x "$c/bin/python" ] && V=$c && break; done
+fi
 export PY=${V:-/usr}/bin/python3
+# the source tree's verity, which check.py reads only to diagnose a sweep chunk that disagrees (sweep.model)
+export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 export S
 : > "$O/rc.txt"
@@ -32,8 +38,9 @@ if [ -f "$IN/units-old.tar" ]; then
   OLD=$S/old
 fi
 grep -qv " rc 0$" "$O/rc.txt" && { cat "$O/rc.txt"; exit 2; }
-cp "$S/build-check.json" "$S/harness-gate.txt" "$S/toolchain.txt" "$S/source.txt" "$S/MANIFEST.sha256" "$S/check/fixture.json" "$O/"
-cp "$S/harness-gate.json" "$O/" 2>/dev/null
+cp "$S"/build-check.*.json "$S"/harness-gate.*.txt "$S/toolchain.txt" "$S/source.txt" "$S/MANIFEST.sha256" \
+  "$S/check/fixture.json" "$O/"
+cp "$S"/harness-gate.*.json "$O/" 2>/dev/null
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 "$PY" -c 'import sys, numpy, torch; print(sys.executable, "numpy", numpy.__version__, "torch", torch.__version__, torch.version.cuda)' \
   > "$O/python.txt" 2>&1

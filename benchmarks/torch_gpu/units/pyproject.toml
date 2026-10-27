@@ -1,6 +1,7 @@
-# The frozen decoder's non-matmul units (HASH-19). Not a package: build.sh, session.sh and check.py run on a CPU node and the
-# H200; tests/ checks here what a CPU can: the twins against the fp32 primitives' evaluators and scalar compositions, the
-# twins against the sweeps' models, and the build check (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/units`).
+# The frozen decoder's non-matmul units (HASH-19). Not a package: build.sh, session.sh and check.py run on a CPU node, the
+# H200 and the RTX PRO 6000; tests/ checks here what a CPU can: the twins against the fp32 primitives' evaluators and scalar
+# compositions, the twins against the sweeps' models, and the build check
+# (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/units`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
