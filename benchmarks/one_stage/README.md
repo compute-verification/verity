@@ -80,6 +80,14 @@ negatives.
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
+- `served_bandwidth.sh` (with `served_bandwidth.py`): the bandwidth audit's piece,
+  `BANDWIDTH_CMD='bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'`. After the window is served, under a
+  lease of its own, it runs one remote bandwidth session on the card over the node's registered store (PoUS's P2 `C*`,
+  decoded at use by kernels' staging decode, `benchmarks/pous/p2_v1/bandwidth.py session`) against the verifier on
+  vy-auditor-2, which its gate's party key starts there. The answer goes to `DIR/answer.json` in the core interface's
+  form (`p2_party.core_answer`): the credited reads `q_bytes` at `eps` and δ, and γ's timing and sample terms against an
+  H200's specified 4.8 TB/s. The session runs beside the window and is not interleaved with the engine's reads, and the
+  answer says so.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
