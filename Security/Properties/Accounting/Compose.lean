@@ -33,11 +33,11 @@ program `p` and query:
   then its closure, `Properties.SampledProofs.bytesOf`), is accepted and draws no unit of a set `U` no more often than
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 
-It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
-open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
-its leaf under the weights' or the transcript's root is the extractor's too. The draw conjunct is over the code alone
-and could be proved first (`Select.select`'s subset draw from bytes, `Draw.drawUnits`), beside
-`Properties.SampledProofs.DrawMisses`.
+It is stated, not proved, and isn't to be: its commit-coin and seed conjuncts are the seeded schedule, which
+`LayerCommitted` excludes. `Properties.Compose.declaredOf` (`Properties.Accounting.ComposeOf`) builds a `Declared` from
+a compiled Program, and `Properties.Compose.DeclaredOfProgram` proves of what it accepts the units and draw conjuncts
+(`Properties.Compose.LayoutUnits`), on the live schedule it is given; tying each value to its leaf under the weights'
+or the transcript's root is the extractor's too.
 -/
 
 open Lean (Json)

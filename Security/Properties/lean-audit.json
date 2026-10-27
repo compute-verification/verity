@@ -42,6 +42,7 @@
   "Properties.RemoteAudit.Shared",
   "Properties.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
+  "Properties.Accounting.ComposeOf",
   "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit",
   "Properties.RemoteAudit.Line",
@@ -461,6 +462,7 @@
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
    "except": [
     "Properties.Accounting.Compose",
+    "Properties.Accounting.ComposeOf",
     "Properties.Accounting.Served",
     "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
     "Properties.Accounting.DeclaredCircuit",
@@ -478,6 +480,11 @@
    "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
    "except": [],
    "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
+  },
+  "Properties.Accounting.ComposeOf": {
+   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.Accounting.Compose"],
+   "except": [],
+   "why": "the declared circuit of a compiled Program (`dagOf`, `declaredOf`) is built from the code's own gate locator (`Flock.Program.Prog.gate`), the registry's classes (`Definitions.Accounting.Gates.classOf`) and the verifier's partition of its program (`SampledProofs.Slots.layout`), and what they accept is stated against them, never a proof"
   },
   "Properties.Accounting.Served": {
    "imports": [
@@ -2370,6 +2377,12 @@
    "assumptions": [],
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5"
   },
+  "Properties.Compose.SecurityProofs.dagOfProgram": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Compose.SecurityProofs.declaredOfProgram": {
+   "owner": "@compute-accounting"
+  },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.SecurityProofs.designWellFormed : Properties.SampledProofs.DesignWellFormed"],
@@ -3241,6 +3254,14 @@
    "Properties.Requirement.planMatches": {
     "function": "CircuitRequirement.Instance.planMatches",
     "outcome": "none"
+   },
+   "Properties.Compose.SecurityProofs.dagOfProgram": {
+    "function": "Properties.Compose.dagOf",
+    "outcome": "accept"
+   },
+   "Properties.Compose.SecurityProofs.declaredOfProgram": {
+    "function": "Properties.Compose.declaredOf",
+    "outcome": "accept"
    },
    "Properties.SampledProofs.SecurityProofs.designWellFormed": {
     "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign"],

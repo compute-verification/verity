@@ -50,6 +50,7 @@
   "Proofs.Properties.RemoteAudit.SharedLink",
   "Proofs.Properties.RemoteAudit.Pooled",
   "Proofs.Properties.Accounting.Served",
+  "Proofs.Properties.Accounting.ComposeOf",
   "Proofs.Properties.RemoteAudit.Line",
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
