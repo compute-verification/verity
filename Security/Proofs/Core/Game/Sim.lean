@@ -18,7 +18,8 @@ strategy node by node, as a reduction runs a prover of `g` against the verifier 
 * relabelled outputs on either side (`dom_map_left`, `dom_map_right`), and C-Flock's games through core's image
   (`Dominated.toFlock`);
 * a coin of `G` read through a map keeping the uniform law, or a factor at a time (`dom_coin_right_map`,
-  `dom_coin_prod`, `dom_coin_equiv`), and drawn in chunks (`Split`, `dom_split`, through `Covers`).
+  `dom_coin_prod`, `dom_coin_equiv`), and drawn in chunks (`Split`, `dom_split`, through `Covers`; bits drawn a
+  release at a time, `splitBits`, through an equivalence, `Split.congr`).
 
 A deterministic strategy of `G` can't toss the coins `g` reads beyond `G`'s, so the reduction fixes them at their best
 value (`exists_avg_le`): the average over them is at most the largest.

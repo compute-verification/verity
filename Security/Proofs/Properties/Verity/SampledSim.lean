@@ -27,6 +27,10 @@ accepted.
 live order). An untagged release never moves the reduction (`reached_filter`); where the tagged releases are the draw's
 block, the link points', then one block per round, each one release per chunk, the reduction is in the rounds at what
 they read back to (`reached_canon`); and the record is the live audit's transcript there.
+
+`Drive` bundles the reduction at one live session of `SampledDeploy.A` (the coupling's `proj` and `covers`, how it
+reads the releases, and those refusals), and gives the strategy `Drive.τ` and the coupling `Drive.coupling`.
+`accept_le_of_drives` is `SampledDeploy.accept_le` at `τOf := (Dr …).τ`.
 -/
 
 namespace Verity.Game.LiveDrive
