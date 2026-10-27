@@ -1,6 +1,7 @@
 import Proofs.Properties.Verity.SampledProofs
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Unopened
+import Proofs.Core.Game.Tape
 
 /-!
 # Sampled proofs' target at the deployment, with no hypothesis on the strategy
@@ -69,6 +70,46 @@ theorem card_unbound_congr {C C' : Verity.Circuit} (hC : C = C') {n n' : ℕ} (h
   obtain rfl := eq_of_heq hO
   obtain rfl := eq_of_heq hT
   rfl
+
+/-- `Claims.Pr` is the uniform `prCoin`, in `ℝ≥0∞`. -/
+theorem ofReal_Pr_eq_prCoin {β : Type} [Fintype β] [Nonempty β] (p : β → Prop) :
+    ENNReal.ofReal (Claims.Pr p) = Game.prCoin p := by
+  classical
+  unfold Claims.Pr
+  rw [Game.prCoin_eq_card, ENNReal.ofReal_div_of_pos (by exact_mod_cast Fintype.card_pos), ENNReal.ofReal_natCast,
+    ENNReal.ofReal_natCast]
+  congr 3
+
+/-- **The replay finder**: on a uniform tape of the play, it plays `σ` and outputs what `col` reads off the outcome,
+at the declared cost `k`. -/
+noncomputable def Vocab.replayFinder (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ) : Claims.Finder where
+  S := Game.Tape (V.game θ F c) σ
+  out t := col (Game.Tape.run _ σ t)
+  cost _ := k
+
+/-- **The collision `col` reads off the outcome.** -/
+def ColEvent (col : Outcome → Option (Claims.Msg × Claims.Msg)) (o : Outcome) : Prop :=
+  ∃ u v, col o = some (u, v) ∧ Claims.Collision sha512Msg u v
+
+/-- **The play's collision event has the replay finder's probability** (`Game.prob_eq_prCoin_tape`). -/
+theorem prob_colEvent_eq (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ) :
+    Game.prob (ColEvent col) (V.game θ F c) σ = ENNReal.ofReal ((V.replayFinder θ F c σ col k).Pr sha512Msg) := by
+  rw [Game.prob_eq_prCoin_tape, Claims.Finder.Pr, ofReal_Pr_eq_prCoin]
+  rfl
+
+/-- **`break_le` from the vocabulary's finder.** Where the vocabulary's sampled-proofs finder at `σ` outputs a collision
+at least as often as the replay finder of `col` (`hF`; the vocabulary's finder is that finder, or a combined finder
+that runs it), and the loss is at least its argument (`hloss`, the additive form), the collision event `col` reads off
+the play is at most the loss at the finder: `SampledIn.break_le` at `Brk := ColEvent col`. -/
+theorem break_le_of (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ)
+    (hF : (V.replayFinder θ F c σ col k).Pr sha512Msg ≤ (V.finder .sampled θ F c σ).Pr sha512Msg)
+    (hloss : ∀ x, x ≤ V.loss .sampled θ x) :
+    Game.prob (ColEvent col) (V.game θ F c) σ ≤ V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) := by
+  rw [prob_colEvent_eq V θ F c σ col k]
+  exact (ENNReal.ofReal_le_ofReal hF).trans (hloss _)
 
 /-- The values the session's extractor opens at `τ`: its witness's openings in the sampling statement. -/
 noncomputable abbrev _root_.Flock.Guarantees.LiveAt.valE {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit}
