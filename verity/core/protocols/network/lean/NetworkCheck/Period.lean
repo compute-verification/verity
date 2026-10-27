@@ -6,6 +6,7 @@ import SampledProofs.OneStageZk
 import SampledProofs.Partition
 import Flock.Program
 import Flock.Public
+import NciCheck.Desc
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -53,14 +54,15 @@ its descriptor and the schedule,
 
     "program": hex,
     "scan": descriptor,
-    "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "lanes",
-                 "queue", "slots", "window"}
+    "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
+                 "lanes", "queue", "slots", "window"}
 
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
-header, and B, S = `lanes` · `slots` and T = `window` u32s), whose digest `WardenParams.digest` every registration
-binds; its `program` is the scan's registered Program, the descriptor's SHA-512 (`partition_object.program_sha512`),
-and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
+header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a timestep's buckets, dividing T, so each
+link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
+whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
+descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
 its root batches one instance of a template whose parameters are `row` and `prog` (`IngressScanFirst`, bucket 0), T − 1
 of one whose are `row`, `sin` and `prog` (`IngressScanBucket`; none when T = 1), each `row` the schedule's (S · B
@@ -68,7 +70,10 @@ bytes) and both returning the same, then T of one whose parameter is `state` and
 schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 8 bits, a u16 16), and its every input gate is
 a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
 egress gate is an input (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows
-leaves free. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
+leaves free. The rest of what `NetTiming.Layout.Fits` asks is read off the description (`scanOf`): the Program laid out
+as the decoder lays one out and within its resolution's walk (`NciCheck.Desc`), every egress leaf returned by the root
+and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
+ingress row's. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
 are checked as in the clock form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
@@ -140,7 +145,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
   (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
-  certificate is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
+  certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
+  connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
   the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout, the link-window's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
@@ -218,7 +224,7 @@ def formats : List String := ["verity/registration/v1", "verity/registration/v2"
 /-- A proof unit's public outputs are at most 16 bits (the values it commits can be wider). -/
 def outBits : Nat := 16
 def unitLevel : String := "unit"
-def scheduleTag : String := "verity-network-warden/parameters/v2"
+def scheduleTag : String := "verity-network-warden/parameters/v3"
 def domainTag : String := "verity-network-warden/cells-domain/v2"
 def cellsTag : String := "verity-network-warden/cells/v2"
 def rowsFormat : String := "verity-network-warden/registration/v2"
@@ -244,6 +250,7 @@ structure Schedule where
   cellBytes : Nat
   delay : Nat
   egressCells : Nat
+  every : Nat
   ingressBuckets : Nat
   ingressCells : Nat
   lanes : Nat
@@ -253,6 +260,12 @@ structure Schedule where
 
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
+
+/-- A timestep's Program slots, one a lane (`WardenParams.program_slots`). -/
+def Schedule.programSlots (s : Schedule) : Nat := s.lanes
+
+/-- A window's Program slots: T / `every` timesteps of `programSlots` (`WardenParams.window_programs`). -/
+def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
 /-- The clock form's link as N2 declares it: Σ_sync, its run, each end's grid and occupancy profile, and the auditor's
 one-stage v2 parameters for its link-windows (`oneStage`, without `ports`) with their partition object's digest. -/
@@ -390,20 +403,21 @@ def rowsParamsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
 
 def scheduleOf (j : Json) : V Schedule := do
-  exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "lanes", "queue",
-    "slots", "window"] "schedule"
+  exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
+    "queue", "slots", "window"] "schedule"
   let pos : String → V Nat := fun k => do
     let x ← Flock.J.nat j k "schedule"
     unless 1 ≤ x do throw s!"schedule: {k} is a positive integer"
     pure x
   let s : Schedule :=
     { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
-      egressCells := ← pos "egress_cells", ingressBuckets := ← pos "ingress_buckets",
+      egressCells := ← pos "egress_cells", every := ← pos "every", ingressBuckets := ← pos "ingress_buckets",
       ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
       window := ← pos "window" }
   unless cellHeader + 1 < s.cellBytes do throw s!"schedule: a cell holds its {cellHeader}-byte header and a byte"
   unless s.cellBytes < 2 ^ 32 ∧ s.allocation < 2 ^ 32 ∧ s.window < 2 ^ 32 do
     throw "schedule: B, S = lanes · slots and T = window are u32s"
+  unless s.window % s.every == 0 do throw "schedule: every divides the window: a window is whole timesteps"
   pure s
 
 /-- An end of the clock form's link: its declared grid, exactly `LinkWindow.gridOf`'s keys, and its occupancy profile or
@@ -435,7 +449,7 @@ def oneStageOf (j : Json) : V (String × String) := do
 def Schedule.digest (s : Schedule) : V ByteArray :=
   Identity.identityDigestSha512 scheduleTag (Json.mkObj [
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
-    ("egress_cells", toJson s.egressCells), ("ingress_buckets", toJson s.ingressBuckets),
+    ("egress_cells", toJson s.egressCells), ("every", toJson s.every), ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
     ("reasons", toJson failReasons)])
@@ -452,6 +466,57 @@ def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
 
 /-- Parameters' bits: their types' summed. -/
 def paramBits (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + bitsOf p.2) 0
+
+/-- The collections a part of references names: its space and index, or each item's of an explicit part. -/
+def partNames : Flock.Program.Part → Array (Bool × Nat)
+  | .affine p i _ _ => #[(p, i)]
+  | .strided p i _ _ _ _ _ => #[(p, i)]
+  | .explicit it => it.map fun r => (r.p, r.i)
+
+/-- Per Definition, whether every leaf it returns is a gate it computes, never a parameter's leaf passed through: each
+part of its return names nodes of its body, none a scan, each calling a primitive or a Definition decoded before it of
+which the same holds. Once per Definition, at the cost of its return's parts. -/
+def ownReturns (P : Flock.Program.Prog) : Array Bool :=
+  (List.range P.defs.size).foldl (fun a d =>
+    let defn := P.defs[d]!
+    a.push (!defn.prim && defn.body.ret.parts.all fun q => (partNames q).all fun (p, k) =>
+      !p && match defn.body.nodes[k]? with
+        | some n => n.form != .scan && ((P.defs[n.fn]!).prim || (n.fn < d && a[n.fn]!))
+        | none => false)) #[]
+
+/-- The root's template nodes, in order: those calling a composite. -/
+def templateNodes (P : Flock.Program.Prog) : List Nat :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  (List.range nodes.size).filter fun k => match P.defs[nodes[k]!.fn]? with
+    | some d => !d.prim
+    | none => false
+
+/-- The root node a template's argument reads when the argument is that input node's leaves in order from its first
+(one affine run), as the generator form binds each parameter to an input array of its own. -/
+def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
+  match a.seq.parts.toList with
+  | [.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
+    | some n => if NciCheck.Desc.isInputNode P n then some k else none
+    | none => none
+  | _ => none
+
+/-- Refuses with `why` unless `b`: one step of a `do` block, so what its acceptance gives is read off it step by step
+(`Properties.NetworkScan`). -/
+def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
+
+/-- `o`'s value, refusing with `why` where there is none, as one step. -/
+def needSome {α : Type} (o : Option α) (why : String) : V α := match o with
+  | some a => pure a
+  | none => throw why
+
+/-- The generator form's ingress templates, from the templates before the egress template's: bucket 0's, and the later
+ingress buckets' when there are later buckets. -/
+def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
+    V ((Flock.Program.Node × Flock.Program.Defn) × Option (Flock.Program.Node × Flock.Program.Defn))
+  | [f] => pure (f, none)
+  | [f, b] => pure (f, some b)
+  | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
+    bucket's"
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
@@ -476,47 +541,69 @@ the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of t
 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
 scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
 form, is refused first, by name: there the egress row is an input gate, which `NetTiming.Layout.Fits` refuses, and `K`
-would count the free inputs of a Program that only compares its egress rows. -/
+would count the free inputs of a Program that only compares its egress rows.
+
+Then what `NetTiming.Layout.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
+the description, at the cost of its nodes and returns: the Program is laid out as C-Flock's decoder lays one out and
+within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
+every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
+returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); each
+ingress template's row, and every template's argument, is one input node's leaves (`inputArg`), so each ingress gate is
+an input and a template reads only input gates outside its own; no egress template's argument is an ingress row's
+input node, so no egress gate depends on an ingress gate; and the Program is topological (`Prog.orderViolation`, as
+`NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
-  let prog ← match Flock.Program.decode (← Flock.canon j).toUTF8 with
-    | .ok prog => pure prog
-    | .error e => throw s!"scan: {e}"
-  unless Flock.hexOf prog.sha512 == program do throw "scan: its SHA-512 is not the registered Program's (program)"
-  let some root := prog.defs[prog.root]? | throw "scan: no root"
-  let templates := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
-    | some d => if d.prim then none else some (x, d)
-    | none => none
+  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+  need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
+  let root ← needSome prog.defs[prog.root]? "scan: no root"
+  let templates := (templateNodes prog).toArray.map fun k => (root.body.nodes[k]!, prog.defs[root.body.nodes[k]!.fn]!)
   let T := s.window
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
-  let some (xe, de) := templates.back? | throw "scan: no template"
-  if de.params.any (fun p => p.1 == "row" || p.2 == row) then
-    throw "scan: the egress template takes its row as an input (the checker form): no egress gate is an input \
-      (NetTiming.Layout.Fits)"
-  let ((xf, df), later) ← match templates.pop with
-    | #[f] => pure (f, none)
-    | #[f, b] => pure (f, some b)
-    | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
-      bucket's"
-  unless df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
-      de.params.map (·.1) == egressParams do
-    throw s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
+  let (xe, de) ← needSome templates.back? "scan: no template"
+  need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
+    (the checker form): no egress gate is an input (NetTiming.Layout.Fits)"
+  let ((xf, df), later) ← ingressTemplates templates.pop.toList
+  need (df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
+      de.params.map (·.1) == egressParams)
+    s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
   let laterN := match later with
     | some (x, _) => if x.form == .batch && 1 ≤ x.n then some x.n else none
     | none => some 0
-  unless xf.form == .batch && xf.n == 1 && laterN == some (T - 1) && xe.form == .batch && xe.n == T do
-    throw s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
-  unless df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row) do
-    throw "scan: an ingress template's row is not the schedule's"
-  unless later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret do
-    throw "scan: the ingress templates' prog or return differ"
-  unless de.ret == .tuple #[.array outBits (.value 1), row] do
-    throw "scan: the egress template doesn't return a u16 and the schedule's row"
+  need (xf.form == .batch && xf.n == 1 && laterN == some (T - 1) && xe.form == .batch && xe.n == T)
+    s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
+  need (df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row))
+    "scan: an ingress template's row is not the schedule's"
+  need (later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret)
+    "scan: the ingress templates' prog or return differ"
+  need (de.ret == .tuple #[.array outBits (.value 1), row])
+    "scan: the egress template doesn't return a u16 and the schedule's row"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
   let laterBits := (later.map (paramBits ·.2.params)).getD 0
-  unless inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params do
-    throw "scan: an input gate that is no template's parameter"
+  need (inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params)
+    "scan: an input gate that is no template's parameter"
+  need (NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog)
+    "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
+      (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
+  let ke := (templateNodes prog).getLast?.getD 0
+  need (root.body.ret.parts.any fun q => match q with
+      | .affine false k 0 c => k == ke && T * de.outLeaves ≤ c
+      | _ => false)
+    "scan: the root doesn't return every egress leaf, so an egress gate would be one the Program doesn't return \
+      (NetTiming.Layout.Fits)"
+  need ((ownReturns prog)[xe.fn]!) "scan: the egress template returns a leaf it doesn't compute (a parameter's, passed \
+    through), so an egress gate would be an input (NetTiming.Layout.Fits)"
+  let ingress := #[xf] ++ (later.map (#[·.1])).getD #[]
+  let rows := ingress.map fun x => x.args[0]?.bind (inputArg prog)
+  need (rows.all (·.isSome)) "scan: an ingress template's row is not one input node's leaves, so an ingress gate \
+    would be no input (NetTiming.Layout.Fits)"
+  need ((ingress.push xe).all fun x => x.args.all fun a => (inputArg prog a).isSome)
+    "scan: a template's argument is not one input node's leaves"
+  need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
+    row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
+  need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
+    is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do
@@ -878,7 +965,8 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg 
   unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
-    refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's"
+    refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
+      certifier certifies none of a window in which it refused a connection: traffic past the Program slots)"
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
   unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"

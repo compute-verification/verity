@@ -20,7 +20,11 @@ gets the ingress payloads as bytes (co-located tonight; deployed, its own shim s
 it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
 taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
-until its last bucket. Nothing admitted is dropped or reordered.
+until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
+can hold (`every`: a timestep of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
+`ingress_scan.Class`), so the warden certifies no record of a window in which it refused a connection: `withhold`
+gets that window's three records in place of `publish`, and the period check refuses a link-window missing any
+record's certificate.
 
 **The schedule.** Connection q, admitted at bucket s on the warden's own schedule, carries r = `slots` cells a bucket
 each way from s on:
@@ -79,7 +83,7 @@ from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BY
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, row_count
 from verity.core.protocols.certifier.release import with_release
 
-PARAMETERS_TAG = "verity-network-warden/parameters/v2"
+PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the warden's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
@@ -105,6 +109,7 @@ class WardenParams:
     ingress_cells: int = 64
     ingress_buckets: int = 50
     egress_cells: int = 4096
+    every: int = 1  # a timestep's buckets: the Programs' boundaries are every `every` buckets of a window
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -112,6 +117,18 @@ class WardenParams:
                 raise ValueError(f"{name} is a positive integer, not {value!r}")
         if self.cell_bytes <= HEADER.size + 1:
             raise ValueError(f"a cell holds its {HEADER.size}-byte header and a byte")
+        if self.window % self.every:
+            raise ValueError(f"every ({self.every}) divides the window ({self.window}): a window is whole timesteps")
+
+    @property
+    def program_slots(self) -> int:
+        """A timestep's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
+        return self.lanes
+
+    @property
+    def window_programs(self) -> int:
+        """A window's Program slots: `window / every` timesteps of `program_slots`."""
+        return self.window // self.every * self.program_slots
 
     @property
     def payload(self) -> int:
@@ -255,8 +272,10 @@ class Warden:
     served or queued. `connect()` opens a server connection, a (reader, writer) pair.
 
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
-      default they are kept in `records`); `log` has one entry a connection once it ends, `refused` the ordinal-less
-      refusals' count, `lateness` each tick's in seconds;
+      default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a
+      connection was refused (`refused_windows`; by default kept in `withheld`): nothing of that window is to be
+      certified; `log` has one entry a connection once it ends, `refused` the ordinal-less refusals' count,
+      `lateness` each tick's in seconds;
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
@@ -268,6 +287,7 @@ class Warden:
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
+                 withhold: Callable[[Record, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
@@ -282,11 +302,14 @@ class Warden:
         self.fails = Certifier(fails_link, params.fails_grid)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
+        self.withheld: list[Record] = []
+        self.withhold = withhold or (lambda record, grid: self.withheld.append(record))
         self.release = release
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
         self.refused = 0
+        self.refused_windows: set[int] = set()
         self.log: list[dict] = []
         self.lateness: list[float] = []
         self.ticks = 0
@@ -303,6 +326,7 @@ class Warden:
     async def handle(self, reader: asyncio.StreamReader, writer: Any) -> None:
         if len(self.queue) >= self.params.queue:
             self.refused += 1
+            self.refused_windows.add(self.ticks // self.params.window)
             writer.write(cell(REFUSED, 0, b"", self.params.cell_bytes))
             writer.close()
             self._changed.set()
@@ -357,9 +381,10 @@ class Warden:
             if self.release is not None:
                 self.release(grid.link, row)
         if (t + 1) % self.params.window == 0:
-            self.publish(self.ingress.close_window(), self.params.grid)
-            self.publish(self.egress.close_window(), self.params.grid)
-            self.publish(self.fails.close_window(), self.params.fails_grid)
+            out = self.withhold if t // self.params.window in self.refused_windows else self.publish
+            out(self.ingress.close_window(), self.params.grid)
+            out(self.egress.close_window(), self.params.grid)
+            out(self.fails.close_window(), self.params.fails_grid)
 
     def _admit(self, c: _Connection, t: int) -> None:
         c.admitted = t

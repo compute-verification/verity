@@ -110,7 +110,8 @@ def test_a_mirror_that_skips_one_stage_v2_is_caught(server, monkeypatch):
 #: with an answer of its own (the made-up `{"verdict": "accept", …}` the check once read), one whose proof v2 refuses
 #: (a public file or a session record in no blob, units no session proved, a circuit file in no blob), one whose
 #: sessions opened a root other than the registered one, and in the rows form a link-window missing one of its
-#: records' certificates, a registration not under the deployment key, the scan's answer for another window's rows,
+#: records' certificates, one the warden left uncertified for refusing a connection (traffic past its Program slots),
+#: a registration not under the deployment key, the scan's answer for another window's rows,
 #: rows under a schedule whose digest isn't the bound one, and the scan's answer of an honest period, which the check
 #: takes from no one.
 REFUSALS = {
@@ -119,6 +120,7 @@ REFUSALS = {
     "v2-refused": ("one-stage v2: ", "one-stage v2: "),
     "v2-session": ("one-stage v2: the audit's checks failed: roots", "one-stage v2: "),
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
+    "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
@@ -164,7 +166,8 @@ def test_the_scan_is_read_off_its_program(server):
     bits free, and an ingress and an egress instance's committed bits (their returns: a u16 with the state and view, or
     with the row); and Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one
     in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
-    and T instances, or rows other than the schedule's, and one with an input gate no template's."""
+    and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
+    check of what `NetTiming.Layout.Fits` asks."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
@@ -176,6 +179,21 @@ def test_the_scan_is_read_off_its_program(server):
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))
             verdict, out = D.replay(PORT, broken, server)
             assert verdict == REJECT and "scan" in json.loads(out)["reason"], (n, out)
+
+
+def test_each_fits_check_refuses_its_negative(server):
+    """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
+    passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
+    an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
+    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, and
+    one whose ingress template names a later root node."""
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        for name, (bad, fragment) in PC.scan_negatives(case["params"]).items():
+            broken = case | {"params": bad}
+            assert fragment in reference(broken)["reason"], (name, n, reference(broken))
+            verdict, out = D.replay(PORT, broken, server)
+            assert verdict == REJECT and fragment in json.loads(out)["reason"], (name, n, out)
 
 
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):
