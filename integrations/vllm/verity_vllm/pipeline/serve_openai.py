@@ -58,7 +58,9 @@ record of the step rows it ran, committed at its close under its run root for th
 whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
-`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
+`serve_commit.advice_trace`'s file; with the Commit on, the committer's ``private/cos_sin_cache.npy`` too, the rotary table
+at the words the engine serves (`m1_capture.dump_cos_sin`), which its weights registration registers once within the
+analytic table's bound (``prove_path.py weights-registration``) and no record copies. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
@@ -699,7 +701,10 @@ def main(opts: Options) -> int:
     windows = sealer = warmed = arm = None
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
+        from verity_vllm.pipeline.m1_capture import dump_cos_sin
 
+        (out / "private").mkdir(exist_ok=True)
+        dump_cos_sin(llm, out / "private")
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
                                config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
