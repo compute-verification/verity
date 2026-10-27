@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
 
-import h200_step  # noqa: E402
+import h200_step
 
 #: the SM clock of each reading by card SKU; a card not named here has its card file's clock as its one reading
 READINGS = {"h200-sxm-141gb": h200_step.CLOCKS_MHZ}
