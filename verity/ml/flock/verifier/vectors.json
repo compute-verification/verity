@@ -4481,8 +4481,9 @@
      {
       "dir": "art:bf70d8eb/vectors/honest",
       "expect": {
-       "accepted": true,
-       "why": ""
+       "accepted": false,
+       "why": "setup: registered reads (complete): the statement's port ",
+       "upstream_accepted": true
       }
      },
      {
