@@ -295,7 +295,9 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  which the certifier doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
+  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
+  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each `prog` entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is
 refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
@@ -348,8 +350,8 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), which the certifier doesn't meet: an offset the prover chooses within
-  a bucket reaches the client.
+- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
+  receiver no more than an idle one.
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
@@ -380,8 +382,10 @@ and the secrets of a covert sender whose every window meets `WindowGood` number 
 
 K = log2 #S_s + Σ_c log2(cap_c + 1) + Σ_i [#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 D_j].
 
-The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, which the certifier
-doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
+The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, not met at D_j = 1 until a
+run shows the written buckets tell a receiver no more than an idle one. The warden and the served proxy each hand every
+bucket to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`,
+`warden_serve.py --paced-ms`; `active.Proxy(paced=…)`, `certifier_serve.py --paced-ms`).
 
 `NetTiming.periodLeak_le_sum` (#4324) sums the windows' failures by a union bound:
 
