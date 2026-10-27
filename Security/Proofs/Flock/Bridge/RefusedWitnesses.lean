@@ -2,8 +2,7 @@ import Proofs.Flock.Bridge.PublicWitnesses
 import Proofs.Flock.Bridge.Refused
 
 /-!
-# `SampledKSLiveV2`'s and `SampledKSLiveV3`'s nontrivial lemmas (LEAN-66)
-
+# `SampledKSLiveV2`'s and `SampledKSLiveV3`'s nontrivial lemmas
 Both read `SampledKSLivePub`'s failing instance (`Bridge.toy_exceeds`, `Guarantees.sampledKSLivePub_nontrivial`)
 through the bound `sampledKSLivePub_of` proves: at `SampledKSLivePub`'s parameters, `SampledKSLiveV2`'s error is at most
 `Bridge.deltaPub` (`Bridge.v2Bound_le_deltaPub`), whatever the event.
@@ -155,7 +154,7 @@ theorem sampledKSLivePubAll_of_v2All (h : SampledKSLiveV2All) : SampledKSLivePub
     (Bridge.v2Bound_le_deltaPub hkd hρ ht' hks hQs)
 
 open Classical in
-/-- **`SampledKSLiveV2`'s nontrivial lemma** (LEAN-66): `SampledKSLiveV2` at the verifier that accepts everything is
+/-- **`SampledKSLiveV2`'s nontrivial lemma**: `SampledKSLiveV2` at the verifier that accepts everything is
 false wherever `SampledKSLivePub`'s is (`sampledKSLivePub_nontrivial`), since it implies `SampledKSLivePubAll`. -/
 theorem sampledKSLiveV2_nontrivial :
   ∀ (n : ℕ) (Reg : Type)
@@ -276,7 +275,7 @@ def SampledKSLiveV3All : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **`SampledKSLiveV3`'s nontrivial lemma** (LEAN-66): `SampledKSLiveV3` at the verifiers that accept everything is false
+/-- **`SampledKSLiveV3`'s nontrivial lemma**: `SampledKSLiveV3` at the verifiers that accept everything is false
 at `SampledKSLivePub`'s failing instance (`sampledKSLivePub_nontrivial`) once the game's units are the public file's
 (`pub.n = n`): there its bound, `SampledKSLiveV2`'s, is at most `deltaPub < 1` (`Bridge.v2Bound_le_deltaPub`), and the
 extractor's values fail the claim at every run (`Bridge.not_relS_unopened`). -/
