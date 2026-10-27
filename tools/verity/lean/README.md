@@ -297,8 +297,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
   ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
   excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
-  The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
-  package's (`unread_spec` in `report.json`).
+  The report lists the spec definitions that no guarantee reads, its own or a dependent package's (`unread_spec` in
+  `report.json`). Where the lock has `unread` ({module: [names]}, the ones that predate the rule), any other such
+  definition fails (`unread_failures`, LEAN-67): move it to `Proofs/`, or have a listed statement read it.
+  `--update` drops the names that are read now or gone, so the list only shrinks.
 - **Heartbeat overrides are listed, never refused** (Daniel, 2026-10-09). Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
