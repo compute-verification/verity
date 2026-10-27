@@ -61,8 +61,10 @@ export RAYON_NUM_THREADS=$(nproc)
 # (prove_path/run.sh)
 export RUST_MIN_STACK=$((64 << 20))
 
-if [ -z "${PB_WINDOW:-}" ]; then
-  "$REPO/.venv/bin/research" data fetch $BUNDLE_WINDOW --to "$FX" > "$O/fetch.log" 2>&1 \
+if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path/run.sh's R
+  PYTHONPATH=$REPO/benchmarks/proof_throughput "$PY" -c 'import os, sys
+from verity_proof_throughput.store import store_env
+os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' data fetch $BUNDLE_WINDOW --to "$FX" > "$O/fetch.log" 2>&1 \
     || { tail -20 "$O/fetch.log"; exit 8; }
 fi
 
