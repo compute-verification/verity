@@ -146,7 +146,7 @@ def markdown(table: dict) -> str:
                          f"{w['fraction']:.2%} [{w['fraction']:.4f}, {w['uncertified_fraction']:.4f}] | {w['slowdown']:.3f} | "
                          f"{w['proving_cost'] or '— (hidden-zk)'} | {w['tiles_accepted']} / {w['tiles']} | {controls} |")
         fr = [w["fraction"] for w in windows]
-        lines += ["", "A replay audit is a diagnostic, not a verification (Daniel, 2026-10-04 4:06 PM PDT): only a sampled "
+        lines += ["", "A replay audit is a diagnostic, not a verification: only a sampled "
                   "proof over C-Flock with ZK verifies a computation. Each window's audit recomputes its drawn tiles on the "
                   "CPU (`archive/pouw-blake3/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
                   "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's draws; uncertified = "
