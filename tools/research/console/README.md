@@ -19,6 +19,12 @@ on a host.
   other store result from the store's index. It needs the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
   `/post_start.sh`; it reads the R2 credentials from `/root/.config/verity/r2.env` and the store from `/workspace/steward/store`.
 
+- **`status_export.py`** writes the docs site's status document, `verity/status/v0`: every guarantee the tree's
+  `lean-audit.json` locks list, proved outright or resting on named assumptions, and the results of record its tables and
+  examples name. `--facts` takes a Lean audit's output directory (a `check` run's `lean-audit/`); a guarantee whose facts it
+  doesn't hold is `unknown`, never `proved`. Run it at the commit those facts were built from:
+  `python3 status_export.py --root REPO --rev COMMIT --facts DIR --out status.json`.
+
 Deploy to vy-nebius-1 with `research deploy` (`tools/research/src/research/pods/nebius/deploy.toml` lists the two scripts, the `cluster` tree and both
 units; it reloads systemd after a unit changes, and the timer's next pass runs the new files):
 
