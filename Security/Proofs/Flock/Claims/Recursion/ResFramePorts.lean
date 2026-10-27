@@ -117,7 +117,7 @@ theorem framePorts_D (rd : Msg → Option FinalP) (wE w : Msg → ℝ) (b : Brin
   have h0 : 0 < D.sts.size := by omega
   have hG := D.rowG Top.cls₀ (fun _ => #[]) hx hf rfl h0
   obtain ⟨hsp, hsts⟩ := D.setup_eq
-  obtain ⟨v', -, -, -, -, -, -, hv', -, -, -, -, -, -, hd⟩ := Rows.decR_last D.dec
+  obtain ⟨v', c₁, r₀, rss, fl, link, pf, hv', -, -, -, -, -, -, hd⟩ := Rows.decR_last D.dec
   have hvv : v' = v := Option.some.inj (hv'.symm.trans hv)
   have hds0 : D.d.spec = v'.2.1 := by rw [hd]
   have hdt0 : D.d.sts = v'.2.2 := by rw [hd]
@@ -180,10 +180,10 @@ theorem framePorts_D (rd : Msg → Option FinalP) (wE w : Msg → ℝ) (b : Brin
       rw [h4] at hon'
       exact absurd hon' (Nat.not_lt_zero _)
   have hokk : o < (rounds (Rows.shapeNoCoin v.2.1 v.2.2))[P[i]].size := by
-    have hlt1 : P[i] < ((rounds (Rows.shapeNoCoin v.2.1 v.2.2)).map (·.size)).size := by
+    have hlt1 : P[i] < ((rounds (Rows.shapeNoCoin v.2.1 v.2.2)).map (fun a => Array.size a)).size := by
       rw [Array.size_map]
       exact hkk
-    have hlt2 : P[i] < ((rounds (Rows.shapeNoCoin v.2.1 v.2.2)).map (·.size) ++ #[2, 2]).size := by
+    have hlt2 : P[i] < ((rounds (Rows.shapeNoCoin v.2.1 v.2.2)).map (fun a => Array.size a) ++ #[2, 2]).size := by
       rw [Array.size_append]
       exact Nat.lt_of_lt_of_le hlt1 (Nat.le_add_right _ _)
     have h := hon'
@@ -250,7 +250,11 @@ theorem framePorts_D (rd : Msg → Option FinalP) (wE w : Msg → ℝ) (b : Brin
   have hrows := Rows.DecAt.rows_getD D (o₀ := o₀) (ot := ot) (last := last) rfl hlens rf htl
   have hgd := ResFrames.getD_toList_eq rs t
   have hra := ResFrames.rowsAt_elem hRA hvs2 hon
-  rw [hrows, hgd, hop] at hra
+  rw [hrows, hgd] at hra
+  first
+    | erw [hop] at hra
+    | replace hra := (congrArg (fun y : ByteArray => elemsOf y.data.toList
+        ((P.toList.map ((RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!))[i]'hi) o) hop).symm.trans hra
   have hcp := hrow hnout
   rw [hn1, hname_i, hheld'] at hcp
   have hpa : Rows.portAt (Rows.shapeNoCoin v.2.1 v.2.2) q.key.1
