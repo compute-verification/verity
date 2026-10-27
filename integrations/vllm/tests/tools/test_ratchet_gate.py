@@ -663,7 +663,7 @@ def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
     {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
     {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
     {G.REPO_RUFF_CONFIG: None},
-    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"verity/ml/definitions/")', '"verity/ml/definitions/", "tools/")')},
 ], ids=["ignore", "exclude", "deleted", "lint-code"])
 def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
     both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})
@@ -762,15 +762,15 @@ def test_a_rename_that_leaves_its_entry_behind_is_refused_naming_the_entry_to_mo
 
 
 def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypatch):
-    """a.py's finding is untouched; the integration's file, the archive's and a deleted one are left to others."""
+    """a.py's finding is untouched; the integration's files and a deleted one are left to others."""
     seen, real = [], G.ruff_findings
     monkeypatch.setattr(G, "ruff_findings", lambda ruff, config, files: seen.append(sorted(files)) or real(ruff, config, files))
     both_ruffed.git("checkout", "-q", "main")
-    both_ruffed.commit("archive", {"archive/old.py": "X = 1\n"})
+    both_ruffed.commit("definitions", {"verity/ml/definitions/old.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
     both_ruffed.commit("a clean file, and others the lint doesn't hold", {
-        "tools/c.py": "C = 1\n", "integrations/vllm/verity_vllm/c.py": "import os\n", "archive/x.py": "import os\n",
-        "archive/old.py": None, "tools/notes.md": "import os\n"})
+        "tools/c.py": "C = 1\n", "integrations/vllm/verity_vllm/c.py": "import os\n",
+        "verity/ml/definitions/x.py": "import os\n", "verity/ml/definitions/old.py": None, "tools/notes.md": "import os\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
     assert seen == [[], ["tools/c.py"]]
@@ -831,10 +831,10 @@ def _env_lint(repo: Repo) -> str | None:
 
 
 def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_registry_and_one_there_passes(env_linted):
-    """Reads outside the lint's scope (the integration's, the archive's) are left to others."""
+    """Reads outside the lint's scope (the integration's) are left to others."""
     env_linted.commit("a second read in a.py, a new file with one, and reads the lint doesn't hold", {
         "tools/a.py": A_READS + "B = os.environ['B']\n", "tools/c.py": "import os\nif 'C' in os.environ:\n    pass\n",
-        "integrations/vllm/verity_vllm/c.py": "import os\nX = os.getenv('X')\n", "archive/x.py": "import os\nos.getenv('X')\n"})
+        "integrations/vllm/verity_vllm/c.py": "import os\nX = os.getenv('X')\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["touched"], c["counted"].get("repo_env_reads")) == ("failed", [], ["tools/a.py", "tools/c.py"]), c["why"]
     assert c["why"].startswith(f"adds 2 direct environment read(s) to the Python it changes, as the base's {REPO_ENV_LINT} "
@@ -907,7 +907,7 @@ def test_the_environment_read_list_may_not_grow(env_linted):
 
 
 def test_loosening_the_environment_read_lint_fails_naming_what_the_base_lint_finds(env_linted):
-    lint = (SCRIPT.parents[3] / REPO_ENV_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')
+    lint = (SCRIPT.parents[3] / REPO_ENV_LINT).read_text().replace('"integrations/vllm/",)', '"integrations/vllm/", "tools/")')
     env_linted.commit("leaves tools/ out and drops its entry", {REPO_ENV_LINT: lint, REPO_ENV_JSON: _allowlist()})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_env_reads"], [
@@ -965,14 +965,12 @@ def _silent_lint(repo: Repo) -> str | None:
 
 
 def test_a_new_swallowing_handler_is_refused_naming_it_and_the_fix_and_one_that_records_its_outcome_passes(silent_linted):
-    """Typed handlers count like broad ones; handlers outside the lint's scope (the integration's, the archive's) are left to
-    others."""
+    """Typed handlers count like broad ones; handlers outside the lint's scope (the integration's) are left to others."""
     silent_linted.commit("a second handler in s.py, a new file with one, and handlers the lint doesn't hold", {
         "tools/s.py": S_SWALLOWS + "    except ValueError:\n        pass\n",
         "tools/t.py": "def t(xs, out):\n    for x in xs:\n        try:\n            out[x] = int(x)\n"
                       "        except ValueError:\n            continue\n",
-        "integrations/vllm/verity_vllm/c.py": "try:\n    X = 1\nexcept Exception:\n    pass\n",
-        "archive/x.py": "try:\n    X = 1\nexcept Exception:\n    pass\n"})
+        "integrations/vllm/verity_vllm/c.py": "try:\n    X = 1\nexcept Exception:\n    pass\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["touched"], c["counted"].get("repo_silent_excepts")) == ("failed", [], ["tools/s.py", "tools/t.py"]), \
         c["why"]
@@ -1020,7 +1018,7 @@ def test_the_silent_except_list_may_not_grow_and_loosening_its_lint_fails_naming
     assert c["why"].startswith(f"grows {REPO_SILENT_JSON} 1 -> 2 in total"), c["why"]
     assert c["fix"] == [f"{REPO_SILENT_JSON}: {G.key(b)} 0 -> 1"]
     silent_linted.git("checkout", "-q", "-B", "pr", "main")
-    lint = (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')
+    lint = (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text().replace('"integrations/vllm/",)', '"integrations/vllm/", "tools/")')
     silent_linted.commit("leaves tools/ out and drops its entry", {REPO_SILENT_LINT: lint, REPO_SILENT_JSON: _allowlist()})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_silent_excepts"], [

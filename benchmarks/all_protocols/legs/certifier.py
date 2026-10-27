@@ -89,8 +89,10 @@ Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window
 input-row bits, less the rows wires feed or ``external`` names) and its Program (`audit_program`, the window's
 population program rebuilt from its records, off which the period check reads its units and the bits each commits),
 the observation horizon the link's (its link-windows' buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1
-(N2 holds the planned profile's egress counts exactly, so no observation moves), and no connection through the network
-certifier but the link, whose counts the profile fixes (``cells`` empty).
+(N2 holds the planned profile's egress counts exactly, so no count moves; that no offset within a bucket tells a
+receiver more is J's, assumed, `JITTER`, and not met: an offset the prover chooses within a bucket reaches the
+client), and no connection through the network certifier but the link, whose counts the profile fixes (``cells``
+empty).
 
 **The block record**: a period's accepted answer, of either path, is the certifier leg of ``verity/block-record/v1``
 by `benchmarks/network_traces/block_certifier.py`'s ``block_leg``, which also holds `check`.
@@ -129,6 +131,10 @@ SESSION = "certifier-session"
 #: the δ a period's certificate holds at: its answer's, then the one written beside it, each split across the case's
 #: terms (`term_delta`)
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
+#: K's jitter term, 0 at the case's jitter bound 1: J (`NetTiming.JitterBounded`) assumes it, and the certifier doesn't
+#: meet J at that bound (an offset the prover chooses within a bucket reaches the client); each answer's row in
+#: ``summary.json`` says so (``jitter_term``)
+JITTER = "assumed (J)"
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40
 #: the lines of a failed session step's log its error carries (`failed`)
@@ -1202,7 +1208,8 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                 (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
                 pub = a.get("public") or {}
                 row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "term_delta": str(d),
-                                   "K": pub.get("K"), "eps": pub.get("eps"), "scans": pub.get("scans")}
+                                   "K": pub.get("K"), "eps": pub.get("eps"), "scans": pub.get("scans"),
+                                   "jitter_term": JITTER}
                 if strategy == "honest" and k == 0:
                     answer = a
         if strategy == "honest":
@@ -1295,7 +1302,8 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             (out / f"{name}.case.json").write_text(json.dumps(case, sort_keys=True))
             (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
             row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "term_delta": str(d),
-                               "K": (a.get("public") or {}).get("K"), "eps": (a.get("public") or {}).get("eps")}
+                               "K": (a.get("public") or {}).get("K"), "eps": (a.get("public") or {}).get("eps"),
+                               "jitter_term": JITTER}
             if strategy == "honest" and k == 0:
                 answer = a
             if TAMPERED_WINDOW.get(strategy) in ws and a["verdict"] == "accept":
@@ -1309,7 +1317,7 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
+__all__ = ["DELTAS", "JITTER", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
            "answer_of_outcome", "audit_answer", "case_of", "certified_events", "certifier_leg", "check",
            "relay", "relayed", "tie_holds", "tie_of", "audit_program",

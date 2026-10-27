@@ -23,7 +23,7 @@ export TMPDIR
 trap 'rm -rf "$TMPDIR"' EXIT
 # shellcheck disable=SC1091
 source "${VENV:-/workspace/cp/venv312}/bin/activate"
-export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/integrations/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/archive/sp1/python:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
+export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/integrations/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
 cd "$TREE/integrations/vllm"
 nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
 python -c "from verity_vllm.commit.committer import native_collect as N; N.ext()"
