@@ -11893,7 +11893,9 @@
    "Pouw.SecurityProofs.Dither.WorkMoment_honest": "completeness: WorkMoment's honest witness (LEAN-66): every premise outside the named assumptions, and the named assumptions, hold at RT-LEAN L7's toy instance, and its verdict accepts the honest prover there, so WorkMoment is not vacuous (CMP-152).",
    "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial": "lemma: WorkMoment's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verifier that accepts everything; a counterexample about no protocol function (CMP-152).",
    "Pouw.SecurityProofs.Dither.FleetSound_honest": "completeness: FleetSound's honest witness (LEAN-66): at a fleet of the toy instance's replicas, each replica's moment, OwnDither and CoinsConfidential hold, and the verdict accepts the honest fleet, so FleetSound is not vacuous (CMP-152).",
-   "Pouw.SecurityProofs.Dither.FleetSound_nontrivial": "lemma: FleetSound's nontrivial witness (LEAN-66): at that fleet some prover's event has probability 1 at the verifier that accepts everything, past delta_coin + sum kappa_max; a counterexample about no protocol function (CMP-152)."
+   "Pouw.SecurityProofs.Dither.FleetSound_nontrivial": "lemma: FleetSound's nontrivial witness (LEAN-66): at that fleet some prover's event has probability 1 at the verifier that accepts everything, past delta_coin + sum kappa_max; a counterexample about no protocol function (CMP-152).",
+   "Pouw.SecurityProofs.Dither.WorkSound_honest": "completeness: WorkSound's honest witness (LEAN-66): every premise, AnswersFit among them, holds at RT-LEAN L7's toy instance, and its verdict accepts the honest prover there within the cap, its answers' calls counted, so WorkSound is not vacuous (CMP-154).",
+   "Pouw.SecurityProofs.Dither.WorkSound_nontrivial": "lemma: WorkSound's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verifier that accepts everything; a counterexample about no protocol function (CMP-154)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
