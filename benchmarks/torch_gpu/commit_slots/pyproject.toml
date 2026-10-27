@@ -18,5 +18,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # slots_gpu runs the SHA-512 engine (sha512_rows: engine.py and the host twin's sources), whose device build includes
-# commit_gpu's SHA-512 and hashes it into the build's cache key.
-inputs = ["benchmarks/torch_gpu/sha512_rows", "benchmarks/pouw/commit_gpu/sha512.cuh"]
+# commit_gpu's SHA-512 and hashes it into the build's cache key. step.py and overlap.py read the run's directory, id and
+# lease through verity_config's SHARED settings.
+inputs = ["benchmarks/torch_gpu/sha512_rows", "benchmarks/pouw/commit_gpu/sha512.cuh", "tools/config/verity_config"]

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.engine import static_schedule
-from verity_vllm.config import RowEngine
+from verity_vllm.config import RowEngine, workload_file
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.engine import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
@@ -34,7 +34,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     """The workload file (`workloads/workload_32x16_1req.json`, `workload_qwen15_32x16_1req.json`) ->
     {"requests": [...], "sampling": {...}, "case": <checkpoint role or None>, "accepted": {request_id: accepted token ids}}.
     The accepted tokens come from the file's `accepted_token_ids` per request (M6) or `ACCEPTED_TOKENS` of the case."""
-    doc = json.loads(Path(path).read_text())
+    doc = json.loads(workload_file(path).read_text())
     eng = RowEngine.of(doc)
     # [GEN sampling] an optional top-level `sampling` block selects the variant and the request seeds / fan-out:
     # {"variant": "greedy", "seed": null, "n": 1} (defaults = the greedy runs); a request may override `seed` / `n`.

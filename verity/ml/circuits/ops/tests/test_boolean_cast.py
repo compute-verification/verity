@@ -1,17 +1,17 @@
 """`verity.ml.circuits.ops.boolean.cast` and `verity.ml.circuits.boolean.gather`: the Boolean bf16 widening agrees with `Bf16ToF32_v1` on every bf16
 and is pinned by gate count and program digest; the f32 -> bf16 rounding (`gemm.F2fpBf16_v2`) agrees with `F2fpBf16_v1` on every
-f32 word of its special chunks, and on all 2^32 when ``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is set, and `F32ToBf16Rn_v2` agrees with
+f32 word of its special chunks, and on all 2^32 when ``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is on, and `F32ToBf16Rn_v2` agrees with
 `F32ToBf16Rn_v1` on those chunks; the multiplexer tree selects
 ``words[idx]``, else its fill, at every index of its width and costs the ANDs its docstring states; and a Boolean Program's
 prescribed inputs are `Input1_v1` leaves, so the word Programs' `Input16_v1` and `Input32_v1` need no Boolean version."""
 from __future__ import annotations
 
 import json
-import os
 
 import numpy as np
 import pytest
 
+from verity import settings
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
@@ -81,7 +81,7 @@ def test_the_software_rounding_agrees_with_f32_to_bf16_rn_v1() -> None:
     assert np.array_equal(got, E.evaluate_batch(P.F32ToBf16Rn, words).astype(np.uint64))
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_ML_BOOLEAN_EXHAUSTIVE"),
+@pytest.mark.skipif(not settings.VERITY_ML_BOOLEAN_EXHAUSTIVE,
                     reason="every f32 word (2^32 instances, about 20 minutes); set VERITY_ML_BOOLEAN_EXHAUSTIVE=1")
 def test_the_rounding_agrees_with_f2fp_v1_on_every_f32_word() -> None:
     _every_f32_chunks(range(1 << 12))

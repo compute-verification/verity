@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.config import WORKLOADS, RowId, row_execution
+from verity_vllm.config import WORKLOADS, RowId, row_execution, workload_files
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
@@ -40,7 +40,7 @@ def _is_row(stem: str) -> bool:
         return False
 
 
-ROWS = [p for p in sorted(WORKLOADS.glob("*.json")) if _is_row(p.stem)]
+ROWS = [p for p in workload_files() if _is_row(p.stem)]
 
 
 def _glm() -> tuple[dict, object]:
