@@ -16,7 +16,7 @@ component (`TREES`) and its area its next (`Definitions.Pouw.X` is `Pouw`'s, `Pr
 module's area is its package's (`CODE_AREA`). Text, not the elaborated environment: a declaration a macro writes is
 invisible, and a definition's result is read from its header (`: Prop`), so a casing count is a lower bound.
 
-`map` is LEANARCH's map of the repository's Lean:
+`map` maps the repository's Lean:
 (a) every Lake package: its requires, the roots its libraries list, its executables and its size in modules, lines and
     declarations, and the path requires none of its modules imports;
 (b) the areas against the trees (Code, Definitions, Properties, Proofs and the properties' proofs), with the trees an
@@ -35,14 +35,14 @@ invisible, and a definition's result is read from its header (`: Prop`), so a ca
 import of them; a module whose new root is another package's (`Proofs.` to `Definitions.`) moves into it. So a proposed
 move shows the cycles it leaves before anyone runs it.
 
-`conventions` is LEANSTD's survey of the Lean's form, behind the Lean standards (LEAN-69), over every package with a
+`conventions` surveys the Lean's form, behind the Lean standards, over every package with a
 `lean-audit.json` (default: all, the auditor's fixtures aside) and their locks: module path against namespace, where
 guarantees and assumptions live and how they are named, casing, theorem name forms, retired words, file sizes, heartbeat
-overrides with and without a reason, imports, docstrings on trusted declarations, duplicated statements, and how many
+overrides with and without a reason, imports, docstrings on spec declarations, duplicated statements, and how many
 guarantees have honest and nontrivial lemmas beside them. It refuses nothing: it is what a check of a standard would count.
 
-`size` is the size of a package's trusted text per area, what LEAN-67 tracks. PKG (default `Security`) is a Lake package
-with a `lean-audit.json`; its trusted text is the modules under `--prefix` (default `Definitions`), grouped by their next
+`size` is the size of a package's spec per area. PKG (default `Security`) is a Lake package
+with a `lean-audit.json`; its spec is the modules under `--prefix` (default `Definitions`), grouped by their next
 component. For each area it prints the files, their lines (and the lines that are neither blank nor comment nor
 docstring), the theorems, the definitions, how many of them a listed statement reads, and how many guarantees read the
 area. The definitions and what reads them come from a run of the Lean check on PKG: its `facts.json` (`--facts`), or that
@@ -841,7 +841,7 @@ DEPENDENCY_ROOTS = {
 BANNED_CODE = re.compile(r"\b(sorry|native_decide)\b|#exit\b")
 UNINFORMATIVE = re.compile(r"^(?:aux|helper|key|main|claim|step|lemma|thm|foo|bar|test|tmp|temp|h|this|goal|fact)\d*'*$|"
                            r"_aux\d*'*$|_helper\d*'*$")
-#: Glossary terms retired on 25–26 Oct (ARCHITECTURE.md's Glossary, glossary/README.md in CMP-150's PR 1b)
+#: terms the Glossary retires (its "Older names")
 RETIRED_PROSE = {
     "leg": re.compile(r"\blegs?\b", re.I),
     "warden": re.compile(r"\bwardens?\b", re.I),
@@ -854,7 +854,7 @@ RETIRED_PROSE = {
 #: the same words as an identifier's components (`legBound`, `warden_rows`, `NebiusHost`)
 RETIRED_WORDS = {"leg": {"leg", "legs"}, "warden": {"warden", "wardens"}, "tap": {"tap", "taps"},
                  "provider name": {"nebius", "coreweave", "aws", "gcp", "azure"}}
-#: the prefixes a block takes (Glossary, "Block": Daniel, 26 Oct)
+#: the prefixes a block takes (the Glossary's "block")
 BLOCK_PREFIXES = {"proof", "sampling", "server-time", "time", "serving", "server", "isolation", "replay", "inference",
                   "multiplication", "check", "flock", "c-flock", "flock's", "c-flock's"}
 PROSE_BLOCK = re.compile(r"(?:\b([\w'-]+)[ \t]+)?\bblocks?\b", re.I)
@@ -1219,7 +1219,7 @@ def render(r: dict, top: int) -> str:
     for t, a in r["areas"]["by_tree"].items():
         L.append(f"  {t:18} {', '.join(a)}")
     L.append("  missing: " + json.dumps(r["areas"]["missing"]))
-    sec("the definitions tree (trusted)")
+    sec("the definitions tree (the spec)")
     dt = r["definitions_tree"]
     L.append(f"  {dt['files']} files, {dt['decls']} declarations; {dt['theorems']} theorems in {dt['files_with_theorems']} "
              f"files; {dt['securityproofs_decls']} SecurityProofs declarations; {dt['spec_definitions']} definitions, "
@@ -1381,9 +1381,9 @@ def main(argv: list[str] | None = None) -> int:
                    "of an older commit, to compare")
     c.add_argument("--json", type=Path, help="also write the full survey here")
     c.add_argument("--top", type=int, default=10, help="worst offenders listed per measure")
-    s = sub.add_parser("size", help="the trusted text's size per area, and what no listed statement reads")
+    s = sub.add_parser("size", help="the spec's size per area, and what no listed statement reads")
     s.add_argument("pkg", nargs="?", default="Security", help="the Lake package (default Security)")
-    s.add_argument("--prefix", default="Definitions", help="the trusted modules' prefix (default Definitions)")
+    s.add_argument("--prefix", default="Definitions", help="the spec modules' prefix (default Definitions)")
     src = s.add_mutually_exclusive_group()
     src.add_argument("--facts", type=Path, help="a Lean check's facts.json for PKG")
     src.add_argument("--run", help="a records run of PKG whose facts.json and lock the evidence store holds")
