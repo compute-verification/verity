@@ -600,6 +600,9 @@ def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     (scope.parent / "memory.max").write_text(str(560 << 30))
     (scope.parent / "memory.current").write_text(str(400 << 30))
     assert CHECK.memory_gb(tmp_path) == 160, "the slice leaves 160 of its 560 GB"
+    (scope.parent / "memory.current").write_text(str(555 << 30))
+    (scope.parent / "memory.stat").write_text(f"anon {255 << 30}\nactive_file {100 << 30}\ninactive_file {200 << 30}\n")
+    assert CHECK.memory_gb(tmp_path) == 230, "the slice's 300 GB of page cache is reclaimed at its limit, so it is left"
     (scope.parent / "memory.max").write_text("max")
     assert CHECK.memory_gb(tmp_path) == 230
     pod = tmp_path / "pod"

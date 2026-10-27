@@ -46,7 +46,6 @@ import Proofs.Accounting.PerRunJoint
 import Proofs.Accounting.PerRunNecessity
 import Proofs.Accounting.PerRunPriced
 import Proofs.Accounting.PerRunStop
-import Proofs.Accounting.Remote
 import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
@@ -100,5 +99,6 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
+import Proofs.Accounting.Overhead
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

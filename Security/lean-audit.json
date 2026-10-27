@@ -3793,6 +3793,42 @@
   "Accounting.SecurityProofs.OnsiteTimeLowerBound": {
    "owner": "@training"
   },
+  "Accounting.SecurityProofs.Overhead.EndToEnd": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.EndToEnd_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.OverheadOfReference": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.ReferenceBound": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.ReferenceBound_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial": {
+   "owner": "@training"
+  },
   "Accounting.SecurityProofs.PearlCEndToEndPerRun": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.PearlCEndToEndPerRun : Accounting.Guarantees.PearlCEndToEndPerRun"],
@@ -12297,7 +12333,19 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Accounting.SecurityProofs.OnsiteTimeLowerBound": "frozen (no-function,world-unlisted): It is DampenerWindowsCap inverted over an arbitrary actual circuit (Accounting.Placed) in the onsite class (Accounting.OnsiteClass, the physical constraints Causal, ComputeRate and Links among them) at valid parameters (Accounting.Onsite.Valid) under the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
-   "Accounting.SecurityProofs.OnsiteEndToEnd": "frozen (no-function): Like JointPeriodLive, each audit's per-period guarantee and each wipe's survivor bound is a hypothesis over an abstract live period whose verdicts are fields of the run, not Lean functions, and it bounds a Verity.Game.prob event, which shape.events does not list; the device model per run, the bridges (Accounting.CertifierLinks, Accounting.Assumptions.WipeState, Accounting.Assumptions.IntegrityContains) and the task model (Accounting.Assumptions.Coverage) are premises over the run's world (Accounting.Actual.Run per run), until the bridges are proved."
+   "Accounting.SecurityProofs.OnsiteEndToEnd": "frozen (no-function): Like JointPeriodLive, each audit's per-period guarantee and each wipe's survivor bound is a hypothesis over an abstract live period whose verdicts are fields of the run, not Lean functions, and it bounds a Verity.Game.prob event, which shape.events does not list; the device model per run, the bridges (Accounting.CertifierLinks, Accounting.Assumptions.WipeState, Accounting.Assumptions.IntegrityContains) and the task model (Accounting.Assumptions.Coverage) are premises over the run's world (Accounting.Actual.Run per run), until the bridges are proved.",
+   "Accounting.SecurityProofs.Overhead.EndToEnd": "frozen (no-function): The end-to-end overhead guarantee's event decomposition (Step 1), over an arbitrary causal game (Verity.Game) at every strategy with its events and errors as parameters: the joint guarantee's, the bridges' and the coverage exception's bounds and the pointwise cost bound are hypotheses over the experiment, not a function's acceptance; the onsite and remote end-to-end guarantees instantiate it.",
+   "Accounting.SecurityProofs.Overhead.EndToEnd_honest": "frozen (no-function): EndToEnd's honest witness (LEAN-66): at a constructed experiment (the game with one run) whose verifier accepts and whose computation succeeds with probability 1, its hypotheses hold at errors 0; an existential over games, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial": "frozen (no-function): EndToEnd's nontrivial witness (LEAN-66): at a constructed experiment whose verifier accepts every run, dropping any one of its four premises makes it false; a negated statement over arbitrary games, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise": "frozen (no-function): A static task's threshold (Accounting.Overhead.threshold) bounded below by a pointwise size bound and the coverage exception, over an arbitrary task, class of computations and output map: hypotheses over the class, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest": "frozen (no-function): ThresholdOfPointwise's honest witness (LEAN-66): its hypotheses hold at the NOT task over every circuit, where a circuit with no operation gate succeeds with probability at most 1/2 and the NOT circuit with probability 1; a statement about a constructed task, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial": "frozen (no-function): ThresholdOfPointwise's nontrivial witness (LEAN-66): without either premise it is false at the unit task, where the circuit with no gate succeeds always; a negated statement over arbitrary tasks, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.ReferenceBound": "frozen (no-function): A static task's threshold bounded above by the size of a reference circuit that succeeds with probability above the coverage exception, over an arbitrary task, class and output map: not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.ReferenceBound_honest": "frozen (no-function): ReferenceBound's honest witness (LEAN-66): at the NOT task the NOT circuit, of one operation gate, succeeds with probability above 1/2; a statement about a constructed task, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial": "frozen (no-function): ReferenceBound's nontrivial witness (LEAN-66): without the reference's success (over the empty class, whose threshold is infinite) or its size (the unit task's circuits with an operation gate) it is false; a negated statement, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.OverheadOfReference": "frozen (no-function): The overhead T(eta; A) / T(eta; A_phys) at least rho (Step 8), from ThresholdOfPointwise's and ReferenceBound's hypotheses over an arbitrary task, two classes and a reference circuit: not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest": "frozen (no-function): OverheadOfReference's honest witness (LEAN-66): its hypotheses hold at the NOT task with rho = 2, A the circuits with at least two operation gates, A_phys every circuit and the NOT circuit as the reference; a statement about a constructed task, not a function's acceptance.",
+   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": "frozen (no-function): OverheadOfReference's nontrivial witness (LEAN-66): without the coverage exception, the pointwise size bound or the reference's success it is false at the unit task; a negated statement, not a function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
