@@ -34,15 +34,26 @@
 #                        uncounted (repeatable); the control link (`control`: the default route's NIC, which ssh and
 #                        research run reach the node by) is always named, and the challenger's from the connection made
 #   --threads T          the native streamer's threads when the challenger runs here (default: every CPU)
-#   --store cuda|host    host: the CPU stand-in, host memory for the device (no GPU)
+#   --store cuda|host|disk  host: the CPU stand-in, host memory for the device (no GPU); disk: the --disk targets alone
+#   --disk PATH          a disk target in the same session, ahead of the store (repeatable, one a filesystem): a
+#                        directory, where the run makes a scratch directory of its own (removed on exit) holding the
+#                        fill's file, or a block device nothing holds, written raw. The whole disks under the targets are
+#                        declared, so what the fill doesn't overwrite (the used filesystem, its metadata, the reserve,
+#                        the spare area) counts in R
+#   --disk-gb G          the fill on the disks, in GB (default: all their room)
+#   --disk-reserve-gib G free space each directory target keeps (default 10)
+#   --disk-spare-gb G    the drives' spare area and cache, from their datasheets, declared so they count in R (default
+#                        0, which the record names undeclared on a physical drive)
+#   --lease-min M        gpu-lease's --max-min (default 60; a fill of the disks too takes longer)
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
 #   --node NAME          the prover's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
 #   --no-lean            judge in Python alone; judge out/wipe.case.json with wipe-protocol later on a CPU node
 #
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
-# Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, lake-build.log, period.json, wipe.json,
-# wipe.case.json, summary.json. summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
+# Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, disk.txt (with --disk: the block devices,
+# filesystems, swap and each disk's driver), lake-build.log, period.json, wipe.json, wipe.case.json, summary.json.
+# summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
 # connected, the session signed), and its `uncertified` what the bound doesn't cover (the placement's links and
 # undeclared tiers, an uncounted egress). Scratch (the challenger's key and session log, the built streamer) is a
 # mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
@@ -57,7 +68,7 @@ if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
-  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS=
+  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -75,6 +86,11 @@ else
       --challenger-command) CH_CMD=$2; shift ;;
       --threads) THREADS=$2; shift ;;
       --store) STORE=$2; shift ;;
+      --disk) DISKS+=("$2"); shift ;;
+      --disk-gb) DISK_GB=$2; shift ;;
+      --disk-reserve-gib) DISK_RESERVE=$2; shift ;;
+      --disk-spare-gb) DISK_SPARE=$2; shift ;;
+      --lease-min) LEASE_MIN=$2; shift ;;
       --gpu) GPU=$2; shift ;;
       --node) NODE=$2; shift ;;
       --limit-ns) LIMIT=$2; shift ;;
@@ -93,8 +109,39 @@ else
   CTRL_MBPS=$(cat "/sys/class/net/${CTRL_DEV:-none}/speed" 2>/dev/null || echo)
   [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }
   [ "$DRY" = 1 ] && [ -z "$SEGMENTS" ] && SEGMENTS=64
+  [ "$STORE" = disk ] && [ ${#DISKS[@]} = 0 ] && { echo "demo.sh: --store disk takes --disk PATH"; exit 2; }
   S=$(mktemp -d)
-  trap 'rm -rf "$S"' EXIT
+  MADE=()
+  trap 'rm -rf "$S" "${MADE[@]}"' EXIT
+  trap 'exit 143' TERM INT HUP
+  TARGETS=()
+  for d in "${DISKS[@]}"; do
+    if [ -d "$d" ]; then
+      m=$(mktemp -d "$d/verity-wipe-disk.XXXXXX")
+      MADE+=("$m")
+      TARGETS+=("$m")
+    elif [ -b "$d" ]; then
+      TARGETS+=("$d")
+    else
+      echo "demo.sh: --disk $d is neither a directory nor a block device"; exit 2
+    fi
+  done
+  if [ ${#DISKS[@]} -gt 0 ]; then
+    { lsblk -b -o NAME,KNAME,TYPE,SIZE,ROTA,MODEL,TRAN,FSTYPE,MOUNTPOINTS; echo; findmnt -b -o TARGET,SOURCE,FSTYPE,SIZE,USED,AVAIL
+      echo; df -B1; echo; swapon --show --bytes; echo; cat /proc/mdstat 2>/dev/null
+      for b in /sys/block/*; do echo "$(basename "$b") driver=$(basename "$(readlink -f "$b/device/driver" 2>/dev/null || readlink -f "$b/device/device/driver" 2>/dev/null)") size=$(( $(cat "$b/size") * 512 )) rotational=$(cat "$b/queue/rotational" 2>/dev/null)"; done
+      for t in "${TARGETS[@]}"; do echo "target $t: $(findmnt -n -o SOURCE,FSTYPE -T "$t" 2>/dev/null)"; done
+    } > "$O/disk.txt" 2>&1 || true
+  fi
+  DISK_JSON=$(python3 - "$DISK_GB" "$DISK_RESERVE" "$DISK_SPARE" "${TARGETS[@]}" <<'EOF'
+import json, sys
+from fractions import Fraction
+gb, reserve, spare, *paths = sys.argv[1:]
+print(json.dumps(None if not paths else {"paths": paths, "bytes": int(Fraction(gb) * 10 ** 9) // 4096 * 4096 if gb else None,
+                                         "reserve_bytes": int(Fraction(reserve) * 2 ** 30),
+                                         "spare_bytes": int(Fraction(spare) * 10 ** 9), "direct": True}))
+EOF
+)
   { echo "commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"; echo "args: ${ARGS[*]:-}"; date -u +%FT%TZ; hostname
     lscpu | grep -E "Model name|^CPU\(s\)|NUMA node\(s\)"; free -g; df -h /tmp; uptime
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
@@ -113,11 +160,11 @@ else
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
-    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" <<'EOF'
+    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" <<'EOF'
 import json, shlex, sys
 from fractions import Fraction
 (path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
- specs) = sys.argv[1:]
+ specs, disk) = sys.argv[1:]
 links = [] if not dev else [{"name": "control", "to": "outside", "via": f"{dev} {src}: the node's own NIC (ssh, research run)",
                              "mbps": int(mbps) if mbps.strip().isdigit() and int(mbps) > 0 else None}]
 for spec in filter(None, specs.splitlines()):
@@ -131,7 +178,7 @@ doc = {"tools": json.loads(tools),
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
-                "reads": json.loads(reads), "links": links}}
+                "reads": json.loads(reads), "links": links, "disk": json.loads(disk)}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))
@@ -139,11 +186,11 @@ EOF
   cp "$S/periods/p0/period.json" "$O/period.json"
   export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_GPU=$GPU DEMO_EXPECT=$EXPECT
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
-    GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 60 -- bash "$SELF" leased
+    GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash "$SELF" leased || rc=$?
   else
-    bash "$SELF" leased
+    bash "$SELF" leased || rc=$?
   fi
-  exit $?
+  exit "${rc:-0}"
 fi
 
 if [ "$DEMO_STORE" = cuda ]; then

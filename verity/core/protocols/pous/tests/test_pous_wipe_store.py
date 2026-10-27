@@ -4,11 +4,15 @@ boundary and refuses a store whose addresses wrap, its cheat keeps prior content
 rejected one label past the published threshold, a host without the CUDA driver is refused by name, and the leg runs
 whole on it against a challenger side of its own host that streams natively, recording the prover's, the session's and
 the streamer's figures and the store in the placement, and against a simulated placement's side on the cheat,
-rejecting."""
+rejecting. On a disk (`Disk`, a small fill file in the test's directory) it keeps the fill in a file of its own,
+written in whole blocks and patched where a frame isn't, on the file once synced, and removed at close, refuses a fill
+it can't keep and never takes an existing file; one session over a disk and host memory (`Joint`) accepts the honest
+server and rejects the one keeping its own content on the disk, and the leg runs it whole, the disk declared."""
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -172,3 +176,120 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
     assert record["answer"]["verdict"] == "reject" and record["prover"]["foreign"]["labels"] == n
     assert record["placement"]["kind"] == "simulated" and record["placement"][WP.PREMISE].startswith("simulated: ")
     assert W.summary(record)["foreign_labels"] == n == record["wipe"]["foreign_labels"]
+
+
+def _fills(d: Path) -> list[Path]:
+    return sorted(d.glob("verity-wipe-fill-*.bin"))
+
+
+def test_a_disk_keeps_the_fill_in_a_file_of_its_own_and_answers_from_it(tmp_path) -> None:
+    """A frame of whole blocks is written in flight, the rest read, patched and written back; once synced the file
+    holds the fill, and close removes it."""
+    disk = WS.Disk([tmp_path], reserve_bytes=0, direct=None)
+    params = sw.WipeParams(256, W.READS, 1, 1_000, (("disk", disk.total),))
+    p = WS.StoreProver(params, disk, staging=2 * WS.BLOCK, clock=Clock())
+    [fill] = _fills(tmp_path)
+    assert fill.stat().st_size == 256 * sw.LABEL_BYTES
+    assert p.gate() == {"labels": 3, "highest": 255, "passed": True}
+    p.receive(0, sw.labels(KEY, 0, 200))
+    p.receive(200, sw.labels(KEY, 200, 56))
+    p.sync()
+    assert fill.read_bytes() == sw.labels(KEY, 0, 256)
+    assert p.answer([255, 0, 128, 199, 200]) == b"".join(sw.label(KEY, i) for i in (255, 0, 128, 199, 200))
+    r = p.record()
+    assert r["store"]["tier"] == "disk" and r["store"]["backend"] == "disk" and r["fill"]["sync_ns"] == 7
+    assert r["store"]["targets"] == [{"path": str(tmp_path), "kind": "file", "room": disk.targets[0]["room"],
+                                      "file": str(fill), "bytes": 256 * sw.LABEL_BYTES}]
+    assert disk.mem_info()[1] == disk.total >= os.statvfs(tmp_path).f_blocks * os.statvfs(tmp_path).f_frsize
+    p.close()
+    disk.close()
+    assert _fills(tmp_path) == []
+
+
+def test_a_disk_refuses_what_it_cannot_keep(tmp_path) -> None:
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    with pytest.raises(ValueError, match="on a device another target is on"):
+        WS.Disk([a, b])
+    (tmp_path / "x").write_bytes(b"x")
+    with pytest.raises(ValueError, match="neither a directory nor a block device"):
+        WS.Disk([tmp_path / "x"])
+    with pytest.raises(ValueError, match="at least one target"):
+        WS.Disk([])
+    disk = WS.Disk([a], reserve_bytes=0, direct=None)
+    with pytest.raises(ValueError, match="whole 4096-byte blocks"):
+        disk.alloc(100)
+    with pytest.raises(RuntimeError, match="room for"):
+        disk.alloc(disk.mem_info()[0] + WS.BLOCK)
+    taken = a / WS.FILL_FILE.format(pid=os.getpid(), i=0)
+    taken.write_bytes(b"someone else's")
+    with pytest.raises(FileExistsError):
+        disk.alloc(WS.BLOCK)
+    disk.close()
+    assert taken.read_bytes() == b"someone else's", "an existing file is never taken, written or removed"
+    full = WS.Disk([b], reserve_bytes=1 << 62)
+    assert full.mem_info()[0] == 0
+    full.close()
+
+
+def _joint(d: Path) -> WS.Joint:
+    return WS.Joint([(WS.Disk([d], reserve_bytes=0, direct=None), 256 * sw.LABEL_BYTES),
+                     (WS.HostMemory(), 256 * sw.LABEL_BYTES)])
+
+
+@pytest.mark.parametrize("foreign", [0, 128])
+def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None:
+    """The disk first: the honest server accepts, and the one keeping its own content in place of the first 128
+    labels, all on the disk, misses a read."""
+    joint = _joint(tmp_path)
+    assert joint.tier == "disk+host-dram"
+    assert joint.declared() == (("disk", joint.parts[0][0].total), ("host-dram", 256 * sw.LABEL_BYTES))
+    params = sw.WipeParams(512, W.READS, 1, W.LIMIT_NS, joint.declared())
+    store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(), foreign=foreign)
+    store.gate()
+    w = W.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(), schemes=ts.SCHEMES,
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), secret=KEY, session_id=bytes(32),
+              coin_secret=b"coins", egress_bits=0, prover=lambda _: store)
+    [fill] = _fills(tmp_path)
+    on_disk, key = fill.read_bytes(), sw.wipe_key(KEY, b"n0", bytes(32))
+    assert store.sync_ns == 7 and store.record()["store"]["parts"][0]["tier"] == "disk"
+    store.close()
+    joint.close()
+    assert _fills(tmp_path) == []
+    assert on_disk[64 * foreign:] == sw.labels(key, foreign, 256 - foreign)
+    assert all(on_disk[64 * i:64 * (i + 1)] != sw.label(key, i) for i in range(foreign))
+    if foreign:
+        assert w.verdict == "reject" and "wrong answers" in w.answer["reason"]
+    else:
+        assert w.verdict == "accept", w.answer
+        assert w.answer["profile"]["tiers"] == [list(t) for t in joint.declared()]
+
+
+def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
+    """period.json's wipe on host memory and a disk directory in one session against a challenger side of its own
+    host: it accepts, both tiers declared, the disk's filesystems no longer undeclared, and the fill file removed."""
+    period = tmp_path / "periods" / "p0"
+    period.mkdir(parents=True)
+    target = tmp_path / "disk"
+    target.mkdir()
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+        "store": "host", "segments": 1, "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0,
+                                                 "direct": None}}}))
+    device = tmp_path / "device"
+    device.mkdir()
+    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    out = tmp_path / "out"
+    answer = W.leg(period, "n0", out)
+    assert answer["verdict"] == "accept", answer
+    record = json.loads((out / "wipe.json").read_text())
+    disk_total = record["prover"]["store"]["parts"][0]["total_bytes"]
+    assert answer["profile"]["tiers"] == [["disk", disk_total], ["host-dram", 1 << 25]]
+    assert record["wipe"]["tier"] == "disk+host-dram" and record["wipe"]["segments"] == 2
+    assert record["prover"]["fill"]["bytes"] == 1 << 26 and record["prover"]["fill"]["sync_ns"] is not None
+    part = record["prover"]["store"]["parts"][0]
+    assert part["targets"][0]["bytes"] == 1 << 25 and part["direct"] in (True, False)
+    dram = [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"]
+    assert dram[0]["what"] == "the host's DRAM outside the declared tier"
+    assert _fills(target) == []

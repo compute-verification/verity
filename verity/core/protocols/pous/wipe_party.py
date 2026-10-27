@@ -106,10 +106,11 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
 
 def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int:
     """The prover's side over the connection `f`: each fill frame kept by `prover` (read straight into its store when
-    it has `receive_into`, as `wipe_store.StoreProver`), each batch answered from it until the challenger ends the
-    session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
+    it has `receive_into`, as `wipe_store.StoreProver`), the fill acknowledged once it is in the store (after the
+    prover's `sync`, when it has one: a disk's writes on the media), each batch answered from it until the challenger
+    ends the session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
     n = 0
-    into = getattr(prover, "receive_into", None)
+    into, sync = getattr(prover, "receive_into", None), getattr(prover, "sync", None)
     while (tag := _read(f, 1)) != END:
         if tag == FILL:
             first, count = int.from_bytes(_read(f, 8), "big"), int.from_bytes(_read(f, 4), "big")
@@ -118,6 +119,8 @@ def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int
             else:
                 prover.receive(first, _read(f, sw.LABEL_BYTES * count))
         elif tag == DONE:
+            if sync is not None:
+                sync()
             f.write(ACK)
             f.flush()
         elif tag == CHALLENGE:

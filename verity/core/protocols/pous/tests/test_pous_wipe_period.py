@@ -6,7 +6,8 @@ vacuous when the egress is uncounted, a prover keeping one label past it and a l
 left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
 is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
-(the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's window."""
+(the links leaving the node, the undeclared tiers, an uncounted egress, what a joint store's disks leave outside the
+boundary), the reads and the session's window."""
 
 from __future__ import annotations
 
@@ -287,6 +288,28 @@ def test_what_the_bound_does_not_cover() -> None:
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
 
 
+def test_what_a_joint_store_and_its_disks_leave_out() -> None:
+    """A joint store declares each part at its own bytes: DRAM outside a host-dram part, nothing of a device declared
+    whole; a virtual disk's backing store, a drive's undeclared spare area and buffered I/O are named."""
+    disk = {"tier": "disk", "total_bytes": 10 ** 12, "spare_bytes": 0, "direct": True,
+            "disks": {"vda": {"bytes": 10 ** 12, "driver": "virtio_blk"}, "nvme0n1": {"bytes": 10 ** 12, "driver": "nvme"}}}
+    joint = {"tier": "disk+host-dram", "parts": [disk, {"tier": "host-dram", "bytes": 100}]}
+    dram = W.undeclared("disk+host-dram", 10 ** 12 + 100, joint)[0]
+    assert dram == {"tier": "host-dram", "bytes": os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") - 100,
+                    "what": "the host's DRAM outside the declared tier"}
+    gpu = {"tier": "disk+gpu-hbm", "parts": [disk, {"tier": "gpu-hbm", "total_bytes": 1000, "bytes": 900}]}
+    assert [u["tier"] for u in W.undeclared("disk+gpu-hbm", 0, gpu) if u["tier"] == "gpu-hbm"] == []
+    gaps = W.disk_gaps(joint)
+    assert gaps == [
+        "disk nvme0n1: its spare area and cache are undeclared (spare_bytes 0), so M doesn't count what they keep",
+        "disk vda: a virtual disk (virtio_blk), its backing store the hypervisor's: a snapshot or replica the cloud keeps "
+        "of it is outside the boundary, which Covered assumes away"]
+    assert W.disk_gaps(disk | {"spare_bytes": 7, "direct": False}) == [gaps[1], (
+        "disk: buffered I/O, not O_DIRECT: the page cache can answer a read the disk doesn't keep")]
+    where = WP.placement("n0", "auditor", store=joint, links=[])
+    assert W.uncertified(where, None)[-2:] == gaps and W.disk_gaps(None) == []
+
+
 def test_the_disks_are_the_block_device_filesystems_once(tmp_path) -> None:
     st = os.statvfs(tmp_path)
     mounts = tmp_path / "mounts"
@@ -301,8 +324,20 @@ def test_the_config_and_the_device_fit() -> None:
     assert W.config({}) == W.CONFIG and W.config({"wipe": {"store": "cuda"}})["store"] == "cuda"
     with pytest.raises(ValueError, match="unknown keys"):
         W.config({"wipe": {"segment": 4}})
-    with pytest.raises(ValueError, match="store is python, host or cuda"):
+    with pytest.raises(ValueError, match="store is python, host, cuda or disk"):
         W.config({"wipe": {"store": "tpu"}})
+    disk = W.config({"wipe": {"store": "cuda", "disk": {"paths": ["/scratch"], "spare_bytes": 7}}})["disk"]
+    assert disk == W.DISK | {"paths": ["/scratch"], "spare_bytes": 7}
+    for bad in ({"store": "disk"}, {"disk": {"paths": ["/scratch"]}},
+                {"store": "host", "tier": "x", "disk": {"paths": ["/scratch"]}}):
+        with pytest.raises(ValueError, match="store disk takes wipe.disk"):
+            W.config({"wipe": bad})
+    for bad in ({"paths": []}, {"paths": "/scratch"}, {"paths": ["/s"], "bytes": 0}, {"paths": ["/s"], "direct": 1},
+                {"paths": ["/s"], "spare_bytes": -1}):
+        with pytest.raises(ValueError, match="wipe.disk: paths a list"):
+            W.config({"wipe": {"store": "disk", "disk": bad}})
+    with pytest.raises(ValueError, match="wipe.disk takes"):
+        W.config({"wipe": {"store": "disk", "disk": {"paths": ["/s"], "size": 1}}})
     for bad in ({"foreign_bytes": -1}, {"foreign_bytes": "f"}, {"foreign_bytes": 1.5}, {"placement": "far"},
                 {"egress_bits": -1}, {"egress_bits": "0"}):
         with pytest.raises(ValueError, match="foreign_bytes is a byte count"):
