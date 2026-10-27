@@ -335,8 +335,10 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
   have hN : _root_.Flock.RecAlgebra.nR (DecompBR.shI v.2.1 v.2.2) =
       ((_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).map (·.size)).toList.sum :=
     (sizes_sum _).symm
-  obtain ⟨i, hi, bb, hb, o, ho2, hPi, hj'', he'⟩ :=
-    acc_elem (B := (_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).map (·.size)) he (by omega)
+  have hps : _root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2) =
+      (_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).map (·.size) ++ #[2, 2] := rfl
+  rw [hps] at he
+  obtain ⟨i, hi, bb, hb, o, ho2, hPi, hj'', he'⟩ := acc_elem he (by rw [← hN]; exact hj)
   refine ⟨by omega, ?_⟩
   have hjo : j' - _root_.Flock.RecAlgebra.nR (DecompBR.shI v.2.1 v.2.2) = 2 * bb + o := by omega
   rw [hjo]
@@ -345,13 +347,13 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     simpa using hi
   have hnsi : (P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!))[i] = 2 := by
     simp only [List.getElem_map, Array.getElem_toList]
-    rw [hPi]
+    rw [hPi, hps]
     exact sizes_acc ((_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).map (·.size)) hb
   have hoN : o < (P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!))[i] := by
     rw [hnsi]
     exact ho2
   have he2 : e = ((P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!)).take i).sum +
-      o := he'
+      o := by rw [hps]; exact he'
   -- the copy's element is its committed row's, at the piece's instance `r0`
   obtain ⟨cS, hpc⟩ := staged_circuit hsh.2 hr
   have hc0 : p.sts[0].c = cS := partCircuit_staged hsh.2 hxO htg hpi hr hpc ht
