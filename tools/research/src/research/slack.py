@@ -1766,19 +1766,23 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
     warn_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
-    body = linear_ask(ns, owner, h["handle"], body)
-    _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
+    text = f"{tag(owner)} {linear_ask(ns, owner, h['handle'], body)}"
+    check_length(reg, ch, text, POST_WORDS)
+    _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
 
 def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> str:
     """The ask filed as an issue in its owner's Linear team (`linear` in the registry), which holds the whole brief; what
-    Slack carries is then its first line and the issue's link.  The body as it was when the owner has no team
-    or Linear fails, so the ask still goes out on Slack in full."""
-    if not ASKS_ON_LINEAR or ns.dry_run or not owner.get("linear"):
+    Slack carries is then its first line and the issue's link (with `--dry-run`, nothing filed, a stand-in link).  The body
+    as it was when the owner has no team or Linear fails, so the ask still goes out on Slack in full."""
+    if not ASKS_ON_LINEAR or not owner.get("linear"):
         return body
     from . import linear
 
+    if ns.dry_run:
+        print(f"dry-run: would file the ask in Linear team {owner['linear']}", file=sys.stderr)
+        return f"{linear.first_line(body)}\nLinear: <https://linear.app|{owner['linear']}-?>"
     parent = getattr(ns, "parent", None)
     issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None))
     if not issue:
@@ -2000,8 +2004,8 @@ def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
     _check_audience(to, body := _body(ns), reg)
-    _post(client(ns), ch, h["handle"], announcement(h, to, body, ns.verify, ns.ships),
-          route=_route(ns, reg, ch), urgent=ns.urgent)
+    check_length(reg, ch, text := announcement(h, to, body, ns.verify, ns.ships), ANNOUNCE_WORDS)
+    _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
 
@@ -2045,6 +2049,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
+    check_length(reg, ch, text, ANNOUNCE_WORDS if kind == "announce" else POST_WORDS)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
     return 0
 
@@ -2060,6 +2065,7 @@ def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg)
     body = _body(ns)
     warn_unrouted(body, reg, h["handle"])
+    check_length(reg, ch, body, POST_WORDS)
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent,
           tags=(QUIET,) if ns.quiet else ())                         # a footer tag rides on the first piece of a long post
     return 0
@@ -2748,6 +2754,20 @@ def render_latency(rep: dict, hours: float) -> str:
 
 VOLUME_WORDS = 80                                                # a post longer than this is a brief: it belongs in its issue
 VOLUME_THREADS = 10                                              # the busiest threads `traffic --volume` names
+POST_WORDS, ANNOUNCE_WORDS = 60, 150                             # the coordinating skill's lengths ("How long, and where")
+LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment ISSUE --file BODY.md --as ME`), or in a file, "
+              "PR or note, and post a short line that links it")
+
+
+def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
+    """A post `send`, `reply`, `announce` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
+    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted."""
+    if ch != channel_id_for(reg, FRONT_DOOR) or (n := len(plain(text).split())) <= limit:
+        return
+    if n > 2 * limit:
+        raise SlackError(f"{n} words, past twice the {limit} a post in #{FRONT_DOOR} may have, so nothing was posted: {LENGTH_FIX}")
+    print(f"research msg: {n} words, past the {limit} a post in #{FRONT_DOOR} may have (posted; past {2 * limit} it is refused): "
+          f"{LENGTH_FIX}", file=sys.stderr)
 
 
 def volume(api: Slack, reg: dict, ch: str, since: float, now: float) -> dict:
