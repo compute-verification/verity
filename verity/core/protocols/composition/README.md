@@ -63,7 +63,7 @@ components yet.
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
-`tests/reference.py`: the trial's composition rule, onsite's and remote's over their components' statements, over the harness's framing
+`tests/reference.py`: the trial's composition rule (vendored, with its source files named), over the harness's framing
 of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
 the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's

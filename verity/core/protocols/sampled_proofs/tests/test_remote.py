@@ -1148,7 +1148,7 @@ XOR8 = PrimitiveDefinition("RemoteTestXor8", 1, (("a", Value(8)), ("b", Value(8)
 
 
 def _declared(steps: int, annotate: bool = False) -> tuple[bytes, str]:
-    """A static window's declared Program of `steps` calls, as the H1 rehearsal writes it before it serves
+    """A static window's declared Program of `steps` calls, as vllm's rehearsal writes it before it serves
     (`pouw_h1_rehearsal.build_program`): its descriptor's canonical JSON without annotations, and its `program_digest`,
     the period's ``--circuit`` (with `annotate`, a descriptor that names its window in its annotations)."""
     def sig(S):
@@ -1164,8 +1164,8 @@ def _declared(steps: int, annotate: bool = False) -> tuple[bytes, str]:
 
 
 def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
-    """A served H1 rehearsal's ledger: a prover's period opened with cap 1 and `circuit`, its one window reserved, opened,
-    served and ended complete, then the period closed (no period with `period` false)."""
+    """vllm's served H1 rehearsal's ledger (r20261021-024645-c83a): lane vllm's period opened with cap 1 and `circuit`,
+    its one window reserved, opened, served and ended complete, then the period closed (no period with `period` false)."""
     tmp_path.mkdir()
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     if period:
@@ -1180,7 +1180,7 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
     """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
-    window only when the descriptor of the circuit its sessions prove hashes to it. The rehearsal's shape is credited;
+    window only when the descriptor of the circuit its sessions prove hashes to it. vllm's rehearsal shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""
     descriptor, digest = _declared(4)
@@ -1293,11 +1293,11 @@ MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 
 def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
     """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
-    A session whose open names `PIN`, main's tip when vy-challenger-1 was repinned and the one line of the pins log it
+    A session whose open names `PIN`, main's tip when infra repinned vy-challenger-1 and the one line of the pins log it
     published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
     its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
     log, an open that seals none, no copy of main or a malformed one, and a logged pin that is in main's history but not
-    on its first-parent line (`BRANCH_PINS[-1]`, the second parent of `MERGE`, which landed it, as the other six)."""
+    on its first-parent line (882770e600, the second parent of the merge that landed it, as the six other 20 Oct pins)."""
     assert MAIN[0] == PIN and MAIN[-1] == "6c2de12715770b0cb1662e5036e5ee239ff191c1" and MERGE in MAIN
     assert not set(BRANCH_PINS) & set(MAIN)
     descriptor, digest = _declared(4)
