@@ -217,6 +217,18 @@ def test_a_terminal_run_dirs_reservation_is_stale(machine):
     assert M.snapshot(machine["ram"])["available_gb"] == 50
 
 
+def test_a_check_slot_waiting_in_line_for_a_slot_that_holds_no_memory_counts_nothing_until_it_leaves(machine):
+    """A check slot's reservation marked waiting (lean_slot.wait while its check queues for a Lean audit slot) counts nothing; the
+    same reservation unmarked counts what it hasn't used yet."""
+    f = machine["ram"] / "check-s0.json"
+    f.write_text(json.dumps({"owner": "check", "gb": 40, "pid": os.getpid(), "waiting": True}))
+    row = next(x for x in M.snapshot(machine["ram"])["reservations"] if x["file"] == "check-s0.json")
+    assert row["live"] and row["outstanding"] == 0 and "waiting in line" in row["why"]
+    assert M.snapshot(machine["ram"])["available_gb"] == 50
+    f.write_text(json.dumps({"owner": "check", "gb": 40, "pid": os.getpid()}))
+    assert M.snapshot(machine["ram"])["available_gb"] < 50
+
+
 def test_cli_mem_gb_needs_a_machine_and_research_mem_prints_the_reading(machine, capsys):
     assert main(["run", "--mem-gb", "4", "--", "true"]) == 2
     assert "--mem-gb admits a run on a shared machine" in capsys.readouterr().err

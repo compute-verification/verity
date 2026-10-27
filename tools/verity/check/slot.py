@@ -261,6 +261,8 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False) -> int:
             continue
         if priority and doc.get("priority") is not True:
             continue
+        if doc.get("waiting") is True:
+            continue
         try:
             if doc.get("run_dir") and json.loads((Path(doc["run_dir"]) / "status.json").read_text()).get("state") in ENDED:
                 continue
@@ -273,6 +275,27 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False) -> int:
         key = doc.get("run_id") or f.name
         by[key] = max(by.get(key, 0.0), max(0.0, gb - min(used or 0, gb)))
     return int(sum(by.values())) >> 30
+
+
+def mark_waiting(name: str, waiting: bool) -> None:
+    """Mark check slot NAME's research.mem reservation as waiting (or not) while its check queues for something that holds no
+    memory, such as one of the node's few Lean audit slots: a waiting reservation counts nothing (`reserved_gb`, research.mem's
+    `reservations`), so checks queued behind a Lean slot don't hold their GB idle and block every other slot on the node. No
+    reservation file, or an unreadable one, is left as it is."""
+    path = RAMLOCK / f"check-{name}.json"
+    try:
+        with open(RAMLOCK / ".admission.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            doc = json.loads(path.read_text())
+            if bool(doc.get("waiting")) == waiting:
+                return
+            doc = {k: v for k, v in doc.items() if k != "waiting"} | ({"waiting": True} if waiting else {})
+            tmp = path.with_name(f".{path.name}.{os.getpid()}")
+            tmp.write_text(json.dumps(doc) + "\n")
+            tmp.chmod(0o664)
+            os.replace(tmp, path)
+    except (OSError, ValueError):
+        pass
 
 
 def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:

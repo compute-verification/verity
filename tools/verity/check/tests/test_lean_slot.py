@@ -307,3 +307,30 @@ def test_the_lean_audit_run_by_hand_with_build_takes_a_slot_of_pool_audit(slots,
     assert audit.lean_slot(slots) is None                                # a laptop
     for h in held:
         os.close(h)
+
+
+def test_a_check_waiting_for_a_lean_slot_holds_its_memory_reservation_at_nothing_until_it_gets_one(slots, monkeypatch, tmp_path):
+    """A check slot's research.mem reservation is taken when its check starts; while the check queues for one of the node's few
+    Lean audit slots it holds nothing, so the reservation counts nothing until the check leaves the line, and in full after."""
+    ramlock = tmp_path / "ramlock"
+    ramlock.mkdir()
+    monkeypatch.setattr(LS.SLOT, "RAMLOCK", ramlock)
+    monkeypatch.setenv("CHECK_SLOT", "s0")
+    (ramlock / "check-s0.json").write_text(json.dumps({"owner": "check", "gb": 64.4, "pid": os.getpid()}) + "\n")
+    first = LS.wait("audit", now=lambda: NOW, log=lambda s: None)
+    second = LS.wait("audit", now=lambda: NOW, log=lambda s: None)
+    assert "waiting" not in json.loads((ramlock / "check-s0.json").read_text())       # a slot was free: it never waited
+    seen = []
+
+    def sleep(_s):
+        doc = json.loads((ramlock / "check-s0.json").read_text())
+        seen.append((doc.get("waiting"), LS.SLOT.reserved_gb()))
+        if len(seen) == 2:
+            os.close(second[2])
+
+    third = LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lambda s: None)
+    assert seen == [(True, 0), (True, 0)]
+    assert "waiting" not in json.loads((ramlock / "check-s0.json").read_text())
+    assert LS.SLOT.reserved_gb() > 0
+    for fd in (first[2], third[2]):
+        os.close(fd)

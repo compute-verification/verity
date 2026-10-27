@@ -155,7 +155,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     pools = parse(SLOTS.read_text())
     name, n = resolve(pools, pool, or_any)
     ticket, tfd = SLOT.join(d, who=asker(by), line=line_name(name))
-    told, since = None, 0
+    told, since, waiting = None, 0, None
     try:
         while True:
             try:
@@ -167,6 +167,8 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
             got = None if ahead else take(d, name, n)
             if got:
                 break
+            if waiting is None and (waiting := os.environ.get("CHECK_SLOT") or ""):
+                SLOT.mark_waiting(waiting, True)
             why = f"{ahead} Lean audit(s) ahead in line" if ahead else f"all {n} Lean audit slot(s) of pool {name} are taken"
             lines = status(pools, d, now(), only=name, before=ticket.name)
             seen = (why, [re.sub(r" \(\d+ min\)", "", ln) for ln in lines])       # the same holders, a minute older
@@ -180,6 +182,8 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     finally:
         ticket.unlink(missing_ok=True)
         os.close(tfd)
+        if waiting:
+            SLOT.mark_waiting(waiting, False)
     i, fd = got
     who = {**asker(by), "took": f"{now():%Y-%m-%dT%H:%MZ}"}
     path = lock_path(d, name, i).with_suffix(".who")

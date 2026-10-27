@@ -169,6 +169,8 @@ def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
             row.update(live=False, why=f"run {doc.get('run_id')} ended", outstanding=0)
         elif pid is not None and not _alive(pid):
             row.update(live=False, why=f"pid {pid} gone", outstanding=0)
+        elif doc.get("waiting") is True:
+            row.update(live=True, why="waiting in line for a slot that holds no memory; counts nothing until it leaves", outstanding=0)
         else:
             used = _rss_tree(pid) if pid is not None else None
             row.update(live=True, why=f"pid {pid} holds {used / GB:.1f} GB" if used is not None else ("no pid" if pid is None else f"pid {pid}"),
