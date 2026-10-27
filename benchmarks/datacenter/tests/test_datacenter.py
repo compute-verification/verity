@@ -18,7 +18,7 @@ from verity.ml.circuits.types import Array, Tuple
 
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
                         Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
-                        Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
+                        Plan, Port, Record, Refused, Store, Wipe, account, ands, audit, check_records, crossings,
                         double_credit, evaluate, names, occupancy, place, read, register, run, traffic, values, work)
 from datacenter.binding import hops
 from datacenter.logical import census_of, committed
@@ -30,13 +30,15 @@ PROGRAM = two_stage()
 REG = register(PROGRAM, WEIGHTS)
 INPUTS = {"x": X}
 STAGE = {"mac:bf16": 1024, "cuda:gate": 5728}       # one linear: 32 × 32 multiply-adds, 32 roundings to BF16 of 179 gates
+ANDS = 528640 + 2112                                # its ANDs on bits: the BF16 step's and the roundings'
 HBM, RESIDUAL = 6.4e10, 8e6
 
 
 def node(n: str) -> Block:
     gpu = Device(f"{n}.gpu", "gpu", rate={"mac:bf16": Assumption(f"{n}.gpu.bf16", 1e6, "MAC/s"),
                                           "cuda:gate": Assumption(f"{n}.gpu.gates", 1e7, "gate/s")},
-                 memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"))
+                 memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"),
+                 write=Assumption(f"{n}.gpu.write", 1e14, "bit/s"))
     return Block(n, [gpu])
 
 
@@ -77,12 +79,12 @@ def _float(w: int) -> float:
 def test_a_program_of_registered_definitions_has_census_values_work_and_its_evaluation():
     """The circuit is a `verity.ml.circuits` Program: its root nodes are its parameters' input nodes and its named Calls,
     its values are the census's (what each node passes the Calls that read it), each Call's work is counted by kind
-    from its Definition's body, and its evaluation is the BF16 tensor-core step's, which a float matmul matches to
-    BF16's precision."""
+    from its Definition's body and its ANDs from the census's Boolean work, and its evaluation is the BF16 tensor-core
+    step's, which a float matmul matches to BF16's precision."""
     assert [(v.name, v.bits, v.reads, v.output) for v in values(PROGRAM)] == [
         ("x", 512, (3,), False), ("w1", 16384, (3,), False), ("w2", 16384, (4,), False), ("h", 512, (4,), False),
         ("y", 512, (), True)]
-    assert work(PROGRAM) == {3: STAGE, 4: STAGE}
+    assert work(PROGRAM) == {3: STAGE, 4: STAGE} and ands(PROGRAM) == {3: ANDS, 4: ANDS}
     assert len(committed(PROGRAM)) == 32 + 2 * 1024 + 2 * 32          # a run commits its census values, not a Call's wires
     doc = census_of(PROGRAM)                                         # the multiply-adds are the census's served MACs
     nodes = doc["nodes"]
@@ -111,7 +113,7 @@ def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registere
     profile = p.public(Plan(EPOCH), record=rec, query=query)
     assert profile.units == {"a": 32, "b": 32} and profile.partition == "registered" and rec["population"] == 64
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
-    assert Computed("a", 6752, EPOCH, units=32) in claims and Computed("b", 6752, EPOCH, units=32) in claims
+    assert Computed("a", ANDS, EPOCH, units=32) in claims and Computed("b", ANDS, EPOCH, units=32) in claims
     assumed = p.public(Plan(EPOCH))
     assert assumed.units == profile.units and assumed.partition == "assumed"
     assert [SERVED_PARTITION.name in account(claims, x).blocks[0].assumptions for x in (assumed, profile)] == [True, False]
@@ -160,7 +162,8 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     assert profile.salt["a"] == profile.forced["a"] == 512 and profile.pinned["a"] == 0
     assert {x.value.name for x in crossings(p) if x.dst == "world"} == {"pouw[0][0:2048]", "pouw[0][2048:2304]"}
     # the claim an accepted window gives, in place of `audit`'s re-execution of the unit's gates
-    acc = account([Computed("a", profile.credit("a"), EPOCH)], profile, assume=(FLEET_CLOSED,))
+    acc = account([Computed("a", profile.ands["a"], EPOCH)], profile, assume=(FLEET_CLOSED,))
+    assert profile.ands["a"] == sum(ands(compiled).values()) > 0 and profile.uncounted is None
     assert [c for c in acc.credits if c.resource.startswith("compute")] == [
         Credit("a", "compute", EPOCH, ticks, "fleet-closed", "proved")]
 
@@ -194,20 +197,19 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     ticks = PT.proved_block_ticks(PT.placed(work["a"], PT.tiles(compiled)), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
                                   gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
     profile = p.public(Plan(EPOCH), ticks={"a": ticks})
-    acc = account([Computed("a", profile.credit("a"), EPOCH)], profile, assume=(FLEET_CLOSED,))
+    acc = account([Computed("a", profile.ands["a"], EPOCH)], profile, assume=(FLEET_CLOSED,))
     assert [c for c in acc.credits if c.resource.startswith("compute")] == [
         Credit("a", "compute", EPOCH, ticks, "fleet-closed", "proved")]
     with pytest.raises(ValueError, match="aren't its H1 tiles'"):
         PT.placed(work["a"], {PT.Tile(4, 16, 64, 64): 1})
 
 
-def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():
-    """Compute's review 2: PoUW credits W_ref, multiply-adds weighted by kind (sm_120's cohalf QKᵀ at 1.25), and a
-    device's rate depends on the operand format. So each primitive's gates are work of its kind: the BF16 and E4M3
-    tensor-core steps' products and the CUDA cores' roundings. The profile carries per-kind counts, the audit credits
-    them at their weights, and the account times each kind at the block's declared rate for it. Kinds on one facet (the
-    tensor cores' `mac:*`) add up; the roundings on the CUDA cores run beside them (compute's review 3), so the block's
-    busy share is the busiest facet's, and the ledger credits and caps each facet."""
+def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
+    """Compute credit is the declared circuit's AND count under one pinned lowering (LEAN-63, RT-UNITS-3), with the
+    multiply-adds reported by format beside it (U3). A device's rate depends on the operand format, so each primitive's
+    gates are work of its kind, timed at the block's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
+    up; the roundings on the CUDA cores run beside them (compute's review 3), so the block's busy share is the busiest
+    facet's, and the ledger credits and caps each facet."""
     row8 = Array(32, word(8))
     qk = bind(GemmCoordinateE4m3, K=32, **GEMM_SM120_E4M3)
     attend = program("Attend", {"x": VEC, "w1": MAT, "q": row8, "k": row8}, Tuple(VEC, word(16)),
@@ -221,12 +223,14 @@ def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rat
     k = [0x30 + i % 8 for i in range(32)]                            # E4M3 codes 0.5 to 0.94
     p = place(attend, dc, "a.gpu", registration=register(attend, {"w1": WEIGHTS["w1"], "k": k}), deliver="world",
               x="world", q="world")
-    profile = p.public(Plan(EPOCH), weights={"mac:fp8": 1.25})
+    profile = p.public(Plan(EPOCH))
     assert profile.work == {"a": {"mac:bf16": 1024, "mac:fp8": 32, "cuda:gate": 5728 + 179}, "b": {}}
+    assert profile.ands == {"a": ANDS + 9194, "b": 0}                # the E4M3 coordinate's 9194 ANDs on bits
     acc = account(audit(run(p, {"x": X, "q": [0x38] * 32}, Plan(EPOCH)), profile), profile)
     a = acc.blocks[0]
     mac = (1024 / 1e6 + 32 / 5e5) / 16e-3
-    assert a.credited == 1024 + 1.25 * 32 + 5907 and a.loads == pytest.approx({"mac": mac, "cuda": 5907 / 1e7 / 16e-3})
+    assert a.credited == ANDS + 9194 and a.loads == pytest.approx({"mac": mac, "cuda": 5907 / 1e7 / 16e-3})
+    assert a.macs == {"mac:bf16": 1024, "mac:fp8": 32} and "MACs by format (not credited)" in repr(acc)
     assert a.busy == pytest.approx(max(a.loads.values())) and a.busy < sum(a.loads.values())
     assert acc.sound and {x.resource for x in acc.credits} == {"compute:mac", "compute:cuda"}
     assert {"a.gpu.bf16", "a.gpu.fp8", "a.gpu.gates"} <= set(a.assumptions)
@@ -288,10 +292,10 @@ def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_
 def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
     dc, p = setup
     profile = p.public(Plan(EPOCH))
-    assert profile.work == {"a": STAGE, "b": STAGE} and profile.credit("a") == 6752
+    assert profile.work == {"a": STAGE, "b": STAGE} and profile.ands == {"a": ANDS, "b": ANDS}
     assert profile.occupancy[Port("b.cert", "egress")] == {7: 16}     # y's 32 words, at the world's read tick
     assert list(profile.windows) == [0, 1, 2, 3] and profile.registered == REG.root
-    assert profile.census == census(PROGRAM, digest=program_digest(PROGRAM))["digest"]
+    assert profile.census == census(PROGRAM, digest=program_digest(PROGRAM), boolean=True)["digest"]   # names the lowering
 
 
 def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
@@ -300,14 +304,14 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     profile = p.public(plan)
     claims = audit(run(p, INPUTS, plan), profile)
     assert not refusals(claims)
-    assert Computed("a", 6752, EPOCH, units=32) in claims and Computed("b", 6752, EPOCH, units=32) in claims
+    assert Computed("a", ANDS, EPOCH, units=32) in claims and Computed("b", ANDS, EPOCH, units=32) in claims
     assert Held("labels@b.gpu", HBM - RESIDUAL, Interval(0, 2)) in claims
     assert [x for x in claims if isinstance(x, Entered)] == [Entered("x", 512, "outside")]
     carried = [x for x in claims if isinstance(x, Carried)]
     assert len(carried) == len(dc.ports) * 4 and all(x.bits == 7 for x in carried)
     acc = account(claims, profile)
     a, b = acc.blocks
-    assert acc.sound and a.credited == b.credited == 6752
+    assert acc.sound and a.credited == b.credited == ANDS
     assert b.carried == RESIDUAL and a.carried == HBM                # b was wiped down to its residual
     assert acc.input_bits == {"x": 512} and acc.located == {"labels@b.gpu": ["b.gpu"]}
 
@@ -508,7 +512,7 @@ def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
 
     profile, acc = custody()
     a = acc.blocks[0]
-    dot = 32 + 179                                                   # p's multiply-adds and its rounding's gates
+    dot = 14907                                                      # p's ANDs the salt reaches: its 16586 less h's own
     assert profile.salt == {"a": 512, "b": 0} and profile.pinned["a"] == dot and profile.salt_out["a"] == 0
     assert a.custody == 4 * 7 and a.local_at_least == dot and "salt-custody" in a.assumptions
     assert acc.blocks[1].custody is None and acc.blocks[1].local_at_least == 0

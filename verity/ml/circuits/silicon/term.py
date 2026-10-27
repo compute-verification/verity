@@ -20,8 +20,7 @@ least significant bit), and a non-finite word becomes one of the strings ``"nan"
 The BF16 and E4M3 products are Hawkeye's (``utils.cpp::multiply_bfloat16_to_gfloat`` /
 ``multiply_fp8e4m3_to_gfloat``, commit ``30703fcb``); E5M2 and E2M1 follow the same rule -- subnormal inputs keep
 their unnormalised significand at the minimum exponent, nothing is normalised or flushed -- for formats Hawkeye's
-simulators do not have.  Moved here from ``silicon.py`` (which re-exports every name) in the silicon Phase-0
-consolidation; the BF16/E4M3 functions are byte-for-byte the veritor ``core/silicon.py`` (eb865ce29) ones.
+simulators do not have.  ``silicon.py`` re-exports every name.
 """
 from __future__ import annotations
 
