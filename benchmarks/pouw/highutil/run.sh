@@ -38,8 +38,11 @@ echo "build rc $?" >> "$O/rc.txt"
 [ -x "$W/hu" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
 sha256sum $D/v31.cu $D/v31.py $D/hu.cu $D/period.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
-$PY --with safetensors $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" > "$O/prep.log" 2>&1
-echo "prep rc $?" >> "$O/rc.txt"
+uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" \
+  > "$O/prep.log" 2>&1
+r=$?
+echo "prep rc $r" >> "$O/rc.txt"
+[ $r = 0 ] || { cat "$O/rc.txt"; tail -30 "$O/prep.log"; exit 1; }
 cp "$W/cfg/prep.json" "$O/prep.json"
 [ "$CKPT" = seeded ] || $TORCH_PY -c "import torch, safetensors, tokenizers, pyarrow; print('torch', torch.__version__, torch.version.cuda)" \
   >> "$O/prep.log" 2>&1
@@ -62,8 +65,10 @@ $LEASE bash -c '
   if [ "$CKPT" != seeded ]; then
     $TORCH_PY $D/capture.py "$W/cfg" --checkpoint "$CKPT" \
       > "$O/capture.log" 2>&1
-    echo "capture rc $?" >> "$O/rc.txt"
-    cp "$W/cfg/capture.json" "$O/capture.json" 2>/dev/null
+    r=$?
+    echo "capture rc $r" >> "$O/rc.txt"
+    [ $r = 0 ] || { kill $smi 2>/dev/null; exit $r; }
+    cp "$W/cfg/capture.json" "$O/capture.json"
   fi
   $PY $D/period.py diag "$W/cfg" "$W/hu" "$O" > "$O/diag.log" 2>&1
   echo "diag rc $?" >> "$O/rc.txt"

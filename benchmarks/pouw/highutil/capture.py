@@ -138,9 +138,9 @@ def main(argv: list[str] | None = None) -> int:
             qkv = call("qkv", rms(x, ck.get(p + "input_layernorm.weight"), eps),
                        cat("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"))
             q, k, v = qkv.split([nh * hd, nkv * hd, nkv * hd], dim=-1)
-            q = rope(q.view(S, L, nh, hd).transpose(1, 2), cos, sin)
-            k = rope(k.view(S, L, nkv, hd).transpose(1, 2), cos, sin)
-            v = v.view(S, L, nkv, hd).transpose(1, 2)
+            q = rope(q.reshape(S, L, nh, hd).transpose(1, 2), cos, sin)
+            k = rope(k.reshape(S, L, nkv, hd).transpose(1, 2), cos, sin)
+            v = v.reshape(S, L, nkv, hd).transpose(1, 2)
             att = F.scaled_dot_product_attention(q, k, v, is_causal=True, enable_gqa=True)
             x = x + call("o", att.transpose(1, 2).reshape(m, nh * hd), cat("self_attn.o_proj"))
             gu = call("up", rms(x, ck.get(p + "post_attention_layernorm.weight"), eps), cat("mlp.gate_proj", "mlp.up_proj"))
