@@ -1458,7 +1458,9 @@ static void set_carveout(int pct) {
                       (const void*)form_b_kernel<true>, (const void*)bits_kernel,         (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
                       (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
-                      (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>};
+                      (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>,
+                      (const void*)leaf_small<LtRow, 0>, (const void*)leaf_persist<LtRow>,  (const void*)fill_a_kernel,
+                      (const void*)fill_b_kernel};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
@@ -1748,6 +1750,7 @@ struct Fill {
   uint16_t* wpack = nullptr;          // testing: D packed as words
   Lt lt{};
   bool ltw = false;
+  bool nomem = false;                 // timing only: the leaves hashed from NoMemRow's register bytes (wrong roots)
   Committer cm[2];
   Maps* maps = nullptr;
   cudaStream_t s0 = nullptr, s1 = nullptr, so = nullptr;   // compute, commit, openings
@@ -1886,7 +1889,8 @@ struct Fill {
   }
   LtRow ltrow(int b) const { return LtRow{D[b], (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)kn.pf}; }
   void leaves_nodes(int b, cudaStream_t st) {
-    if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
+    if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
+    else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
     else pl.leaves_nodes(cm[b], rowsrc(b), kn.ccta, st);
   }
   // copy b's values poisoned (testing)
@@ -2313,6 +2317,37 @@ static std::string fill_params_name(int m, int n, int k, int lp, int L, int row)
   return "fill-" + std::to_string(m) + "x" + std::to_string(n) + "x" + std::to_string(k) + "-lp" + std::to_string(lp) + "-L" +
          std::to_string(L) + "-r" + std::to_string(row) + ".bin";
 }
+// One shape's Fill call twice, each committed before the next is issued, then V31_ONCE_OVL (default 6) back-to-back calls
+// (each committed beside the next one's compute), nothing timed: what a profiler watches (run.sh's FILL_NSYS)
+static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, const std::string& sh) {
+  char name[64];
+  int m, n, k;
+  if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+  const int L = Lspec > 0 ? Lspec : k, novl = env_int("V31_ONCE_OVL", 6);
+  Fill f;
+  f.setup(m, n, k, lp, L, row, read_params(pdir + "/" + fill_params_name(m, n, k, lp, L, row)), 0);
+  int8_t* A = dalloc<int8_t>((size_t)m * k);
+  gen_kernel<<<m, 256, 0, f.s0>>>(A, k, 1u, true);
+  gen_kernel<<<n, 256, 0, f.s0>>>(f.B, k, 2u, false);
+  std::vector<uint8_t> sd(384), ks(64);
+  for (size_t i = 0; i < sd.size(); i++) sd[i] = (uint8_t)mix32((u32)i);
+  for (size_t i = 0; i < ks.size(); i++) ks[i] = (uint8_t)mix32((u32)(i + sd.size()));
+  f.set_seeds(sd.data());
+  CK(cudaStreamSynchronize(f.s0));
+  for (int i = 0; i < 2; i++) {
+    f.issue(ks.data(), A);
+    f.ready(f.calls - 1);
+  }
+  for (int i = 0; i < novl; i++) f.issue(ks.data(), A);
+  f.flush();
+  CK(cudaDeviceSynchronize());
+  CK(cudaGetLastError());
+  printf("%s: %llu calls (2 serial, %d overlapped), ltw %d\n", name, (unsigned long long)f.calls, novl, f.ltw ? 1 : 0);
+  cudaFree(A);
+  f.release();
+  return 0;
+}
+
 // Two sampled tiles of a filler call (copy b), for `v31.py fill-sample`: the seeds (dither order), the call's key, the
 // params, A's and B's rows of each tile, its words and its leaves (level 0)
 static void fill_samples(Fill& f, int b, const std::string& dir, const std::string& pfile, const std::vector<uint8_t>& sd,
@@ -2346,8 +2381,8 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
 // for `v31.py fill-sample`, then gpu_kit's interleaved arms: coins (d_A, V), coins_w (d_B, U, the permutations), pad (the
 // filler's pad), form_a, form_b, gemm, commit; call, one call serial with the weight side a period's (v3.2); ovl,
 // back-to-back calls each committed beside the next call's compute, the weight side a period's; ovl_w, the same with the
-// weight side every call (dither.call_seeds); ovl_pad, the filler's call (the pad and every coin a call). One JSON line a
-// shape.
+// weight side every call (dither.call_seeds); ovl_pad, the filler's call (the pad and every coin a call); ovl_nomem, ovl
+// with each leaf's bytes made in registers (NoMemRow: the commit's compressions without its loads). One JSON line a shape.
 static int cmd_fill_bench(int reps, const std::string& out, const std::string& pdir, int lp, int Lspec, int row,
                           const std::vector<std::string>& shapes) {
   gk::Nvml nv(0);
@@ -2441,6 +2476,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
         {"ovl", [&](cudaStream_t s, int r) { ovl(s, r, A, false); }},
         {"ovl_w", [&](cudaStream_t s, int r) { ovl(s, r, A, true); }},
         {"ovl_pad", [&](cudaStream_t s, int r) { ovl(s, r, nullptr, true); }},
+        {"ovl_nomem", [&](cudaStream_t s, int r) { f.nomem = true; ovl(s, r, A, false); f.nomem = false; }},
     };
     const int ICUT = (int)arms.size();
     if (cut.best) arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
@@ -2484,8 +2520,9 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");
-    printf("}, \"gamma_ovl\": %.4f, \"gamma_ovl_w\": %.4f, \"gamma_ovl_pad\": %.4f, \"gamma_call\": %.4f, \"gamma_gemm\": %.4f, ",
-           at("ovl") / l, at("ovl_w") / l, at("ovl_pad") / l, at("call") / l, at("gemm") / l);
+    printf("}, \"gamma_ovl\": %.4f, \"gamma_ovl_w\": %.4f, \"gamma_ovl_pad\": %.4f, \"gamma_ovl_nomem\": %.4f, \"gamma_call\": %.4f, "
+           "\"gamma_gemm\": %.4f, ",
+           at("ovl") / l, at("ovl_w") / l, at("ovl_pad") / l, at("ovl_nomem") / l, at("call") / l, at("gemm") / l);
     if (cut.best)
       printf("\"gamma_ovl_cutlass\": %.4f, \"gamma_ovl_w_cutlass\": %.4f, \"gamma_ovl_pad_cutlass\": %.4f, "
              "\"gamma_gemm_cutlass\": %.4f, \"cutlass_over_lt\": %.4f, ",
@@ -2678,6 +2715,8 @@ int main(int argc, char** argv) {
     return cmd_fill_bench(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]),
                           std::vector<std::string>(argv + 8, argv + argc));
   if (argc == 7 && !strcmp(argv[1], "once")) return cmd_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
+  if (argc == 7 && !strcmp(argv[1], "fill-once"))
+    return cmd_fill_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
   if (argc >= 10 && !strcmp(argv[1], "gate"))
     return cmd_gate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]), argv[9]);
   if (argc >= 9 && !strcmp(argv[1], "bench"))
@@ -2689,7 +2728,8 @@ int main(int argc, char** argv) {
     return 0;
   }
   fprintf(stderr, "usage: v31 gate DIR M N K LP T ROW CHEAT | bench REPS OUT PDIR LP T ROW name:M:N:K... | once PDIR LP T ROW "
-                  "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | attrs\n");
+                  "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | fill-once PDIR LP L ROW name:M:N:K "
+                  "| attrs\n");
   return 2;
 }
 #endif

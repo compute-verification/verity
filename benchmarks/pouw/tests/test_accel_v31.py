@@ -181,11 +181,52 @@ def test_timeline_splits_calls_and_measures_the_overlap(tmp_path, capsys):
     (tmp_path / "t.csv").write_text("\n".join(rows) + "\n")
     assert v31.main(["v31", "timeline", str(tmp_path / "t.csv")]) == 0
     out = capsys.readouterr().out
-    assert "| wrap4_kernel<128> | 1 | 10.000 | 15.000 | 1.50 | 100% |" in out
-    assert "| gemm_kernel<true> | 1 | 20.000 | 25.000 | 1.25 |" in out
-    assert "| leaf_persist<V31Row> | 1 | 30.000 | 40.000 | 1.33 | 68% |" in out
+    assert "| wrap4_kernel<128> | ? x ?, ? regs, 0 KB | 1 | 10.000 | 15.000 | 1.50 | 100% |" in out
+    assert "| gemm_kernel<true> | ? x ?, ? regs, 0 KB | 1 | 20.000 | 25.000 | 1.25 |" in out
+    assert "| leaf_persist<V31Row> | ? x ?, ? regs, 0 KB | 1 | 30.000 | 40.000 | 1.33 | 68% |" in out
     assert "steady period (GEMM end to GEMM end): median 40.000 ms, 40.000, 40.000, 40.000" in out
     assert "steady window 120.000 ms: compute alone 0.0%, commit alone 4.2%, both 95.8%, neither 0.0%" in out
+
+
+def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
+    ms = 1_000_000
+    spans = [   # (start, end, kernel) in ms: cuBLASLt's autotuning and the operands, two serial calls (the weight side in
+        # the first only), then four overlapped calls, each commit beside the next call's GEMM (sched 1)
+        (0, 2, "g"), (2, 4, "g"), (5, 6, "gen"),
+        (10, 11, "b"), (11, 12, "n"), (12, 13, "b"), (13, 14, "n"), (14, 15, "p"), (15, 16, "a"), (16, 17, "fb"),
+        (17, 27, "g"), (27, 28, "s"), (28, 33, "l"),
+        (40, 41, "b"), (41, 42, "n"), (42, 43, "a"), (43, 53, "g"), (53, 54, "s"), (54, 59, "l"),
+        (60, 61, "b"), (61, 62, "n"), (62, 63, "a"), (63, 73, "g"),
+        (73, 74, "b"), (74, 75, "n"), (75, 76, "a"), (76, 87, "g"), (76, 77, "s"), (77, 83, "l"),
+        (87, 88, "b"), (88, 89, "n"), (89, 90, "a"), (90, 101, "g"), (90, 91, "s"), (91, 97, "l"),
+        (101, 102, "b"), (102, 103, "n"), (103, 104, "a"), (104, 115, "g"), (104, 105, "s"), (105, 111, "l"),
+        (115, 116, "s"), (116, 121, "l"),
+    ]
+    names = {"g": "void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>(T1::Params)",
+             "gen": "void gen_kernel(signed char *, int, unsigned int, bool)", "b": "void bits_kernel(Seeds, int, unsigned long, unsigned char *)",
+             "n": "void noise_kernel(Seeds, int, unsigned long, signed char *)", "p": "void perm_kernel(Seeds, int, unsigned short *)",
+             "a": "void fill_a_kernel(const signed char *, const unsigned char *, const signed char *, signed char *, unsigned long, int, int, int)",
+             "fb": "void fill_b_kernel(const signed char *, const unsigned char *, const signed char *, const unsigned short *, signed char *, unsigned long, int, int, int)",
+             "s": "void salt_persist(Persist, int, const uint4 *, unsigned long, unsigned long, unsigned long *, unsigned long *, unsigned long *)",
+             "l": "void leaf_persist<LtRow>(Persist, int, LtRow, const unsigned long *, const unsigned long *, unsigned long, unsigned long, unsigned long *)"}
+    launch = {"g": (448, 256, 232, 0.098), "l": (376, 128, 96, 0.0)}
+    rows = ['"Start (ns)","Duration (ns)","GrdX","BlkX","Reg/Trd","StcSMem (MB)","DymSMem (MB)","Strm","Name"']
+    for s, e, n in spans:
+        g, b, r, sm = launch.get(n, (1, 128, 32, 0.0))
+        rows.append(f'{s * ms},{(e - s) * ms},{g},{b},{r},0.000,{sm},{13 if n in "sl" else 14},"{names[n]}"')
+    (tmp_path / "t.csv").write_text("\n".join(rows) + "\n")
+    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv"), "--gemm", "gemm", "--from", "bits_kernel"]) == 0
+    out = capsys.readouterr().out
+    assert "6 calls (2 serial), steady overlapped calls 3..5" in out
+    gemm = "cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>"
+    assert f"| {gemm} | 448 x 256, 232 regs, 100 KB | 1 | 10.000 | 11.000 | 1.10 | 64% |" in out
+    assert "| leaf_persist<LtRow> | 376 x 128, 96 regs, 0 KB | 1 | 5.000 | 6.000 | 1.20 | 71% |" in out
+    assert "| bits_kernel | 1 x 128, 32 regs, 0 KB | 1 | 1.000 | 1.000 | 1.00 |" in out
+    assert "fill_b_kernel" not in out
+    assert "serial call: 19.000 ms; steady period (GEMM end to GEMM end): median 14.000 ms, 14.000, 14.000, 14.000" in out
+    assert "steady window 42.000 ms: compute alone 50.0%, commit alone 0.0%, both 50.0%, neither 0.0%" in out
+    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv"), "--gemm", "gemm", "--from", "wrap4_kernel"]) == 2
+    capsys.readouterr()
 
 
 def test_challenger_keeps_the_order_and_never_redraws():
@@ -312,8 +353,11 @@ def test_fill_table(tmp_path, capsys):
     line = {"fill": True, "shape": "8b-up", "m": 16384, "n": 28672, "k": 4096, "L": 4096, "S": 1, "row": 1024, "cprio": "hi",
             "ccta": 1, "sched": 1, "arms": arms, "gamma_ovl": 1.05, "gamma_ovl_cutlass": 2.1 / 1.9, "gamma_ovl_w": 1.06,
             "gamma_ovl_pad": 1.07, "gamma_call": 1.7, "gamma_gemm": 1.025}
-    (tmp_path / "b.jsonl").write_text("x\n" + json.dumps(line) + "\n")
+    later = dict(line, ltw=1, pf=2, gamma_ovl_nomem=1.02)
+    (tmp_path / "b.jsonl").write_text("x\n" + json.dumps(line) + "\n" + json.dumps(later) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row = capsys.readouterr().out.splitlines()[-1]
+    row, row2 = capsys.readouterr().out.splitlines()[-2:]
     assert row.startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | r1024 hi k1 s1 | 2.000 | 1.900 | 2.100 | 1.050 | 1.105 |")
+    assert "| 1.070 | - | 1.700 |" in row
     assert "| 95.2% | 0.010, 0.020, 0.030, 0.100, 0.200, 2.050, 1.200 |" in row
+    assert "| r1024 hi k1 s1 p2 ltw |" in row2 and "| 1.070 | 1.020 | 1.700 |" in row2

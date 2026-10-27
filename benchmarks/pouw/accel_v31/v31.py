@@ -42,7 +42,8 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
                                                 built from the tiles' A and B rows and those rows' coins alone
     python3 v31.py params DIR NAME:M:N:K ...    CGP1 params for `v31 bench` (a fresh Ks each)
     python3 v31.py table BENCH.jsonl ...        gamma beside D6 v1.1's prediction, shape by shape
-    python3 v31.py timeline TRACE.csv           a kernel timeline of serial and overlapped calls (run.sh's MODE=nsys)
+    python3 v31.py timeline TRACE.csv           a kernel timeline of serial and overlapped calls (run.sh's MODE=nsys, and
+                                                MODE=fill's FILL_NSYS with --gemm gemm --from bits_kernel)
     python3 v31.py fill-params DIR NAME:M:N:K ... [--L L]   CGP1 params of Dither's no-fold calls for `v31 fill-bench`
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
     python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
@@ -55,10 +56,12 @@ Run from the source tree's root with ``PYTHONPATH=.``.
 from __future__ import annotations
 
 import argparse
+import bisect
 import csv
 import hashlib
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -830,7 +833,8 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
 
 def cmd_fill_table(a: argparse.Namespace) -> int:
     """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped as served, over cuBLASLt and CUTLASS, with the
-    weight side a period's (v3.2: ovl), a call's (dither.call_seeds: ovl_w) and the filler's pad (ovl_pad), the GEMM's
+    weight side a period's (v3.2: ovl), a call's (dither.call_seeds: ovl_w) and the filler's pad (ovl_pad), ovl with the
+    commit's loads left out (ovl_nomem: its compressions on bytes made in registers; wrong roots, timing only), the GEMM's
     tensor duty (cuBLASLt's time over the call's period) and where the call's time goes."""
     rows = []
     for path in a.files:
@@ -838,17 +842,18 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
             if line.startswith("{") and '"fill": true' in line:
                 rows.append(json.loads(line))
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | gamma ovl_pad "
-          "| gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, commit ms |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+          "| gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, commit ms |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
         variant = (f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}" + (f" p{r['pf']}" if r.get("pf") else "")
                    + (" ltw" if r.get("ltw") else ""))
         cut, gcut = ((f"{ms['cutlass']['ms']:.3f}", f"{r['gamma_ovl_cutlass']:.3f}") if "cutlass" in ms else ("-", "-"))
         parts = ", ".join(f"{ms[x]['ms']:.3f}" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
+        nomem = f"{r['gamma_ovl_nomem']:.3f}" if "gamma_ovl_nomem" in r else "-"
         print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {ms['lt']['ms']:.3f} | {cut} | "
               f"{ms['ovl']['ms']:.3f} | {r['gamma_ovl']:.3f} | {gcut} | {r['gamma_ovl_w']:.3f} | {r['gamma_ovl_pad']:.3f} | "
-              f"{r['gamma_call']:.3f} | {r['gamma_gemm']:.3f} | {100 / r['gamma_ovl']:.1f}% | {parts} |")
+              f"{nomem} | {r['gamma_call']:.3f} | {r['gamma_gemm']:.3f} | {100 / r['gamma_ovl']:.1f}% | {parts} |")
     return 0
 
 
@@ -1070,7 +1075,8 @@ def cmd_table(a: argparse.Namespace) -> int:
     return 0
 
 
-COMPUTE_KERNELS = ("bits_kernel", "noise_kernel", "perm_kernel", "form_a_kernel", "form_b_kernel", "wrap", "gemm_kernel")
+COMPUTE_KERNELS = ("bits_kernel", "noise_kernel", "perm_kernel", "form_a_kernel", "form_b_kernel", "fill_a_kernel",
+                   "fill_b_kernel", "wrap", "gemm_kernel")
 
 
 def kernel_name(full: str) -> str:
@@ -1104,36 +1110,54 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     second serial call and its median over the steady overlapped calls (each one's compute beside the previous call's
     commit, the first overlapped call's left out), with the share of it that ran beside the other stream; the steady
     period (GEMM end to GEMM end); and the steady window's time with compute alone, the commit alone, both, and neither.
-    A kernel's k-th launch belongs to call k // (its launches / the calls), the calls counted by the protocol GEMM's."""
-    ks = []
+    The GEMM is the kernel whose name --gemm matches (cuBLASLt's under V31_LTW), and it counts the calls. A kernel's k-th
+    launch belongs to call k // (its launches / the calls); a compute kernel launched in some calls only (`v31 fill-once`'s
+    weight side, formed once a period) to the call whose GEMM comes next. --from NAME drops what ran before NAME's first
+    launch (cuBLASLt's autotuning). Each kernel's grid, block, registers a thread and shared memory are its first launch's."""
+    ks, res = [], {}
     with open(a.csv, newline="") as f:
         for r in csv.DictReader(f):
             if r.get("Name", "").startswith("[CUDA") or not r.get("Start (ns)"):
                 continue
-            ks.append((int(r["Start (ns)"]), int(r["Start (ns)"]) + int(r["Duration (ns)"]), kernel_name(r["Name"])))
+            n = kernel_name(r["Name"])
+            ks.append((int(r["Start (ns)"]), int(r["Start (ns)"]) + int(r["Duration (ns)"]), n))
+            if n not in res:
+                smem = sum(float(r.get(c) or 0) for c in ("StcSMem (MB)", "DymSMem (MB)"))
+                res[n] = f"{r.get('GrdX', '?')} x {r.get('BlkX', '?')}, {r.get('Reg/Trd', '?')} regs, {smem * 1024:.0f} KB"
     ks.sort()
-    ncalls = sum(n == "gemm_kernel<true>" for _, _, n in ks)
+    if a.start:
+        first = min((s for s, _, n in ks if n.startswith(a.start)), default=None)
+        if first is None:
+            print(f"no {a.start} launch", file=sys.stderr)
+            return 2
+        ks = [k for k in ks if k[0] >= first]
+    gemm = re.compile(a.gemm)
+    gstart = [s for s, _, n in ks if gemm.search(n)]
+    ncalls = len(gstart)
     if ncalls < a.serial + 3:
         print(f"{ncalls} calls: want {a.serial} serial and at least 3 overlapped", file=sys.stderr)
         return 2
     by_name: dict[str, list[tuple[int, int]]] = {}
     for s, e, n in ks:
         by_name.setdefault(n, []).append((s, e))
+    is_compute = {n: n.startswith(COMPUTE_KERNELS) or bool(gemm.search(n)) for n in by_name}
     calls: list[list[tuple[int, int, str]]] = [[] for _ in range(ncalls)]
     for n, v in by_name.items():
-        if len(v) % ncalls:
-            continue
-        per = len(v) // ncalls
-        for j, (s, e) in enumerate(v):
-            calls[j // per].append((s, e, n))
-    is_compute = {n: n.startswith(COMPUTE_KERNELS) for n in by_name}
+        if len(v) % ncalls == 0:
+            per = len(v) // ncalls
+            for j, (s, e) in enumerate(v):
+                calls[j // per].append((s, e, n))
+        elif is_compute[n]:
+            for s, e in v:
+                calls[min(bisect.bisect_left(gstart, s), ncalls - 1)].append((s, e, n))
     first_ovl = a.serial
     steady = range(first_ovl + 1, ncalls)
     comp_spans = spans_union([(s, e) for c in calls[first_ovl:] for s, e, n in c if is_compute[n]])
     comm_spans = spans_union([(s, e) for c in calls[first_ovl:] for s, e, n in c if not is_compute[n]])
     print(f"{a.csv}: {ncalls} calls ({a.serial} serial), steady overlapped calls {steady.start}..{steady.stop - 1}\n")
-    print("| kernel | launches a call | serial ms | overlapped ms (median) | overlapped / serial | beside the other stream |")
-    print("|---|---|---|---|---|---|")
+    print("| kernel | grid x block, regs, smem | launches a call | serial ms | overlapped ms (median) | overlapped / serial "
+          "| beside the other stream |")
+    print("|---|---|---|---|---|---|---|")
     names = list(dict.fromkeys(n for _, _, n in calls[a.serial - 1]))
     for n in names:
         ser = sum(e - s for s, e, m in calls[a.serial - 1] if m == n)
@@ -1145,9 +1169,9 @@ def cmd_timeline(a: argparse.Namespace) -> int:
             beside.append(sum(covered(other, s, e) for s, e in mine))
         med = float(np.median(per_call))
         side = sum(beside) / max(1, sum(per_call))
-        print(f"| {n} | {len([m for _, _, m in calls[a.serial - 1] if m == n])} | {ser / 1e6:.3f} | {med / 1e6:.3f} | "
-              f"{med / max(ser, 1):.2f} | {100 * side:.0f}% |")
-    gend = [max(e for s, e, n in c if n == "gemm_kernel<true>") for c in calls]
+        print(f"| {n} | {res[n]} | {len([m for _, _, m in calls[a.serial - 1] if m == n])} | {ser / 1e6:.3f} | "
+              f"{med / 1e6:.3f} | {med / max(ser, 1):.2f} | {100 * side:.0f}% |")
+    gend = [max(e for s, e, n in c if gemm.search(n)) for c in calls]
     periods = [gend[i] - gend[i - 1] for i in steady]
     ser_call = calls[a.serial - 1]
     ser_span = max(e for s, e, _ in ser_call) - min(s for s, _, _ in ser_call)
@@ -1192,6 +1216,8 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("timeline")
     p.add_argument("csv")
     p.add_argument("--serial", type=int, default=2, help="the serial calls before the overlapped ones (`v31 once`'s 2)")
+    p.add_argument("--gemm", default="^gemm_kernel<true>$", help="a regex for the GEMM's kernel name (fill: gemm)")
+    p.add_argument("--from", dest="start", default="", help="drop kernels before this one's first launch (fill: bits_kernel)")
     p = sub.add_parser("fill-params")
     p.add_argument("dir")
     p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
