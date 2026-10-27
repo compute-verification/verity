@@ -9,10 +9,17 @@ flags name, by SHA-512, and every file is handed to `verdicts` as a blob. The fo
 ``data/TAG``, `KEEP_DATA=1`, after STEP=lean), three recursive sessions are put to both: the honest one, every part
 accepted by each; the inner session with rep 0's challenge coin flipped (85's ``inner-neg-challenge``); and the honest
 one with one bit of part 0's first rep file flipped. Each part's verdict is the same in both, and a refusal of the whole
-check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at every part."""
+check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at every part.
+
+The refusals the compiled check adds to `flock-verify`'s per-part path are each held to a refusal by both: the inner
+statement under Flock's plain verifier (`innerOk`, here an inner draw that does not parse), and plain SHA-512 leaves under
+`--zk` (`verifyCmd`'s message, which `partVerdict` gives word for word; its statement is the constant
+`verity/flock-circuit`, so only `flock-verify`'s side is driven). `fits`' bound, `2^56` bytes, is past any file a test can
+stage."""
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -178,6 +185,24 @@ def test_a_wrong_input_is_refused_before_any_blob(tmp_path, own, proofs, why):
     assert why in _verdicts(tmp_path, own, proofs)["refused"]
 
 
+#: `verifyCmd`'s refusal of plain SHA-512 leaves under `--zk`, `partVerdict`'s reason for the same statement
+PLAIN_LEAVES = ("verify --zk: refused: {name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): "
+                "--zk's hiding needs hm96-sha512/v1 leaves")
+
+
+def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_path):
+    """`flock-verify verify --zk` at a plain-leaves statement refuses before reading a file (exit 2), with the reason
+    `partVerdict`'s `need (!tags0.plainLeaves)` gives."""
+    name = "verity/flock-circuit+plain-leaves"
+    for f in ("c", "p", "comp"):
+        (tmp_path / f).write_bytes(b"")
+    (tmp_path / "s").mkdir()
+    r = subprocess.run([str(D.build(FLOCK, "flock-verify")), "verify", "--zk", "--statement", name, "--circuit",
+                        str(tmp_path / "c"), "--comp", str(tmp_path / "comp"), "--public", str(tmp_path / "p"),
+                        "--session", str(tmp_path / "s")], capture_output=True, text=True, check=False)
+    assert r.returncode == 2 and PLAIN_LEAVES.format(name=name) in r.stderr, (r.returncode, r.stdout, r.stderr)
+
+
 # --- a whole recursive session: a recursion_e2e run's kept data ---------------------------------------------------------------
 
 DATA = os.environ.get("VERITY_VSTAR_RECURSIVE_DATA", "")
@@ -274,3 +299,19 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
     parts = [Part(p0.name, p0.stmt, p0.rows, p0.bindings, cp), *session.parts[1:]]
     got = session.check(session.inner, parts, tmp_path)
     assert got[0][1] is False and all(a for _, a in got[1:]), got
+
+
+@pytest.mark.slow
+@DEPLOYED
+def test_an_inner_draw_that_does_not_parse_is_refused_by_both(session, tmp_path):
+    """The inner statement's draw cut short: the compiled check refuses the whole check at Flock's plain verifier on the
+    inner statement (`innerOk`), and `flock-verify` accepts no part."""
+    inner = copy.copy(session.inner)
+    inner.draw = tmp_path / "draw.json"
+    inner.draw.write_bytes(session.inner.draw.read_bytes()[:-2])
+    lean = lean_verdicts(session.exe, inner, session.parts, tmp_path)
+    assert lean.get("refused", "").startswith("rec inner statement: Flock's plain verifier refuses it: draw: not JSON"), lean
+    with ThreadPoolExecutor(int(os.environ.get("LEAN_JOBS", "4"))) as ex:
+        flock = list(ex.map(lambda jp: flock_verdict(session.flock, inner, session.rec_inner, *jp), enumerate(session.parts)))
+    print(json.dumps({"lean": lean, "flock-verify": flock}))
+    assert not any(f["accepted"] for f in flock), flock

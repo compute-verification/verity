@@ -17,7 +17,8 @@ auditor runs (`flock-verify verify --zk` once per V* part with that part's recur
   `{file: SHA-512}` naming at least each rep file its session reads;
 * **blobs**: the files those digests name (`Core.Blobs`);
 * **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `flock-verify
-  rec-inner --program` writes it); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
+  rec-inner --program` writes it), and Flock's plain verifier's own checks on the inner statement at its draw
+  (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
   with the part's `--circuit`, `--public`, `--partition`, `--program`, `--registered`, `--rec-inner`, `--rec-part j`,
   `--rec-bindings` and `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
   `--rec-inner-partition`, `--rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os
@@ -29,7 +30,8 @@ auditor runs (`flock-verify verify --zk` once per V* part with that part's recur
 **Form.** Only the dense form, the one `Flock.Guarantees.RecursiveKSAt`'s statements (`RecDeploy.DenseAt`) cover: the
 inner circuits are public (no `--hide`), there is no RecSparse phase (no `--sparse`), and an inner circuit whose META
 names R's shape is refused, as `rec-inner` refuses it without `--sparse`. One recursive session, with one part per V*
-statement at the inner shape, in order. Any other form is refused.
+statement at the inner shape, in order. Any other form is refused, as are a part statement with plain SHA-512 leaves
+(`verify --zk`'s refusal) and a staged public file, inner record or transcript of `2^56` bytes or more (`fits`).
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the inner circuit file.
 -/
@@ -217,6 +219,44 @@ def registeredOf (j : Json) :
   pure (own, ← Flock.Registered.completeOf j, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
     ← Flock.Registered.paramsOf j)
 
+/-- `pure ()` when `b`, else the refusal `why`. -/
+def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
+
+/-- The bound on a file every part's session encodes as one field (the staged public file, the inner record and the coin
+server's transcript): each field's length is one 8-byte word, so the verifier refuses a file of `2^56` bytes or more,
+under which the statement's own fields keep every encoded field under `2^64`. -/
+def FIELD_MAX : Nat := 2 ^ 56
+
+/-- `need` on a file's size: `what` is under `FIELD_MAX` bytes. -/
+def fits (b : ByteArray) (what : String) : V Unit :=
+  need (b.size < FIELD_MAX) s!"{what} is 2^56 bytes or more"
+
+/-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`): Flock's plain verifier sets the inner statement
+up as each part's setup is told to (`--statement verity/flock-circuit+plain-leaves --coins os`, the verifier's own
+partition and program, the inner statement's draw, no lookup tables, registered reads or identifier: `verifyCmd`'s
+plain path), its scope check passes (`ProvedScope.check`), and it carries a draw. -/
+def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
+  let some tags := Flock.Tags.find? INNER_STATEMENT | throw s!"the statement {INNER_STATEMENT} is not known"
+  let coins := Flock.Coins.os
+  let rtags := tags.withCoins coins
+  let some t := String.fromUTF8? drawB | throw "draw: not UTF-8"
+  let draw := some (Flock.norm (← (Json.parse t).mapError fun e => s!"draw: not JSON: {e}"))
+  let partition := some o.partition
+  let program := some o.program
+  if !rtags.hm96Rows then
+    throw s!"{rtags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
+  Flock.RecSetup.checkInner none none (pure (none, none))
+  let (_, sts) ← Flock.Stmt.setupTables rtags circuitB pubB coins 1 [] draw partition program none none none none
+  for st in sts do
+    Flock.checkRegistered st none
+    OneStageZk.checkIdentifier st
+  Flock.Registered.checkFull none draw
+  Flock.RecSetup.checks none none tags [] sts circuitB partition program none none none none
+  sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
+  sts.forM (Flock.RecVStar.checkPubRows · none none none)
+  Flock.ProvedScope.drawLaw false rtags false draw
+  Flock.ProvedScope.check rtags false circuitB pubB [] 1 false false
+
 /-- What every part's check reads of the inner session: the inner shape, the inner statement's files (check 5's
 source), what the inner circuit's META binds, the coin server's transcript as `verify` holds it and its link points. -/
 structure InnerHeld where
@@ -232,14 +272,19 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   let circuitB ← bs.get o.circuit "the inner circuit"
   let pubB ← bs.get o.pub "the inner public file"
   let shape ← shapeOf circuitB pubB o.partition o.program
-  let some record := String.fromUTF8? (← bs.get pr.record "the inner session's record")
+  let recordB ← bs.get pr.record "the inner session's record"
+  fits recordB "rec inner session: the record"
+  let some record := String.fromUTF8? recordB
     | throw "rec inner session: the record is not UTF-8"
   let drawB ← bs.get o.draw "the inner statement's draw"
+  (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
       form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB } }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
-  let some t := String.fromUTF8? (← bs.get pr.transcript "rec inner transcript")
+  let transcriptB ← bs.get pr.transcript "rec inner transcript"
+  fits transcriptB "rec inner transcript"
+  let some t := String.fromUTF8? transcriptB
     | throw "rec inner transcript: not UTF-8"
   let reg ← o.registration.mapM fun d => do
     let some s := String.fromUTF8? (← bs.get d "rec inner registration") | throw "rec inner registration: not UTF-8"
@@ -255,10 +300,13 @@ session, `.ok ()` or the session's refusal. An input `verify` would refuse befor
 whole check's refusal. -/
 def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Core.Blobs) : V (V Unit) := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  need (!tags0.plainLeaves) (s!"verify --zk: refused: {tags0.name}, a statement with plain SHA-512 leaves " ++
+    "(flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves")
   let count := 1
   let coins := Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames count))
   let circuitB ← bs.get p.circuit s!"part {j}'s circuit"
   let pubB ← bs.get s.pub s!"part {j}'s public file"
+  fits pubB s!"part {j}'s public file"
   let tags := Flock.Zk.tags (tags0.withCoins coins) (Flock.Zk.maskLogOf circuitB) count
   let tables : List (String × ByteArray) := []
   let (registered, complete, known, regParams) ← match p.registered with
@@ -318,9 +366,6 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     Flock.ProvedScope.programHeld program
     Flock.RecordText.check record
   pure verdict
-
-/-- `pure ()` when `b`, else the refusal `why`. -/
-def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
 /-- The one inner form the recursive audit's soundness covers, `RecDeploy`'s `Form.Dense`: public inner circuits
 (`holo = false`), no RecSparse phase and no R. -/
