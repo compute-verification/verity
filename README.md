@@ -32,7 +32,7 @@ every component accepts its own case, and the commitment binds all of theirs.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
   PoUS, the remote bandwidth audit and the network certifier.
-- **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
+- **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
 
 The wipe, the bandwidth audit over PoUS's store and NCI are not components of either yet.
 
