@@ -12,7 +12,8 @@ parameters ONE-19 deploys, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w 
 * `deltaPub_le_deployed`: so `deltaPub` is the draw's miss plus at most `2^-100`, for `W ≤ 2^40` committed wires;
 * `miss_le_pow`, `miss_le_exp`: the miss `C(n−K₀, k_d)/C(n, k_d)` is at most `(1 − K₀/n)^{k_d} ≤ e^{−K₀k_d/n}`;
 * `Flock.Guarantees.DeltaPubDeployed`: at `K₀ ≤ n ≤ K₀·k_d` (a draw of `k_d` units expects at least one of `K₀` bad
-  ones), the miss is at most `1/e`, so `deltaPub < 1`.
+  ones), the miss is at most `1/e`, so `deltaPub < 1` at `SampledKSLivePub`'s budgets `q_F = 2(t' + v)`, `q_S = t' + v`
+  for `t', v ≤ 2^80`.
 -/
 
 namespace Flock.Bridge
@@ -205,22 +206,24 @@ end Flock.Bridge
 namespace Flock.Guarantees
 
 /-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters.** At `k = kDep = ⌈2^24/e⌉`, `ρ = 1/2` and
-`M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `deltaPub < 1` at budgets
-`q_F, q_S ≤ 2^82`, `t' ≤ 2^80`, at most `2^40` committed wires (`W`, `Bridge.ioSum`) and a draw of `k_d` of `n` units
-with `K₀ ≤ n ≤ K₀·k_d`. -/
+`M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `deltaPub < 1` at its budgets
+`q_F = 2(t' + v)` and `q_S = t' + v` for a prover's per-run time `t' ≤ 2^80` and one opening's verification `v ≤ 2^80`, at
+most `2^40` committed wires (`W`, `Bridge.ioSum`) and a draw of `k_d` of `n` units with `K₀ ≤ n ≤ K₀·k_d`. -/
 def DeltaPubDeployed : Prop :=
   1 ≤ Bridge.kDep ∧ FlockSoundness.Discharge.ZkLink.rateM1 Bridge.kDep ≤ 1 / 2 ∧
-    ∀ (n kd K₀ W : ℕ) (qF qS t' : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ qF → qF ≤ 2 ^ 82 →
-      0 ≤ qS → qS ≤ 2 ^ 82 → 0 ≤ t' → t' ≤ 2 ^ 80 →
-      Bridge.deltaPub n kd K₀ Bridge.kDep qF qS t' (2 ^ 192) (2 ^ 192) W (1 / 2) < 1
+    ∀ (n kd K₀ W : ℕ) (t' v : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ t' → t' ≤ 2 ^ 80 →
+      0 ≤ v → v ≤ 2 ^ 80 →
+      Bridge.deltaPub n kd K₀ Bridge.kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) W (1 / 2) < 1
 
 end Flock.Guarantees
 
 /-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters** (`Flock.Guarantees.DeltaPubDeployed`). -/
 theorem Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed := by
   refine ⟨Flock.Bridge.one_le_kDep, Flock.Bridge.rateM1_kDep, ?_⟩
-  intro n kd K₀ W qF qS t' hn0 hK hn hW hF0 hF hS0 hS ht0 ht
-  refine (Flock.Bridge.deltaPub_le_deployed n kd K₀ W hW hF0 hF hS0 hS ht0 ht).trans_lt ?_
+  intro n kd K₀ W t' v hn0 hK hn hW ht0 ht hv0 hv
+  have hF : 2 * (t' + v) ≤ 2 ^ 82 := by linarith
+  have hS : t' + v ≤ 2 ^ 82 := by linarith
+  refine (Flock.Bridge.deltaPub_le_deployed n kd K₀ W hW (by linarith) hF (by linarith) hS ht0 ht).trans_lt ?_
   have h := Flock.Bridge.miss_le_half hn0 hK hn
   have : (2 : ℝ) ^ (-(100 : ℝ)) < 1 / 2 := by
     rw [Real.rpow_neg (by norm_num), show (100 : ℝ) = ((100 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
