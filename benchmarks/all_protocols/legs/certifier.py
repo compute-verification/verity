@@ -220,8 +220,9 @@ def member_rows(period_dir: Path, m: Mapping[str, Any]) -> np.ndarray:
 
 
 def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]]:
-    """Every unit of the period's window: its label (`index.json`: request, step, layer) and its rows by port, u16 words,
-    read off the member's value files (`member_rows`)."""
+    """Every unit of the period's window: its label (`index.json`: request, step, layer; a wired record's ``requests``,
+    one a unit in order, each unit's ``request``) and its rows by port, u16 words, read off the member's value files
+    (`member_rows`). A wired window's quantize units have no ``layer``."""
     win = json.loads((period_dir / "window.json").read_text())
     labels = {m["name"]: m["labels"] for m in json.loads((period_dir / "index.json").read_text())["members"]}
     out: dict[int, tuple[dict, dict[str, np.ndarray]]] = {}
@@ -232,7 +233,11 @@ def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]
         units = json.loads((period_dir / m["units"]).read_text())["indices"]
         label = {}
         for lo, hi, lab in labels[m["name"]]:
-            label.update({u: lab for u in range(lo, hi)})
+            if "requests" in lab:
+                rest = {k: v for k, v in lab.items() if k != "requests"}
+                label.update({u: {**rest, "request": lab["requests"][u - lo]} for u in range(lo, hi)})
+            else:
+                label.update({u: lab for u in range(lo, hi)})
         for i, u in enumerate(units):
             out[u] = (label[u], {p: rows[i, at[p]:at[p] + w] for p, w in zip(names, widths)})
     return out
@@ -277,14 +282,16 @@ def free_inputs(circuit: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def registered_outputs(units: Mapping[int, tuple[dict, dict]]) -> dict[tuple[str, int], bytes]:
-    """Each request's step outputs as the window registered them: the last linear's units' ``o0`` words in unit order,
-    2H bytes a step, by (request, step)."""
-    last = max(lab["layer"] for lab, _ in units.values())
-    got: dict[tuple[str, int], list[tuple[int, int]]] = {}
-    for u, (lab, rows) in units.items():
+    """Each request's step outputs as the window registered them: the last linear's units' ``o0`` words in unit order
+    (one word a per-coordinate unit, H a wired one), 2H bytes a step, by (request, step)."""
+    linears = {u: x for u, x in units.items() if "layer" in x[0]}
+    last = max(lab["layer"] for lab, _ in linears.values())
+    got: dict[tuple[str, int], list[tuple[int, np.ndarray]]] = {}
+    for u, (lab, rows) in linears.items():
         if lab["layer"] == last:
-            got.setdefault((lab["request"], lab["step"]), []).append((u, int(rows["o0"][0])))
-    return {k: np.array([w for _, w in sorted(v)], "<u2").tobytes() for k, v in sorted(got.items())}
+            got.setdefault((lab["request"], lab["step"]), []).append((u, rows["o0"]))
+    return {k: np.concatenate([w for _, w in sorted(v, key=lambda x: x[0])]).astype("<u2").tobytes()
+            for k, v in sorted(got.items())}
 
 
 def requests_of(period_dir: Path, units: Mapping[int, tuple[dict, dict]] | None = None) -> tuple[list[int], int, int]:
@@ -295,12 +302,15 @@ def requests_of(period_dir: Path, units: Mapping[int, tuple[dict, dict]] | None 
 
     units = loop_units(period_dir) if units is None else units
     name = json.loads((period_dir / "circuit.json").read_text())["name"]
-    h = int(re.fullmatch(r"torch-loop/mlp-w8a8-h(\d+)", name).group(1))
+    if not (m := re.fullmatch(r"torch-loop/mlp-w8a8-h(\d+)(/wired)?", name)):
+        raise ValueError(f"circuit {name!r} is not the torch loop's (torch-loop/mlp-w8a8-hH, or its /wired circuit)")
+    h = int(m.group(1))
     model = S.L.Model(h=h)
     table = {S.L.bits(S.L.quantize(model.embed[t][None, :])[0]).tobytes(): t for t in range(S.L.VOCAB)}
     first: dict[str, tuple[int, bytes]] = {}
-    steps = 1 + max(lab["step"] for lab, _ in units.values())
-    for u, (lab, rows) in sorted(units.items()):
+    linears = {u: x for u, x in units.items() if "layer" in x[0]}
+    steps = 1 + max(lab["step"] for lab, _ in linears.values())
+    for u, (lab, rows) in sorted(linears.items()):
         if lab["step"] == 0 and lab["layer"] == 0 and lab["request"] not in first:
             first[lab["request"]] = (u, rows["x"].astype("<u2").tobytes())
     tokens = []

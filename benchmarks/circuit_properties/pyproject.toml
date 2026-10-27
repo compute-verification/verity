@@ -1,0 +1,19 @@
+[project]
+name = "verity-circuit-properties"
+version = "0.1.0"
+description = "Structural properties of a circuit's counted operations, measured exactly: a_out, a_in, |J|, s_x, and which a partition computes whole."
+requires-python = ">=3.12"
+# The circuits are verity.ml.circuits' Programs; the reference layer is the served b1 registry's on bits.
+dependencies = ["verity"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["circuit_properties"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

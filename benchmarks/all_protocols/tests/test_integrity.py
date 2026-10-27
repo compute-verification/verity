@@ -88,6 +88,21 @@ def test_a_refused_audit_record_names_leans_refusals(tmp_path):
     assert "position 2" in a["reason"] and "position 3" not in a["reason"] and a["reason"].endswith("and 2 more")
 
 
+def test_a_tampered_wired_window_names_the_drawn_units_its_sessions_refused_before_leans_missing_files(tmp_path):
+    """A drawn member whose live session the verifier of record rejects leaves no proof files, so Lean's replay finds
+    none: the reason names the drawn units not proved, by template, and the verifier of record's rejection first."""
+    mm, quant = "ScaledMmS8_v1{K=128,N=128}", "QuantRowS8_v1{N=128,RELU=true}"
+    rec = record(False, proved=False)
+    rec["checks"]["proved"]["detail"] = {"units": {"drawn": list(range(12)), "statement": list(range(8, 12))}}
+    rec["draw"] = {**DRAW, "strata": [{"template": mm, "units": [[0, 8]]}, {"template": quant, "units": [[8, 12]]}]}
+    why = {**{f"lean-verify/m{k}": "session files: no such file or directory" for k in range(4)},
+           **{f"m0-verifier/m{k}": "R7: no proof for circuit/rep0 (lone rep)" for k in range(4)}}
+    a = I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}, "audit": {"why": why}}, rec), REG)
+    assert a["verdict"] == "reject"
+    assert a["reason"].startswith(f"audit record: proved (drawn units not proved: {mm} 0-7); m0-verifier/m0: R7: ")
+    assert "session files" not in a["reason"] and quant not in a["reason"] and a["reason"].endswith("and 5 more")
+
+
 def test_an_audit_that_left_nothing_is_an_error(tmp_path):
     with pytest.raises(RuntimeError, match="no summary"):
         I.answer(tmp_path, REG)

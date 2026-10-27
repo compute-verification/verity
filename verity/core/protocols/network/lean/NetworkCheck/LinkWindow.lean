@@ -22,6 +22,11 @@ proof as the verifier receives it and the link's public fields, and nothing else
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
+A warden link (`Kind.warden`, `service.WardenProfile`) is the plain unit under the active warden's records: both ends'
+grids are the warden's one grid, with no profile, and both carry the warden's parameters digest (`gridBytes`) in place
+of a certifier's; the warden runs no shaper clock, so a window declares no sync and nothing is read of the syncs
+(`synced`). Its outputs are a plain link's.
+
 Its public outputs are `verdict` and the proved `deadline` bit (on an advised link the advice it read, as given), and
 `digest` binds them to the registration, the sessions and the accept bit (`verdictDigest`). An advised link's window view
 is an input here (`Case.view`), the Python's `advised.view`: that derivation is not ported, so an advised link's verdict
@@ -91,6 +96,8 @@ inductive Kind where
   | served
   /-- the window's view (none where `advised.view` refuses) and the advice output (`advised.digest`, none without one) -/
   | advised (view : Option View) (advice : Option String)
+  /-- the warden's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
+  | warden (digest : ByteArray)
 
 structure Case where
   link : String
@@ -187,7 +194,11 @@ def caseOf (j : Json) : V Case := do
     | "plain" => pure Kind.plain
     | "served" => pure Kind.served
     | "advised" => pure (Kind.advised (← (opt j "view").mapM viewOf) (← (opt j "advice").mapM (asStr · "advice")))
-    | k => throw s!"a link is plain, served or advised, not {k}"
+    | "warden" => do
+      let d ← bytesOf (← get j "warden" "case") "warden"
+      unless d.size = digestBytes do throw s!"a warden's parameters digest is {digestBytes} bytes, not {d.size}"
+      pure (Kind.warden d)
+    | k => throw s!"a link is plain, served, advised or a warden's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
   let rhos ← (← arr ss "rhos" "sync_set").mapM (ratOf · "sync_set.rhos")
@@ -197,6 +208,12 @@ def caseOf (j : Json) : V Case := do
   let key ← bytesOf (← get j "key" "case") "key"
   unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
   let salts ← get j "salts" "case"
+  let egress ← endOf (← get j "egress" "case") "egress"
+  let ingress ← endOf (← get j "ingress" "case") "ingress"
+  if let .warden _ := kind then
+    let fields (g : NetworkCheck.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
+    unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
+      throw "a warden link's two ends are on the warden's one grid, with no occupancy profile"
   pure { link := ← str j "link" "case", run := ← str j "run" "case", window := ← nat j "window" "case",
          root := ← bytesOf (← get j "root" "case") "root", registration := ← str j "registration" "case",
          units := ← natsOf (← get j "units" "case") "units", program := ← str j "program" "case",
@@ -211,9 +228,7 @@ def caseOf (j : Json) : V Case := do
          certificates := ← (← arr j "certificates" "case").mapM certOf,
          digests := ← (← arr j "digests" "case").mapM (bytesOf · "digests"),
          syncs := ← (← arr j "syncs" "case").mapM syncOf, deltas, rhos, lms, key,
-         session := ← bytesOf (← get j "session" "case") "session",
-         egress := ← endOf (← get j "egress" "case") "egress", ingress := ← endOf (← get j "ingress" "case") "ingress",
-         kind }
+         session := ← bytesOf (← get j "session" "case") "session", egress, ingress, kind }
 
 end Decode
 
@@ -257,11 +272,13 @@ def manifestSet (c : Case) : NetworkCheck.SyncSet :=
   ⟨c.deltas.map Int.ofNat, c.rhos.map fun (n, d) => ((n / Nat.gcd n d : Nat), d / Nat.gcd n d)⟩
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
-parameters digest, which binds Σ_sync on egress. -/
+parameters digest, which binds Σ_sync on egress; on a warden link, both ends' the warden's (`LinkWindows.grid`). -/
 def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
-  let digest ← parametersDigest g (if d = 0 then some (manifestSet c) else none)
+  let digest ← match c.kind with
+    | .warden w => pure w
+    | _ => parametersDigest g (if d = 0 then some (manifestSet c) else none)
   return be 4 g.buckets ++ be 4 g.allocation ++ be 4 g.frameBytes ++ be 4 g.bucketMs ++ digest
 
 /-- The served unit's `sync` input (`served.sync_words`): δ, then ρ's numerator and denominator in lowest terms, each a
@@ -285,7 +302,7 @@ def pubRow (c : Case) : V (Option ByteArray) := do
   let digests := [d0, d1]
   if c.certificates.size ≠ 2 ∨ digests.any (·.size ≠ 64) then return none
   let tail : Option ByteArray ← match c.kind with
-    | .plain => pure (some ByteArray.empty)
+    | .plain | .warden _ => pure (some ByteArray.empty)
     | .served => pure do
         let s ← c.syncs[c.window]?
         let (d, p, q) ← syncWords s
@@ -412,11 +429,14 @@ def certified (c : Case) : Bool :=
     | some x => x.link == c.link && x.direction.code == d && x.window == c.window && verifies c x
     | none => false
 
-/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. -/
+/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A warden link
+declares none (the warden runs no shaper clock), so nothing is read of the syncs there. -/
 def synced (c : Case) : Bool :=
-  match c.syncs[c.window]? with
-  | some s => c.deltas.contains s.delta && c.rhos.any fun (n, d) => s.num * d == n * s.den
-  | none => false
+  match c.kind with
+  | .warden _ => true
+  | _ => match c.syncs[c.window]? with
+    | some s => c.deltas.contains s.delta && c.rhos.any fun (n, d) => s.num * d == n * s.den
+    | none => false
 
 /-! ## The verdict -/
 

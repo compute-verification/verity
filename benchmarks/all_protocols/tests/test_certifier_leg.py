@@ -855,3 +855,18 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     circuit = json.loads((d / "circuit.json").read_text())
     assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
+
+
+def test_a_wired_windows_requests_and_registered_outputs_are_the_per_coordinate_windows(tmp_path):
+    """The wired circuit records each linear once for all requests (a record's ``requests``, one a unit) and its quantize
+    units carry no layer: the leg reads the same prompts, steps and outputs off it as off the per-coordinate circuit."""
+    from verity_torch_loop import serve
+
+    shape = ["--requests", "3,7", "--steps", "2", "--law", "stratified:3", "--run-id", "allp-cert-wired"]
+    assert serve.main([*shape, "--out", str(tmp_path / "coord")]) == 0
+    assert serve.main([*shape, "--out", str(tmp_path / "wired"), "--cap", "2", "--wired"]) == 0
+    coord, wired = (L.loop_units(tmp_path / d) for d in ("coord", "wired"))
+    assert L.requests_of(tmp_path / "wired", wired) == L.requests_of(tmp_path / "coord", coord) == ([3, 7], 2, 128)
+    outputs = L.registered_outputs(wired)
+    assert outputs == L.registered_outputs(coord) and sorted(outputs) == [(r, s) for r in ("r0", "r1") for s in (0, 1)]
+    assert all(len(v) == 2 * 128 for v in outputs.values())
