@@ -21,7 +21,6 @@ DIR/CASE.jsonl has a row per check: the description's sizes, `nci-check --policy
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import json
 import os
@@ -62,11 +61,14 @@ def launch(argv: list[str], log: Path | None = None) -> dict:
 
 
 def verdict_of(lines: list[str]):
+    """The last line's verdict; a last line that isn't JSON (a refusal's message) as `{"unparsed": line}`."""
     last = next((x for x in reversed(lines) if x.strip()), None)
-    try:
-        return json.loads(last) if last else None
-    except json.JSONDecodeError:
+    if last is None:
         return None
+    try:
+        return json.loads(last)
+    except json.JSONDecodeError:
+        return {"unparsed": last}
 
 
 def small(v):
@@ -104,8 +106,11 @@ def suite(args) -> int:
     data.mkdir(parents=True, exist_ok=True)
     bad = 0
     rows = []
+
+    def sub(s: str) -> str:
+        return s.replace("{repo}", str(run.ROOT)).replace("{out}", str(data))
+
     for main, spec in sorted(lock["runs"].items()):
-        sub = lambda s: s.replace("{repo}", str(run.ROOT)).replace("{out}", str(data))
         t = time.perf_counter()
         gen = [sys.executable if a == "python3" else sub(a) for a in spec["generate"]]
         subprocess.run(gen, cwd=NCI, check=True, capture_output=True)
