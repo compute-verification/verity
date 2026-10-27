@@ -361,10 +361,7 @@
   "Properties.Composition",
   "CoreComposition",
   "Properties.Verity",
-  "CoreOnsite",
-  "Definitions.Flock",
-  "Properties.Flock.Circuit",
-  "VStar"
+  "CoreOnsite"
  ],
  "layers": {
   "Properties.Composition": {
@@ -554,7 +551,6 @@
   },
   "Properties.Verity": {
    "imports": [
-    "Properties.Verity",
     "CoreOnsite",
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
