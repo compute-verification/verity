@@ -109,7 +109,6 @@ import numpy as np
 from verity.ml.circuits.silicon import models as TCM
 from verity.ml.circuits.silicon import silicon as S
 from verity.ml.circuits.silicon import total as T
-from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 N = 8  # every shape here has 8 output columns
@@ -1689,6 +1688,7 @@ def compile_only(ids: list[str], out: Path, args) -> int:
         print(id_, json.dumps({k: v for k, v in entry.items() if k not in ("instruction", "sass")}),
               json.dumps({k: v for k, v in entry.get("sass", {}).items() if k in ("ok", "kernel", "tile_kernel_mma_count", "error")}), flush=True)
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
+    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
     run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         checks = {id_: {"compiled": e["compiled"], "sass_ok": e.get("sass", {}).get("ok", False), "mma_count": e.get("sass", {}).get("tile_kernel_mma_count"),
@@ -1880,6 +1880,7 @@ def main() -> int:
     results["hypothesis_findings"] = findings
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
+    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
     run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
