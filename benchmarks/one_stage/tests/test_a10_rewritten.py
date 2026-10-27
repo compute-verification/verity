@@ -4,6 +4,9 @@ otherwise is mismatched by name."""
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,12 +15,26 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 
 
-def test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root(monkeypatch, tmp_path):
+def _a10(monkeypatch) -> types.ModuleType:
+    """a10 over stand-ins for a9 and a11, whose module-level names it binds and `rewritten` never reads: the real ones import the
+    served units and circuit-check, which this suite does not read.  Loaded under its own name, so no other test imports it."""
     monkeypatch.syspath_prepend(str(HERE.parent))
-    import a10
+    for name, attrs in (("a9", ("capture_words",)), ("a11", ("ROW", "fold_values", "operands", "save_values"))):
+        stub = types.ModuleType(name)
+        for a in attrs:
+            setattr(stub, a, None)
+        monkeypatch.setitem(sys.modules, name, stub)
+    spec = importlib.util.spec_from_file_location("a10_under_test", HERE.parent / "a10.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root(monkeypatch, tmp_path):
     from verity_vllm.check import fp8_ue8m0
     from verity_vllm.commit import scheme, step_rows
 
+    a10 = _a10(monkeypatch)
     geo, wk = bytes(range(32)), bytes(range(64, 128))
     served = {"model.a.weight": np.arange(8, dtype=np.uint16), "model.b.weight": np.arange(8, 16, dtype=np.uint16)}
     names = [[n, "bfloat16", [8], 16] for n in served]
