@@ -242,7 +242,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
-    env = {"PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(tmp_path), "VENV": str(venv.parent),
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
                         check=False).returncode
