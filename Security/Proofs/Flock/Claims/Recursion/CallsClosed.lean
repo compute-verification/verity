@@ -2,6 +2,8 @@ import Proofs.Flock.Claims.Recursion.CallsR
 import Proofs.Flock.Claims.Recursion.VerdictFramedJson
 import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.NumbersDeploy
+import Proofs.Flock.Claims.Recursion.InnerSetupCount
+import Proofs.Flock.Claims.Recursion.AcceptedScope
 
 /-!
 # `c_V = 2^24` at a plain session in scope
@@ -10,8 +12,10 @@ At a decision `actR` makes, the record the verdict decodes is the reader's (`rec
 streams are the reps' (`jAt_recJ_streams`): `2·n` of them at `n ≤ 64` tables (`setup_tables`), each of at most its
 rep's rounds, `2200` at a session in scope (`repLens_le_in`); and `readPs` reads `2·n` proofs. The verdict runs at the
 session the setup returns against `H`, which has at most `64` tables at any hash too (`setupWith_tables`). So a
-decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`), and `lamLin2_R_ge_acc'` holds at
-`c_V = 2^24` (`lamLin2_R_ge_in`).
+decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`). With the inner setup's
+`c_B = SetupCount.innerB ≤ 2^43` at any hash (`innerSetupCalls_le_acc`), its inputs (`innerSetupIns_le_acc`) and the
+scope (`plainIn_of_run_acc`), all read from an accepted run, `λ₂ ≥ 100` holds at KS's deployed record with no count
+premise (`lamLin2_R_ge_in`).
 -/
 
 namespace FlockDeploy
@@ -206,8 +210,9 @@ open Flock
 open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin Ins)
 
-/-- **`λ₂ ≥ 100` at the deployed reader at a plain session in scope, at `c_V = 2^24`**: `lamLin2_R_ge_acc'` with its
-`hV` discharged by `decisionAtS_calls_in`; `c_B` stays the setup's. -/
+/-- **`λ₂ ≥ 100` at KS's deployed record, at an accepted statement**: the inner verifier's calls are at most
+`2^28 + (c_B + c_V)` on every run, with `c_B = SetupCount.innerB` the inner setup's at any hash and `c_V = 2^24` a
+decision's, and route 2C's `λ₂` at that count is at least `100`. Every premise is read from the accepted run `hacc`. -/
 theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -215,24 +220,32 @@ theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (H : Msg → Msg)
     {x : Msg} {IV : Claims.Verifier Coin} {H' : Msg → Msg} {Ω : Type} {P : Prover Ω} {ω : Ω}
     {r : Fin ((V IV (deployedB b).st).k x) → Coin} (hacc : (run H' P (V IV (deployedB b).st) x ω r).out = .acc)
-    (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) (ps : List (Msg × Out))
-    {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : FlockDeploy.PlainIn (xIOf x) s spec sts) (cB : ℕ)
-    (hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
-    (hc : 2 ^ 28 + (cB + 2 ^ 24) ≤ 2 ^ 55) :
+    (ps : List (Msg × Out)) :
     (∀ cs ws, (((recBoundAt rel (deployedB b) L).record
       (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).innerCalls H x cs ws).length ≤
-        2 ^ 28 + (cB + 2 ^ 24)) ∧
+        2 ^ 28 + (SetupCount.innerB + 2 ^ 24)) ∧
     100 ≤ Claims.Recursion.lamLin2
       ((recBoundAt rel (deployedB b) L).record
         (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar)
       (Claims.Recursion.Inner.ofFlock (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).deploy decI)
-      FlockDeploy.KS.CpDep x (2 ^ 28 + (cB + 2 ^ 24)) (2 ^ 55) ∧
+      FlockDeploy.KS.CpDep x (2 ^ 28 + (SetupCount.innerB + 2 ^ 24)) (2 ^ 55) ∧
     (Claims.Recursion.setupCalls H
       (recBound rel (deployedB b) L (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar)
       ((recBound rel (deployedB b) L
         (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).vstar x ps)).length ≤
-        2 ^ 55 :=
-  lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc hS ps cB (2 ^ 24) hB
+        2 ^ 55 := by
+  obtain ⟨s, spec, sts, hin⟩ := plainIn_of_run_acc hacc
+  have hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v →
+      FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ SetupCount.innerB := fun v hv => by
+    obtain ⟨s', spec', sts', hset, hle⟩ := innerSetupCalls_le_acc hacc
+    rw [hset] at hv
+    cases hv
+    exact hle _
+  have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 55 := by
+    have := SetupCount.innerB_le
+    first | omega | (simp only [Nat.reducePow] at this ⊢; omega)
+  exact lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc (innerSetupIns_le_acc hacc) ps
+    SetupCount.innerB (2 ^ 24) hB
     (fun _ _ _ _ _ _ _ _ _ _ _ ha hw => FlockDeploy.KS.decisionAtS_calls_in H hin ha hw) hc
 
 end RecDeploy

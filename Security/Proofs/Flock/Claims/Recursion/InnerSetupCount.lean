@@ -18,7 +18,7 @@ accepts, and it holds for every hash `h`, not only SHA-512 (`innerSetupCalls_le_
   (`Counts.n_le`), which the draw's population is (`Layout.drawn_spec`);
 * `innerB = 12 + 31 · 2^38 ≤ 2^43`.
 
-`lamLin2_deployedB_ge_accepted` is `lamLin2_deployedB_ge_acc` without `hS`.
+`RecDeploy.lamLin2_R_ge_in` (CallsClosed) takes `hS` and `c_B` from here.
 -/
 
 set_option Elab.async false
@@ -218,25 +218,5 @@ theorem innerSetupIns_le_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
   exact (hle _).trans (SetupCount.innerB_le.trans (by norm_num))
 
 end Runs
-
-/-- **Route 2C's `λ₂ ≥ 100` at the deployed brings, at an accepted statement**, without `hS`:
-`lamLin2_deployedB_ge_acc` with the inner session's setup inputs from the run (`innerSetupIns_le_acc`). -/
-theorem lamLin2_deployedB_ge_accepted (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
-    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (H : Msg → Msg)
-    {x : Msg} {IV : Claims.Verifier Coin} {H' : Msg → Msg} {Ω : Type} {P : Prover Ω} {ω : Ω}
-    {r : Fin ((V IV (deployedB b).st).k x) → Coin} (hacc : (run H' P (V IV (deployedB b).st) x ω r).out = .acc)
-    (ps : List (Msg × Out)) {n : ℕ} (hU : n ≤ 2 ^ 55) :
-    100 ≤ Claims.Recursion.lamLin2
-      ((recBoundAt rel (deployedB b) L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
-      FlockDeploy.KS.CpDep x n (2 ^ 55) ∧
-    (Claims.Recursion.setupCalls H
-      (recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-      ((recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar).vstar x
-        ps)).length ≤ 2 ^ 55 :=
-  lamLin2_deployedB_ge_acc rel b L nextE colsE wE join rowIn final w decI H hacc (innerSetupIns_le_acc hacc) ps hU
 
 end RecDeploy
