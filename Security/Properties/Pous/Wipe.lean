@@ -5,7 +5,8 @@ import Definitions.Accounting.Wipe
 # An accepted wipe meets the survivor bound it publishes
 
 For a session it accepts and certifies, `MemoryChallenger.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
-`StreamedWipe.verdict`) publishes `foreign_bits = ⌈M/19⌉ + E` at `eps = 2^-128` (`certify`), `E` the network
+`StreamedWipe.verdict`) publishes `foreign_bits = 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128`
+(`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the network
 certifiers' count of the egress, `egress_mib` whole MiB. `WipeSurvivorBound` says that every prover strategy `τ` of the
 device model (`Accounting.Wipe.Strategy`), with the labels `prf K` of the challenger's key `K`, meets the survivor bound
 (`Verity.Wipe.SurvivorBound`) at `foreign_bits` and
@@ -22,12 +23,15 @@ label, as the memory challenger signs it, and the certifiers' count of the egres
   (`NetTiming.Guarantees.SampledLeakAccepted`).
 
 The strategy is arbitrary, its fill any bits of the store up to `memory_bits`. The state the fill leaves out
-(`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. Proved from
-`Pous.Guarantees.StreamedWipeMeetsFamily` (`Proofs.Properties.Pous.Wipe`).
+(`Verity.Wipe.unfilled`) is counted beside `foreign_bits`, as `SurvivorBound` counts it. The commitment has at least one
+read, as every commitment `StreamedWipe.Commitment.ofJson` decodes has (`Params.check`: `1 ≤ batch ≤ k`); `check`
+itself certifies a commitment of no reads, where the bound fails. Proved from `Pous.Guarantees.StreamedWipeMeetsReads`
+at `r = ratio k` (`Proofs.Properties.Pous.Wipe`).
 
-* `WipeSurvivorBoundHonest`: an honest session's parameters with no egress are certified at the published pair, and the
-  honest strategy (`honest`: the labels written into the store, each read answered from it) meets the observed event on
-  every run, with its fill `memory_bits` and its egress in a set of `2^0` strings.
+* `WipeSurvivorBoundHonest`: an honest session's parameters of at most `MAX_READS` reads with no egress are certified
+  at the published pair, and the honest strategy (`honest`: the labels written into the store, each read answered from
+  it) meets the observed event on every run, with its fill the `n · 512` bits of the labels and its egress in a set of
+  `2^0` strings.
 * `WipeSurvivorBoundNontrivial`: at one segment (`segmentParams` on `segmentDevice`), a strategy that keeps the whole
   store (`cheat`) fails the bound under a verdict that accepts every run, for every PRF.
 -/
@@ -38,15 +42,16 @@ open Verity
 open scoped ENNReal
 
 /-- **An accepted, certified wipe meets the survivor bound at the pair it publishes.** When `check` accepts the signed
-session `e` of the commitment `c` and publishes it certified, with `egress_mib`, `eps`, `foreign_bits` and
-`memory_bits`, every strategy `τ` of a device for `c`'s labels and reads whose fill is at most `memory_bits`, with the
-labels `prf` of the challenger's key, every count `count` of the egress by the network certifiers and every set `A` of
-at most `2^(egress_mib MiB)` egress strings, meets `SurvivorBound foreign_bits` on the observed event at `eps` plus the
-PRF's advantage against the adversary's distinguisher plus `δ_net` at `A`. -/
+session `e` of the commitment `c`, of at least one read, and publishes it certified, with `egress_mib`, `eps`,
+`foreign_bits` and `memory_bits`, every strategy `τ` of a device for `c`'s labels and reads whose fill is at most
+`memory_bits`, with the labels `prf` of the challenger's key, every count `count` of the egress by the network
+certifiers and every set `A` of at most `2^(egress_mib MiB)` egress strings, meets `SurvivorBound foreign_bits` on the
+observed event at `eps` plus the PRF's advantage against the adversary's distinguisher plus `δ_net` at `A`. -/
 def WipeSurvivorBound : Prop :=
   ∀ (schemes : Schemes) (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
-    (egressMib : Int) (eps : Core.Ratio) (foreignBits memoryBits : Nat) (profile : StreamedWipe.Params × Int),
-    WipeProtocol.check schemes p c e = .accept ⟨true, egressMib, eps, foreignBits, memoryBits⟩ profile →
+    (egressMib : Int) (eps : Core.Ratio) (foreignBits k memoryBits r : Nat) (profile : StreamedWipe.Params × Int),
+    WipeProtocol.check schemes p c e = .accept ⟨true, egressMib, eps, foreignBits, k, memoryBits, r⟩ profile →
+    0 < c.params.k →
     ∀ {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B)
       [NeZero c.params.labels] (τ : Accounting.Wipe.Strategy d s b c.params.labels c.params.k) {κ : ℕ}
       (prf : Pous.Bits κ → Accounting.Wipe.Labels c.params.labels) (count : (Fin τ.egress → Bool) → ℕ)
@@ -103,17 +108,19 @@ instance instNeZeroNatHPowOfNat_properties : NeZero (2 ^ 19 : ℕ) := ⟨(Nat.tw
 /-- One segment's device: no on-chip state, a store of `2^19` labels, `2^28` bits, and no side channel. -/
 def segmentDevice : Accounting.Device Unit := ⟨0, 2 ^ 19 * 512, fun _ => 0, 0, fun _ => 0⟩
 
-/-- One segment's session parameters: `2^19` labels, the bound's `2152` reads, one a batch, as
-`WipeProtocol`'s own check of `certify` takes them. -/
-def segmentParams : StreamedWipe.Params := ⟨2 ^ 19, WipeProtocol.READS, 1, 1000, #[("gpu", 2 ^ 25)]⟩
+/-- One segment's session parameters: `2^19` labels, `2152` reads, one a batch, as `WipeProtocol`'s own check of
+`certify` takes them. -/
+def segmentParams : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
 /-- **The honest lemma of `WipeSurvivorBound`: its hypotheses hold for an honest session.** The parameters of a session
-at the bound's reads and at least one segment, with no egress, are certified at `eps = 2^-128` and
-`foreign_bits = ⌈M/19⌉`, `M = labels · 512`. The honest strategy on any device whose store holds the fill has its fill
-`M`, its egress in a set of `2^0` strings, and meets the observed event on every run at the count of no egress. -/
+of at most `MAX_READS` reads, with no egress, are certified at `eps = 2^-128` and `foreign_bits` the threshold
+`foreignBits` at `r = ratio k`, with their reads, `memory_bits` and ratio. The honest strategy on any device whose store
+holds the fill has its fill the labels' `n · 512` bits, its egress in a set of `2^0` strings, and meets the observed
+event on every run at the count of no egress. -/
 def WipeSurvivorBoundHonest : Prop :=
-  (∀ q : StreamedWipe.Params, q.k = WipeProtocol.READS → 2 ^ 19 ≤ q.labels →
-      WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, (q.labels * 512 + 18) / 19, q.labels * 512⟩) ∧
+  (∀ q : StreamedWipe.Params, q.k ≤ WipeProtocol.MAX_READS →
+      WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, WipeProtocol.foreignBits q (WipeProtocol.ratio q.k), q.k,
+        WipeProtocol.memoryBits q, WipeProtocol.ratio q.k⟩) ∧
     ∀ {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (n k : ℕ)
       (h : n * 512 ≤ d.mem) (carry : Device.State d → s.Carried b),
       (honest d s b n k h carry).fill = n * 512 ∧
@@ -122,18 +129,19 @@ def WipeSurvivorBoundHonest : Prop :=
 
 /-- **The nontrivial lemma of `WipeSurvivorBound`: its conclusion fails under a verdict that accepts every run.** At one
 segment, the cheating strategy, with every PRF, every egress string in `A` and a verdict that accepts every run, fails
-`SurvivorBound` at the pair `certify` publishes for the segment with no egress: it keeps `⌈2^28/19⌉` bits of foreign
-content in the store with probability 1, while the bound is `2^-128` plus a PRF advantage and a `δ_net` that are 0. -/
+`SurvivorBound` at the pair `certify` publishes for the segment with no egress: it keeps the published `foreign_bits`
+(11,709,069 bits, at `r = 24`) of foreign content in the store with probability 1, while the bound is `2^-128` plus a
+PRF advantage and a `δ_net` that are 0. -/
 def WipeSurvivorBoundNontrivial : Prop :=
   ∀ {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (carry : Device.State segmentDevice → s.Carried b) {κ : ℕ}
     (prf : Pous.Bits κ → Accounting.Wipe.Labels (2 ^ 19)),
-    ¬ ((cheat segmentDevice s b (2 ^ 19) WipeProtocol.READS carry).wipe (fun _ _ _ => True) prf).SurvivorBound
+    ¬ ((cheat segmentDevice s b (2 ^ 19) 2152 carry).wipe (fun _ _ _ => True) prf).SurvivorBound
         (WipeProtocol.certify segmentParams 0).foreignBits fun _ hold keep =>
           ((WipeProtocol.certify segmentParams 0).eps.num : ℝ≥0∞) / (WipeProtocol.certify segmentParams 0).eps.den +
             Pous.StreamedWipe.prfAdvantage prf
-              ((cheat segmentDevice s b (2 ^ 19) WipeProtocol.READS carry).distinguisher (fun _ _ _ => True)
+              ((cheat segmentDevice s b (2 ^ 19) 2152 carry).distinguisher (fun _ _ _ => True)
                 Finset.univ hold keep) +
-            (cheat segmentDevice s b (2 ^ 19) WipeProtocol.READS carry).deltaNet (fun _ _ _ => True) prf
+            (cheat segmentDevice s b (2 ^ 19) 2152 carry).deltaNet (fun _ _ _ => True) prf
               Finset.univ hold
 
 end MemoryChallenger.Properties

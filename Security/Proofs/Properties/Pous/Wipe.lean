@@ -7,28 +7,31 @@ import Mathlib.Tactic.DefEqTransformations
 /-!
 # Proof that an accepted wipe meets the survivor bound it publishes (`Properties.Pous.Wipe`)
 
-* **The ideal game from the family** (`winIdeal_le_of_family`): `StreamedWipeMeetsFamily`, proved
-  (`PousStreamedWipe.streamed_wipe_meets_family`), at a key that is the whole label table, whose labels are a bijection
+* **The ideal game at `k` reads** (`winIdeal_le_of_reads`): `StreamedWipeMeetsReads`, proved
+  (`PousStreamedWipe.streamed_wipe_meets_reads`), at a key that is the whole label table, whose labels are a bijection
   of the key, so its real game is the ideal one.
 * **The distinguisher on uniform labels** (`pr_distinguisher_le`): the adversary's distinguisher is won only by a prover
   of the streamed game. The device's state when the fill ends and an egress in `A`, `chip + mem` bits and one of at most
-  `2^E` strings, go one-to-one into the game's inside, the `n · 512` bits the fill covers, and its egress,
-  `E' = E + chip + (mem − n · 512)`: the on-chip state and the store the fill leaves out are charged as egress. `hold`
-  and the strategy's fill are the prover's fill, its answers the prover's answers and `keep` its keep, so a run the
-  observed event accepts with `keep` returning `z` and the egress in `A` is one the prover wins, at most `2^-128` at
-  `S_φ ≥ ⌈n · 512/19⌉ + E'`.
+  `2^E` strings, go one-to-one into the game's inside, the `n · 512 + R` bits of the declared memory, and its egress,
+  `E' = E + chip + (mem − (n · 512 + R))`: the on-chip state and the store past the declared memory are charged as
+  egress. `hold` and the strategy's fill are the prover's fill, its answers the prover's answers and `keep` its keep, so
+  a run the observed event accepts with `keep` returning `z` and the egress in `A` is one the prover wins, at most
+  `2^-128` at `S_φ ≥ 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E'`.
 * **The survivor bound** (`survivorBound_of_observed`): the game's event splits on whether the egress is in `A`. In `A`
   it is the distinguisher on the labels `prf K`: at most its value on uniform labels plus the PRF's advantage
   (`Pous.StreamedWipe.prfAdvantage`, which is that difference). Outside `A` it is `δ_net`
   (`Accounting.Wipe.Strategy.deltaNet`).
+* **The ratio** (`ratioSearch_samples`, `ratio_samples`): `ratio`'s bisection keeps a lower end `lo ≥ 1` that samples,
+  so at `k ≥ 1` reads `ratio k ≥ 1` and `(ratio k − 1)^k · 2^129 ≤ (ratio k)^k`, `StreamedWipeMeetsReads`' condition.
 * **What `check` publishes** (`check_accept`, `certify_certified`): an accepted `check` publishes `certify` of the
-  commitment's parameters, and a certified one has `k = 2152`, at least `2^19` labels, `memory_bits = labels · 512`,
-  `eps = 1/2^128` and `foreign_bits = ⌈M/19⌉ + egress_mib · 2^23`. At the bound's reads, a segment or more and no
+  commitment's parameters, and a certified one has `k ≤ MAX_READS`, `memory_bits` the declared tiers' bits,
+  `eps = 1/2^128` and `foreign_bits = foreignBits p (ratio k) + egress_mib · 2^23`. At most `MAX_READS` reads and no
   egress, `certify` certifies (`certify_zero`).
 * **The honest and nontrivial lemmas** (`wipeSurvivorBoundHonest`, `wipeSurvivorBoundNontrivial`): the honest strategy
-  reads back what it wrote; the cheating strategy keeps `⌈2^28/19⌉` bits of foreign content in the store
+  reads back what it wrote; the cheating strategy keeps the published `foreign_bits` of foreign content in the store
   (`storeHold`, `storeKeep`) with probability 1, and with a verdict that accepts every run and every egress in `A` the
-  PRF advantage and `δ_net` are 0 (`not_survivorBound_cheat`, on any device whose store holds the content).
+  PRF advantage and `δ_net` are 0 (`not_survivorBound_cheat`, on any device whose store holds the content). The
+  segment's `ratio 2152 = 24` and its declared `2^28` bits are the kernel's to evaluate (`segment_foreign_le`).
 -/
 
 namespace MemoryChallenger.Properties.SecurityProofs
@@ -84,11 +87,12 @@ theorem prfAdvantage_of_forall {N b κ : ℕ} {ω : Type} [Fintype ω] [Nonempty
   unfold Pous.StreamedWipe.prfAdvantage
   rw [Pous.pr_eq_one (P := fun x : ω × Pous.Bits κ => D (x.1, prf x.2)) fun _ => h _, Pous.pr_eq_one h, tsub_self]
 
-/-- **The ideal game from the family.** `StreamedWipeMeetsFamily` (`PousStreamedWipe.streamed_wipe_meets_family`) at a
-key that is the whole label table: the labels are a bijection of the key, so the real game is the ideal one and the
-PRF's advantage is 0. -/
-theorem winIdeal_le_of_family {n q E : ℕ} (hn : 2 ^ 19 ≤ n)
-    (P : Pous.StreamedWipe.Prover n 2152 512 q (n * 512) E) (hq : (n * 512 + 18) / 19 + E ≤ q) :
+/-- **The ideal game at `k` reads.** `StreamedWipeMeetsReads` (`PousStreamedWipe.streamed_wipe_meets_reads`) at a key
+that is the whole label table: the labels are a bijection of the key, so the real game is the ideal one and the PRF's
+advantage is 0. -/
+theorem winIdeal_le_of_reads {n k r R q E : ℕ} (hn : 0 < n) (hr : 0 < r) (hk : (r - 1) ^ k * 2 ^ 129 ≤ r ^ k)
+    (P : Pous.StreamedWipe.Prover n k 512 q (n * 512 + R) E)
+    (hq : 512 * ((n + r - 1) / r - 1) + n + Nat.log2 k + 130 + R + E ≤ q) :
     Pous.StreamedWipe.winIdeal P ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by
   classical
   have hc : Fintype.card (Pous.Bits (n * 512)) = Fintype.card (Fin n → Pous.Bits 512) := by
@@ -99,7 +103,7 @@ theorem winIdeal_le_of_family {n q E : ℕ} (hn : 2 ^ 19 ≤ n)
     congr 2
     · exact Finset.card_equiv ((Equiv.refl _).prodCongr e) fun x => by simp; exact Iff.rfl
     · simp only [Fintype.card_prod, hc]
-  have h := PousStreamedWipe.streamed_wipe_meets_family n hn q E (n * 512) e P hq
+  have h := PousStreamedWipe.streamed_wipe_meets_reads r k hr hk n hn R q E (n * 512) e P hq
   rwa [Pous.StreamedWipe.prfAdvantage, ← Pous.StreamedWipe.winReal, ← Pous.StreamedWipe.winIdeal, hreal,
     tsub_self, add_zero] at h
 
@@ -117,35 +121,38 @@ theorem card_state {ι : Type} (d : Accounting.Device ι) :
   rw [Fintype.card_congr (stateEquiv d)]
   simp
 
-/-- **The distinguisher on uniform labels.** For a strategy with `n ≥ 2^19` labels and 2152 spot reads, a verdict whose
-accepted runs answer every read with its label, and a set `A` of at most `2^E` egress strings, the adversary's
-distinguisher outputs true on uniform labels with probability at most `2^-128` once `S_φ` is at least
-`⌈n · 512/19⌉ + E + chip + (mem − n · 512)`. -/
+/-- **The distinguisher on uniform labels.** For a strategy with `n ≥ 1` labels and `k` spot reads, a ratio `r ≥ 1` with
+`(r − 1)^k · 2^129 ≤ r^k`, a verdict whose accepted runs answer every read with its label, and a set `A` of at most
+`2^E` egress strings, the adversary's distinguisher outputs true on uniform labels with probability at most `2^-128`
+once `S_φ` is at least `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E + chip + (mem − (n · 512 + R))`. -/
 theorem pr_distinguisher_le {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B}
-    {n : ℕ} (hn : 2 ^ 19 ≤ n) (τ : Accounting.Wipe.Strategy d s b n 2152)
-    (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n 2152 → Prop)
+    {n k r R : ℕ} (hn : 0 < n) (hr : 0 < r) (hk : (r - 1) ^ k * 2 ^ 129 ≤ r ^ k)
+    (τ : Accounting.Wipe.Strategy d s b n k)
+    (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n k → Prop)
     (hacc : ∀ σ L c, acc σ L c → ∀ i, τ.answer (τ.filled σ L).1 (τ.filled σ L).2
       (Pous.StreamedWipe.revealed c i) (c i) = L (c i))
     {K : ℕ} (A : Finset (Fin τ.egress → Bool)) (hA : A.card ≤ 2 ^ K) {S : ℕ}
-    (hS : (n * 512 + 18) / 19 + (K + d.chip + (d.mem - n * 512)) ≤ S) (hold : Pous.Bits S → Device.State d)
-    (keep : Device.State d → (Fin τ.egress → Bool) → Accounting.Wipe.Reads n 2152 → Pous.Bits S) :
+    (hS : 512 * ((n + r - 1) / r - 1) + n + Nat.log2 k + 130 + R + (K + d.chip + (d.mem - (n * 512 + R))) ≤ S)
+    (hold : Pous.Bits S → Device.State d)
+    (keep : Device.State d → (Fin τ.egress → Bool) → Accounting.Wipe.Reads n k → Pous.Bits S) :
     Pous.pr (τ.distinguisher acc A hold keep) ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by
   classical
   rcases A.eq_empty_or_nonempty with rfl | ⟨a₀, ha₀⟩
   · rw [pr_eq_zero fun x hx => by simp [Accounting.Wipe.Strategy.distinguisher] at hx]
     exact zero_le
   have hcard : Fintype.card (Device.State d × A) ≤
-      Fintype.card (Pous.Bits (n * 512) × Pous.Bits (K + d.chip + (d.mem - n * 512))) := by
+      Fintype.card (Pous.Bits (n * 512 + R) × Pous.Bits (K + d.chip + (d.mem - (n * 512 + R)))) := by
     rw [Fintype.card_prod, Fintype.card_prod, card_state, Fintype.card_coe]
     simp only [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]
     calc 2 ^ d.chip * 2 ^ d.mem * A.card ≤ 2 ^ d.chip * 2 ^ d.mem * 2 ^ K := Nat.mul_le_mul_left _ hA
       _ = 2 ^ (d.chip + d.mem + K) := by rw [pow_add, pow_add]
-      _ ≤ 2 ^ (n * 512 + (K + d.chip + (d.mem - n * 512))) := Nat.pow_le_pow_right (by norm_num) (by omega)
-      _ = 2 ^ (n * 512) * 2 ^ (K + d.chip + (d.mem - n * 512)) := pow_add _ _ _
+      _ ≤ 2 ^ (n * 512 + R + (K + d.chip + (d.mem - (n * 512 + R)))) :=
+          Nat.pow_le_pow_right (by norm_num) (by omega)
+      _ = 2 ^ (n * 512 + R) * 2 ^ (K + d.chip + (d.mem - (n * 512 + R))) := pow_add _ _ _
   obtain ⟨enc⟩ := Function.Embedding.nonempty_of_card_le hcard
   have : Nonempty (Device.State d × A) := ⟨(⟨fun _ => false, fun _ => false⟩, ⟨a₀, ha₀⟩)⟩
   have hdec : ∀ x, Function.invFun enc (enc x) = x := Function.leftInverse_invFun enc.injective
-  let P : Pous.StreamedWipe.Prover n 2152 512 S (n * 512) (K + d.chip + (d.mem - n * 512)) :=
+  let P : Pous.StreamedWipe.Prover n k 512 S (n * 512 + R) (K + d.chip + (d.mem - (n * 512 + R))) :=
     { fill := fun z L => enc ((τ.filled (hold z) L).1,
         if h : (τ.filled (hold z) L).2 ∈ A then ⟨_, h⟩ else ⟨a₀, ha₀⟩)
       answer := fun σ ξ h i => τ.answer (Function.invFun enc (σ, ξ)).1 (Function.invFun enc (σ, ξ)).2.1 h i
@@ -169,53 +176,55 @@ theorem pr_distinguisher_le {ι : Type} {d : Accounting.Device ι} {C : Circuit}
           rw [hf]
           exact hkeep
     _ = Pous.StreamedWipe.winIdeal P := rfl
-    _ ≤ _ := winIdeal_le_of_family hn P hS
+    _ ≤ _ := winIdeal_le_of_reads hn hr hk P hS
 
-/-- **The streamed wipe's survivor bound on the device**, for every strategy. A strategy with `n ≥ 2^19` labels and
-2152 spot reads and a fill of at most `n · 512` bits, under a verdict whose accepted runs answer every read with its
-label, meets the survivor bound at `⌈n · 512/19⌉ + E` bits and `ε₀ ≥ 2^-128` plus the PRF's advantage against the
-adversary's distinguisher plus `δ_net`, at every set `A` of at most `2^E` egress strings. -/
+/-- **The streamed wipe's survivor bound on the device**, for every strategy. A strategy with `n ≥ 1` labels, `k` spot
+reads and a fill of at most `n · 512 + R` bits, at a ratio `r ≥ 1` with `(r − 1)^k · 2^129 ≤ r^k`, under a verdict whose
+accepted runs answer every read with its label, meets the survivor bound at
+`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` bits and `ε₀ ≥ 2^-128` plus the PRF's advantage against the adversary's
+distinguisher plus `δ_net`, at every set `A` of at most `2^E` egress strings. -/
 theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B}
-    {b : Fin B} {n k : ℕ} [NeZero n] (hk : k = 2152) (hn : 2 ^ 19 ≤ n) (τ : Accounting.Wipe.Strategy d s b n k)
-    (hfill : τ.fill ≤ n * 512)
+    {b : Fin B} {n k r R : ℕ} [NeZero n] (hr : 0 < r) (hk : (r - 1) ^ k * 2 ^ 129 ≤ r ^ k)
+    (τ : Accounting.Wipe.Strategy d s b n k) (hfill : τ.fill ≤ n * 512 + R)
     (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n k → Prop)
     (hacc : ∀ σ L c, acc σ L c → ∀ i, τ.answer (τ.filled σ L).1 (τ.filled σ L).2
       (Pous.StreamedWipe.revealed c i) (c i) = L (c i))
     {κ : ℕ} (prf : Pous.Bits κ → Accounting.Wipe.Labels n) {K : ℕ} (A : Finset (Fin τ.egress → Bool))
-    (hA : A.card ≤ 2 ^ K) {foreignBits : ℕ} (hf : (n * 512 + 18) / 19 + K ≤ foreignBits) {ε₀ : ℝ≥0∞}
+    (hA : A.card ≤ 2 ^ K) {foreignBits : ℕ}
+    (hf : 512 * ((n + r - 1) / r - 1) + n + Nat.log2 k + 130 + R + K ≤ foreignBits) {ε₀ : ℝ≥0∞}
     (hε₀ : (2⁻¹ : ℝ≥0∞) ^ 128 ≤ ε₀) :
     (τ.wipe acc prf).SurvivorBound foreignBits fun _ hold keep =>
       ε₀ + Pous.StreamedWipe.prfAdvantage prf (τ.distinguisher acc A hold keep) + τ.deltaNet acc prf A hold := by
   classical
-  subst hk
   intro S hS hold keep
-  have hS' : (n * 512 + 18) / 19 + (K + d.chip + (d.mem - n * 512)) ≤ S := by
+  have hS' :
+      512 * ((n + r - 1) / r - 1) + n + Nat.log2 k + 130 + R + (K + d.chip + (d.mem - (n * 512 + R))) ≤ S := by
     have : (τ.wipe acc prf).unfilled = d.chip + (d.mem - τ.fill) := rfl
     omega
-  have hD := pr_distinguisher_le hn τ acc hacc A hA hS' hold keep
-  let e : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n 2152 ≃
-      (Pous.Bits S × Accounting.Wipe.Reads n 2152) × Pous.Bits κ :=
+  have hD := pr_distinguisher_le (Nat.pos_of_ne_zero (NeZero.ne n)) hr hk τ acc hacc A hA hS' hold keep
+  let e : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k ≃
+      (Pous.Bits S × Accounting.Wipe.Reads n k) × Pous.Bits κ :=
     ⟨fun x => ((x.1, x.2.2), x.2.1), fun y => (y.1.1, y.2, y.1.2), fun _ => rfl, fun _ => rfl⟩
   beta_reduce
   rw [value_draw_pr]
   unfold Accounting.Wipe.Strategy.deltaNet
-  calc _ ≤ Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n 2152 =>
+  calc _ ≤ Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
           τ.distinguisher acc A hold keep ((x.1, x.2.2), prf x.2.1)) +
-        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n 2152 =>
+        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
           acc (hold x.1) (prf x.2.1) x.2.2 ∧ (τ.filled (hold x.1) (prf x.2.1)).2 ∉ A) := by
         refine pr_le_add fun x hx => ?_
         by_cases hm : (τ.filled (hold x.1) (prf x.2.1)).2 ∈ A
         · exact Or.inl ⟨hx.1, hx.2, hm⟩
         · exact Or.inr ⟨hx.1, hm⟩
-    _ = Pous.pr (fun y : (Pous.Bits S × Accounting.Wipe.Reads n 2152) × Pous.Bits κ =>
+    _ = Pous.pr (fun y : (Pous.Bits S × Accounting.Wipe.Reads n k) × Pous.Bits κ =>
           τ.distinguisher acc A hold keep (y.1, prf y.2)) +
-        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n 2152 =>
+        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
           acc (hold x.1) (prf x.2.1) x.2.2 ∧ (τ.filled (hold x.1) (prf x.2.1)).2 ∉ A) := by
         congr 1
         exact pr_congr_equiv e fun _ => Iff.rfl
     _ ≤ Pous.pr (τ.distinguisher acc A hold keep) +
           Pous.StreamedWipe.prfAdvantage prf (τ.distinguisher acc A hold keep) +
-        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n 2152 =>
+        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
           acc (hold x.1) (prf x.2.1) x.2.2 ∧ (τ.filled (hold x.1) (prf x.2.1)).2 ∉ A) := by
         gcongr
         exact le_add_tsub
@@ -223,42 +232,59 @@ theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Ci
         gcongr
         exact hD.trans hε₀
 
-/-- What a certified `certify` publishes: the session's `k` is 2152, its fill at least one segment (`2^19` labels),
-`memory_bits` its `labels · 512` bits, the egress count non-negative, `eps` `1/2^128` and `foreign_bits`
-`⌈M/19⌉ + egress_mib · 2^23`. -/
-theorem certify_certified {p : StreamedWipe.Params} {e egressMib : Int} {eps : Core.Ratio} {foreignBits m : Nat}
-    (h : WipeProtocol.certify p e = ⟨true, egressMib, eps, foreignBits, m⟩) :
-    p.k = 2152 ∧ 2 ^ 19 ≤ p.labels ∧ m = p.labels * 512 ∧ 0 ≤ egressMib ∧ eps = ⟨1, 2 ^ 128⟩ ∧
-      foreignBits = (p.labels * 512 + 18) / 19 + egressMib.toNat * 2 ^ 23 := by
+/-- What a certified `certify` publishes: the session's `k` is at most `MAX_READS`, `eps` is `1/2^128`, `memory_bits`
+the declared tiers' bits and `foreign_bits` `StreamedWipeMeetsReads`' threshold at `r = ratio k` plus
+`egress_mib · 2^23`. -/
+theorem certify_certified {p : StreamedWipe.Params} {e egressMib : Int} {eps : Core.Ratio} {fb k m r : Nat}
+    (h : WipeProtocol.certify p e = ⟨true, egressMib, eps, fb, k, m, r⟩) :
+    p.k ≤ WipeProtocol.MAX_READS ∧ eps = WipeProtocol.EPS ∧ m = WipeProtocol.memoryBits p ∧
+      fb = WipeProtocol.foreignBits p (WipeProtocol.ratio p.k) + egressMib.toNat * WipeProtocol.UNIT_BITS := by
   unfold WipeProtocol.certify at h
   split_ifs at h with hg
   · simp only [WipeProtocol.Public.mk.injEq] at h
-    obtain ⟨-, rfl, rfl, rfl, rfl⟩ := h
+    obtain ⟨-, rfl, rfl, rfl, -, rfl, -⟩ := h
     simp only [WipeProtocol.gaps, List.isEmpty_iff, List.append_eq_nil_iff] at hg
-    obtain ⟨⟨hk, hb⟩, he⟩ := hg
-    split_ifs at hk hb he with h1 h2 h3
-    simp only [bne_iff_ne, ne_eq, Decidable.not_not] at h1
-    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt, not_le] at h3
-    refine ⟨h1, ?_, ?_, h3.1, rfl, ?_⟩
-    · simp only [StreamedWipe.LABEL_BYTES, WipeProtocol.LEAST_FILL_BYTES, not_lt] at h2; omega
-    · simp only [WipeProtocol.memoryBits, StreamedWipe.LABEL_BYTES]; ring
-    · simp only [WipeProtocol.memoryBits, StreamedWipe.LABEL_BYTES, WipeProtocol.F, WipeProtocol.UNIT_BITS]; omega
+    obtain ⟨hk, -⟩ := hg
+    split_ifs at hk with h1
+    have hk' : p.k ≤ WipeProtocol.MAX_READS := by omega
+    exact ⟨hk', rfl, rfl, by simp [WipeProtocol.ratioOf, hk']⟩
   · simp at h
 
-/-- At the bound's reads, a fill of at least one segment and no egress, `certify` certifies, at `eps = 1/2^128` and
-`foreign_bits = ⌈M/19⌉`. -/
-theorem certify_zero {q : StreamedWipe.Params} (hk : q.k = WipeProtocol.READS) (hn : 2 ^ 19 ≤ q.labels) :
-    WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, (q.labels * 512 + 18) / 19, q.labels * 512⟩ := by
-  have h1 : ¬ q.labels * StreamedWipe.LABEL_BYTES < WipeProtocol.LEAST_FILL_BYTES := by
-    simp only [StreamedWipe.LABEL_BYTES, WipeProtocol.LEAST_FILL_BYTES, not_lt] at hn ⊢
-    omega
+/-- At most `MAX_READS` reads and no egress, `certify` certifies, at `eps = 1/2^128` and `foreign_bits` the threshold at
+`r = ratio k`. -/
+theorem certify_zero {q : StreamedWipe.Params} (hk : q.k ≤ WipeProtocol.MAX_READS) :
+    WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, WipeProtocol.foreignBits q (WipeProtocol.ratio q.k), q.k,
+      WipeProtocol.memoryBits q, WipeProtocol.ratio q.k⟩ := by
+  have h1 : ¬ WipeProtocol.MAX_READS < q.k := not_lt.mpr hk
   have hg : WipeProtocol.gaps q 0 = [] := by
-    simp [WipeProtocol.gaps, hk, h1, StreamedWipe.EGRESS_MAX_UNITS]
+    simp [WipeProtocol.gaps, h1, StreamedWipe.EGRESS_MAX_UNITS]
   unfold WipeProtocol.certify
   rw [hg]
-  simp only [List.isEmpty_nil, ↓reduceIte, WipeProtocol.Public.mk.injEq, true_and, WipeProtocol.memoryBits,
-    StreamedWipe.LABEL_BYTES, WipeProtocol.F, Int.toNat_zero, zero_mul, add_zero]
-  omega
+  simp [WipeProtocol.ratioOf, hk]
+
+/-- `ratio`'s bisection keeps its lower end: from a lower end `lo ≥ 1` that samples, it returns one. -/
+theorem ratioSearch_samples {k : ℕ} (fuel : ℕ) : ∀ {lo hi : ℕ}, 1 ≤ lo → WipeProtocol.samples lo k = true →
+    1 ≤ WipeProtocol.ratioSearch k fuel lo hi ∧
+      WipeProtocol.samples (WipeProtocol.ratioSearch k fuel lo hi) k = true := by
+  induction fuel with
+  | zero => intro lo hi h1 hs; exact ⟨h1, hs⟩
+  | succ fuel ih =>
+    intro lo hi h1 hs
+    simp only [WipeProtocol.ratioSearch]
+    split_ifs with hd hm
+    · exact ⟨h1, hs⟩
+    · exact ih (by omega) hm
+    · exact ih h1 hs
+
+/-- At `k ≥ 1` reads, `ratio k` is at least 1 and meets `StreamedWipeMeetsReads`' condition
+`(r − 1)^k · 2^129 ≤ r^k`: the bisection starts from `r = 1`, where `0^k · 2^129 = 0`. -/
+theorem ratio_samples {k : ℕ} (hk : 0 < k) :
+    0 < WipeProtocol.ratio k ∧ (WipeProtocol.ratio k - 1) ^ k * 2 ^ 129 ≤ WipeProtocol.ratio k ^ k := by
+  have h1 : WipeProtocol.samples 1 k = true := by
+    simp [WipeProtocol.samples, zero_pow hk.ne']
+  obtain ⟨hr, hs⟩ := ratioSearch_samples (k := k) 64 (hi := k / 89 + 2) le_rfl h1
+  simp only [WipeProtocol.samples, decide_eq_true_eq] at hs
+  exact ⟨hr, hs⟩
 
 /-- An accepted `check` publishes `certify` of the commitment's parameters at some egress count. -/
 theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : StreamedWipe.Commitment}
@@ -277,13 +303,17 @@ theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : Streamed
       · cases h
 
 theorem wipeSurvivorBound : WipeSurvivorBound := by
-  intro schemes p c e egressMib eps foreignBits memoryBits profile h ι d C B s b _ τ κ prf count A hfill hA
+  intro schemes p c e egressMib eps foreignBits k memoryBits r profile h hk0 ι d C B s b _ τ κ prf count A hfill hA
   obtain ⟨egress, hc⟩ := check_accept h
-  obtain ⟨hk, hn, hm, -, rfl, rfl⟩ := certify_certified hc
+  obtain ⟨-, rfl, rfl, rfl⟩ := certify_certified hc
+  obtain ⟨hr, hs⟩ := ratio_samples hk0
   have heps : ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) = (2⁻¹ : ℝ≥0∞) ^ 128 := by
     rw [Nat.cast_one, Nat.cast_pow, Nat.cast_ofNat, one_div, ENNReal.inv_pow]
-  subst hm
-  exact survivorBound_of_observed hk hn τ hfill _ (fun _ _ _ h => h.1) prf A hA (le_of_eq rfl) heps.ge
+  have hfill' : τ.fill ≤ c.params.labels * 512 + WipeProtocol.outsideBits c.params := by
+    simp only [WipeProtocol.outsideBits, WipeProtocol.fillBits, StreamedWipe.LABEL_BYTES]
+    omega
+  exact survivorBound_of_observed (R := WipeProtocol.outsideBits c.params) hr hs τ hfill' _ (fun _ _ _ h => h.1) prf A
+    hA (le_of_eq rfl) heps.ge
 
 /-! ## The honest and nontrivial lemmas -/
 
@@ -298,7 +328,7 @@ theorem honestRead_honestFill {ι : Type} {d : Accounting.Device ι} {n : ℕ} (
   · omega
 
 theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
-  refine ⟨fun q hk hn => certify_zero hk hn, ?_⟩
+  refine ⟨fun q hk => certify_zero hk, ?_⟩
   intro ι d C B s b n k h carry
   refine ⟨rfl, ?_, fun σ L c => ⟨fun i => ?_, le_rfl⟩⟩
   · show (Finset.univ : Finset (Fin 0 → Bool)).card ≤ 2 ^ 0
@@ -348,17 +378,29 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
   · exact absurd (h.trans_eq key) (not_le.mpr hε)
   · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 
-/-- The segment's published `foreign_bits` fit in its store beside its on-chip state. -/
+theorem segment_reads : segmentParams.k ≤ WipeProtocol.MAX_READS := by
+  show 2152 ≤ 2 ^ 17
+  norm_num
+
+/-- The segment's published `foreign_bits`, 11,709,069 bits at `r = ratio 2152 = 24`, fit in its store beside its
+on-chip state. -/
 theorem segment_foreign_le :
     (WipeProtocol.certify segmentParams 0).foreignBits + segmentDevice.chip ≤ segmentDevice.mem := by
-  rw [certify_zero (q := segmentParams) rfl le_rfl]
-  show (2 ^ 19 * 512 + 18) / 19 + 0 ≤ 2 ^ 19 * 512
-  norm_num
+  have hr : WipeProtocol.ratio segmentParams.k = 24 := by first | decide +kernel | rfl
+  have hm : WipeProtocol.memoryBits segmentParams = 2 ^ 28 := by
+    first | decide +kernel | simp [WipeProtocol.memoryBits, segmentParams] | rfl
+  have hl : Nat.log2 2152 < 12 := (Nat.log2_lt (by norm_num)).2 (by norm_num)
+  rw [certify_zero segment_reads]
+  simp only [WipeProtocol.foreignBits, WipeProtocol.outsideBits, WipeProtocol.fillBits, hr, hm]
+  show 64 * 8 * ((2 ^ 19 + 24 - 1) / 24 - 1) + 2 ^ 19 + Nat.log2 2152 + 130 + (2 ^ 28 - 2 ^ 19 * 64 * 8) + 0 ≤
+    2 ^ 19 * 512
+  generalize Nat.log2 2152 = l at hl ⊢
+  norm_num <;> omega
 
 /-- The segment's published `eps` is below 1. -/
 theorem segment_eps_lt :
     ((WipeProtocol.certify segmentParams 0).eps.num : ℝ≥0∞) / (WipeProtocol.certify segmentParams 0).eps.den < 1 := by
-  rw [certify_zero (q := segmentParams) rfl le_rfl]
+  rw [certify_zero segment_reads]
   show ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) < 1
   rw [Nat.cast_one, one_div, ENNReal.inv_lt_one]
   exact_mod_cast (by norm_num : (1 : ℕ) < 2 ^ 128)
