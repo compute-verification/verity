@@ -599,7 +599,8 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py"
+        "benchmarks/judge.py",
+        "benchmarks/README.md"
       ],
       "branch_suffixes": [
         "47e4",
