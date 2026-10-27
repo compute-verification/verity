@@ -34376,7 +34376,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "8d029f8379b44a9b3724f74e6e9b334f0c6ca6c8d1c2e2cba85e439eae0ea217",
+   "digest": "9b251beea6f5c83f91802e92acf9a8b41eb578ad3085b75309b16d5a82b1a341",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -34526,9 +34526,9 @@
     "Flock.HmRow.wordsBE": "2649069b0c46f7d101cfc4ea1b6e26b2766a4d65488e54032ee142546d201433",
     "Flock.HmRow.workLaw": "efb93a2ae6398da29d22cc33c23b9339b5d372711de510dbbb9433230d779fd0",
     "Flock.HmRow.zeroRowBc": "70914d394be7bc1eb39db8688cfc653ec4fa9eaa394b9a4e18acdce1feb9ea3f",
-    "Flock.Stmt.setupH": "0af90c32d63893abff7c0e963b882fb94d05fd78716f7a0ed31051126d454178",
+    "Flock.Stmt.setupH": "936a44fbf80452a5f8b572b4feffa24b31260759103589ac13be0c8b47b78277",
     "Flock.Stmt.setupH._sparseCasesOn_5": "d7fa2775d3f894d247b591b627dbe1dd5ebfde6070f3edf2d7aa1afbbfa0d77b",
-    "Flock.Stmt.setupHidden": "bf31b4704e890bfd40aa7c25a695574d6bc5eea60b76f551469643af480b9e57",
+    "Flock.Stmt.setupHidden": "5f56d811199390fd752ac22aaab157400682d6bf71c06fe7a8f3c33952ab018a",
     "Flock.Stmt.setupTables": "a35273580d80eb8a258b0d7e080f89dd83b5b0b03456246b5ae8b733f5082a19",
     "Flock.Stmt.setupTables._sparseCasesOn_16": "abecbf134d8566d384a2419a9a8480800ecc94399c74983a3f0c0cbb769cddc2",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
@@ -41712,7 +41712,7 @@
    ]
   },
   "Flock.With.Setup": {
-   "digest": "33d49ef684c2db4def9dd8088ac07cb263a416d43760291319a3d98b36f60d1a",
+   "digest": "a7b505a1726fe8a2661bc7bfb7f5bf4a38a841aa14e20b0514f0671daa2155eb",
    "definitions": {
     "Flock.CircuitType.digestWith": "288247cf1a3e1910a2c77ce8b2a36aa7817c77bab4de46ab86ce14bcdde779f8",
     "Flock.FV3.hashWith": "77f953d81e16730ed6eda71a596e867f2ba1e5034d4b0e24d68a5b18272b6cc9",
@@ -41734,7 +41734,7 @@
     "Flock.HmRow.deriveTemplateUnitsWith": "6ed1fcd1deaf027564c39a351769c969ffacdf75653dd3fbd45e7103d1c136c8",
     "Flock.HmRow.drawnWith": "2159b6ce8c8a32cc0351a334c50f440de9e466c3301cdaa9ab36a1421300338a",
     "Flock.HmRow.loadPublicWith": "60c64482f50a88dc3a8cbb68f52b3811dd484f7f4ee14a581ab2f952e752bb52",
-    "Flock.HmRow.parseRest": "8f699250526b4217a5d6fb5e1192d257458fc413e46871d23ee512396fab30a5",
+    "Flock.HmRow.parseRest": "ecba08fb3494a1fce561d17aaee539f1b71660b59de68321696fdaa38a4e5502",
     "Flock.HmRow.parseRest._sparseCasesOn_14": "e27c7e9edc36926105e694aa53eb352a66b608acec17deacbef9f883634a2a23",
     "Flock.HmRow.parseRest._sparseCasesOn_5": "3196e717c95ab48859a74e7c34eee620d325af0824bfa1204ec275d631cb06c6",
     "Flock.HmRow.parseTypedWith": "7f76f2cff74684ac383eebd4cd3e2c67c85785e80c5494b81b67145578b14294",
@@ -41751,8 +41751,8 @@
     "Flock.Pinned.tableSha": "b0bed943a439e6bac73a9ad37ae760bd2bc6340f4a84e65558518e54c63b5803",
     "Flock.Stmt.setupHWith": "82d860f4685a98d2f443da24e97ce0a28a8090e1ccffa512783182f1ee5bcb28",
     "Flock.Stmt.setupHWith._sparseCasesOn_5": "7b570855eef1875a2b6fd45c900c24ab3fb7d3e8f8e7f13ca1d2e6bd913b0de0",
-    "Flock.Stmt.setupHiddenWith": "44c5e1068bc90fea1f43c60dd38a63b28a8925039240bd529e043a6d983e179d",
-    "Flock.Stmt.setupTablesWith": "def4e573709c06486dd4df851e05199c8295b28f748c3f0323e9dc5d6fdc4948",
+    "Flock.Stmt.setupHiddenWith": "47499a1f6db8095d393003c202e451826a813286a1088cfbf8505b79175ba9ca",
+    "Flock.Stmt.setupTablesWith": "ab34b519bce3f61d29b7489407dc97c4cc79dee35b46d8a33fd363bdaa5fc4b7",
     "Flock.Stmt.setupTablesWith._sparseCasesOn_16": "5378992df9019495304efd52ef3027f0deab602581c2d9a3baf888e6f3ae7897",
     "Flock.Stmt.setupTablesWith._sparseCasesOn_3": "29f19a9cb19f316aa4ccce10769dae5c61793053dd1ef62fc7e3251bcf5247eb",
     "Flock.TemplateQuery.Desc.parseWith": "c29e8d558cfdf81891a861d8e48ac10725feaeb4b83e8cb9f999f98e5a44ca90",
@@ -52046,9 +52046,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds": {
-   "digest": "6d5d301a5b996ee09ffa72bb9c9be87d56c085f74851bf380315a237fa46a08c",
+   "digest": "f5ff5c7f2705754c4338774a64723aeb67775714ec7ce30dd99708fcba764936",
    "definitions": {
-    "FlockSoundness.Discharge.Composed.MaskSetup": "d50e9f37a25524245a87a3d32fc26e4b5910a53f01718c909ce729a9c7934f9b"
+    "FlockSoundness.Discharge.Composed.MaskSetup": "37c0ec004db4e8e5357e9d008593072a20985380bcc0a4010088319e4e794c62"
    },
    "guarantees": ["Flock.SecurityProofs.MaskedZK"]
   },
