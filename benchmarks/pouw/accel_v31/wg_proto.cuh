@@ -36,7 +36,7 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //   RP 1  384 threads at 136 (__launch_bounds__(480, 1); producer 24, consumers 192): 13,312 left
 //   RP 2  288 threads at 168 (one producer warp, no setmaxnreg): 17,152 left
 constexpr int RP1_LAUNCH = 136, RP1_PRODUCER = 24, RP1_CONSUMER = 192;
-template <int RP> constexpr int threads() { return RP == 2 ? 2 * 128 + 32 : 3 * 128; }
+template <int RP> __host__ __device__ constexpr int threads() { return RP == 2 ? 2 * 128 + 32 : 3 * 128; }
 
 template <int BN> struct Tile {
   static_assert(BN == 128 || BN == 256, "128 x 128 or 128 x 256 tiles");
