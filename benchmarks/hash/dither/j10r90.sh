@@ -4,7 +4,7 @@
 #   kr        the receipts-only base (job.sh's kr: H1U_KSPLIT = 4, H1K_AUTO, H1K_RONLY)
 #   kra       A: kr + H1U_JCTA, H1U_WARPS = 4, H1U_JX, H1U_JBW
 #   kraq      AQ: kra + H1U_PF, H1U_JPI, H1U_JCS = 2 (H1U_JXS stays off: it stalls under PREQ on the RTX)
-#   kraqwxsc  the sm_90a arm: kra + H1U_PF, H1U_JPI, H1U_JW, H1U_JXS, H1U_JWS, H1U_JPC (no JCS: the column blocks and
+#   kraqwxsc  the sm_90a arm: kra + H1U_PF, H1U_JPI, H1U_JW, H1U_JXS, H1U_JWS, H1U_JPC (no JCS: the column tiles and
 #             W' once a call, X and W' in fragment order, their prep's stores coalesced)
 #
 #   build  (a CPU node) job.sh's build of the four at sm_90a with --no-compress ($OUT/lib/sm_90a), then the SASS gate on
@@ -16,7 +16,7 @@
 #   check  (vy-dc-h200, under gpu-lease) job.sh's j10r90: unitsbench.py's J10-R gates at its own shapes, then j10r90.py
 #          check at the frozen shape
 #   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent (KP2-S8's
-#          s8_linear/build.sh ship plus its wgmma.py and configs.py, #4520), wgmma.linear as a second plain arm
+#          s8_linear/build.sh ship plus its wgmma.py and configs.py), wgmma.linear as a second plain arm
 #
 #   research run --on auto --cwd source --timeout 30m -- bash benchmarks/hash/dither/j10r90.sh build
 #   (or on the H200's host, outside any lease; where the host has no /workspace/cp/venv312, VERITY_BENCH_VENV names a

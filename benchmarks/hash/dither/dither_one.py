@@ -65,7 +65,7 @@ PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DI
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
-# a form per call: (wide, narrow), wide where the call's column blocks outnumber the SMs (a second block an SM pays only
+# a form per call: (wide, narrow), wide where the call's column tiles outnumber the SMs (a second block an SM pays only
 # past one wave: qkv and gate_up at decode), narrow elsewhere
 MIX_FORMS = {"mix": ("block2", "split")}
 # "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
@@ -514,7 +514,7 @@ def _window(dev) -> Window:
     return WIN
 
 
-# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: #2684's trace counts an op without a
+# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: the credit gate's trace counts an op without a
 # Python definition as one GEMM, and its two fresh results, z and y, as written by it.
 _LIB = torch.library.Library(LIB, "DEF")
 _LIB.define("one_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int idx) -> (Tensor, Tensor)")
@@ -542,7 +542,7 @@ CG = None
 
 
 def credit_doc() -> dict:
-    """#2684's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
+    """The credit gate's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
     return {"calls": CREDIT.get("calls", 0), "credited": CREDIT.get("credited", 0),
             "reasons": dict(CREDIT.get("reasons", {})), "kernels": dict(CREDIT.get("kernels", {})),
             "sample": CREDIT.get("sample", [])}
@@ -550,7 +550,7 @@ def credit_doc() -> dict:
 
 def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = False, credit: str | None = None) -> None:
     """Every int8-exact linear through ``dither1::one_mm`` (call before the engine is built, in its process).  ``credit``,
-    the path of #2684's `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
+    the path of `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
     op's z) is tallied in `CREDIT` (an eager engine: a compiled one never runs `apply` per call)."""
     from collections import Counter
 
@@ -953,7 +953,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                  "density": float(cnt.sum() / ent.sum()),
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
     # the activation wrap's entries (A = 127 and b = 1) each call's live units hold, by h1o_ref's own noise, and the
-    # A = 127 entries of the call's live rows (each such entry meets every unit of its row block)
+    # A = 127 entries of the call's live rows (each such entry meets every unit of its row tile)
     a127 = [int((g["a"][w][:m] == 127).sum()) for w in range(L)]
     doc["xa"] = {"entries": int(cnt[:, 2].sum()), "by_call": cnt[:, 2].tolist(), "calls_without": int((cnt[:, 2] == 0).sum()),
                  "min": int(cnt[:, 2].min()), "max": int(cnt[:, 2].max()),
@@ -978,7 +978,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
             eq += int(torch.equal(yt, yk))
             rel.append(float((yk - yt).norm() / yt.norm().clamp_min(1e-30)))
         doc["y_vs_today"] = {"calls_equal": eq, "rel_l2_median": float(np.median(rel)), "rel_l2_max": float(np.max(rel))}
-    # CA's definition on the CPU, a few units of row block 0
+    # CA's definition on the CPU, a few units of row tile 0
     units_doc, h1v3_in, kernel_out = [], [], []
     if which == "gate":
         rng = np.random.default_rng(s)

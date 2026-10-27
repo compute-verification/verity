@@ -10,9 +10,9 @@ it fast, and `conformance.py` holds it to those references.
 What it computes:
 
 - SHA-512 of many messages, and bare compressions (`vc_sha512_launch`, `vc_compress_launch`).
-- Row digests: `sha512/row/v2` (and `sha512/row/v1`'s one prefix block, verity_vllm's serving rows) and `sha512/row-seg/v1`
+- Row digests: `sha512/row/v2` (and `sha512/row/v1`'s one prefix chunk, verity_vllm's serving rows) and `sha512/row-seg/v1`
   (`vc_rows_launch`); Pearl-C -h3's tile leaves of C~ and U (`vc_tiles_launch`) and row seeds (`vc_row_seeds_launch`).
-- hm96-sha512 leaves: the salt phase (y, M_key y, c and the frame leaf's first block, before the operand exists:
+- hm96-sha512 leaves: the salt phase (y, M_key y, c and the frame leaf's first chunk, before the operand exists:
   `vc_salts_launch`), the data phase (x, b = x xor M_key y, h, the frame leaf: `vc_leaves_rows_launch` from rows,
   `vc_leaves_x_launch` from given 64-byte digests, e.g. A's tree), or both in one kernel (`vc_leaves_fused_launch`).
 - frame-v3-sha512 leaves over 64-byte values, pads, nodes and the empty root (`vc_frame_leaves_launch`, `vc_nodes_launch`,
@@ -67,7 +67,7 @@ lib.open_launch(plan.ptr, tables.data_ptr(), None, bc.data_ptr(), None, levels.d
 openings = vclib.parse_openings(out.cpu().numpy().tobytes(), n, m)
 ~~~
 
-From C it is the same sequence: fill a `vc_spec` with the reference's blocks (`vclib.py`'s spec builders show where each comes
+From C it is the same sequence: fill a `vc_spec` with the reference's prefix chunks (`vclib.py`'s spec builders show where each comes
 from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc_commit_rows_launch` on each step's rows
 (`bench/rows.cu` does exactly this against commit_gpu's parameter file).
 
@@ -76,18 +76,18 @@ from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc
   `tiles_spec` and `seeds_spec` (Pearl-C -h3). Each takes its prefixes from the owning reference, so a plan is the reference's
   format by construction.
 - Salts (`salt_source`): `GIVEN`, the caller's 192 bytes a position (`salts`); `PRF`, y_r = SHA-512(Ks || u64be pos || u64be r)
-  (commit_gpu); `CHACHA64`, `audit.hm96_salt`'s ChaCha20 blocks 3 pos .. 3 pos + 2 with a 64-bit counter and nonce; `CHACHA_RFC`,
+  (commit_gpu); `CHACHA64`, `audit.hm96_salt`'s ChaCha20 chunks 3 pos .. 3 pos + 2 with a 64-bit counter and nonce; `CHACHA_RFC`,
   RFC 8439's stream at 192 pos, `salt_nonce` the 12-byte little-endian nonce's value (verity_vllm's port index). A keyed source
   never leaves the device.
 - Forms (`vc_commit_rows_launch`): `SPLIT` runs the salt phase, the data phase, then the tree; `FUSED` one kernel a leaf, then
   the tree; `FOLD` the salt phase (which also zeroes the climb's counters in `scratch`) then one data kernel that folds the tree
-  too: each block hashes its 256 leaves' subtree in shared memory, and of two sibling blocks the one that finishes second climbs
+  too: each CTA hashes its 256 leaves' subtree in shared memory, and of two sibling CTAs the one that finishes second climbs
   on (its nodes by length, or on sm_100 through a compact node body), so a commit is two launches; `SPEC` one kernel after
-  a memset of the counters: each block pairs a row thread with a salt
-  thread a leaf, the salt threads writing M_key y, c and the frame leaf's first block to shared memory while the row threads
+  a memset of the counters: each CTA pairs a row thread with a salt
+  thread a leaf, the salt threads writing M_key y, c and the frame leaf's first chunk to shared memory while the row threads
   hash the rows, then each warp folds its 32 leaves and climbs. `AUTO` picks by device and rows: up to 40,000 rows `SPEC`
   on sm_90 and `FOLD` elsewhere, then `SPEC` on sm_120 up to 200,000 rows, else `SPLIT`.
-  The one- and two-launch forms save the tree's launches, a fixed cost, while their blocks idle through their subtree's
+  The one- and two-launch forms save the tree's launches, a fixed cost, while their CTAs idle through their subtree's
   barriers, a cost per row. It was tuned on 4 KiB rows; a committer with other rows can name its form. Every form writes
   the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side stream
   and `vc_leaves_rows_launch` when the rows exist, then `vc_tree_launch`.
@@ -147,7 +147,7 @@ uv run tools/verity/check/suites.py benchmarks/hash/lib      # the CPU suite
 ## Conformance on every architecture
 
 A kernel can be right on one architecture and wrong on another from the same source: on sm_120, `k_rows_seg`'s fold of an
-even segment count's last block (all padding, every word a constant) came out wrong for some rows, depending on the data,
-while sm_90 and sm_100 were right, so that block's schedule now comes from the host (`kw_fold`). Only the conformance run on
+even segment count's last chunk (all padding, every word a constant) came out wrong for some rows, depending on the data,
+while sm_90 and sm_100 were right, so that chunk's schedule now comes from the host (`kw_fold`). Only the conformance run on
 each GPU catches such a fault, so a new kernel or a compiler bump reruns `gpu.sh`'s conformance on all three architectures
 before its bench times anything.
