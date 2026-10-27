@@ -27,14 +27,17 @@ accepted.
 `coinsMismatch`: each round's coins the device's release after its digest, one release per (session, round), in the
 live order). An untagged release never moves the reduction (`reached_filter`); where the tagged releases are the draw's
 block, the link points', then one block per round, each one release per chunk, the reduction is in the rounds at what
-they read back to (`reached_canon`); and the record is the live audit's transcript there.
+they read back to (`reached_canon`); and where the coupling's transcript of the record is accepted, so is the live
+audit's there (its writer `wr` at what the releases read back to).
 
 `Drive` bundles the reduction at one live session of `SampledDeploy.A` (the coupling's `proj` and `covers`, how it
 reads the releases, and those refusals), and gives the strategy `Drive.τ` and the coupling `Drive.coupling`.
 `accept_le_of_drives` is `SampledDeploy.accept_le` at `τOf := (Dr …).τ`.
 
 What the reduction reads off a release is its request's (`tagOfRequest`, `rootOfRequest`, `bytesOfRequest`, over
-`PlayDevice.requestParts`). The break is the play's: `Vocab.colAt` and `Vocab.forgerAt` read the challenger's finder's
+`PlayDevice.requestParts`; a round's coin count its message's squeeze header, `coinCountOf`, so `tagOfPlay`), and a
+release's 512 bits read as the record reads its coin's bytes (`splitDraw`, `splitPoints`, `splitRounds`: bytes LSB
+first, each F128 `{hi:016x}{lo:016x}`). The break is the play's: `Vocab.colAt` and `Vocab.forgerAt` read the challenger's finder's
 valid witness off the records the uses name (`Vocab.breakAt`, `Vocab.recsOf`), so a break from a use's record
 (`Vocab.rounds_at_play`'s second case) is the collision `col` counts or the forger's success
 (`Vocab.use_break_counted`).
@@ -561,12 +564,12 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
           (∀ r ∈ rds, r.Fits Game.LiveDrive.nOfJ Game.LiveDrive.mkJ
             (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length) m tagOf spR bytesOf
             (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) ∧
-          proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ =
-            wr (Game.LiveDrive.drawOS law pop (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) R₀
+          (ZkExec.AcceptsZK I (proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩) →
+            ZkExec.AcceptsZK I (wr (Game.LiveDrive.drawOS law pop (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) R₀
               ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
                 Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg)
                   (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length) m spR bytesOf
-                  (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits)) rds fun _ _ => [], pfOf e⟩) :
+                  (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits)) rds fun _ _ => [], pfOf e⟩))) :
     Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
       (fun o => ZkExec.LiveAcceptsZK I o)
       (toVerity (Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
@@ -577,8 +580,7 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
   refine ⟨_, _, _, _, _, Game.LiveDrive.reached_canon (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
     Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf
     hs kd kp rds hc hd hp hN hr, ?_⟩
-  rw [← hpr]
-  exact hacc
+  exact hpr hacc
 
 /-- **The reduction at a live session `A`**: the coupling's transcript of the play (`proj`: off the break, where
 sampled proofs' verdict accepts, a session's transcript of v2's evidence at `A`'s inputs, `covers`), the registration
@@ -610,12 +612,13 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
         (∀ r ∈ rds, r.Fits Game.LiveDrive.nOfJ Game.LiveDrive.mkJ
           (fun x => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ (Game.LiveDrive.drawOS (.subset kd) n x) R₀).length)
           m tagOf spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) ∧
-        proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ =
-          A.wr (Game.LiveDrive.drawOS (.subset kd) n (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) R₀
+        (ZkExec.AcceptsZK A.I (proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩) →
+          ZkExec.AcceptsZK A.I
+            (A.wr (Game.LiveDrive.drawOS (.subset kd) n (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) R₀
             ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
               Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ A.dg)
                 (fun x => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ (Game.LiveDrive.drawOS (.subset kd) n x) R₀).length)
-                m spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits)) rds fun _ _ => [], pfOf e⟩
+                m spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits)) rds fun _ _ => [], pfOf e⟩))
 
 namespace Drive
 
@@ -688,6 +691,87 @@ def rootOfRequest (b : ByteArray) : Array ByteArray :=
 /-- The bytes a release's request holds: the round's message a round's coins are released after. -/
 def bytesOfRequest (b : ByteArray) : ByteArray :=
   ((PlayDevice.requestParts b).map (·.2)).getD .empty
+
+/-- **A round message's coin count**: the count its squeeze header frames last (`Flock.Transcript.framed`: op `4`, the
+coin's kind, six zero bytes, then the count in eight bytes little-endian). The verifier asks a round for exactly that
+many coins after exactly those bytes (`Flock.Transcript.squeeze`), and the device serves one coin a request with no
+count of its own (`PlayDevice.served`), so the count is the message's: a record round whose message has the request's
+digest carries it, or the two messages are a collision. -/
+def coinCountOf (x : ByteArray) : Option ℕ :=
+  if x.size < 16 ∨ x.get! (x.size - 16) ≠ 4 then none
+  else some ((List.range 8).foldl (fun acc i => acc + (x.get! (x.size - 8 + i)).toNat * 256 ^ i) 0)
+
+/-- A round request's table, rep and coin count: its stream's (`streamOf`, from the label `slot/0/<stream>`) and its
+message's (`coinCountOf`). -/
+def roundOfRequest (streamOf : String → Option (ℕ × Fin 2)) (l : String) (x : ByteArray) : Option (ℕ × Fin 2 × ℕ) :=
+  (streamOf l).bind fun (t, r) => (coinCountOf x).map fun n => (t, r, n)
+
+/-- **What a release of the play is to the reduction**: `tagOfRequest` at the registration's challenger label `draw`
+and session 0's streams `streamOf`, each round's coin count its message's. -/
+def tagOfPlay (draw : String) (streamOf : String → Option (ℕ × Fin 2)) : ByteArray → Option Game.LiveDrive.Tag :=
+  tagOfRequest draw (roundOfRequest streamOf)
+
+/-! ## A release's bits as the record reads them
+
+A release is one 64-byte coin (`COIN_BYTES`), 512 bits, whose bytes are its bits LSB first (`PlayDevice.bytesOfBits`:
+bit `t` is bit `t mod 8` of byte `⌊t/8⌋`). An F128 is 16 of those bytes as the record writes it,
+`{hi:016x}{lo:016x}` (`Flock.f128OfHex`, `OneStageZk.coinsMismatch`): `hi` the first eight bytes big-endian, `lo` the
+next eight. A coin of `K` bits is drawn release by release (`Game.splitBits`), its F128s in turn across the releases'
+bytes, and read through these equivalences: the draw's bytes (`splitDraw`), the link points rep by rep
+(`splitPoints`, `points[k][t]` the record's F128 `k · mPts + t`) and a round's coins (`splitRounds`). -/
+
+/-- A byte from its eight bits, bit `i` of weight `2 ^ i`. -/
+def coinByte : (Fin 8 → Bool) ≃ Fin 256 :=
+  ((Equiv.refl (Fin 8)).arrowCongr finTwoEquiv.symm).trans
+    (finFunctionFinEquiv.trans (finCongr (by norm_num : 2 ^ 8 = 256)))
+
+/-- `n` bytes from their `n * 8` bits, byte `j` from bits `8 j` to `8 j + 7`. -/
+def coinBytes (n : ℕ) : (Fin (n * 8) → Bool) ≃ (Fin n → Fin 256) :=
+  ((finProdFinEquiv (m := n) (n := 8)).symm.arrowCongr (Equiv.refl Bool)).trans
+    ((Equiv.curry (Fin n) (Fin 8) Bool).trans ((Equiv.refl (Fin n)).arrowCongr coinByte))
+
+/-- Eight bytes as a 64-bit word, big-endian. -/
+def coinWord : (Fin 8 → Fin 256) ≃ Fin (2 ^ 64) :=
+  ((Fin.revPerm (n := 8)).arrowCongr (Equiv.refl (Fin 256))).trans
+    (finFunctionFinEquiv.trans (finCongr (by norm_num : 256 ^ 8 = 2 ^ 64)))
+
+/-- An F128 from its 128 bits, as the record reads its 16 bytes (`Flock.f128OfHex`): `hi` the first eight, `lo` the
+next eight, each big-endian. -/
+def coinF128 : (Fin 128 → Bool) ≃ 𝔽 :=
+  ((finCongr (by norm_num : 128 = 16 * 8)).arrowCongr (Equiv.refl Bool)).trans <|
+    (coinBytes 16).trans <|
+      (((finCongr (by norm_num : 16 = 2 * 8)).trans (finProdFinEquiv (m := 2) (n := 8)).symm).arrowCongr
+        (Equiv.refl (Fin 256))).trans <|
+        (Equiv.curry (Fin 2) (Fin 8) (Fin 256)).trans <|
+          ((Equiv.refl (Fin 2)).arrowCongr coinWord).trans <|
+            (piFinTwoEquiv fun _ => Fin (2 ^ 64)).trans <|
+              (Equiv.prodComm (Fin (2 ^ 64)) (Fin (2 ^ 64))).trans FlockLevel3.f128Equiv.symm
+
+/-- `k` F128s from their `k * 128` bits, F128 `i` from bits `128 i` to `128 i + 127`. -/
+def coinF128s (k : ℕ) : (Fin (k * 128) → Bool) ≃ (Fin k → 𝔽) :=
+  ((finProdFinEquiv (m := k) (n := 128)).symm.arrowCongr (Equiv.refl Bool)).trans
+    ((Equiv.curry (Fin k) (Fin 128) Bool).trans ((Equiv.refl (Fin k)).arrowCongr coinF128))
+
+/-- The link points of both reps from their bits: rep `k`'s point `t` the F128 `k · mPts + t`. -/
+def coinPoints (mPts : ℕ) : (Fin (2 * mPts * 128) → Bool) ≃ (Fin 2 → Fin mPts → 𝔽) :=
+  (coinF128s (2 * mPts)).trans <|
+    ((finProdFinEquiv (m := 2) (n := mPts)).symm.arrowCongr (Equiv.refl 𝔽)).trans (Equiv.curry (Fin 2) (Fin mPts) 𝔽)
+
+/-- The draw's bytes from their bits: one segment of `Lb 0` bytes. -/
+def coinDraw (Lb : Fin 1 → ℕ) : (Fin (Lb 0 * 8) → Bool) ≃ ((i : Fin 1) → Fin (Lb i) → Fin 256) :=
+  (coinBytes (Lb 0)).trans (Equiv.piUnique fun i : Fin 1 => Fin (Lb i) → Fin 256).symm
+
+/-- The draw's coin, drawn a release at a time. -/
+def splitDraw (Lb : Fin 1 → ℕ) : Game.Split ((i : Fin 1) → Fin (Lb i) → Fin 256) 512 :=
+  (Game.splitBits 512 (by decide) (Lb 0 * 8)).congr (coinDraw Lb)
+
+/-- The link points' coin, drawn a release at a time. -/
+def splitPoints (mPts : ℕ) : Game.Split (Fin 2 → Fin mPts → 𝔽) 512 :=
+  (Game.splitBits 512 (by decide) (2 * mPts * 128)).congr (coinPoints mPts)
+
+/-- A round's `k` coins, drawn a release at a time. -/
+def splitRounds (k : ℕ) : Game.Split (Fin k → 𝔽) 512 :=
+  (Game.splitBits 512 (by decide) (k * 128)).congr (coinF128s k)
 
 /-! ## The play's break: the finder's collision or forgery at the play's device -/
 
