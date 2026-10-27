@@ -1586,8 +1586,8 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
 
 
 #: a running step none of whose outputs (`outputs`) has changed for this long is hung. pytest can sit a day on one hung test after
-#: lean-suites fails, holding its train slot, and circuit-check beside it its share of memory; a passing step's longest quiet stretch is about an hour (circuit-check's plan before its first target,
-#: one 35-minute target, a cold Lean package's build)
+#: lean-suites fails, holding its train slot, and circuit-check beside it its share of memory; a passing step's longest quiet
+#: stretch is about an hour (circuit-check's plan before its first target, one 35-minute target, a cold Lean package's build)
 IDLE_S = 3 * 3600
 #: and one still running after this long is over its budget, whatever it writes (the longest steps passed in 3-4 h)
 STEP_BUDGET_S = 12 * 3600

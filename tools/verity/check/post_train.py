@@ -58,7 +58,8 @@ INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-#: the run's bound on the machine: the longest rebuilds take 89 and 104 min on 32 cores beside other lanes' jobs; a run that outlives it is cut off before its junit, and is inconclusive, not a failure
+#: the run's bound on the machine: the longest rebuilds take 89 and 104 min on 32 cores beside other lanes' jobs; a run that
+#: outlives it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
 #: the run's memory, reserved on the machine (`research run --mem-gb`, waiting up to MEM_WAIT_S for it), and its xdist workers
 #: capped at MEM_GB // WORKER_GB: about 20 workers at ~28 GB each with nothing reserved, 570 GB, fill a node's slice and get

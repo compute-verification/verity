@@ -18,10 +18,11 @@ reads the key as unknown and the slot as any other). A slot with mem=GB is skipp
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM, less what
 live research.mem reservations hold but don't use yet, `reserved_gb`: for a `--priority` waiter, or on an only=trains slot, only
 other priority checks' reservations, so a train never waits behind a research job's unused reservation), so a
-check starts only when its measured peak fits and queues instead of being killed with the others under the slice, and CMD gets GB as SLOT_MEM_ENV, which check.py makes
-circuit-check's budget, so two checks' circuit-checks never each budget all the memory free when they began (two cold ones,
-each at its six 125-151 GiB targets, fill a 1600 GiB slice); while the check runs, the slot holds a
-research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.
+check starts only when its measured peak fits and queues instead of being killed with the others under the slice, and CMD
+gets GB as SLOT_MEM_ENV, which check.py makes circuit-check's budget, so two checks' circuit-checks never each budget all
+the memory free when they began (two cold ones, each at its six 125-151 GiB targets, fill a 1600 GiB slice); while the
+check runs, the slot holds a research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that
+needs what the check may still take.
 With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
 CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (a run sent to a pool the node lacks
@@ -45,8 +46,8 @@ run so far plus SECONDS, through its harness's control file (research.telemetry.
 --on` sends both, so a check that times out waiting in the line is not reported failed.
 
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
-free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, never waiting on one machine while
-another's slot is free. Each waits in its own machine's line. The one holding a slot runs only if it
+free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, never waiting on one machine
+while another's slot is free. Each waits in its own machine's line. The one holding a slot runs only if it
 claims PAIR first: `mkdir TWINS/PAIR` beside SLOTS on this machine (`--twin PAIR`) or on HOME, over the ssh PEERS names for it.
 Its twins, finding the claim (each poll here, every TWIN_PEEK_S from another machine, and whenever one holds a slot), leave
 their line and exit NOT_STARTED. A claim that can't be made (HOME unreachable or not in PEERS) also exits NOT_STARTED, so a
@@ -648,7 +649,8 @@ DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the sl
 
 def usable(slots: list[dict]) -> list[dict]:
     """The slots whose every core this process may run on. Pinning onto any other fails (EINVAL), so a check never takes one:
-    in a `research run` session held to cores 0-127, a slot on 128-159 kills every check that takes it. A `research run` starts on the host's /etc/vy/direct-cpus, so a slot's cores must be listed there too."""
+    in a `research run` session held to cores 0-127, a slot on 128-159 kills every check that takes it. A `research run`
+    starts on the host's /etc/vy/direct-cpus, so a slot's cores must be listed there too."""
     mine = allowed()
     return [s for s in slots if cpulist(s["cpus"]) <= mine]
 
