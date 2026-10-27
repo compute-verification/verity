@@ -294,6 +294,8 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
         name = s.get("stream") if isinstance(s, dict) else None
         if type(name) is not str:
             raise ValueError("record: a stream's name is not a string")
+        if name == "session":
+            raise ValueError("record: a stream is named session, the link points' family")
         rounds = s.get("rounds")
         if type(rounds) is not list:
             raise ValueError(f"record: {name}'s rounds are not a list")

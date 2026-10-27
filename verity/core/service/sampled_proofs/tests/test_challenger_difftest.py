@@ -1712,7 +1712,7 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
 # ---- every coin a v2 window reads -------------------------------------------------------------------------------------
 
 def rounds(j: Any) -> Any:
-    _request(j, ["coins", "key", "uses", "window"])
+    _request(j, ["coins", "key", "order", "uses", "window"])
     if type(j["window"]) is not str:
         raise D.Reject("window is not a string")
     if type(j["uses"]) is not list:
@@ -1723,17 +1723,26 @@ def rounds(j: Any) -> Any:
                 and type(u["after"]) is str and type(u["coins"]) is int and u["coins"] >= 0):
             raise D.Reject("a use is {after, coins, label}")
         uses.append(T.Use(u["label"], _hex(u["after"]), u["coins"]))
+    if type(j["order"]) is not list:
+        raise D.Reject("order is not a list")
+    order = []
+    for o in j["order"]:
+        if not (type(o) is list and len(o) == 2 and all(type(x) is str for x in o)):
+            raise D.Reject("an order entry is [a, b], two family labels")
+        order.append((o[0], o[1]))
     return _refusing(lambda: {"coins": [x.hex() for x in T.round_coins(Ch.ChallengerKey.from_json(j["key"]), j["window"],
-                                                                         uses, j["coins"], lms_verify)]})
+                                                                         uses, order, j["coins"], lms_verify)]})
 
 
 class Rounds:
     """A v2 window's coins from one ledger session's challenger: the draw (family `draw`, after the registration's
     digest), then for each used slot its link points (`slot/<i>/session`, after their digest) and its stream's rounds
-    (`slot/<i>/s/rep0`, each after its round's digest), each use read through its own `ChallengerCoins` segment.
-    The layout holds one slot more than `slots` uses, which an honest window never releases."""
+    (`slot/<i>/s/rep0`, each after its round's digest), each use read through its own `ChallengerCoins` segment,
+    released in that order unless `late` names the `draw` (released after every slot's) or slot 0's `points`
+    (released after its rounds). The layout holds one slot more than `slots` uses, which an honest window never
+    releases."""
 
-    def __init__(self, rng: random.Random, slots: int = 1) -> None:
+    def __init__(self, rng: random.Random, slots: int = 1, late: str | None = None) -> None:
         s = self.s = _ledger_session(rng)
         self.slots = slots
         families = [("draw", 4)] + [(f"slot/{i}/{f}", n) for i in range(slots + 1) for f, n in (("session", 3),
@@ -1745,11 +1754,21 @@ class Rounds:
         self.records = {label: Ch.LiveRecord(s.ch, label, self.clock) for label, _ in families}
         self.readers = {label: T.ChallengerCoins(r) for label, r in self.records.items()}
         self.uses, self.segments = [], []
-        self.use("draw", rng.randbytes(64), rng.randint(1, 2))
+        draw = (rng.randbytes(64), rng.randint(1, 2))
+        if late != "draw":
+            self.use("draw", *draw)
         for i in range(slots):
-            self.use(f"slot/{i}/session", rng.randbytes(64), 1)
+            points = rng.randbytes(64)
+            if not (late == "points" and i == 0):
+                self.use(f"slot/{i}/session", points, 1)
             for _ in range(rng.randint(1, 3)):
                 self.use(f"slot/{i}/s/rep0", rng.randbytes(64), rng.randint(1, 2))
+            if late == "points" and i == 0:
+                self.use(f"slot/{i}/session", points, 1)
+        if late == "draw":
+            self.use("draw", *draw)
+        self.order = [("draw", f"slot/{i}/{f}") for i in range(slots) for f in ("session", "s/rep0")] + [
+            (f"slot/{i}/session", f"slot/{i}/s/rep0") for i in range(slots)]
 
     def use(self, label: str, after: bytes, coins: int) -> None:
         n = len(self.records[label].log)
@@ -1775,12 +1794,14 @@ class Rounds:
         coins = {"ledger": self.ledger.lines(), "main": self.main, "pins": self.pins, "segments": list(segments),
                  "session": self.s.files()}
         return {"coins": coins, "key": self.s.key.to_json(),
+                "order": [list(o) for o in self.order],
                 "uses": [{"after": u.after.hex(), "coins": u.coins, "label": u.label} for u in uses],
                 "window": self.ledger.window["root"]}
 
 
 ROUNDS_NAMES = ["honest", "chosen", "second-release", "requery", "unused-slot", "draw-elsewhere", "use-short",
-                "use-dropped", "segment-dropped", "other-after", "rounds-form", "request"]
+                "use-dropped", "segment-dropped", "other-after", "points-late", "draw-late", "unordered", "rounds-form",
+                "order-form", "request"]
 
 
 def rounds_case(rng: random.Random, name: str) -> Any:
@@ -1788,9 +1809,12 @@ def rounds_case(rng: random.Random, name: str) -> Any:
     `second-release`: a round's digest queried twice. `requery`: a round queried again on another digest (grinding)
     and the second answer used. `unused-slot`: the slot no use reads released a coin. `draw-elsewhere`: a draw coin
     released after another root. `use-short`, `use-dropped`: the uses miss a coin, or a use, the log shows released.
-    `segment-dropped`: one segment fewer than uses. `other-after`: a round's use and segment after another digest."""
+    `segment-dropped`: one segment fewer than uses. `other-after`: a round's use and segment after another digest.
+    `points-late`: slot 0's link points released after its rounds. `draw-late`: the draw released after every slot's
+    coins. `unordered`: `draw-late`'s log under an `order` that asks nothing, which accepts."""
     rng = _seeded(rng)
-    r = Rounds(rng, slots=rng.randint(1, 2))
+    late = {"points-late": "points", "draw-late": "draw", "unordered": "draw"}.get(name)
+    r = Rounds(rng, slots=rng.randint(1, 2), late=late)
     rounds_at = [k for k, u in enumerate(r.uses) if u.label.endswith("/s/rep0")]
     k = rng.choice(rounds_at)
     u = r.uses[k]
@@ -1830,6 +1854,10 @@ def rounds_case(rng: random.Random, name: str) -> Any:
             segments[k] = {**segments[k], "after": uses[k].after.hex()}
     j = r.request(uses, segments)
     match name:
+        case "unordered":
+            j["order"] = rng.choice([[], [["slot/0/session", "slot/0/s/rep0"]]])
+        case "order-form":
+            j["order"] = rng.choice([None, {}, [["draw"]], [["draw", 0]], [["a", "b", "c"]], ["draw"]])
         case "rounds-form":
             j["coins"] = rng.choice([_body(j["coins"], segments=DROP), {**j["coins"], "segments": {}}, None,
                                      {**j["coins"], "segment": j["coins"]["segments"]}])

@@ -342,6 +342,7 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
   let .arr ss := getD j "streams" | throw "record: streams is not a list"
   for s in ss do
     let .str name := getD s "stream" | throw "record: a stream's name is not a string"
+    if name == POINTS then throw s!"record: a stream is named {POINTS}, the link points' family"
     let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
     for r in rs do
       let .str sha := getD r "msg_sha512" | throw s!"record: a round of {name} has no msg_sha512"
@@ -363,7 +364,8 @@ def ROUNDS_NEED_CHALLENGER : String :=
 /-- Why the window's coins are not all the challenger's (`Challenger.roundCoins`), one release a use; none when they
 are. The uses are the draw's (its family, after the registration's digest, as many coins as its segment opens) and
 each session's (`sessionUses`, slot `i` the session's index), each with its segment: the draw's `coins.segment`, then
-each session's `coins`. Every coin a session's record holds must be the challenger's (`coinsMismatch`). -/
+each session's `coins`. The log must release the draw before any of a session's families, and a session's link
+points before its rounds (`order`). Every coin a session's record holds must be the challenger's (`coinsMismatch`). -/
 def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Option String :=
   match p.base.challenger, p.base.verifier.windowRoot with
   | some (key, label), some w =>
@@ -373,18 +375,22 @@ def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.B
       let mut uses : Array Challenger.Use := #[{ label, after := c.digest, coins := opened.size }]
       let mut wants : Array (Option (String × Array String)) := #[none]
       let mut segments : Array Json := #[draw]
+      let mut order : Array (String × String) := #[]
       for (s, i) in e.sessions.toList.zipIdx do
         let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
           | throw s!"session {s.name}'s record is not UTF-8"
         let us ← (sessionUses i record).mapError (s!"session {s.name}: {·}")
         unless s.coins.size == us.length do
           throw s!"session {s.name}: {s.coins.size} segments for its {us.length} uses of the challenger's coins"
+        let points := Hello.slotStream i POINTS
+        let fams := (us.map (·.1.label)).eraseDups
+        order := order ++ (fams.map (label, ·)).toArray ++ ((fams.filter (· != points)).map (points, ·)).toArray
         uses := uses ++ us.toArray.map (·.1)
         wants := wants ++ us.toArray.map fun (u, hs) => some (s!"{s.name}'s {u.label}", hs)
         segments := segments ++ s.coins
       let coins := Json.mkObj [("ledger", getD e.base.coins "ledger"), ("main", getD e.base.coins "main"),
         ("pins", getD e.base.coins "pins"), ("segments", Json.arr segments), ("session", getD e.base.coins "session")]
-      let ξs ← Challenger.roundCoins key w uses.toList coins
+      let ξs ← Challenger.roundCoins key w uses.toList order.toList coins
       for (ξ, want) in ξs.zip wants.toList do
         if let some (what, hs) := want then
           if let some why := coinsMismatch hs ξ then throw s!"session {what}: {why}"

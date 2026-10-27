@@ -252,6 +252,7 @@ REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex
            "a root_B digest not hex": _record(**{"link.root_b_sha512.a": "zz" * 64}),
            "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
            "rounds not a list": _record(**{"streams.1.rounds": None}),
+           "a stream named as the points' family": _record(**{"streams.1.stream": "session"}),
            "a round without its digest": _record(**{"streams.0.rounds.0": {"coins": []}}),
            "a short round digest": _record(**{"streams.0.rounds.1.msg_sha512": "02" * 63}),
            "an uppercase round digest": _record(**{"streams.0.rounds.1.msg_sha512": "AB" * 64}),

@@ -1,5 +1,6 @@
 import CoreProtocol.Live
 import SampledProofs.ChallengerDraw
+import SampledProofs.ChallengerRounds
 import SampledProofs.OneStage
 
 /-!
@@ -17,6 +18,12 @@ what that record shows, for every input: the coins the challenger device drew, o
   concatenation of the coins of that family that a session of the device released after `after`, a session the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
+* `RoundsByDevice`: what `SampledProofs.Challenger.roundCoins` reads for v2's uses (the window's draw, each session's
+  link points and rounds) is, use by use, what one session of the device released of the use's family after its root,
+  a session the device's own ledger opens withheld on the window; that session's log shows every family of its layout
+  released after exactly the uses' roots, coin for coin (one release a use: a second query is refused, not charged);
+  and its log releases each pair of `order` in order (the draw before every session's families, a session's link
+  points before its rounds). Or the fixed finder outputs a break from one use's record.
 
 **The device** (`Device`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs sessions
 (`Session`): it draws each coin and its salt by position, commits to the frame-v3 root over their live leaves
@@ -372,6 +379,46 @@ def DrawnByDeviceAt (read : ChallengerKey → String → String → ByteArray �
     read key w label after coins = .ok ξ →
       (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
         Break dev key label coins
+
+/-- The roots session `s`'s release log shows it received for family `label`, in order (`releasedRootsOf` on its own
+log); none when its layout or its log doesn't read. -/
+def Session.rootsOf (s : Session) (label : String) : List ByteArray :=
+  match s.commitment with
+  | none => []
+  | some c => match releasedRootsOf c s.log with
+    | .error _ => []
+    | .ok roots => ((roots.find? (·.1 == label)).map (·.2)).getD []
+
+/-- Session `s`'s log receives every root of family `a` before any of family `b` (`receivedOrder`). -/
+def Session.Before (s : Session) (a b : String) : Prop :=
+  ∀ i j, (receivedOrder s.log)[i]? = some a → (receivedOrder s.log)[j]? = some b → i < j
+
+/-- The record `roundCoins` reads use `i`'s coins from, as `drawCoins` reads it: `coins` with its `i`th segment as the
+segment. -/
+def useCoins (coins : Json) (i : Nat) : Json :=
+  Json.mkObj [("ledger", getD coins "ledger"), ("main", getD coins "main"), ("pins", getD coins "pins"),
+    ("segment", match getD coins "segments" with | .arr ss => ss.getD i .null | _ => .null),
+    ("session", getD coins "session")]
+
+/-- `RoundsByDevice` for the reader `read` in `roundCoins`' place. -/
+def RoundsByDeviceAt
+    (read : ChallengerKey → String → List Use → List (String × String) → Json → Flock.V (List ByteArray)) : Prop :=
+  ∀ (dev : Device) (key : ChallengerKey) (w : String) (us : List Use) (order : List (String × String)) (coins : Json)
+    (ξs : List ByteArray), read key w us order coins = .ok ξs →
+      (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧
+          (∀ i (u : Use), us[i]? = some u → ξs[i]? = some (s.released u.label u.after)) ∧
+          (∀ ℓ ∈ s.families.map (·.1), s.rootsOf ℓ = Use.roots us ℓ) ∧
+          ∀ ab ∈ order, s.Before ab.1 ab.2) ∨
+        ∃ i (u : Use), us[i]? = some u ∧ Break dev key u.label (useCoins coins i)
+
+/-- **Every coin a v2 window reads is its challenger's, one release a use, in the play's order.** For every challenger
+device, if `roundCoins` reads `ξs` for the uses `us` (each a family, the root its coins were released after, and how
+many) under the verifier's key `key` and window `w`, then one session of the device under `key`, which the device's own
+ledger opens withheld on `w`, released each use's coins (`ξs[i]` is what it released of `us[i]`'s family after its
+root), its log shows every family of its layout released after exactly the uses' roots, coin for coin and in order
+(`Use.roots`: no second release for one use, none no use reads), and its log receives every root of `a` before any of
+`b` for each pair of `order`; or the fixed finder outputs a break from some use's record (`useCoins`). -/
+def RoundsByDevice : Prop := RoundsByDeviceAt roundCoins
 
 /-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
 from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
