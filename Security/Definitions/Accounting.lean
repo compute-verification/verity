@@ -34,6 +34,7 @@ import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory
+import Definitions.Accounting.Onsite
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
 import Definitions.Accounting.Pouw
