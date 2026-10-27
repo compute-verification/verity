@@ -870,9 +870,8 @@ PORTS = {
 server = D.server_fixture(PORTS["constants"][0])
 
 
-#: What the recorded served windows of the current registration registered (served_zk runs r20261006-070934-e5f4,
-#: -081412-94b4, -195343-75a1, -202341-0806, -214314-06f0 and -225123-3136): run, the work item, the law's K′ and the
-#: entries root's domain, each at ε 1/2, δ 1/10, 3 grid bits and w = 4096
+#: What six recorded served windows of the current registration registered: a name for the window, the work item, the
+#: law's K′ and the entries root's domain, each at ε 1/2, δ 1/10, 3 grid bits and w = 4096
 SERVED = [
     ("e5f4", {"credited": 33554432, "credited_tiles": 8192, "level": 87, "n": 9216}, 4,
      "033a13db83abc925f5f87e5a3c586d3ec3d9cc7ae21245a150aaff0388ae3204d480216a98dbf8e7ea9d369a3b7eeb7e1d7283897e157c5a93c3d47fde9b27e1"),
@@ -905,7 +904,7 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
         D.replay(PORTS["side_domain"][0], {"window": domain, "side": side}, server)
 
 
-#: SERVE-REG's 8B window (Llama-3.1-8B int8, r20261021-082038-028f): 1,548,288 units, 16 of its 18 steps filled, so
+#: A served 8B window (Llama-3.1-8B int8): 1,548,288 units, 16 of its 18 steps filled, so
 #: u = 8/9 of them credited (1,376,256), every unit's work `tile_work`. At ε = 1/1000 and δ = 2^-40, its grid level
 #: (`bucket` of the credited tiles: 1,310,720 of n = 1,441,792, u = 10/11) has K′ = 30,485, and its units themselves
 #: K′ = 31,178. Each row: name, the credited units, the units, K′, and the ε `eps_at` gives at K′ in the credit's form
@@ -916,7 +915,7 @@ SERVE_REG = [("grid", 1_310_720, 1_441_792, 30_485, "4294913/4294967296", "19522
 
 @pytest.mark.parametrize("name,credited,n,k,eps,at_w", SERVE_REG, ids=[s[0] for s in SERVE_REG])
 def test_eps_at_serve_reg(name: str, credited: int, n: int, k: int, eps: str, at_w: str, server) -> None:
-    """Lean and Python give SERVE-REG's 8B window its K′ at ε = 0.1% and δ = 2^-40 in the credit's form
+    """Lean and Python give the served 8B window its K′ at ε = 0.1% and δ = 2^-40 in the credit's form
     `eps_at(K, δ, C, W, 1)`, and invert it to an ε at most 0.1%, one grid point below which K′ exceeds K; taking C = W
     instead reports ε too small by W/C."""
     tw, delta, grid = 4096, [1, 1 << 40], Fraction(1, 1 << Wd.EPS_BITS)

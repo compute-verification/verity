@@ -13,7 +13,7 @@ def _pouw_roots() -> list[Any]:
     v4: v3, then three `PouwOrBit` over its 4 admit bits and a `PouwMask32` of each of its 8 receipt words by their OR), and
     J10-R's `PouwH1Tile_v5` and `PouwH1Tile_v6`, v1 and v3 with seed_c and σ_R from one `PouwCallSeeds` and each of the 12
     noise blocks' counter a `PouwAdd64` of its ``blocks`` base. They
-    grow linearly in lanes and in KS. None where `circuit.segment` (E2E-120) is not on the tree, which is where `PouwH1Tile`
+    grow linearly in lanes and in KS. None where `circuit.segment` is not on the tree, which is where `PouwH1Tile`
     is registered. `PouwU129`, the one-stream recombinations, the wrap pieces, the peel pieces, `PouwOrBit` and `PouwMask32`
     are catalog roots (primitives and static-free composites). Then `TemplateInstances_v1` of `PouwH1Tile_v1` at N = 2
     (`population_program`), a window's program over the pinned tile: each instance's salt a coin, its position a position

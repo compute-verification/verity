@@ -1,4 +1,4 @@
-"""`circuit.h1tile` registers `eps1-sm120-h1fx1` only ``if SG is not None`` (``SG`` is #2417's `circuit.segment`), so on a
+"""`circuit.h1tile` registers `eps1-sm120-h1fx1` only ``if SG is not None`` (``SG`` is `circuit.segment`), so on a
 tree without segment the scheme is quietly absent.  That guard must not fail silently: once `circuit.segment` imports, the
 one scheme has to be in `compile.SCHEMES`.
 

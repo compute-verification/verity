@@ -544,7 +544,7 @@ _SAMPLE = [1.0 if _COLS.random() < 0.275 else 0.5 for _ in range(4096)]
 
 
 def spike_row(i: int, k: int = 1024, s: float = 8.9, top: float | None = None) -> list[int]:
-    """The assessor's base-split rows (fp4-base-split-break.md): every 8th position at ±1 (ρ = 1), 14 spikes per block at
+    """The base-split rows: every 8th position at ±1 (ρ = 1), 14 spikes per block at
     s·ρ off ρ's positions, signed by a row sign times a block sign.  `top` puts one entry in the last block (screened)
     that sets α so the spikes' block max centres UE4M3's byte 384: every scale then sits at one byte."""
     rng = random.Random(i)
@@ -933,7 +933,7 @@ NAN_BIT7_SPECIALS = (
 @pytest.mark.parametrize("row", NAN_BIT7_SPECIALS, ids=lambda r: f"{r[0]:08X}")
 def test_nan_accumulator_specials_read_their_scales_as_the_hardware(row):
     """The decode's 28-row specials table: a NaN accumulator whose scale bytes set bit 7.  Read as sm_120 reads them
-    (low 7 bits: `hw_scales`, and the pinned model's own decode since GPU 4's replay, r20260930-161935-83a8), the bytes
+    (low 7 bits: `hw_scales`, and the pinned model's own decode), the bytes
     are valid scales, so the vector is outside the model only through its accumulator (the step raises, Lean's `none`;
     the card writes 0x7FFFFFFF).  D-SB keeps such bytes off every formed side."""
     from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4 as atom
@@ -1244,7 +1244,7 @@ def test_replay_rejects(tmp_path):
 def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_path):
     """The replay's prove declares R1's rows as the honest prover does (`clear_work.declare` on the transcript): A row 5,
     the spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the
-    verifier accepts.  Credited, as prove declared before R1 (r20261001-134930-22d2's m64-n512-k2048 unit, B row 386), it
+    verifier accepts.  Credited, as prove declared before R1 (an m64-n512-k2048 unit's B row 386), it
     rejects.  prove maps R1 row by row over its workers, and two workers give the one worker's transcript."""
     s = V.scheme("nvfp4", True)
     rows_a = V.rows("work-life", "A", 20, K) + [F.bf16_row([0] * K)] * 12
