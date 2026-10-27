@@ -1631,16 +1631,17 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
     entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
     path = {"missing": ["P.gone"], "reached": 40,
-            "implemented_by": [{"name": "P.fast", "module": "P.Defs", "by": "P.fastImpl"}],
-            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray"}],
+            "implemented_by": [{"name": "P.fast", "module": "P.Defs", "by": "P.fastImpl", "path": ["P.verify", "P.fast"]}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude", "path": ["P.verify", "P.fast", "Nat.add"]},
+                       {"name": "ByteArray.push", "module": "Init.Data.ByteArray", "path": ["P.verify", "ByteArray.push"]}],
             "hash": [{"name": "P.Sha512.hash", "module": "P.Hash", "path": ["P.verify", "P.tag", "P.Sha512.hash"]}]}
     rule = {"entries": ["P.verify", "P.gone"], "stop": ["P.key"], "hash": "P.Sha512", "allow": ["Nat.add", "module:Init.Data"]}
     fails = A.verifier_failures(rule, path)
     assert fails == [
         "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
-        "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
-        "if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing DM shows "
-        "it), else take it off the path",
+        "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, by P.verify -> P.fast: compiled code "
+        "no proof sees; if it belongs there, run `check.py --update`, which lists it under `verifier.allow` (the landing DM "
+        "shows it), else take it off the path",
         "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
         "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
     assert A.verifier_failures(None, path) == []
@@ -1659,8 +1660,8 @@ def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
     rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Array.foldlM", "Nat.add"]}
     assert A.verifier_failures(rule, path) == [
         "verifier: ByteArray.push (@[extern], in Init.Data.ByteArray.Basic) is on the path from P.verify: compiled code no "
-        "proof sees; if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing "
-        "DM shows it), else take it off the path"]
+        "proof sees; if it belongs there, run `check.py --update`, which lists it under `verifier.allow` (the landing DM "
+        "shows it), else take it off the path"]
     assert A.verifier_failures({**rule, "allow": [*rule["allow"], "ByteArray.push", "UInt64.add"]}, path) == [
         "verifier: `verifier.allow` lists UInt64.add, which admits nothing on the path from P.verify; run `check.py --update`"]
     assert A.verifier_failures({**rule, "allow": ["module:Init"]}, path) == []
@@ -1675,6 +1676,69 @@ def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
     assert notes == ["verifier: allowed ByteArray.push (@[extern], in Init.Data.ByteArray.Basic): compiled code no proof "
                      "sees, now on the verifier's path"]
     assert A.statement_changes(notes) == notes
+
+
+def test_the_verifiers_path_also_starts_from_each_executables_main():
+    """The walk starts from the `main` of each executable the package builds as well as from `entries`, so compiled code
+    that only a binary's `main` reaches (a `Task` no entry reaches) fails as the entries' does, naming the executable and
+    the path. What one executable may run is its own: `--update` lists it under that executable in `allow_in`, which
+    admits nothing on another's walk, so a `Task` the firewall runs doesn't let one into the verifier unseen; `allow`
+    stays what the entries reach, and the review says where the walk reached each addition from. An executable whose
+    `main` the walk could not read fails, with `--update` too, and keeps its list."""
+    unwalked = [{"module": "PRows", "why": "is not built (no `.olean` on the search path; `check.py --build` builds it)"}]
+    path = {"missing": [], "reached": 3, "hash": [], "csimp": [], "implemented_by": [],
+            "mains": [{"module": "PTool", "reached": 7}, {"module": "PVerify", "reached": 9}], "unwalked": unwalked,
+            "executables": {"PRows": "p-rows", "PTool": "p-tool", "PVerify": "p-verify"},
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude", "path": ["P.verify", "P.step", "Nat.add"]},
+                       {"name": "Task.spawn", "module": "Init.Core", "main": "PTool", "path": ["main", "P.par", "Task.spawn"]},
+                       {"name": "Nat.add", "module": "Init.Prelude", "main": "PVerify",
+                        "path": ["main", "P.verify", "P.step", "Nat.add"]},
+                       {"name": "Task.spawn", "module": "Init.Core", "main": "PVerify",
+                        "path": ["main", "P.fold", "P.par", "Task.spawn"]}]}
+    rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Nat.add"],
+            "allow_in": {"p-rows": ["IO.println"], "p-tool": ["Task.spawn"]}}
+    rows = ("verifier: PRows, the root of the p-rows executable, is not built (no `.olean` on the search path; `check.py "
+            "--build` builds it), so the walk can't cover the code its `main` runs")
+    assert A.verifier_failures(rule, path) == [
+        rows,
+        "verifier: Task.spawn (@[extern], in Init.Core) is on the path from PVerify's main (the p-verify executable), by "
+        "main -> P.fold -> P.par -> Task.spawn: compiled code no proof sees; if it belongs there, run `check.py --update`, "
+        "which lists it under the p-verify executable's list in `verifier.allow_in` (the landing DM shows it), else take "
+        "it off the path"]
+    f = facts(); f["verifier"] = path
+    fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
+    assert fails == [rows] and pol["verifier"] == {**rule, "allow_in": {
+        "p-rows": ["IO.println"], "p-tool": ["Task.spawn"], "p-verify": ["Task.spawn"]}}
+    walked = {**path, "unwalked": []}
+    assert A.verifier_failures({**pol["verifier"], "allow_in": {k: v for k, v in pol["verifier"]["allow_in"].items()
+                                                                 if k != "p-rows"}}, walked) == []
+    assert A.verifier_failures(pol["verifier"], walked) == [
+        "verifier: `verifier.allow_in` lists IO.println for the p-rows executable, which admits nothing its `main` reaches "
+        "that `verifier.allow` doesn't; run `check.py --update`"]
+    f["verifier"] = walked
+    assert A.judge({**POLICY, "verifier": pol["verifier"]}, f, FILES, update=True)[1]["verifier"]["allow_in"] == {
+        "p-tool": ["Task.spawn"], "p-verify": ["Task.spawn"]}
+    stale = {**rule, "allow": ["Nat.add", "Task.spawn"], "allow_in": {"p-gone": [], "p-verify": ["Nat.add"]}}
+    assert A.verifier_failures(stale, walked) == [
+        "verifier: `verifier.allow_in` has a list for p-gone, which is not an executable of the package (a `lean_exe` of "
+        "its `lakefile.toml`); run `check.py --update`",
+        "verifier: `verifier.allow` lists Task.spawn, which admits nothing on the path from P.verify; run `check.py --update`",
+        "verifier: `verifier.allow_in` lists Nat.add for the p-verify executable, which admits nothing its `main` reaches "
+        "that `verifier.allow` doesn't; run `check.py --update`"]
+    notes = A.review({"verifier": rule}, {"verifier": pol["verifier"]}, {"pins": {}, "verifier": walked}, {})
+    assert notes == ["verifier: allowed Task.spawn in the p-verify executable (@[extern], in Init.Core; from PVerify's main "
+                     "(the p-verify executable), by main -> P.fold -> P.par -> Task.spawn): compiled code no proof sees, now "
+                     "on the path its `main` runs"]
+    assert A.statement_changes(notes) == notes
+
+
+def test_the_verifier_walks_from_the_root_of_each_lean_exe_the_lakefile_lists(tmp_path):
+    """`executables`: each `lean_exe` of `lakefile.toml` by its root module (`root`, Lake's default its name), whose `main`
+    the verifier's walk starts from; a package without a `lakefile.toml` has none."""
+    (tmp_path / "lakefile.toml").write_text('name = "p"\n\n[[lean_lib]]\nname = "P"\n\n[[lean_exe]]\nname = "p-verify"\n'
+                                            'root = "PVerify"\n\n[[lean_exe]]\nname = "Tool"\n')
+    assert A.executables(tmp_path) == {"PVerify": "p-verify", "Tool": "Tool"}
+    assert A.executables(tmp_path / "none") == {}
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():

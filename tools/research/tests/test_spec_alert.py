@@ -127,6 +127,21 @@ def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
     assert spec._tally(["compiled", "compiled", "new"]) == "guarantees: 1 new; verifier: 2 allowed"
 
 
+def test_compiled_code_newly_allowed_in_one_executable_is_shown_on_one_line_per_executable():
+    """`verifier.allow_in` lists, by executable, the compiled code its `main` may reach past `verifier.allow`: the entries
+    added to one executable's list are shown on one line, each counted in the tally; one already listed for that executable
+    is not, while the same name in another executable's list is."""
+    base = _doc({"P.t": _g("P.t : A", H1)}) | {"verifier": {"entries": ["P.verify"], "allow": ["Nat.add"],
+                                                             "allow_in": {"p-tool": ["Task.spawn"]}}}
+    more = base | {"verifier": {"entries": ["P.verify"], "allow": ["Nat.add"],
+                                "allow_in": {"p-tool": ["IO.asTask", "Task.spawn"], "p-verify": ["IO.println", "Task.spawn"]}}}
+    assert spec.changes(base, more) == [
+        "• compiled code allowed in the `p-tool` executable, which no proof sees: `IO.asTask`",
+        "• compiled code allowed in the `p-verify` executable, which no proof sees: `IO.println`, `Task.spawn`"]
+    assert [k for _, k, _ in spec._across({"x/lean-audit.json": base}, {"x/lean-audit.json": more})] == ["compiled"] * 3
+    assert spec.changes(more, base) == [] and spec.changes(more, more) == []
+
+
 def _repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()

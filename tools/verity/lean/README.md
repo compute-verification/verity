@@ -81,11 +81,19 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
-- with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
-  and they reach the `hash` namespace only through `stop` (`verifier_failures`). `allow` is a record: `--update` writes
-  each such constant on the path into it by name, so the review and the landing DM show one added, and a name that admits
-  nothing on the path fails; a `module:M` entry, which admits every constant of the modules under `M`, is kept as
-  written (Flock's lock lists names only). The walk follows definitions' values,
+- with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside
+  `allow`, nothing the `main` of an executable the package builds (each `lean_exe` of its `lakefile.toml`) reaches is
+  outside both `allow` and that executable's list in `allow_in`, and the entries reach the `hash` namespace only through
+  `stop` (`verifier_failures`). A failure names the root that reaches the constant and the path from it. A `main`'s walk
+  expands everything, `stop` included, so it covers the code the binary runs, which the entries alone may not; what
+  `allow_in` admits for one executable admits nothing in another, so a `Task` another binary runs can't enter the
+  verifier's binary unseen. An executable's root that the audit doesn't import (exempt: two roots that each declare
+  `main` can't share one environment) is read from its `.olean` files as data, and one that isn't built, declares no
+  `main` or imports a module outside the audit fails; `--build` builds each root. `allow` and `allow_in` are records:
+  `--update` writes each such constant into them by name (into `allow` what the entries reach, into an executable's
+  `allow_in` list what its `main` reaches past `allow`), so the review (with where the walk reached it from) and the
+  landing DM show one added, and a name that admits nothing fails; a `module:M` entry, which admits every constant of the
+  modules under `M`, is kept as written (Flock's lock lists names only). The walk follows definitions' values,
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
   is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its

@@ -201,6 +201,17 @@
   "policy": {"verifier": {"entries": ["Control.f"], "allow": ["module:Init"]}},
   "fails": "verifier: Control.g (@[implemented_by], in Control.Bad) is on the path from Control.f"
  },
+ "verifier_main": {
+  "write": {"Control/Par.lean": "namespace Control\n\n/-- Evaluated in a `Task`: compiled code that only the executable's `main` reaches. -/\ndef par (n : Nat) : Nat := (Task.spawn fun _ => n + 1).get\n\nend Control\n",
+            "ControlMain.lean": "import Control.Par\n\ndef main : IO Unit := if Control.par 3 = 4 then pure () else pure ()\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Par"],
+              "lakefile.toml": ["defaultTargets = [\"Control\"]\n", "defaultTargets = [\"Control\", \"control-main\"]\n\n[[lean_exe]]\nname = \"control-main\"\nroot = \"ControlMain\"\n"]},
+  "policy": {"exempt": {"Scratch": "a scratch file, built by nobody", "RunOk": "the controls' test, which `runs` runs",
+                        "ControlMain": "the executable's root, which the verifier's walk reads from its `.olean` files"},
+             "verifier": {"entries": ["Control.double"], "allow": ["module:Init.Prelude"]}},
+  "fails": "verifier: Task.spawn (@[extern], in Init.Core) is on the path from ControlMain's main (the control-main executable), by main -> Control.par -> Task.spawn",
+  "not": ["verifier: ControlMain", "verifier: Nat."]
+ },
  "claim_fails_not_negated": {
   "replace": {"Control/Thms.lean": ["Small_fails : ∃ n, ¬ Small n := ⟨10, by unfold Small; omega⟩",
                                     "Small_fails : ∃ n, Small n := ⟨3, by unfold Small; omega⟩"]},

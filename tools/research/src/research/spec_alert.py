@@ -5,8 +5,8 @@ The spec is what each package's `lean-audit.json` records: every guarantee's sta
 hash), every definition the statements read (its hash, under `reads`), every named assumption no `reads` record holds
 (its `digest` under `assumptions`, of it and the definitions it reads: one that gains a digest is shown as recorded), what
 the shape rule exempts (`shape.frozen`:
-an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
-entry added there is shown). Between the main the push replaced and the one it
+an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`, and
+by executable `verifier.allow_in`: an entry added there is shown). Between the main the push replaced and the one it
 pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
 across every record that changed, not record by record: a guarantee or a definition that moved from one package's record
 to another's under its name is no change, nor is a guarantee renamed with the same type hash, one that only prints
@@ -93,6 +93,13 @@ def _allowed(doc: dict) -> list[str]:
     return [x for x in a if isinstance(x, str)] if isinstance(a, list) else []
 
 
+def _allowed_in(doc: dict) -> dict[str, list[str]]:
+    """{executable: its list}: the record's `verifier.allow_in`, the compiled code no proof sees that one executable's
+    `main` may reach past `verifier.allow`."""
+    a = (doc.get("verifier") or {}).get("allow_in") or {}
+    return {k: [x for x in v if isinstance(x, str)] for k, v in a.items() if isinstance(v, list)} if isinstance(a, dict) else {}
+
+
 def _signature(rec: dict) -> str:
     lines = rec.get("signature") or ["(no signature recorded)"]
     lines = [lines] if isinstance(lines, str) else list(lines)
@@ -118,7 +125,8 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     The kinds are `changed`, `removed`, `definition`, `assumption` (an assumption's digest changed under its name),
     `recorded` (an assumption listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
-    `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
+    `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`, or to an executable's
+    list in `verifier.allow_in`, those shown on one line per executable) and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
     another package's record under its name, counted in that package's tally. A guarantee under another name with its type
     hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's or an
@@ -170,6 +178,13 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     va = {x for d in olds.values() for x in _allowed(d)}
     out += [(_package(p), "compiled", f"• compiled code allowed on the verifier's path, which no proof sees: `{x}`")
             for p, d in news.items() for x in _allowed(d) if x not in va]
+    ia = {(e, x) for d in olds.values() for e, xs in _allowed_in(d).items() for x in xs}
+    for p, d in news.items():
+        for e, xs in sorted(_allowed_in(d).items()):
+            if added := [x for x in xs if (e, x) not in ia]:
+                out.append((_package(p), "compiled", f"• compiled code allowed in the `{e}` executable, which no proof "
+                            f"sees: {', '.join(f'`{x}`' for x in added)}"))
+                out += [(_package(p), "compiled", "")] * (len(added) - 1)
     out += [(b[n][0], "new", f"• new guarantee `{n}`\n{_signature(r)}")
             for n, r in sorted(came.items()) if r.get("type_hash") not in renamed]
     out += [(b[n][0], "moved", "") for n in sorted(set(a) & set(b)) if a[n][0] != b[n][0] and not _restated(a[n][1], b[n][1])]
