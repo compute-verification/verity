@@ -36,6 +36,7 @@ whose soundness `Properties.Attest.PeriodSigned` states), and the verifier reads
 
 from __future__ import annotations
 
+import copy
 import secrets
 import threading
 from collections.abc import Callable, Mapping, Sequence
@@ -78,6 +79,23 @@ class Entry:
     digest: bytes
     record: bytes
 
+    @classmethod
+    def of(cls, key_id: bytes, attachment: bytes, link: str, direction: Direction, window: int,
+           digest: bytes) -> Entry:
+        """The entry of ``digest`` certified on a link-window, its record rebuilt from the public fields under the lower
+        key's identifier ``key_id`` in the attachment: what a reader that holds the fields checks (`refusal`)."""
+        return cls(link, direction, window, bytes(digest),
+                   certificate_message(key_id, attachment, link, direction, window, digest))
+
+    def to_json(self) -> dict:
+        return {"link": self.link, "direction": self.direction.value, "window": self.window,
+                "digest": self.digest.hex(), "record": self.record.hex()}
+
+    @classmethod
+    def from_json(cls, d: dict) -> Entry:
+        return cls(d["link"], Direction(d["direction"]), d["window"], bytes.fromhex(d["digest"]),
+                   bytes.fromhex(d["record"]))
+
 
 @dataclass(frozen=True, slots=True)
 class PeriodRecord:
@@ -111,6 +129,11 @@ class Liveness:
     signature: bytes
     entries: tuple[Entry, ...]
 
+    def to_json(self, link: str) -> dict:
+        """The public line of link ``link``'s link-window: its place and its signature, no entries."""
+        return {"link": link, "window": self.window, "period": self.period, "block": self.block,
+                "signature": self.signature.hex()}
+
 
 class _Records:
     """The `certificate.Signer` that `PeriodIssuer` runs its `Issuer` on: it signs nothing, and keeps the message it was
@@ -135,7 +158,9 @@ class PeriodIssuer:
     link-windows ``first``, ``first + 1``, … of ``attachment`` on ``link``, in certification periods of ``windows``
     link-windows, under the party key ``key``. Each record's and each clock's salt is fresh bytes of ``coins``, as
     `Issuer`'s are. On an `lms.PartyKey` it first records the attachment as started on the lower key's leaf state, and
-    raises `SignerRefused` when the state has started it already."""
+    raises `SignerRefused` when the state has started it already. A record may name a link other than ``link`` (the
+    warden's fails record, ``<link>-fails``, is of the warden's link-window): it binds the link it names, and is a
+    record of this link's period."""
 
     key: PartyKey
     attachment: bytes
@@ -160,12 +185,24 @@ class PeriodIssuer:
                     state.start(bytes(self.attachment))
             except lms.StateError as e:
                 raise SignerRefused(str(e)) from None
+        self._fresh()
+
+    def _fresh(self) -> None:
         self._signer = _Records(bytes(self.key.lower[:16]), bytes(self.attachment))
         self._issuer = Issuer(self._signer, bytes(self.attachment), coins=self.coins)
         self._pending: dict[int, list[Entry]] = {}
         self._period: attest.Period | None = None
         self._last = self.first - 1
         self._lock = threading.Lock()
+
+    def on(self, link: str) -> PeriodIssuer:
+        """A period issuer of the same key, attachment and periods on another link, whose periods and liveness records
+        are its own (the warden's load on its uplink beside its link): it shares this issuer's start of the attachment,
+        which a second `PeriodIssuer` would be refused."""
+        other = copy.copy(self)
+        other.link, other.closed, other.refused = link, [], []
+        other._fresh()
+        return other
 
     @property
     def session(self) -> bytes:

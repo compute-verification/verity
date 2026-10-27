@@ -429,21 +429,25 @@ def _layout(params: WardenParams, window: int) -> dict[str, int]:
             "first_bucket": window * params.window}
 
 
-def registration(head: CellsHead, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
-    """The public record a unit's registered port reads: the head, the rows' format and order, and the certificate."""
+def registration(head: CellsHead, certificate: Certificate | None, params: WardenParams) -> dict[str, Any]:
+    """The public record a unit's registered port reads: the head, the rows' format and order, and the certificate; on
+    device-attest (``certificate`` None) no certificate, the head's digest a record of the certifier's period
+    (`period_root`)."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
             "rows": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
             "row_schema": SCHEMA, "domain": head.domain.hex(), "wiring": head.wiring.hex(), "root": head.root.hex(),
-            "layout": _layout(params, head.window),
-            "certificate": {"key": certificate.key_id.hex(), "digest": certificate.digest.hex(),
-                            "signature": certificate.signature.hex()}}
+            "layout": _layout(params, head.window)} | ({} if certificate is None else {
+                "certificate": {"key": certificate.key_id.hex(), "digest": certificate.digest.hex(),
+                                "signature": certificate.signature.hex()}})
 
 
-def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
+def check_registration(doc: Mapping[str, Any], key: PublicKey | None, session: bytes, params: WardenParams, link: str,
                        direction: Direction, window: int) -> tuple[CellsHead, CommitmentDomain]:
     """The verifier's read of a registration for the link-window it expects, under the warden's key and session and the
-    schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails."""
+    schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails. With ``key``
+    None (device-attest) the registration holds no certificate, and the caller checks the head's digest against the
+    certifier's period (`period_root.refusal`)."""
     B, S, T = params.cell_bytes, params.grid.allocation, rows_of(params)
     dom = domain(params, session, link, direction, window)
     want = {"format": REGISTRATION, "value": value_name(link, direction, window), "link": link,
@@ -453,12 +457,14 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     for k, v in want.items():
         if doc.get(k) != v:
             raise ValueError(f"the registration's {k} is {doc.get(k)!r}, and the schedule's {v!r}")
-    read = {"wiring", "root", "certificate"}
+    read = {"wiring", "root"} | ({"certificate"} if key is not None else set())
     if set(doc) != set(want) | read:
         raise ValueError(f"a registration holds the keys {sorted(set(want) | read)} and no other")
     try:
         head = CellsHead(link, direction, window, params.digest, B, S, T, bytes.fromhex(doc["wiring"]), dom.domain_id,
                          bytes.fromhex(doc["root"]))
+        if key is None:
+            return head, dom
         c = doc["certificate"]
         cert = Certificate(bytes.fromhex(c["key"]), link, direction, window, bytes.fromhex(c["digest"]),
                            bytes.fromhex(c["signature"]))

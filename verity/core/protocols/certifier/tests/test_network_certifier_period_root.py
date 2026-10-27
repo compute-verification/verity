@@ -5,6 +5,7 @@ keys are the deployed scheme (N = 64, W = 1) on trees of 2^4 leaves."""
 import dataclasses
 import hashlib
 import itertools
+import json
 from fractions import Fraction
 
 import pytest
@@ -13,7 +14,7 @@ from verity.core import attest
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, Direction, Issuer, SignerRefused,
                                                          certificate_digest, certificate_message, clock_commitment)
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill
-from verity.core.protocols.certifier.period_root import PARTY, PeriodIssuer, refusal
+from verity.core.protocols.certifier.period_root import PARTY, Entry, PeriodIssuer, refusal
 from verity.core.protocols.certifier.schedule import ClockSync
 from verity.ml.crypto import lms
 
@@ -210,6 +211,26 @@ def test_an_attachment_is_started_once_on_the_party_key(device, key):
     issuer = PeriodIssuer(key, OTHER_ATTACHMENT, LINK, M, coins=coins())
     certify(issuer, 0)
     assert issuer.live(0) is not None
+
+
+def test_an_issuer_on_another_link_shares_the_attachments_start_and_keeps_periods_of_its_own(device, key):
+    """`PeriodIssuer.on`: the warden's load on its uplink beside the warden's link in one attachment, which a second
+    issuer would be refused (above). Its records and liveness records are its link's period's, and no other link's; an
+    entry rebuilds from its public fields (`Entry.of`), and entries and liveness records read back from their JSON."""
+    issuer = PeriodIssuer(key, ATTACHMENT, LINK, M, coins=coins())
+    uplink = issuer.on("s0/uplink")
+    head = uplink.sign("s0/uplink", INGRESS, 0, hashlib.sha512(b"a load head").digest())
+    live = uplink.live(0)
+    [closed] = uplink.close()
+    assert (closed.link, closed.period, closed.records) == ("s0/uplink", 0, (head.record,))
+    assert check(device, closed, [live], link="s0/uplink") is None
+    assert check(device, closed, [live]).startswith("another period's")
+    certify(issuer, 0)
+    assert issuer.live(0).block == 0 and issuer.closed == [] and uplink.closed == [closed]
+    assert Entry.of(key.key.I, ATTACHMENT, head.link, head.direction, head.window, head.digest) == head
+    assert Entry.from_json(json.loads(json.dumps(head.to_json()))) == head
+    assert live.to_json("s0/uplink") == {"link": "s0/uplink", "window": 0, "period": 0, "block": 0,
+                                         "signature": live.signature.hex()}
 
 
 def test_a_period_issuer_is_one_attachments_of_one_period_length():

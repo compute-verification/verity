@@ -246,21 +246,25 @@ def response_rows(responses: Sequence[bytes], slots: int, generated: int = GENER
     return _byte_rows("response", responses, slots, generated)
 
 
-def registration(head: TransferHead, certificate: Certificate) -> dict[str, Any]:
-    """The public record of a transfer value: its head, its rows' format, and the certificate."""
+def registration(head: TransferHead, certificate: Certificate | None) -> dict[str, Any]:
+    """The public record of a transfer value: its head, its rows' format, and the certificate; on device-attest
+    (``certificate`` None) no certificate, the head's digest a record of the certifier's period (`period_root`)."""
     return {"format": REGISTRATION, "link": head.link, "direction": head.direction.value, "window": head.window,
             "kind": head.kind, "value": head.value, "program": head.program.hex(), "words": head.words, "rows": head.rows,
-            "word_bits": head.word_bits, "row_schema": head.schema, "domain": head.domain.hex(), "root": head.root.hex(),
-            "certificate": {"key": certificate.key_id.hex(), "digest": certificate.digest.hex(),
-                            "signature": certificate.signature.hex()}}
+            "word_bits": head.word_bits, "row_schema": head.schema, "domain": head.domain.hex(),
+            "root": head.root.hex()} | ({} if certificate is None else {
+                "certificate": {"key": certificate.key_id.hex(), "digest": certificate.digest.hex(),
+                                "signature": certificate.signature.hex()}})
 
 
-def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, direction: Direction, window: int,
+def check_registration(doc: Any, key: PublicKey | None, session: bytes, *, link: str, direction: Direction, window: int,
                        kind: str, value: str, program: str, words: int, rows: int, word_bits: int = WORD_BITS,
                        schema: str = SCHEMA) -> tuple[TransferHead, CommitmentDomain]:
     """The verifier's read of a transfer registration for the transfer it expects (its link-window, kind, value, the
     circuit's program digest and the value's shape and row format, all from its own record), under the network
-    certifier's key and session: the head and the domain the verifier derived, or ValueError naming what fails."""
+    certifier's key and session: the head and the domain the verifier derived, or ValueError naming what fails. With
+    ``key`` None (device-attest) the registration holds no certificate, and the caller checks the head's digest against
+    the certifier's period (`period_root.refusal`)."""
     _kind(kind, direction)
     _format(word_bits, schema)
     dom = domain(program, value, words, rows, word_bits)
@@ -272,13 +276,16 @@ def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, d
     for k, v in want.items():
         if doc.get(k) != v or type(doc.get(k)) is not type(v):
             raise ValueError(f"the transfer registration's {k} is {doc.get(k)!r}, and the verifier's {v!r}")
-    if set(doc) != set(want) | {"root", "certificate"}:
-        raise ValueError(f"a transfer registration holds the keys {sorted(set(want) | {'root', 'certificate'})} and no other")
+    read = {"root"} | ({"certificate"} if key is not None else set())
+    if set(doc) != set(want) | read:
+        raise ValueError(f"a transfer registration holds the keys {sorted(set(want) | read)} and no other")
     try:
         if not (isinstance(doc["root"], str) and _HEX64.fullmatch(doc["root"])):
             raise ValueError(f"its root is lowercase hex of 64 bytes, not {doc['root']!r}")
         head = TransferHead(link, direction, window, kind, value, bytes.fromhex(program), words, rows, dom.domain_id,
                             bytes.fromhex(doc["root"]), word_bits, schema)
+        if key is None:
+            return head, dom
         c = doc["certificate"]
         if not isinstance(c, Mapping) or set(c) != {"key", "digest", "signature"}:
             raise ValueError("its certificate is {key, digest, signature}")
