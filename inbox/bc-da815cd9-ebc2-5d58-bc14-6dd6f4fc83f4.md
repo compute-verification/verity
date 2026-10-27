@@ -58,3 +58,6 @@ CANON-B's `RecordDrawn` (`SampledCanonDrawAt.lean`, b0f93542d5 on `cursor/soundn
 - `units-identity`: the public file's `units.indices` is the identity.
 - `proved-units`: the evidence's `proved_units` equal the units the record's draw names. Check whether v1's checks already give this; if so, write only the lemma.
 Mirror each refusal in Python and add difftest cases. Check that honest a5 `--v2` still passes, and say so if a check refuses an honest run. Post the lemma names on PRF-199 for CANON-B.
+
+## 21:35Z
+Resend your waiting runs to vy-nebius-cpu-6 or cpu-2 (briefs/common.md, "New slots"): r20261027-203036-87d8, -203036-b2d5, -205040-5817 and -204505-8c33 (vy-nebius-1), and -202840-d3b2 (cpu-1).
