@@ -146,8 +146,8 @@ transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`: `Accept
 the sampled-proofs run passes the registration's population (`Bridge.RunPopOk`), and the claims
 relation fails, at files and a draw in `Bridge.KsScoped` the bound is `SampledKSLiveV3`'s, and outside them the event
 has probability 0. It has none of V3's hypotheses `I.tags.typed = false`, `Built D.unroll.unit`, `pub.tables = none`,
-`scopeOkH D.unroll = true`, `kd % nTab I = 0` and `TagsOkZHJ I`. `SampledKSLiveV3` implies it
-(`sampledKSLiveV4_of`). -/
+`scopeOkH D.unroll = true`, `kd % nTab I = 0` and `TagsOkZHJ I`. Its knowledge finders' budgets are V3's, `2(t' + v)`
+and `t' + v`. `SampledKSLiveV3` implies it (`sampledKSLiveV4_of`). -/
 def SampledKSLiveV4 : Prop :=
   ∀ (n : ℕ) (Reg : Type) (I : Inputs)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
@@ -170,7 +170,8 @@ def SampledKSLiveV4 : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (qF qS : ℝ)
+    -- one opening's verification, in SHA-512 evaluations
+    (v : ℝ)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     if hs : Bridge.KsScoped I D pub kd then
@@ -197,17 +198,19 @@ def SampledKSLiveV4 : Prop :=
       let Cd := Bridge.commitDep Cc rows D.unroll n roots
       -- the circuit's constants, public
       let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hs.built n g
-      -- cr/sha-512 for the knowledge finders of each table the prover's session runs
-      (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
-        (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+      -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
+      -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
+      (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+        (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
       -- ecr/sha-512 for the prover's link finders
-      LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+      FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
+        k Rw M t' →
       prob (fun o => (Bridge.LiveAcceptsScoped I o ∧ Bridge.RunPopOk desc qr n) ∧
           ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
             (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
           (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
         ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
-          ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+          ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +
           ENNReal.ofReal ((∑ p : vb.Pos,
               (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
             (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
@@ -219,13 +222,13 @@ def SampledKSLiveV4 : Prop :=
 `KsScoped`'s six; outside them no outcome the prover reaches is accepted (`Bridge.ksScoped_of_accepts`). -/
 theorem sampledKSLiveV4_of (h : SampledKSLiveV3) : SampledKSLiveV4 := by
   intro n Reg I D hD pub hpub hn desc qr kd hkd dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr
-    t' ht' K₀ hK₀ τ qF qS q
+    t' ht' K₀ hK₀ τ v q
   split
   · next hs =>
     intro L P vb σ Xr δ Cc rows roots Cd κ hT hL
     exact (prob_mono (fun o ho => ⟨⟨ho.1.1.ks, ho.1.2⟩, ho.2⟩) _ τ).trans
       (h n Reg I hs.typed D hD hs.built pub hpub hs.tables hs.scope hn desc qr kd hkd hs.div dj S₀ d₀ y₀ wr dg N Ω Lb
-        src hA3 hs.tags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q hT hL)
+        src hA3 hs.tags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v q hT hL)
   · next hs =>
     refine nonpos_iff_eq_zero.1 (((FlockSoundness.Game.prob_mono_outcome (q := fun _ => False) _ τ
       fun o ho he => hs ?_).trans (prob_false _ τ).le))
