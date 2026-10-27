@@ -192,7 +192,7 @@ CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm
 
 
 def _or_empty(package: str, n: int) -> dict:
-    """typed_records' count of `.get(k) or []` reads in one package (#4525)"""
+    """typed_records' count of `.get(k) or []` reads in one package"""
     return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
 
 
@@ -202,12 +202,12 @@ def _schema(file: str) -> dict:
 
 
 def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
-    """clean-engine's #4545 moves `.get(k) or []` reads from check/ to commit/ to break their cycle: commit's count rises
-    53 -> 87 as check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    """A move of `.get(k) or []` reads from check/ to commit/, to break their cycle, raises commit's count 53 -> 87 as
+    check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
     gates = _schema("verity_vllm/check/gates.py")
     repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("#4545", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 87), gates)})
+    repo.commit("moves check's reads to commit", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 87), gates)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
     assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
@@ -447,8 +447,8 @@ def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, 
 
 
 def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypatch, tmp_path):
-    """ci's review of #4852: when git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own
-    cleanup raised on 3.12, past `main`'s `GitError`, and the gate exited 1 naming no failure."""
+    """When git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own cleanup raises
+    on 3.12, past `main`'s `GitError`: the gate still reaches its verdict, rather than exiting 1 naming no failure."""
     linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
                                                        P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
     run = subprocess.run
@@ -1040,7 +1040,7 @@ def _caught_up(listed: str, total: str, n: int) -> str:
 
 
 def test_a_counted_lint_s_list_catches_up_to_what_its_base_holds_and_no_further(silent_linted):
-    """A handler that landed with no entry (a PR on `next` before the lint did, CI-198) may be listed in any file, the list's
+    """A handler that landed with no entry (a PR on `next` before the lint did) may be listed in any file, the list's
     own or one the change edits; a count past what the base's lint finds there, or a site the lint doesn't count (an edit to
     the lint's module buys nothing), is growth."""
     u = {"file": "tools/u.py", "count": 1}
@@ -1126,9 +1126,9 @@ def callers_linted(repo) -> Repo:
 
 
 def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_is_refused_when_it_does_not(callers_linted):
-    """#5088's weights-tie, run only from benchmarks/prove_path/run.sh: the base's P16 lint, run on the change's tree, reads
-    the change's public table, and the gate checks each caller the table gains (a new command's, or one moved to another
-    file) as that lint finds a call."""
+    """A command run only from benchmarks/, as weights-tie is from benchmarks/prove_path/run.sh: the base's P16 lint, run on
+    the change's tree, reads the change's public table, and the gate checks each caller the table gains (a new command's, or
+    one moved to another file) as that lint finds a call."""
     callers_linted.commit("adds tie, run from benchmarks", {
         CLI: _cli("row", "tie"), G.CALLERS_LIST: _callers({**ROW, "tie": "benchmarks/tie/run.sh"}),
         "benchmarks/tie/run.sh": 'WT="$PY -m verity_vllm.pipeline.cli tie"\n$WT --x 1\n'})

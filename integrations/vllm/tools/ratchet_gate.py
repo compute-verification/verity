@@ -32,9 +32,8 @@ when:
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
   integration, where P16's suite doesn't look, or one given another caller, names a file that, in the change's tree, runs it
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
-  declaration and no ratchet counts it, but this one is checked, so a change may add one (the vLLM coordinator, 27 Oct
-  16:12Z: while the table was P16's code, which the gate runs as the base has it, no change could add a command run from
-  ``benchmarks/``); and
+  declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
+  the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
   In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
   base's, each allowlist there holding the top's entries for its slug (none for a deleted one), P16's the top's public
