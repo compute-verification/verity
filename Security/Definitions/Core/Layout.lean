@@ -198,13 +198,13 @@ def reached : List String :=
   (L.links.filter fun k => L.kind? k.ends.1 = some .challenger ∨ L.kind? k.ends.2 = some .challenger).flatMap
     fun k => [k.ends.1, k.ends.2]
 
-instance : DecidablePred L.Known := fun _ => by unfold Known; infer_instance
+instance instDecidablePredStringKnown : DecidablePred L.Known := fun _ => by unfold Known; infer_instance
 
-instance (k : Link) (a b : Kind) : Decidable (L.Joins k a b) := by unfold Joins; infer_instance
+instance instDecidableJoins (k : Link) (a b : Kind) : Decidable (L.Joins k a b) := by unfold Joins; infer_instance
 
-instance : DecidablePred L.Boundary := fun _ => by unfold Boundary; infer_instance
+instance instDecidablePredLinkBoundary : DecidablePred L.Boundary := fun _ => by unfold Boundary; infer_instance
 
-instance : DecidablePred L.Certified := fun _ => by unfold Certified; infer_instance
+instance instDecidablePredLinkCertified : DecidablePred L.Certified := fun _ => by unfold Certified; infer_instance
 
 end Layout
 
@@ -303,16 +303,16 @@ def Valid : Prop :=
   Follows head e ∧ Fresh D L e ∧ Refs L e ∧ Kinds L e ∧ Cards D A L e ∧ Capacity D L e ∧ Owners A e ∧
     Covered c L e ∧ Reached c L e
 
-instance : Decidable (Follows head e) := by unfold Follows; infer_instance
-instance : Decidable (Fresh D L e) := by unfold Fresh; infer_instance
-instance : Decidable (Refs L e) := by unfold Refs; infer_instance
-instance : Decidable (Kinds L e) := by unfold Kinds; infer_instance
-instance : Decidable (Cards D A L e) := by unfold Cards; infer_instance
-instance : Decidable (Capacity D L e) := by unfold Capacity; infer_instance
-instance : Decidable (Owners A e) := by unfold Owners; infer_instance
-instance : Decidable (Covered c L e) := by unfold Covered; infer_instance
-instance : Decidable (Reached c L e) := by unfold Reached; infer_instance
-instance : Decidable (Valid D A c L head e) := by unfold Valid; infer_instance
+instance instDecidableFollows : Decidable (Follows head e) := by unfold Follows; infer_instance
+instance instDecidableFresh : Decidable (Fresh D L e) := by unfold Fresh; infer_instance
+instance instDecidableRefs : Decidable (Refs L e) := by unfold Refs; infer_instance
+instance instDecidableKinds : Decidable (Kinds L e) := by unfold Kinds; infer_instance
+instance instDecidableCards : Decidable (Cards D A L e) := by unfold Cards; infer_instance
+instance instDecidableCapacity : Decidable (Capacity D L e) := by unfold Capacity; infer_instance
+instance instDecidableOwners : Decidable (Owners A e) := by unfold Owners; infer_instance
+instance instDecidableCovered : Decidable (Covered c L e) := by unfold Covered; infer_instance
+instance instDecidableReached : Decidable (Reached c L e) := by unfold Reached; infer_instance
+instance instDecidableValid : Decidable (Valid D A c L head e) := by unfold Valid; infer_instance
 
 /-- **The refusal**: the first check the entry fails, in `Valid`'s order, or `none` when it passes them all. -/
 def refusal : Option Refusal :=
@@ -333,7 +333,8 @@ end Entry
 def Valid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) : Prop :=
   ∀ i (h : i < log.length), log[i].Valid D A c (Layout.ofLog (log.take i)) (head D c (log.take i))
 
-instance (D : Digests) (A : Auditor) (c : Composite) (log : Registration) : Decidable (Valid D A c log) := by
+instance instDecidableValid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) :
+    Decidable (Valid D A c log) := by
   unfold Valid; infer_instance
 
 end Registration
