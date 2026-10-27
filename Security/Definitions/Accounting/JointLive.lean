@@ -160,12 +160,12 @@ structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : �
   /-- the read deadline, in ticks (T_read) -/
   readDeadline : ℕ
 
-/-- **Block `b`'s memory term** on the run `o` (`BlocksRun.MemoryTerm`'s, ASK-132): at each of its PoUS challenge
+/-- **Block `b`'s memory term at share `σ`** on the run `o` (`BlocksRun.MemoryTerm`'s): at each of its PoUS challenge
 times, the bits of its weights that its capacity account doesn't hold in device memory are at most
-`0.07 · U + S_chip + ∑_i cap_i · T_read`. -/
+`σ · U + S_chip + ∑_i cap_i · T_read`. -/
 def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {B : ℕ}
-    {C : Fin B → Verity.Circuit} {Cm O : Type} (s : BlocksLive d α B C Cm O) (b : Fin B) (o : O) : Prop :=
+    {C : Fin B → Verity.Circuit} {Cm O : Type} (s : BlocksLive d α B C Cm O) (σ : ℝ) (b : Fin B) (o : O) : Prop :=
   ∀ t ∈ s.chal b o, (s.weights b : ℝ) - (((s.block b).schedule o t).mem ((s.block b).acct .capacity) : ℝ) ≤
-    7 / 100 * s.weights b + d.chip + (∑ i, d.cap i * s.readDeadline : ℕ)
+    σ * s.weights b + d.chip + (∑ i, d.cap i * s.readDeadline : ℕ)
 
 end Accounting

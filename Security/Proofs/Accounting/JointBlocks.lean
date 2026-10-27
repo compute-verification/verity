@@ -1,15 +1,28 @@
 import Definitions.Accounting.Guarantees.JointBlocks
 import Proofs.Core.UnionBound
+import Proofs.Pous.Obligation
 
 /-!
 # Proof of the joint guarantee over a horizon of server-time blocks and the wipes between them
 
 The blocks' audits are a horizon of periods (`Pouw.union_bound_horizon_with`, each audit's guarantee over its own
 coordinate). The extra event is some wipe's survivor bound or some block's memory term failing, whose probability is at
-most `∑_b ε_wipe b + ∑_b δ_PoUS b` by a union bound over the blocks (`Pouw.Proofs.pr_exists_le_sum`).
+most `∑_b ε_wipe b + ∑_b δ_PoUS b` by a union bound over the blocks (`Pouw.Proofs.pr_exists_le_sum`). The demo's memory
+share is the one `Pous.Guarantees.ObligationDemo` proves (`demoMemoryShare_obligationDemo`).
 -/
 
 namespace Accounting.SecurityProofs
+
+/-- **The demo's memory share is PoUS's.** At the demo's store, `N = 1038·2^16` blocks on a device of
+`U = 139.64·2^33` bits, the bits of `U` above the state bound `S₀ = ⌊ρ·|C|⌋` are at most `demoMemoryShare · U`, the
+bound `Pous.Guarantees.ObligationDemo` proves. So the joint memory term at `Accounting.demoMemoryShare` is
+`ObligationDemo`'s, `undeclared ≤ 0.1163·U + S_chip + Σ cap·round`. -/
+theorem demoMemoryShare_obligationDemo (N : ℕ) [NeZero N] (hN : N = 1038 * 2 ^ 16) :
+    (13964 / 100 * 2 ^ 33 - (Pous.p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ : ℝ) ≤
+      demoMemoryShare * (13964 / 100 * 2 ^ 33) := by
+  obtain ⟨hS, hU, -⟩ := Pous.SecurityProofs.ObligationDemo N hN
+  rw [hS]
+  exact_mod_cast hU
 
 /-- Some event of a finite family holds with probability at most the sum of their bounds. -/
 theorem pr_exists_univ_le {β J : Type} [Fintype β] [Fintype J] (E : J → β → Prop) (η : J → ℝ)
@@ -19,7 +32,7 @@ theorem pr_exists_univ_le {β J : Type} [Fintype β] [Fintype J] (E : J → β �
 
 /-- **The joint guarantee over a horizon of server-time blocks** (`Accounting.Guarantees.JointHorizonBlocks`). -/
 theorem JointHorizonBlocks : Accounting.Guarantees.JointHorizonBlocks := by
-  intro ι α I _ _ _ _ Ω _ _ d C B s c p f δ εWipe δPous hS hW hM
+  intro ι α I _ _ _ _ Ω _ _ d C B s c p f σ δ εWipe δPous hS hW hM
   have hF := (Pouw.pr_or_le _ _).trans (add_le_add (pr_exists_univ_le _ εWipe hW) (pr_exists_univ_le _ δPous hM))
   refine (Pouw.pr_mono fun ξ h => ?_).trans
     ((Pouw.union_bound_horizon_with _ hF (fun b a => (s.block b).own a)

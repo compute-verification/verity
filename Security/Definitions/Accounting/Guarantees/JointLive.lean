@@ -71,26 +71,27 @@ suppose, over `G` at every strategy:
 * the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
   state survive beyond the committed carried state with probability at most `ε_wipe b`;
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
-  `0.07 · U + S_chip + c` with probability at most `δ_PoUS b`.
+  `σ_b · U + S_chip + c` (`σ_b` the share PoUS certifies for block `b`) with probability at most `δ_PoUS b`.
 
 Then at every strategy the probability that some block's accepted subprotocol's claim fails with no break, some
 accepted wipe's survivor bound fails, or some block's memory term fails while its PoUS accepted is at most
 $$\sum_b \sum_a \delta_{b,a} + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \delta_{\mathrm{PoUS},b}.$$
-The gap `JointHorizonBlocks` states (PRF-167, the state a block carries across a wipe) is unchanged. -/
+The gap `JointHorizonBlocks` states (the state a block carries across a wipe) is unchanged. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (Cm O : Type)
     (S : BlocksLive d α B C Cm O) (G : Verity.Game O) (c : Fin B → Certificates) (p : Price) (f : ℝ)
-    (δ : Fin B → Audit → ℝ) (εWipe δPous : Fin B → ℝ),
+    (σ : Fin B → ℝ) (δ : Fin B → Audit → ℝ) (εWipe δPous : Fin B → ℝ),
     (∀ b a, (S.block b).Sound G (c b) p a (δ b a)) →
     (∀ b (s : Verity.Game.Strategy G),
       Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives f o) G s ≤ ENNReal.ofReal (εWipe b)) →
     (∀ b (s : Verity.Game.Strategy G),
-      Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm b o) G s ≤ ENNReal.ofReal (δPous b)) →
+      Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) b o) G s ≤
+        ENNReal.ofReal (δPous b)) →
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o =>
           (∃ b a, (S.block b).accepts a o ∧ ¬ (S.block b).Holds (c b) p G s a o ∧ ¬ (S.block b).Break G s o) ∨
           (∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives f o) ∨
-          (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm b o)) G s ≤
+          (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) b o)) G s ≤
         ∑ b, ∑ a, ENNReal.ofReal (δ b a) + ∑ b, ENNReal.ofReal (εWipe b) + ∑ b, ENNReal.ofReal (δPous b)
 
 end Accounting.Guarantees

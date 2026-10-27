@@ -76,7 +76,7 @@ theorem JointHorizonBlocksAOfIntegrityBlock : Accounting.Guarantees.Bridge.Joint
 /-- **The joint guarantee over a horizon of server-time blocks, with every block's integrity leg from C-Flock's
 integrity audit of that block** (`Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock`). -/
 theorem JointHorizonBlocksOfIntegrityBlock : Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock := by
-  intro ι α I _ _ _ _ Ω _ _ d C B s S q δI hq hδ hqt hA3 R hT hL c p f δ εWipe δPous hcert hfin hS hW hM
+  intro ι α I _ _ _ _ Ω _ _ d C B s S q δI hq hδ hqt hA3 R hT hL c p f σ δ εWipe δPous hcert hfin hS hW hM
   let δ' : Fin B → Audit → ℝ := fun b a =>
     if a = .sampled then (ENNReal.ofReal δI + S.err b).toReal else δ b a
   have hS' : ∀ b a, (s.block b).Sound (c b) p a (δ' b a) := by
@@ -95,7 +95,7 @@ theorem JointHorizonBlocksOfIntegrityBlock : Accounting.Guarantees.Bridge.JointH
     refine congrArg₂ (· + ·) (by simp only [δ', ite_true])
       (Finset.sum_congr rfl fun a ha => ?_)
     simp only [δ', Finset.ne_of_mem_erase ha, ite_false]
-  refine (Accounting.SecurityProofs.JointHorizonBlocks ι α I Ω d C B s c p f δ' εWipe δPous hS' hW hM).trans_eq ?_
+  refine (Accounting.SecurityProofs.JointHorizonBlocks ι α I Ω d C B s c p f σ δ' εWipe δPous hS' hW hM).trans_eq ?_
   rw [Finset.sum_congr rfl fun b _ => hsum b]
 
 end Accounting.SecurityProofs.Bridge

@@ -28,7 +28,7 @@ theorem sum_univ_audit (g : Audit → ℝ) : ∑ a, g a = g .sampled + g .pouw +
 /-- **The joint guarantee over a horizon of server-time blocks, every leg from its protocol's own guarantee**
 (`Accounting.Guarantees.JointHorizonBlocksDeployed`). -/
 theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDeployed := by
-  intro ι α I _ _ _ _ Ω _ _ d C B s c p f εWipe δPous
+  intro ι α I _ _ _ _ Ω _ _ d C B s c p f σ εWipe δPous
     S q δI hq hδI hqt hA3 RI hT hL hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
     macs u bUnit help RW hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
@@ -56,7 +56,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
         (round b) (c b) p (RS b) (hdev b) (hS b)
     · exact Bridge.BandwidthOfAuditPerRunPeriod N bits h sB G k lam ι α d C I Ω (s.block b) (c b) p hN0 (RB b) (hQ b)
     · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hbc hδc hdec εks εbind εtap (herr b) (hbindN b) (htap b)
-  refine (JointHorizonBlocks ι α I Ω d C B s c p f δ εWipe δPous hδ hW hMem).trans_eq ?_
+  refine (JointHorizonBlocks ι α I Ω d C B s c p f σ δ εWipe δPous hδ hW hMem).trans_eq ?_
   simp only [sum_univ_audit]
   rfl
 

@@ -157,15 +157,16 @@ def JointHorizonBlocksOfIntegrityBlock : Prop :=
     (∀ b ξ t (τ : Strategy (S.W t).game), Flock.Guarantees.Period.Plays S.W S.T ((R b).strat ξ) t τ →
       LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    ∀ (c : Fin B → Certificates) (p : Price) (f : ℝ) (δ : Fin B → Accounting.Audit → ℝ) (εWipe δPous : Fin B → ℝ),
+    ∀ (c : Fin B → Certificates) (p : Price) (f : ℝ) (σ : Fin B → ℝ) (δ : Fin B → Accounting.Audit → ℝ)
+      (εWipe δPous : Fin B → ℝ),
     (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (s.block b).units) →
     (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
     (∀ b a, a ≠ .sampled → (s.block b).Sound (c b) p a (δ b a)) →
     (∀ b, Pouw.pr (fun ξ => (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ≤ εWipe b) →
-    (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ) ≤ δPous b) →
+    (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm (σ b) b ξ) ≤ δPous b) →
     Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
         (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
-        (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
+        (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm (σ b) b ξ)) ≤
       ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + ∑ a ∈ Finset.univ.erase .sampled, δ b a) +
         ∑ b, εWipe b + ∑ b, δPous b
 

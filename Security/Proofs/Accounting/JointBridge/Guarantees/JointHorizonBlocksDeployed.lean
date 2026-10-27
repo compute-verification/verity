@@ -92,7 +92,7 @@ carries across a wipe is outside the integrity bound (PRF-167). -/
 def JointHorizonBlocksDeployed : Prop :=
   ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (s : BlocksRun d α C Ω B)
-    (c : Fin B → Certificates) (p : Price) (f : ℝ) (εWipe δPous : Fin B → ℝ)
+    (c : Fin B → Certificates) (p : Price) (f : ℝ) (σ : Fin B → ℝ) (εWipe δPous : Fin B → ℝ)
     -- sampled proofs: C-Flock's integrity audit of each server-time block
     (S : Flock.Guarantees.ServerBlocks) (q δI : ℝ), 0 < q → 0 < δI →
     (∀ b : Fin B, ∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -207,10 +207,10 @@ def JointHorizonBlocksDeployed : Prop :=
       ((RN b).stmt ξ i)).Pr H ≤ εtap) →
     -- the wipes and the memory terms, as in `JointHorizonBlocks`
     (∀ b, Pouw.pr (fun ξ => (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ≤ εWipe b) →
-    (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ) ≤ δPous b) →
+    (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm (σ b) b ξ) ≤ δPous b) →
     Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
         (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
-        (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
+        (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm (σ b) b ξ)) ≤
       ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + (δs + n * (δbind + δks)) +
           ((Pous.Params.δ : ℝ) + Pous.Params.εMax.toReal) +
           ((((k - 1 : ℕ) : ℝ) / N) ^ sB + (sB : ℝ) / 2 ^ h +

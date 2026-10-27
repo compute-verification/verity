@@ -29,9 +29,10 @@ In the demo each `F w` is one of:
 * a wipe's survivor bound failing: the prover keeps more than the wipe's guarantee allows through its spot reads,
   `Pous.Guarantees.SecureErasureMeetsFamily` at the `N` the wipe's fill reaches, at `2^-128`;
 * a block's memory term failing: at one of the block's challenge times the undeclared memory exceeds
-  `0.07·U + S_chip + c`, except with `δ_PoUS` (Daniel's ASK-132).
+  `σ·U + S_chip + c`, `σ` the share PoUS certifies for the block's store (`0.1163` at the demo's,
+  `Accounting.demoMemoryShare`), except with `δ_PoUS`.
 
-The state a block carries across a wipe is outside the integrity bound (PRF-167): the sampled audit bounds a block's
+The state a block carries across a wipe is outside the integrity bound: the sampled audit bounds a block's
 wrong units, not what survives a wipe into the next block, which only the wipe's event bounds. -/
 def JointHorizonBlocksAbstract : Prop :=
   ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
