@@ -968,7 +968,7 @@ struct WRing {
   static constexpr int STAGES = V31_WG_STAGES, NCT = 384, CONS = V31_WG_NREG + (V31_WG_NREG - 40) / 2;
   static constexpr uint32_t A_BYTES = TILE * BK;
   static constexpr uint32_t stage_bytes(int nb) { return (1 + nb) * TILE * BK; }
-  static constexpr int SMEM = STAGES * stage_bytes(V31_WG_BN / TILE) + 32 * STAGES + 1024;
+  static constexpr int SMEM = STAGES * (1 + V31_WG_BN / TILE) * TILE * BK + 32 * STAGES + 1024;
   static_assert(CONS % 8 == 0 && CONS <= 256, "V31_WG_NREG: setmaxnreg's counts are multiples of 8, at most 256");
   static_assert(V31_WG_BN == 128 || V31_WG_BN == 256, "V31_WG_BN: 128 or 256");
 };
