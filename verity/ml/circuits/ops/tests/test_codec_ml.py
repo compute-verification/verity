@@ -1,5 +1,5 @@
 """A `GemmCoordinate_v2` program round-trips through the descriptor codec, including the on-demand `Const` family that
-`verity.ml.circuits.ops.prims` registers with `verity.ml.circuits.codec.register_lazy_family` (the IR itself knows no semantics package)."""
+`verity.ml.circuits.ops.prims` registers with `verity.ml.circuits.codec.register_lazy_family` (`verity.ml.circuits` itself knows no semantics package)."""
 from __future__ import annotations
 
 import json

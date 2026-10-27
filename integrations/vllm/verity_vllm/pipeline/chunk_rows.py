@@ -42,9 +42,8 @@ def reads(tp: Any) -> str:
     622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB, r20261025-072909-38b5; in slots, 314M nonzeros for
     8,473,952 ANDs, 37 an AND, k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives
     refused, r20261025-094406-c40b) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
-    five-split combine were proved, and the RMSNorm
-    rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros an AND inline) at their served shapes. A ``_v2``
-    body reads no table (its EX2 is gates), so it lowers flat either way."""
+    five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
+    an AND inline) at their served shapes. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
     from verity_vllm.pipeline import split_rows as SP
     from verity_vllm.query.program_view import spec_base, spec_statics
 

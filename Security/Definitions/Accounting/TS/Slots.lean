@@ -3,8 +3,8 @@ import Mathlib
 /-!
 # Slot writes, heads and a steered consumer (trusted)
 
-The counting objects of EPS1-TENSOR's T1 (note:20261017T0321Z-draft-eps1-tensor §3), EPS1-SPEC's Lemma 2 (§1.3) and
-SAMPLING's LIN-STEER (note:20261017T0608Z-draft-eps1-sampling):
+The counting objects of EPS1-TENSOR's T1 (§3), EPS1-SPEC's Lemma 2 (§1.3) and
+SAMPLING's LIN-STEER:
 
 * a tensor run's slot writes: an instruction of form `i` writes `w i` slots and holds its pipe `c i` cycles, and the
   family's best slots per pipe cycle is `ρ_T = max_i w i / c i` (`rhoT`);

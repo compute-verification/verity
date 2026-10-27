@@ -11,7 +11,7 @@ head-check units and the I/O tie's units all ride it.
       --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots]
 
 * **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
-  refuses typed and template statements until PRF-133), `UnitStager`'s rows and output rows, the prover's rows, the rows
+  refuses typed and template statements), `UnitStager`'s rows and output rows, the prover's rows, the rows
   the verifier derives itself (``held``: public inputs, opened by ``b || c`` to its own copy under the salts the prover
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
@@ -45,9 +45,8 @@ and the window circuit's units (`window_circuit`): an attention head's per-key-b
 (`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
 (`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
 
-Known limits: units flat or untyped staged (PRF-133); C-Flock's block at most 2^27 (split-K, #3467, past K = 5041);
-table-heavy units need lookup slots (#3416, #3478); tail lookup slots are the GPU prover's; prover worker threads may need
-a bigger stack (PRF-141).
+Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
+need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
 """
 from __future__ import annotations
 
@@ -639,9 +638,9 @@ STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l":
 WINDOW_ONLY = ("EmbeddingRead_v1",)
 #: the units `defs` sizes but never stages, and why: the stager lowers a unit whole through `ir_lower`, and these whole
 #: pass any node's memory
-UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower (#4227's "
-                                "heavy.json), and staging embedding-read:1b reached 430 GB before its OOM kill "
-                                "(r20261027-073957-e063): it needs cutting into Calls first"}
+UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower, and staging "
+                                "embedding-read:1b reached 430 GB before its out-of-memory kill: it needs cutting into Calls "
+                                "first"}
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
