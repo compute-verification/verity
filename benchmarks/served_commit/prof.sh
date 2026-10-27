@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One served_commit sweep with the measurement arms of prof_arm.py (ARMS, default stock + the NVTX-ranged noretain arm), under nsys
+# One served_commit sweep with the measurement arms of prof_arm.py (ARMS, default stock + the rows-sha512 arm; the
+# vllm-v1 arms refuse to run: arm.py), under nsys
 # when NSYS=1 (then nsys_summary.py over the last profiled run of each arm, or over every run with NSYS_EACH=1). Measurement only.
 # PIN_BUILD=<served-match's build.json>: every arm's process compiles into one fresh Inductor dir seeded with the Build of record's
 # autotune winners (`served-pin seed`, as ops/served_commit.sh), compile caches off, and the dir is checked against them after
@@ -15,7 +16,7 @@ if [ -n "${PIN_BUILD:-}" ]; then
   export TORCHINDUCTOR_CACHE_DIR="$OUT/inductor" VLLM_CACHE_ROOT="$OUT/vllm_cache" VERITY_INDUCTOR_DIR_PER_PROCESS=1 \
     VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_FX_GRAPH_CACHE=0 TORCHINDUCTOR_AUTOGRAD_CACHE=0
 fi
-ARMS=${ARMS:-stock,served-commit-prof}
+ARMS=${ARMS:-stock,served-commit-rows}
 mods=()
 for a in ${ARMS//,/ }; do
   case "$a" in
