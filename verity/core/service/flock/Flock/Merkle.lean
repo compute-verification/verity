@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §14: the proof's own Merkle trees, as a parameter. A scheme fixes the digest size (the width of every cap entry
+The proof's own Merkle trees, as a parameter. A scheme fixes the digest size (the width of every cap entry
 and sibling in the proof), the node hash, the leaf of an opened row, and the `merkle_hash` index the proof's `PcsParams`
 must carry. The recorded statements use unsalted SHA-256; the target statement uses SHA-512 on every commitment path.
 -/
@@ -67,7 +67,7 @@ def sibsOf (siblings : Array ByteArray) (w j : Nat) : List ByteArray := (sibling
 /-- The salts `n` openings carry. -/
 def saltCount (ms : MerkleScheme) (n : Nat) : Nat := if ms.saltBytes = 0 then 0 else n
 
-/-- §14: `rows` open to `cap` (depth `c`) at `positions` of a codeword of `2^d` rows, each of `lanes` elements, with
+/-- `rows` open to `cap` (depth `c`) at `positions` of a codeword of `2^d` rows, each of `lanes` elements, with
 `d − c` siblings per query and, for a salted scheme, one salt per query. -/
 def merkleCheck (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat) (rows : Array (Array F128))
     (siblings : Array ByteArray) (salts : Array ByteArray) (lanes : Nat) : V Unit :=

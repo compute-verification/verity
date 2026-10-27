@@ -49,7 +49,7 @@ instance instCharPGF256OfNatNat : CharP GF256 2 := (CharP.charP_iff_prime_eq_zer
 
 theorem charTwoK : CharP GF256 2 := inferInstance
 
-/-! ### Packing: bit `v` is the coefficient of `x^v` (§12.1) -/
+/-! ### Packing: bit `v` is the coefficient of `x^v` (`Flock.Opening`) -/
 
 /-- A GF128 element as its residue class. -/
 noncomputable def toA (a : GF128) : AdjoinRoot G := toAdj a.val
@@ -106,14 +106,14 @@ theorem unpack_add (a a' : GF128) : unpack (a + a') = unpack a + unpack a' := by
   funext v
   rw [unpack, val_add, F128.poly_add, coeff_add]; rfl
 
-/-! ### `K = F ⊕ F·u`: a K coin is two F limbs (§13.2) -/
+/-! ### `K = F ⊕ F·u`: a K coin is two F limbs (`Flock.Ligerito`) -/
 
 theorem ofLimbs_bijective : Function.Bijective fun w : GF128 × GF128 => embed w.1 + embed w.2 * u := by
   have h : (fun w : GF128 × GF128 => embed w.1 + embed w.2 * u) = fun w => f256Equiv.symm w :=
     funext fun w => (ofLimbs w.1.val w.2.val).symm
   rw [h]; exact f256Equiv.symm.bijective
 
-/-! ### Query positions: the low bits of `lo` are balanced (§13.5) -/
+/-! ### Query positions: the low bits of `lo` are balanced (`Flock.Ligerito`) -/
 
 /-- The low 64-bit word. -/
 def lo (w : GF128) : ℕ := (GF128.val w).lo.toNat
@@ -161,7 +161,7 @@ theorem lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
   apply Nat.div_eq_of_eq_mul_left (Nat.two_pow_pos b)
   rw [← pow_add, ← pow_add, show 64 - b + 64 + b = 128 by omega]
 
-/-! ### The Reed–Solomon domain points (§13.1) -/
+/-! ### The Reed–Solomon domain points (`Flock.Ligerito`) -/
 
 /-- `ω_q`: the element whose low word is `q`. -/
 def omega (q : ℕ) : GF128 := GF128.of ⟨q.toUInt64, 0⟩
@@ -175,7 +175,7 @@ theorem omega_injective : ∀ d ≤ 64, Set.InjOn omega {q | q < 2 ^ d} := by
   norm_num at hq64 hq64' this
   omega
 
-/-! ### The pinned zerocheck coordinates (§9.2) -/
+/-! ### The pinned zerocheck coordinates (`Flock.Piop`) -/
 
 /-- The seven pinned coordinates (the executable's `Flock.pinned`). -/
 def pinnedF (i : Fin 7) : GF128 := GF128.of (Flock.pinned[i.val]!)

@@ -1,8 +1,8 @@
-"""Registered reads (PROTOCOL.md §16.10, `verity/core/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (`Flock.HmRow`, `verity/core/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
-circuit (§16.13, the default `verity/flock-circuit`) composed for the `RegisteredRoPE` program and its `Q_template_instance`
+circuit (`HmOut`, the default `verity/flock-circuit`) composed for the `RegisteredRoPE` program and its `Q_template_instance`
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
 with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
 set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
@@ -296,7 +296,7 @@ def test_a_row_v1_port_is_refused_a_bit_row_registration(staged):
 
 
 def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):
-    """An output row (§16.13) is a registered port too: each instance's output row, committed under the registered row's
+    """An output row (`HmOut`) is a registered port too: each instance's output row, committed under the registered row's
     salt, opens the registered root at the position the verifier's reads file names for its unit."""
     code, out = _statement(staged, _stage_out(staged, "out-honest"), staged.dir / "own-out.json")
     assert code == 0, out
@@ -341,7 +341,7 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
-    """`verify` sets up every table's statement through the same check (§16.12): with two tables, table 1's drawn statement
+    """`verify` sets up every table's statement through the same check (`Stmt.setupTables`): with two tables, table 1's drawn statement
     (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes, so the
     verifier goes on to read the (empty) session's proofs, which it names by the tables it set up."""
     sess = staged.dir / "session"
@@ -365,7 +365,7 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
 
 @pytest.mark.parametrize("value", ["rec-top-L0", "rec-top-stacked-L0"])
 def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
-    """U4 (§16.10, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
+    """U4 (`Flock.HmRow`, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
     when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:
     `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
@@ -518,10 +518,10 @@ def rope(tmp_path_factory):
 def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
     honest session, proved by upstream over a registered statement, sets up under its own reads file, where it meets the
-    refusal of its form, a shared-row public file (§16.15), which only a statement that sets up meets, and is refused at setup
+    refusal of its form, a shared-row public file (`Flock.ProvedScope`), which only a statement that sets up meets, and is refused at setup
     under one that moves every position. Upstream's seed-injection build has no zk patch, so the session's plain files are
     upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under `--upstream-plain`
-    (§8.1)."""
+    (`Flock.Proof`)."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]

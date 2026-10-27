@@ -1,4 +1,4 @@
-"""Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session sampled by a law no soundness claim draws by (a bernoulli
+"""Draw laws (`Flock.ProvedScope`, D12): `verify` refuses a session sampled by a law no soundness claim draws by (a bernoulli
 sample, a work sample with or without a closure, a subset sample without `--zk` at public outputs) at setup, whatever flags it
 holds, and passes a stratified sample, and under `--zk` a subset sample, on to the session's checks. The statement's form is
 checked last, once every check has passed, and a session without a sample is refused after that. The sessions are the registered-reads set's honest
@@ -9,7 +9,7 @@ fails at S2: its Hello is the undrawn session's, and under `--zk` not a `--zk` s
 which the form check refuses, so the session as recorded, without a sample and without `--zk`, passes every check and meets
 that refusal. Upstream's seed-injection build proved it, with no zk patch, so its plain files are upstream's form, without
 the `zk_level0 = None` tag the deployed prover writes, and the run without `--zk` reads them under `--upstream-plain`
-(PROTOCOL.md §8.1). Each sample is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law
+(`Flock.Proof`). Each sample is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law
 check with a work sample."""
 from __future__ import annotations
 

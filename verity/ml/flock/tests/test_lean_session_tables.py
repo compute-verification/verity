@@ -1,7 +1,7 @@
-"""Sessions of several tables (PROTOCOL.md §16.12, #306's `--session-tables J`, N4): the Lean verifier builds each table's
+"""Sessions of several tables (`Stmt.setupTables`, #306's `--session-tables J`, N4): the Lean verifier builds each table's
 statement from its part of the session's draw (without one, of the population's units), never from anything in the record.
 The sessions are #306's live ones on RoPE, all accepted by its server, and none is `--zk`. Without `--plain-tables`, several
-tables without `--zk` are a form the one-table plain claim does not cover (§16.15), so the verifier refuses every session, for
+tables without `--zk` are a form the one-table plain claim does not cover (`Flock.ProvedScope`), so the verifier refuses every session, for
 that once every check has passed: a drawn one for its subset sample without `--zk` at setup first, and a sample it sets no
 statement up from keeps its setup's reason. Under `--plain-tables` (`flock_verify_sound`'s plain multi-table claim, at up to
 64 tables and a subset sample) with the verifier's own program (the RoPE Definition's, META's `program_sha512`), both drawn

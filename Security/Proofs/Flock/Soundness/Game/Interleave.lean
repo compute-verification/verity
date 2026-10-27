@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Game.Basic
 `interleave g₁ g₂` runs two interactions side by side, with the prover choosing at every step
 which one advances next, adaptively. This is how the two reps of a Flock table run on the live
 coin server: each rep is its own stream, the server draws a stream's coins when that stream's
-round arrives, and the prover may interleave the streams in any order (PROTOCOL.md §5.3, S15).
+round arrives, and the prover may interleave the streams in any order (`Flock.Record`, S15).
 The verifier accepts only if both interactions accept.
 
 `value_interleave_le` is the repetition theorem: against an optimal, unbounded prover, the

@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 # The inner proof file's bytes: `encodeProof`, and `TableSrc.Encodes`
 
 `encodeProof sh p` is the file the prover writes for the proof `p` at shape `sh`: `bincode 1.3` of the commitment and
-`R1csProofLigerito` (PROTOCOL.md §8), each `Vec` as its `u64` length then its elements, each `F128` as
+`R1csProofLigerito` (`Flock.Proof`), each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
 and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, then the zk patch's
 `zk_level0 = None` tag, as every deployed prover writes it: the verifier's `Flock.Wire.proofFile`, the one file

@@ -6,7 +6,7 @@ import Mathlib.Algebra.CharP.Defs
 /-!
 # One sumcheck round
 
-The spec encodes a round's quadratic in three ways (PROTOCOL.md §9.2 Z6, §10 L3, §13.2). In each,
+The spec encodes a round's quadratic in three ways (`Flock.Piop`'s Z6 and L3, `Flock.Ligerito`). In each,
 the verifier derives a quadratic from the prover's message and the running claim, and the new
 claim is its value at the fresh coin. If the running claim is false, the derived quadratic
 differs from the true one whatever the prover sends, so the new claim is false except with

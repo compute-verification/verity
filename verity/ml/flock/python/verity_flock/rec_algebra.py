@@ -1,5 +1,5 @@
-"""V*'s algebra: the inner verifier's algebraic checks on one rep of a Flock session (`verifier/PROTOCOL.md` §9.2, §10, §12,
-§13), at the session's coins, as residuals over F that are all zero iff the checks hold.
+"""V*'s algebra: the inner verifier's algebraic checks on one rep of a Flock session (`Flock.Piop`, `Flock.Opening`,
+`Flock.Ligerito`), at the session's coins, as residuals over F that are all zero iff the checks hold.
 
 With the coins values, every check is linear in the rep's messages with coefficients that are functions of the coins and the
 public statement, except two products of messages (zerocheck's ``v_A · v_B``, lincheck's ``comb · z_partial``). So each check is
@@ -55,7 +55,7 @@ __all__ = ["ACC_NAMES", "Claim", "CoinSource", "claim_names", "H_ROUND", "Lin", 
            "verifier_rows", "witness"]
 
 
-# --- §15: the fast100 schedule ------------------------------------------------------------------------------------------------
+# --- `Flock.Schedule`: the fast100 schedule ------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Level:
@@ -189,7 +189,7 @@ class _Reader:
 
 def decode(sh: Shape, data: bytes) -> Proof:
     """The proof container (`decodeProof`'s reader, `decodeRead`), on the prover's side: bytes after it (the zk patch's
-    `zk_level0` tag, §8.1) aren't read here. An opening-only shape's is a rep's with an empty zerocheck and lincheck (``flock-circuit stacked``)."""
+    `zk_level0` tag, `Flock.Proof`) aren't read here. An opening-only shape's is a rep's with an empty zerocheck and lincheck (``flock-circuit stacked``)."""
     s = sh.sched
     R = len(s.levels) - 1
     r = _Reader(data)
@@ -261,7 +261,7 @@ def rep_rounds(record: dict, stream: str) -> list[list[int]]:
 
 
 class CoinSource:
-    """The rep's coins in the order the verifier draws them (§6.2: a draw of n coins is one round of n; none is no round, so
+    """The rep's coins in the order the verifier draws them (`Flock.Transcript`: a draw of n coins is one round of n; none is no round, so
     a recorded round of no coins, z_partial's in a holo session's `verity_flock.rec_live.holo_rounds`, is skipped)."""
 
     def __init__(self, rounds: Sequence[Sequence[int]]):
@@ -388,7 +388,7 @@ def _upk(a: int) -> tuple[int, int]:
 
 
 def basis_for_claim(gamma_rpp_z: tuple, q: list[tuple[int, int]], e: int) -> list[tuple[int, int]]:
-    """§12.4's branching program for one switched claim (`basisForClaim`): ``b̂_k(q ‖ bits(y))`` for ``y < 2^e``."""
+    """`Flock.Opening`'s branching program for one switched claim (`basisForClaim`): ``b̂_k(q ‖ bits(y))`` for ``y < 2^e``."""
     _, rpp, z = gamma_rpp_z
     eq_r = eq_table(rpp)
     s = [1] + [0] * 127
@@ -428,7 +428,7 @@ def _cff(c: tuple[int, int]) -> tuple[int, int]:
 
 
 def final_weights(sch: Schedule, init_ch: list, levels: list[list], oods: list, conss: list, sws: list) -> list[tuple[int, int]]:
-    """§13.6's ``res[y]`` for ``y < 2^ext``: the batched basis at the folded point, the OOD terms and the consistency terms,
+    """`Flock.Ligerito`'s ``res[y]`` for ``y < 2^ext``: the batched basis at the folded point, the OOD terms and the consistency terms,
     all public (the coins and the claims' points)."""
     n, ext = sch.n, sch.ext
     orig = list(init_ch) + [c for l in levels for c in l[1:]]
@@ -491,7 +491,7 @@ def final_weights(sch: Schedule, init_ch: list, levels: list[list], oods: list, 
 
 
 def positions(lv: Level, coins: Sequence[int]) -> list[int]:
-    """§13.5: stratified positions; reads the low ``d - c`` bits of each coin's low word."""
+    """`Flock.Ligerito`: stratified positions; reads the low ``d - c`` bits of each coin's low word."""
     out, j = [], 0
     for c in lv.strata:
         for s in range(1 << c):
@@ -580,7 +580,7 @@ def kadd(*xs: tuple) -> tuple:
 
 @dataclass(frozen=True)
 class Claim:
-    """A claim handed to the opening (§11): value, 64 skip weights, m - 6 coordinates. An extra claim's are public."""
+    """A claim handed to the opening (`Flock.Piop`): value, 64 skip weights, m - 6 coordinates. An extra claim's are public."""
 
     value: Any
     skip: tuple[int, ...]
@@ -656,7 +656,7 @@ def run(sh: Shape, coins: CoinSource, M: Messages, extras: Sequence[Claim], fold
         raise ValueError("a holo shape's messages need h")
     folded = M.comb if not sh.holo or M.symbolic else [c ^ x for c, x in zip(M.comb, M.h, strict=True)]
     info = {}
-    # §9.2 zerocheck
+    # `Flock.Piop` zerocheck
     coins.vec(6)
     r = PINNED + coins.vec(m - 13)
     z = coins.one()
@@ -689,7 +689,7 @@ def run(sh: Shape, coins: CoinSource, M: Messages, extras: Sequence[Claim], fold
                 r_in=ts[::-1])
     if fold_only:
         return out, info
-    # §11, §12.2-§12.3 ring switching
+    # `Flock.Piop`, `Flock.Opening` ring switching
     claims = [Claim(w, tuple(skip_weights(r_prime)), tuple(ts[::-1] + rho[k_log - 6:m - 6])),
               Claim(pc, tuple(skip_weights(z)), tuple(r))] + [Claim(cst(e.value), e.skip, e.x) for e in extras]
     info["claims"] = claims
@@ -713,7 +713,7 @@ def _opening(sh: Shape, coins: CoinSource, M: Messages, claims: list[Claim], out
     T = dot(gamma, betas)
     t_in = T if M.t_atom is None else M.t_atom
     info.update(T=T, gamma=gamma)
-    # §13 Ligerito
+    # `Flock.Ligerito` Ligerito
     R = len(sch.levels) - 1
     msgs, oods = iter(M.msgs), iter(M.ood)
     st: dict[str, Any] = {"s": (t_in, 0), "q": None}

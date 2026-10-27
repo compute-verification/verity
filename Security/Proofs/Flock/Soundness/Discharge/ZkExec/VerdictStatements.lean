@@ -140,7 +140,7 @@ def ZkInnerAccepts : Prop :=
       [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩, ⟨Fin (T.np + T.nP) → 𝔽, vecOf (T.np + T.nP) pr.y⟩]
       (consumed t.rounds t.k t'.k) v → v.1 (innerOpensOf pr)
 
-/-- **A `--zk` rep's result accepts** (live PROTOCOL.md §1–§7, PROTOCOL.md §14). At the `--zk` schedule under
+/-- **A `--zk` rep's result accepts** (live PROTOCOL.md §1–§7, `Flock.Merkle`). At the `--zk` schedule under
 `hm96-sha512/v1`, at a compiled table whose dimensions (`ZkTabSeam`), pads and inner code (`ZkTabLay`) are the
 executable's, whose statement's fold the setup's circuit fold realizes and whose extra claims at the link points are
 the executable's, on a decoded proof and well-formed rounds, when a run of rep `r`'s transcript program consumes every
@@ -169,7 +169,7 @@ def ZkRepAccepts : Prop :=
       ZkLink.OpensOKZ H512 enc512 leaf512 (ZkLink.width₀ T) cap₀ r.val pend.lig os.rows os.salts
 
 /-- **The compiled `--zk` table accepts at the two reps' results, under `hm96-sha512/v1`** (live PROTOCOL.md §1–§7,
-PROTOCOL.md §5, §14, S16). When both reps of table `i` pass `Zk.verifyRep` with one cap, at a compiled table whose
+`Flock.Record`, `Flock.Merkle`, S16). When both reps of table `i` pass `Zk.verifyRep` with one cap, at a compiled table whose
 dimensions, pads and inner code are the executable's, whose statement's fold the setup's circuit fold realizes and
 whose extra claims at the link points `pts` are the session's, each rep's stream and proof file decode, the two reps'
 compiled games, played with their proof files' messages and their streams' coins, have results, and at every pair of

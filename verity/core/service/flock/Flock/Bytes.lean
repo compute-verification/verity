@@ -1,5 +1,5 @@
 /-
-Byte encodings and a total reader over `ByteArray` (PROTOCOL.md §1, §8.1).
+Byte encodings and a total reader over `ByteArray` (`Flock.Verify`, `Flock.Proof`).
 -/
 import Flock.Field
 
@@ -45,7 +45,7 @@ def unhex (s : String) : V ByteArray := do
     | _, _ => throw "not lowercase hex"
   return b
 
-/-- Record hex of an F128: `{hi:016x}{lo:016x}` (§5.1). -/
+/-- Record hex of an F128: `{hi:016x}{lo:016x}` (`Flock.RecordText`). -/
 def f128OfHex (s : String) : V F128 := do
   let b ← unhex s
   if b.size != 16 then throw "an F128 is 32 hex digits"
@@ -119,7 +119,7 @@ def bytes (n : Nat) : M ByteArray := do
   set { r with pos := r.pos + n }
   return r.data.extract r.pos (r.pos + n)
 
-/-- A `Vec<T>` whose length must be `want` (checked before any element is read, §8.1). -/
+/-- A `Vec<T>` whose length must be `want` (checked before any element is read, `Flock.Proof`). -/
 def vecExact {α} (want : Nat) (elem : M α) (what : String) : M (Array α) := do
   let n ← u64
   if n.toNat != want then throw s!"{what}: length {n}, want {want}"
@@ -138,7 +138,7 @@ def vecAny {α} (minSize : Nat) (elem : M α) (what : String) : M (Array α) := 
     out := out.push (← elem)
   return out
 
-/-- `m` read from the first byte of `bytes`, refused unless it stops after the last (§8.1): a file is the one encoding of
+/-- `m` read from the first byte of `bytes`, refused unless it stops after the last (`Flock.Proof`): a file is the one encoding of
 what it decodes to, so every byte the record's digest binds (S17) is one the verifier reads. -/
 def runAll {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=
   match m.run ⟨bytes, 0⟩ with

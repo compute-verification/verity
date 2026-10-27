@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`, PR #131) over the
+`Flock.HmRow`: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`, PR #131) over the
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`, PR #120) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 

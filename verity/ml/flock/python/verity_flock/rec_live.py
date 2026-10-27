@@ -62,7 +62,7 @@ population's in order with the sample in its header, so its Σ is the drawn stat
 population's. ``verify`` holds the sample to its own law (``--stratified N --program --partition``): a session without one
 is refused (D12), and the soundness headline at the full draw has no sampling term.
 
-A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
+A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (`Flock.Transcript`). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
 top), a proof-of-work nonce (8 bytes, `0`, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
 statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is

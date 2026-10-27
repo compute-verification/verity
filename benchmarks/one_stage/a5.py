@@ -84,7 +84,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 * **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
-  table, verifier PROTOCOL §16.15). Each prover runs behind the ZK server's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
+  table, `Flock.ProvedScope`). Each prover runs behind the ZK server's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
   PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
   `--partition` and `--program` (units derived).
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
@@ -138,7 +138,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
-* **Wiring across statements** (`commit.wiring`, verifier PROTOCOL §16.13 ``Wiring``): a w13 coordinate's K-chunks
+* **Wiring across statements** (`commit.wiring`, `HmOut` ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
   that row's salt. Lean's links hold only inside a statement, so after the sample each sampled proof block's wires are held on the public
   bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
@@ -181,7 +181,7 @@ from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # no
 from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
-#: what a plain audit covers until proofs' multi-table coverage lands (verifier PROTOCOL §16.15, `ProvedScope.drawLaw`)
+#: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.drawLaw`)
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
                "shared rows wait for proofs' PRs A, B and C")

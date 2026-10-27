@@ -29,7 +29,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## The clear replay -/
 
-/-- The starting claim `Pcomb(z) + Pc(z)` (§9.2), as `Zk.replay` forms it on the clear values. -/
+/-- The starting claim `Pcomb(z) + Pc(z)` (`Flock.Piop`), as `Zk.replay` forms it on the clear values. -/
 def claim0 (zc : ZerocheckProof) (z : F128) : F128 :=
   dot (combWeights z) ((Array.range 64).map fun i => zc.round1ab[i]! + zc.round1c[i]!) +
     dot (lagrange nodesL den6Inv z) zc.round1c

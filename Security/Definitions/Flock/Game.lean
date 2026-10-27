@@ -15,7 +15,7 @@ A `Game α` is the verifier's side of a public-coin interaction, written as a pr
 * `coin C k`: the verifier draws `c : C` uniformly at random, independently of everything before,
   and the interaction continues as `k c`. This is a live coin: it is drawn after every earlier
   message is fixed (in verity, the coin server draws it from the operating system after recording
-  the round's digest, PROTOCOL.md §7.1);
+  the round's digest, `Tags.coinScheme`);
 * `ret a`: the interaction ends with the verifier's output `a`.
 
 Messages may be anything, including whole oracles (the committed tables of the interactive oracle

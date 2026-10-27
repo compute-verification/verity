@@ -935,7 +935,7 @@ def bcOf (l : Nat) (row salt : String) : String := Id.run do
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
-    generates (`Flock.HmNets`, PROTOCOL.md §16.10). A composed RoPE circuit is accepted; one AND row changed in either
+    generates (`Flock.HmNets`, `Flock.HmRow`). A composed RoPE circuit is accepted; one AND row changed in either
     section is refused, naming the row."""
     pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
@@ -970,7 +970,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path):
     """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
-    PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
+    `Flock.HmRow`), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
     before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
     for its bits, in an address space of 8 GiB, far below the net's size. Renamed at the heights `RecOpen_v4` builds, 0
     to 32 (`aux` one row at 0), it is refused for its bits against `max(1, ⌈H/2⌉)` rows of `aux`; at 33, for its height."""

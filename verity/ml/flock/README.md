@@ -35,8 +35,8 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   `live/PROTOCOL.md` §10.4 says what each side computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
 - `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
-- `verifier/`: the verifier of record: the specification `PROTOCOL.md`, the executable Lean verifier (`../../core/service/flock/`,
-  `flock-verify`) and the agreement scripts; its Lean proofs are under `Security/Proofs/Flock/` (`Level3/`,
+- `verifier/`: what runs the verifier of record, the Lean verifier (`../../core/service/flock/`, `flock-verify`, whose
+  definitions are the specification), and the agreement scripts; its Lean proofs are under `Security/Proofs/Flock/` (`Level3/`,
   `Soundness/`). See its README.
 
 Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements

@@ -2,14 +2,14 @@ import Mathlib.Data.List.Basic
 import Mathlib.Tactic.DeriveFintype
 
 /-!
-# The `fast100` schedule (PROTOCOL.md §15)
+# The `fast100` schedule (`Flock.Schedule`)
 
 The verifier of record pins Flock's `fast100` Ligerito profile and runs it twice on one root.
-This file is the schedule table of §15 as data, for every `m` the profile supports (22 to 35).
+This file is the schedule table of `Flock.Schedule` as data, for every `m` the profile supports (22 to 35).
 Level `ℓ` of a schedule is a Reed–Solomon code of rate `2^-logInvRate` on messages of
 `2^logCols` columns (codeword length `2^(logCols + logInvRate)`), interleaved over `2^lanes`
 rows; the verifier makes `queries` consistency queries on it. The analysis slack is
-`η = 1/200` at every level (Johnson regime); the §15 value `0.02` is a diagnostic the verifier never
+`η = 1/200` at every level (Johnson regime); the `Flock.Schedule` value `0.02` is a diagnostic the verifier never
 reads.
 -/
 
@@ -46,7 +46,7 @@ structure Schedule where
   ext : ℕ
   deriving DecidableEq, Repr, Inhabited
 
-/-- Queries per level of `fast100` (PROTOCOL.md §15, first table), by rate exponent. -/
+/-- Queries per level of `fast100` (`Flock.Schedule`, first table), by rate exponent. -/
 def queriesAt : ℕ → ℕ
   | 1 => 218
   | 2 => 106
@@ -57,7 +57,7 @@ def queriesAt : ℕ → ℕ
   | 7 => 32
   | _ => 0
 
-/-- Build a schedule from the second table of §15: `k0`, the columns per level and `ext`.
+/-- Build a schedule from the second table of `Flock.Schedule`: `k0`, the columns per level and `ext`.
 Level `ℓ` has rate `2^-(ℓ+1)`, except that `m = 22` has rate `1/16` at level 2. -/
 def mk (m k0 : ℕ) (cols : List ℕ) (ext : ℕ) : Schedule where
   m := m
@@ -67,7 +67,7 @@ def mk (m k0 : ℕ) (cols : List ℕ) (ext : ℕ) : Schedule where
     { logInvRate := r, queries := queriesAt r, logCols := c, lanes := if ℓ = 0 then k0 else 4 }
   ext := ext
 
-/-- The `fast100` schedule for `m` (PROTOCOL.md §15), or `none` outside `22 ≤ m ≤ 35`. -/
+/-- The `fast100` schedule for `m` (`Flock.Schedule`), or `none` outside `22 ≤ m ≤ 35`. -/
 def fast100 : ℕ → Option Schedule
   | 22 => some (mk 22 6 [9, 6, 3] 3)
   | 23 => some (mk 23 6 [10, 7, 4] 4)
@@ -85,7 +85,7 @@ def fast100 : ℕ → Option Schedule
   | 35 => some (mk 35 6 [22, 19, 16, 13, 10, 7, 4] 4)
   | _ => none
 
-/-- The §15 table's own consistency checks: the codeword lengths `d` it lists, and the shape
+/-- The `Flock.Schedule` table's own consistency checks: the codeword lengths `d` it lists, and the shape
 identity `k0 + 3·R + ext = m − 7` (`R` = levels − 1). -/
 def Schedule.WellShaped (s : Schedule) (ds : List ℕ) : Prop :=
   s.levels.map Level.logLen = ds ∧ s.k0 + 3 * (s.levels.length - 1) + s.ext = s.m - 7
@@ -93,7 +93,7 @@ def Schedule.WellShaped (s : Schedule) (ds : List ℕ) : Prop :=
 instance instDecidableWellShaped (s : Schedule) (ds : List ℕ) : Decidable (s.WellShaped ds) := by
   unfold Schedule.WellShaped; infer_instance
 
-/-- The `d` column of §15, checked against the schedule. -/
+/-- The `d` column of `Flock.Schedule`, checked against the schedule. -/
 example : (fast100 22).get! |>.WellShaped [10, 8, 7] := by decide
 example : (fast100 23).get! |>.WellShaped [11, 9, 7] := by decide
 example : (fast100 24).get! |>.WellShaped [12, 10, 8] := by decide

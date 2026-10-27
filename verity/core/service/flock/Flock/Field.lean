@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §2.1, §2.2, §2.4: the fields.
+The fields.
 -/
 namespace Flock
 
@@ -540,7 +540,7 @@ def invGo (a : F128) : Nat → F128 → F128
   | 0, acc => acc
   | k + 1, acc => invGo a k (mul (square acc) a)
 
-/-- `a^(2^128 − 2)`: the inverse, with `inv 0 = 0` (§2.1). 2^128 − 2 = 0b111…10: 127 ones, then one zero. -/
+/-- `a^(2^128 − 2)`: the inverse, with `inv 0 = 0`. 2^128 − 2 = 0b111…10: 127 ones, then one zero. -/
 def inv (a : F128) : F128 := square (invGo a 127 one)
 
 /-- The 16-byte encoding `le64(lo) ‖ le64(hi)`. -/
@@ -989,7 +989,7 @@ private def hexDigit (n : UInt64) : Char :=
   let d := n.toNat
   if d < 10 then Char.ofNat (48 + d) else Char.ofNat (87 + d)
 
-/-- Record hex: `{hi:016x}{lo:016x}` (§5.1). -/
+/-- Record hex: `{hi:016x}{lo:016x}` (`Flock.RecordText`). -/
 def toHex (a : F128) : String := Id.run do
   let mut s := ""
   for i in [0:16] do s := s.push (hexDigit ((a.hi >>> (4 * (15 - i)).toUInt64) &&& 0xf))
@@ -998,7 +998,7 @@ def toHex (a : F128) : String := Id.run do
 
 end F128
 
-/-- GF(2^256) = F[u]/(u^2 + u + x^{-1}) (§2.4); an element is `c0 + c1·u`. -/
+/-- GF(2^256) = F[u]/(u^2 + u + x^{-1}); an element is `c0 + c1·u`. -/
 structure F256 where
   c0 : F128
   c1 : F128
@@ -1033,7 +1033,7 @@ instance instOfNatOfNatNat_1 : OfNat F256 1 := ⟨one⟩
 
 end F256
 
-/-- `φ8(α) = g`, a root of `X^8 + X^4 + X^3 + X + 1` in F (§2.2). -/
+/-- `φ8(α) = g`, a root of `X^8 + X^4 + X^3 + X + 1` in F. -/
 def phi8Gen : F128 := ⟨0x6b8330483c2e9849, 0x0dcb364640a222fe⟩
 
 /-- `g^i`. -/
@@ -1046,7 +1046,7 @@ def phi8Sum (v : Nat) : Nat → F128
   | 0 => F128.zero
   | i + 1 => if v.testBit i then phi8Sum v i + phi8Pow i else phi8Sum v i
 
-/-- `φ8(v) = Σ bit_i(v) · g^i` for bytes `v` (§2.2), tabulated. -/
+/-- `φ8(v) = Σ bit_i(v) · g^i` for bytes `v`, tabulated. -/
 def phi8Table : Array F128 := Array.ofFn (n := 256) fun v => phi8Sum v.val 8
 
 @[inline] def phi8 (v : Nat) : F128 := phi8Table.getD (v % 256) 0

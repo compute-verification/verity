@@ -1,5 +1,5 @@
 /-
-The in-circuit row leaf as a parameter of the circuit statement (PROTOCOL.md §16.5). The leaf is the part of the block that
+The in-circuit row leaf as a parameter of the circuit statement (`Flock.Circuit`). The leaf is the part of the block that
 hashes each instance's input rows into the digests the frame-v3 roots are built from: its slot circuit, its Δ, its regions
 and the public check of its digests. The statement composes it with the units, the mask slot and the output region.
 Today's leaf is the keyed-BLAKE3 row (`Blake3Row`); `hm96-sha256/v1` (Halevi–Micali on SHA-256, PR #88) is the next.
@@ -8,7 +8,7 @@ import Flock.Public
 
 namespace Flock
 
-/-- A region (§16.2): `free` in-block bit positions (LSB first), the other bits fixed to `fixed` where `mask` is set, and
+/-- A region (`Flock.Statement`): `free` in-block bit positions (LSB first), the other bits fixed to `fixed` where `mask` is set, and
 the region's known bytes in each block, in free-assignment order (bit `8i + t` is bit `t` of byte `i`). -/
 structure Region where
   name : String

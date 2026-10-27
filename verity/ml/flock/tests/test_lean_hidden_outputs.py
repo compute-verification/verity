@@ -1,8 +1,8 @@
-"""Hidden outputs (PROTOCOL.md §16.13): the Lean verifier reads M0's hidden-output statements, `verity/flock-circuit` and
+"""Hidden outputs (`HmOut`): the Lean verifier reads M0's hidden-output statements, `verity/flock-circuit` and
 `verity/flock-circuit/types`, as the Rust prover writes them, on its recorded CPU selftest sessions: flat RoPE (the unit
 returns its output), flat GEMM (a tail stage returns it, one BF16 word in a 64-word row), typed RoPE (a flat class) and typed
 GEMM (a template). Each public file holds only roots, hiding leaves and structure. Both typed sets are forms the soundness
-proof does not cover (§16.15), which `verify` refuses after every check has passed; flat GEMM (its unit reads two input
+proof does not cover (`Flock.ProvedScope`), which `verify` refuses after every check has passed; flat GEMM (its unit reads two input
 groups, a tail stage returns the outputs) is the general instance form, which it covers. No session has a sample, which
 `verify` refuses after that (D12). So the honest session gets the form's refusal on the typed sets (`REFUSED`), on the flat
 ones the sample-less one (`DRAWLESS`), and each false statement the check that catches it.
@@ -93,7 +93,7 @@ def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_pat
 
 
 def test_a_session_past_the_proved_range_is_refused_naming_it(store, tmp_path):
-    """A session whose statement is past the range the soundness bound covers (`Stmt.InRange`, PROTOCOL.md §16.5) is refused
+    """A session whose statement is past the range the soundness bound covers (`Stmt.InRange`, `Flock.Circuit`) is refused
     at setup, its reason naming the value: flat RoPE's honest session, replayed first (it passes every check and meets the
     sample-less refusal), then the same session under its circuit with `k_log` 28, one past the cap. `k_log` is the one cap a
     session can cross: past 1024 regions takes over 1022 row ports, whose hm96 slots outgrow a `2^27` block, and
@@ -115,7 +115,7 @@ def test_a_session_past_the_proved_range_is_refused_naming_it(store, tmp_path):
 
 
 def test_a_tail_with_no_unit_is_refused(store, tmp_path):
-    """`units_per_vu = 0` is refused as the circuit is read (PROTOCOL.md §16.10, D8; the Rust side is `circuit.rs`'s
+    """`units_per_vu = 0` is refused as the circuit is read (`Flock.HmRow`, D8; the Rust side is `circuit.rs`'s
     `a_tail_with_no_unit_is_refused`). Flat GEMM's tail returns the outputs, so its unit count need not be a power of two;
     the rest is kept consistent: no unit or stage slot, no leaf map or cut, no wire but the rows'."""
     d = store / "flat" / "gemm-coordinate" / "stage"
@@ -137,7 +137,7 @@ def test_a_tail_with_no_unit_is_refused(store, tmp_path):
 
 
 def test_a_block_with_no_vu_is_refused(store, tmp_path):
-    """`vus_per_block = 0` is refused as the circuit is read (PROTOCOL.md §16.10, D9; the Rust side is `circuit.rs`'s
+    """`vus_per_block = 0` is refused as the circuit is read (`Flock.HmRow`, D9; the Rust side is `circuit.rs`'s
     `a_block_with_no_vu_is_refused`). Flat GEMM's tail returns the outputs, so its unit count need not be a power of two;
     the rest is kept consistent: every range has no slot."""
     d = store / "flat" / "gemm-coordinate" / "stage"
@@ -157,7 +157,7 @@ def test_a_block_with_no_vu_is_refused(store, tmp_path):
 
 @pytest.mark.slow
 def test_a_block_of_three_vus_is_refused(store, tmp_path):
-    """`vus_per_block = 3` is refused as the circuit is read, though a tail returns the outputs (PROTOCOL.md §16.10, D9;
+    """`vus_per_block = 3` is refused as the circuit is read, though a tail returns the outputs (`Flock.HmRow`, D9;
     the Rust side is `circuit.rs`'s `a_block_of_three_vus_is_refused`): the Digest region's VU bits, `Nat.log2 3 = 1` here
     and `trailing_zeros(3) = 0` in Rust, would pin VUs 0 and 1 here, VU 0 there, and VU 2 in neither. The statement is flat
     GEMM's composed for three VUs a block, with its public file of three instances."""

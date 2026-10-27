@@ -4,10 +4,10 @@ import Flock.Schedule
 /-!
 # The executable's schedule, read as the model's
 
-`schedOf` reads an executable `fast100` schedule (`Flock.Schedule`, PROTOCOL.md §15) as the model's
+`schedOf` reads an executable `fast100` schedule (`Flock.Schedule`) as the model's
 (`Accounting.Schedule`). `LevelSeam` and `DimSeam` are the facts about one schedule that the executable's Ligerito loop
-relies on and the model states differently: the stratified queries (§13.5), the Merkle cap depth and path length (§14),
-the consistency-coin count, and the dimensions of the rounds (§13.3). `Refine.Seam` proves them for every `fast100`
+relies on and the model states differently: the stratified queries (`Flock.Ligerito`), the Merkle cap depth and path length (`Flock.Merkle`),
+the consistency-coin count, and the dimensions of the rounds (`Flock.Ligerito`). `Refine.Seam` proves them for every `fast100`
 schedule.
 -/
 
