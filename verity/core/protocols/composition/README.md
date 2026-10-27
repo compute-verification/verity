@@ -74,7 +74,7 @@ carries them as hex under `blobs`.
 same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
 `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
 SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
-to, one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
+to, one registration digest in both. NCI is a registration check, not a component (onsite has six
 subprotocols, and NCI is none of them). Its formats are the product's with the registration's beside the components':
 
 | input | format |

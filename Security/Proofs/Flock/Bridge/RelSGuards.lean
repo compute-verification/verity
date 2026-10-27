@@ -4,7 +4,7 @@ import Proofs.Flock.Bridge.FaultyRightC
 /-!
 # `card_wrong_lt_of_relS` is neither vacuous nor trivial
 
-The two guards a bound gets beside it (one adversary form, Daniel, 26 Oct):
+The two guards a bound gets beside it (one adversary form):
 
 * `card_wrong_lt_of_relS_honest`: its hypothesis holds at the honest instance. The witness that opens the circuit's
   evaluation on the honest inputs (`witDep C Cm H roots Xr`) is in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, whenever the
