@@ -25,7 +25,7 @@ The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycl
   bound on their issue cost.
 - JP<row><family>_k: a lane pipe's facets beside the honest form, only where the lane loses rate beside it.
 
-The tables: T1 a form (note:20261017T0321Z-draft-eps1-tensor §3: slots a warp instruction, depth, rate, slots/SM/clk,
+The tables: T1 a form (slots a warp instruction, depth, rate, slots/SM/clk,
 fraction of ρ_T), the family's ε_tensor at L = 32 and the L where honest holds ρ_T, the joint issue rows, q* (the
 binding issue facet's c_M over the words the honest instruction gives a lane, plus on sm_100 the tcgen05.ld issue that
 moves them to registers: QSTAR's threshold, 2.03 on sm_120) and L_bal (32 ρ_T over the duo fold's words/SM/clk, alone

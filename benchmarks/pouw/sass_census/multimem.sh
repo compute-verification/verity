@@ -2,7 +2,7 @@
 # The multimem probe (multimem.cu) on one leased RTX PRO 6000: builds for sm_120a outside the lease, records the SASS,
 # then runs under `gpu-lease 1`. Writes multimem.txt and multimem.sass to $OUT; the last line is the verdict.
 #
-#   research run --on vy-nebius-1 --cwd source --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/sass_census/multimem.sh
+#   research run --on vy-nebius-1 --cwd source --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/multimem.sh
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
