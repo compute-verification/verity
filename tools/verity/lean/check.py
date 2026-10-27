@@ -1800,9 +1800,10 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}"))
             continue
         w = ws[g]
-        honest_ok = lambda w: isinstance(w.get("honest"), list) and w["honest"] and all(isinstance(n, str) for n in w["honest"])
+        honest = w.get("honest") if isinstance(w, dict) else None
         if not (isinstance(w, dict) and (isinstance(w.get("nontrivial"), str) or skip == "nontrivial")
-                and (honest_ok(w) or skip == "honest") and set(w) <= {"honest", "nontrivial", "kind"}
+                and ((isinstance(honest, list) and honest and all(isinstance(n, str) for n in honest)) or skip == "honest")
+                and set(w) <= {"honest", "nontrivial", "kind"}
                 and w.get("kind", kind or "acceptance") in WITNESS_KINDS):
             fails.append(Failure("witnesses.witness-form", g, f"witnesses: witnesses[{g}] is {{honest: [theorem], "
                                  f"nontrivial: theorem, kind: {' or '.join(WITNESS_KINDS)} (optional)}}"))
