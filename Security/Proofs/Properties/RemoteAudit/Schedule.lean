@@ -45,7 +45,7 @@ from step 3, so a session whose third pass's plan drops it, as a coin might say,
 at 200 bits under a cap of 200 and is refused under 199 (`coinPasses_refused`, `coinPasses_accepted`,
 `coinPasses_overCap`; `test_schedule.py` plays the same session in Python).
 
-Each guarantee's premises hold at gate run 7's deployed shape, one pass over all 130023424 blocks (the `_meets` lemmas),
+Each guarantee's premises hold at the deployed shape, one pass over all 130023424 blocks (the `_meets` lemmas),
 and each conclusion is false for some input a verifier that accepted everything would take (the `_fails` lemmas).
 -/
 
@@ -637,11 +637,10 @@ theorem coinPasses_overCap : Schedule.check honest 8 199 (coinPasses true) #[(8,
 
 /-! ## Honest and nontrivial lemmas
 
-Each property's honest lemma (`_meets`) shows its premises hold at the deployed instance, gate run 7
-(`benchmarks/remote_session/tests/fixtures/gate_run_7.json.gz`: verifier run r20261023-124317-07a8, auditor run
-r20261023-133359-30ad): a store of 130023424 blocks of 4096 bytes under p1024/k3/masked with sketch-sha512 receipts,
-sessions of 2118 windows (T = 60 s) and 96 (T = 1 s), each window one pass over the whole store (`Plan.whole`), with
-no appends and no schedule cap committed. Its nontrivial lemma (`_fails`) shows its conclusion fails where the code's
+Each property's honest lemma (`_meets`) shows its premises hold at the deployed instance, the session of
+`benchmarks/remote_session/tests/fixtures/gate_run_7.json.gz`: a store of 130023424 blocks of 4096 bytes under
+p1024/k3/masked with sketch-sha512 receipts, each window one pass over the whole store (`Plan.whole`), with no appends
+and no schedule cap committed. Its nontrivial lemma (`_fails`) shows its conclusion fails where the code's
 check is dropped, for a verifier that accepts everything. -/
 
 theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi : ℕ) :
@@ -651,7 +650,7 @@ theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi 
   · rfl
   · simp
 
-/-- **`PlanBlocks` meets the deployed plan.** The plan of gate run 7's passes, the whole store as one run, is one
+/-- **`PlanBlocks` meets the deployed plan.** The plan of the deployed passes, the whole store as one run, is one
 `Plan.make?` makes, and it is `Plan.whole`, the second conjunct's plan. -/
 theorem planBlocks_meets : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) := by
   have h : (Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424).map (fun pl => (pl.blocks, pl.runs, pl.ends)) =
@@ -680,7 +679,7 @@ theorem tileAt_whole {B i : ℕ} (hi : i < B) : tileAt B #[] (Plan.whole B).runs
   rw [tileAt, runBlocks_whole, List.getElem?_range' hi]
   simp [position, hi]
 
-/-- **`CodeLayoutTiles` meets the deployed pass.** At gate run 7's plan, made by `Plan.make?`, its runs hold the
+/-- **`CodeLayoutTiles` meets the deployed pass.** At the deployed plan, made by `Plan.make?`, its runs hold the
 store's 130023424 blocks, each at a position below `(1, 130023424)`: the registration's tree, at its own index. -/
 theorem codeLayoutTiles_meets :
     Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) ∧
@@ -710,7 +709,7 @@ theorem codeLayout_eq {N T M blocks : ℕ} {dflt : Fin N ↪ Fin T × Fin M} {ap
 /-- Store order: tile `i` at block `i` of the registration's tree. -/
 def wholeLayout (B : ℕ) : Fin B ↪ Fin 1 × Fin B := ⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩
 
-/-- At gate run 7's plan the verifier's layout is store order. -/
+/-- At the deployed plan the verifier's layout is store order. -/
 theorem codeLayout_whole (B : ℕ) (dflt : Fin B ↪ Fin 1 × Fin B) :
     codeLayout B dflt #[] (Plan.whole B).runs = wholeLayout B :=
   codeLayout_eq (wholeLayout B) (by rw [runBlocks_whole, List.length_range']) fun i => tileAt_whole i.2
@@ -953,7 +952,7 @@ def honestPass (reg : Registration) (s : ByteArray) : PassRecord :=
   ⟨zeroRoot (treeDomain s (Plan.whole 130023424)) 0 (hidden (honestLeaf reg s) (zeros SALT_BYTES)),
     Plan.whole 130023424, none⟩
 
-/-- Window 0 of one pass, as gate run 7's windows. -/
+/-- Window 0 of one pass, as the deployed session's windows are. -/
 def honestWindow (reg : Registration) (challenge previous : ByteArray) : WindowRecord :=
   ⟨0, challenge, previous, #[honestPass reg (seed challenge 0 previous)]⟩
 
@@ -1029,7 +1028,7 @@ theorem honestReg_make (node codecSeed : ByteArray) (rows : ℕ) (hnode : 1 ≤ 
 /-- **`OpensAtPosition` meets the deployed instance.** For any node id and codec seed of the sizes `Registration.make?`
 takes, and any challenge and previous root, the deployed registration (130023424 blocks, p1024/k3/masked,
 sketch-sha512 receipts of 16 or 64 rows) is one `Registration.make?` accepts, and in a window of one pass over the
-whole store, as gate run 7's, `checkOpening` accepts an opening of position 0: `OpensAtPosition`'s premise holds. -/
+whole store, as the deployed session's are, `checkOpening` accepts an opening of position 0: `OpensAtPosition`'s premise holds. -/
 theorem opensAtPosition_meets (node codecSeed challenge previous : ByteArray) (rows : ℕ)
     (hnode : 1 ≤ node.size ∧ node.size ≤ 64) (hseed : codecSeed.size = Codec.SEED_BYTES)
     (hrows : rows = 16 ∨ rows = 64) :
@@ -1063,7 +1062,7 @@ theorem opensAtPosition_fails : ¬ ∀ (reg : Registration) (appends : Array App
 ledger asks no schedule; had it committed one, its T = 1 s session's 96 passes over the whole store are the plans of
 the schedule with no frees and no appends at steps 0 to 95, which the check accepts at its 792 bits (99 one-byte
 integers). The premises of `Properties.DeclaredCircuit.ScheduledRequirement` besides the check are `G`'s, whose honest
-lemma is `G`'s; at gate run 7's plan the verifier's layout is store order (`codeLayout_whole`). -/
+lemma is `G`'s; at the deployed plan the verifier's layout is store order (`codeLayout_whole`). -/
 theorem scheduled_meets : Schedule.check ⟨#[], #[], (List.range 96).toArray⟩ 130023424 792
     ((List.range 96).map fun s => (s, (Plan.whole 130023424).runs)).toArray #[] = .ok 792 := by
   decide +kernel
