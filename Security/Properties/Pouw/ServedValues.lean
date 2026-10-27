@@ -6,7 +6,7 @@ import Properties.Pouw.PeriodJ10R
 
 `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` is stated in words: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the windows
-before the first refusal. `ServedValues` states that bound in AND gates of the registered declared circuit under its
+before the first refusal. `RightValues` states that bound in AND gates of the registered declared circuit under its
 pinned lowering (`Verity.creditSize lower D`, Daniel, 26 Oct, tentative): except with probability δ_coin + δ_crypto,
 an accepted period's right values cover at least `(1 − ε_skip)₊·S` AND gates. It is the values guarantee, "declared
 size, values certified".
@@ -33,7 +33,7 @@ which adds SAK to H1.
 * `sizePerWord`, `epsSkip`, `creditFloor`: the most size a credited word carries, `σ = max_t size_t / words_t` over the
   blocks of credited words. Then `ε_skip = σ·ε(j)·N_live/S`, and the right values must cover `(1 − ε_skip)₊·S` AND
   gates. When every block of credited words carries the same size per word, `S = σ·N_live` and `ε_skip = ε(j)`.
-* `ServedValues`: except with H1's probability, an accepted period's right blocks have total size at least
+* `RightValues`: except with H1's probability, an accepted period's right blocks have total size at least
   `(1 − ε_skip)₊·S`.
 
 *No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileDrawIsCoin` (the draw),
@@ -130,7 +130,7 @@ It is a statement about values, not a compute claim: right values aren't work (R
 algorithmic premise, only H1's. `TileDrawIsCoin`, `TileServiceSound`, `RegisteredBeforeDraw` and `SaltIsLiveCoin` are
 about the draw, the service and the salt. `SharedNoiseLucks` is the one computational premise: the fold receipts'
 detection, which R-ACCEL-6 says is to be proved or designed away by the no-fold receipt. -/
-def ServedValues : Prop :=
+def RightValues : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)

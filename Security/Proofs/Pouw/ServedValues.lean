@@ -2,7 +2,7 @@ import Properties.Pouw.ServedValues
 import Proofs.Pouw.PeriodJ10R
 
 /-!
-# Proof of `ServedValues`
+# Proof of `RightValues`
 
 `H1J10RCheckedCreditPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
 words are the blocks not skipped whole. There `UnitFixed` holds with equality, so H1 bounds the right blocks' words
@@ -151,7 +151,7 @@ theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 
   split_ifs at hp with hc
   exact ⟨(credited_iff σ k hk sT unitOf hKd ws opened rel right x w).1 hc.1, hc.2⟩
 
-theorem servedValues : ServedValues := by
+theorem rightValues : RightValues := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr hM hKd D lower M ledger ws opened enc
     place tile Wp Pl ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
   classical

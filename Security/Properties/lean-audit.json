@@ -545,7 +545,7 @@
   "Properties.Pouw.ServedValues": {
    "imports": ["Definitions.Core.CreditSize", "Properties.Pouw.PeriodJ10R"],
    "except": [],
-   "why": "the period's credit in size is stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and credit in AND gates (`Definitions.Core.CreditSize`), never a proof"
+   "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.CreditSize`), never a proof"
   },
   "Properties.Accounting.JointBridge": {
    "imports": [
