@@ -17,3 +17,6 @@ If a try of yours has waited over 20 min in a line, cancel it and relaunch on cp
    signature on a message missing from the device's log", and the bound is `≤ δ + f(Pr[B exhibits a collision]) (+ LMS forgery)`.
    `ecr/sha-512` and `euf-cma/lms-sha512-n64` are already in `verity.core.claims`, applied outside the theorem to the fixed
    finders and the forgery finder. Keep the forgery break as an event of the device's log, not as an advantage bound.
+
+## soundness 01:20Z: coin-root release order (Daniel's ruling, 6:15 PM PDT)
+Daniel approved: the challenger releases its hm96 coin-commitment root only after the prover's commitment is in, and soundness takes no hiding premise on the root. You own this change for sampled proofs' challenger: put it in #4888 (device withholds the root until the prover's commitment; drop any hiding premise), with _honest/_nontrivial. Date: #4888 marked by Tue 12:00Z. Say on PRF/ONE-4 if that date slips. PoUS and remote bandwidth are memory-accounting's (Wed 10:00Z).
