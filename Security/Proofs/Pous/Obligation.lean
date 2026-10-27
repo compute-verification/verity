@@ -202,4 +202,23 @@ theorem obligationHeld : ObligationHeld := by
     fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P round S
       hdev hS (o.1, (o.2, e))
 
+/-- **`obligationHeld` holds at the honest instance**: its device premise, `ringDevice_honest`, the other tags' keys
+among the other audits' coins. -/
+theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, Pous.EndToEnd.S < (r.schedule ω t).mem (r.acct .capacity)) :
+    RingDevice r P D Q L round :=
+  ringDevice_honest r P D Q L round hfull
+
+/-- **`obligationHeld` is nontrivial**: at a store of `2^19` tags, an event that holds on every oracle and coin
+exceeds its bound `δ + ε_max`. -/
+theorem obligationHeld_nontrivial :
+    ¬ Pouw.pr (fun _ : Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × HmCoins × Streams => True) ≤
+      (Params.δ : ℝ) + Params.εMax.toReal := by
+  haveI : Nonempty (Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
+    inferInstanceAs (Nonempty (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
+  rw [Pouw.pr_eq_one fun _ => trivial]
+  exact not_le.2 bound_toReal_lt_one
+
 end Pous.Period.SecurityProofs

@@ -253,17 +253,18 @@ theorem ofFn_getElem! {α : Type} [Inhabited α] {n : ℕ} (f : Fin n → α) (a
   rw [getElem!_pos (Array.ofFn f) a (by simpa using h)]
   simp [Array.getElem_ofFn]
 
-theorem make_ok_of (session key : ByteArray) (indices : Array ℕ) (salts : Array ByteArray) (hs : session.size = 32)
-    (hn : indices.size = 105) (hsalts : salts.size = indices.size) (hlt : ∀ j < indices.size, indices[j]! < 2 ^ 19)
-    (hsalt : ∀ j < indices.size, salts[j]!.size = 192) (hk : checkKey key = .ok ()) :
-    ∃ t, CoinTree.make session (2 ^ 19) indices key salts = .ok t := by
-  have hcond : (decide (2 ^ 19 < 1) || indices.isEmpty || salts.size != indices.size ||
-      indices.any fun x => decide (x ≥ 2 ^ 19)) = false := by
+theorem make_ok_of (N : ℕ) (session key : ByteArray) (indices : Array ℕ) (salts : Array ByteArray) (hN : 0 < N)
+    (hN64 : N ≤ 2 ^ 64) (hs : session.size = 32) (hn : indices.size = 105) (hsalts : salts.size = indices.size)
+    (hlt : ∀ j < indices.size, indices[j]! < N) (hsalt : ∀ j < indices.size, salts[j]!.size = 192)
+    (hk : checkKey key = .ok ()) :
+    ∃ t, CoinTree.make session N indices key salts = .ok t := by
+  have hcond : (decide (N < 1) || indices.isEmpty || salts.size != indices.size ||
+      indices.any fun x => decide (x ≥ N)) = false := by
     have he : indices.isEmpty = false := by
       rw [Array.isEmpty_eq_false_iff]; intro h; rw [h] at hn; simp at hn
     rw [hsalts, he, bne_self_eq_false]
     simp only [Bool.or_false, Bool.or_eq_false_iff]
-    refine ⟨by decide, Bool.eq_false_iff.2 fun h => ?_⟩
+    refine ⟨decide_eq_false (by omega), Bool.eq_false_iff.2 fun h => ?_⟩
     rw [Array.any_eq_true] at h
     obtain ⟨i, hi, hp⟩ := h
     have := hlt i hi
@@ -285,8 +286,9 @@ theorem make_ok_of (session key : ByteArray) (indices : Array ℕ) (salts : Arra
 
 theorem coinView_some (session : ByteArray) (hs : session.size = 32) (c : HmCoins) (I : Fin 105 → Fin (2 ^ 19)) :
     ∃ v, coinView session c I = some v := by
-  obtain ⟨t, ht⟩ := make_ok_of session (coinKey c.1) (Array.ofFn fun j => (I j).val)
-    (Array.ofFn fun j => bytesOf (c.2 j)) hs (Array.size_ofFn) (by rw [Array.size_ofFn, Array.size_ofFn])
+  obtain ⟨t, ht⟩ := make_ok_of (2 ^ 19) session (coinKey c.1) (Array.ofFn fun j => (I j).val)
+    (Array.ofFn fun j => bytesOf (c.2 j)) (by norm_num) (by norm_num) hs (Array.size_ofFn)
+    (by rw [Array.size_ofFn, Array.size_ofFn])
     (fun j hj => by
       rw [Array.size_ofFn] at hj
       rw [ofFn_getElem! _ j hj]; exact (I _).isLt)

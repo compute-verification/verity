@@ -269,4 +269,73 @@ theorem endToEndRingDemo : EndToEndRingDemo := by
   rw [hS] at hw
   exact hw
 
+/-! ### The honest and nontrivial lemmas at any block count
+
+As `Pous.EndToEnd.SecurityProofs`' at `2^19`. At `N` the draw may reject a word, so the honest lemma is pointwise: the
+honest full-state server passes on every `ω`, coins and streams from which the code's sampler draws its indices. -/
+
+theorem coinViewAt_some (N : ℕ) (hN : 0 < N) (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
+    (c : HmCoins) (I : Fin 105 → Fin N) : ∃ v, coinViewAt N session c I = some v := by
+  obtain ⟨t, ht⟩ := make_ok_of N session (coinKey c.1) (Array.ofFn fun j => (I j).val)
+    (Array.ofFn fun j => bytesOf (c.2 j)) hN hN64 hs (Array.size_ofFn) (by rw [Array.size_ofFn, Array.size_ofFn])
+    (fun j hj => by
+      rw [Array.size_ofFn] at hj
+      rw [ofFn_getElem! _ j hj]; exact (I _).isLt)
+    (fun j hj => by
+      rw [Array.size_ofFn] at hj
+      rw [ofFn_getElem! _ j hj]; exact size_bytesOf _)
+    (checkKey_coinKey c.1)
+  exact ⟨_, by rw [coinViewAt, ht]; rfl⟩
+
+/-- The honest full-state server for a scheme in the ring model: it keeps all of `C` and answers each index from it,
+with no query. -/
+noncomputable def honestRing {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p)) : RingServer sc (sc.B * sc.ℓ) 0 0 0 :=
+  ⟨honestPre sc, fun _ _ _ σ i => .ret ((codeEquiv sc.B sc.ℓ).symm σ i, σ),
+    fun _ _ _ _ _ _ => ⟨le_rfl, le_rfl, le_rfl⟩⟩
+
+theorem honestRing_answers {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p))
+    (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (W : Bits sc.n) (pp : Bits sc.t) (C : Fin sc.B → Bits sc.ℓ) (k : ℕ)
+    (I : Fin k → Fin sc.B) :
+    seqAnswers f ((honestRing sc).step W pp) 0 (List.ofFn I) (codeEquiv _ _ C) = List.ofFn fun j => C (I j) := by
+  show seqAnswers f (fun _ σ i => .ret ((codeEquiv sc.B sc.ℓ).symm σ i, σ)) 0 (List.ofFn I) (codeEquiv _ _ C) = _
+  rw [seqAnswers_const f (fun σ i => (codeEquiv sc.B sc.ℓ).symm σ i), List.map_ofFn]
+  congr 1
+  funext j
+  simp
+
+set_option exponentiation.threshold 20000 in
+/-- **`endToEndRingAt` holds at the honest instance**: at every block count `N ≤ 2^64` and 32-byte session id, the
+honest full-state server passes on every `ω`, coins and streams from which the code's sampler draws its indices `I`. -/
+theorem endToEndRingAt_honest (N : ℕ) [NeZero N] (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
+    (W : Bits (schAt N).n) (x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin N)
+    (hI : ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2.2 j)) = some (I j).val) :
+    PassesAt N session W (honestRing (schAt N)) x := by
+  obtain ⟨v, hv⟩ := coinViewAt_some N (Nat.pos_of_ne_zero (NeZero.ne N)) hN64 session hs x.2.1 I
+  exact ⟨I, v, hI, hv, honestRing_answers (schAt N) _ W ((schAt N).enc W x.1 ()).1 ((schAt N).enc W x.1 ()).2 105 I⟩
+
+/-- **`endToEndRingAt` is nontrivial**: at every block count and every bound `c < 1`, an event that holds on every
+coin, a verifier accepting everything, exceeds `c`. -/
+theorem endToEndRingAt_nontrivial (N : ℕ) [NeZero N] (c : ℝ≥0∞) (hc : c < 1) :
+    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤ c := by
+  rw [pr_eq_one fun _ => trivial]
+  exact not_le.2 hc
+
+/-- **`endToEndRingOfRoundSecure`, `endToEndRingOfRoundSecureWide` and `endToEndRingDemo` are nontrivial**: at every
+block count, a verifier accepting everything exceeds their bound `1% + 2^-128`. Their honest lemma is
+`endToEndRingAt_honest`, their event being `PassesAt`. -/
+theorem endToEndRingOfRoundSecure_nontrivial (N : ℕ) [NeZero N] :
+    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      ENNReal.ofReal Params.δ + Params.εMax :=
+  endToEndRingAt_nontrivial N _ bound_lt_one
+
+theorem endToEndRingOfRoundSecureWide_nontrivial (N : ℕ) [NeZero N] :
+    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      ENNReal.ofReal Params.δ + Params.εMax :=
+  endToEndRingOfRoundSecure_nontrivial N
+
+theorem endToEndRingDemo_nontrivial (N : ℕ) [NeZero N] :
+    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      ENNReal.ofReal Params.δ + Params.εMax :=
+  endToEndRingOfRoundSecure_nontrivial N
+
 end Pous.EndToEnd.SecurityProofs

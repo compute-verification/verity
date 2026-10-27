@@ -77,4 +77,68 @@ theorem periodCapacity : PeriodCapacity := by
     exact ⟨(hv _ hacc).1, (hv _ hacc).2, hheld⟩
   exact ⟨h, r.capacitySound_of_perRun h⟩
 
+/-! ### The honest and nontrivial lemmas
+
+The device premise, `RingDevice`, holds at an honest device: one whose capacity account holds more than `S₀` bits at a
+tick of the capacity window on every coin, as a server keeping all of `C` (`FULL > S₀` bits) does, is a ring-model
+server for every period's audit, since no bound `B` within `S₀` holds its account. A verifier accepting every period
+fails the conclusion: on a run whose account holds nothing, its event holds on every coin, with probability 1, above
+`δ + ε_max`. -/
+
+/-- A server that keeps nothing and answers every index with the zero block, with no query. -/
+def nullServer (D Q L : ℕ) : Server Pous.EndToEnd.S D Q L :=
+  ⟨fun _ _ _ _ _ => false, fun _ _ _ σ _ => .ret (fun _ => false, σ),
+    fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _⟩⟩
+
+/-- **`RingDevice` holds at an honest device**, one whose capacity account exceeds `S₀` at a tick of the capacity
+window on every coin, at every `(D, Q, L)`. -/
+theorem ringDevice_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, Pous.EndToEnd.S < (r.schedule ω t).mem (r.acct .capacity)) :
+    RingDevice r P D Q L round := by
+  intro o B hB
+  refine ⟨nullServer D Q L, fun x hx _ => ?_⟩
+  obtain ⟨t, ht, hlt⟩ := hfull (o.1, o.2, x)
+  have := hx t ht
+  exfalso
+  omega
+
+theorem bound_toReal_lt_one : (Params.δ : ℝ) + Params.εMax.toReal < 1 := by
+  have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
+    ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
+  have h := (ENNReal.toReal_lt_toReal hfin ENNReal.one_ne_top).2 Pous.EndToEnd.SecurityProofs.bound_lt_one
+  rwa [ENNReal.toReal_add ENNReal.ofReal_ne_top εMax_ne_top, ENNReal.toReal_ofReal δ_nonneg,
+    ENNReal.toReal_one] at h
+
+/-- **`periodHeld` holds at the honest instance**: its device premise, `ringDevice_honest`. -/
+theorem periodHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, Pous.EndToEnd.S < (r.schedule ω t).mem (r.acct .capacity)) :
+    RingDevice r P D Q L round :=
+  ringDevice_honest r P D Q L round hfull
+
+/-- **`periodHeld` is nontrivial**: an event that holds on every capacity coin, a verifier accepting every period on a
+run whose account holds nothing, exceeds its bound `δ + ε_max`. -/
+theorem periodHeld_nontrivial :
+    ¬ Pouw.pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      (Params.δ : ℝ) + Params.εMax.toReal := by
+  rw [Pouw.pr_eq_one fun _ => trivial]
+  exact not_le.2 bound_toReal_lt_one
+
+/-- **`periodCapacity` holds at the honest instance**: `periodHeld_honest`, its premises being `periodHeld`'s. -/
+theorem periodCapacity_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, Pous.EndToEnd.S < (r.schedule ω t).mem (r.acct .capacity)) :
+    RingDevice r P D Q L round :=
+  ringDevice_honest r P D Q L round hfull
+
+/-- **`periodCapacity` is nontrivial**: `periodHeld_nontrivial`, its bound being `periodHeld`'s. -/
+theorem periodCapacity_nontrivial :
+    ¬ Pouw.pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      (Params.δ : ℝ) + Params.εMax.toReal :=
+  periodHeld_nontrivial
+
 end Pous.Period.SecurityProofs

@@ -34,4 +34,30 @@ theorem SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld := by
   rw [hH', hR.len] at hn'
   exact lt_of_not_ge hn'
 
+/-- **`SpaceOfPeriodHeld` holds at the honest instance**: its premises on the code, setup's `AcceptsDecodes` and
+`PublishesRoot`, are proved, and its device premise holds at a device whose capacity account exceeds `S₀` at a tick
+of the capacity window on every coin (`Pous.Period.SecurityProofs.ringDevice_honest`). -/
+theorem SpaceOfPeriodHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (run : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ)
+    (hfull : ∀ ω, ∃ t ∈ (run.win .capacity).ticks, Pous.EndToEnd.S < (run.schedule ω t).mem (run.acct .capacity)) :
+    AcceptsDecodes ∧ PublishesRoot ∧ RingDevice run P D Q L round :=
+  ⟨PousCheck.Properties.SecurityProofs.acceptsDecodes, PousCheck.Properties.SecurityProofs.publishesRoot,
+    Pous.Period.SecurityProofs.ringDevice_honest run P D Q L round hfull⟩
+
+/-- **`SpaceOfPeriodHeld` is nontrivial**: a period whose PoUS verdict accepts every coin while its claim fails is not
+`Sound` at `δ + ε_max`. -/
+theorem SpaceOfPeriodHeld_nontrivial {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+    {C : Verity.Circuit} {I : Type} [DecidableEq I] {Ω : I → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
+    (r : Accounting.PeriodRun d α C Ω) (c : Accounting.Certificates) (p : Accounting.Price)
+    (h : ∀ ξ, r.accepts .pous ξ ∧ ¬ r.Holds c p .pous ξ) :
+    ¬ r.Sound c p .pous ((Params.δ : ℝ) + Params.εMax.toReal) := by
+  intro hs
+  obtain ⟨ξ⟩ : Nonempty ((i : I) → Ω i) := inferInstance
+  have h1 : Pouw.pr (fun x : Ω (r.own .pous) =>
+      r.accepts .pous (Function.update ξ (r.own .pous) x) ∧
+        ¬ r.Holds c p .pous (Function.update ξ (r.own .pous) x)) = 1 :=
+    Pouw.pr_eq_one fun x => h (Function.update ξ (r.own .pous) x)
+  exact not_le.2 Pous.Period.SecurityProofs.bound_toReal_lt_one (h1.symm.trans_le (hs ξ))
+
 end Accounting.SecurityProofs.Bridge

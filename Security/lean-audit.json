@@ -1510,10 +1510,6 @@
    "owner": "@memory-accounting",
    "digest": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482"
   },
-  "Pous.P2.Assumptions.CoinCommitHides": {
-   "owner": "@lean",
-   "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
-  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
