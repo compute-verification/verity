@@ -1118,8 +1118,8 @@ def match_outputs(requests: Sequence[Mapping[str, Any]], events: Sequence[bytes]
 def term_delta(delta: Fraction, terms: int) -> Fraction:
     """The δ each of a case's ``terms`` is decided at for its answer to hold at ``delta``: `NetworkCheck.Period`'s
     ``eps`` is the sum of its terms' δ (the clock form's compute audits', or the rows form's link-windows' scans', whose
-    compute audits are acceptance conditions in no term; the clock form's link-window answers add none), so each takes
-    an equal share."""
+    compute audits' δ is in none, a tied audit's free inputs in its link-window's term; the clock form's link-window
+    answers add none), so each takes an equal share."""
     if terms < 1:
         raise ValueError(f"a case has at least one term, not {terms}")
     return delta / terms

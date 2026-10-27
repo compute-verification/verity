@@ -269,7 +269,8 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
   Tied (NET-92: `NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
   and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
-  K doesn't count yet, so this reading counts them as the scan's.
+  K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
+  tied audit's inputs; K is unchanged in what it bounds, 143,872 bits a link-window at w63.
 - No faulty term with every unit drawn, and D_j = 1.
 
 The two forms:
@@ -323,7 +324,8 @@ K also rests on these conditions:
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriod's sum.
+- An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriod's sum. The tied
+  audit's (the toy block's) are the link-window's free inputs above.
 
 **`stubbed`.**
 - NET-71: the units read the records through a stand-in until the rows form (#4452) and the generator-form lowering

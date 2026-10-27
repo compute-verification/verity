@@ -62,7 +62,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o1 is the
-  scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs G·T·NP and no steps).
+  scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs G·T·NP, which the rows
+  form's K charges to each link-window tied to it, and no steps).
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
   alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected

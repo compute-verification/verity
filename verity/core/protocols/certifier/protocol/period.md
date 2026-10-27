@@ -48,6 +48,8 @@ egress). A link-window passes when:
  outputs, and a scan whose `prog` is no audit's output is refused by name;
 - one-stage accepted the scan with one level drawn subset or stratified, and a bound `b` on faulty proof blocks.
 
-With one schedule the schedules term is 0. Each link-window's scan adds its free inputs (none: it registers its rows,
-and its `prog` is a compute audit's output), faulty sets, `16 · b` and `Dj^k`, as an audit does, and the public lists
-those terms under `scans`. `eps` is the union of the audits' and the scans' δ.
+With one schedule the schedules term is 0. Each link-window's scan adds its free inputs, faulty sets,
+`b · max(b_ing, b_eg)` and `Dj^k`, as an audit does, and the public lists those terms under `scans`. Its free inputs
+are its tied audits': the scan registers its rows and its `prog` is a compute audit's output, so the egress tie moves
+the free term from the scan's `prog` to the tied audit's inputs, the parameters' `free` of each audit whose output port
+the scan's `prog` entry names. `eps` is the union of the scans' δ.
