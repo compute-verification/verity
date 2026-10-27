@@ -77,14 +77,14 @@ def test_coin_tree_is_released_after_the_last_answer():
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
     for j in range(K):
         with pytest.raises(RuntimeError, match="released after the session"):
-            c.commitment
+            _ = c.commitment
         with pytest.raises(RuntimeError, match="opened after the session"):
             c.openings()
         assert c.challenge() == tree.indices[j]
         c.receive(block(tree.indices[j]))
     assert c.done
     with pytest.raises(RuntimeError, match="released after the session"):
-        c.commitment
+        _ = c.commitment
     signed = c.close()
     assert c.commitment == signed.commitment and c.commitment.coin_root == tree.root and len(tree.root) == 64
     assert c.openings() == tuple(tree.opening(j) for j in range(K))
