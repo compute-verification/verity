@@ -25,6 +25,8 @@ uv run python benchmarks/rho/run.py                                  # every sce
 uv run python benchmarks/rho/run.py --scenario reference-onsite-h200 --set regime.onsite.k_wipe=2e10
 uv run python benchmarks/rho/run.py --figures /tmp/rho-figs             # and the figures (matplotlib)
 verity bench rho                                                      # the same, as a runner (with $OUT: rho.md, rho.json, figures/)
+uv run python benchmarks/rho/periods.py                              # the H200 scenarios per monitoring period (week, month, year), over one datacenter and the
+                                                                      # world (census world-inference-2027): the bound, its parts by kind, what is scaled, the premises ranked
 ~~~
 
 ## The model

@@ -230,3 +230,29 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "
                                               "`intake · α Φ`, a server's ingress only its declared inputs "
                                               "(draft:NET-92); plus 1.86e+03 bit/s of timing and side channels.")
+
+
+def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices(tmp_path, monkeypatch, capsys):
+    """Remote: the serving block is one server over the period, one a server; each row's overhead is the scenario's
+    with `fleet` and `horizon` set."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import periods
+
+    name = "reference-remote-h200"
+    monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", name, "--out", str(tmp_path)])
+    periods.main()
+    text = capsys.readouterr().out
+    assert all(f"\n## {s}\n" in text for s in ("The lower bound", "Its parts", "The premises, ranked"))
+    assert (tmp_path / "periods.md").read_text() == text
+    rows = json.loads((tmp_path / "periods.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
+    rows = rows["rows"]
+    assert [(x["fleet"], x["period"]) for x in rows] == [(f, p) for f, _ in periods.FLEETS for p in periods.PERIODS]
+    for x in rows:
+        at = REG.override(periods.choices(name, x["fleet"], x["period"]))
+        assert x["overhead"] == analysis.result(at, name).lo
+        (block,) = x["scaled"]["blocks"]
+        assert block["count"] == REG[f"fleet.{x['fleet']}.count"]
+        assert block["seconds"] == pytest.approx(x["period_s"]) == pytest.approx(REG[f"horizon.{x['period']}.seconds"])
+        assert x["range"][0] <= x["overhead"] <= x["range"][1] and x["corner"] <= x["overhead"]
+        assert [r["decades"] for r in x["ranking"]] == sorted((r["decades"] for r in x["ranking"]), reverse=True)
+        assert any(r["what"] == "draft:no-straddle" for r in x["ranking"])
