@@ -9,7 +9,7 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
 0930aa61ef10caf3a7bc94eec8d7876c5d38cd9aac9e14b794136723df36a5ba  ../../../../../Security/Proofs/lakefile.toml
 f4cb72d3c83b113593469e056cc6fb514bd049421264f74adca175527ba3bb29  ../../../../../Security/Proofs/lake-manifest.json
-dcd2ec45928a625652ff19f6d8ddb5b28aea2e71ae920e3a957634822c7e3325  ../../../../../Security/Definitions/Pous.lean
+ed29f54a759bf2c550b042f8c84ec178f71af26913d54dc2042e48b1fd60e195  ../../../../../Security/Definitions/Pous.lean
 3dec494c279c59a29d7d17d53987e71bfce51434dc21052f220abca76e219eca  ../../../../../Security/Proofs/Pous/Statements.lean
 57d86e4aa918aa43d237c72f4cf793324c1269dd6aa4a3c70550d7da7dc22c15  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
@@ -53,6 +53,7 @@ f17be8cbc547930461d46c4f41040ea165bfff15169972934aade312603dc129  ../../../../..
 54f82aac68b27f47b2383f486ef7dbfae2dfc14fc02de7e12458a97b7bfd6463  ../../../../../Security/Definitions/Pous/Model/SecureErasure.lean
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 f5671be4b98bfe70d0cafff562ed2c79f5ac500482a652ac3c6d669e0fc836c1  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
+4333de5991b7db95a648179d453b0ac08707315ce168b48ac27408a2086676ab  ../../../../../Security/Definitions/Pous/P2/Clip.lean
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 820e3315c31eafa922a98a3e9ce18dd085f66a9a2948d8f35b08f8f3e2576c79  ../../../../../Security/Definitions/Pous/P2/Mutable.lean
 d8f6004051961b914e007d744f4acbef542bff8fc2a99b7ce36de33b6a9d469b  ../../../../../Security/Definitions/Pous/P2/Rounds.lean
