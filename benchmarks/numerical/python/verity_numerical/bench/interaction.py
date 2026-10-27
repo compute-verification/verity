@@ -1,7 +1,7 @@
 """A result's interaction record and the measurement protocol it must meet: what ``cell check`` and C-Flock's ``register``
 read of a ``bench-result/v1`` document.
 
-The interaction model is t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25), with the
+The interaction model is t = compute + rounds x RTT + bytes / bandwidth, with the
 reference network ``census.REFERENCE_NETWORK`` (``benchmarks/census/networks.json``: same datacenter)."""
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def interaction(meta: Mapping[str, Any], interactive: bool = False) -> dict[str,
     rounds (``rounds_source``): a Fiat–Shamir proof has none (0); an ``interactive`` protocol's file-replayed transcript pays the
     protocol's sequential depth, ``"derived: file-verified"``: the per-proof depth (``rounds.sequential_depth``, else
     ``rounds.protocol``) x the proofs that run one after another -- ``N_subbatches`` sub-batch proofs,
-    ``software.backend.pipeline`` of them in flight at once, so ceil(N_subbatches / pipeline) waves (root's ruling 2026-09-26)."""
+    ``software.backend.pipeline`` of them in flight at once, so ceil(N_subbatches / pipeline) waves."""
 
     m = measurements(meta)
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -127,7 +127,7 @@ def interaction_problem(ix: Mapping[str, Any], one_sided: bool = False) -> str |
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
     and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
     the run's own measured RTT (``net.rtt_ms``) and bandwidth (``net.bandwidth_bps``, else the reference's): the check validates
-    the model against the run itself (root's ruling 2026-09-25)."""
+    the model against the run itself."""
     if not ix["live"]:
         return None
     if ix["rounds"] is None:
