@@ -1,9 +1,9 @@
 # The bandwidth audit, v0
 
-Status: superseded. The bandwidth audit on the served path is the remote bandwidth audit
-(`verity/core/protocols/remote_bandwidth/PROTOCOL.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
+Status: superseded. The bandwidth audit on the served path is proof of useful bandwidth (PoUB,
+`verity/core/protocols/remote_bandwidth/PROTOCOL.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
 tag `ro-blake3/v1` is BLAKE3, which the one-hash rule takes off the served path, so no deployment runs this
-audit, and no served code reads it: `verity_vllm.protocols.remote_bandwidth`'s receipts are the remote audit's own
+audit, and no served code reads it: `verity_vllm.protocols.remote_bandwidth`'s receipts are PoUB's own
 (its `receipts.py`). The code stays for the benchmarks that measure its tags. What follows is v0 as it was granted.
 
 v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
@@ -22,9 +22,9 @@ is `HonestPasses`.
 No guarantee assumes trusted prover hardware. The audit has two parts, and only one is trusted:
 
 - **The verifier** holds the secret `source`, draws each window's nonce, derives its key, sends `σ`, runs the clock,
-  draws the samples, checks the openings and keeps the store's state (§3). It is PoUS's memory challenger (§3), the
-  auditor's hardware on a machine the prover doesn't control (the auditor's own VM or box, under the auditor's
-  account), never a process on the GPU's node. `trusted-host` (§5) is about that machine only.
+  draws the samples, checks the openings and keeps the store's state (§3). It is the memory challenger (§3) of proof
+  of useful space (PoUS), the auditor's hardware on a machine the prover doesn't control (the auditor's own VM or box,
+  under the auditor's account), never a process on the GPU's node. `trusted-host` (§5) is about that machine only.
 - **The on-node challenger** is the code that runs on the GPU's own node: `audit.read_device`, and
   `benchmarks/bandwidth`'s `gpu.challenger_device` and `gpu.Prover`. It is prover hardware. Its only role is to run the
   protocol: to drive the tagger and carry `σ`, the root, the samples and the openings between the GPU and the verifier.
@@ -45,7 +45,7 @@ Two things still rest on the on-node challenger, and neither is certified until 
    time with the verifier off the node, which adds a round trip inside the site, is unmeasured. This is completeness
    only: the bound reads `T + RTT` on the verifier's clock wherever it runs.
 
-The remote bandwidth audit keeps the same split: its passes are chained by Fiat–Shamir from the verifier's
+PoUB keeps the same split: its passes are chained by Fiat–Shamir from the verifier's
 live challenge, and its openings are drawn from the verifier's live coin after the last root.
 
 ## 1. What a window certifies
@@ -441,8 +441,8 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 1. **`ro-sha512/v1` does not fit on the RTX PRO 6000.** Its honest pass takes 1.73 ms, past the 1.708 ms rebuild floor,
    so no `T` that `Params` allows admits it; its windows are late. It is SHA-512-bound (17 compressions per block and
    one for its leaf), and it stays as the proof's first instance and the reference's.
-2. **`ro-blake3/v1` was v0's deployed tag**, until the one-hash rule took BLAKE3 off the served path; the remote
-   bandwidth audit's receipt is sketch-then-SHA-512. Keyed BLAKE3 is the fastest random-oracle candidate on sm_120, whose
+2. **`ro-blake3/v1` was v0's deployed tag**, until the one-hash rule took BLAKE3 off the served path; PoUB's
+   receipt is sketch-then-SHA-512. Keyed BLAKE3 is the fastest random-oracle candidate on sm_120, whose
    integer pipe runs every integer operation at about 64 thread-operations per SM per clock. TurboSHAKE128, the second
    candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88, a compute
    floor of 0.56 ms on this store against 0.51 ms.

@@ -187,7 +187,7 @@ A spec-level reference for network accounting's timing channel:
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
   (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
   `benchmarks/network_traces/load_relay.py`);
-- the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
+- the blocks (`blocks`): the proof blocks each server runs, the steps the circuit spans and its transfer gates, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
   blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
   transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
@@ -200,8 +200,9 @@ A spec-level reference for network accounting's timing channel:
   blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
-  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
-  declaration and not a private partition, so it is checked in the clear with no proof block;
+  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like the
+  registration the inference-only policy checks and not a private partition, so it is checked in the clear with no
+  proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt

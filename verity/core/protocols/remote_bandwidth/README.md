@@ -1,12 +1,12 @@
-# Remote bandwidth audit (`verity.core.protocols.remote_bandwidth`)
+# PoUB (`verity.core.protocols.remote_bandwidth`)
 
-The remote bandwidth audit v0: a verifier with no hardware at the site certifies, window by window, how many reads of a
-node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
+Proof of useful bandwidth (PoUB) v0: a verifier with no hardware at the site certifies, window by window, how many reads
+of a node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
 
 ## Which side is the definition
 
 The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
-verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
+verifier of record, Python mirrors it, and PoUB switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
 `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
