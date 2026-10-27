@@ -536,10 +536,10 @@ def delete(pkg: Path, area: str, doc: dict, used: dict, spare: set[str]) -> list
     return sorted(gone)
 
 
-def stale_mentions(pkg: Path, gone: list[str], files: list[str]) -> list[str]:
-    """The tracked files (documents and locks) still naming a deleted module's path or name."""
+def stale_mentions(pkg: Path, gone: list[str], files: list[str], mods: dict[str, str]) -> list[str]:
+    """The tracked files (documents and locks) still naming a deleted module's path (``mods``: where each was) or name."""
     p = rel(pkg)
-    paths = {f"{p}/{m.split('.', 1)[1].replace('.', '/')}.lean" for m in gone}
+    paths = {f"{p}/{mods[m]}" for m in gone}
     names = set(gone)
     out = []
     for f in files:
@@ -575,11 +575,12 @@ def main(argv: list[str] | None = None) -> int:
         if not a.list or not a.used:
             ap.error("--delete needs --list (an unused.json) and --used (the used.json beside it)")
         doc, used = json.loads(a.list.read_text()), json.loads(a.used.read_text())
-        spare = set(a.spare) | set(queued_modules(queued or {}, rel(pkg), C.lean_modules(pkg)))
+        mods = C.lean_modules(pkg)
+        spare = set(a.spare) | set(queued_modules(queued or {}, rel(pkg), mods))
         gone = delete(pkg, a.delete, doc, used, spare)
         print(f"unused: deleted {len(gone)} modules of {a.delete}, "
               f"{sum(r['bytes'] for r in doc['unused'] if r['module'] in set(gone)):,} bytes")
-        for line in stale_mentions(pkg, gone, tracked()):
+        for line in stale_mentions(pkg, gone, tracked(), mods):
             print(f"  still named by {line}")
         return 0
     p = rel(pkg)

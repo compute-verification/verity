@@ -139,7 +139,11 @@ def test_listing_carries_bytes_area_owner_and_totals(stand_in):
 def test_delete_rewrites_the_imports_through_what_it_deleted(stand_in):
     pkg, policy, used, test = stand_in
     doc = U.listing(pkg, U.decide(pkg, policy, used, [test], ["Prune.B.Old"]), {U.rel(pkg): policy}, used, [test])
+    mods = U.C.lean_modules(pkg)
+    (pkg / "README.md").write_text(f"`{U.rel(pkg)}/Prune/B/Group.lean` groups them\n")
     assert U.delete(pkg, "B", doc, used, set()) == ["Prune.B.Group"]
+    assert U.stale_mentions(pkg, ["Prune.B.Group"], [f"{U.rel(pkg)}/README.md"], mods) == [
+        f"{U.rel(pkg)}/README.md: {U.rel(pkg)}/Prune/B/Group.lean"]
     assert not (pkg / path_of("Prune.B.Group")).exists()
     assert (pkg / "Prune.lean").read_text() == "import Prune.A.Main\nimport Prune.B.Old\n"
     assert U.delete(pkg, "A", doc, used, set()) == ["Prune.A.Side"]
