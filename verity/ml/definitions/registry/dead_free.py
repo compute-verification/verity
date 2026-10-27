@@ -11,6 +11,9 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   partial by `TokenSelectChunk_v2` (`b1.TokenSelectChunk_v1` with its last lane's unread index increment gone), reduced with
   logits[0] by `TokenSelectCombine_v2` (`b1.TokenSelectCombine_v1` with each select's branches swapped, as the chunk step's
   are).  Flat, v1 and v3 lower to circuits quadratic in V; this one is linear.
+* `TokenSelectGroups_v1{C,G}`: `TokenSelectChunk_v2{G}` over each group of G of its C logits, the groups' bests as one array
+  and their indices as another, for `TokenSelectCombine_v2{V,G}`.  A unit's output rows then hold a word or two per group, so
+  they pass the 111 bytes C-Flock needs in some row of every unit, where a chunk's partial alone is 2 and 4 bytes.
 * `TopPKeepWord_v2{V,S}`: `topp_words.TopPKeepWord_v1{V,S}`'s word gates that its keep bits depend on (`live_replay`).  The keep
   word's builder applies each operation to whole vectors of lanes, and some lanes of a vector are read by nothing after it.
 * `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
@@ -42,7 +45,7 @@ from verity.ml.circuits.liveness import Liveness
 from verity.ml.circuits.ops.fp32 import F32AddFtz
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
-from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
+from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16, ZERO16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
@@ -190,6 +193,33 @@ def TokenSelectCombineV2(B, S, x0, best, idx):
         if c < n - 1:
             run = B.call(P.SelectBf16, keep, run, best[c])
     return run_i
+
+
+def _groups_type(S):
+    if not 1 <= S.G <= S.C:
+        raise ValueError(f"TokenSelectGroups_v1: groups of G = {S.G} of C = {S.C} logits (1 <= G <= C)")
+    n = len(chunks(S.C, S.G))
+    return (("x", Array(S.C, BF16)),), Tuple(Array(n, BF16), Array(n, I32))
+
+
+@composite("TokenSelectGroups", 1, ["C", "G"], _groups_type, conformance="model-untested")
+def TokenSelectGroupsV1(B, S, x):
+    """`TokenSelectChunk_v2{G}` over each group of G consecutive logits of the C (`chunks(C, G)`: the last group the rest),
+    each group's best a word of ``best`` and its index in the group a word of ``idx``: `TokenSelect_v4`'s chunks of G, C
+    logits of them in one unit, for `TokenSelectCombine_v2{V,G}` to read a unit's groups as one row of bests and one of
+    indices."""
+    full = S.C // S.G
+    best, idx = [], []
+    if full:
+        parts = B.batch(bind(TokenSelectChunkV2, C=S.G), x[0:full * S.G].reshape(Array(full, Array(S.G, BF16))), axes=(0,))
+        best.append(strided_view(parts, 0, 1, 2, 0, full))
+        idx.append(strided_view(parts, 1, 1, 2, 0, full))
+    if S.C % S.G:
+        last = B.call(bind(TokenSelectChunkV2, C=S.C % S.G), x[full * S.G:S.C])
+        best.append(last[0].refs)
+        idx.append(last[1].refs)
+    n = len(chunks(S.C, S.G))
+    return tuple_of(_Coll(Array(n, BF16), concat(best)), _Coll(Array(n, I32), concat(idx)))
 
 
 @composite("TokenSelect", 4, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
@@ -435,5 +465,5 @@ def AttentionV19(B, S, q, kc, vc):
 __all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnBlockFirstV2",
            "AttnHeadEndV1", "CHUNK",
            "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
-           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
-           "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
+           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectGroupsV1", "TokenSelectV3", "TokenSelectV4",
+           "TopPKeepWordV2", "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
