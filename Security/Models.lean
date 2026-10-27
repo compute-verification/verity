@@ -11,6 +11,7 @@ import Definitions.Nci.Guarantees.FitRate
 import Definitions.Nci.Guarantees.Dampener
 import Definitions.Nci.Guarantees.Remote
 import Definitions.Nci.Guarantees.RemotePeriod
+import Definitions.Nci.Guarantees.RemoteEndToEnd
 import Definitions.Nci.Guarantees.Info
 import Definitions.Nci.Guarantees.Fmt
 import Definitions.Nci.Guarantees.Fmt2
