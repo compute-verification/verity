@@ -6,7 +6,7 @@ import Proofs.Flock.Bridge.Deployed
 # The sampled audit's knowledge soundness, live (stated, not proved)
 
 `SampledKSLive` is `EndToEndHidden`'s setting with its event read in the sampling claims' relation, at the deployed
-trace commitment: for every live prover, the probability that flock-verify accepts and the committed transcript fixed
+trace commitment: for every live prover, the probability that flock-verify accepts and the committed trace fixed
 at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`
 at the circuit's constants `Bridge.constsOf`, `Bridge.partOf`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is
 at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
@@ -44,7 +44,7 @@ open Classical in
 bytes `desc` and query `q` (which `RelS` doesn't read), at SHA-512, the registration's roots and the deployed commitment,
 $$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \delta + \varepsilon_{ks} + \delta_{link}, \qquad \delta = \binom{n-K_0}{kd} / \binom{n}{kd},$$
-`X` the committed transcript fixed at registration (`XplurZC`), `ε_ks` and `δ_link` `EndToEndHidden`'s. -/
+`X` the committed trace fixed at registration (`XplurZC`), `ε_ks` and `δ_link` `EndToEndHidden`'s. -/
 def SampledKSLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)

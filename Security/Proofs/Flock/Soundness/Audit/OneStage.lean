@@ -9,7 +9,7 @@ The prover registers `R` (its roots). The verifier draws units from its own rand
 `L`, after registration. One batched session proves the drawn units against `R`. The audit's output
 is the verdict and the draw (`audit`).
 
-**The committed transcript** is an analysis device: a function of the prover's state at
+**The committed trace** is an analysis device: a function of the prover's state at
 registration, which is its registration `R` and its session strategy for every draw (`Cont`). In
 the compiled analysis it is the plurality of what the extractor recovers behind each commit string.
 Because it is fixed before the draw, the draw is independent of its wrong units. Nobody computes it.
@@ -19,13 +19,13 @@ table, both named:
 
 * `KnowledgeSound ε_ks`: the table accepts while extraction of the unit fails;
 * `LinkSound δ_link`: extraction succeeds, but what it recovers differs from the committed
-  transcript on the unit's wires (consistency across units).
+  trace on the unit's wires (consistency across units).
 
 Both are bounds over the whole audit, for every prover and every rule that picks a drawn unit before
 the session's first coin (the first wrong drawn unit, in the proof). That is the form the table
 theorems take once averaged over the prover's state; neither needs to hold state by state.
 
-**The theorem** (`audit_le`): for every event `E` on the committed transcript and the draw,
+**The theorem** (`audit_le`): for every event `E` on the committed trace and the draw,
 $$\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset]
   + \varepsilon_{ks} + \delta_{link}.$$
 Its corollaries are the integrity profile (`audit_profile`), the count curve
@@ -59,8 +59,8 @@ def cont (σ : Strategy (audit L Reg session)) : Cont L Reg session (reg σ) :=
   fun ω => Strategy.ofMap _ _ (σ.2 ω)
 
 /-- What the analysis of an audit fixes.
-* `Tr`, `wrong`: transcripts, and the units wrong in each;
-* `committed`: the committed transcript, a function of the prover's state at registration;
+* `Tr`, `wrong`: traces, and the units wrong in each;
+* `committed`: the committed trace, a function of the prover's state at registration;
 * `ksFail S R τ u`: extraction of drawn unit `u` from the session state `τ` fails;
 * `linkFail S R τ u X`: it succeeds, but disagrees with `X` on `u`'s wires;
 * `cover`: a unit wrong in `X` fails one way or the other, from every state. -/
@@ -76,7 +76,7 @@ namespace Analysis
 
 variable (A : Analysis L Reg session)
 
-/-- The committed transcript of an audit strategy. -/
+/-- The committed trace of an audit strategy. -/
 def committedOf (σ : Strategy (audit L Reg session)) : A.Tr := A.committed (reg σ) (cont σ)
 
 /-- **Knowledge soundness, per unit** (named hypothesis `ε_ks`): for every prover and every rule
@@ -90,7 +90,7 @@ def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
 
 /-- **The link term** (named hypothesis `δ_link`): for every prover and every rule `tgt` that
 picks a drawn unit before the session's first coin, the probability that the session accepts while
-the picked unit's extraction disagrees with the committed transcript is at most `δ_link`. -/
+the picked unit's extraction disagrees with the committed trace is at most `δ_link`. -/
 def LinkSound (δlink : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => prob (fun ok => ok = true ∧
@@ -103,7 +103,7 @@ theorem avg_add₃ {C : Type} [Fintype C] (f g h : C → ℝ≥0∞) :
     avg (fun c => f c + g c + h c) = avg f + avg g + avg h := by
   rw [avg_add, avg_add]
 
-/-- **The one-stage audit bound.** For every event `E` on the committed transcript and the draw,
+/-- **The one-stage audit bound.** For every event `E` on the committed trace and the draw,
 the audit accepts with `E` with probability at most the probability that the draw satisfies `E`
 and misses every wrong unit, plus `ε_ks + δ_link`. -/
 theorem audit_le (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
@@ -219,9 +219,9 @@ namespace Partition
 
 variable {C : Circuit} (P : Partition C n)
 
-/-- **The audit's analysis over a partition.** `X` is the committed transcript, a function of the
+/-- **The audit's analysis over a partition.** `X` is the committed trace, a function of the
 prover's state at registration. `ext S R τ u` is what the extractor recovers for the drawn unit
-`u` from the session state `τ`: a transcript, of which only `u`'s committed inputs and outputs
+`u` from the session state `τ`: a trace, of which only `u`'s committed inputs and outputs
 (`io u`) are read, or nothing. Extraction fails when it recovers nothing or something that does
 not satisfy `u`; the link fails when it satisfies `u` but differs from `X` on `u`'s wires. -/
 noncomputable def analysis (X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool))
@@ -331,12 +331,12 @@ theorem audit_covered (hks : (P.analysis X ext).KnowledgeSound εks)
 
 /-! ### The oracle layer
 
-The prover sends the committed transcript itself, as tables are sent at the oracle layer, so the
-committed transcript is the registration and extraction returns it. Knowledge soundness is then
+The prover sends the committed trace itself, as tables are sent at the oracle layer, so the
+committed trace is the registration and extraction returns it. Knowledge soundness is then
 soundness of the session (`SessionSound`), the link term is zero, and the anchors term is the
 session's error on inputs other than the anchors' (`InputsSound`). -/
 
-/-- The oracle-layer analysis: the registration is the transcript. -/
+/-- The oracle-layer analysis: the registration is the trace. -/
 noncomputable def oracle (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) :
     Analysis L (Fin C.N → Bool) session :=
   P.analysis (fun R _ => R) (fun _ R _ _ => some R)

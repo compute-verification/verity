@@ -3,10 +3,10 @@ import Definitions.Pouw.Window
 /-!
 # PoUW's reading of the window: its bound plus the tie to what's served, and its collision term at counted queries
 
-`WindowEps` bounds the window accepting while its committed transcript's wrong units are in the family `𝓑`.
-PoUW credits the served computation, so it reads one more term, the window accepting while its committed transcript
+`WindowEps` bounds the window accepting while its committed trace's wrong units are in the family `𝓑`.
+PoUW credits the served computation, so it reads one more term, the window accepting while its committed trace
 isn't the served one (`ServedTie`, `δ_in`). `window_served_le` adds the two: the window accepts while its committed
-transcript is not anchored, served and with its wrong units outside `𝓑` with probability at most `WindowEps`'s bound
+trace is not anchored, served and with its wrong units outside `𝓑` with probability at most `WindowEps`'s bound
 plus `δ_in`.
 
 `WindowEps`'s bound holds at each oracle with the collision term `coll` at that oracle's play. `avg_counted_le` reads it
@@ -51,9 +51,9 @@ theorem prob_or_le (p q : α → Prop) :
       rw [← mul_add]
       exact mul_le_mul_right (prob_or_le p q (k c) (s c)) _
 
-/-- **PoUW's reading of the window**: if the window accepts with its committed transcript's wrong units in `𝓑` with
+/-- **PoUW's reading of the window**: if the window accepts with its committed trace's wrong units in `𝓑` with
 probability at most `b` (`WindowEps`'s bound) and the tie to what's served holds (`ServedTie`, against the served pass
-`P`), then it accepts while its committed transcript is not anchored, served and with its wrong units outside `𝓑` with
+`P`), then it accepts while its committed trace is not anchored, served and with its wrong units outside `𝓑` with
 probability at most `b + δin(R, τ)`. -/
 theorem window_served_le {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} {Lw : Reg → Law (WUnit n)}
     {sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool} {U : UnitStmts Tr n} {P : ServedPass Tr n U.Pos}

@@ -12,7 +12,7 @@ commit string to a value other than the registrant's (`LinkEvRegZK`). The second
 extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, at the same trial as the link finder,
 `trialGZC`).
 
-* `analysisRegZC`: `analysisZC` with the committed transcript paired with the registration, its wrong units the wrong
+* `analysisRegZC`: `analysisZC` with the committed trace paired with the registration, its wrong units the wrong
   units together with the units reading a registered-value disagreement (`regWrongZ`), and its link term at
   `LinkEvRegZK`;
 * `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
@@ -39,7 +39,7 @@ variable {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
 
 /-! ## The event and the analysis -/
 
-/-- **Wire `g` disagrees with its registered value** in the transcript `Xt`: the registrant's opening `wo` of `g`'s
+/-- **Wire `g` disagrees with its registered value** in the trace `Xt`: the registrant's opening `wo` of `g`'s
 commit string has the commitment registered at `R`, and `Xt`'s bit on `g` is not the opening's. -/
 def RegBadZ (R : Reg) (Xt : Fin C.N → Bool) (g : Fin C.N) : Prop :=
   vb.com (wo (vb.pos g)) = vb.cs R (vb.pos g) ∧ Xt g ≠ vb.bit (vb.val (wo (vb.pos g))) g
@@ -49,7 +49,7 @@ open Classical in
 noncomputable def regWrongZ (R : Reg) (Xt : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ∃ g ∈ P.io u, RegBadZ A P planZ tab vb wo R Xt g
 
-/-- **The registered link event** at drawn unit `u`'s table, for the registration `R'` and the transcript `Xc`: the
+/-- **The registered link event** at drawn unit `u`'s table, for the registration `R'` and the trace `Xc`: the
 oracle `C₀` is committed, and every close satisfying padded witness, on one of `u`'s wires, decodes differently from
 `Xc`, or decodes differently from the registrant's opening of the wire's commit string, that opening having the
 commitment registered at `R'`. -/
@@ -76,7 +76,7 @@ noncomputable def regTermZC (L : Law n) (k Rw : ℕ) (ρ qW : ℝ) : ℝ≥0∞ 
 
 variable {L : Law n}
 
-/-- **The compiled `--zk` audit's analysis against registered values**: `analysisZC`, its committed transcript paired
+/-- **The compiled `--zk` audit's analysis against registered values**: `analysisZC`, its committed trace paired
 with the registration, its wrong units also those that read a registered-value disagreement (`regWrongZ`), and its
 link term at `LinkEvRegZK`. -/
 noncomputable def analysisRegZC
@@ -514,7 +514,7 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
 
 /-- **`zk_flock_regValsC_cr` with the wrong units counted too**: on its assumptions,
 `Pr[accept ∧ a drawn unit is wrong or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
-event `analysisRegZC`'s at its committed transcript. -/
+event `analysisRegZC`'s at its committed trace. -/
 theorem zk_flock_regDrawnC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (wo : vb.Pos → vb.Opening)

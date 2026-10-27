@@ -66,6 +66,48 @@ files = ["Security/Definitions/Core.lean", "Security/Definitions/Accounting/Assu
 "transcript before the coins" = "trace before the coins"
 "a transcript committed before the coins" = "a trace committed before the coins"
 
+# The audits' analyses, the bridges to them and PoUW's window: every lowercase "transcript" there is the committed
+# values `X` on the units' wires (`Exec.Transcript`, C-Flock's run, keeps its name).
+[[words_in]]
+files = ["Security/Proofs/Flock/Soundness/Audit/OneStage.lean", "Security/Proofs/Flock/Soundness/Audit/TwoStage.lean",
+         "Security/Proofs/Flock/Soundness/Audit/Influence.lean", "Security/Proofs/Flock/Soundness/Audit/Extraction.lean",
+         "Security/Proofs/Flock/Soundness/Audit/FlockPublic.lean", "Security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+         "Security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+         "Security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockPublicL.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Link.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Rows.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicHJ.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/PublicJ.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/Composed/PublicJ.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkBind/Headline.lean",
+         "Security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+         "Security/Proofs/Flock/Recursive/ZkReg/RegLink.lean", "Security/Proofs/Flock/Recursive/Transfer.lean",
+         "Security/Proofs/Flock/VBridge/Unit.lean", "Security/Proofs/Flock/VBridge/Verifier.lean",
+         "Security/Proofs/Flock/VBridge/InnerUnit.lean", "Security/Proofs/Flock/VBridge/OfVStar.lean",
+         "Security/Proofs/Flock/VBridge/ResUnit.lean",
+         "Security/Proofs/Flock/Bridge/Statement.lean", "Security/Proofs/Flock/EndToEnd/Statement.lean",
+         "Security/Proofs/Flock/EndToEndDrawn/Statement.lean", "Security/Proofs/Flock/EndToEndRegistered/Statement.lean",
+         "Security/Proofs/Flock/EndToEnd/Period/Statement.lean",
+         "Security/Definitions/Pouw/Window.lean", "Security/Definitions/Pouw/Guarantees/Window.lean",
+         "Security/Proofs/Pouw/Window/Served.lean"]
+[words_in.words]
+"transcripts" = "traces"
+"transcript" = "trace"
+
+# Files that also speak of C-Flock's run or PoUW's transcripts: the analysis's committed values by phrase.
+[[words_in]]
+files = ["Security/Proofs/Flock/Soundness/E2E.lean", "Security/Proofs/Flock/Soundness/Discharge/Exec/E2EL.lean",
+         "Security/Proofs/Pouw/EndToEndWindow/Statement.lean"]
+[words_in.words]
+"committed transcript" = "committed trace"
+"analysis's transcripts" = "analysis's traces"
+"at every transcript `X`" = "at every trace `X`"
+"transcripts, the map `tx` to PoUW" = "traces, the map `tx` to PoUW"
+
 # The locks' prose and keys outside their records name the field by its full name.
 [[words_in]]
 files = ["**/lean-audit.json"]

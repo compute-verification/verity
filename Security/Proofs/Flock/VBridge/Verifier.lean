@@ -303,7 +303,7 @@ theorem inWords_unit {LANES H : ℕ} {name : String} {net : Flock.Net}
 /-- **A copy of a unit the verifier accepted as `rec-open/l<L>-h<H>`, in a unit of any partition, computes the climb
 and the consistency term.** If `RecOpen.check` accepted `c` and its unit's name gives `L` and `H`, then `H ≤ 32` and
 the unit is the verifier's net (`RecOpen.check_ok`). Let unit `u` be an instance of `k` stacked copies of the unit's rows
-(`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values (`copyVal`),
+(`Rows.ofNet`), the trace `X` carrying 1 at the stack's constant. Then at copy `j`'s column values (`copyVal`),
 `laid_unit` holds. -/
 theorem unit_check {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit} (hB : Built c.unit)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
@@ -337,7 +337,7 @@ theorem unit_check {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n}
 
 /-- **A copy of the unit of a circuit `HmRow.parse` accepted, in the circuit's program on Δ's keys, computes the climb
 and the consistency term**, when the unit is named `rec-open/l<L>-h<H>`: `parse` ran `RecOpen.check`
-(`ParseFacts.recNet`), and `unit_check` holds at `keyInst`, the transcript carrying 1 on unit `u`'s constant gate. -/
+(`ParseFacts.recNet`), and `unit_check` holds at `keyInst`, the trace carrying 1 on unit `u`'s constant gate. -/
 theorem keyProg_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (hc : Flock.HmRow.parse tags bytes tables = .ok c) (hU : Built c.unit) (n : ℕ)
     (outs : Finset (Fin (keyGates hU n))) (X : Fin (keyGates hU n) → Bool) (u : Fin n) {j : ℕ}

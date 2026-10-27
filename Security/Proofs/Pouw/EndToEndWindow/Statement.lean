@@ -251,7 +251,7 @@ end Prover
 
 /-- **Straight-line extraction of the registration's transcript** (a named premise, open; the random-oracle model,
 claim id `random-oracle`, card 9cd57182), for a prover model `PM`, PoUW's cost model `CM`, a domain `D`, the transcript
-`Ccom H s R` that the registration `R`'s commitments bind at the oracle and the salt (the analysis's committed transcript,
+`Ccom H s R` that the registration `R`'s commitments bind at the oracle and the salt (the analysis's committed trace,
 read at the registration alone), the extractor's cost `T_ext` and calls `q_ext`, and an error `ε_id(q, N)`. For every
 in-domain workload and every prover `B` within `(T, q)` there is an adversary `A` of PoUW's game within
 `(T + T_ext, q + q_ext)` whose transcript is the one `B`'s registration binds, on every run whose registration the
@@ -317,7 +317,7 @@ def WindowBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : 
       (auditReg Lr (session H s)) (σ' H s) ≤ β H s
 
 /-- **The window realizes PoUW's units** at the oracle `H` and the salt `s`, for the wrong units `wrong` of an
-analysis's transcripts and the map `tx` from them to PoUW transcripts: at every transcript `X`, the incorrect work of
+analysis's traces and the map `tx` from them to PoUW transcripts: at every trace `X`, the incorrect work of
 `tx X` is at most the window's unsound work at `X`'s wrong units,
 $$\sum_{u < N,\ u \notin K(tx\,X)} W_{ref}(u) \le \mathrm{unsoundWork}_w(cl, \mathrm{wrong}\,X).$$
 At the service's draw the closures are empty (`fun _ => ∅`, each drawn unit proved alone), and the unsound work is the
@@ -328,7 +328,7 @@ def Realizes (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) {n m : �
 
 /-- **Each PoUW unit is one template instance** (what the compiler gives at decision 107's coordinate units), at the
 oracle `H` and the salt `s`, for the audit units' strata `σ` and work `w`, the wrong units `wrong` of the analysis's
-transcripts, the map `tx` to PoUW transcripts and the instance `a u` of each PoUW unit `u`:
+traces, the map `tx` to PoUW transcripts and the instance `a u` of each PoUW unit `u`:
 * distinct PoUW units are distinct instances;
 * an instance's work is at least its unit's `W_ref` (the work table at coordinates);
 * a unit not correct in `tx X` is a wrong instance in `X`: the instance's statement is the unit's `Correct` (int7
@@ -371,7 +371,7 @@ theorem realizes_of_coordinates : RealizesOfCoordinates := by
 service (decision 102, `window.py`) draws one uniform `K′`-subset of the window's `N` units after the receipt
 (`subset:K′`), `N` the real units padded to the grid with fillers (`pad(N_real + 1)`), each proved alone (no closures).
 If every audit unit does at most `w_max` (fillers included), the window realizes PoUW's units, the window's one analysis
-at each oracle and salt has knowledge and link terms at the prover's state, and its committed transcript is the
+at each oracle and salt has knowledge and link terms at the prover's state, and its committed trace is the
 registration's (`tx ∘ committed` reads the registration alone, `Ccom`), then `WindowBound` holds at the share `ε` at
 $$\beta(H, s) = \mathrm{miss}_{K'}(b) + \varepsilon_{ks}(H, s, R, \tau) + \delta_{link}(H, s, R, \tau),\qquad
   b = \lceil \varepsilon W / w_{max} \rceil,$$

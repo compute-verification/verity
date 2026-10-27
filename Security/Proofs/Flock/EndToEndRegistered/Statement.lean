@@ -35,7 +35,7 @@ with or without shared-row tables. Every row is registered under the public file
 for every live prover `τ`:
 1. $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
-   with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at
+   with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file, in the committed trace fixed at
    registration) at the rows `rsZHJS`, and `ε_ks`, `δ_link` `EndToEnd`'s terms;
 2. at every outcome flock-verify accepts, each registered read that is the verifier's own at the draw of the table its
    unit is drawn into (`OwnReadsHJ`) is checked at the outcome's registration (`Registered.Reads.Checked`): the SHA-512

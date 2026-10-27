@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 `ZkLink.zk_flock_countC_execOS_cr` at the circuit's program on Δ's source keys (`Placed.keyProg c hU n`), with each
 drawn unit placed at its site in its `--zk` table's accepted statement (`place := si.placeKey hU hparse outs`), and the
-committed transcript the plurality value layer of the rows' binding (`vb := rs.bindingZ hHm`). Its `place` and `vb`
+committed trace the plurality value layer of the rows' binding (`vb := rs.bindingZ hHm`). Its `place` and `vb`
 hypotheses become the sites (`si`), the parse (`hparse`), the layout (`lay`, `rs`) and `HmRowComputes` (`hHm`).
 -/
 

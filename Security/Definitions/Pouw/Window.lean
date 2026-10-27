@@ -29,25 +29,25 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
 * `WUnit`, `slice`, `seqCalls`, `windowSession`: a window's units (a call and a unit of that call), a call's share of a
   draw, and the calls' sessions in order;
 * `SeedIn`, `UnitStmts`: a unit's seed inputs (tag, salt, position, root(A_j), root(B_j)) and the units' statements, each
-  a self-contained tile (decision 106) whose position and roots are functions of its place and the committed transcript
+  a self-contained tile (decision 106) whose position and roots are functions of its place and the committed trace
   (`UnitStmts.seedIn`), and `UnitStmts.wrong`, the units whose committed outputs aren't their function of their inputs;
 * `harmSets`: PoUW's harm family, the wrong-unit sets holding a share of the window's work by the scheme's work table;
 * `CallAnalysis`: what the analysis of one call fixes, in the randomized-extraction form: from each state of the call's
   session, the probabilities that it accepts while a drawn unit's extraction fails (`ks`) or succeeds but disagrees with
-  a transcript on the unit's wires (`link`). The transcripts and the units' statements are the window's;
+  a trace on the unit's wires (`link`). The traces and the units' statements are the window's;
 * `thenExp`, `along`: a quantity of each call's session state, summed over the calls along the window's run;
 * the premises of the window's composition, each in the shape of a compiled bound, a constant plus a term of the
   prover's state: `EscapesWithin` (the draw's escapes on a family within `η` of the product law's at every
   registration), `CallAnalysis.KnowledgeSound` (a call's extraction, `κ_c` plus a term `g_c` of its session's state)
-  and `LinkSoundIn` (a call's link term in the window, against the window's committed transcript, a function of the
+  and `LinkSoundIn` (a call's link term in the window, against the window's committed trace, a function of the
   window's state);
 * `coll`: the window's collision term, the calls' state terms `g_c` summed along the window's run, in expectation over
   the draw; `CollCounted` (premise): on average over the oracle, at most a function of the sessions' counted queries,
   meant only for one oracle program's run at each oracle, counted by that program's calls (as stated, over a separate
   play at each oracle with a free count, it is false at a true count and vacuous at a made-up one);
 * `ServedPass`, `Anchored`, `Served`: what the served pass committed (its anchors and its `-h3` leaves), and a
-  transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
-* `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
+  trace whose inputs are the anchors' and whose outputs are the served leaves' words;
+* `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed trace isn't anchored and
   served with probability at most a term of the window's state;
 * the deployed draw, sampled proofs' service (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
@@ -171,7 +171,7 @@ call's matmul `A_c·B_cᵀ`: it checks its seed, derives from it the noise it re
 input is a public or committed input of the unit, bound before the draw:
 * `tag` (protocol structure) and `salt` (the epoch's live coin, opened before the window) are public, one each for the
   window;
-* `rootA X v` and `rootB X v`, the operand roots of unit `v`'s matmul, are committed: read from the committed transcript
+* `rootA X v` and `rootB X v`, the operand roots of unit `v`'s matmul, are committed: read from the committed trace
   `X`, which is fixed at registration, and bound by the unit's proof through its rows' opening path to the window root;
 * `pos X v`, the position, is a function of the unit's place `v` (the verifier's draw) and `X` alone (`seedIn`), so no
   message of a session sets it: a prover that could pick a position inside a unit could pick its seed. On the service
@@ -196,13 +196,13 @@ namespace UnitStmts
 
 variable {Tr : Type} {C : ℕ} {n : Fin C → ℕ}
 
-/-- Unit `v`'s seed inputs in the transcript `X`: the window's tag and salt, and its position and operand roots, read
+/-- Unit `v`'s seed inputs in the trace `X`: the window's tag and salt, and its position and operand roots, read
 at its place `v` in `X`. -/
 def seedIn (U : UnitStmts Tr n) (X : Tr) (v : WUnit n) : SeedIn U.Tag U.Salt U.Pos U.Root :=
   ⟨U.tag, U.salt, U.pos X v, U.rootA X v, U.rootB X v⟩
 
 open Classical in
-/-- **The wrong units of a transcript**: those whose committed outputs in `X` aren't their function of their inputs at
+/-- **The wrong units of a trace**: those whose committed outputs in `X` aren't their function of their inputs at
 their seed inputs. Wrong is about values, not work: a deficient unit whose committed outputs came out right by luck isn't
 wrong. -/
 noncomputable def wrong (U : UnitStmts Tr n) (X : Tr) : Finset (WUnit n) :=
@@ -276,14 +276,14 @@ noncomputable def along (sess : Fin C → Game Bool) (F : (c : Fin C) → Strate
 /-- **What the analysis of one call fixes**, in the randomized-extraction form (`ExtractionAnalysis` in
 `Proofs/Flock/Soundness/Audit/Extraction.lean`): from each state `τ` of call `c`'s session on its share `S` of the draw,
 * `ks S R τ u`: `Pr[the session accepts ∧ extraction of the drawn unit u fails]`;
-* `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the transcript X on u's wires]`, the
+* `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the trace X on u's wires]`, the
   roots its seed reads among them;
 * `cover`: when `u` is drawn and wrong in `X` (`UnitStmts.wrong`), `Pr[accept] ≤ ks + link`.
 
 Extraction is against `u`'s statement at its place `⟨c, u⟩`: its relation derives the seed from the place and what its
 witness opens to the window root, the position and roots among it. A witness that opens anything but `X`'s differs from
 `X` on `u`'s wires, which `link` counts, and `UnitStmts.wrong` reads the seed inputs at the same place in `X`. So
-`cover` can hold only for a session that checks unit `u` at its place, never at one the prover picks. The transcripts
+`cover` can hold only for a session that checks unit `u` at its place, never at one the prover picks. The traces
 `Tr` and the units' statements `U` are the window's. -/
 structure CallAnalysis {Reg Tr : Type} (U : UnitStmts Tr n) (c : Fin C)
     (sess : Finset (Fin (n c)) → Reg → Game Bool) where
@@ -310,11 +310,11 @@ def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
 /-- **A call's link term in the window** (premise `δlink_c`): for every window prover state `τ` after the registration
 `R` and every rule that picks a drawn unit before the sessions' first coin, the average over the draw of call `c`'s
 `link` at the picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`),
-against the window's committed transcript, is at most `δlink_c(R, τ)`, a function of the window's state as `LinkSound`'s
+against the window's committed trace, is at most `δlink_c(R, τ)`, a function of the window's state as `LinkSound`'s
 `δlink` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
-transcript is a function of the prover's state at registration, so it is the same for every call and every draw. The
+trace is a function of the prover's state at registration, so it is the same for every call and every draw. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
-its seed reads are the committed transcript's, fixed before the draw. -/
+its seed reads are the committed trace's, fixed before the draw. -/
 def LinkSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
@@ -370,7 +370,7 @@ def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
 /-- **The window's draw is within `η` of the product law on the family `𝓑`** at every registration (premise): the
 escape of every unit set in `𝓑` under the law the verifier runs at `R` is at most its escape under the calls' laws at
 `R`, drawn independently, plus `η`, the same `η` for every `R`. The window's guarantee reads it only at its committed
-transcript's wrong units, when they're in `𝓑`. For the keyed draw this is the pseudorandomness of the keyed streams at
+trace's wrong units, when they're in `𝓑`. For the keyed draw this is the pseudorandomness of the keyed streams at
 the context `digest(R)` (A4, `prf/sha-512`), from a fresh uniform source (A5), with a distinct context for every call
 (M1), on every family. For the service's draw it holds at `η = 0` on the copy-closed sets (`CopyClosed`). -/
 def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fin C) → Law (Fin (n c)))
@@ -382,11 +382,11 @@ def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fi
   `p`, its anchors;
 * `rootH3`: the pass's `-h3` root; `leaf p`, the `-h3` leaf at position `p` under it; `tileRead l v`, the words of leaf
   `l` that unit `v` reads (`tile_read` in `verity/core/protocols/pouw/window.py`);
-* `inputs X v`, `outputs X v`: a transcript `X`'s values at unit `v`'s input and output wires; `rootOf X`, the `-h3`
+* `inputs X v`, `outputs X v`: a trace `X`'s values at unit `v`'s input and output wires; `rootOf X`, the `-h3`
   root the window's entries hold in `X`.
 The positions are the units' statements' (`UnitStmts.Pos`), so a unit reads the anchors and the leaf at its own place in
-the transcript. A reading of `ServedTie` names its instance: the window's wires and the pass's `-h3` tree. An instance
-whose readings forget the words (`In`, `Out` and `Root` with one element) makes every transcript anchored and served. -/
+the trace. A reading of `ServedTie` names its instance: the window's wires and the pass's `-h3` tree. An instance
+whose readings forget the words (`In`, `Out` and `Root` with one element) makes every trace anchored and served. -/
 structure ServedPass (Tr : Type) {C : ℕ} (n : Fin C → ℕ) (Pos : Type) where
   In : Type
   Out : Type
@@ -400,20 +400,20 @@ structure ServedPass (Tr : Type) {C : ℕ} (n : Fin C → ℕ) (Pos : Type) wher
   outputs : Tr → WUnit n → Out
   rootOf : Tr → Root
 
-/-- **An anchored transcript**: its values at every unit's input wires are the served pass's anchors at the unit's
+/-- **An anchored trace**: its values at every unit's input wires are the served pass's anchors at the unit's
 position. -/
 def Anchored {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
   ∀ v, P.inputs X v = P.anchor (U.pos X v)
 
-/-- **A served transcript**: its window entries hold the served pass's `-h3` root, and its outputs at every unit are
+/-- **A served trace**: its window entries hold the served pass's `-h3` root, and its outputs at every unit are
 the words that unit reads from the `-h3` leaf at its position. -/
 def Served {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
   P.rootOf X = P.rootH3 ∧ ∀ v, P.outputs X v = P.tileRead (P.leaf (U.pos X v)) v
 
 /-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowEps`; open on main): every prover's window
-accepts while its committed transcript isn't anchored and served (`Anchored`, `Served`, against the served pass `P`)
+accepts while its committed trace isn't anchored and served (`Anchored`, `Served`, against the served pass `P`)
 with probability at most `δin(R, τ)`, a function of the window's state. `WindowEps` bounds the wrong units of whatever
-transcript the analysis commits; this is what makes that transcript the served computation's, not a self-consistent copy
+trace the analysis commits; this is what makes that trace the served computation's, not a self-consistent copy
 the prover chose. The units' statements `U` and the served pass `P` are fixed before the window, so the prover picks
 neither.
 
@@ -472,7 +472,7 @@ def sessionLaw (N K cap σ : ℕ) : Law (Fin N) where
   draw π := subsetDraw (share K cap σ) π
 
 /-- **Copy-closed unit sets**: a set that holds tile `t` in one session holds it in every session. The service's units'
-statements read the tile and not the session that proves it, so a transcript's wrong units are copy-closed
+statements read the tile and not the session that proves it, so a trace's wrong units are copy-closed
 (`WrongCopyClosed`). -/
 def CopyClosed {S N : ℕ} (B : Finset (WUnit fun _ : Fin S => N)) : Prop :=
   ∀ (σ σ' : Fin S) (t : Fin N), (⟨σ, t⟩ : WUnit fun _ : Fin S => N) ∈ B → ⟨σ', t⟩ ∈ B
@@ -495,7 +495,7 @@ def UnitStmts.copies {Tr : Type} {N : ℕ} (V : UnitStmts Tr fun _ : Fin 1 => N)
   computes v si X := V.computes ⟨0, v.2⟩ si X
 
 /-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowEps`, which it reads at
-`𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceEscapes`'s family): at every transcript, the wrong units hold a tile
+`𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceEscapes`'s family): at every trace, the wrong units hold a tile
 in every session or in none. It holds for the service's statements (`Pouw.Window.wrongCopyClosed_copies`), and there
 `𝓑`'s copy-closed conjunct is automatic (`Pouw.Window.harmSets_copyClosed_iff`). -/
 def WrongCopyClosed {Tr : Type} {S N : ℕ} (U : UnitStmts Tr fun _ : Fin S => N) : Prop :=

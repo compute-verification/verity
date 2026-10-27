@@ -84,8 +84,8 @@ def cont₁ (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
 
 /-- What the analysis of a two-stage audit fixes.
 * `parent`: the coarse unit each fine unit lies in;
-* `committedC`: the coarse committed transcript, from the prover's state at registration;
-* `committedF`: the fine committed transcript, from the coarse one and the prover's state after
+* `committedC`: the coarse committed trace, from the prover's state at registration;
+* `committedF`: the fine committed trace, from the coarse one and the prover's state after
   committing the interior;
 * `compose`: a drawn wrong coarse unit has a wrong fine unit inside it, under every interior;
 * `ksFail`, `linkFail`, `cover`: as in one-stage, at the fine level. -/
@@ -112,7 +112,7 @@ namespace Analysis₂
 
 variable (A : Analysis₂ L₁ L₂ Reg Int session)
 
-/-- The coarse committed transcript of a two-stage strategy. -/
+/-- The coarse committed trace of a two-stage strategy. -/
 def committedCOf (σ : Strategy (twoStage L₁ L₂ Reg Int session)) : A.TrC :=
   A.committedC (reg₂ σ) (cont₁ σ)
 
@@ -126,7 +126,7 @@ def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
       (session (fineDraw L₁ L₂ ω₁ ω₂) R (L₁.draw ω₁) (c ω₁).1) ((c ω₁).2 ω₂)) ≤ εks
 
 /-- **The link term at the fine level** (named hypothesis `δ_link`): extraction of the picked fine
-unit disagrees with the fine committed transcript. -/
+unit disagrees with the fine committed trace. -/
 def LinkSound (δlink : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (c : Cont₁ L₁ L₂ Reg Int session R) (tgt : L₁.Ω → (∀ u, (L₂ u).Ω) → Option (Fin nf)),
     avg (fun ω₁ => avg fun ω₂ => prob (fun ok => ok = true ∧ ∃ v, tgt ω₁ ω₂ = some v ∧
@@ -154,7 +154,7 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
   set c : Cont₁ L₁ L₂ Reg Int session R := cont₁ ⟨R, c'⟩
   set X := A.committedC R c
   show prob _ (twoStage L₁ L₂ Reg Int session) ⟨R, c'⟩ ≤ _
-  -- the fine committed transcript after each coarse draw
+  -- the fine committed trace after each coarse draw
   let Z : L₁.Ω → A.TrF := fun ω₁ => A.committedF X R ω₁ (c ω₁).1 (c ω₁).2
   let D : L₁.Ω → Finset (Fin nc) := fun ω₁ => A.wrongC X ∩ L₁.draw ω₁
   -- the second draw misses every wrong fine unit inside every drawn wrong coarse unit
@@ -306,7 +306,7 @@ theorem two_stage_a_coarse (r : Refines Pf Pc) {L : Law nf} {Reg : Type}
   (prob_mono (fun _ h => ⟨h.1, h.2.trans (r.card_wrong_le fun _ _ => rfl)⟩) _ _).trans
     (audit_count (Pf.analysis X ext) hks hlink K σ)
 
-/-- The fine transcript: the coarse committed wires from `X`, every other wire from `Y`. -/
+/-- The fine trace: the coarse committed wires from `X`, every other wire from `Y`. -/
 noncomputable def extend (X Y : Fin C.N → Bool) : Fin C.N → Bool := by
   classical
   exact fun g => if g ∈ Pc.committed then X g else Y g
@@ -317,9 +317,9 @@ theorem extend_committed (X Y : Fin C.N → Bool) :
   intro g hg
   simp [extend, hg]
 
-/-- **Variant (b) over a refinement.** The coarse committed transcript `X` comes from the prover's
+/-- **Variant (b) over a refinement.** The coarse committed trace `X` comes from the prover's
 state at registration; the interior's committed values `Yint` from its state after committing the
-interior; the fine committed transcript is `X` on the coarse committed wires and `Yint` elsewhere.
+interior; the fine committed trace is `X` on the coarse committed wires and `Yint` elsewhere.
 Fine units are read through the extractor `ext`, as in one-stage. -/
 noncomputable def Refines.analysis₂ (r : Refines Pf Pc)
     {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}
@@ -350,7 +350,7 @@ noncomputable def Refines.analysis₂ (r : Refines Pf Pc)
     · exact Or.inl fun Y hY hc => h ⟨Y, hY, hc⟩
 
 /-- **The input unit in a two-stage audit** (named hypothesis `δ_in`), as `AnchorsSound` is for one stage: for every
-strategy, the session accepts while the committed coarse transcript's inputs differ from the anchors' values `a` with
+strategy, the session accepts while the committed coarse trace's inputs differ from the anchors' values `a` with
 probability at most `δ_in`. -/
 def AnchorsSound₂ {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}
     {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
@@ -360,11 +360,11 @@ def AnchorsSound₂ {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type} {Int
 
 /-! ### The oracle layer
 
-The prover sends the coarse transcript, then the interior, as tables are sent at the oracle layer.
-The fine transcript is `extend R I`, extraction returns it, and the link term is zero. -/
+The prover sends the coarse trace, then the interior, as tables are sent at the oracle layer.
+The fine trace is `extend R I`, extraction returns it, and the link term is zero. -/
 
 /-- **Any per-unit proof system at the fine level** (named hypothesis): if a drawn fine unit is
-wrong in the fine transcript, the session accepts with probability at most `ε`. -/
+wrong in the fine trace, the session accepts with probability at most `ε`. -/
 def SessionSound₂ (Pf : Partition C nf) (Pc : Partition C nc) {Int : Finset (Fin nc) → Type}
     (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))
     (session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool)
@@ -372,7 +372,7 @@ def SessionSound₂ (Pf : Partition C nf) (Pc : Partition C nc) {Int : Finset (F
   ∀ S R S₁ I v, v ∈ S → v ∈ Pf.wrong (extend (Pc := Pc) R (ext S₁ I)) →
     ∀ τ : Strategy (session S R S₁ I), prob (· = true) (session S R S₁ I) τ ≤ ε
 
-/-- The oracle-layer two-stage analysis: the registration is the coarse transcript, and the
+/-- The oracle-layer two-stage analysis: the registration is the coarse trace, and the
 interior `I` fills in the fine one through `ext`. -/
 noncomputable def Refines.oracle₂ (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
     {Int : Finset (Fin nc) → Type} (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))

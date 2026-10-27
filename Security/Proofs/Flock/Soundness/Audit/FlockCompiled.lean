@@ -20,7 +20,7 @@ its level-0 cap, the first verifying opening at each position, then decoding. Th
   radius (`FlockTableC.ksJoint`, `table_knowledge_sound_joint_tight`'s left side);
 * `link`: the table accepts, the extracted table is committed, but every close message packing a
   satisfying witness decodes, on the unit's committed wires, to values other than the committed
-  transcript's (`LinkEvent`, `linkJoint`). This is the weakest link event: the link theorem need
+  trace's (`LinkEvent`, `linkJoint`). This is the weakest link event: the link theorem need
   only show that some satisfying candidate agrees with `X`.
 
 The decoder is **per drawn unit** (`Decoder`): two drawn units that share a wire hold it in their
@@ -180,7 +180,7 @@ theorem prob_sessionC (S : Finset (Fin n)) (R : Reg) (τ : Strategy (sessionC H 
 
 variable {L : Law n}
 
-/-- **The compiled audit's analysis.** `X` is the committed transcript (the link theorem defines
+/-- **The compiled audit's analysis.** `X` is the committed trace (the link theorem defines
 it), `decode` reads the witness, `Kr` is the extractor's rerun count, one for both terms. -/
 noncomputable def analysisC (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) (Kr : ℕ)

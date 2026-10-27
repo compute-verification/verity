@@ -42,7 +42,7 @@ variable {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
 
 /-! ## The event and the analysis -/
 
-/-- **Wire `g` disagrees with the candidate** in the transcript `Xt`: its commit string is one of `Sk`, and `Xt`'s bit on
+/-- **Wire `g` disagrees with the candidate** in the trace `Xt`: its commit string is one of `Sk`, and `Xt`'s bit on
 `g` is not the candidate value's. -/
 def CandBadZ (Xt : Fin C.N → Bool) (g : Fin C.N) : Prop :=
   vb.pos g ∈ Sk ∧ Xt g ≠ vb.bit (wv (vb.pos g)) g
@@ -52,7 +52,7 @@ open Classical in
 noncomputable def candWrongZ (Xt : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ∃ g ∈ P.io u, CandBadZ A P planZ tab vb Sk wv Xt g
 
-/-- **The candidate link event** at drawn unit `u`'s table, for the transcript `Xc`: the oracle `C₀` is committed, and
+/-- **The candidate link event** at drawn unit `u`'s table, for the trace `Xc`: the oracle `C₀` is committed, and
 every close satisfying padded witness, on one of `u`'s wires, decodes differently from `Xc`, or, the wire's commit string
 being one of `Sk`, from the candidate. -/
 def LinkEvCandZK (S : Finset (Fin n)) (R : Reg) (u : Fin n) (Xc : Fin C.N → Bool) (C₀ : Oracle F) : Prop :=

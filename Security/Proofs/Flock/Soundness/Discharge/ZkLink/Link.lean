@@ -29,7 +29,7 @@ with `π_c` the probability that a draw reads `c`. At M0 (`flock_batched_linkSou
 adds `k/(eR_w)` and the factor `1/(1 − ρ)`; here extraction is the oracle itself. A2 is asked of one prover at a time
 (`LinkCRZ`), and the bound is `⊤` at any other (`linkBoundZ`).
 
-`zk_flock_count_execOS_m1_cr`: `zk_flock_count_execOS_m1` with the committed transcript the plurality value layer and
+`zk_flock_count_execOS_m1_cr`: `zk_flock_count_execOS_m1` with the committed trace the plurality value layer and
 `δ_link` that bound.
 
 **What this does not cover.** The finder reads the oracle the prover sends at `Commit`; the protocol as run sends a Merkle
@@ -432,7 +432,7 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
 /-- **The `--zk` count curve at the live draw, every table at M1's parameters, `δ_link` under A2**
-(interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
+(interactive-oracle layer): with the committed trace the plurality value layer (`XplurZ`) of a binding of wires to
 registered commit strings (`ValueBindingZ`),
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
 satisfy A2 (`LinkCRZ`), and `⊤` on the right at any other. -/

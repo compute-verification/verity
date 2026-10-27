@@ -110,7 +110,7 @@ noncomputable def linkTermZC (decode : DecoderZK (C := C) planZ tab) (k : ℕ) (
     (1 - rateZ (planZ S R) (tab S R u) k))
 
 /-- **The compiled `--zk` audit's analysis, with the expected-time extractor**, at a knowledge bound `a` with its joint
-inequality (`hj`). `Xc` is the committed transcript (the link theorem defines it), `decode` reads each drawn unit from
+inequality (`hj`). `Xc` is the committed trace (the link theorem defines it), `decode` reads each drawn unit from
 its table's padded witness, and `k` is the number of accepted reruns, with `N₀/(ek) < 1` for every table of every plan. -/
 noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)

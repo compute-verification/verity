@@ -20,7 +20,7 @@ the other tables do (`value_batch_getD_le`). Over every table at once the bound 
 
 **The audit** (`analysisZK`, in the shape of `Audit.FlockBatched`): the verifier draws units by a law `L`, plans the
 `--zk` tables from the draw and the registration (`planZ`), and reads each drawn unit from one table (`tab`). A drawn
-unit wrong in the committed transcript `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
+unit wrong in the committed trace `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
 (`ks`), or it is, and every satisfying padded witness near it decodes, on the unit's wires, to values other than `Xc`'s
 (`link`, `LinkEvZK`). At this layer the oracle is the prover's message, so extraction is the oracle itself and `ε_ks` is
 discharged by `sessionZK_sound` with no assumption (`zk_knowledgeSound`): it is the largest table bound of the plan,
@@ -250,7 +250,7 @@ theorem loweringSoundZK_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (ta
 
 variable {L : Law n}
 
-/-- **The batched `--zk` audit's analysis.** `Xc` is the committed transcript; `ks` and `link` are the session's
+/-- **The batched `--zk` audit's analysis.** `Xc` is the committed trace; `ks` and `link` are the session's
 joint probabilities of acceptance with the two ways unit `u`'s table can fail. -/
 noncomputable def analysisZK (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → (Fin C.N → Bool))

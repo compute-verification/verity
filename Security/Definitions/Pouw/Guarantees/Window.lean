@@ -13,7 +13,7 @@ Stated, not proved: the order is statement, red team, card, then proof, so `lean
 `WindowEps` and `ServiceEscapes` under `shape.frozen` as `unstated`.
 
 * `WindowEps`: `Pr[accept ∧ wrong(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} escape_{∏ L_c(R)}(B) + η + max_c κ_c + coll(R, τ) +
-  ∑_c δlink_c(R, τ)`, where `X` is the committed transcript (fixed at registration), `∏ L_c(R)` the calls' laws at the
+  ∑_c δlink_c(R, τ)`, where `X` is the committed trace (fixed at registration), `∏ L_c(R)` the calls' laws at the
   prover's registration drawn independently, `η` the draw's distance from that product on `𝓑`, `κ_c + g_c(state)`
   call `c`'s knowledge bound in a compiled table's shape, `coll(R, τ)` the calls' `g_c` summed along the window's run
   (`Pouw.Window.coll`), and `δlink_c(R, τ)` call `c`'s link term in the window at the window's state.
@@ -23,7 +23,7 @@ Stated, not proved: the order is statement, red team, card, then proof, so `lean
 Knowledge soundness enters at its largest call's constant: whatever the draw, the rule picks one unit, of one call,
 and that call's extraction fails from the state the window brings with probability at most `κ_c + g_c(state)`. The
 state terms are one window-level collision term, in expectation over the window's run. The link terms add: each bounds
-the picked unit's disagreement with the window's committed transcript on the draws where the unit is its call's. So
+the picked unit's disagreement with the window's committed trace on the draws where the unit is its call's. So
 `WindowEps` gives gap (4)'s premises (`WindowBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
 and `LinkSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
 
@@ -66,7 +66,7 @@ decision 101's keyed draw) is retired.
   misses nothing. PoUW's reading there takes the service's own escape (gap (4)'s `WindowBoundOfService`, the subset
   law's miss, `0` at `K′ = N`).
 
-**PoUW's reading: three links.** `WindowEps` bounds the committed transcript's wrong units. PoUW's reading of it needs
+**PoUW's reading: three links.** `WindowEps` bounds the committed trace's wrong units. PoUW's reading of it needs
 three more links, each stated:
 * **The deployed wrong sets are copy-closed** (`WrongCopyClosed`), so `ServiceEscapes`'s `η = 0` applies to them. The
   service's units' statements are the tiles' read in every session (`UnitStmts.copies`: an instance's public inputs are
@@ -74,7 +74,7 @@ three more links, each stated:
   (`Pouw.Window.wrongCopyClosed_copies`). On them `𝓑 = harmSets Wref ε ∧ CopyClosed` holds of a wrong set exactly when
   `harmSets` does (`Pouw.Window.harmSets_copyClosed_iff`).
 * **The tie to what's served** (`ServedTie`, premise `δ_in`, open on main): the window accepts while its committed
-  transcript isn't anchored (`Anchored`: its values at every unit's input wires are the served pass's anchors at the
+  trace isn't anchored (`Anchored`: its values at every unit's input wires are the served pass's anchors at the
   unit's position) and served (`Served`: its window entries hold the pass's `-h3` root, and its outputs at every unit
   are the words `tile_read` reads from the `-h3` leaf at the unit's position) with probability at most `δ_in(R, τ)`.
   The units' statements are the verifier's own (`Check.program`) and the served pass is fixed before the window, so
@@ -82,7 +82,7 @@ three more links, each stated:
   side ports' regions are empty, nothing outside `window.py` calls `tile_read`, and `window_problem` is Python only), so
   `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
   Program: the outputs' half is that Program's opening of the `-h3` root, the inputs' half C-Flock's `AnchorsSound`
-  (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
+  (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed trace
   isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).
 * **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in this game
@@ -114,13 +114,13 @@ open scoped ENNReal
 
 /-- **M2 with C1: the window's ε from its calls'.** For a window of `C` calls, call `c` with `n c` units, a registration
 `R` (the receipt), the calls' laws `L R c` at each registration and the law `Lw R` the verifier runs there, each call's
-session `sess c` on its share of the draw, the window's transcripts and its units' statements `U` (each unit's seed
-inputs, with its position and roots read at its place in the transcript, and what it computes), a committed transcript
+session `sess c` on its share of the draw, the window's traces and its units' statements `U` (each unit's seed
+inputs, with its position and roots read at its place in the trace, and what it computes), a committed trace
 that is a function of the prover's state at registration, an analysis of each call, and a family `𝓑` of wrong-unit
 sets: if the draw's escapes on `𝓑` are within `η` of the calls' product law at every registration (`EscapesWithin`),
 every call's extraction fails from a state `τ` of its session with probability at most `κ c + g c τ`
 (`CallAnalysis.KnowledgeSound`), and every call's link term in the window is at most `δlink c (R, τ)` at the window's
-state (`LinkSoundIn`), then for every prover the window accepts with its committed transcript's wrong units in `𝓑` with
+state (`LinkSoundIn`), then for every prover the window accepts with its committed trace's wrong units in `𝓑` with
 probability at most the largest escape over `𝓑` of the calls' product law at the prover's registration, plus `η`, plus
 the largest `κ c`, plus the window's collision term at the prover's state (`coll`), plus the sum of the
 `δlink c (R, τ)`.

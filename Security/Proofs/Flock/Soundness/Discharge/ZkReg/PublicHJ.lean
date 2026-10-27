@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 
 `zk_session_soundHJR_custody_reg` is `zk_session_soundHJR_custody` with its first conjunct's "wrong" `wrongRegZ` at the
 prover's registration in place of `Partition.wrong`, at the same bound, and its second conjunct (the registered check at
-every accepted outcome) unchanged. A unit counts as wrong unless it is correct in the committed transcript and one opening
+every accepted outcome) unchanged. A unit counts as wrong unless it is correct in the committed trace and one opening
 per commit string makes the key program's evaluation on the committed inputs, on every committed wire the unit reads or
 computes, the bit of an opening of that wire's registered commit string: the public file's `b ‖ c` at rows, which the
 second conjunct ties, at each read the verifier owns, to the root `--registered F` holds.

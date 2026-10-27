@@ -26,7 +26,7 @@ verifier draws a `kd`-subset of the `n` proof units from its operating system's 
 `src`); one `--zk` session of `J = nTab I` tables proves the drawn units, `kd / J` in each; and
 `flock-verify verify --zk --session-tables J` reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{some drawn unit is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-with "wrong" `EndToEnd`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at registration), and
+with "wrong" `EndToEnd`'s (`wrongRegZ`, against the public file, in the committed trace fixed at registration), and
 `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's draw. The bound has no miss term, so it holds whatever
 the verifier's bytes: it needs no A3.
 

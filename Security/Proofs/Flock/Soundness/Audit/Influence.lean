@@ -10,12 +10,12 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 
 * `Circuit.FeedsAvoiding K g t`: `g` feeds `t` along a path none of whose gates is in `K`.
 * `Partition.Separates K B D` (a downstream cut): `K` meets every path from a gate of a unit of `B` to a wire of `D`.
-* `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in
+* `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose wrong units lie in
   `B`, and that agree on a committed separator of `B`, deliver the same values on `D`. So they deliver at most `2^|K|`
   values on `D` (`card_delivered_le`): in a Boolean circuit a gate is one bit, and `|K|` is the separator's width.
 * `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay unit, those are its exports.
   `Separates.mono` and `Separates.union` build separators for larger sets from smaller ones.
-* `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their wrong units form a set
+* `influenceSet D e a δ`: what the traces with the anchors' inputs deliver on `D` when their wrong units form a set
   whose escape `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the law and `δ`, never by
   the prover, and `card_influenceSet_le` bounds its size by `∑_{B : δ ≤ e B} 2^|K B|`.
 * `audit_influence` (one-stage) and `Refines.twoStage_influence` (two-stage, over replay units, with `effEscape`): the
@@ -109,7 +109,7 @@ theorem separates_exits (B : Finset (Fin n)) {D : Finset (Fin C.N)} (hD : D ⊆ 
       · exact hg (mem_filter.2 ⟨P.mem_committed_of_read hx (by rw [hu]; exact hh), u, huB, hu⟩)
 
 /-- The induction behind `outputs_eq_of_separates`: on a gate with a path to a delivered wire avoiding `K`, the two
-transcripts' local evaluations agree, and so do their committed values. -/
+traces' local evaluations agree, and so do their committed values. -/
 theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
     (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.wrong X ⊆ B) (hwY : P.wrong Y ⊆ B)
@@ -150,7 +150,7 @@ theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Fin
     exact hB u hu
   · rw [hX g hi, hY g hi]
 
-/-- **The influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in `B`, and that agree on a
+/-- **The influence cap**: two traces with the anchors' inputs, whose wrong units lie in `B`, and that agree on a
 committed separator `K` of `B` from the committed delivered wires `D`, deliver the same values on `D`. -/
 theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
@@ -161,11 +161,11 @@ theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D :
   · exact hXY t htK
   · exact (P.separator_induction hK hsep hX hY hwX hwY hXY t.val t rfl ⟨t, ht, .refl htK⟩).2 (hD ht)
 
-/-- What a transcript delivers on the wires `D`. -/
+/-- What a trace delivers on the wires `D`. -/
 def out (D : Finset (Fin C.N)) (X : Fin C.N → Bool) : D → Bool := fun t => X t
 
 open Classical in
-/-- What the transcripts with the anchors' inputs whose wrong units lie in `B` deliver on `D`. -/
+/-- What the traces with the anchors' inputs whose wrong units lie in `B` deliver on `D`. -/
 noncomputable def delivered (D : Finset (Fin C.N)) (a : Fin C.N → Bool) (B : Finset (Fin n)) : Finset (D → Bool) :=
   univ.filter fun y => ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y
 
@@ -266,7 +266,7 @@ variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Boo
   {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
   {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)}
 
-/-- **The influence of an accepted audit** (one-stage): the audit accepts while the committed transcript delivers on
+/-- **The influence of an accepted audit** (one-stage): the audit accepts while the committed trace delivers on
 `D` a value outside the influence set at `δ` with probability at most `δ + ε_ks + δ_link + δ_in`. -/
 theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
     (hlink : (P.analysis X ext).LinkSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
@@ -351,7 +351,7 @@ section TwoStage
 variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞}
   {D : Finset (Fin C.N)}
 
-/-- **The influence of an accepted two-stage audit**, variant (b), over replay units: the committed coarse transcript
+/-- **The influence of an accepted two-stage audit**, variant (b), over replay units: the committed coarse trace
 delivers on `D` a value outside the coarse partition's influence set, with the effective escape, with probability at
 most `δ + ε_ks + δ_link + δ_in`, given the two-stage input hypothesis `AnchorsSound₂`. A replay unit's separator can be
 its exits (`separates_exits`). -/

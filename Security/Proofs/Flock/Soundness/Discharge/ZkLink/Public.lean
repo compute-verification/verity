@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration
 
-`zk_flock_countC` counts the units wrong in the committed transcript `X` (`Partition.wrong`): a unit is wrong there when
+`zk_flock_countC` counts the units wrong in the committed trace `X` (`Partition.wrong`): a unit is wrong there when
 its committed outputs are not its gates applied to its committed inputs, both read from `X`. Nothing in that event ties
 `X` to what was registered. This file counts the units **wrong on the registration** instead (`wrongRegZ`): a unit is
 right when it is correct in `X` and one opening per commit string makes the circuit's evaluation on `X`'s inputs
@@ -81,7 +81,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Parti
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
-/-- **Unit `u` is right on the registration `R`** at the transcript `Xv`: it is correct in `Xv`, and one opening per
+/-- **Unit `u` is right on the registration `R`** at the trace `Xv`: it is correct in `Xv`, and one opening per
 commit string makes the circuit's evaluation on `Xv`'s inputs, on every committed wire `u` reads or computes, the bit of
 an opening of that wire's registered commit string. -/
 def RightRegZ (R : Reg) (Xv : Fin C.N → Bool) (u : Fin n) : Prop :=
@@ -89,7 +89,7 @@ def RightRegZ (R : Reg) (Xv : Fin C.N → Bool) (u : Fin n) : Prop :=
     vb.com (op (vb.pos g)) = vb.cs R (vb.pos g) ∧ vb.bit (vb.val (op (vb.pos g))) g = C.eval Xv g
 
 open Classical in
-/-- **The units wrong on the registration `R`** at the transcript `Xv`: those not right on it (`RightRegZ`). -/
+/-- **The units wrong on the registration `R`** at the trace `Xv`: those not right on it (`RightRegZ`). -/
 noncomputable def wrongRegZ (R : Reg) (Xv : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ RightRegZ A P planZ tab vb R Xv u
 
@@ -115,7 +115,7 @@ variable {L : Law n}
 
 open Classical in
 /-- **The compiled `--zk` audit's analysis, "wrong" measured against the registration** (`analysisZC`'s, with
-`wrongRegZ`). The transcript is the registration with the committed values, so that "wrong" can read the registered
+`wrongRegZ`). The trace is the registration with the committed values, so that "wrong" can read the registered
 commit strings; the link term is `analysisZC`'s at the session's own registration, and `⊤` at any other. -/
 noncomputable def analysisZCReg
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)

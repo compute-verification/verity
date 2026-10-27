@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 `zk_session_soundJ_custody_reg`: `zk_session_soundJ_custody` with its event's "wrong" `wrongRegZ` at the prover's
 registration (`ZkLink.Public`) in place of `Partition.wrong`, at the same bound. A unit counts as wrong unless it is
-correct in the committed transcript and one opening per commit string makes the key program's evaluation on the committed
+correct in the committed trace and one opening per commit string makes the key program's evaluation on the committed
 inputs, on every committed wire the unit reads or computes, the bit of an opening of that wire's registered commit
 string: on its outputs, the program's output on the committed inputs opens the registered output commitments. Its
 wrong units contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so its event implies that one's.

@@ -26,7 +26,7 @@ source `src`); one `--zk` session of `J = nTab I` tables proves the drawn units,
 record, `flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
-* a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
+* a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed trace fixed at
   registration (`XplurZC`: the plurality of what the expected-time extractor recovers behind each commit string) its
   committed outputs are its gates applied to its committed inputs, and one opening per commit string of the public
   file's commitments carries, on each of its committed wires, the key program's evaluation on the committed inputs (on

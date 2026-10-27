@@ -8,7 +8,7 @@ A period's integrity audit is a sequence of sampling blocks, each one `--zk` ses
 live subset draw, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
 prover strategy plays the whole period (`Period.game`), adaptively: the strategy each sampling block is played with may
 depend on everything before it. `Period.run` records, for each sampling block, whether flock-verify accepted it, its
-wrong units in the committed transcript fixed at its registration (`wrongRegZ` at `XplurZC`, as in `EndToEndHidden`),
+wrong units in the committed trace fixed at its registration (`wrongRegZ` at `XplurZC`, as in `EndToEndHidden`),
 and whether a drawn unit is one of them.
 
 * `IntegrityPeriod`: the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
@@ -121,7 +121,7 @@ noncomputable def sim (τ : Strategy w.game) :=
         w.wr _ w.hTags w.hCust.1
         fun _ => drawOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
 
-/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
+/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed trace fixed at
 registration (`XplurZC`), as in `EndToEndHidden`. -/
 noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   wrongRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))

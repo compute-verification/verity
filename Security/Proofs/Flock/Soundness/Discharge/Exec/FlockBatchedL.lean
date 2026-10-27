@@ -18,7 +18,7 @@ everything after `Commit`:
   (`expect_mul_expectN`);
 * `link`: likewise with the link event on the extracted table (`LinkEvB`): it is committed, but
   every close message packing a satisfying witness decodes, on the unit's committed wires, to values
-  other than the committed transcript's.
+  other than the committed trace's.
 
 `cover` is `one_le_fail_add_BL'`: by **the lowering** (`LoweringSoundB`, named, per table), a
 committed table gives the link event for a wrong unit. `loweringSoundB_of_place` discharges it from
@@ -63,7 +63,7 @@ theorem prob_batchedSessionL (S : Finset (Fin n)) (R : Reg)
 
 variable {L : Law n}
 
-/-- **The batched audit's analysis.** `X` is the committed transcript (the link theorem defines it),
+/-- **The batched audit's analysis.** `X` is the committed trace (the link theorem defines it),
 `decode` reads each drawn unit from its table's witness, `Kr` is the extractor's rerun count. -/
 noncomputable def analysisBL (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) (Kr : ℕ)

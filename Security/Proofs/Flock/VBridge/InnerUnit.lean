@@ -283,7 +283,7 @@ open FlockSoundness FlockSoundness.Audit
 
 /-- **A copy of V*'s laid-out `InnerRepCheck` unit, in a unit of any partition, computes its residuals**
 (`laid_innerUnit`). Let the verifier build `net` from the layout of `VStar.innerUnit S name` (`netOf`), and let unit `u`
-be an instance of `k` stacked copies of the net's rows, the transcript `X` carrying 1 at the stack's constant. Then at
+be an instance of `k` stacked copies of the net's rows, the trace `X` carrying 1 at the stack's constant. Then at
 copy `j`'s column values (`copyVal`), `laid_innerUnit` holds. -/
 theorem unit_innerUnit {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)

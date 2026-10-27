@@ -41,7 +41,7 @@ theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞
     · exact h u hu
     · exact zero_le
 
-/-- What the analysis of an audit fixes when extraction is randomized: the committed transcript,
+/-- What the analysis of an audit fixes when extraction is randomized: the committed trace,
 and for each drawn unit the joint probabilities of the two ways its table can accept while it is
 wrong. -/
 structure ExtractionAnalysis (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
@@ -60,7 +60,7 @@ namespace ExtractionAnalysis
 
 variable (A : ExtractionAnalysis L Reg session)
 
-/-- The committed transcript of an audit strategy. -/
+/-- The committed trace of an audit strategy. -/
 def committedOf (σ : Strategy (audit L Reg session)) : A.Tr := A.committed (reg σ) (cont σ)
 
 /-- **Knowledge soundness, per unit** (named hypothesis `ε_ks`, which may depend on the prover's
@@ -71,7 +71,7 @@ def KnowledgeSound (εks : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : 
     avg (fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))) ≤ εks R τ
 
 /-- **The link term** (named hypothesis `δ_link`, which may depend on the prover's state):
-likewise, with `Pr[accept ∧ extraction succeeds but disagrees with the committed transcript]`. -/
+likewise, with `Pr[accept ∧ extraction succeeds but disagrees with the committed trace]`. -/
 def LinkSound (δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u (A.committed R τ)) ≤

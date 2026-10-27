@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Audit.FlockPublic
 The link theorem's value layer (`XplurL`) is the plurality of a trial's readings at each commit string. On the constant
 and on the statement's zero, that plurality is the prover's only in form. Every satisfying message of every drawn unit's
 table decodes the constant to 1 (`UnitPlace.decode_one`) and the zero to 0 (its forced-zero rows). So the committed
-transcript here is `Xpub ones zeros vals`: 1 on `ones`, the gates the units' constants read; 0 on `zeros`, the statement's
+trace here is `Xpub ones zeros vals`: 1 on `ones`, the gates the units' constants read; 0 on `zeros`, the statement's
 zero; and `vals` elsewhere.
 
 * `linkEvB_of_pub`: at a drawn unit, when the public wires decode to their values in every satisfying message of its
@@ -82,7 +82,7 @@ theorem linkSoundE_monoL {decode : DecoderB (C := C) (Reg := Reg) plan tab}
 variable {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : P.ValueBinding plan tab decode Hc)
 
-/-- **The link theorem at the public transcript**: `flock_batched_linkSoundEL`'s bound, prover by prover
+/-- **The link theorem at the public trace**: `flock_batched_linkSoundEL`'s bound, prover by prover
 (`linkBoundCRL`), holds for `Xpub ones zeros XplurL` when the public wires decode to their values. -/
 theorem flock_batched_linkSoundE_pubL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
@@ -94,8 +94,8 @@ theorem flock_batched_linkSoundE_pubL (ones zeros : Finset (Fin C.N)) (hpub : P.
   linkSoundE_monoL P H E Lf plan tab hk _ hlow (fun _ _ _ _ hu _ h => P.linkEvB_of_pub plan tab hpub hu h)
     (flock_batched_linkSoundEL P H E Lf plan tab vb hlow hk hRw hM hρ hr ht)
 
-/-- **The compiled-layer count curve at the public transcript**: `flock_batched_count_linkedL` with the committed
-transcript 1 on `ones`, 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
+/-- **The compiled-layer count curve at the public trace**: `flock_batched_count_linkedL` with the committed
+trace 1 on `ones`, 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
 theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -111,7 +111,7 @@ theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (flock_batched_linkSoundE_pubL P H E Lf plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])
 
-/-- **Drawn units at the public transcript**: `flock_batched_drawn_linkedL` with the committed transcript 1 on `ones`,
+/-- **Drawn units at the public trace**: `flock_batched_drawn_linkedL` with the committed trace 1 on `ones`,
 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
 theorem flock_batched_drawn_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)

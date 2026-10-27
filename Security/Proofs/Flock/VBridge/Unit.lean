@@ -11,7 +11,7 @@ row carries the shared constant (`stack_one`). The rows of a net (`Rows.ofNet`),
 laid-out rows of the `Laid` the verifier built it from (`netOf`, `laidRows_ofNet`).
 
 So copy `j` of a unit whose rows are a stack of V*'s laid-out opening computes `laid_recOpen`'s outputs from its inputs
-at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's input columns read the transcript
+at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's input columns read the trace
 (`copyVal_input`), and so does every committed column of a correct unit (`copyVal_committed`).
 -/
 
@@ -29,7 +29,7 @@ theorem sat_localEval {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin
   simp only [Op.apply, xorSum_map]
   rfl
 
-/-- A column that is no computed row is read from the transcript. -/
+/-- A column that is no computed row is read from the trace. -/
 theorem localEval_wire {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) (X : Fin C.N → Bool) {c : Fin R.w} (hc : R.nIn + R.nComp ≤ c.val ∨ c.val < R.nIn) :
     P.localEval X u (I.wire c) = X (I.wire c) :=
@@ -168,7 +168,7 @@ evaluation at the copy's column `c`'s wire. -/
 noncomputable def copyVal (I : P.IsRowsUnit u (R.stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k) : ℕ → Bool :=
   colVal fun c => P.localEval X u (I.wire (R.stackCol k hj c))
 
-/-- A copy's input column reads the transcript at its wire. -/
+/-- A copy's input column reads the trace at its wire. -/
 theorem copyVal_input (I : P.IsRowsUnit u (R.stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k) {c : ℕ}
     (hc : c < R.nIn) :
     copyVal I X hj c = X (I.wire (R.stackCol k hj ⟨c, by simp only [Rows.w]; omega⟩)) := by
@@ -181,7 +181,7 @@ theorem copyVal_input (I : P.IsRowsUnit u (R.stack k)) (X : Fin C.N → Bool) {j
   rw [Rows.stackCol, dite_eq_left hc]
   exact hlt
 
-/-- A committed column of a correct unit reads the transcript at its wire. -/
+/-- A committed column of a correct unit reads the trace at its wire. -/
 theorem copyVal_committed (I : P.IsRowsUnit u (R.stack k)) {X : Fin C.N → Bool} (hX : P.Correct X u) {j : ℕ}
     (hj : j < k) (c : Fin R.w) (hm : I.wire (R.stackCol k hj c) ∈ P.committed) :
     copyVal I X hj c.val = X (I.wire (R.stackCol k hj c)) := by
@@ -190,7 +190,7 @@ theorem copyVal_committed (I : P.IsRowsUnit u (R.stack k)) {X : Fin C.N → Bool
   · exact (hX _ hm hu).symm
   · exact P.localEval_of_not_mem X hu
 
-/-- A copy's rows hold at its column values, and its constant is the transcript's at the stack's constant. -/
+/-- A copy's rows hold at its column values, and its constant is the trace's at the stack's constant. -/
 theorem sat_copy (I : P.IsRowsUnit u (R.stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k) :
     R.Sat (fun c => P.localEval X u (I.wire (R.stackCol k hj c))) ∧
       P.localEval X u (I.wire (R.stackCol k hj R.one)) = X (I.wire (R.stack k).one) := by
@@ -211,7 +211,7 @@ theorem inWords_recOpen {LANES H : ℕ} {p : Ports} {outBits : Array ℕ} {name 
 
 /-- **A copy of V*'s laid-out opening, in a unit of any partition, computes the climb and the consistency term.** Let
 the verifier build `net` from `recOpenLaid` (`netOf`), and let unit `u` be an instance of `k` stacked copies of the
-net's rows (`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values
+net's rows (`Rows.ofNet`), the trace `X` carrying 1 at the stack's constant. Then at copy `j`'s column values
 (`copyVal`), `laid_recOpen` holds: if the copy's input columns hold the row, `acc`, the coefficients, the siblings and
 the position's bits, its output columns from `outStart` hold the verifier of record's climb and 64 zero bytes, then the
 consistency term at `k = 0, 1` and the rest of `acc`. -/

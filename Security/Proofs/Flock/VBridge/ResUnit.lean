@@ -376,7 +376,7 @@ open FlockSoundness FlockSoundness.Audit
 
 /-- **A copy of the verifier's laid-out `rec-residuals` unit, in a unit of any partition, computes its residuals**
 (`laid_part`). Let the verifier build `net` from `RecResiduals.unitLaid S ns nv` (`netOf`), and let unit `u` be an
-instance of `k` stacked copies of the net's rows, the transcript `tr` carrying 1 at the stack's constant. Then at copy
+instance of `k` stacked copies of the net's rows, the trace `tr` carrying 1 at the stack's constant. Then at copy
 `j`'s column values (`copyVal`), `laid_part` holds. -/
 theorem unit_part {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (tr : Fin C.N → Bool) {j : ℕ} (hj : j < k)

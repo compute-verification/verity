@@ -36,11 +36,11 @@ checklist `assumption-notes/e2e-checklist.md` gives each one's owner and how it 
   `Rows.ofNet` reads off setupH's net, and W6, that those are the program's), and `aliased` (`Layout.Aliased`);
 * `hConst : ConstCols`: at each drawn unit's place, only the constant's column sits on a gate of `ones`. No unit's input
   column reads a constant, a fact of the circuit's wiring (S4). With it the committed values carry 1 on `ones`: the
-  committed transcript is public there (`Xpub`, `FlockPublic.lean`), since every satisfying message decodes the constant
+  committed trace is public there (`Xpub`, `FlockPublic.lean`), since every satisfying message decodes the constant
   to 1;
 * `hZero : ZeroCols`: every column on a gate of `zeros`, the statement's zero, carries 0 in every satisfying witness.
   These are the forced-zero rows, which the verifier's Δ copies to the slot inputs that read the zero (1d, 1e, S4). The
-  committed transcript is 0 there, so the profile is about the zero padding at 0. This is the zero's binding;
+  committed trace is 0 there, so the profile is about the zero padding at 0. This is the zero's binding;
 * `vb : ValueBinding`: the binding of wires to registered commit strings, already named on `main`.
 -/
 
