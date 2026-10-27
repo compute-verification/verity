@@ -64,7 +64,7 @@ the finding or the changed policy).  `[[rows.<row>.decisions]]` in fixtures.toml
 ALL of one decision's `expected` reproduced -> PASS with `sanctioned_by=<finding>` in the check's canonical JSON (junit property too);
 neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  #57's
 `manifest_digest` decisions are what `test_negative_57` accepts in place of the refusal.
-A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it) or `pending_review` (labelled by a lane, awaiting Daniel);
+A decision's `status` is `accepted` (absent = accepted: confirmed) or `pending_review` (labelled, awaiting review);
 both sanction, and which side reproduced is recorded as junit property `matched`; `python -m tests.regression.decisions --pending`
 lists the pending ones.  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
 sha256 }`: #57's promoted r19-int-22 manifest) -- `resolver.Row._checked` accepts it where the frozen v1 pin fails, junit property

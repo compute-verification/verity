@@ -103,6 +103,9 @@ REGISTRY = Registry(
     S("PEARLC_CAPTURE_SIZES", ints, None, VALUE, "the whole-step arm's CUDA graph capture sizes; unset, 1, 8, 32 and 128"),
     S("VLLM_ENABLE_V1_MULTIPROCESSING", str, None, WHERE, "vLLM's engine core in a process of its own; the arm's scripts set 0, "
                                                           "so its hooks and profiles see the engine in theirs"),
+    S("VERITY_INDUCTOR_DIR_PER_PROCESS", one, False, WHERE, "1: TORCHINDUCTOR_CACHE_DIR is this process's own (the vLLM "
+                                                            "integration's engine.env.INDUCTOR_DIR_MARK), else served_step.py "
+                                                            "gives a serving-defaults arm a fresh one"),
     S("E2E_GPU_UUID", str, "0", WHERE, "the GPU nvidia-smi reads (window.sh sets the lease's), since NVML ignores "
                                        "CUDA_VISIBLE_DEVICES"),
     S("POUW_COIN_STATE", str, None, WHERE, "a file holding the challenger's entropy (e2e.py's epoch coins), whose commitment "

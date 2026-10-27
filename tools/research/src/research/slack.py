@@ -142,6 +142,7 @@ EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
+BARE_GROUP_RE = re.compile(r"@(S[0-9A-Z]{8,})\b")
 DATE_TOKEN_RE = re.compile(r"<!date\^\d+\^[^|>]*\|([^>]*)>")          # `read` and `roster` show a date token as its fallback
 ANNOUNCE = "\U0001f4e3"                                            # 📣
 DONE, DECLINED = "\u2705", "\u274c"                                 # ✅ ❌
@@ -887,10 +888,14 @@ def stamp_time(text: str, now: datetime) -> str:
     return f"{text[:m.end()]} (sent {real:%H:%M}Z){text[m.end():]}"
 
 
-def plain(text: str) -> str:
-    """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes)."""
+def plain(text: str, reg: dict | None = None) -> str:
+    """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes).  With `reg`, a
+    user group shows as its handle, a bare id copied into a doorbell included."""
+    names = {g: h["handle"] for h in (reg or {}).get("handles", []) for g in group_ids(h)}
     text = FOOTER_RE.sub("", text or "")
-    text = SUBTEAM_RE.sub(lambda m: "@" + (m[2] or m[1]).lstrip("@"), text)
+    text = SUBTEAM_RE.sub(lambda m: "@" + (m[2] or names.get(m[1]) or m[1]).lstrip("@"), text)
+    if names:
+        text = BARE_GROUP_RE.sub(lambda m: "@" + names.get(m[1], m[1]), text)
     text = DATE_TOKEN_RE.sub(r"\1", text)
     text = LINK_RE.sub(lambda m: m[1] if not m[2] or m[2] == m[1] else f"{m[2]} ({m[1]})", text)
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
@@ -1163,7 +1168,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
     A quiet post wakes only the names at its start.  A reply under an announcement wakes only the names it starts with,
     whatever PRs and runs its body names, and of its status lines only a decline wakes the announcer (`roster` reads the
-    rest): the replies to an announcement to every handle were about 3,000 doorbells a week (reach PR 7).  The author
+    rest): otherwise the replies to an announcement to every handle are thousands of doorbells a week.  The author
     is never a target, unless
     `author_rings` (`rings_own_inbox`: another agent posting as the author's handle, such as the outgoing generation of a
     handover), when a post naming the author's handle is for it like a post naming anyone else."""
@@ -2259,7 +2264,7 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         who = "@" + m["username"] if m.get("username") else poster(m, reg) or m.get("user") or m.get("bot_id") or "?"
         tags = [t for t in tags_of(m.get("text") or "") if t != "ask"]
         at = datetime.fromtimestamp(float(m["ts"]), UTC).strftime("%H:%M:%SZ") if m.get("ts") else "?"
-        print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
+        print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''), reg)}")
     return 0
 
 
@@ -2457,7 +2462,7 @@ def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
     for where in dict.fromkeys(c for m in msgs if is_doorbell(m, reg) and (c := doorbell_channel(m.get("text") or ""))):
         lines[0] += f"; one from #{where} is answered there, `... {_channel_flag(where)} --thread T`"
     for m in msgs:
-        text = plain(m.get("text") or "")
+        text = plain(m.get("text") or "", reg)
         if not is_doorbell(m, reg):
             who = "@" + m["username"] if m.get("username") else m.get("user") or m.get("bot_id") or "?"
             text = f"(posted in the inbox by {who}, not a doorbell) {text}"
@@ -2762,7 +2767,7 @@ def volume(api: Slack, reg: dict, ch: str, since: float, now: float) -> dict:
             posts += replies
             if replies:
                 threads.append({"ts": root["ts"], "by": poster(root, reg) or root.get("username") or root.get("user") or "?",
-                                "replies": len(replies), "first": " ".join(plain(root.get("text") or "").split())[:80]})
+                                "replies": len(replies), "first": " ".join(plain(root.get("text") or "", reg).split())[:80]})
     by: dict[str, list[int]] = {}
     for m in posts:
         by.setdefault(poster(m, reg) or m.get("username") or m.get("user") or "?", []).append(len(plain(m.get("text") or "").split()))

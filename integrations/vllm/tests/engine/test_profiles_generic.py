@@ -1,4 +1,4 @@
-"""[P6, 2026-09-23] `profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
+"""`profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
 module, no role -> module table.  Every shipped config.json builds a profile or is refused with its reason."""
 from __future__ import annotations
 
