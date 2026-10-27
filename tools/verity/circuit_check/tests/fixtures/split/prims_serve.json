@@ -239,7 +239,6 @@
   "GeluRef_v1{N=16,DT='bf16',APPROX='tanh'}": "a2564dfc43c044d82a113dceef19c511f724fe3ebf74665921abc9839501f9ea703bed8557127d225a181b38316185d259dbc166ab9c028d529f2ba6d91dd0e3",
   "GeluRef_v1{N=16,DT='f32',APPROX='tanh'}": "750bf73f9a4e810ceb4f7d6f104977d6249b736c537ea8365e47450a32c04a79d1ac8fa0b2582c8d7b359977ba473262664a090c75908417729a0e77d0439e95",
   "GeluTanhMulBf16_v3": "0e5fd9d97d18f47999867ad7cfe1a442991f1825986b35dcd762dfec26e590b2eff613a389eec0dd670f8b95f72e9a07bebb2b45df0003f8d8d35cf87123e4ff",
-  "GeluTanhMul_v3{I=16}": "2736b9eac60826407b46149732cbf10ea8644dcec5248e3f14f8a2767647f08be676ae4aa5c1704ecbf3059637255b9c744ad07fc91afe8e8fc3e1bbd384aca6",
   "GemmCoordinate_v1{K=16}": "120b62328295e90f0cd615f648c35106082f4175efca59ab925a370ba85bd9905bee65d31f19d745755e22cd2246c258d4e3505d1301cca329747c27d1a51ea2",
   "GemmCoordinate_v1{K=32}": "7377cc5a556c8bfabdf11add4ef67d43f5cdaeceb828317f005c8ab3089adf2e07d0d1e5a37cf2b2d12b64d3441c807dc96244252812d2f2aa6d2ab0443d9b31",
   "GemmCoordinate_v1{K=48}": "90c567134107eaab9ce6cc155abc6d40e7cf5af77662e1401eeac29e3a9695e27a4c8bfcd958af1c5cd094f53bc57340e41c88efd7eb0b4e057b8e73155ec40d",
@@ -462,7 +461,6 @@
   "GeluRefElem_v1": "ref_prims",
   "GeluRef_v1": "ref_prims",
   "GeluTanhMulBf16_v3": "tables",
-  "GeluTanhMul_v3": "tables",
   "GemmCoordinate_v1": "b1",
   "Gemm_v1": "b1",
   "I64ToI32_v1": "ref_prims",
@@ -636,7 +634,6 @@
   "GeluRefElem_v1",
   "GeluRef_v1",
   "GeluTanhMulBf16_v3",
-  "GeluTanhMul_v3",
   "GemmCoordinate_v1",
   "Gemm_v1",
   "I64ToI32_v1",
@@ -1654,10 +1651,6 @@
   [
    "definition",
    "GeluTanhMulBf16_v3"
-  ],
-  [
-   "definition",
-   "GeluTanhMul_v3{I=16}"
   ],
   [
    "definition",

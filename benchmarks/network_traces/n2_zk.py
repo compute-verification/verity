@@ -226,10 +226,13 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
     profile, whose counts the unit leaves to N2's advised unit, and on a warden link, whose counts are its schedule's);
-    extra, egress heads fail their counts alone, on one window or more; late, egress heads
-    fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
+    extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
+    faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
+    `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
+    if name == "late":
+        return not xs and any(w == 0 for *_, w in rd.issuer_refused)
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
         return False
@@ -242,7 +245,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
         signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
         want = ["signed"] if signed else ["counts", "signed"]
         return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
-    allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
+    allowed = {"extra": ([], ["counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
 
@@ -350,28 +353,10 @@ def _one_stage():
     return SimpleNamespace(a0=a0, a8=a8, np=np, P=P, PF=PF, V2=V2, FC=FC, CS=CS)
 
 
-def builders() -> tuple:
-    """Give the traced parts the head check calls that carry no builder (`gates.lms._leaf_definition`'s; `head_check`'s,
-    `frame_v3._part` and `boolean.trace.definition` keep one) the builder their trace was taken from, so C-Flock lowers
-    each activation by it, commits included (`ir_lower._boolean_activation`, which calls ``build(C, S, *e)`` for a part
-    with statics and ``build(C, *e)`` without). Gate by gate their linear forms grow without bound: one SHA-512
-    compression passes 1 GB. Returns the parts."""
-    from verity.ml.commitments.gates import lms
-    from verity.ml.commitments.gates.sha512 import compress_gadget
-
-    parts = ((lms.Sha512Compress, lambda C, *e: compress_gadget(C, list(e[:8]), list(e[8:24]))),
-             (lms.LmsEqual, lms._build_equal))
-    for d, build in parts:
-        if getattr(d, "build", None) is None:
-            d.build = build
-    return tuple(d for d, _ in parts)
-
-
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
     """The one circuit: `LinkWindows.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
     `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
-    builders()
     rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(lw.partition, sort_keys=True))

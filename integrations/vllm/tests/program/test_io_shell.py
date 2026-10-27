@@ -1,7 +1,8 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and a slot's `SlotRow_v1` and
-`SlotMask_v1`."""
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, a slot's `SlotRow_v1` and
+`SlotMask_v1`, and the network certifier's scan state read (`ScanSlots_v1`), output collection (`OutCollect_v1`) and
+entry (`SlotEntry_v1`)."""
 from __future__ import annotations
 
 import json
@@ -141,9 +142,11 @@ def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
             assert slot == [(lp - p - 1) & 0xFFFFFFFF, *ids[p + 1:], *[0] * (p + 1)]
         assert toks == ids[:lp] + sels[lp - 1:NP - 1]
     assert run(first, [0, *ids])[0] == ids[0]
-    for kw in ({"NP": 0, "FIRST": True}, {"NP": 2, "FIRST": 1}):
-        with pytest.raises(ValueError, match="refuses this binding"):
-            bind(X.TokenFeed, **kw)
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(X.TokenFeed, NP=0, FIRST=True)
+    # `bind`'s cache keys FIRST=1 as FIRST=True, so once a class circuit in this process has bound its feed at NP = 2 (as
+    # `window_weights.WEIGHTS_CLASS`'s does) `bind` returns that one unrefused: the rule is checked on its own.
+    assert X.feed_refuse({"NP": 2, "FIRST": 1}) and X.feed_refuse({"NP": 2, "FIRST": True}) is None
 
 
 def test_a_slots_row_opens_into_its_occupancy_and_feed_and_an_empty_slot_outputs_no_token():
@@ -164,6 +167,81 @@ def test_a_slots_row_opens_into_its_occupancy_and_feed_and_an_empty_slot_outputs
     assert X.EMPTY >= 1 << 31
     with pytest.raises(ValueError, match="refuses this binding"):
         bind(X.SlotRow, NP=0)
+
+
+def _run(fn, *rows):
+    args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
+    return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
+
+
+def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_packed():
+    """`ScanSlots_v1` on a 40-word row with two lanes: random rows give `slots_reference`'s rows and heads, and a row packed
+    field by field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each
+    later one) reads each lane's fields back, ids cut to IDB bits.  A field past the row is refused."""
+    NS, NP, IDB, K0, K = 40, 4, 17, 2, 3
+    OCC, LP, MAX, IDS = (3, 300), (40, 340), (80, 380), (120, 420)
+    st = {"NS": NS, "NP": NP, "IDB": IDB, "K0": K0, "K": K, "OCC": OCC, "LP": LP, "MAX": MAX, "IDS": IDS}
+    fn = bind(X.ScanSlots, **st)
+    state = np.random.default_rng(1).integers(0, 1 << 16, size=(3, NS), dtype=np.uint64)
+    got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint64)
+    for i in range(3):
+        ref = X.slots_reference([int(w) for w in state[i]], NP, IDB, K0, K, OCC, LP, MAX, IDS)
+        assert [int(v) for v in got[i].reshape(-1)] == [v for row, head in ref for v in (*row, *head)]
+    lanes = [(1, 3, 64, [5, (1 << IDB) - 1, 0, 77]), (0, 0, 9, [0, 0, 0, 0])]
+    x = 0
+    for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
+        x |= occ << o | lp << l | m << mx
+        x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
+    words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
+    out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
+    assert out == [v for occ, lp, m, ids in lanes for v in (occ, lp, *ids, lp, m)]
+    assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
+    for bad in ({"IDS": (120, 16 * NS - IDB)}, {"IDB": 33}, {"OCC": (3,)}):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(X.ScanSlots, **{**st, **bad})
+
+
+@pytest.mark.parametrize("KO", [1, 2, 5])
+def test_the_output_collector_keeps_the_ko_samples_from_the_prompts_last_position_on(KO):
+    """`OutCollect_v1` chained down NP + KO positions from each prompt length lp = 1..4: each step is `collect_reference`,
+    and after the last, ids[i] is the sample at position lp − 1 + i, ``max_tokens`` carried through."""
+    first, rest = bind(X.OutCollect, KO=KO, FIRST=True), bind(X.OutCollect, KO=KO, FIRST=False)
+    for lp in range(1, 5):
+        state = _run(first, [lp, 9], [100])
+        assert state == X.collect_reference([lp, 9], 100, KO, True)
+        for p in range(1, lp + KO):
+            nxt = _run(rest, state, [100 + p])
+            assert nxt == X.collect_reference(state, 100 + p, KO, False)
+            state = nxt
+        assert state[1:] == [9, *[100 + lp - 1 + i for i in range(KO)]]
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(X.OutCollect, KO=0, FIRST=True)
+
+
+@pytest.mark.parametrize("KO, STOP", [(2, ()), (5, (103,)), (5, (102, 104))], ids=["no-stop", "one-stop", "two-stops"])
+def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO, STOP):
+    """`SlotEntry_v1` against `entry_reference` at each occupancy word, ``max_tokens`` (2^31 and 2^32 − 1 unsigned) and
+    prompt length lp (the last state's w = lp − NP − KO): an empty slot's every word is zero; an occupied slot's n is
+    min(max_tokens, the first stop's index + 1) and its ids output i's low 17 bits for i < n, zeros past it (ids carry a bit
+    at 2^20 the cut drops), except that a request the class can't hold, its prompt not 1 to NP ids or that n past KO, has
+    n = KO + 1 and no ids."""
+    NP = 3
+    e, ids = bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
+    for occ in (0, 1, 2, 3):
+        for m in (0, 1, 2, 4, 9, 1 << 31, X.M32):
+            for lp in (0, 1, NP, NP + 1, 1 << 31):
+                state = [(lp - NP - KO) & X.M32, m, *[x | (1 << 20 if x not in STOP else 0) for x in ids]]
+                bits = _run(e, [occ], state)
+                words = [sum(bits[16 * k + b] << b for b in range(16)) for k in range(len(bits) // 16)]
+                assert words == X.entry_reference(occ, state, KO, 17, NP, STOP)
+                n = min([m, *[i + 1 for i, x in enumerate(ids) if x in STOP]]) if 1 <= lp <= NP else KO + 1
+                n = 0 if not occ & 1 else n if n <= KO else KO + 1
+                packed = sum(w << 16 * k for k, w in enumerate(words))
+                assert packed == n | sum(x << 32 + 17 * i for i, x in enumerate(ids[:n] if n <= KO else ()))
+    assert X.entry_words(64, 17) == 70
+    for bad in ({"STOP": (1, 1)}, {"NP": 0}):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(X.SlotEntry, **{"KO": 2, "IDB": 17, "NP": 4, "STOP": (), **bad})
 
 
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "served"])

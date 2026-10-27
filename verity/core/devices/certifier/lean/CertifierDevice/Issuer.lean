@@ -16,7 +16,9 @@ Which leaf signs, and which session ids the key has started, is the signer's sta
 state, starting the issuer's session there (`Core.World.start`) before its first reservation, as `certificate.Issuer`
 does. As in `Issuer.certify`, the salt, the head, its digests and the message come first, so a record with no encoding
 is refused before a session is started or a leaf is spent, and a start or a reservation the host refuses leaves the
-link-window without a certificate (fail-closed) and is listed in `refused`.
+link-window without a certificate (fail-closed) and is listed in `refused`. The issuer certifies only a complete
+record: one whose status isn't complete is listed in `refused` after its head and message, before the session's start
+or a leaf, so a link-window that isn't covered has no certificate.
 
 **The clock certificate** (`ClockCertificate`, `Issuer.clock`, `clockWith`): beside each egress window's record, the
 sync the certifier's shaper ran the window under, hidden as a record digest is and signed as
@@ -129,11 +131,15 @@ def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : 
 
 /-- **`Issuer.certify`**, the record's salt and its signer's reservation given (a refused start of the session is a
 refused reservation): refused (an error) where the salt is not 64 bytes or the record has no head, as Python raises
-`ValueError`. -/
+`ValueError`; a record whose status isn't complete is listed in `refused` and signed nothing, whatever the
+reservation: the issuer certifies only a complete record. -/
 def certify (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : Record) (direction : Direction)
     (params : Params) (parameters : ByteArray) (deadline : Bool := true) :
     Except String (Issuer × Option CertifiedRecord) := do
-  i.finish salt leaf record direction (← i.prepare salt record direction params parameters deadline)
+  let prepared ← i.prepare salt record direction params parameters deadline
+  if (Status.reason? record.status).isSome then
+    pure ({ i with refused := i.refused.push (record.link, direction, record.window) }, none)
+  else i.finish salt leaf record direction prepared
 
 /-- What `Issuer.clock` signs: the sync's clock digest under `salt` (`clockCommitment`) and the certificate message over
 it for the egress link-window; refused (an error) where the salt is not 64 bytes or is one of `clockSalts`, those the
@@ -177,6 +183,8 @@ def certifyWith (w : Core.World Out) (i : Issuer) (record : Record) (direction :
     (parameters : ByteArray) (deadline : Bool := true) : IO (Issuer × Option CertifiedRecord) := do
   let salt ← w.coins NetworkCheck.saltBytes
   let prepared ← IO.ofExcept (i.prepare salt record direction params parameters deadline)
+  if (Status.reason? record.status).isSome then
+    return ({ i with refused := i.refused.push (record.link, direction, record.window) }, none)
   let started ← if i.started then pure (.ok ()) else w.start i.session
   let leaf ← match started with
     | .ok () => w.reserve

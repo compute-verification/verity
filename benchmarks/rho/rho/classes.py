@@ -9,12 +9,13 @@ the Lean statement it instantiates first, then its named assumptions; `lean.weak
 The statements are about inference blocks of `c` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
-**Counted sets.** Each statement counts its own products: the covering family and the partial-sum and E1 bounds count
-each (weight, token) pair of the forward pass once, `Keyed` counts Dgrad too at `c = 2`, and the cover and thread
-theorems count whatever products their certificate covers. A count on a set `S` is `κ / κ_S` times as many of the
+**Counted sets.** Each statement counts its own products: the covering family and the E1 and pair bounds count each
+(weight, token) pair of the forward pass once, `Keyed` counts Dgrad too at `c = 2`, and the cover and thread theorems
+count whatever products their certificate covers. A count on a set `S` is `κ / κ_S` times as many of the
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
-be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
-conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
+be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0 (E1's
+activation rate once a layer's update fits, `unheld_share`). Both conversions are exact over a whole cover, and per
+block they assume each block does a representative mix of products.
 
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
 (`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion bound's per-block cap
@@ -28,7 +29,6 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Literal, Protocol
 
 from rho import lean
@@ -81,6 +81,8 @@ class Structure:
     #: where `s_×`'s gates come from, as `Units.basis` says it for `gates_per_flop` (`REFERENCE` is the FLOP model's);
     #: none needed at `s_× ≤ 1`, which holds in every design
     basis: str = ""
+    #: the runs that measured `s_×` (`art:` ids), cited beside the straddling premise
+    evidence: tuple[str, ...] = ()
 
     #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
     #: each operation is charged to one gate, its output, and none can straddle
@@ -108,7 +110,7 @@ class Structure:
         return self.omega_max / self.gates(w)
 
     def cites(self) -> tuple[str, ...]:
-        return self.STRADDLE if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
+        return self.STRADDLE + self.evidence if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
 
     def elementary(self) -> Structure:
         """One counted operation per gate, at most: the cap that needs no straddling premise."""
@@ -116,7 +118,8 @@ class Structure:
 
 
 def structure(registry: Registry, name: str) -> Structure:
-    return registry.fields(Structure, f"structure.{name}")
+    t = f"structure.{name}"
+    return registry.fields(Structure, t, evidence=tuple(registry.get(f"{t}.evidence", ())))
 
 
 class Outside(Exception):
@@ -204,6 +207,13 @@ def expensive_share(k: float, layer_bits: float, layers: int) -> float:
     return 1 - min(1.0, (math.floor(k / layer_bits) + 1) / layers)
 
 
+def unheld_share(k: float, layer_bits: float, layers: int) -> float:
+    """`expensive_share` while no layer's update fits in `k` bits, and 0 (no cap) once one does. A block holding whole
+    layers computes their activations from the entries it receives, any layers and not only the first, so a rate per
+    activation (`ActivationRate`, E1's) is false there: the held-layers attack (`attacks.py`)."""
+    return expensive_share(k, layer_bits, layers) if k < layer_bits else 0.0
+
+
 def cover(k: float, b: float) -> float:
     """`CoverTraining`: `α₀ b s ≤ (α²Γ + bα) size(d)`, so a block of `k` novel bits finishes at most `k²/b + k`."""
     return k * k / b + k
@@ -259,30 +269,6 @@ def fanout_read(k: float, b: float, f: float, legs: int, aout: float, c: float, 
     return k * max(aout / f, c * k / (4 * (legs - e) * f * b)) + k
 
 
-def ps_rate(b: float, f: float, a: float, aout: float, pool: float, mu: float) -> float:
-    """`psRate b f a aOut K μ`, exactly as Lean states it."""
-    c1 = (1 + math.sqrt(mu)) ** 2 * (b * f * a / pool)
-    c2 = 2 * (1 + math.sqrt(mu)) * math.sqrt(1 - mu) * math.sqrt(b * f / (3 * pool))
-    return max(min(c1, c2), mu * f / max(aout, pool / (4 * b * a)))
-
-
-@lru_cache(maxsize=1 << 16)
-def partial_sum(k: float, b: float, f: float, a: float, aout: float, grid: int = 1000) -> float:
-    """`PartialSumCoverBound`: `r(μ) (#P − k #𝓘) ≤ 2k #𝓘` for every `μ ∈ [0, 1]`, so a block finishes at most
-    `k + 2k / r` products at the best `r = max_μ psRate b f a aOut (2k) μ` (over a grid of `μ`)."""
-    r = max(ps_rate(b, f, a, aout, 2 * k, i / grid) for i in range(grid + 1))
-    return k + 2 * k / r if r > 0 else math.inf
-
-
-def partial_sum_keyed(k: float, b: float, legs: int, aout: float, vocab: int, bcol: float, n: float) -> float:
-    """`PartialSumKeyedCoverBound`: `PartialSumCoverBound` at `f = 1` and `a = min(d − E, n)` (`KeyedActivationReads`),
-    while `E < d`."""
-    e = lookups(k, bcol, vocab)
-    if e >= legs:
-        return math.inf
-    return partial_sum(k, b, 1, min(legs - e, n), aout)
-
-
 def threaded(k: float, b_a: float, b_w: float, d: float, e: float, c: float) -> float:
     """`ThreadedThrottled`: `b_a |M| ≤ α Λ(αΓ) size(d)`, so a block of `k` novel bits does at most `k Λ(k) / b_a` counted
     multiplications, with `Λ = max(e, c k / (4 d b_w))` (`Threading.bound`)."""
@@ -297,8 +283,16 @@ def threaded_checked(k: float, b_a: float, b_w: float, d: float, e: float, c: fl
 def fanout_priced(k: float, aout: float, beta_x: float) -> float:
     """E1's Proposition 3, sharpened: each activation meets at most `aOut` counted products and costs a block `β_x`
     fresh bits, so a block of `k` bits finishes at most `aOut · k / β_x` (the priced form's `min{h_w, P_col} h_x / β_x`
-    at `P_col = aOut p̄ ≤ h_w`, `h_x ≈ k`). `β_x` is the replay-consistent rate, `≤ (h_tok + F) / d`."""
+    at `P_col = aOut p̄ ≤ h_w`, `h_x ≈ k`). `β_x` is the replay-consistent rate, `≤ (h_tok + F) / d`. Its class has no
+    cap once a layer's update fits (`unheld_share`)."""
     return aout * k / beta_x
+
+
+def pair(k: float, b: float, beta_x: float, width: float) -> float:
+    """`PairBound`: with each (weight, entry) pair counted once and `HeldRate` at `βw = b` a held weight and
+    `βe = β_x d` an entry, a block of `k` bits finishes at most `k² / (4 b β_x d)` forward products (AM–GM on
+    `|W_I| |S_I|`), whatever activations it computes inside from the layers it holds."""
+    return k * k / (4 * b * beta_x * width)
 
 
 def fanout_split(k: float, aout: float, beta_x: float, gamma: float, price: float, price_max: float) -> float:
@@ -326,6 +320,7 @@ def output_premise(k: float, map_width: float, map_width_min: float, b: float, b
 
 
 DEPTH = ("layers", "layer_weights")
+UNHELD = ("layer_bits", "layers")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("cover", ("Nci.Cover.Guarantees.CoverTraining", "Nci.Cover.Assumptions.UpdateHardness",
@@ -359,23 +354,18 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("fanout-read", ("Nci.Cover.Guarantees.FanOutReadCoverBound", "Nci.Cover.Assumptions.ValueReadHardness",
                             "Nci.Cover.Assumptions.ColumnsIncompressible"),
             ("b", "f", "legs", "fanout", "per_param", "vocab", "bcol"), fanout_read, counts="keyed"),
-    Formula("partial-sum", ("Nci.Cover.Guarantees.PartialSumCoverBound", "Nci.Cover.Assumptions.UpdateHardness",
-                            "Nci.Cover.Assumptions.ActivationReads"),
-            ("b", "f", "width", "fanout"), partial_sum, counts="kappa_forward"),
-    Formula("partial-sum-keyed", ("Nci.Cover.Guarantees.PartialSumKeyedCoverBound",
-                                  "Nci.Cover.Assumptions.UpdateHardness", "Nci.Cover.Assumptions.ColumnsIncompressible",
-                                  "Nci.Cover.Cube.Wide"),
-            ("b", "legs", "fanout", "vocab", "bcol", "entry_width"), partial_sum_keyed, counts="kappa_forward"),
     Formula("threaded", ("Nci.Guarantees.ThreadedThrottled", "Nci.Assumptions.WeightsIncompressible",
                          "Nci.Assumptions.BaselineRegistered", "Nci.Guarantees.ReferenceThreaded",
                          "Nci.Assumptions.ReferenceLayered"),
             ("b_a", "b_w", "thread_d", "thread_e", "thread_c", "thread_k"), threaded_checked),
     Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate"),
-            ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=expensive_share,
-            share_reads=("layer_bits", "layers")),
+            ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=unheld_share, share_reads=UNHELD),
     Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma"),
             ("fanout", "beta_x", "gamma", "price", "price_max"), fanout_split, counts="kappa_forward",
-            share=expensive_share, share_reads=("layer_bits", "layers")),
+            share=unheld_share, share_reads=UNHELD),
+    Formula("pair", ("Nci.Ldl.Guarantees.PairBound", "Nci.Ldl.Assumptions.HeldRate",
+                     "Nci.Ldl.Assumptions.EvaluatesBlocks"),
+            ("b", "beta_x", "residual_width"), pair, counts="kappa_forward", share=expensive_share, share_reads=UNHELD),
     Formula("accumulator", ("draft:E1-Cor4a", "draft:E1-R"),
             ("h_eff", "b_ps", "step_tokens"), accumulator, counts="kappa_wgrad"),
     Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise"),

@@ -10,6 +10,7 @@ import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.EndToEnd.Blocks
 import Proofs.Flock.EndToEnd.Joint
 import Proofs.Flock.EndToEnd.Joint.MT.Bound
+import Proofs.Flock.EndToEnd.Served
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.EndToEndRegisteredRows
 import Proofs.Flock.SoundAtBridge

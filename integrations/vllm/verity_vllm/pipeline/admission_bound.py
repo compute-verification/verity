@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
-from verity_vllm.config import RowEngine, option
+from verity_vllm.config import RowEngine, option, workload_arg
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes (the factor of the original F-dA-15 warning)
@@ -275,7 +275,7 @@ def host_cap() -> tuple[int | None, str | None]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload",
+    workload: str = option("--workload", type=workload_arg,
                            help="verity-sweep/workload/v1 manifest (requests[] with prompt_len, max_tokens, arrive_step)")
     sizing: str = option("--sizing", help="arena_sizing_*.json of a Commit on the same model (per-module widths + geometry)")
     cap_bytes: int | None = option("--cap-bytes", type=int, default=None,

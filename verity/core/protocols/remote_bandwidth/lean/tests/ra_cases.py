@@ -34,7 +34,7 @@ from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_C
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
-#: The ports' side of record (`verity_difftest`): the Lean, as `benchmarks/remote_session/verifier.py`'s `VERDICT`.
+#: The ports' side of record (`verity_difftest`): the Lean, the verifier `benchmarks/remote_session/verifier.py` runs.
 OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.
@@ -529,8 +529,7 @@ class Run:
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
-                                   entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}
