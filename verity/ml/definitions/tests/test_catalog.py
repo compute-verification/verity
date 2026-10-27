@@ -30,7 +30,7 @@ COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
-COUNT += 1  # `int8_exact`'s Int8RowQuant_v3, a line of its own so it merges with any other change to the count
+COUNT += 2  # `int8_exact`'s Int8RowQuant_v3 and `boolean_int8`'s Int8RowQuant_v4, its σ, a line of its own
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
