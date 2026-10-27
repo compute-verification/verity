@@ -1,9 +1,9 @@
 import Definitions.Flock.Session
 
 /-!
-# Ligerito with M1's padded level 0, in the clear
+# Ligerito with C-Flock ZK's padded level 0, in the clear
 
-M1 (lane `flock-zk`, `backends/flock/live/PROTOCOL.md` §7) changes level 0 of each rep `r`:
+C-Flock ZK (`verity/ml/flock/live/PROTOCOL.md` §7) changes level 0 of each rep `r`:
 
 * **the committed lanes** are `2^k₀` witness lanes and `e` extra lanes per rep, rep `r`'s at
   `2^k₀ + e·r + i`. Every lane is a codeword of `RS[2^d, 2^cols + t]`: its message plus `c₀` times
