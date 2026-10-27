@@ -1,8 +1,8 @@
 {
  "about": "DeepSeek-V4-Pro B1 attempt 3's committed q-norm rows (TritonBlockRMSNorm_v1{N=1536,BLOCK=2048,WARPS=8,EPS}, vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel on the H200): x the norm's committed input, w model.layers.L.attn.q_norm.weight from the checkpoint, y the committed output, each a little-endian bf16 array in base64",
- "commit": "r20261021-092814-0b1c",
- "extracted_by": "r20261021-180952-300c (out/rows.npz: 1,230 rows, 308 distinct)",
- "sass": "r20261021-181759-65f9 (Triton 3.7.1 sm_90 of the served kernel: MUFU.RCP R16; FFMA R3, R16, R3, UR4; MUFU.RSQ)",
+ "commit": "art:741570080c57b678d4cc9f1d8eb72ae020484a69457a686efb67fda1b90c7c9a",
+ "extracted_by": "art:40478e6f381efd7e0394483c8a5fc995653286324b3edef3b12acf9b9d0db31f (out/rows.npz: 1,230 rows, 308 distinct)",
+ "sass": "art:f4e10fe8b11dc71532c8512691edaa642b76f322854221841afc068d14737139 (Triton 3.7.1 sm_90 of the served kernel: MUFU.RCP R16; FFMA R3, R16, R3, UR4; MUFU.RSQ)",
  "statics": {
   "N": 1536,
   "BLOCK": 2048,
