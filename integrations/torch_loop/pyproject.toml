@@ -11,5 +11,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `benchmarks/prove_path`: the records audit its PoUW window's audit drives (`pouw_audit`).
 # `benchmarks/live_challenger` (its `models.py`, the auditor's gate, which the checkpoint role's test holds the role's files
 # to), `a5_coins.py` and `benchmarks/pouw/window_salt`: the local gate a live PoUW window's salt session opens on.
-inputs = ["verity", "benchmarks/prove_path", "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py",
+inputs = ["verity", "benchmarks/prove_path", "benchmarks/live_challenger", "examples/one-stage/a5_coins.py",
           "benchmarks/pouw/window_salt"]

@@ -1482,6 +1482,12 @@
         "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
         "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/": "examples/one-stage/",
+        "benchmarks/private_circuit/": "examples/private-circuit/"
+      }
     }
   ]
 }

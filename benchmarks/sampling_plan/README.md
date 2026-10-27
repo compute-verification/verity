@@ -17,7 +17,7 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   chains; the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, the remote audit's receipts
   and passes, decode's step and its compression latency), each with a low and a
   high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, C-Flock's
-  zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of the remote
+  zero-knowledge sessions on sm_120 (`examples/one-stage/zk_cost.py`'s of s8 coordinates, and A8's of the remote
   bandwidth audit's opening unit, `BlockOpeningCheck_v1`, at twice their ANDs, its proving only), with the builds and
   hardware they key.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units are compute accounting's

@@ -75,7 +75,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
-ONE_STAGE = HERE.parents[1] / "benchmarks" / "one_stage"
+ONE_STAGE = HERE.parents[1] / "examples" / "one-stage"
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402

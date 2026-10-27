@@ -108,7 +108,7 @@ from typing import Any
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "one_stage"))
+sys.path.insert(0, str(HERE.parents[1] / "examples" / "one-stage"))
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402

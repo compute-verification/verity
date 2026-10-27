@@ -8,4 +8,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity`: PoUW's check of record (`core_check.window_salt`) and the challenger's client. `a5_coins.py` and
 # `benchmarks/live_challenger`: the tests open the session on a local auditor host (auditor.py), whose serve.py runs under
 # its tests' stub of the Lean verifier's coins (stub_serve.py).
-inputs = ["verity", "benchmarks/one_stage/a5_coins.py", "benchmarks/live_challenger"]
+inputs = ["verity", "examples/one-stage/a5_coins.py", "benchmarks/live_challenger"]

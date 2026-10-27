@@ -14,7 +14,7 @@ It is the one test in `check` that hands the Lean verifier a proof of a false st
 `test_lean_zk.py`'s mutants edit an honest proof, whose statement is true. So it catches a verifier that accepts a proof
 whose transcript is consistent and whose witness is false, which those can't.
 
-The sessions are a fetched fixture (`fixtures/artifacts.json`), written by `benchmarks/one_stage/forged_proofs.sh` (run
+The sessions are a fetched fixture (`fixtures/artifacts.json`), written by `examples/one-stage/forged_proofs.sh` (run
 r20261019-070603-7331), which `suites.py` fetches before the suite runs, so a missing fixture fails these tests rather than
 skipping them."""
 from __future__ import annotations

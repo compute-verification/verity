@@ -1,6 +1,6 @@
 """Every suite that builds or runs a Lake package is one `check` runs after its Lean steps (`AFTER_LEAN`): Lake builds a
 package's path requirements in their own `.lake`, so a `lake build` from the pytest step writes the verifier's build directory
-while lean-build does (main 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while benchmarks/one_stage and
+while lean-build does (main 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while examples/one-stage and
 verity-network-e2e built sampled-proofs-verifier, which requires flock, from the pytest step).
 
 What says so is the suite's metadata alone, which every suite may read: no scan of test code tells a suite that builds the Lean

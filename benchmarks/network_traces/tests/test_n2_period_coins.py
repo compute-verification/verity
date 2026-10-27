@@ -37,7 +37,7 @@ def _root(name: str, w: int) -> bytes:
 
 
 def _session(tmp_path: Path, monkeypatch, names: list[str]):
-    sys.path.append(str(TREE / "benchmarks" / "one_stage"))
+    sys.path.append(str(TREE / "examples" / "one-stage"))
     import a5_coins as AC
 
     A = AC._module("a5_auditor", AC.TREE / "benchmarks" / "live_challenger" / "auditor.py")

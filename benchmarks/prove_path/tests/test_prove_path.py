@@ -53,7 +53,7 @@ VLLM = HERE.parents[2] / "integrations" / "vllm"
 sys.path.insert(0, str(HERE.parent))
 import prove_path as PP  # noqa: E402
 
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
+sys.path.insert(0, str(HERE.parents[2] / "examples" / "one-stage"))
 import a5 as A5  # noqa: E402
 
 PROMPTS = (5, 3)

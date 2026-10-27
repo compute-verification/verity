@@ -38,9 +38,9 @@ TREE = Path(__file__).resolve().parents[3]
 
 
 def a5_coins():
-    """`benchmarks/one_stage/a5_coins.py`, whose `Local` and `Gate` open a session on a gate."""
+    """`examples/one-stage/a5_coins.py`, whose `Local` and `Gate` open a session on a gate."""
     if "a5_coins" not in sys.modules:
-        spec = importlib.util.spec_from_file_location("a5_coins", TREE / "benchmarks" / "one_stage" / "a5_coins.py")
+        spec = importlib.util.spec_from_file_location("a5_coins", TREE / "examples" / "one-stage" / "a5_coins.py")
         module = sys.modules["a5_coins"] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     return sys.modules["a5_coins"]

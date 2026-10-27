@@ -28,7 +28,7 @@ is the derived file, digest and members included.  ``scope.op_path_prefix`` rest
 to those steps of each request.  A chunked template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate,
 a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk or a ``SPLITS`` split part or combine; and a row template or
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
-into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
+into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``examples/one-stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
@@ -247,7 +247,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names) are consecutive chunks of
     at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
-    With no ``caps`` at all (a tool reading one Call's units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS``
+    With no ``caps`` at all (a tool reading one Call's units, ``examples/one-stage/m1_unit.py``), a ``COORDS`` or ``COLS``
     template is one member of word rows."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 

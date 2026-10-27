@@ -7,7 +7,7 @@ units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, a
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on its own coins or a challenger's (`--challenger local`,
-`benchmarks/one_stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
+`examples/one-stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
 deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir from the store (`PP_LLAMA`) or on a served window
 (`PP_SERVE_RUN`), with one forged run that must be refused. The docstrings say how.
 
@@ -247,7 +247,7 @@ and what is moved and listed) are in [e2e_chains/README.md](e2e_chains/README.md
 **Tonight's interim.**
 - **2b's plain sessions are inside what `flock_verify_sound` covers today.** Each session has one table: `statementRules`
   refuses more without `--zk`. Each draws by the stratified law: `lawWhy` refuses a subset draw without `--zk`, and a
-  bernoulli or work draw in either mode. a5 writes each session's draw as `subset` (`benchmarks/one_stage/a5.py`), so a
+  bernoulli or work draw in either mode. a5 writes each session's draw as `subset` (`examples/one-stage/a5.py`), so a
   plain session drawn as a5 draws is refused. The outputs are public, and there are no registered reads. One-table plain
   already covers hidden outputs (`SoundExecH`).
 - **In plain mode, the drawn units' committed rows are not opened outside the session** (proofs). `keyRowsH_computes`

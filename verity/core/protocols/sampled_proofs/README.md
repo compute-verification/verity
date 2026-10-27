@@ -57,7 +57,7 @@ Not built yet: the security function and its red-team review (decision 41), and 
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
 
 Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
-captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchmarks/one_stage/a5.py`) registers a stand-in
+captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`examples/one-stage/a5.py`) registers a stand-in
 too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
@@ -84,7 +84,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
-  `benchmarks/one_stage` call it. Python is held to the Lean by
+  `examples/one-stage` call it. Python is held to the Lean by
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
@@ -118,7 +118,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   samplers and `draw_first` under each sampling design against the Lean verifier's (`drawOn`) on raw bytes, and
   `tests/test_one_stage.py` the work sizes against the ones C-Flock's
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's draw against `one_stage.draw`.
-- **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
+- **The benchmark.** `examples/one-stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn units. The vLLM integration
   commits serving rows with the registration and served domains of `one_stage` (`verity.ml.windows.rows`, in the
@@ -294,7 +294,7 @@ only inside a proof (`one_stage.registered`).
   reused value, the earlier port's or entry's (R7 holds the record to it: `registration.check(..., outputs=)`), and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
   no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
   R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no unit
-  reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.
+  reads. `examples/one-stage/a0.py`'s `hold_registered` is the template.
 - The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
   registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
   (`audit.session_registered(verdicts, registration)`) reads them off the accepted verdicts of record (the Lean
