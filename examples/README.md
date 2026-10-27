@@ -35,10 +35,6 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   phase a run, from the step's commit on the H200 to its drawn blocks proved. Level 1 on DRAWPROVE r20261027-013625-8e25: 8
   live-drawn proof blocks are proved by C-Flock `--zk` and accepted by Lean, and the flipped bit is refused. Demo B's memory
   terms (memory-accounting's, M4) have a slot in its `example.toml` and aren't claimed.
-- `lifecycle/`: the onsite and remote composites stepped through the whole lifecycle on a tiny int8 model, every party
-  simulated on CPU in one process: the hardware registration (one `Layout`, growing), the registration, each
-  declaration's block of the declared circuit, its audit (proofs a labelled stand-in) and the monitoring period's
-  accounting. It shows the interfaces the protocols need, and which are still missing.
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.

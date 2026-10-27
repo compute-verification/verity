@@ -1,6 +1,7 @@
 """The lifecycle both composite protocols step through, on a tiny model, with the parts they share: the phases as functions
 with typed inputs and outputs, and the developer and verifier as parties of the deployment layer (`verity.core.deploy`).
-`onsite.py` and `remote.py` add what each composite has of its own; `run.py` runs both; README.md walks through it.
+A composite's own module (`remote.py`) adds what it has of its own, through the verifier's hooks; `run.py` runs it;
+README.md walks through it.
 
 The phases, each a function here:
 
@@ -1207,12 +1208,13 @@ PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
 LATER = Layout("", devices=(Device("gpu2", "sim-int8-b", "node0"),), stores=(Store("nvme1", "node0", 1 << 43),))
 """The hardware a site adds after its first declaration."""
-CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "io-mismatch",
-          "lost-theta", "off-node", "fork")
+CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")
 """Each way the developer deviates in the tests, by the phase that refuses it: hardware registration (`hardware`: a later
 registration names a device twice), registration (`builder`), operation (`placement`: B places a unit on a device before
-its registration; `unreported`), declaration (`advice-cap`, `recommit`), audit (`wrong-value`, and onsite `io-mismatch`,
-`lost-theta`, `off-node`) and accounting (`fork`)."""
+its registration; `unreported`), declaration (`advice-cap`, `recommit`), audit (`wrong-value`) and accounting (`fork`)."""
+ONSITE_CHEATS = ("io-mismatch", "lost-theta", "off-node")
+"""The deviations only an onsite composite's own devices see: the wire carrying other outputs than the committed ones,
+answering the memory challenger with a row that isn't theta's, and fetching theta from off the node."""
 OFF_NODE_TICKS = 3_000_000
 """`off-node`: the round trip to where a developer that doesn't hold theta on the node keeps it."""
 

@@ -10,6 +10,9 @@
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
 
+A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
+``"mode": "by-calls"`` and names the target each callee relies on.
+
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
 warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
@@ -30,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ambient as AM
+from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
 from . import sidecars as SC
@@ -117,7 +121,9 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index).  Traced
     (`cache.tracing`), each check gets a memo of its own, so its result never rests on what an earlier target's check computed,
     and the pins it looks up are recorded (`cache.recorded_pins`); a suite Definition's ``as_call`` is resolved here (the catalog's
-    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check."""
+    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check.  A named by-calls
+    root brings the targets its callees rely on (`by_calls.relied_targets`), each checked beside it, so the report holds their
+    verdicts (`by_calls.joined`); ``--all``'s are its suite's."""
     from verity.ml.circuits.evaluation.reference import resolve
 
     TG.load_registries()
@@ -126,6 +132,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     memo = (lambda: {}) if fresh else (lambda: shared)
     pins = CC.recorded_pins(CK.load_pins()) if fresh else CK.load_pins()
     tasks: list[tuple] = []
+    named = 0
     if everything:
         found = TG.suite()
         calls = TG.call_families(found)
@@ -136,6 +143,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
         for label, sub, sts in TG.templates():
             tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
                           {"units": sorted(TG.BINDINGS.get(label, ()))}))
+        named = len(tasks)
     for s in specs:
         kind = TG.kind_of(s)
         if kind == "row":
@@ -161,6 +169,21 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
                 continue
             tasks.append(("definition", s, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
                           {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
+    labels = {t[1] for t in tasks}
+    for t in tasks[named:]:
+        if not any(TG.is_by_calls(fn) for fn in _info(t).get("roots", ())):
+            continue
+        try:
+            relied = BC.relied_targets(_info(t)["roots"][0])
+        except Exception as e:  # noqa: BLE001  (the root's own check fails by name on what raised here)
+            print(f"circuit-check: {t[1]}: the targets its callees rely on aren't added ({type(e).__name__}: {str(e)[:200]})",
+                  file=sys.stderr)
+            continue
+        for fn in relied:
+            if fn.id not in labels:
+                labels.add(fn.id)
+                tasks.append(("definition", fn.id, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                              {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
     return tasks
 
 
@@ -583,6 +606,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             qc = (r.get("partition") or {}).get("q_call") or {}
             call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
                     f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
+            if r.get("mode") == BC.CHECK:
+                call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
                 f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
 
