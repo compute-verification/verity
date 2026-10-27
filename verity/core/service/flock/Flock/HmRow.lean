@@ -26,6 +26,7 @@ import Flock.RecResiduals
 import Flock.RecSparse
 import Flock.RecOpening
 import Flock.SplitNL
+import Flock.Norm
 
 namespace Flock
 
@@ -1327,7 +1328,7 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
   let header ← match Json.parse text with
-    | .ok j => pure j
+    | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
   if (← J.str header "format" pctx) != tags.publicFormat || (← J.str header "statement" pctx) != tags.statement then
@@ -1596,7 +1597,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-!
 PROTOCOL.md §16.13: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
@@ -1953,6 +1954,7 @@ def parse (c : Circuit) : V Ports := do
   let mj := c.metaJ
   let .ok pj := mj.getObjVal? "public_inputs" | do
     if J.has mj "leaves_public" then throw "META: leaves_public without public_inputs"
+    if J.has mj "shared_reads" then throw "META: shared_reads without public_inputs (a shared read's position is a public input)"
     return {}
   let ps ← J.asArr pj "META public_inputs"
   if ps.isEmpty then throw "META: public_inputs names no port"
@@ -2028,8 +2030,43 @@ def regions (c : Circuit) (pi : Ports) (pub : Public) : V (Array Region) := do
             | none => 0
           acc.push (v % 256).toUInt8 |>.push (v / 256).toUInt8) acc) ByteArray.empty
 
+/-- META `shared_reads` (each `{port, group, position}`, nothing else): input row `port` is one table row per group of
+`group` instances, instance `i` reading row `⌊i/group⌋`, and public input `position` is `i mod group` (seed `instance`,
+derivation `mod:G`), so each window `(⌊i/G⌋, i mod G)` of a shared row is one instance's: one writer a window. Held on the
+population's public file: a shared-row file, its instances whole groups, the port's table one row per group, every
+instance's ref its group. `parse` refuses the key without public inputs. -/
+def checkReads (c : Circuit) (pi : Ports) (n : Nat) (tables : Option Tables) : V Unit := do
+  if pi.ports.isEmpty then return
+  let .ok rj := c.metaJ.getObjVal? "shared_reads" | return
+  let rs ← J.asArr rj "META shared_reads"
+  if rs.isEmpty then throw "META: shared_reads names no port"
+  let some t := tables | throw "shared reads: the public file is not a shared-row file (header shared_rows)"
+  let np := c.ports.size
+  let mut seen : Array String := #[]
+  for r in rs do
+    let .obj kvs := r | throw "META: a shared read is not an object"
+    let keys := (kvs.toArray.map (·.1)).qsort (· < ·)
+    let s := fun k => (r.getObjValAs? String k).toOption.getD ""
+    let g := (r.getObjValAs? Nat "group").toOption.getD 0
+    if keys != #["group", "port", "position"] || s "port" == "" || s "position" == "" || g == 0 then
+      throw "META: a shared read names no port, position, or group (a positive count of instances)"
+    let (port, pos) := (s "port", s "position")
+    if seen.contains port then throw s!"shared read {port}: named twice"
+    seen := seen.push port
+    let some p := (List.range (HmOut.nIn c)).find? (fun p => (c.ports.getD p default).name == port)
+      | throw s!"shared read {port}: not an input row"
+    let some k := (List.range pi.ports.size).find? (fun k => (pi.ports.getD k default).1 == pos)
+      | throw s!"shared read {port}: its position {pos} is not a public input"
+    let pj := (pi.json.getArrVal? k).toOption.getD Json.null
+    if (pj.getObjValAs? String "seed").toOption != some "instance" || (pj.getObjValAs? String "derivation").toOption != some s!"mod:{g}" then
+      throw s!"shared read {port}: its position {pos} is not the instance index mod {g} (seed instance, derivation mod:{g})"
+    if n % g != 0 then throw s!"shared read {port}: {n} instances are not whole groups of {g}"
+    if t.counts.getD p 0 != n / g then throw s!"shared read {port}: its table is not one row per group of {g} ({n / g} rows)"
+    if let some i := (List.range n).find? (fun i => t.refs.getD (i * np + p) 0 != i / g) then
+      throw s!"shared read {port}: instance {i} reads table row {t.refs.getD (i * np + p) 0}, not its group's {i / g}"
+
 /-- The verifier's public file: `HmOut.loadPublic`'s, then every instance's public words (`Public.outputs`), its header's
-`public_inputs` META's (and none without). -/
+`public_inputs` META's (and none without), and its shared reads' refs their groups (`checkReads`). -/
 def loadPublic (tags : Tags) (c : Circuit) (pi : Ports) (file : ByteArray) : V Public := do
   let pub ← HmRow.loadPublic tags { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } file
   match pub.header.getObjVal? "public_inputs", pi.ports.isEmpty with
@@ -2041,6 +2078,7 @@ def loadPublic (tags : Tags) (c : Circuit) (pi : Ports) (file : ByteArray) : V P
     if (t.counts.extract k np).any (· != pub.n) then throw "header: an output row's table is not one row per instance"
     if (List.range t.refs.size).any (fun x => x % np ≥ k && t.refs[x]! != x / np) then
       throw "shared rows: an instance's output row is not its own"
+  checkReads c pi pub.n pub.tables
   return pub
 
 def drawn (c : Circuit) (pi : Ports) (pub : Public) (draw : Json) : V Public :=
@@ -2263,7 +2301,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
@@ -2318,8 +2356,8 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
       pure st
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   if count ≤ 1 then
     let st ← setup tags draw
@@ -2355,7 +2393,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 /-- `Stmt.setupHidden` on its circuit as `HmOut.parse` returns it (`parsed`), which the caller parses once
 (`Stmt.setupHidden_eq`). -/
@@ -2420,7 +2458,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- `Stmt.setupTables` on its circuit as `HmOut.parse` returns it under `tags` (`parsed`), which the caller parses once: a
 one-table session sets up on it, several tables each parse their own (`Stmt.setupTables_eq`). -/
@@ -2466,8 +2504,8 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
       pure st
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   let setupOne := fun (d : Option Json) => do
     if tags.hiddenOutputs then
@@ -2476,8 +2514,8 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
       pure st
     else
       let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   if count ≤ 1 then
     let st ← setupOne draw
@@ -2513,7 +2551,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option maxRecDepth 20000 in
 theorem Stmt.setupHidden_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
