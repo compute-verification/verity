@@ -8,6 +8,11 @@ import Properties.Verity.Game
 import Proofs.Properties.Verity.Soundness
 import Proofs.Properties.Verity.Recursive.Compiled
 import Proofs.Properties.Verity.Recursive.Numbers
+import Proofs.Properties.Verity.Recursive.Names
+import Proofs.Properties.Verity.Recursive.PartStatement
+import Proofs.Properties.Verity.Recursive.PartVerdict
+import Proofs.Properties.Verity.Recursive.SetupChecks
+import Proofs.Properties.Verity.Recursive.ScheduleRun
 
 /-!
 # Sampled proofs' recursive configuration: the component's property and its target (ONE-9p)
@@ -129,33 +134,25 @@ noncomputable def LiveCoins (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
       .decide i spec sts link c₁ mids f →
     (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()
 
-/-- **The statement names the component's inputs.** `x` is a compiled statement (`decodeX`) whose parts are:
-* its inner statement, which is the inner session's as `innerHeld` reads it off the blobs: the circuit, public file,
-  partition, program and draw;
-* its own inner shape, which is the one `innerHeld` derives;
-* its registration, which is the evidence's;
-* its bindings, which are every part's;
-* its part `j`, which carries `p.own.parts[j]`'s circuit, partition, program, registration and rows.
-
-Piece B of PRF-202's split owns this definition, and refines it where the model reads a field it misses. -/
-def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core.Blobs) (x : Msg) : Prop :=
-  ∃ w ri, decodeX x = some w ∧ FlockDeploy.decode w.inner = some ri ∧
-    bs.get p.own.circuit "the inner circuit" = .ok ri.circuit ∧
-    bs.get p.own.pub "the inner public file" = .ok ri.publicFile ∧
-    ri.statement = VStar.Recursive.INNER_STATEMENT ∧ ri.tables = [] ∧
-    ri.partition.map (FlockDeploy.jsonOf "partition") = some (.ok p.own.partition) ∧
-    ri.program = some p.own.program ∧
-    ri.draw = (bs.get p.own.draw "the inner statement's draw").toOption ∧
-    (∀ h, VStar.Recursive.innerHeld p.own e.proofs bs = .ok h →
-      (do Flock.RecVStar.Inner.ofJson (← FlockDeploy.jsonOf "rec-inner" w.recInner)) = .ok h.shape) ∧
-    (p.own.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration ∧
-    w.parts.length = p.own.parts.size ∧
-    ∀ j (hj : j < p.own.parts.size) (q : PartX), w.parts[j]? = some q →
-      FlockDeploy.jsonOf "rec-bindings" w.bindings = .ok p.own.parts[j].bindings ∧
-      bs.get p.own.parts[j].circuit s!"part {j}'s circuit" = .ok q.base.circuit ∧
-      q.base.partition.map (FlockDeploy.jsonOf "partition") = some (.ok p.own.parts[j].partition) ∧
-      q.base.program = some p.own.parts[j].program ∧
-      q.base.registered.map (FlockDeploy.jsonOf "registered") = p.own.parts[j].registered.map Except.ok
+/-- **G, the schedule's half: the run accepts where every V\* session sets up at its staged statement and the outer
+verifier accepts it there** (F3's `run_acc_sha512`, with C2's `numsOf_staged` for its numbers and `vstarAt_staged` for
+its statement). -/
+theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
+    (r : Fin ((RecDeploy.V IV st).k x) → Coin) (hn : 0 < nS x)
+    (hset : ∀ s < nS x, ∃ o, setupO (staged st x
+      ((Claims.run FlockDeploy.sha512 P (RecDeploy.V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = some o)
+    (hacc : ∀ s < nS x, ((nextO (staged st x
+        ((Claims.run FlockDeploy.sha512 P (RecDeploy.V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s)
+        ((session IV st x s (Claims.run FlockDeploy.sha512 P (RecDeploy.V IV st) x ω r).seen).msgs.map Prod.fst)
+        ((session IV st x s (Claims.run FlockDeploy.sha512 P (RecDeploy.V IV st) x ω r).seen).msgs.map
+          fun m => outCoin m.2)).eval FlockDeploy.sha512).1 = .acc) :
+    (Claims.run FlockDeploy.sha512 P (RecDeploy.V IV st) x ω r).out = .acc := by
+  refine Schedule.run_acc_sha512 IV st x P ω r hn (fun s hs => ?_) (fun s hs => ?_)
+  · obtain ⟨o, ho⟩ := hset s hs
+    exact numsOf_staged ho
+  · obtain ⟨o, ho⟩ := hset s hs
+    rw [vstarAt_staged ho]
+    exact hacc s hs
 
 /-- **ONE-9p's property: the recursive component's acceptance is the event `RecursiveKSAt` is stated over.** Suppose
 the compiled recursive component accepts `(p, c, e, bs)`, `x` names its inputs (`Names`), the blobs show a run of the
@@ -178,6 +175,29 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
     RecDeploy.DenseAt x ∧
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).out = .acc := by
   sorry
+
+/-- **Sampled proofs' one-stage form is v2** (the bridge's carry-over lemma, soundness 02:10Z): where the parameters name
+the one-stage form and `VStar.Recursive.Sampled` accepts, the evidence is one-stage too and v2
+(`SampledProofs.OneStageZk.checkBlobs`) accepts the same commitment, evidence and blobs with the same public output and
+profile. So what is proved of v2's acceptance (ONE3P's `acceptMeans`, ONE8's sampled proofs bound) holds of the
+composed component's one-stage branch. -/
+theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
+    {prof : Core.Integrity}
+    (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
+  cases e with
+  | inl e₀ => exact ⟨e₀, rfl, h⟩
+  | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
+
+/-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
+theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params}
+    {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
+    {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (h : VStar.Recursive.Sampled.protocol.checkBlobs
+      (show VStar.Recursive.Sampled.protocol.Params from Sum.inl p₀) c e bs = .accept pub prof) :
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
+  sampled_oneStage_accepts h
 
 /-! ## The target -/
 
