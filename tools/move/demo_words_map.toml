@@ -61,6 +61,11 @@ files = ["ARCHITECTURE.md"]
 "(example, run, proof)" = "(demo, run, proof)"
 
 [[words_in]]
+files = ["tools/research/console/README.md"]
+[words_in.words]
+"examples name" = "demos name"
+
+[[words_in]]
 files = ["integrations/vllm/pyproject.toml"]
 [words_in.words]
 "the example's stored row" = "the demo's stored row"
