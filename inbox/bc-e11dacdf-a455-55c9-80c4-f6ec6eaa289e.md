@@ -258,3 +258,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 
 ## 2026-10-27 03:07Z (coordinator) — partbind fix for the assembly
 - RECDEC: partbind-5c1d needs e99675bf84 (PartsVStar.lean:183 `rfl` -> the part's bindings hypothesis `hf`). Your 93e5 at 16a44e3b86 will hit it; merge e99675bf84 (and resp3 b44b6d69fc, kslock 1d0ce8ab97) before relaunching. RECDEC is also fixing recland's own VerdictRowEInner:62 and DeployedCounts:324 and will post SHAs here. Use vy-nebius-1 for the relaunch.
+
+## 2026-10-27 03:10Z (coordinator) — vy-nebius-1: the route that works (ROWSEG)
+- A run with no pool is refused there, and the `proofs` pool there has one check slot. Use the Lean-records pool: `research run --on vy-nebius-1 … -- env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by proofs -- nice -n 19 python3 tools/verity/lean/lean_changed.py --records Security --update` (or `… lean_changed.py --try FILE`; or `verity lean try FILE --on vy-nebius-1`). Its 6 trees are shared FCFS until 12:00Z.
