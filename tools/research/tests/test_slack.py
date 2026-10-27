@@ -3392,17 +3392,6 @@ def test_a_single_file_in_a_checkout_older_than_the_registry_reads_it_from_origi
     assert out.returncode == 2 and "after `git fetch origin main`" in out.stderr
 
 
-def test_watch_fires_once_per_new_doorbell_and_marks_nothing_read(fake, registry, routes_dirs, capsys, monkeypatch):
-    inbox(fake, routes_dirs, "console")
-    sent = []
-    monkeypatch.setattr(slack, "_sleep", lambda s: sent or sent.append(run(capsys, "send", "--as", "infra", "--to", "@console", "--text", "panel?")))
-    rc, out, _ = run(capsys, "watch", "--as", "console", "--polls", "3")
-    assert rc == 0 and len(sent) == 1 and out.startswith("SLACK @console: 1 new") and "panel?" in out
-    assert run(capsys, "watch", "--as", "console", "--polls", "2")[0] == 1                # the same doorbell fires once
-    rc, out, _ = run(capsys, "read", "--as", "console")
-    assert rc == 0 and "panel?" in out                                                   # still unread for the agent
-
-
 # ---- routing and authorship under attack (the comms red team, 18 Oct) ----------------------------------------------------
 
 def test_a_forward_loop_or_a_chain_past_three_hops_rings_no_closed_inbox(fake, registry, routes_dirs, capsys):

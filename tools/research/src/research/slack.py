@@ -18,7 +18,6 @@ Notes are records, never messages.
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--replay] [--json]             # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
-  research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
@@ -2366,28 +2365,6 @@ def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     return 1 if ns.urgent and not any(urgent_doorbell(m, reg) for m in msgs) else 0
 
 
-def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
-    """Block until a doorbell lands in NAME's inbox that neither `read --as` nor an earlier `watch` has seen; print it, exit
-    0.  Marks nothing read: it is the hook a wake script runs (`while watch; do <wake the agent>; done`) for an agent that
-    can't subscribe to its inbox thread.  Exit 1 after --polls polls with none."""
-    name = ns.handle.lstrip("@")
-    r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
-    if not r:
-        raise SlackError(f"@{name} has no inbox")
-    r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
-    api, mark = client(ns), seen_path(f"{name}.watch")
-    for i in range(ns.polls or 1 << 62):
-        if i:
-            _sleep(ns.every)
-        last = float(mark.read_text().strip()) if mark.is_file() else 0.0
-        new = [m for m in unread(api, r) if float(m["ts"]) > last]
-        if new:
-            print(render_unread(name, new, reg))
-            mark_read(f"{name}.watch", new)
-            return 0
-    return 1
-
-
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
 
 def comment_by(c: dict) -> str | None:
@@ -3955,9 +3932,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--peek", action="store_true", help="read: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="read: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
-    p = cmd("watch", "block until a new doorbell reaches NAME, print it, exit 0 (the hook for a wake script)", as_=True)
-    p.add_argument("--every", type=float, default=20, metavar="S", help="seconds between polls (default 20)")
-    p.add_argument("--polls", type=int, default=0, help="give up (exit 1) after this many polls (default: never)")
     p = cmd("traffic", "the monitor: doorbells per inbox, pauses, dropped names, unanswered asks")
     p.add_argument("--hours", type=float, default=24)
     p.add_argument("--stale-h", type=float, default=2,
@@ -4071,7 +4045,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                 "pickup": cmd_pickup, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "ring-run": cmd_ring_run, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close,
-                "watch": cmd_watch, "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
+                "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"{prog}: {e}", file=sys.stderr)
         return 2
