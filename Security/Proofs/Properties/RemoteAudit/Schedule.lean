@@ -45,8 +45,9 @@ from step 3, so a session whose third pass's plan drops it, as a coin might say,
 at 200 bits under a cap of 200 and is refused under 199 (`coinPasses_refused`, `coinPasses_accepted`,
 `coinPasses_overCap`; `test_schedule.py` plays the same session in Python).
 
-Each guarantee's premises hold at the deployed shape, one pass over all 130023424 blocks (the `_meets` lemmas),
-and each conclusion is false for some input a verifier that accepted everything would take (the `_fails` lemmas).
+Each guarantee's premises hold at the deployed shape, one pass over all 130023424 blocks (the `_honest` lemmas),
+and each conclusion is false for some input a verifier that accepted everything would take (the `_nontrivial`
+lemmas): the lock's `witnesses`.
 -/
 
 open RemoteAudit
@@ -637,11 +638,15 @@ theorem coinPasses_overCap : Schedule.check honest 8 199 (coinPasses true) #[(8,
 
 /-! ## Honest and nontrivial lemmas
 
-Each property's honest lemma (`_meets`) shows its premises hold at the deployed instance, the session of
+Each property's honest lemma (`_honest`) shows its premises hold at the deployed instance, the session of
 `benchmarks/remote_session/tests/fixtures/gate_run_7.json.gz`: a store of 130023424 blocks of 4096 bytes under
 p1024/k3/masked with sketch-sha512 receipts, each window one pass over the whole store (`Plan.whole`), with no appends
-and no schedule cap committed. Its nontrivial lemma (`_fails`) shows its conclusion fails where the code's
-check is dropped, for a verifier that accepts everything. -/
+and no schedule cap committed. Its nontrivial lemma (`_nontrivial`) shows its conclusion fails where the code's
+check is dropped, for a verifier that accepts everything.
+
+The lock lists both as the property's `witnesses`, so each builds its instance: no binder ranges over it (a
+nontrivial lemma's one `∀` stands for its property's `∃`), and its statement reads only the spec and the code, its
+instance written out rather than named by a definition of this file. -/
 
 theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi : ℕ) :
     (as.qsort lt lo hi).size = as.size := by
@@ -652,7 +657,7 @@ theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi 
 
 /-- **`PlanBlocks` meets the deployed plan.** The plan of the deployed passes, the whole store as one run, is one
 `Plan.make?` makes, and it is `Plan.whole`, the second conjunct's plan. -/
-theorem planBlocks_meets : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) := by
+theorem planBlocks_honest : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) := by
   have h : (Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424).map (fun pl => (pl.blocks, pl.runs, pl.ends)) =
       some (130023424, #[(0, 130023424)], #[130023424]) := by
     simp only [Plan.make?, size_qsort]
@@ -666,11 +671,13 @@ theorem planBlocks_meets : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 13002342
     obtain ⟨rfl, rfl, rfl⟩ := h
     rfl
 
-/-- **`PlanBlocks` fails for any plan**: a plan the verifier did not make can hold more positions than its runs have
-blocks. -/
-theorem planBlocks_fails : ¬ ∀ pl : Plan, pl.length = (runBlocks pl.runs).length ∧
-    ∀ p < pl.length, (runBlocks pl.runs)[p]? = some (pl.block p) :=
-  fun h => absurd (h ⟨1, #[], #[1]⟩).1 (by decide)
+/-- **`PlanBlocks` fails for a plan the verifier did not make**: a verifier that accepted every plan would take one
+of one position over no runs, which has more positions than its runs have blocks. -/
+theorem planBlocks_nontrivial :
+    ¬ ((⟨1, #[], #[1]⟩ : Plan).length = (runBlocks (⟨1, #[], #[1]⟩ : Plan).runs).length ∧
+      ∀ p < (⟨1, #[], #[1]⟩ : Plan).length,
+        (runBlocks (⟨1, #[], #[1]⟩ : Plan).runs)[p]? = some ((⟨1, #[], #[1]⟩ : Plan).block p)) :=
+  fun h => absurd h.1 (by decide)
 
 theorem runBlocks_whole (B : ℕ) : runBlocks (Plan.whole B).runs = List.range' 0 B := by
   simp [runBlocks, Plan.whole]
@@ -680,13 +687,13 @@ theorem tileAt_whole {B i : ℕ} (hi : i < B) : tileAt B #[] (Plan.whole B).runs
   simp [position, hi]
 
 /-- **`CodeLayoutTiles` meets the deployed pass.** At the deployed plan, made by `Plan.make?`, its runs hold the
-store's 130023424 blocks, each at a position below `(1, 130023424)`: the registration's tree, at its own index. -/
-theorem codeLayoutTiles_meets :
+store's 130023424 blocks, tile `i` at `(0, i)`, a position below `(1, 130023424)`: the registration's tree, at its own
+index. -/
+theorem codeLayoutTiles_honest :
     Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) ∧
       (runBlocks (Plan.whole 130023424).runs).length = 130023424 ∧
-      ∀ i < 130023424, ∃ t m, tileAt 130023424 #[] (Plan.whole 130023424).runs i = some (t, m) ∧ t < 1 ∧
-        m < 130023424 :=
-  ⟨planBlocks_meets, by rw [runBlocks_whole, List.length_range'], fun i hi => ⟨0, i, tileAt_whole hi, Nat.one_pos, hi⟩⟩
+      ∀ i < 130023424, tileAt 130023424 #[] (Plan.whole 130023424).runs i = some (0, i) :=
+  ⟨planBlocks_honest, by rw [runBlocks_whole, List.length_range'], fun _ hi => tileAt_whole hi⟩
 
 /-- An embedding that puts each tile at `tileAt` of the runs is the verifier's layout. -/
 theorem codeLayout_eq {N T M blocks : ℕ} {dflt : Fin N ↪ Fin T × Fin M} {appends runs : Array (ℕ × ℕ)}
@@ -714,23 +721,33 @@ theorem codeLayout_whole (B : ℕ) (dflt : Fin B ↪ Fin 1 × Fin B) :
     codeLayout B dflt #[] (Plan.whole B).runs = wholeLayout B :=
   codeLayout_eq (wholeLayout B) (by rw [runBlocks_whole, List.length_range']) fun i => tileAt_whole i.2
 
-/-- **`CodeLayoutTiles` fails for any plan**: runs that repeat a block, which `Plan.make?` refuses, put two tiles at
-one position, where no embedding puts each tile at its block's. -/
-theorem codeLayoutTiles_fails : ¬ ∀ (N T M blocks : ℕ) (appends : Array (ℕ × ℕ)) (pl : Plan)
-    (dflt : Fin N ↪ Fin T × Fin M), (runBlocks pl.runs).length = N →
-    (∀ i < N, ∃ t m, tileAt blocks appends pl.runs i = some (t, m) ∧ t < T ∧ m < M) →
-    ∀ i : Fin N, tileAt blocks appends pl.runs i =
-      some (((codeLayout blocks dflt appends pl.runs i).1 : ℕ), ((codeLayout blocks dflt appends pl.runs i).2 : ℕ)) := by
-  intro h
-  let dflt : Fin 2 ↪ Fin 1 × Fin 2 := ⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩
+/-- Runs that repeat a block put both tiles at one position, which no embedding does, so the verifier's layout of them
+is the default. -/
+theorem codeLayout_repeat (dflt : Fin 2 ↪ Fin 1 × Fin 2) : codeLayout 1 dflt #[] #[(0, 1), (0, 1)] = dflt := by
   have ht : ∀ i < 2, tileAt 1 #[] #[(0, 1), (0, 1)] i = some (0, 0) := by decide
-  have hc := h 2 1 2 1 #[] ⟨1, #[(0, 1), (0, 1)], #[1, 2]⟩ dflt (by decide)
-    (fun i hi => ⟨0, 0, ht i hi, by decide, by decide⟩)
-  have e0 := (Prod.mk.inj (Option.some.inj ((ht 0 (by decide)).symm.trans (hc 0)))).2
-  have e1 := (Prod.mk.inj (Option.some.inj ((ht 1 (by decide)).symm.trans (hc 1)))).2
-  have : codeLayout 1 dflt #[] #[(0, 1), (0, 1)] 0 = codeLayout 1 dflt #[] #[(0, 1), (0, 1)] 1 :=
-    Prod.ext (Subsingleton.elim _ _) (Fin.ext (e0.symm.trans e1))
-  exact absurd ((codeLayout 1 dflt #[] #[(0, 1), (0, 1)]).injective this) (by decide)
+  unfold codeLayout
+  split
+  · rename_i h
+    exfalso
+    obtain ⟨e, -, he⟩ := h
+    have e0 := (Prod.mk.inj (Option.some.inj ((ht 0 (by decide)).symm.trans (he 0)))).2
+    have e1 := (Prod.mk.inj (Option.some.inj ((ht 1 (by decide)).symm.trans (he 1)))).2
+    have : e 0 = e 1 := Prod.ext (Subsingleton.elim _ _) (Fin.ext (e0.symm.trans e1))
+    exact absurd (e.injective this) (by decide)
+  · rfl
+
+/-- **`CodeLayoutTiles` fails for a plan the verifier did not make**: runs that repeat a block, which `Plan.make?`
+refuses and a verifier that accepted every plan would take, hold two blocks with positions in range, both `(0, 0)`.
+No embedding puts both tiles there, so the verifier's layout is the default, store order, and tile 1 is not at its
+block's position. -/
+theorem codeLayoutTiles_nontrivial :
+    ¬ (tileAt 1 #[] #[(0, 1), (0, 1)] ((1 : Fin 2) : ℕ) =
+      some (((codeLayout 1 (⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩ : Fin 2 ↪ Fin 1 × Fin 2) #[]
+          #[(0, 1), (0, 1)] 1).1 : ℕ),
+        ((codeLayout 1 (⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩ : Fin 2 ↪ Fin 1 × Fin 2) #[]
+          #[(0, 1), (0, 1)] 1).2 : ℕ))) := by
+  rw [codeLayout_repeat]
+  decide
 
 /-! ### An opening the verifier accepts at the deployed shape
 
@@ -738,7 +755,7 @@ A tree whose siblings are all 64 zero bytes (`zeroPath`) has the root its leaf c
 opening verifies (`verifyOpening_zeroRoot`). The zero block decodes under every key (its words are 0, below `p`), to a
 payload `zeroPayload`; a registration whose payload tree holds that payload at block 0, and a pass over the whole store
 whose receipt tree holds the zero block's receipt at position 0, accept the opening of position 0
-(`opensAtPosition_meets`). The payload is the zero block's decoding under the codec key, which an honest prover stores
+(`opensAtPosition_honest`). The payload is the zero block's decoding under the codec key, which an honest prover stores
 after the key is drawn; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
 deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
 
@@ -1025,47 +1042,54 @@ theorem honestReg_make (node codecSeed : ByteArray) (rows : ℕ) (hnode : 1 ≤ 
   simp [hnode.1, hnode.2, hs1, hs2, hroot, hseed, hrow]
   try rfl
 
-/-- **`OpensAtPosition` meets the deployed instance.** For any node id and codec seed of the sizes `Registration.make?`
-takes, and any challenge and previous root, the deployed registration (130023424 blocks, p1024/k3/masked,
-sketch-sha512 receipts of 16 or 64 rows) is one `Registration.make?` accepts, and in a window of one pass over the
-whole store, as the deployed session's are, `checkOpening` accepts an opening of position 0: `OpensAtPosition`'s premise holds. -/
-theorem opensAtPosition_meets (node codecSeed challenge previous : ByteArray) (rows : ℕ)
-    (hnode : 1 ≤ node.size ∧ node.size ≤ 64) (hseed : codecSeed.size = Codec.SEED_BYTES)
-    (hrows : rows = 16 ∨ rows = 64) :
+/-- **`OpensAtPosition` meets the deployed instance.** The deployed registration (130023424 blocks, p1024/k3/masked,
+sketch-sha512 receipts of 16 rows), here of a one-byte node id under the zero codec seed, is one `Registration.make?`
+accepts, and in a window of one pass over the whole store, as the deployed session's are, `checkOpening` accepts an
+opening of position 0: `OpensAtPosition`'s premise holds. `honestReg_make` and `honest_checks` give the same at any
+node id and codec seed of the sizes `Registration.make?` takes, either row count, and any challenge. -/
+theorem opensAtPosition_honest :
     ∃ (reg : Registration) (w : WindowRecord) (o : Opening),
-      Registration.make? node 130023424 reg.payloadRoot codecSeed honestCodec .sketch false LAYOUT rows = .ok reg ∧
-      w.challenge = challenge ∧ w.previous = previous ∧ w.passes.size = 1 ∧
-      w.passes[0]!.plan = Plan.whole 130023424 ∧
-      checkOpening reg reg.digest #[] w (receipterOf reg w 0) 0 0 o = none :=
-  ⟨honestReg node codecSeed rows, honestWindow (honestReg node codecSeed rows) challenge previous,
-    honestOpening (honestReg node codecSeed rows) challenge previous,
-    honestReg_make node codecSeed rows hnode hseed hrows, rfl, rfl, rfl, rfl, honest_checks _ _ _ rfl rfl rfl⟩
+      Registration.make? (zeros 1) 130023424 reg.payloadRoot (zeros Codec.SEED_BYTES) ⟨Codec.P1024, 3, true⟩ .sketch
+          false LAYOUT 16 = .ok reg ∧
+        w.passes.size = 1 ∧ w.passes[0]!.plan = Plan.whole 130023424 ∧
+        checkOpening reg reg.digest #[] w (receipterOf reg w 0) 0 0 o = none :=
+  ⟨honestReg (zeros 1) (zeros Codec.SEED_BYTES) 16,
+    honestWindow (honestReg (zeros 1) (zeros Codec.SEED_BYTES) 16) (zeros 64) (zeros 64),
+    honestOpening (honestReg (zeros 1) (zeros Codec.SEED_BYTES) 16) (zeros 64) (zeros 64),
+    honestReg_make (zeros 1) (zeros Codec.SEED_BYTES) 16 (by simp [zeros_size]) (zeros_size _) (Or.inl rfl), rfl, rfl,
+    honest_checks _ _ _ rfl rfl rfl⟩
 
 /-- **`OpensAtPosition` fails without `checkOpening`.** Its conclusion's first part, that the opened block has a
-position, fails at the deployed registration for a pass whose plan reads past the store, where no append is: a
-verifier that accepted every opening would accept it. -/
-theorem opensAtPosition_fails : ¬ ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : ℕ),
-    ∃ t, position reg.blocks (appends.map fun a => (a.first, a.count)) (w.passes[i]!.plan.block p) =
-      some (t, w.passes[i]!.plan.block p) := by
-  intro h
-  obtain ⟨t, ht⟩ := h (honestReg (zeros 1) (zeros Codec.SEED_BYTES) 16) #[]
-    ⟨0, .empty, .empty, #[⟨.empty, Plan.whole 130023425, none⟩]⟩ 0 130023424
-  have hn : position 130023424 ((#[] : Array Append).map fun a => (a.first, a.count))
-      ((⟨0, .empty, .empty, #[⟨.empty, Plan.whole 130023425, none⟩]⟩ : WindowRecord).passes[0]!.plan.block
-        130023424) = none := by
+position, fails at the deployed store for a pass whose plan reads past the store, where no append is: the block at
+position 130023424 of a plan of 130023425 blocks has none. A verifier that accepted every opening would accept it. -/
+theorem opensAtPosition_nontrivial :
+    ∀ t, ¬ (position 130023424 #[] ((Plan.whole 130023425).block 130023424) =
+      some (t, (Plan.whole 130023425).block 130023424)) := by
+  intro t h
+  have hn : position 130023424 #[] ((Plan.whole 130023425).block 130023424) = none := by
     decide +kernel
-  exact Option.some_ne_none _ (ht.symm.trans hn)
+  exact Option.some_ne_none _ (h.symm.trans hn)
 
 /-! ### The scheduled layout -/
 
-/-- **The schedule check meets the deployed session.** Gate run 7 commits no schedule cap and appends nothing, so its
-ledger asks no schedule; had it committed one, its T = 1 s session's 96 passes over the whole store are the plans of
-the schedule with no frees and no appends at steps 0 to 95, which the check accepts at its 792 bits (99 one-byte
-integers). The premises of `Properties.DeclaredCircuit.ScheduledRequirement` besides the check are `G`'s, whose honest
-lemma is `G`'s; at the deployed plan the verifier's layout is store order (`codeLayout_whole`). -/
+/-- **The schedule check meets the deployed session.** The deployed session commits no schedule cap and appends
+nothing, so its ledger asks no schedule; had it committed one, its T = 1 s session's 96 passes over the whole store are
+the plans of the schedule with no frees and no appends at steps 0 to 95, which the check accepts at its 792 bits (99
+one-byte integers). The premises of `Properties.DeclaredCircuit.ScheduledRequirement` besides the check are `G`'s,
+whose honest lemma is `G`'s; at the deployed plan the verifier's layout is store order (`codeLayout_whole`). -/
 theorem scheduled_meets : Schedule.check ⟨#[], #[], (List.range 96).toArray⟩ 130023424 792
     ((List.range 96).map fun s => (s, (Plan.whole 130023424).runs)).toArray #[] = .ok 792 := by
   decide +kernel
+
+/-- **`steered_of_checked`'s premise holds at the deployed session's shape.** Over the 130023424-block store with no
+appends, at the cap of 792 bits, a schedule's check accepts passes whose pass at each of the T = 1 s session's 96 steps
+sent the whole store's runs (`scheduled_meets`): `checked`, with the pass at prefix `c` the `c`-th and every coin's
+plan the whole store. -/
+theorem steered_of_checked_honest :
+    ∃ (sc : Schedule.Schedule) (passes : Array (ℕ × Array (ℕ × ℕ))) (b : ℕ),
+      Schedule.check sc 130023424 792 passes #[] = .ok b ∧
+        ∀ s < 96, (passes[s]?).map Prod.snd = some (Plan.whole 130023424).runs :=
+  ⟨_, _, _, scheduled_meets, by first | decide +kernel | (intro s hs; simp [hs])⟩
 
 /-- No appends. -/
 def noAppends : Unit → Fin 3 → Array (ℕ × ℕ) := fun _ _ => #[]
@@ -1088,12 +1112,18 @@ theorem sessionLayout_coinRun (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) (y : Fi
 
 /-- **`steered_of_checked` fails without the schedule check.** A verifier that accepted every session would meet its
 premise for the pass that reads the block a coin `y ∈ {0, 1, 2}` names, at cap 0; the verifier's layout there takes
-three values, which one bit does not steer. The real check refuses every schedule at cap 0 and a coin-steered plan at
-any cap (`coinPasses_refused`). -/
-theorem steered_of_checked_fails (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) :
-    ¬ ∃ steer : Unit → Fin 3 → Pous.Bits (0 + 1),
-      Accounting.Assumptions.SteeredLayout (sessionLayout 3 dflt noAppends coinRun) steer := by
-  rintro ⟨steer, slot, h⟩
+three values, which no one bit steers. The real check refuses every schedule at cap 0 and a coin-steered plan at any
+cap (`coinPasses_refused`). Stated at the default layout of block 0; the layout there is the plan's whatever the
+default (`sessionLayout_coinRun`). -/
+theorem steered_of_checked_nontrivial :
+    ∀ steer : Unit → Fin 3 → Pous.Bits (0 + 1),
+      ¬ Accounting.Assumptions.SteeredLayout
+        (sessionLayout 3 (fun _ : Unit => (⟨fun _ => (0, 0), fun _ _ _ => Subsingleton.elim _ _⟩ : Fin 1 ↪ Fin 1 × Fin 3))
+          (fun (_ : Unit) (_ : Fin 3) => (#[] : Array (ℕ × ℕ))) (fun (_ : Unit) (y : Fin 3) => #[((y : ℕ), 1)]))
+        steer := by
+  intro steer hs
+  change Accounting.Assumptions.SteeredLayout (sessionLayout 3 (fun _ => threeLayout 0) noAppends coinRun) steer at hs
+  obtain ⟨slot, h⟩ := hs
   have key : ∀ y y' : Fin 3, steer () y 0 = steer () y' 0 → y = y' := by
     intro y y' hs
     have hs' : steer () y = steer () y' := funext fun i => by
@@ -1101,8 +1131,8 @@ theorem steered_of_checked_fails (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) :
       obtain rfl : i = 0 := by omega
       exact hs
     exact congrArg (fun e : Fin 1 ↪ Fin 1 × Fin 3 => (e 0).2)
-      ((sessionLayout_coinRun dflt y).symm.trans ((h () y).trans ((congrArg (slot ()) hs').trans
-        ((h () y').symm.trans (sessionLayout_coinRun dflt y')))))
+      ((sessionLayout_coinRun (fun _ => threeLayout 0) y).symm.trans ((h () y).trans
+        ((congrArg (slot ()) hs').trans ((h () y').symm.trans (sessionLayout_coinRun (fun _ => threeLayout 0) y')))))
   obtain ⟨y, y', hne, he⟩ := Fintype.exists_ne_map_eq_of_card_lt (fun y : Fin 3 => steer () y 0) (by simp)
   exact hne (key y y' he)
 

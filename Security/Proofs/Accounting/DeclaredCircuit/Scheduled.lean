@@ -16,8 +16,8 @@ accepts at every pass, and its correct receipts on one it refuses, which no shor
 
 Its honest lemma is `Properties.RemoteAudit.scheduled_meets` (the check accepts the deployed session's shape at
 T = 1 s, at 792 bits; the rest of its premises are `G`'s, whose honest lemma is `G`'s), and its nontrivial one is
-`Properties.RemoteAudit.steered_of_checked_fails`: without the check's acceptance, a layout that follows a three-way
-coin is the verifier's and is the slot of no one-bit summary.
+`Properties.RemoteAudit.steered_of_checked_nontrivial`: without the check's acceptance, a layout that follows a
+three-way coin is the verifier's and is the slot of no one-bit summary.
 -/
 
 namespace Accounting.RateSketch.SketchSummarySession

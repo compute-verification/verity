@@ -41,8 +41,8 @@ every pass of the session. The bound is `G`'s over the accepted sessions; a prov
 check refuses.
 
 The check's premise holds at the deployed session's shape at T = 1 s, at 792 bits
-(`Properties.RemoteAudit.scheduled_meets`; `G`'s premises are `G`'s honest lemma's). Without it the steering fails: a layout that follows a three-way coin is
-the verifier's and is the slot of no one-bit summary (`Properties.RemoteAudit.steered_of_checked_fails`).
+(`Properties.RemoteAudit.steered_of_checked_honest`; `G`'s premises are `G`'s honest lemma's). Without it the steering fails: a layout that follows a three-way coin is
+the verifier's and is the slot of no one-bit summary (`Properties.RemoteAudit.steered_of_checked_nontrivial`).
 
 The pass devices are told `steer c y`, any `a` bits, as in `G`. The layout's summary is the schedule's, which they are
 told only through `steer`, so the union in `G`'s query term runs over both summaries: `2^(a + (cap + 1))` in place of
