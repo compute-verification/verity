@@ -72,7 +72,7 @@ theorem deltaPub_add_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) {qF qS 
   rw [e, e100]
   have hρ : (1 : ℝ) - 1 / 2 = 1 / 2 := by norm_num
   rw [hρ, div_div_eq_mul_div, div_div_eq_mul_div]
-  have h1 : ksClosedM1 kDep qF qS * 2 / 1 ≤ 1 / 2 ^ 155 * 2 := by linarith
+  have h1 : FlockSoundness.Discharge.ZkLink.ksClosedM1 kDep qF qS * 2 / 1 ≤ 1 / 2 ^ 155 * 2 := by linarith
   have h2 : (W : ℝ) * B * 2 / 1 ≤ 2 ^ 40 * (1 / 2 ^ 150) * 2 := by linarith
   have h3 : (1 : ℝ) / 2 ^ 155 * 2 + 2 ^ 40 * (1 / 2 ^ 150) * 2 + 1 / 2 ^ 200 ≤ 1 / 2 ^ 100 := by norm_num
   linarith
@@ -82,8 +82,10 @@ theorem rootTerm_le {qS : ℝ} (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) : qS ^ 2 / 
   have h513 : (2 : ℝ) ^ (513 : ℝ) = 2 ^ (513 : ℕ) := by norm_num
   rw [h513]
   have hq2 : qS ^ 2 ≤ 2 ^ 164 := by nlinarith [mul_le_mul hS hS hS0 (by norm_num : (0 : ℝ) ≤ 2 ^ 82)]
+  have hsplit : (2 : ℝ) ^ (513 : ℕ) = 2 ^ 164 * 2 ^ 349 := by rw [← pow_add] <;> norm_num
   calc qS ^ 2 / 2 ^ (513 : ℕ) ≤ 2 ^ 164 / 2 ^ (513 : ℕ) := by gcongr
-    _ ≤ 1 / 2 ^ (200 : ℕ) := by norm_num
+    _ = 1 / 2 ^ 349 := by rw [hsplit, div_mul_eq_div_div, div_self (show (2 : ℝ) ^ 164 ≠ 0 by positivity)]
+    _ ≤ 1 / 2 ^ (200 : ℕ) := one_div_le_one_div_of_le (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num))
 
 end Flock.Bridge
 
@@ -135,7 +137,7 @@ theorem deltaPub_root_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Buil
 
 theorem ofReal_add_le_of {a b c : ℝ} (hb : 0 ≤ b) (h : a + b ≤ c) (hbc : b ≤ c) :
     ENNReal.ofReal a + ENNReal.ofReal b ≤ ENNReal.ofReal c := by
-  rcases le_or_lt 0 a with ha | ha
+  rcases le_or_gt 0 a with ha | ha
   · rw [← ENNReal.ofReal_add ha hb]
     exact ENNReal.ofReal_le_ofReal h
   · rw [ENNReal.ofReal_of_nonpos ha.le, zero_add]
