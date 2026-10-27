@@ -1,4 +1,4 @@
-"""What verifying a served model costs end to end (BENCH-31): `served_verdicts.sh`'s composed run over `served_stock.sh`'s
+"""What verifying a served model costs end to end: `served_verdicts.sh`'s composed run over `served_stock.sh`'s
 stock control, the same endpoint, engine and load with no protocol and no Commit.
 
     python benchmarks/one_stage/served_overhead.py metrics SERVE_DIR...
