@@ -12,13 +12,14 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
     python benchmarks/network_traces/scan_zk.py schedule [--class w63|test]    # its schedule as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
-  (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 10, WITHIN 12) with the warden's delay D 21 and KO 64 outputs a request,
+  (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
+  warden's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
-  link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 3, WITHIN 3, D 5,
-  KO 8) and 16-bucket link-windows, whose units a CPU proves in minutes.
+  link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
+  KO 8, KI 100) and 16-bucket link-windows, whose units a CPU proves in minutes.
 * **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
-  in the queue until request 1's egress ends at bucket 21 and takes its slot at 22), test's three (the third in the
+  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), test's three (the third in the
   first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
   test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
@@ -64,10 +65,10 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   `DATA` id changed and its link-window re-signed (a warden that saw a byte the scan doesn't render; a warden run's
   re-signed by the driver's own key, under which the verifier reads it): egress unit t's o1, the row its view renders,
   doesn't open the signed row t. ``unread`` (`_unread`): a Program of one ingress unit, at the first bucket U ≥ 1 where
-  a request is anchored, its ``prog`` tree the honest one but for row U's entry of that request's slot, its read bit
-  cleared (no Program reads the request): every registered read holds, since the read bit enters the unit's ok bit alone
-  and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens to 0, so the link-window is
-  refused. Every unit (the one) is drawn.
+  a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for row U's entry of that
+  slot, its read bit cleared (no Program reads the request): every registered read holds, since the read bit enters
+  the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens to 0, so
+  the link-window is refused. Every unit (the one) is drawn.
 * **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
   rehearsal's live coins), each template's stratum its share and at least one unit; only the drawn units are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
@@ -156,19 +157,19 @@ class Setup(NamedTuple):
 
 
 W63 = Setup(
-    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=10, WITHIN=12, D=21, KO=64),
-    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=21, lanes=4, queue=4, window=32, ingress_cells=47,
-                   ingress_buckets=12, egress_cells=65),
-    (tuple((7 * k + 11) % 128_256 for k in range(1500)), tuple(100_000 + k for k in range(600)),
+    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024),
+    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
+                   ingress_buckets=12, egress_cells=65, every=16),
+    (tuple((7 * k + 11) % 128_256 for k in range(1024)), tuple(100_000 + k for k in range(600)),
      tuple(131_071 - 3 * k for k in range(40)), tuple((k * k) % 128_256 for k in range(300)),
      tuple(5_000 + k for k in range(100))),
     (0, 2, 2, 12, 15),
     tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 40, 64, 8, 5), 1)),
     windows=2, A=9, max_tokens=16, seed=7)
 TEST = Setup(
-    "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=3, WITHIN=3, D=5, KO=8),
+    "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
     W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
-                   ingress_buckets=3, egress_cells=9),
+                   ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
 SETUPS = {s.name: s for s in (W63, TEST)}
@@ -452,13 +453,13 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
 
 
 def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace | None:
-    """The unread round's unit: the first ingress bucket b ≥ 1 at which a slot is due (a request's anchor), the first
-    such slot j, and the Programs' rows committed with row b's entry j absent, its read bit cleared and its outputs
-    kept; None when no request is anchored in the group past bucket 0."""
+    """The unread round's unit: the first ingress bucket b ≥ 1 at which a slot's Program starts (a request's anchor,
+    the slot due and its `occ` 1), the first such slot j, and the Programs' rows committed with row b's entry j absent,
+    its read bit cleared and its outputs kept; None when no request is anchored in the group past bucket 0."""
     for b in range(1, len(ch.progs)):
-        dues = IS.due(cls, ch.scan[b])
-        if any(dues):
-            j = dues.index(True)
+        reads = [d and s.occ & 1 for d, s in zip(IS.due(cls, ch.scan[b]), ch.scan[b].slots)]
+        if any(reads):
+            j = reads.index(True)
             entries = IS.prog_decode(cls, ch.progs[b])
             entries[j] = (0, *entries[j][1:])
             progs = list(ch.progs)
@@ -661,7 +662,7 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
 # --- the statements ---------------------------------------------------------------------------------------------------
 
 def _defs(cls: IS.Class) -> dict[str, object]:
-    st = {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO")}
+    st = {k: getattr(cls, k) for k in IS.STATICS}
     sh = cls.egress
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)}

@@ -49,8 +49,8 @@ import warden_serve as WS
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
     h = sz.host(tmp_path)
     at, T, A = h.at, sz.PARAMS.window, sz.W63.A
-    assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 22}
-    assert [s.q for s in at.chain.scan[23].slots] == [5, 2, 3, 4]
+    assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
+    assert [s.q for s in at.chain.scan[29].slots] == [5, 2, 3, 4]
     honest, chain, tampered = ({m.name: m for m in h.rounds[k]} for k in ("honest", "chain", "tampered"))
     first, ing, eg = (honest[k] for k in ("first", "ingress-0", "egress-0"))
     assert [(m.base, m.n) for m in (first, ing, eg)] == [(0, 1), (1, T - 1), (T, T)]
@@ -73,10 +73,10 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert f.refused == f"registered reads: table row {b} does not open the registered root at position {b}"
     assert f.outputs == [1] * T and f.made == eg.made and at.tampered.row != eg.made["o1"][b]
     assert f.ports["o1"]["root"] == at.tampered.head.root.hex() != eg.ports["o1"]["root"] and f.base == 0
-    # unread: requests 1, 2 and 3 are anchored at 20, and request 1's slot 0 is read by no Program there
+    # unread: requests 1, 2 and 3 are anchored at 16, and request 1's slot 0 is read by no Program there
     (u,) = h.rounds["unread"]
     U = at.unread.bucket
-    assert (U, at.unread.slot, at.unread.q) == (20, 0, 1) and sz.targets(at, "unread") == [u.name] == ["ingress-0"]
+    assert (U, at.unread.slot, at.unread.q) == (16, 0, 1) and sz.targets(at, "unread") == [u.name] == ["ingress-0"]
     assert (u.base, u.n, u.buckets, u.refused, u.outputs) == (0, 1, [U], None, [0])
     assert sz.IS.prog_decode(sz.CLASS, sz._bits(at.unread.tree, U))[0] == (0, *sz.IS.prog_decode(
         sz.CLASS, at.chain.progs[U])[0][1:]) and sz._bits(at.unread.tree, U - 1) == at.chain.progs[U - 1]
@@ -104,7 +104,7 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
     assert eg1.ports["o1"]["root"] == at.sides["egress"][1].head.root.hex() and eg1.ports["o1"][sz.REG.READS_FROM] == 3 * T
     assert [m.name for m in h.rounds["chain"] if m.refused] == sz.targets(at, "chain") == ["ingress-0"]
     assert [m.name for m in h.rounds["tampered"] if m.refused] == sz.targets(at, "tampered")
-    assert [(m.name, m.buckets, m.outputs) for m in h.rounds["unread"]] == [("ingress-0", [3], [0])]
+    assert [(m.name, m.buckets, m.outputs) for m in h.rounds["unread"]] == [("ingress-0", [4], [0])]
     with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
@@ -173,7 +173,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
     assert set(h.rounds) == {"honest", "chain", "tampered", "unread"} and h.at.run_id == "00" * 32
-    assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 22}
+    assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.at.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.at.tampered.key_of == "the driver's own"
     syn = sz.host(tmp_path / "syn")
