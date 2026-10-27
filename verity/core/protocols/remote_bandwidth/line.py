@@ -25,7 +25,8 @@ W is the pooled bound of the session's record (`pooled.bound`, the Lean's `Remot
 and draws at δ), so the line reads it from the record's windows, never from a float another module computed.  The
 line of record reads its groups' passes, its windows and its registered blocks off the Lean verifier's record of the
 session (`line_of_record`, the Lean's `lineOfRecordAt` at the record's `groups_per_coin` g, `lineOfRecord` at g = 1),
-and each group's times and reads beside it (`Seen`).
+and each group's times and reads beside it (`Seen`), refused unless the record is of the registration given with it
+(`unregistered`, the Lean's `lineOfRegistered`).
 
 Each kind is credited its mean blocks a pass less those, in bytes, and at least 0: weights (in HBM), HBM, and filler
 (HBM less the weights, and the host tier).  A reading's line is its worst stretch by weights credited, the first on a
@@ -44,7 +45,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
 
-from . import pooled
+from . import audit, codec, pooled
+from . import receipts as _receipts
 from .audit import RECEIPT_LIMIT
 
 TIME_HELD, LINK_CHARGED = "time-held", "link-charged"
@@ -504,16 +506,31 @@ def times_off(record: Mapping, seen: Sequence[Seen]) -> str | None:
     return None
 
 
-def line_of_record(record: Mapping, *, samples: int, seen: Sequence[Seen], per: int, block_bytes: int,
-                   chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record") -> Line:
+def unregistered(registration: audit.Registration, record: Mapping) -> str | None:
+    """Why `record` isn't of `registration`, or None: it names another registration's digest, or other registered
+    blocks than the registration's (the Lean's `Line.unregistered`)."""
+    if record["registration"] != registration.digest.hex():
+        return "the record is not of the registration given"
+    if record["blocks"] != registration.blocks:
+        return f"the record's {record['blocks']} registered blocks are not the registration's {registration.blocks}"
+    return None
+
+
+def line_of_record(record: Mapping, *, registration: audit.Registration, samples: int, seen: Sequence[Seen],
+                   per: int, block_bytes: int, chip_bytes: int, node_bytes: int, delta: object, rates: Rates,
+                   clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`, at the record's
     `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its draws) and its registered blocks (the
     record's `blocks`, the registration the session ran on). Refused for a record drawn more than one window a coin at
-    one window in flight (`SHARED`). On the record's `clock` the times seen are held to the record's, refused after
-    `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record doesn't hold them."""
+    one window in flight (`SHARED`), then for a record not of `registration` (`unregistered`, the Lean's
+    `lineOfRegistered`), whose blocks the line would credit. On the record's `clock` the times seen are held to the
+    record's, refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record
+    doesn't hold them."""
     g = record.get("groups_per_coin", 1)
     if g != 1 and (record.get("pace") or {}).get("in_flight", 2) == 1:
         raise Refused(SHARED)
+    if (why := unregistered(registration, record)) is not None:
+        raise Refused(why)
     groups, windows = of_summary(record, samples, seen, g)
     if clock == "record" and (why := times_off(record, seen)) is not None:
         raise Refused(why)
@@ -521,16 +538,17 @@ def line_of_record(record: Mapping, *, samples: int, seen: Sequence[Seen], per: 
                 node_bytes=node_bytes, windows=windows, delta=delta, rates=rates)
 
 
-def record_inputs_json(record: Mapping, *, samples: int, seen: Sequence[Seen], per: int, block_bytes: int,
-                       chip_bytes: int, node_bytes: int, delta: object, rates: Rates, clock: str = "record",
-                       session: Mapping | None = None) -> dict:
-    """`line_of_record`'s inputs in the JSON form, the record as the Lean wrote it; with `session`, the session's
-    transcript, from which the Lean verifier's `line_record` makes the record itself (`Shared.run g` at its
-    `groups_per_coin` g, `Session.run` at 1) and refuses a `record` that isn't the one it makes (line.py reads
-    `record`)."""
+def record_inputs_json(record: Mapping, *, registration: Mapping, samples: int, seen: Sequence[Seen], per: int,
+                       block_bytes: int, chip_bytes: int, node_bytes: int, delta: object, rates: Rates,
+                       clock: str = "record", session: Mapping | None = None) -> dict:
+    """`line_of_record`'s inputs in the JSON form, the record as the Lean wrote it and `registration` as the Lean
+    reads one (`period.registration_json`'s form, `registration_of`); with `session`, the session's transcript, from
+    which the Lean verifier's `line_record` makes the record itself (`Shared.run g` at its `groups_per_coin` g,
+    `Session.run` at 1) and refuses a `record` that isn't the one it makes (line.py reads `record`)."""
     if clock not in CLOCKS:
         raise ValueError(f"clock: one of {', '.join(CLOCKS)}, not {clock!r}")
-    return {"record": record, "samples": samples, "seen": [{k: getattr(x, k) for k in SEEN} for x in seen],
+    return {"record": record, "registration": registration, "samples": samples,
+            "seen": [{k: getattr(x, k) for k in SEEN} for x in seen],
             "per": per, "block_bytes": block_bytes, "chip_bytes": chip_bytes, "node_bytes": node_bytes,
             "delta": text(pooled.number(delta)), "rates": rates.to_json(), "clock": clock,
             **({} if session is None else {"session": session})}
@@ -546,6 +564,55 @@ def _nats(j: Mapping, k: str) -> list[int]:
 def _hex(v: object, k: str) -> None:
     if v is not None and not (isinstance(v, str) and re.fullmatch("(?:[0-9a-f]{2})*", v)):
         raise Malformed(f"{k}: not null or lowercase hex")
+
+
+def _bytes(j: Mapping, k: str) -> bytes:
+    v = _field(j, k)
+    if v is None:
+        raise Malformed(f"{k}: not lowercase hex")
+    _hex(v, k)
+    return bytes.fromhex(v)
+
+
+def _str(j: Mapping, k: str) -> str:
+    if not isinstance(v := _field(j, k), str):
+        raise Malformed(f"{k}: not a string")
+    return v
+
+
+def _bool(j: Mapping, k: str) -> bool:
+    if type(v := _field(j, k)) is not bool:
+        raise Malformed(f"{k}: not true or false")
+    return v
+
+
+def registration_of(j: object) -> audit.Registration:
+    """The registration a record is given with, as the Lean reads one (`Difftest.registrationOf`,
+    `Registration.make?`): `audit.register`'s checks on a registration whose seed is given, `bind` refused
+    (`Malformed` if it isn't one)."""
+    c = _field(j, "codec")
+    kind, field, rounds, masked = _str(j, "receipt"), _str(c, "field"), _nat(c, "rounds"), _bool(c, "masked")
+    node, blocks, root, seed = _bytes(j, "node"), _nat(j, "blocks"), _bytes(j, "payload_root"), _bytes(j, "codec_seed")
+    bind, layout, rows = _bool(j, "bind"), _str(j, "layout"), _nat(j, "rows")
+    try:
+        if field not in codec.FIELDS:
+            raise ValueError(f"a codec's field is one of {sorted(codec.FIELDS)}")
+        cd = codec.Codec(codec.FIELDS[field], rounds, masked)
+        _receipts.receipt_kind(kind)
+        if _receipts.store_blocks(blocks) > cd.max_blocks:
+            raise ValueError(f"a store under {cd.name} is at most {cd.max_blocks} blocks")
+        if len(root) != _receipts.DIGEST_BYTES:
+            raise ValueError(f"the payload root is {_receipts.DIGEST_BYTES} bytes")
+        if len(seed) != codec.SEED_BYTES:
+            raise ValueError(f"a codec seed is {codec.SEED_BYTES} bytes")
+        if bind:
+            raise ValueError("a registration that binds PoUW's tile outputs is not covered")
+        if layout != _receipts.LAYOUT:
+            raise ValueError(f"the block layout is {_receipts.LAYOUT}")
+        _receipts.sketch_rows(kind, rows)
+        return audit.Registration(audit._node(node), blocks, root, seed, cd, kind, False, layout, rows)
+    except ValueError as e:
+        raise Malformed(f"registration: {e}") from None
 
 
 def _record(j: object) -> Mapping:
@@ -574,6 +641,7 @@ def _record(j: object) -> Mapping:
         if "in_flight" in pace:
             _nat(pace, "in_flight")
     _hex(_field(j, "appends"), "appends")
+    _bytes(j, "registration")
     if "groups_per_coin" in j:
         _nat(j, "groups_per_coin")
     return j
@@ -591,8 +659,9 @@ def of_record_json(j: Mapping) -> dict:
         delta = pooled.of_json({"windows": [], "delta": _field(j, "delta")})[1]
     except pooled.Malformed as e:
         raise Malformed(str(e)) from None
-    return {"record": _record(_field(j, "record")), "samples": _nat(j, "samples"),
-            "seen": [Seen(*(_nat(x, k) for k in SEEN)) for x in seen], "per": _nat(j, "per"),
+    return {"record": _record(_field(j, "record")), "registration": registration_of(_field(j, "registration")),
+            "samples": _nat(j, "samples"), "seen": [Seen(*(_nat(x, k) for k in SEEN)) for x in seen],
+            "per": _nat(j, "per"),
             "block_bytes": _nat(j, "block_bytes"), "chip_bytes": _nat(j, "chip_bytes"),
             "node_bytes": _nat(j, "node_bytes"), "delta": delta,
             "rates": Rates(*(_rational(r, k) for k in RATES[:1]), _nat(r, "encode_squarings"),
