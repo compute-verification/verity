@@ -526,6 +526,32 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran
 
 
+def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_what_it_refuses():
+    """`lean_root` reads every non-root definition through `codec.definition_decoder`, decode_program's own reader: on the token feed's
+    accepted record its root callees are decode_program's, and the lookalike record `TokenFeed_v1{NP=2,FIRST=1}`, which
+    `TokenFeed`'s `refuse` names a reason against, is refused by both with decode_program's exact message."""
+    from verity.ml.circuits import REGISTRY, Program, bind, decode_program, encode_program
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.definitions.registry.io_shell import TokenFeed
+
+    feed = bind(TokenFeed, NP=2, FIRST=True)
+    sig = feed.signature()
+    calls = CompositeDefinition("CallsTokenFeed", 1, (), lambda S: sig, lambda B, S, slot: B.call(feed, slot), register=False)
+    text = json.dumps(encode_program(Program(calls)), separators=(",", ":"))
+    assert "TokenFeed_v1{NP=2,FIRST=true}" in text
+    root = decode_program(json.loads(text), REGISTRY).root
+    assert [fid for _, fid, *_ in K.lean_root(json.loads(text), REGISTRY)["nodes"]] == [descriptor_id(n.fn) for n in root.body.nodes]
+
+    lookalike = text.replace("FIRST=true", "FIRST=1").replace('"FIRST":true', '"FIRST":1')
+    with pytest.raises(ValueError) as refused:
+        decode_program(json.loads(lookalike), REGISTRY)
+    assert str(refused.value).startswith("definition 'TokenFeed_v1{NP=2,FIRST=1}': TokenFeed_v1 refuses this binding: ")
+    with pytest.raises(ValueError) as lean:
+        K.lean_root(json.loads(lookalike), REGISTRY)
+    assert str(lean.value) == str(refused.value)
+
+
 def test_the_within_step_dag_criterion_holds_on_equal_programs_and_fails_on_a_wrong_one(tmp_path):
     """`program-dag`'s live-cone DAG multiset (the within-step criterion of record) over tp's D90 fixture, compact form: equal where
     the sequence is, unequal on a compare negative."""
