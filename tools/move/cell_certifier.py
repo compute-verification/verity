@@ -8,7 +8,8 @@
 
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/cell_certifier.py`
 carries a branch across it):
-1. moves the relay's modules, the benchmarks that run it and their tests (`MOVES`), each from its old place if it is there;
+1. moves the relay's modules, the benchmarks that run it and their tests (`MOVES`), each from its old place if it is there
+   (`warden_chain.py`, which code still being written imports by that name, stays for now);
 2. renames their module names (`warden_rows`, `warden_serve`, ...) and the relay's class names (`WardenParams`, and in
    Python `Warden`) where they stand as names, in every tracked text file `EXCLUDE` doesn't cover;
 3. in the moved Python and shell files, renames the prose (comments, docstrings, `help=` strings) from "warden" to
@@ -46,11 +47,9 @@ MOVES = {
     f"{NT}/warden_serve.py": f"{NT}/cell_certifier_serve.py",
     f"{NT}/warden_zk.py": f"{NT}/cell_certifier_zk.py",
     f"{NT}/warden_zk.sh": f"{NT}/cell_certifier_zk.sh",
-    f"{NT}/warden_chain.py": f"{NT}/cell_certifier_chain.py",
     f"{NT}/tests/test_warden_serve.py": f"{NT}/tests/test_cell_certifier_serve.py",
     f"{NT}/tests/test_warden_serve_phase10.py": f"{NT}/tests/test_cell_certifier_serve_phase10.py",
     f"{NT}/tests/test_warden_zk.py": f"{NT}/tests/test_cell_certifier_zk.py",
-    f"{NT}/tests/test_warden_chain.py": f"{NT}/tests/test_cell_certifier_chain.py",
     "benchmarks/network_e2e/traces/warden_probe.py": "benchmarks/network_e2e/traces/cell_certifier_probe.py",
     "benchmarks/network_e2e/traces/tests/test_warden_probes.py":
         "benchmarks/network_e2e/traces/tests/test_cell_certifier_probes.py",
@@ -67,14 +66,16 @@ MOVED = set(MOVES) | set(MOVES.values())
 _B, _E = r"(?<![A-Za-z0-9_])", r"(?![A-Za-z0-9_])"
 NAMES = [
     (_B + r"test_network_certifier_warden", "test_network_certifier_cell_certifier"),
-    (_B + r"test_warden_", "test_cell_certifier_"),
+    (_B + r"test_warden_serve", "test_cell_certifier_serve"),
+    (_B + r"test_warden_zk" + _E, "test_cell_certifier_zk"),
+    (_B + r"test_warden_probes" + _E, "test_cell_certifier_probes"),
+    (_B + r"test_warden_replay" + _E, "test_cell_certifier_replay"),
     (_B + r"test_a5_warden" + _E, "test_a5_cell_certifier"),
     (_B + r"test_auditor_warden" + _E, "test_auditor_cell_certifier"),
     (_B + r"network_traces_warden_", "network_traces_cell_certifier_"),
     (_B + r"warden_rows" + _E, "cell_certifier_rows"),
     (_B + r"warden_serve" + _E, "cell_certifier_serve"),
     (_B + r"warden_zk" + _E, "cell_certifier_zk"),
-    (_B + r"warden_chain" + _E, "cell_certifier_chain"),
     (_B + r"warden_probe" + _E, "cell_certifier_probe"),
     (_B + r"warden_replay" + _E, "cell_certifier_replay"),
     (_B + r"a5_warden" + _E, "a5_cell_certifier"),
