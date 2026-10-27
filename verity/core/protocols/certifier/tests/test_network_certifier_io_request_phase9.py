@@ -1,6 +1,5 @@
-"""REDTEAM's phase 9, target 1 (`cursor/redteam-phase9-iotiereq-061a` @8d19db0a2b), IoTieRequest's cases as
-regressions, on the unit a bucket row of the warden's own ingress: what a bucket's verdict holds alone, and what rests
-on the verifier's lanes chaining each connection over its buckets.
+"""IoTieRequest's adversarial cases as regressions, on the unit a bucket row of the warden's own ingress: what a
+bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its buckets.
 
   a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
      advice digest or Commit: `advised.IoTieVerdict` (N2-ADVICE) keys the verdicts to the advice's digest, built only
@@ -78,7 +77,7 @@ def _spanning(link):
 
 
 def test_a_carried_field_count_is_held_by_the_bucket_before():
-    """REDTEAM's free addend: bucket t alone accepts its lane's carry-in fields + Δ with its carry-out's + Δ, but
+    """A free addend: bucket t alone accepts its lane's carry-in fields + Δ with its carry-out's + Δ, but
     bucket t − 1 refuses a carry-out of fields + Δ, and the verifier's lanes from an advice of n + Δ aren't the
     cells' either, so either way the link is refused."""
     link = _link()

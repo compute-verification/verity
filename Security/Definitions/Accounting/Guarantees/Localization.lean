@@ -3,14 +3,14 @@ import Definitions.Accounting.Confidence
 /-!
 # Localization (trusted)
 
-Section 6 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4), over strategies: with every value that
-doesn't depend on the challenge held fixed, a strategy `S` maps the challenge's values `Ω` to runs. When what the rest
-`Y` of the prover can tell at the window's start (`history`) and what it hears during `W = [t₀, t₁)` from outside `X`
-and itself (the verifier's messages) don't depend on the challenge, what it does before each tick of `W` (its gates,
-what it holds, and its sends to `X`, those still in flight at `t₀` too) is a prefix-causal table keyed by what reached
-it from `X` during `W`, values and ticks; and when that takes at most `2^e` values, so does what the rest does. `X`
-with that table, fixed before the challenge, is the prover of the protocol's model: what memory accounting's B2 and B3
-use. It takes causality from every tick (`CausalFrom`), the one assumption it uses.
+The actual-circuit model's localization, over strategies: with every value that doesn't depend on the challenge held
+fixed, a strategy `S` maps the challenge's values `Ω` to runs. When what the rest `Y` of the prover can tell at the
+window's start (`history`) and what it hears during `W = [t₀, t₁)` from outside `X` and itself (the verifier's messages)
+don't depend on the challenge, what it does before each tick of `W` (its gates, what it holds, and its sends to `X`,
+those still in flight at `t₀` too) is a prefix-causal table keyed by what reached it from `X` during `W`, values and
+ticks; and when that takes at most `2^e` values, so does what the rest does. `X` with that table, fixed before the
+challenge, is the prover of the protocol's model: what memory accounting's B2 and B3 use. It takes causality from every
+tick (`CausalFrom`), the one assumption it uses.
 
 `Recall` is B2's count: given what reaches a location during `[t, u)`, what it does then is a function of a string of
 at most `mem X t` bits, its state's content at `t`. The proofs are in

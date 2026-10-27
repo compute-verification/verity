@@ -1,5 +1,5 @@
-"""`wide.py` against what it restates: ra-codec-mix's table v5 (art:b839fbd0979f4b2a), whose κ, x₁ and d its formulas
-must give back at kv.cu as built, and p512's ceiling models (16 limbs) as this lane's 19:19Z report states them."""
+"""`wide.py` against what it restates: the codec-mix study's table v5, whose κ, x₁ and d its formulas
+must give back at kv.cu as built, and p512's ceiling models (16 limbs) at their pinned cycle counts."""
 
 from __future__ import annotations
 

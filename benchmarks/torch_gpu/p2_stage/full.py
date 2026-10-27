@@ -1,11 +1,11 @@
 """The whole encoded store through the staging decode on one GPU, one tensor at a time, each held to the plain weights'
-digests; then the exact W8A8 GEMM (KS8-SIMPLE) on one layer's staged matrices.
+digests; then the exact W8A8 GEMM on one layer's staged matrices.
 
     python full.py --layout LAYOUT --weights M (--w W | --generator G --shape S --weights-seed SEED)
                    --encoded ENC --source HEX --commitment HEX --lib LIB --out OUT [--layers 0-52] [--gemm-layer 51]
                    [--m 16384] [--reps 2] [--readers 6] [--hashers 4] [--n-chunk 16384]
 
-`LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: CMP-95 item 2's layout, the weights manifest with
+`LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: the store's layout, the weights manifest with
 each stream tensor's SHA-256 (`manifest --digests`, the digests memory-accounting held W to), and memory-accounting's
 encoded store, read only, under the salt `setup.draw_salt` of the coin and commitment its `setup.json` is held to.
 
@@ -29,7 +29,7 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   to that directory for `bw_ref.py`.
 - **gemm**, after the pass, `--gemm-layer`'s matrices staged again one at a time: x [M, K] s8 and sx [M] f32 seeded on the
   device (rows 0, 1 and 2 all -128, all 127 and all 0), the stream's f32 scales (held to the manifest's SHA-256),
-  `s8_simple.linear` (fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
+  `int_mm.linear` (s8_linear's int_mm backend, fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
   samples for `check.py`; and the pass's peak HBM.
 
 Writes `OUT/full.json` (one record per tensor, the summary, the GEMMs) and `OUT/samples-<matrix>-m<M>.npz`; exits 1 if a
@@ -53,7 +53,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "s8_simple"))
+sys.path.insert(0, str(HERE.parent / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402
@@ -154,8 +154,8 @@ def segments_of(tensors: list[L.Tensor], bps: int, ranges: list[range] | None = 
     return out
 
 
-FULL_CHALLENGE = hashlib.sha512(b"verity/kernels-kstage/bw-full/challenge/v0").hexdigest()[:64]
-FULL_PREVIOUS = hashlib.sha512(b"verity/kernels-kstage/bw-full/previous/v0").hexdigest()
+FULL_CHALLENGE = hashlib.sha512(b"verity/p2-stage/bw-full/challenge/v0").hexdigest()[:64]
+FULL_PREVIOUS = hashlib.sha512(b"verity/p2-stage/bw-full/previous/v0").hexdigest()
 
 
 class Audit:
@@ -372,7 +372,7 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
 
 
 def gemm_pass(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) -> bool:
-    import s8_simple
+    import int_mm
 
     epilogue = "fused" if DEVICE.type == "cuda" else "eager"
     tensors = [t for t in lay.layer(args.gemm_layer) if t.matrix is not None]
@@ -403,8 +403,8 @@ def gemm_pass(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) 
                 for n0 in range(0, t.n, args.n_chunk):
                     n1 = min(t.n, n0 + args.n_chunk)
                     wc, swc = w[n0:n1], sw[n0:n1]
-                    y = s8_simple.linear(x, sx, wc, swc, epilogue)
-                    secs += min(events(partial(s8_simple.linear, x, sx, wc, swc, epilogue), args.reps))
+                    y = int_mm.linear(x, sx, wc, swc, epilogue)
+                    secs += min(events(partial(int_mm.linear, x, sx, wc, swc, epilogue), args.reps))
                     res = G.twin(x, sx, wc, swc, y)
                     words, bad = words + res["words"], bad + res["mismatches"]
                     first += [{**f, "n": f["n"] + n0} for f in res["first"]][:8 - len(first)]
@@ -440,10 +440,10 @@ def layer_set(spec: str, last: int) -> set[int]:
 def main(argv=None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (CMP-95 item 2)")
+    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest, with digests")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity_torch_loop.weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="e2e_h200.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     ap.add_argument("--encoded", type=Path, required=True, help="the encoded store's directory, read only")
@@ -462,8 +462,8 @@ def main(argv=None) -> int:
     ap.add_argument("--samples", type=int, default=24, help="GEMM words sampled per call for check.py")
     ap.add_argument("--seed", type=int, default=12)
     ap.add_argument("--receipts", action="store_true", help="the bandwidth audit's pass beside the stage pass")
-    ap.add_argument("--challenge", default=FULL_CHALLENGE, help="the pass's window challenge (32 bytes, hex)")
-    ap.add_argument("--pass-index", type=int, default=0, help="the pass's index in its window")
+    ap.add_argument("--challenge", default=FULL_CHALLENGE, help="the pass's period challenge (32 bytes, hex)")
+    ap.add_argument("--pass-index", type=int, default=0, help="the pass's index in its period")
     ap.add_argument("--previous", default=FULL_PREVIOUS, help="the root before (the registration's digest at pass 0)")
     ap.add_argument("--salts", type=Path, help="with --receipts: the leaves' salts, 192 bytes each (default fresh)")
     ap.add_argument("--keep", type=Path, help="with --receipts: σ, y, the salts and the pass for bw_ref.py")

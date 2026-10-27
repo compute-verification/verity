@@ -1,11 +1,11 @@
-"""ROOTS1 (VLLM-73) on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
-``a/<K>@<s>`` as its AROW of the step's calls of K (VLLM-77) and each round's input-ids table ``ids@<s>`` as its step's
+"""ROOTS1 on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
+``a/<K>@<s>`` as its AROW of the step's calls of K and each round's input-ids table ``ids@<s>`` as its step's
 input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
 * **The Commit** (`acquire.h1_commit.attach`): the windowed collector under rows-sha512 (`SCHEME`: hm96-sha512 rows in
   frame-v3-sha512 trees, 64-byte roots; with no Build, so not a Commit of record) with the int8 source
   (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's Int8RowQuant_v1 site `site(module)` at every
-  engine step (`Sites`: no Build names its fx node), a routed expert's by its H1 name (VLLM-80: under its call, an idle
+  engine step (`Sites`: no Build names its fx node), a routed expert's by its H1 name (under its call, an idle
   expert's zero rows too), and the step-input port (`served_record.StepInputPort`): the step's input token ids, taken
   at the model's forward, so also on a model that gathers its embedding fused and never calls it (GLM-5.3 and
   DeepSeek-V3.2 at TP1). `CommitTap` wraps
@@ -43,9 +43,12 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
+from verity_vllm.commit.served_record import PORT_NAMES
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
 SCHEME, ROOT_BYTES = step_rows.NAME, 64
+#: the name the Commit's step-input port acquires the step's token ids under (`CommitTap.port`)
+IDS_PORT = PORT_NAMES[0]
 
 #: the credit refusal of every call of a window whose tables aren't the Commit's values (``details.roots1``)
 UNTIED = ("credit: a-not-the-commits: a call's A table or a round's input-ids table is not the Commit's value of its "
@@ -70,7 +73,7 @@ class Sites(dict):
 
 
 class _EveryStep(dict):
-    """`Int8Source`'s names at each engine step (its ``_at``, X-03's targets): step 0's at every step."""
+    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
 
     def get(self, key: Any, default: Any = None) -> Any:
         return self[0] if 0 in self else default
@@ -325,5 +328,5 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
     return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
 
 
-__all__ = ["ROOT_BYTES", "SCHEME", "CommitTap", "Sites", "UNTIED", "calls_root", "committed", "digest", "ids_reason", "record_of",
+__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitTap", "Sites", "UNTIED", "calls_root", "committed", "digest", "ids_reason", "record_of",
            "roots1", "site", "untied"]

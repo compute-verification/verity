@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from verity_vllm.observe.fold.resolver import spec_label
 
-#: [R9 ref 2026-09-18] the fail-closed reference-integrity rule id (definition and evaluation over persisted summaries:
+#: the fail-closed reference-integrity rule id (definition and evaluation over persisted summaries:
 #: `verity_vllm.check.gates.REF_INTEGRITY_RULE` / `gates.fold_integrity`); quoted in `summarize()` so every fold summary names it
 REFERENCE_INTEGRITY_RULE = "R1/2026-09-18"
 
@@ -16,12 +16,12 @@ def summarize(result) -> dict:
             "report": result.report.to_dict(), "memory": result.memory, "steps": result.steps, "errors": len(result.errors),
             "error_classes": _hist(e["class"] for e in result.errors), "error_examples": result.errors[:16],
             "notes": result.notes[:64], "timings": result.timings, "sampled": result.sampled, "discarded": result.discarded,
-            # [R9 ref 2026-09-18] recompute wiring evidence + the fail-closed eligibility rule (see `gates.fold_integrity`)
+            # recompute wiring evidence + the fail-closed eligibility rule (see `gates.fold_integrity`)
             "refed": len(result.refed), "refed_examples": result.refed[:16],
             "reference_integrity": {"rule": REFERENCE_INTEGRITY_RULE, "eligible": result.reference_eligible,
                                     "errors": len(result.errors), "unsupported": int(getattr(result.report, "unsupported", 0) or 0)},
             "spec": spec_label(result.spec) if result.spec is not None else None,
-            # [R17 D90] the tensor-parallel facts of a rank fold (None / empty on a TP1 log): rank/world, the collectives executed (one
+            # the tensor-parallel facts of a rank fold (None / empty on a TP1 log): rank/world, the collectives executed (one
             # record each, own view as repr) and the `peers_<i>` root-parameter layout -- the collective_received roots the fold synthesised
             "tp": result.tp,
             "collectives": [{**{k: v for k, v in c.items() if k != "own_view"}, "own_view": repr(c.get("own_view"))} for c in result.collectives],

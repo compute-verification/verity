@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import os
 import random
 import sys
 from pathlib import Path
@@ -54,11 +53,14 @@ from arm import Buffer, Gate, Shape, Work
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for _p in (HERE, ROOT, ROOT / "verity" / "core" / "protocols" / "pouw"):
+for _p in (HERE, ROOT, ROOT / "verity" / "core" / "protocols" / "pouw", ROOT / "tools" / "config"):
     if str(_p) not in sys.path:
         sys.path.append(str(_p))
 
 import dev as D  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(__file__)
 
 TILE, WEIGHT_BASE, POISON = 64, 1, 0xA5
 OUTPUTS = {"hash": ("y", "digests", "leaves"), "nohash": ("y",), "plain": ("y",)}
@@ -199,7 +201,7 @@ class _PearlC4:
         call.write_dump(out)
 
     def build(self, ctx: dict) -> dict:
-        cubin = Path(os.environ.get("PEARLC4_CUBIN", HERE / "pearl_c4.cubin"))
+        cubin = Path(settings.PEARLC4_CUBIN or HERE / "pearl_c4.cubin")
         data = cubin.read_bytes()
         self.d = D.Dev(data)
         want = getattr(ctx.get("device"), "info", {}).get("uuid")
@@ -217,7 +219,7 @@ class _PearlC4:
         ``transcripts/{arm}/{shape}/``, so verify.py runs the same commands on the no-write control under ``negative/``,
         which they must reject; ``--path`` names whichever of the two it is."""
         r = ["{python}", "-m", "benchmarks.pouw.pearl_c4.replay"]
-        w = ["--workers", os.environ.get("PEARLC4_VERIFY_WORKERS", "16")]
+        w = ["--workers", str(settings.PEARLC4_VERIFY_WORKERS)]
         return {"name": "benchmarks.pouw.pearl_c4.replay", "transcript": "transcripts/{arm}/{shape}/transcript.json",
                 "commands": [r + ["prove", "{dir}", "--run", "{run_id}", "--out", "{transcript}"] + w,
                              r + ["verify", "{transcript}", "--out", "{dir}/verify.json",
@@ -225,7 +227,7 @@ class _PearlC4:
 
     @staticmethod
     def gate_tiles() -> int:
-        return int(os.environ.get("PEARLC4_GATE_TILES", "2"))
+        return settings.PEARLC4_GATE_TILES
 
     def domain(self, shape: Shape) -> str | None:
         if shape.m % 16:

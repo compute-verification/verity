@@ -1,4 +1,4 @@
-"""[R16 stoch, rev F-r16-20(a)] The stochastic selector is REPLAYED in form (A): `GumbelTopPTokenSelect_v1{V}` has a registered
+"""The stochastic selector is REPLAYED in form (A): `GumbelTopPTokenSelect_v1{V}` has a registered
 evaluator in `sampled_replay` -- the registry's own composite (TemperatureScale -> TopPMask_v1 with the committed `splits` S as its
 operand -> GumbelSelectF32 from the committed seed + the Const64 pos) on the committed bf16 logits row -- so a stochastic Commit's
 sampled ids are recomputed from committed inputs, not excluded as 'no registered evaluator'.  CPU only, small V.
