@@ -324,6 +324,9 @@ the receipt, as v3.2's RP25 and RP26 derive them, under tags distinct from PoUW'
   root before its last root, and receives the paths and the root at close (@proofs, 27 Oct, 04:16Z; ONE-4's withheld
   mode, #4888): opening draw j to it early would hand it the root before later blocks' roots;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
+- the `seeds` tag is the 28 bytes `b"verity/pouw/dither/seeds/v1\x00"`, its closing NUL included, and a served call's
+  seeds are SHA-512(tag ‖ c ‖ receipt ‖ be64(call) ‖ x) for each stream x of `dA`, `dB`, `U`, `V` and `P`, with x
+  NUL-padded to 8 bytes, c and receipt 64 bytes each, and call the call's index in its sampling block;
 - ctx = {period, replica, sampling block index, receipt}, where receipt is the digest of the certifier's signed receipt
   of what the coin follows: the registration for `weights`, the block's operand roots for `seeds`, and its value roots
   for `check`.
@@ -364,14 +367,17 @@ weight root is bound, and never shared between replicas. They are reused across 
 ### The boundary
 
 The network certifier watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
-k_exfil. Dither needs these of the challenger and the certifier:
+k_exfil. Dither needs these of the challenger and the certifier, with the challenger's two premises, `CoinsConfidential`
+and `OneClock`, named as in `verity/core/protocols/sampled_proofs/README.md`:
 
-- **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
-  outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. In the Lean, `CoinsConfidential` is Dither's premise, and the placement premise
-  `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
-  server's coins) travel only on private links, and the certifier sits on the server's own uplink (Daniel, 26 Oct,
-  4:41 PM PDT).
+- **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`): the
+  challenger's coin stream reaches the network certifier only over a path on auditor hosts, or the challenger and the
+  certifier are one device at the boundary. So no machine outside the replica's boundary may hold a coin before the
+  coin enters the boundary, and afterwards only through bits the certifier counts. In the Lean it is the named Prop
+  `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads none
+  of its own coins. The placement premise `WitnessPathPrivate` discharges it: private messages (the devices' signed
+  records and salts, the prover's witness, a server's coins) travel only on private links, and the certifier sits on
+  the server's own uplink (Daniel, 26 Oct, 4:41 PM PDT).
   - **The MVP: the certifier's device is the challenger** (Daniel, 26 Oct, 1:30 PM PDT). The device that runs the
     replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
@@ -380,14 +386,6 @@ k_exfil. Dither needs these of the challenger and the certifier:
     across hosts the prover controls is the secure-transport workstream's. A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
-  - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
-    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
-      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
-      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
-      none of its own coins.
-    - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
-      and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
-      It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
@@ -404,10 +402,12 @@ k_exfil. Dither needs these of the challenger and the certifier:
 - **Each certifier re-clocks the stream** (RP6). It terminates the forwarded stream and sends it into its boundary on
   its own ingress grid: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure.
   Otherwise the packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
-- **One clock.** The certifier stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
-  (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the challenger's too. A challenger of
-  its own would have to keep its clock within 1.03 s of the certifier's, and so does every other certifier of a
-  multi-server replica against the drawing server's.
+- **One clock** (`OneClock`): the challenger's release times and the certifier's ingress and receipt times are read on
+  one clock, within 1.03 s for two devices. The certifier stamps the coins' entry into the boundary (t_b, tc_b) and
+  every receipt and arrival (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the
+  challenger's too. A challenger of its own keeps its clock within 1.03 s of the certifier's, and so does every other
+  certifier of a multi-server replica against the drawing server's. `OneClock` is a spec premise: the Lean reads every
+  time on one axis and names no Prop for it.
 - **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would draw a check coin before the roots.
 - **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
@@ -548,8 +548,9 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     It is false wherever a known cheaper route is missing from the menu.
   - `SAKSha` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.
   - Beside them are `OutsourceWithinEgress`, `CertifierSeesImports`, `RootAfterCoin` and `ProofSystemSound`,
-    `ShaRealize` for the extraction (ASK-16, pending), and POOL-THM's `CoinsConfidential` (which `WitnessPathPrivate`
-    discharges) and `IndependentCoins`.
+    `ShaRealize` for the extraction (ASK-16, pending), and POOL-THM's `IndependentCoins`.
+  - On the challenger's side: `CoinsConfidential`, the Lean's `Pouw.Assumptions.CoinsConfidential`, which
+    `WitnessPathPrivate` discharges, and `OneClock`, a spec premise with no Lean Prop (see "The boundary").
   - There is no `SharedNoiseLucks` and no `UnitFixed` (NOFOLD-OPT): a word's 2^-16 guess sits in SAK-LB's λ.
   - `PeriodInventory` is held pending Daniel: whether host CPUs and DPUs are devices of the period.
 - **The RTX PRO 6000's cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
