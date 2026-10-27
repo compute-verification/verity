@@ -136,9 +136,10 @@ theorem soundness_of_subprotocols : Soundness := by
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
 theorem prob_play_eq_one (ns : List ℕ) (sign : ByteArray → List Bool → ByteArray × ByteArray) (θ F c : ByteArray)
-    (p : Outcome → Prop) (hp : ∀ log e, p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns sign θ F c)) :
+    (p : Outcome → Prop) (hp : ∀ log e b, p ⟨θ, F, c, log, e, b⟩) (σ : Game.Strategy (play ns sign θ F c)) :
     Game.prob p (play ns sign θ F c) σ = 1 := by
-  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
+  refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun eb =>
+    Game.ret (⟨θ, F, c, log, eb.1, eb.2⟩ : Outcome)) p
     (fun _ => True) (fun log t => ?_) (releases sign ns) σ).trans (Game.prob_true _ _)
   simp [Game.prob, hp]
 
@@ -178,14 +179,15 @@ theorem soundness_of_subprotocols_nontrivial {ι α : Type} [Fintype α] {d : De
   intro h
   have h1 := prob_play_eq_one (V.rounds θ) (V.sign θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
-    (fun _ _ => ⟨trivial, hreg, a, hfail _⟩) σ
+    (fun _ _ _ => ⟨trivial, hreg, a, hfail _⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
 theorem prob_play_eq_zero (ns : List ℕ) (sign : ByteArray → List Bool → ByteArray × ByteArray) (θ F c : ByteArray)
-    (p : Outcome → Prop) (hp : ∀ log e, ¬ p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns sign θ F c)) :
+    (p : Outcome → Prop) (hp : ∀ log e b, ¬ p ⟨θ, F, c, log, e, b⟩) (σ : Game.Strategy (play ns sign θ F c)) :
     Game.prob p (play ns sign θ F c) σ = 0 := by
-  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
+  refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun eb =>
+    Game.ret (⟨θ, F, c, log, eb.1, eb.2⟩ : Outcome)) p
     (fun _ => False) (fun log t => ?_) (releases sign ns) σ).trans (Game.prob_false _ _)
   simp [Game.prob, hp]
 
@@ -199,7 +201,7 @@ theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d :
     ¬ V.SoundnessFor fun _ => True := by
   intro h
   have hz : Game.prob (fun o => ¬ V.Registered o.params o.file) (V.game θ F c) σ = 0 :=
-    prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ hn => hn hreg) σ
+    prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ _ hn => hn hreg) σ
   have hle : Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤
       Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
         (V.game θ F c) σ :=
@@ -243,7 +245,7 @@ theorem soundness_at_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (
     ¬ V.SoundnessAtFor D fun _ => True := by
   intro h
   have hz : Game.prob (fun o => ¬ V.Registered o.params o.file) (V.game θ F c) σ = 0 :=
-    prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ hn => hn hreg) σ
+    prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ _ hn => hn hreg) σ
   have hle : Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤
       Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧
         ∃ a, D.Decides a ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
