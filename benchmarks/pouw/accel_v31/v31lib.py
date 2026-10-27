@@ -1,4 +1,4 @@
-"""The per-call binding of v31.cu's GPU prover for Dither's no-fold call (CMP-172, circuit/dither.py on #4974 at 1a428ae983):
+"""The per-call binding of v31.cu's GPU prover for Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py):
 ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's MODE=fill), one `Prover` a shape. v31.py's
 `Fill` is the reference it is checked against and the verifier.
 

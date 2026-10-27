@@ -1,4 +1,4 @@
-"""ACCEL v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
+"""Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
 challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
 no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table."""
 from __future__ import annotations
@@ -125,7 +125,7 @@ def test_gpu_check_wants_a_cheat_refused(tmp_path, capsys):
 
 def test_gpu_sample_rebuilds_a_tile_from_its_rows(tmp_path):
     """`v31 bench`'s sample files (two tiles of the checked call) from the whole call's reference: the tile alone, from
-    its A and B rows and the coins of those rows, gives the same words, O and leaves."""
+    its A and B rows and the coins of those rows, gives the same prefix sums, O and leaves."""
     _, sh, A, B, seeds, ks, prover = _gpu_dir(tmp_path, 384, 256, 1280)
     s = tmp_path / "sample"
     s.mkdir()
@@ -243,9 +243,9 @@ def test_challenger_keeps_the_order_and_never_redraws():
 
 
 # ---------------------------------------------------------------------------------------------------- Dither's no-fold call
-# Known answers of dither.py (#4974 at 1a428ae983: `values_buffer`, `commit` under salts(Ks, 3 leaves), `pad_rows`,
-# `Shape.domain`) on salt bytes 0..63, coin 64..127, operand-root receipt 128..191, Ks 192..255, call 3, and B (and the
-# served A) from default_rng(11)
+# Known answers of verity/core/protocols/pouw/circuit/dither.py (`values_buffer`, `commit` under salts(Ks, 3 leaves),
+# `pad_rows`, `Shape.domain`) on salt bytes 0..63, coin 64..127, operand-root receipt 128..191, Ks 192..255, call 3, and B
+# (and the served A) from default_rng(11)
 DITHER = {
     "pad": ((128, 128, 768, 256, 512, 1024), False, 64,
             "ca33cc7f8f39b599e894626cb0315b32399636eb01065485b117da6dd27b41f6cb2882fdab22f1be6c9187947a3ef3482378d8ddd41f45c74aad749c3a1a8625",

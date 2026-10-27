@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ACCEL's no-fold receipt (v31.cu) on the H200, sm_90a, at the PoUW filler's segments (HASH-27, CMP-172): each of CONFIGS,
+# Dither's no-fold receipt (v31.cu) on the H200, sm_90a, at the PoUW filler's segments: each of CONFIGS,
 # an L':t pair (default L' 512 at t 8 and 16, L = 4,096 and 8,192). run.sh as it stands, with GENCODE sm_90a and no
 # CUTLASS baseline. For each pair, its gates (one lease) and its bench (another):
 #   gates  run.sh's own at L' 256 t 3, then at L' 512 t 8 and 16: one and several whole segments, a partial last one,
@@ -7,12 +7,12 @@
 #          the first pair runs them all and its own whole-segment gate, the others that gate alone (QUICK=1: each pair
 #          its own gate and skip cheat alone, for a knob sweep whose variants the bench's sampled tiles check)
 #   bench  MODEL's calls at M = 16,384: mqa16k52 (default), the frozen shape's q (standing for o too), kv, up, down and the
-#          head; 8b, HIGHUTIL's QKV, O, gate and up, and down; both, the two
-# then h200_step.py's step a pair, ROW and variant: gamma_u against wgmma.linear's 3.06 s (HASH-22) for mqa16k52, and
+#          head; 8b, Llama 3 8B's QKV, O, gate and up, and down; both, the two
+# then h200_step.py's step a pair, ROW and variant: gamma_u against wgmma.linear's 3.06 s for mqa16k52, and
 # against the run's own cuBLASLt for each.
 #
-#   research run --on vy-dc-h200 --project verity --campaign cmp-172 --source . --cwd source --timeout 120m \
-#     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/pouw/accel_v31/h200.sh
+#   research run --on vy-dc-h200 --project verity --campaign CAMPAIGN --source . --cwd source --timeout 120m \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/accel_v31/h200.sh
 #
 # Env: CONFIGS (default "512:8 512:16"), MODEL, VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES
 # (in place of MODEL's), and run.sh's (NVFLAGS=-DV31_WG=1: the GEMM on warpgroup MMAs; -DV31_WG_BN=256 beside it: 128 x
