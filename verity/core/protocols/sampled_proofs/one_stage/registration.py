@@ -117,10 +117,16 @@ def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], s
     return rec
 
 
+def record_digest(tag: str, canon: bytes) -> bytes:
+    """The one registration digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
+    over the bytes it was handed (`pouw.core_check.digest`)."""
+    return hashlib.sha512(tag.encode() + b"\0" + canon).digest()
+
+
 def digest(rec: Mapping[str, Any]) -> str:
     """`SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag."""
     tag = FORMAT_V2 if rec.get("format") == FORMAT_V2 else FORMAT
-    return hashlib.sha512(tag.encode() + b"\0" + canonical_json(dict(rec))).hexdigest()
+    return record_digest(tag, canonical_json(dict(rec))).hex()
 
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
@@ -482,5 +488,5 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 registered_entries = G.registered_entries
 
 __all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest", "held_roots",
-           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "unwindowed",
-           "window_domain"]
+           "matches_public", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
+           "registered_entries", "unwindowed", "window_domain"]
