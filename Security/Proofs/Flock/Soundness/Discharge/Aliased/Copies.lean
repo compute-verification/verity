@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Hm.SatEx
 
 /-!
 # `Layout.Aliased` from Δ's copy positions (`pp.aliased`)
@@ -60,9 +61,9 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (regs : List (Model.Region st
 def zeroPos {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) : Fin (2 ^ (L.model regs).kLog) :=
   ⟨st.c.unitRange.slot s₀ + st.c.unit.useful, L.unit_slot_lt hs₀ F.check.unit_zero⟩
 
-/-- **A unit slot's forced-zero row carries 0**, in every block of a satisfying witness. -/
-theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+/-- **A unit slot's forced-zero row carries 0**, in every block of a witness that satisfies it (`SatEx`). -/
+theorem zeroPos_block_ex {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {D : ℕ → Prop} {z : Model.Witness (L.model regs).m}
+    (hz : SatEx (L.model regs) D z) (hD : ¬ D (zeroPos L regs F hs₀).val) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (zeroPos L regs F hs₀) = 0 := by
   have huse := (built_spec (L.built_flat F.parse.tmpl)).2.1
   have hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0 := fun j' => by
@@ -77,7 +78,13 @@ theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Mo
   have hZ : ZeroRow (L.model regs) (zeroPos L regs F hs₀) :=
     ⟨fun j => (L.placed_zero hs₀ F.check.unit_zero huse hA hB _ j rfl).1,
       fun j => (L.placed_zero hs₀ F.check.unit_zero huse hA hB _ j rfl).2⟩
-  exact hZ.block_eq hz o
+  exact hZ.block_eq_ex hz hD o
+
+/-- **A unit slot's forced-zero row carries 0**, in every block of a satisfying witness. -/
+theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    (L.model regs).block z o (zeroPos L regs F hs₀) = 0 :=
+  zeroPos_block_ex L regs F hs₀ (hz.ex fun _ => False) not_false o
 
 /-- Unit slot `s₀`'s input `off`'s copy position: at a port bit, the column Δ copies into it (`flatSrcAt`), or the slot's
 forced-zero row when that column lies outside the block; at an input padding row, the row itself. -/
