@@ -21,10 +21,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
+
+if TYPE_CHECKING:
+    from verity_vllm.program.frontend.gemm_targets import GemmTarget
 
 SCHEMA = "verity/aot-artifact/v1"
 
@@ -522,7 +525,7 @@ class TargetProfile:
     def digest(self) -> str:
         return sha256_hex(self.canonical())
 
-    def with_overrides(self, **kw) -> "TargetProfile":
+    def with_overrides(self, **kw: Any) -> "TargetProfile":
         return replace(self, **kw)
 
     # -- derived GEMM target facts (one source: this profile's capability -> verity_vllm.program.frontend.gemm_targets) ----------------
@@ -532,7 +535,7 @@ class TargetProfile:
         from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # noqa: PLC0415  (lazy: keeps this module light)
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
-    def gemm_target(self, arch_family=...):
+    def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
         """The registered GEMM specialization for this target (`gemm_targets.GemmTarget`: the launch geometry source, the Definition's k16
         step, the correspondence evidence) — what Bet A pins, the eager resolver pins and the applicability manifest requires.  `arch_family`
         = the family the host actually reported (construction read-back / capture header), when known: it must be the record's.  Raises
@@ -557,7 +560,7 @@ class TargetProfile:
 
 
     @classmethod
-    def from_gpu_document(cls, doc) -> "TargetProfile | None":
+    def from_gpu_document(cls, doc: Any) -> "TargetProfile | None":
         """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.engine.engine_profile.gpu_info`,
         or `versions.gpu` of a bench run): `multi_processor_count` (or `sms`) and `compute_capability` (`[8, 9]` or `"8.9"`, or `cc`).
         The eager Match resolver reads the target from here — the record's own host, not a literal.  None when the document carries no
@@ -580,7 +583,7 @@ class TargetProfile:
         return cls.default().with_overrides(**over)
 
     @classmethod
-    def from_run_profile(cls, profile_doc) -> "TargetProfile | None":
+    def from_run_profile(cls, profile_doc: Any) -> "TargetProfile | None":
         """[R13 hopper] The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
         built with when the capture recorded one (`profile["target"]`, written by `vllm_adapter.build_engine(target=...)` — exact,
         including `flash_attn_version`), else the X-01 device document (`from_gpu_document`) with the FA version the runner's attention

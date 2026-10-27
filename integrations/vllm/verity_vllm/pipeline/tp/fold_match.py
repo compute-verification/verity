@@ -192,7 +192,7 @@ class Options:
     capture: str = option("--capture",
                           help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
     profile: str = option("--profile",
-                          help="rank profile module (verity_vllm.engine.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
+                          help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
     derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],
