@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The sampled-proofs roles end to end (verity_all_protocols.parties), every role on this machine: the toy's example
-# configuration honest, tampered (--tamper 0) and with the certifier listed but no certifier role, each block's VERDICT
+# The sampled-proofs roles end to end (verity_all_protocols.parties), every role on this machine: their
+# configuration (tests/fixtures/sampled-proofs.toml) honest, tampered (--tamper 0) and with the certifier listed but no certifier role, each block's VERDICT
 # line in $OUT/<case>.log and its public record in $OUT/<case>/, then the opt-in test that asserts them (test_parties).
 # The states, with the prover's rows and salts, stay in scratch.
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- bash benchmarks/all_protocols/parties.sh
@@ -17,7 +17,7 @@ git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main 
 SECONDS=0; bash benchmarks/all_protocols/build.sh $W/build || exit $?
 cp $W/build/binaries.sha256 $W/build/tools.json $O/; echo "build ${SECONDS}s" | tee $O/seconds.txt
 PY="env PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $REPO/.venv/bin/python"
-CONFIG=integrations/torch_loop/configs/sampled-proofs.toml
+CONFIG=benchmarks/all_protocols/tests/fixtures/sampled-proofs.toml
 sed 's/^protocols = \["sampled-proofs"\]$/protocols = ["sampled-proofs", "certifier"]/' $CONFIG > $W/both.toml
 grep -q '"certifier"' $W/both.toml || exit 3
 for c in honest:$CONFIG: tampered:$CONFIG:0 absent:$W/both.toml:; do

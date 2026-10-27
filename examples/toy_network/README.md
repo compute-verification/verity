@@ -72,6 +72,24 @@ uv run verity run config.toml --state /tmp/toy-network --party challenger --part
 `--replay /tmp/toy-network --party challenger --party verifier --state DIR` reruns the challenger and the verifier over
 that run's served periods in a new state, without what they wrote: the same records, on new coins.
 
+## The sampled-proofs parties alone
+
+The challenger, firewall and verifier above are sampled proofs' parties
+(`benchmarks/all_protocols/verity_all_protocols/parties.py`, compute-accounting's), which `verity run` calls. Their own
+entry point runs them, with the toy's own workers and no network certifier, on
+`benchmarks/all_protocols/tests/fixtures/sampled-proofs.toml` (a uniform 8 of each block's members):
+
+~~~sh
+PYTHONPATH=benchmarks/all_protocols uv run python -m verity_all_protocols.parties \
+    benchmarks/all_protocols/tests/fixtures/sampled-proofs.toml --state STATE --local
+~~~
+
+`--tamper 0` makes block 0's workers record outputs that are not the model's, and the verifier rejects it
+(`benchmarks/all_protocols/parties.sh` runs honest, tampered and an absent certifier; run `r20261027-013034-fbf3`). The
+parties live in `benchmarks/` because they run the toy loop, the one-stage audit driver and the development challenger
+host, none of which `verity.core` may import. They move into `verity/core/protocols/sampled_proofs/` as deploy-core
+`Party`s, which also puts their channels on the wire between machines.
+
 ## The state
 
 Each party's output is in `STATE/logs/<party>.log`. What each party wrote is its transcript, `STATE/transcripts/<party>.jsonl`:

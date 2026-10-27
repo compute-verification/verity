@@ -24,8 +24,8 @@ below it need. A directory's name is lowercase letters, digits and `_`, since `v
 `verity example --status` prints every example's next missing evidence. The roles, the machine classes and the checks are
 `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `ROLES`, with its side.
 
-- `toy_network/`: sampled proofs and the network certifier on the toy (`integrations/torch_loop`), every party on one
-  machine, its deployment configuration as `verity config new` writes it.
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.
+- `toy_network/`: sampled proofs and the network certifier on the toy (`integrations/torch_loop`), every party on one
+  CPU machine through `verity run`, its deployment configuration as `verity config new` writes it.

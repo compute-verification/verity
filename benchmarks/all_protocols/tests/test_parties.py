@@ -1,13 +1,14 @@
 """The sampled-proofs roles of `verity run CONFIG` (`verity_all_protocols.parties`):
 
-* the roles' table holds the challenger, firewall, workers and verifier, and the example configuration places exactly
-  those roles, its channels between them, each ``after`` a message an earlier channel carries;
+* the roles' table holds the challenger, firewall, workers and verifier, and their configuration
+  (``fixtures/sampled-proofs.toml``) places exactly those roles, its channels between them, each ``after`` a message an
+  earlier channel carries;
 * a configuration listing a component no role knows is refused by name;
 * the verdict line's product runs over exactly the listed components: a listed component whose role wrote nothing is
   ``absent``, its case one its own decoders refuse, so the product never accepts over it; the commitment binds the listed
   components' digests under the product's own id (a stand-in ``product``, which records what it was given);
 * the verifier with no challenger listening, or no block served, decides nothing (2);
-* opt-in (``VERITY_ALL_PROTOCOLS_TOOLS=tools.json``, `build.sh`'s; minutes): the example configuration with every role on
+* opt-in (``VERITY_ALL_PROTOCOLS_TOOLS=tools.json``, `build.sh`'s; minutes): that configuration with every role on
   this machine, honest, accepted on the challenger party's coins; tampered, rejected; and with the certifier listed but
   no certifier role, ``certifier: absent`` and the product rejects.
 """
@@ -24,13 +25,13 @@ import pytest
 
 from verity_all_protocols import compose as C, parties as P
 
-EXAMPLE = P.ROOT / "integrations" / "torch_loop" / "configs" / "sampled-proofs.toml"
+CONFIG = Path(__file__).parent / "fixtures" / "sampled-proofs.toml"
 SP, CERT = "verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"
 
 
-def test_the_roles_table_and_the_example_configuration_agree():
+def test_the_roles_table_and_their_configuration_agree():
     assert set(P.PARTIES["sampled-proofs"]) == set(P.ORDER) == {"challenger", "firewall", "workers", "verifier"}
-    config = P.config_of(EXAMPLE)
+    config = P.config_of(CONFIG)
     assert config["protocols"] == ["sampled-proofs"] and "epsilon" not in json.dumps(config)
     assert sorted(p["name"] for p in config["party"]) == sorted(P.ORDER)
     machines = {p["name"]: p["machine"] for p in config["party"]}
@@ -103,7 +104,7 @@ def test_the_product_over_one_listed_component_is_that_components(tmp_path):
 
 def test_the_verifier_decides_nothing_without_a_challenger_or_a_block(tmp_path, capsys):
     (tmp_path / "tools.json").write_text(json.dumps({"product": "unused"}))
-    config = P.config_of(EXAMPLE)
+    config = P.config_of(CONFIG)
     assert P.verifier(config, tmp_path, True) == 2
     assert "no challenger is listening" in capsys.readouterr().err
     (tmp_path / "challenger").mkdir()
@@ -127,10 +128,10 @@ def test_every_role_here_honest_tampered_and_the_certifier_absent(tmp_path):
     """The one test of the roles as processes: the challenger party's session drawn on by the real audit, and the Lean
     product over the configuration's components."""
     honest, tampered, absent = (tmp_path / x for x in ("honest", "tampered", "absent"))
-    assert P.main([str(EXAMPLE), "--state", str(honest), "--local", "--tools", TOOLS]) == 0
-    assert P.main([str(EXAMPLE), "--state", str(tampered), "--local", "--tools", TOOLS, "--tamper", "0"]) == 1
+    assert P.main([str(CONFIG), "--state", str(honest), "--local", "--tools", TOOLS]) == 0
+    assert P.main([str(CONFIG), "--state", str(tampered), "--local", "--tools", TOOLS, "--tamper", "0"]) == 1
     both = tmp_path / "both.toml"
-    both.write_text(EXAMPLE.read_text().replace('protocols = ["sampled-proofs"]',
+    both.write_text(CONFIG.read_text().replace('protocols = ["sampled-proofs"]',
                                                 'protocols = ["sampled-proofs", "certifier"]'))
     assert tomllib.loads(both.read_text())["protocols"] == ["sampled-proofs", "certifier"]
     assert P.main([str(both), "--state", str(absent), "--local", "--tools", TOOLS]) == 1
