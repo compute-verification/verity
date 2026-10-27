@@ -1,7 +1,6 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
-A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix (Daniel, 26 Oct
-2026, 10:07 AM PDT; `ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
-proof block.
+A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix
+(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty proof block.
 
 Scanned: every tracked text file but the Lean (`.lean` files and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
@@ -9,14 +8,16 @@ line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the 
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
-The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``, Daniel,
-26 Oct: "block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
-keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
-record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
+The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``: "block" is reserved for
+parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code keeps the old words until its
+owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a record key stays, and a term
+written as a quoted mention ("leg"); the table's rows name them too.
 
-``DOC_TERMS`` also holds the overhead lower bound's retired words, each with what replaced it (`GLOSSARY.md`,
-Older names). "Slack" stays out of it, since the word keeps other senses (a tick's slack, AuditRO's slack,
-the Slack app); "dark" alone is in it, since no maintained doc uses the word in another sense.
+``DOC_TERMS`` also holds the overhead lower bound's and the inference-only policy's retired words, each with what
+replaced it (`GLOSSARY.md`, Older names). "Slack", "residual" and "faithful" stay out of it, since those words keep
+other senses (a tick's slack, the Slack app; the residual stream, the covert residual; a byte-faithful replica); "dark"
+alone is in it, since no maintained doc uses the word in another sense. "IU" and "NCI" match in capitals only, so a
+path (`benchmarks/nci`) or a Lean name (`Nci`, `NciCheck`) is no match even outside backticks.
 """
 from __future__ import annotations
 
@@ -36,7 +37,9 @@ RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"')
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
     "wrong unit, incorrect unit": "faulty proof block",
-    "isolation unit, IU": "isolation block",
+    "isolation unit, isolation block, IU": "inference block",
+    "novel communication intensity, NCI": "the inference-only policy",
+    "novel information, novel reads, novel bits, novel data": "fresh input",
     "replay unit": "replay block",
     "physical block, serving block, server-time block, server-window": "server block",
     "certified block": "inference block",
@@ -44,30 +47,38 @@ DOC_TERMS = {
     "KV block": "KV page",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
     "exclusion bound": "overhead lower bound (the result) or server-block yield (the per-block step)",
+    "dampener, compute dampener, training efficiency, pretraining efficiency, hardware multiple": "the overhead lower "
+        "bound (the result) or overhead (η is only a success probability)",
     "window cap, per-block cap, per-block limit": "server-block yield",
     "physical class": "feasible set",
     "monitored class, training class, restricted class": "admissible set (a premise set with the yield it gives is a "
                                                          "pricing argument)",
     "work requirement": "necessary subcomputation",
     "reference construction": "reference training algorithm",
-    "dark, dark compute, dark fleet, dark leaves": "unregistered hardware",
+    "dark, dark compute, dark fleet, dark leaves, unmonitored compute": "unregistered hardware",
     "monitored compute": "registered hardware",
-    "declared compute, accounted compute, certified work": "verified compute",
+    "declared compute, accounted compute, certified work, credited work": "verified compute",
     "undeclared compute, unaccounted compute, skippable work, uncertified capacity, uncertified share": "free compute",
+    "monitored residual": "free compute on registered hardware (ε_undecl + ε_skip)",
+    "faithfulness": "the admissible set, or verified compute",
     "unregistered input bits": "fresh input bits",
     "registered computation": "the declared circuit (registered programs on committed inputs)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?"
-                       rf"|(?:physical|thread|KV|serving|certified|server{_SPACE}time){_SPACE}blocks?"
+                       rf"|(?:physical|thread|KV|serving|certified|isolation|server{_SPACE}time){_SPACE}blocks?"
+                       rf"|novel{_SPACE}(?:communication{_SPACE}intensit(?:y|ies)|information|reads?|bits?|data)"
                        rf"|server{_SPACE}windows?|exclusion{_SPACE}bounds?|window{_SPACE}caps?"
                        rf"|per{_SPACE}block{_SPACE}(?:caps?|limits?)"
+                       rf"|(?:compute{_SPACE})?dampeners?|(?:pre)?training{_SPACE}efficienc(?:y|ies)"
+                       rf"|hardware{_SPACE}multiples?"
                        rf"|(?:physical|monitored|training|restricted){_SPACE}class(?:es)?|work{_SPACE}requirements?"
                        rf"|reference{_SPACE}constructions?|dark{_SPACE}(?:compute|fleets?|leaves)|dark"
-                       rf"|(?:monitored|(?:un)?declared|(?:un)?accounted){_SPACE}compute"
-                       rf"|(?:skippable|certified){_SPACE}work|uncertified{_SPACE}(?:capacit(?:y|ies)|shares?)"
+                       rf"|(?:(?:un)?monitored|(?:un)?declared|(?:un)?accounted){_SPACE}compute"
+                       rf"|monitored{_SPACE}residuals?"
+                       rf"|(?:skippable|certified|credited){_SPACE}work|uncertified{_SPACE}(?:capacit(?:y|ies)|shares?)"
                        rf"|unregistered{_SPACE}input{_SPACE}bits?|registered{_SPACE}computations?"
-                       rf"|legs?)\b)|\bIUs?\b")
+                       rf"|faithfulness|legs?)\b)|\b(?:IUs?|NCI)\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -213,6 +224,13 @@ def test_the_doc_scan_reads_each_form():
         "f.md": "A per-block limit, two per-block\nlimits; the registered computation and registered computations.\n"
                 "Not a per-block error, per-block keys, a window limit, registered programs or the computation\n"
                 "registered.\n",
+        "g.md": "Novel communication intensity, the NCI check and NCI's bound; an isolation block, two isolation\n"
+                "blocks; novel information, novel reads and novel bits. The compute dampener, a dampener, training\n"
+                "efficiency, pretraining efficiency and a hardware multiple; the monitored residual, unmonitored\n"
+                "compute, credited work and faithfulness.\n"
+                "Not `NciCheck`, `benchmarks/nci`, nci, Nci.Complies, the novel basis, faithful, faithfully, the\n"
+                "residual stream, the covert residual, the monitoring period, the work the table credits, fresh input\n"
+                'or registered information; "NCI" quoted.\n',
         "benchmarks/numerical/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
@@ -229,4 +247,10 @@ def test_the_doc_scan_reads_each_form():
         ("e.md", 1, "undeclared compute"), ("e.md", 2, "Accounted compute"), ("e.md", 2, "unaccounted compute"),
         ("e.md", 3, "skippable work"), ("e.md", 3, "certified work"), ("e.md", 3, "unregistered input bits"),
         ("e.md", 4, "dark"), ("f.md", 1, "per-block limit"), ("f.md", 1, "per-block limits"),
-        ("f.md", 2, "registered computation"), ("f.md", 2, "registered computations")]
+        ("f.md", 2, "registered computation"), ("f.md", 2, "registered computations"),
+        ("g.md", 1, "Novel communication intensity"), ("g.md", 1, "NCI"), ("g.md", 1, "NCI"),
+        ("g.md", 1, "isolation block"), ("g.md", 1, "isolation blocks"), ("g.md", 2, "novel information"),
+        ("g.md", 2, "novel reads"), ("g.md", 2, "novel bits"), ("g.md", 2, "compute dampener"), ("g.md", 2, "dampener"),
+        ("g.md", 2, "training efficiency"), ("g.md", 3, "pretraining efficiency"), ("g.md", 3, "hardware multiple"),
+        ("g.md", 3, "monitored residual"), ("g.md", 3, "unmonitored compute"), ("g.md", 4, "credited work"),
+        ("g.md", 4, "faithfulness")]
