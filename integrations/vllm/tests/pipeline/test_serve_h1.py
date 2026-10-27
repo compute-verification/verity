@@ -118,10 +118,11 @@ class _GateAuditor(_Auditor):
 
 def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, monkeypatch):
     """``--challenger-gate`` and ``--challenger-peer``: each window reserves a session of its own (H1's scheme and
-    families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
-    window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
-    session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    families for S rounds, as this peer) and a draw session (the draw coin's family alone), round 0 opens the session on
+    the window's open root once its port listens, the draw opens the draw session withheld on the window's draw root,
+    and the window's close waits for both end entries, closed and complete. The window's salt and round coins are its
+    session's and its draw coin its draw session's, its record carries the sessions without their secrets, and the
+    verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
@@ -140,16 +141,22 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         assert {k: out["session"][k] for k in ("window", "peer", "port", "listen_polls", "unopened", "closed", "end")} == {
             "window": w, "peer": PEER, "port": 7811, "listen_polls": 0, "unopened": None, "closed": {"closed": True},
             "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
+        draw = out["session"]["draw"]
+        assert {k: draw[k] for k in ("port", "listen_polls", "end")} == {
+            "port": 7811, "listen_polls": 0, "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
+        assert auditor.gate._opens[draw["session"]]["withheld"] is True
         record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
-        given = record["commitment"]["session"]
-        assert given["session"] == sid and "secret" not in given
+        given, drawn = record["commitment"]["session"], record["commitment"]["draw_session"]
+        assert given["session"] == sid and drawn["session"] == draw["session"] and "secret" not in given | drawn
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
-        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s == sid else None) is None
+        mine = {sid, draw["session"]}
+        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s in mine else None) is None
         assert run.details["challenger"] == {"closed": True}
-    assert len(set(sids)) == 2 and ports == [7811, 7811]
+    assert len(set(sids)) == 2 and ports == [7811] * 4
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
-    assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)]] * 2
+    assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)],
+                        ["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.draw_families()]] * 2
     srv.src.uninstall()
 
 

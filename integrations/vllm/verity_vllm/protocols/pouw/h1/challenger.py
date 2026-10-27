@@ -17,8 +17,8 @@ verifier's check that a served window's coins are that challenger's.
   (`core_check.rounds`, Lean `PouwCheck.roundsCheck`): each coin opened after its root, the roots the challenger's log
   shows in order. A window whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds``
   of tests, or a host of the prover's), whose log no one signed, or whose ledger is signed under another key, is cut
-    before the session's end or opens a second session for the window, is refused. The window's draw coin comes from a
-  draw session of its own (`window.DRAW_FAMILIES`, `draw_session_reason`), the one the ledger opens on
+  before the session's end or opens a second session for the window, is refused. The window's draw coin comes from a
+  draw session of its own (`window.DRAW_FAMILIES`, `pouw_h1_draw.draw_session_reason`), the one the ledger opens on
   `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin, opened withheld
   (`challenger.withheld_on`): its challenger released its coin root only after that root, the prover's commitment
   (CMP-177). Its coin must have been opened once, after that root: a draw opened early, from another session or family,
@@ -97,6 +97,7 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, Coin
                                                              session_named)
 
 from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1.draw import NO_DRAW_SESSION, draw_files, draw_reason, draw_session_reason
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
 SCHEME = Wd.LIVE_SCHEME
@@ -277,62 +278,6 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, hea
     return _window_reason(commits, key, lines, log, main, window, files, trusted, sid, verify, draw_files)
 
 
-#: why a window's draw coin has no session to be read from
-NO_DRAW_SESSION = ("the verifier names no draw session: a window's draw coin is its own draw session's, opened withheld "
-                   "on its draw root (CMP-177)")
-
-
-def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[str], pins: Any, main: Any,
-                        files: Any, verify: Any = lms_verify) -> str | None:
-    """Why the window's draw coin (its H1 commitment `commits`'s ``draw``) isn't its draw session's: the session the
-    auditor's ledger `lines` opens on the window's draw root under `key`, run from a commit the pins log `pins` records
-    on `main` (`challenger.trusted_session_of` over its files `files`, as infra's gate publishes them; None names none),
-    opened withheld (`challenger.withheld_on`), so its challenger released its coin root only after that root, of a draw
-    session's layout (`window.draw_epoch_reason`), and the coin its draw coin 0 opened after that root
-    (`draw_reason`); None when it is."""
-    draw = commits.get("draw") if isinstance(commits.get("draw"), Mapping) else {}
-    root = draw.get("root")
-    if not (isinstance(root, str) and _ROOT.match(root)):
-        return "the window's draw root is not 128 lowercase hex"
-    if files is None:
-        return NO_DRAW_SESSION
-    try:
-        trusted, received = Ch.trusted_session_of(lines, {"root": root}, key, pins, main, files, verify)
-    except CoinError as e:
-        return f"the window's draw session is not trusted: {e}"
-    if not Ch.withheld_on(lines, root):
-        return f"the window's draw session: {Ch.WITHHELD}"
-    why = Wd.draw_epoch_reason(trusted)
-    if why is not None:
-        return f"the window's draw session's signed coins: {why}"
-    return draw_reason(commits, trusted, received.get(Wd.DRAW, ()))
-
-
-def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
-    """Why the window's draw coin isn't its one draw coin 0, opened after its `pouw_h1_requests.draw_root` (over the
-    manifest's ``calls_root``, the last round's receipts and every round's root and coin), given its draw session's
-    signed commitment `trusted` and the draw roots its log shows it received; None when it is."""
-    if not received:
-        return "the draw session closed with no draw coin opened, so the window has no draw of the challenger's"
-    draw = commits.get("draw") or {}
-    try:
-        root = RQ.draw_root(bytes.fromhex(commits["calls_root"]), bytes.fromhex(draw["receipts"]),
-                            list(commits.get("rounds") or ()))
-    except (KeyError, TypeError, ValueError) as e:
-        return f"the window's draw root is malformed ({e})"
-    if draw.get("root") != root.hex():
-        return "the window's draw root is not over its manifest, its last round's receipts and every round's root and coin"
-    if tuple(received) != (root,):
-        return ("the challenger's log does not show the window's draw root as the one root its draw coin followed: a draw "
-                "opened before the window's rounds, or after another root")
-    try:
-        opening = LiveOpening.from_json(draw.get("coin"))
-    except CoinError as e:
-        return f"the window's draw coin is malformed ({e})"
-    why = live_reason(trusted, opening, Wd.DRAW, 0, root)
-    return None if why is None else f"the window's draw coin: {why}"
-
-
 @dataclass(frozen=True)
 class Ledger:
     """The auditor's ledger as core's check of record reads it under the verifier's challenger `key`: `lines`, the
@@ -479,18 +424,6 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
                           {"root": root}, files, trusted, sid, verify, draw_files(commits, ledger, fetch, verify))
 
 
-def draw_files(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, verify: Any = lms_verify) -> Any:
-    """The files of the window's draw session (`draw_session_reason`), the one `ledger` opens on the window's draw root
-    (its H1 commitment `commits`'s ``draw``'s ``root``), from its ``out/`` as `fetch` gives it; None when the ledger
-    opens none there or `fetch` has no tree for it, which `draw_session_reason` refuses."""
-    root = (commits.get("draw") or {}).get("root") if isinstance(commits.get("draw"), Mapping) else None
-    try:
-        tree = fetch(ledger.pinned({"root": root}, verify).session) if isinstance(root, str) else None
-        return None if tree is None else remote.session_files(Path(tree) / "out")
-    except CoinError:
-        return None
-
-
 def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
                         commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why a Pearl-C pass (its device run's commitment `commits`) isn't held to its salt session, the one whose salt
@@ -564,10 +497,11 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presente
                   verify: Any = lms_verify) -> list[str]:
     """Why the auditor's `ledger` doesn't credit the lane's period `period`, given `accepted` (the session ids of its
     windows that `session_reason` accepted, each with its draw session's, which the close lists after it: a draw session
-    no accepted window drew from is one opened for a coin the prover then dropped), one reason each; [] when it does. Refused: a period the ledger has no
-    period-open for, or no period-close (its windows aren't all known); an accepted window that isn't one of the
-    period's (its lane's reserves and one-step opens between its period-open and its period-close); a close that isn't
-    complete (no window, or a window never opened, never ended, unclosed or short of its coins: every window counts); and
+    no accepted window drew from is one opened for a coin the prover then dropped), one reason each; [] when it does.
+    Refused: a period the ledger has no period-open for, or no period-close (its windows aren't all known); an accepted
+    window that isn't one of the period's (its lane's reserves and one-step opens between its period-open and its
+    period-close); a close that isn't complete (no window, or a window never opened, never ended, unclosed or short of
+    its coins: every window counts); and
     a window of it with no accepted window, which ended complete, so released every coin: a window abandoned after its
     coins, which a prover keeps only when it liked them. With `presented`, the window roots the verifier is shown, in
     order, also core's rules of record: `credit.period` (exactly the close's windows, in its order, the close complete)

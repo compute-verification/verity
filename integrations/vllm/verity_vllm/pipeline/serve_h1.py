@@ -19,7 +19,10 @@ own Commit.
   reserves it (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)), round 0 opens it on the window's
   open root (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the
   auditor host's ``ssh -R`` listens there, and the window's close waits for its end entry, so the next window's
-  session takes that port only after this one's tunnel has gone. A reserve joins its lane's open period, if one is
+  session takes that port only after this one's tunnel has gone. Its draw coin is a draw session's of its own, reserved
+  with it (`pouw_h1_challenger.draw_families`) and opened withheld on the window's draw root once the prover's
+  commitment is in (``open --withhold``, `pouw_h1_window.DrawSession`, CMP-177), whose end entry the close waits for
+  too. A reserve joins its lane's open period, if one is
   open. Without a gate, the epoch's in-process coins, one epoch a window (`pouw_h1_settings.from_engine`): such a
   window credits nothing (`pouw_h1.IN_PROCESS`). ``--protocols-config`` sets no session (``SESSIONED``).
 
@@ -147,9 +150,10 @@ def listening(port: int) -> bool:
 
 class GateSessions:
     """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
-    `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `reserve` is a window's reserve, `open` (the
-    pouw setting ``gate``) opens it on the window's open root and `ended` waits for its end entry. ``held`` is each
-    window's session as the gate answered it. `wait` sleeps between polls and `listens` is `listening` (tests)."""
+    `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `reserve` is a window's reserve and
+    `reserve_draw` its draw session's, `open` (the pouw setting ``gate``) opens either on its root (the draw session's
+    withheld) and `ended` waits for its end entry. ``held`` is each window's session as the gate answered it, its draw
+    session's as its ``draw``. `wait` sleeps between polls and `listens` is `listening` (tests)."""
 
     def __init__(self, gate: Any, peer: str, steps: int, *, wait: Callable[[float], Any] = time.sleep,
                  listens: Callable[[int], bool] = listening) -> None:
@@ -174,10 +178,26 @@ class GateSessions:
               f"(period {reserved.get('period')})", flush=True)
         return reserved
 
-    def open(self, session: str, root: str) -> dict[str, Any]:
+    def reserve_draw(self, window: int) -> dict[str, Any]:
+        """Window `window`'s draw session reserved (``reserve --peer PEER --scheme SCHEME --families draw_families()``),
+        after its `reserve`: the gate's reserve answer as the pouw setting ``draw_session`` takes it, held as the
+        window's ``draw``. The window opens it withheld on its draw root (`pouw_h1_window.DrawSession`). `CoinError`
+        when the gate refuses."""
+        from verity_vllm.protocols.pouw.h1 import challenger as PHC
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families())
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)},
+                                   "draw_session")
+        self.held[-1]["draw"] = dict(reserved)
+        print(f"[serve-h1] window {window}: reserved draw session {reserved['session']} on {self.peer}", flush=True)
+        return reserved
+
+    def open(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
         """`pouw_h1_window.Gate`: ``open --session SESSION --root ROOT`` (its commitment from ``status`` when the answer's
-        is null), answered once the answer's port listens here (the auditor host's ``ssh -R``, polled `POLLS` times)."""
-        answer = self._open(session, root)
+        is null; ``--withhold`` with `withhold`, a draw session's, whose answer has none), answered once the answer's port
+        listens here (the auditor host's ``ssh -R``, polled `POLLS` times)."""
+        answer = self._open(session, root, withhold=withhold)
         port, polls = answer.get("port"), None
         if type(port) is int:
             for i in range(POLLS):
@@ -185,7 +205,7 @@ class GateSessions:
                     polls = i
                     break
                 self.wait(1.0)
-        held = next((h for h in self.held if h["session"] == session), {})
+        held = next((d for h in self.held for d in (h, h.get("draw", {})) if d.get("session") == session), {})
         held.update(port=port, listen_polls=polls)
         print(f"[serve-h1] session {session} opened on {root[:16]}…: port {port} "
               + (f"listening after {polls} polls" if polls is not None else f"not listening after {POLLS} polls"),
@@ -279,6 +299,7 @@ class H1Windows:
         if self.comp is not None:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s H1 is open")
         coins = {} if self.sessions is None else {"challenger": AT, "session": self.sessions.reserve(window),
+                                                  "draw_session": self.sessions.reserve_draw(window),
                                                   "gate": self.sessions.open}
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
@@ -309,6 +330,8 @@ class H1Windows:
             self.tap.untap()
             if held:
                 end = self.sessions.ended(held["session"])
+                if "draw" in held:
+                    held["draw"]["end"] = self.sessions.ended(held["draw"]["session"])
         d, c = run.details, run.commits
         roots1, gate = d.get("roots1"), d.get("gate", {})
         out = {"entry": ENTRY, "window": window, "rows": self.rows, "steps": self.steps,

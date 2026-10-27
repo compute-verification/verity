@@ -308,6 +308,12 @@ NO_DRAW_SESSION = ("the window's draw coin comes from a draw session of its own,
                    "the prover's commitment is in (CMP-177), and the pouw setting 'draw_session' reserves none")
 
 
+def in_process_draw(rounds: Any, coins: Any) -> LiveRecord | None:
+    """Tests' draw coin held in this process, which credits nothing (`pouw_h1.IN_PROCESS`): a `LiveRecord` over a draw
+    challenger at the epoch of `rounds`'s challenger under `coins` (`window.draw_challenger`); None without `rounds`."""
+    return None if rounds is None else LiveRecord(Wd.draw_challenger(rounds.challenger.commitment.epoch, coins), Wd.DRAW)
+
+
 class DrawSession:
     """An H1 window's draw coin from a draw session of its own (`window.DRAW_FAMILIES`) on the challenger at `at`'s host,
     reserved on infra's gate (`reserved`, its reserve answer, `reserved_of`; None reserves none, and the draw is refused,
@@ -422,6 +428,6 @@ def finish(run: Any, client: Any) -> None:
 
 
 __all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "Window", "at_port",
-           "closed_on_error", "connect",
-           "finish", "gate_of", "open_period", "open_session", "opened", "period_reason", "period_setting", "refusals",
-           "reserve_salt", "reserved_of", "salt_session", "session", "session_setting"]
+           "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
+           "period_reason", "period_setting", "refusals", "reserve_salt", "reserved_of", "salt_session", "session",
+           "session_setting"]
