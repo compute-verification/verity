@@ -51,9 +51,9 @@ has at most `2^-40`. The per-unit proof system adds its knowledge-soundness and 
 Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
 plus a term for which units are faulty, and compute security by their work.
 
-**Two-stage sampling is retired** (Daniel, ASK-25, 18 Oct 19:00Z: everything is committed at serve time, no deferral
-or two-stage). The proof service has no two-stage rule, and the Lean verifier refuses a registration that names one.
-Not built yet: the security function and its red-team review (decision 41), and composition checks such as PoUW's tiles
+Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
+registration that names one.
+Not built yet: the security function and its red-team review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
 
 Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values

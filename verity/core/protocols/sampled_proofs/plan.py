@@ -1,7 +1,7 @@
 """Verification plans and obligations over IR programs (IR §1, §D, §E).
 
-Moved from ``verity.verification.plan``, now ``verity_sp1.proofs`` (decision 41).  A plan selects and samples gates of a
-Program for checking; it is verification policy, not computation (README "Protocols").  Each gate class has a rate: the
+A plan selects and samples gates of a Program for checking; it is verification policy, not computation (README
+"Protocols").  Each gate class has a rate: the
 probability a gate of the class is checked, each gate drawn independently.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the

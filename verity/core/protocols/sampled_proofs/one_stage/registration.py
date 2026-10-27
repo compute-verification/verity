@@ -86,7 +86,7 @@ FORMAT = "verity/registration/v1"
 FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
-# Kept for `certifier.tie_service`'s `IngressTie.domain` until #3920 rewrites it; then delete.
+# The window domain's former name; nothing in the tree reads it.
 SERVED_DOMAIN = WINDOW_DOMAIN
 KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
