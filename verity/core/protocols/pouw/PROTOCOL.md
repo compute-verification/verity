@@ -1634,7 +1634,7 @@ registered Definitions, each checked by circuit-check at its sidecar's binding (
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
 
-## ACCEL (protocol v3.1)
+## ACCEL (protocol v3.2)
 
 ACCEL, credit for a served model's int8 matmuls from committed noised prefix sums, is specified in
 `verity/core/protocols/pouw/accel/PROTOCOL.md` while it is experimental.

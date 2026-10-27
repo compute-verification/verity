@@ -92,7 +92,7 @@ def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
     on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
     assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
     assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
-    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings=on)
+    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings=on)
     assert any("no Definition" in r for r in PO.refusals(commit))
 
 
@@ -116,9 +116,9 @@ def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampl
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
     assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
-        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
         assert any("no Definition" in r for r in PO.refusals(commit)), scheme
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:rows-sha512"), settings={"pouw": {"coins": _coins()}})
     assert PO.refusals(commit) == ()
 
 
