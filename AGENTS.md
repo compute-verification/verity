@@ -50,8 +50,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
-  (`examples/README.md`).
+- `examples/`: one directory per example: its workload, placement, commands and level of doneness; a milestone is a set of
+  (example, level) pairs, which top keeps (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -288,9 +288,7 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   in the PR's body names, else the Cursor agent id the body carries. Marks written before `marked_after` in
   `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out, as does a merge onto `next` that conflicts
   or puts a Markdown file over its cap (drive.toml's `landing_gates`). `research queue status` says what each PR
-  waits for. A PR not marked ready at its head and idle 3 days (its head commit, and its ready and review labels there) is
-  stale: drive rings its owner once a day and closes it at 7 days, its branch kept, unless it is held, on `next`, listed
-  in `stale_keep`, or a draft that says "keep open" (`stale_days`, `stale_close_days` in `tools/verity/check/drive.toml`).
+  waits for.
 - Drive stacks admitted PRs on `next`, one merge commit each, non-Lean first (`nonlean_first`, drive.toml): a sync puts
   a PR whose own change is no Lean change below every Lean change it doesn't contain, in `--first`'s order and then
   admission's, and never moves a member it keeps. Reviewers, agents ci staffs and never the PR's owner, read `next`
