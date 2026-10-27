@@ -29,8 +29,8 @@ open Accounting.Remote.Sketch
 
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
-/-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; its use for the
-memory sketch is not yet ruled on). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
+/-- `random-oracle` (PoUW's only, each use a named premise; its use for the memory sketch is not yet
+accepted). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
 uniform**: at every prover coin `b` and registered store `D`, no event `E` of the keys (each candidate seed's signs and
 receipt hash) is more than `ε` likelier at `A.keys b D x`, over SHA-512's outputs `x`, than at uniform keys, so the
 keys' law is within statistical distance `ε` of uniform:
@@ -48,7 +48,7 @@ random-oracle model, and not a lemma. There `Hs` is SHA-512 drawn as a uniform f
 the seeds the prover's run tries. Distinct seeds' receipt hashes and 256-bit sign keys
 `K = derive(seed_i, SIGN_DOMAIN, …)` are fresh queries, uniform and independent, chosen adaptively or not. The signs
 are `K.stream` rows, `k_s × 4096` bits expanded from `K`'s 256, so two candidates whose `K` collide share their signs,
-and exact uniformity (`ε = 0`) is false at two or more candidates (red team RD-13). Off a collision the signs are fresh
+and exact uniformity (`ε = 0`) is false at two or more candidates. Off a collision the signs are fresh
 too, so the keys' law is within the collision's probability of uniform: over at most `Q + P` candidate seeds, at most
 `(Q + P)²/2^257`, the `ε` `SketchBoundDeployed` reads and `timing.sketch_failure`'s last term. The premise fails for a
 run that tries one seed under two candidates (their keys are equal, not independent): the model gives each candidate

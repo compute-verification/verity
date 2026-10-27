@@ -5,7 +5,7 @@ import Proofs.Accounting.Bandwidth.TickedJoint
 /-!
 # Bandwidth adds, by counting (Mbw), on a strategy causal from every tick
 
-Mbw (section 5 of `note:console/20261012T0645Z-draft-actual-circuit-model`) for the chip of a strategy
+The actual-circuit model's Mbw for the chip of a strategy
 `S : (Store × Bits n) × Oracle → Actual.Run L`, causal from every tick, whose view determines `z`: a decoder `ζ`
 recovers `z` from the chip's content at the window's start and what crosses into it in the window (the console's "state
 at the seed, its links' deliveries in the window"). HBM's and the rest's replies may depend on `z` as well as the store

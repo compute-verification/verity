@@ -4,8 +4,8 @@ import Proofs.Accounting.Bandwidth.Interactive
 /-!
 # B3 for the chip as a tick-by-tick transducer over the links' signals
 
-The bandwidth audit's model prover (`InteractiveDevice`) from the chip in the window, read tick by tick as v2.4 of
-`note:console/20261012T0645Z-draft-actual-circuit-model` describes it: causal from the window's start, the chip's
+The bandwidth audit's model prover (`InteractiveDevice`) from the chip in the window, read tick by tick as the
+actual-circuit model describes it: causal from the window's start, the chip's
 behaviour is a function of its state then and of what it observes at each tick. The audited location is the chip, and
 HBM's only link is to it, so HBM hears only the chip: its reply is a function of the store and of the requests the chip
 sent it, and it computes no tag. The rest of the prover may answer as any function of the store, the oracle and every bit

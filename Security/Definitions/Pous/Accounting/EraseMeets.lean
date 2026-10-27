@@ -5,7 +5,7 @@ import Definitions.Pous.Accounting.Params
 # The secure-erasure requirement
 
 `EraseMeets`: the fill covers the prover's whole declared volatile memory, `|C| = B·ℓ` bits, and at most a fraction `f`
-of it can keep anything but `C` through all the spot reads. Added on 4 Oct 2026, with `Pous.Guarantees.SecureErasureMeetsFamily`
+of it can keep anything but `C` through all the spot reads. `Pous.Guarantees.SecureErasureMeetsFamily` reads it
 (`Security/Definitions/Pous/Model/SecureErasure.lean` is the game).
 -/
 
