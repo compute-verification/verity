@@ -12,6 +12,8 @@ import Mathlib.Tactic.Linarith
 * `sum_blocks`, `size_eq`: a sum over operation gates is the sum of its blocks' sums, and exact blocks give `|C| = c B`
   (Theorem 3).
 * Corollary 4b is Lemma 1, the fan-out count `|𝓙_I| ≤ e |V_I|` and Theorem 3 with unit weights.
+* The pair bound is Lemma 1, the pair count `|𝓙_I| ≤ |W_I| |S_I| ≤ h² / (4 βw βe)` (`card_le_pairs`) and Theorem 3 with
+  unit weights.
 -/
 
 namespace Nci.Ldl
@@ -65,6 +67,28 @@ theorem size_eq {C : Circuit} {n c : ℕ} (P : Partition C n) (h : Exact P c) : 
   rw [← P.sum_card_gates]
   simp only [Exact, Circuit.size] at h
   simp [h, mul_comm]
+
+/-- Occurrences naming distinct (weight, entry) pairs number at most `|W| |S|`, and when `βw |W| + βe |S| ≤ h` that is
+at most `h² / (4 βw βe)`. -/
+theorem card_le_pairs {ι W S : Type} [DecidableEq W] [DecidableEq S] (J : Finset ι) (wt : ι → W) (src : ι → S)
+    (hinj : Set.InjOn (fun p => (wt p, src p)) J) {βw βe h : ℝ} (hw : 0 < βw) (he : 0 < βe)
+    (hh : βw * (J.image wt).card + βe * (J.image src).card ≤ h) :
+    4 * βw * βe * J.card ≤ h ^ 2 := by
+  have hJ : J.card ≤ (J.image wt).card * (J.image src).card := by
+    rw [← Finset.card_product]
+    exact Finset.card_le_card_of_injOn _ (fun p hp => Finset.mem_product.2
+      ⟨Finset.mem_image_of_mem _ hp, Finset.mem_image_of_mem _ hp⟩) hinj
+  have hJr : (J.card : ℝ) ≤ (J.image wt).card * (J.image src).card := by exact_mod_cast hJ
+  set x : ℝ := ((J.image wt).card : ℝ)
+  set y : ℝ := ((J.image src).card : ℝ)
+  have hx : 0 ≤ x := Nat.cast_nonneg _
+  have hy : 0 ≤ y := Nat.cast_nonneg _
+  have hsum : 0 ≤ βw * x + βe * y := by positivity
+  calc 4 * βw * βe * J.card ≤ 4 * βw * βe * (x * y) := by
+        have : 0 ≤ 4 * βw * βe := by positivity
+        exact mul_le_mul_of_nonneg_left hJr this
+    _ ≤ (βw * x + βe * y) ^ 2 := by nlinarith [sq_nonneg (βw * x - βe * y)]
+    _ ≤ h ^ 2 := pow_le_pow_left₀ hsum hh 2
 
 namespace SecurityProofs
 
@@ -143,6 +167,48 @@ theorem FanOutBound : Guarantees.FanOutBound := by
     · have : T₀ * e * h = T₀ * (e * h) := by ring
       rw [this]
       exact mul_nonpos_of_nonneg_of_nonpos hT.le (not_lt.1 hpos)
+
+theorem PairBound : Guarantees.PairBound := by
+  intro d n c k R ι A W S _ _ M wt src D t aBlk a βw βe ℓ T₀ inp hck hX hinj hw he hT hev hrate
+  obtain ⟨hc, hk⟩ := hck
+  set h : ℝ := k + Nat.clog 2 n + aBlk + ℓ with hh
+  have hpair : ∀ u, 4 * βw * βe * (M.inBlock R.P u).card ≤ h ^ 2 := fun u => by
+    have h1 := BlockDescription d n k R D t a aBlk inp hk hX hev u
+    have h2 : ENNReal.ofReal (βw * ((M.inBlock R.P u).image wt).card + βe * ((M.inBlock R.P u).image src).card - ℓ) ≤
+        ((k + Nat.clog 2 n + aBlk : ℕ) : ℝ≥0∞) :=
+      (hrate u).trans (by exact_mod_cast ENat.toENNReal_le.2 h1)
+    rw [ENNReal.ofReal_le_natCast] at h2
+    push_cast at h2
+    have hsubJ : M.inBlock R.P u ⊆ M.J := Finset.filter_subset _ _
+    exact card_le_pairs (M.inBlock R.P u) wt src (hinj.mono (Finset.coe_subset.2 hsubJ)) hw he (by linarith)
+  have hrhs : 0 ≤ (d.D.size d.D.computed : ℝ) / T₀ := div_nonneg (Nat.cast_nonneg _) hT.le
+  by_cases hpos : h ^ 2 = 0
+  · rw [hpos, mul_zero, div_zero]
+    exact hrhs
+  · have hsq : 0 < h ^ 2 := lt_of_le_of_ne (sq_nonneg h) (Ne.symm hpos)
+    set V := M.J.image M.rep
+    have hq : 0 < h ^ 2 / (4 * βw * βe) := div_pos hsq (by positivity)
+    have hVsub : V ⊆ d.D.computed := fun v hv => by
+      obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hv
+      simpa [Circuit.computed] using M.rep_op p hp
+    have hblk : ∀ u, ∑ v ∈ V ∩ R.P.gates u, (fun _ => (1 : ℝ)) v ≤ h ^ 2 / (4 * βw * βe) := fun u => by
+      have hsub : V ∩ R.P.gates u ⊆ (M.inBlock R.P u).image M.rep := fun v hv => by
+        obtain ⟨hv, hg⟩ := Finset.mem_inter.1 hv
+        obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hv
+        exact Finset.mem_image.2 ⟨p, Finset.mem_filter.2 ⟨hp, (R.P.mem_gates).1 hg⟩, rfl⟩
+      have hcard : ((V ∩ R.P.gates u).card : ℝ) ≤ (M.inBlock R.P u).card :=
+        by exact_mod_cast (Finset.card_le_card hsub).trans Finset.card_image_le
+      simp only [Finset.sum_const, nsmul_eq_mul, mul_one]
+      rw [le_div_iff₀ (by positivity)]
+      have := mul_le_mul_of_nonneg_right hcard (by positivity : (0 : ℝ) ≤ 4 * βw * βe)
+      linarith [hpair u]
+    obtain ⟨-, h2⟩ := Counting d.D n c R.P V (fun _ => 1) (h ^ 2 / (4 * βw * βe)) T₀ hc hVsub hq hT hblk
+    have hVJ : V.card = M.J.card := Finset.card_image_of_injOn M.rep_inj
+    simp only [Finset.sum_const, nsmul_eq_mul, mul_one, hVJ] at h2
+    have hrw : (c : ℝ) / (T₀ * (h ^ 2 / (4 * βw * βe))) * M.J.card = 4 * c * βw * βe * M.J.card / (T₀ * h ^ 2) := by
+      field_simp
+    rw [hrw] at h2
+    exact h2
 
 end SecurityProofs
 
