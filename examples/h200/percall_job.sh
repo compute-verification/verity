@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The skeleton at coverage f = 1 on one H200 (CMP-126): run.py at the frozen shape with `e2e_h200.percall:$H1U`, every
+# The skeleton at coverage f = 1 on one H200: run.py at the frozen shape with `e2e_h200.percall:$H1U`, every
 # served linear call's J10-R units through kernels' sm_90a build H1U (kraqwxsc, or kraq), receipts and z committed under
 # the step's salt key, sampled units held to the exact fallback. cwd = the source tree's root; the builds are sent, as
 # HASH-22's check held them:

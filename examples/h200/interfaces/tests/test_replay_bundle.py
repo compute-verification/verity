@@ -1,5 +1,5 @@
 """The drawn-unit replay bundle: the fixture, built from the torch loop's window, is its pinned digests, checks clean and fits
-its schema, each kind of tampering is refused by name, the vendored commit call reproduces kernels' fixture, and a tampered
+its schema, each kind of tampering is refused by name, kernels' commit call reproduces their fixture, and a tampered
 loop's outputs are refused."""
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from verity_e2e_demo import commit_slots as S, replay_bundle as B
+from verity_e2e_demo import replay_bundle as B
+
+S = B.S
 
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
 PATHS = "its paths do not reach its unit, slot and step roots"

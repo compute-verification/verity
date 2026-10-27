@@ -523,7 +523,7 @@ def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
     rng = np.random.default_rng(s)
     for w in [0, 3, 2][:n_ref_units]:
         n, k = win.nk[w]
-        u = int(rng.integers(n // 32))          # row block 0, column block u
+        u = int(rng.integers(n // 32))          # row tile 0, column tile u
         zz, rr = RC.reference(RC.Call(g["a"][w], win.wt[w]), g["salt"], s * win.u_step + win.offs[w], g["a_roots"][w],
                               g["b_roots"][w], u)
         rk = (got_of(w)[u].cpu().numpy().astype(np.int64) & 0xFFFFFFFF).tolist()

@@ -1,11 +1,11 @@
 # The H200 example: the walking skeleton
 
-The GPU serving loop of the one-H200 demo (CMP-96) and its audit: steps of the frozen MQA shape (`shape.FROZEN`, ALLP-IFACE's
-`H200`) on the plain INT8 weights, loaded once into the card's memory and resident across steps (Demo A, M1-M3; `--weights
-staged` keeps M4's decode-to-staging path from the store), every op's output committed through the per-step commit call,
-drawn slots opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each
-subprotocol run against the step or named, and a replay bundle and block record written. `verity example h200 --out OUT
-[...]` runs it (`run.py --help`). It is compute-accounting's.
+The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `verity_torch_loop.weights`'s `H200`) on
+the plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from
+the store into staging instead), every op's output committed through the per-step commit call, drawn slots
+opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each subprotocol run against the
+step or named, and a replay bundle and block record written. `verity example h200 --out OUT [...]` runs it
+(`run.py --help`).
 
 Its protocol is the composite `onsite` in skeleton form (`e2e_h200/legs.py`): sampled proofs are the replay and the
 opening, PoUW is H200-PERCALL's per-call tiles as a `--subcircuit`, PoUS is spot reads and the wipe and reload on the M4
@@ -27,7 +27,7 @@ ladder and the runs behind it are `example.toml`'s (`examples/README.md`).
 
 ## What runs, and what stands in
 
-The units are circuits' FAMILIES map's (PRF-166 db928eb0; `e2e_h200/plan.py`, `shape.Forms`). The residual stream and every
+The units are circuits' FAMILIES map's (`e2e_h200/plan.py`, `shape.Forms`). The residual stream and every
 row op's rows are chunk rows of 128 words. RMSNorm is `RmsSumSqChunks_v1{4096,128}` (32 chunk sums a row) and
 `RmsNormOutSums_v1` a chunk row. The quantizer is `RowAbsMax_v1` over parts of 16,384 and `QuantChunkS8_v1{8192}` a chunk. Each
 linear coordinate is one `ScaledMmS8CoordinateRows_v1{K, R = K/8192}`, gathered into its readers' rows by `AllGather_v1`.
@@ -39,7 +39,7 @@ the map.
 
 A step (`Driver.step_slots`) runs a batch of rows, each the KV pool's slot at its own position; `Driver.step` is the
 lockstep step `run.py` drives, and `Driver.serve` (`run.py --requests`) serves requests through `slots.SlotKV`'s slots by
-continuous batching (#4470, lane vllm), each step's K and V written to and read from the SlotKV. Each layer runs in micro-batches of rows (`--micro-batch`) written into the layer's
+continuous batching, each step's K and V written to and read from the SlotKV. Each layer runs in micro-batches of rows (`--micro-batch`) written into the layer's
 full-batch tables, which go to the commit call as the layer ends and are dropped.
 
 | Piece | Here now | Replaced by |
@@ -50,15 +50,15 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (an exact f64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
 | Slots and KV cache | `slots.py`: `SlotKV` admits requests FIFO into the lowest free sequence slots, runs each at its own position, frees and reuses a slot when its request finishes, and holds each slot's K and V rows (the one KV head, the context's positions) as the step's bf16 bits, written and read a micro-batch of rows at a time; `check_slots.py` checks it at the frozen KV shape on a device | stays |
-| Attention | `attention.py`: on CUDA kernels' `attn_ref` (#4466, `benchmarks/torch_gpu/attn_ref`; its cubin from `build.sh`, `$ATTN_REF_CUBIN`) for QK^T and PV and `softmax_t` (the MUFU ex2 table in torch integer ops); elsewhere the Definitions' numpy kernels | kernels' fast attention (`attn_bf16`) |
-| Commit | `commit.py`: kernels' per-slot tree (`--commit slots`, #4469, `benchmarks/torch_gpu/commit_slots`: row/v2 leaves, step → slot → unit → rows), a group at a time on a side stream, salt keys fresh a step; or the by-table `verity_vllm.commit.row_tables` (`reference`, `host`, `device`), which keeps every step's tables | — |
-| Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | PRF-170's plan's live coins |
-| Window writer (CIR-115) | `e2e_h200/window.py`: FAMILIES' shared-row layout (`shared_layout`: 1 KiB rows, 21,857 a slot at the frozen shape, circuits' writers). Each proof block's input ports as pieces (`Window.locate`): committed rows' bytes named by step, slot, row and bytes (a linear's x over its quantizer's R rows; attention's K and V at the steps and rows that wrote them), registered rows and run inputs. `Window.inputs` assembles them from a slot's rows; the same calls work on `families/v1` | the run's commit under the shared layout, and CMP-161's drawn-block bundle over it |
-| Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the replay lane adds the map's; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | the replay lane's templates for the map; PRF-170's plan through `replay.draw` |
-| PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (#4538; `percall:kraq` is #4540's), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | h1zy's J10-R lane Definitions (#4654) and Credit.window over the tile stratum (CMP-127); window_salt's live salt and the real roots (`percall.STANDS_IN`) |
-| Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`, NET-77): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
-| Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (CMP-95 items 5 and 6, PR #4454) |
-| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the M4 path's P2 store; bandwidth not run (M4); sampled proofs are the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
+| Attention | `attention.py`: on CUDA kernels' `attn_ref` (`benchmarks/torch_gpu/attn_ref`; its cubin from `build.sh`, `$ATTN_REF_CUBIN`) for QK^T and PV and `softmax_t` (the MUFU ex2 table in torch integer ops); elsewhere the Definitions' numpy kernels | kernels' fast attention (`attn_bf16`) |
+| Commit | `commit.py`: kernels' per-slot tree (`--commit slots`, `benchmarks/torch_gpu/commit_slots`: row/v2 leaves, step → slot → unit → rows), a group at a time on a side stream, salt keys fresh a step; or the by-table `verity_vllm.commit.row_tables` (`reference`, `host`, `device`), which keeps every step's tables | — |
+| Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | the sampling plan's live coins |
+| Window writer | `e2e_h200/window.py`: FAMILIES' shared-row layout (`shared_layout`: 1 KiB rows, 21,857 a slot at the frozen shape, circuits' writers). Each proof block's input ports as pieces (`Window.locate`): committed rows' bytes named by step, slot, row and bytes (a linear's x over its quantizer's R rows; attention's K and V at the steps and rows that wrote them), registered rows and run inputs. `Window.inputs` assembles them from a slot's rows; the same calls work on `families/v1` | the run's commit under the shared layout, and the drawn-block bundle over it |
+| Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the map's own exist; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | templates for the whole map; the sampling plan through `replay.draw` |
+| PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
+| Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
+| Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (`examples/h200/interfaces`) |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
 
 `e2e_h200/served_weights.py` is the demo's seeded weights and their registration root (CMP-95 interface 1), for any decoder
 shape (`H200`, Phase 1's CPU model, `TINY`): a SHA-512 counter generator from (seed, tensor, row) to every tensor, the weights
@@ -83,7 +83,7 @@ uv run python examples/h200/run.py --out OUT --shape h200 --seed demo --device c
 bash examples/h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: the research run)
 PYTHONPATH=examples/h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
 uv run python examples/h200/run.py --out OUT --shape h200 --seed demo --device cuda \
-    --weights-file W --weights-manifest M --workers "$(nproc)"                   # serve the loaded W (NET-76's sink), checked first
+    --weights-file W --weights-manifest M --workers "$(nproc)"                   # serve the loaded W (the file network's sink), checked first
 E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE=W E2E_H200_WEIGHTS_MANIFEST=M PYTHONPATH=examples/h200 \
     python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:frozen   # the endpoint on it
 PYTHONPATH=examples/h200 python -m e2e_h200.weights_commit commit --shape h200 --seed demo \
@@ -95,5 +95,5 @@ PYTHONPATH=examples/h200 python -m e2e_h200.served_weights manifest --shape h200
 ~~~
 
 Exit 0: every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's own
-check holds; 3: one doesn't; 4: a leg's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
+check holds; 3: one doesn't; 4: a subprotocol's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
 sha256, its size or its model), refused before the first step.
