@@ -21,6 +21,11 @@ b          its offset: LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 3 ‖
            LAYERS + layer, added to t(i) in every round of its words (0 under the seed's key)
 ~~~
 
+At the codecs a registration can name (p512 and p1024 at k ≥ 2, masked or not) a key is the store codec's
+(`verity.core.protocols.remote_bandwidth.codec.key`, kept as `Key.store`), and `encode_word` and `decode_word` are
+that codec's.  At k = 1, which the store's codec refuses, and at the other fields they are the rounds of the table
+above: the same map.
+
 A KV token-layer is written after the codec seed, so it is encoded under its bound key (`encode_token_layer(...,
 bound=True)`), with d kept beside it and given to `decode_token_layer`.  Under the seed's key alone its writer could
 pick its encoding (all zeros, or another block's) and write the token-layer that decodes from it, holding nothing for
@@ -51,6 +56,8 @@ from __future__ import annotations
 import hashlib
 import struct
 from dataclasses import dataclass
+
+from verity.core.protocols.remote_bandwidth import codec as RB
 
 DOMAIN = b"verity/word-codec/kv/v0\0"
 SEED_BYTES = 32
@@ -139,6 +146,7 @@ class Key:
     tau: int
     mask: int | None = None
     seed: bytes | None = None
+    store: RB.Key | None = None
 
     @property
     def rounds(self) -> int:
@@ -176,6 +184,9 @@ def key(name: str, seed: bytes, rounds: int, mask: bool = False) -> Key:
         raise ValueError(f"a seed is {SEED_BYTES} bytes")
     if not 1 <= rounds < BIND_INDEX:
         raise ValueError("a word has at least one round")
+    if name in RB.FIELDS and rounds >= RB.MIN_ROUNDS:
+        s = RB.key(seed, RB.Codec(RB.FIELDS[name], rounds, bool(mask)))
+        return Key(f, s.c, s.tau, s.mask, seed, s)
     k = int.from_bytes(xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if mask else None
     return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1, k, seed)
 
@@ -218,6 +229,8 @@ def rho_inv(y: int, f: Field) -> int:
 
 
 def encode_word(m: int, i: int, k: Key, b: int = 0) -> int:
+    if k.store is not None:
+        return RB.encode_word(m, i, k.store, b)
     f = k.field
     if not 0 <= m < f.p:
         raise ValueError("a payload is a word below p")
@@ -231,6 +244,8 @@ def encode_word(m: int, i: int, k: Key, b: int = 0) -> int:
 
 
 def decode_word(y: int, i: int, k: Key, b: int = 0) -> int:
+    if k.store is not None:
+        return RB.decode_word(y, i, k.store, b)
     f = k.field
     t = (k.tweak(i) + b) % f.p
     x = y
