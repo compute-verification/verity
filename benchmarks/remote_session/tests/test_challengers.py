@@ -290,7 +290,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         (tmp_path / "served").mkdir()
         source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
     pace = verifier.pace_of("1:4:160:2", 1.0)
-    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source, verdict="python",
+    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
     w = honest["windows"]
     end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
@@ -318,8 +318,8 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
     sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")),
-                               challenger=host.gate(out / "challenger", peer=peer), verdict="python",
-                               defer_openings=defer_openings, groups_per_coin=groups_per_coin,
+                               challenger=host.gate(out / "challenger", peer=peer), defer_openings=defer_openings,
+                               groups_per_coin=groups_per_coin,
                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     return sessions, got["reg"], desc
 

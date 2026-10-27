@@ -1,8 +1,10 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
-commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, a
-wire pattern wires whole members unit by unit under its writers' salts, a cut port's rows are each wired from their own
-writer, a registered read's ports are tables of the registered rows under the value's salts, every other input row is
+commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
+the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
+against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
+cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
+the value's salts, every other input row is
 declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
@@ -22,7 +24,9 @@ import pytest
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
@@ -153,6 +157,58 @@ def test_labels_are_opaque_runs_of_each_members_units():
         I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4).record(COORD, ins, outs, object())
 
 
+#: twelve coordinates at 3 steps of 2 slots, two units an inference block: [0, 2) slot 0 step 0, [2, 4) slot 1 step 0,
+#: [4, 6) slot 0 step 1, and so on
+STEPS_SLOTS = I.Blocks(2, 3, (I.InferenceEntry(TID, 0, (3, 2, 2), ("step", "slot", "-"), 0),))
+FORMS = ("node", "evaluated")
+#: each inference block's units a run, labelled by its step, slot and form
+HONEST = [(2, {"step": t, "slot": s, "form": FORMS[t % 2]}) for t in range(3) for s in range(2)]
+
+
+def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> I.Window:
+    """A window of `STEPS_SLOTS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
+    win = I.Window(I.Circuit("test", ((COORD, 12),), blocks=STEPS_SLOTS), RUN, LAW, 4, forms=forms)
+    (ins, outs), at = values(12), 0
+    for n, label in runs:
+        win.record(COORD, [a[at:at + n] for a in ins], [a[at:at + n] for a in outs], label)
+        at += n
+    return win
+
+
+def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
+    """A labelled run starts and ends where its template's units change inference block, labelled by its step and slot and
+    a form of the window's: the honest labelling commits what the unlabelled window does, and the index shows only those
+    bounds and the members', an unlabelled stretch of runs one run."""
+    win = labelled(HONEST)
+    assert win.close(salt_key=bytes(32)).roots == labelled([(12, None)]).close(salt_key=bytes(32)).roots
+    assert [m["labels"] for m in win.labels()["members"]] == [[[4 * m + 2 * j, 4 * m + 2 * j + 2, HONEST[2 * m + j][1]]
+                                                               for j in range(2)] for m in range(3)]
+    whole = labelled([(4, {"step": 0}), (2, {"slot": 0, "form": "evaluated"}), (1, None), (1, None), (4, {})])
+    assert [m["labels"] for m in whole.labels()["members"]] == [[[0, 4, {"step": 0}]],
+                                                                [[4, 6, {"slot": 0, "form": "evaluated"}], [6, 8, None]],
+                                                                [[8, 12, {}]]]
+    with pytest.raises(ValueError, match="a window's forms are names"):
+        labelled([], (0,))
+
+
+@pytest.mark.parametrize("runs, forms, why", [
+    ([(3, {"step": 0})], FORMS, "starts and ends where its template's units change inference block"),
+    ([(1, None), (2, {"step": 0})], FORMS, "starts and ends where its template's units change inference block"),
+    ([(4, {"step": 0, "slot": 0})], FORMS, "its units are at slot [0, 1], not its label's 0"),
+    ([(2, {"step": 1, "slot": 0})], FORMS, "its units are at step [0], not its label's 1"),
+    ([(2, {"step": 0, "slot": 0, "request": 3})], FORMS, "class structure, never a value"),
+    ([(2, {"step": 0, "form": "served"})], FORMS, "class structure, never a value"),
+    ([(2, {"step": 0, "form": "node"})], (), "class structure, never a value"),
+    ([(2, {"step": "0"})], FORMS, "class structure, never a value"),
+    ([(2, {"slot": True})], FORMS, "class structure, never a value"),
+    ([(2, [0, 0])], FORMS, "class structure, never a value"),
+], ids=["ends-inside-a-block", "starts-inside-a-block", "two-slots-as-one", "another-step", "extra-key", "form-outside-forms",
+        "window-without-forms", "step-a-string", "slot-a-bool", "not-a-mapping"])
+def test_a_label_that_is_not_its_runs_class_structure_is_refused(runs, forms, why):
+    with pytest.raises(ValueError, match=re.escape(why)):
+        labelled(runs, forms)
+
+
 def test_mismatches_are_the_units_whose_outputs_are_not_the_definitions():
     win, ins, outs = window()
     assert win.mismatches() == {}
@@ -161,6 +217,44 @@ def test_mismatches_are_the_units_whose_outputs_are_not_the_definitions():
     wrong[7] ^= 1
     bad.record(COORD, ins, [wrong])
     assert bad.mismatches() == {TID: [7]}
+
+
+ROUND, WIDEN = bind(BG.F2fpBf16), bind(BC.Bf16ToF32)
+RID, WID = descriptor_id(ROUND), descriptor_id(WIDEN)
+
+
+def rounded(n: int = 6) -> tuple[I.Circuit, np.ndarray, np.ndarray, np.ndarray]:
+    """``n`` f32 words rounded to bf16 (``F2fpBf16_v2``) and widened back (``Bf16ToF32_v2``), each widening's ``a`` wired from
+    its rounding's output: Boolean-profile Definitions, every leaf one bit and every value its `boolean.word_type` word, as
+    the evaluator's word view computes it. -> the circuit, the f32, bf16 and widened words."""
+    f32 = np.random.default_rng(5).standard_normal(n).astype(np.float32).view(np.uint32)
+    bf16 = evaluate_words(ROUND, f32).astype(np.uint16)
+    wire = I.Wire(WID, "a", RID, "o0", at=0, radix=(n,), base=0, step=(1,))
+    return I.Circuit("bits", ((ROUND, n), (WIDEN, n)), wires=(wire,)), f32, bf16, evaluate_words(WIDEN, bf16).astype(np.uint32)
+
+
+@pytest.mark.parametrize("given", [True, False], ids=["in-full", "by-reference"])
+def test_a_boolean_profile_ports_rows_are_read_bit_by_bit(given):
+    """`Window.mismatches` on Boolean-profile templates: the Definition reads each port's rows bit by bit, the widening's
+    ``a`` recorded in full or read through its wire, so honest values have no mismatch, and one bit flipped in a rounding's
+    output (which its widening reads), an f32's sign or a widened word is that unit's mismatch."""
+    circuit, f32, bf16, wide = rounded()
+
+    def mismatches(f: np.ndarray, b: np.ndarray, w: np.ndarray) -> dict[str, list[int]]:
+        win = I.Window(circuit, RUN, LAW, 4)
+        win.record(ROUND, [f], [b])
+        win.record(WIDEN, [b if given else None], [w])
+        return win.mismatches()
+
+    def flip(a: np.ndarray, unit: int, bit: int) -> np.ndarray:
+        a = a.copy()
+        a[unit] ^= a.dtype.type(1) << a.dtype.type(bit)
+        return a
+
+    assert mismatches(f32, bf16, wide) == {}
+    assert mismatches(f32, flip(bf16, 2, 5), wide) == {RID: [2], WID: [2]}
+    assert mismatches(flip(f32, 4, 31), bf16, wide) == {RID: [4]}
+    assert mismatches(f32, bf16, flip(wide, 1, 16)) == {WID: [1]}
 
 
 def test_several_templates_are_one_population():

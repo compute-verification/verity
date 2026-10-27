@@ -8,7 +8,7 @@ import pytest
 
 from verity.ml.circuits.codec import _lookup_primitive, decode_program, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, Registry, bind
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation import evaluate_region
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P

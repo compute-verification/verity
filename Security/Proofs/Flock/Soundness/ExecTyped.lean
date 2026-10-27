@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.ExecParse
 
 /-!
-# A typed template's Δ (#277), and the rows it makes copies
+# A typed template's Δ, and the rows it makes copies
 
 `HmRow.delta` writes a flat statement's entries (`delta_split`'s forms), then, for a typed template
 (`c.typed = some tb`), per template instance `g`:
@@ -165,7 +165,7 @@ def TailQ (c : Circuit) (pin : ℕ) (tb : TypedBlock) (r : Array (ℕ × ℕ) ×
   ∃ d : Array (ℕ × ℕ), ExtL (constPairs c pin) (DeltaIn c) d ∧
     r.1.toList = d.toList ++ Typed.tail c tb true ∧ r.2.toList = d.toList ++ Typed.tail c tb false
 
-/-- **A typed template's Δ** (#277): the flat statement's entries, then the typed tail, in Δ_A and in Δ_B. -/
+/-- **A typed template's Δ**: the flat statement's entries, then the typed tail, in Δ_A and in Δ_B. -/
 theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb) :
     TailQ c pin tb (HmRow.delta c pin) := by
   unfold HmRow.delta
