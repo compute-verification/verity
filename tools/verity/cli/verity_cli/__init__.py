@@ -6,7 +6,7 @@
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity example NAME [ARGS]      examples/NAME's command (run.py or run.sh): its workload on its placement
-    verity example --status         every example's protocol, workload, level and next missing evidence (examples.py)
+    verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE [--on NODE] [--pool P] [--as LANE]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
                                     print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)
