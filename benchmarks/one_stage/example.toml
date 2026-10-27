@@ -1,0 +1,12 @@
+# The one-stage audit's rung on the ladder (examples/README.md). Level 1 needs a run of record through pod.sh, or a CPU test
+# that runs a driver; level 2 needs the verifier and the challenger off the pod the prover runs on.
+protocol = "sampled_proofs"
+workload = "vllm"
+level = 0
+
+[placement]
+prover = "cpu-node"      # pod.sh's CPU pod: M0, C-Flock's circuit prover
+verifier = "cpu-node"    # the same pod: the verifier's draw and the Lean verifier (one_stage.verifier)
+challenger = "cpu-node"  # the same pod: a local challenger's coins, or the verifier's own
+
+[evidence]
