@@ -481,8 +481,6 @@ def test_a_tp_commit_hashes_its_weights_on_the_device_unless_the_item_says_other
     t = _tp_row(tmp_path, TP_DENSE)
     os.makedirs(f"{t.d}/commit")
     Path(f"{t.d}/commit/summary.json").write_text('{"pass": true}')
-    t.hidden_so = str(tmp_path / "hidden.so")
-    Path(t.hidden_so).touch()
     env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE", "VERITY_LEASE", GL.WEIGHTS_HASH))}
     env.update({GL.WEIGHTS_HASH: item} if item else {})
     env.update({"GPU_LEASE": "/l/gpu-lease"} if leased else {})

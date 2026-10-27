@@ -40,8 +40,8 @@ def _spec(tmp_path: Path, *rows: str) -> dict:
 
 def _args(argv: list[str], **kw) -> SimpleNamespace:
     out = argv[argv.index("--out") + 1]
-    return SimpleNamespace(out=out, replay_deferred=True, flip_weight=None, committer="native_collect_v2b", hidden_so="/x/h.so",
-                           hidden_ns="ns", tap_sources=None, label=argv[argv.index("--label") + 1], **kw)
+    return SimpleNamespace(out=out, replay_deferred=True, flip_weight=None, committer="native_collect_v2b", tap_sources=None,
+                           label=argv[argv.index("--label") + 1], **kw)
 
 
 def _hot() -> dict:
@@ -135,9 +135,8 @@ def test_a_row_the_group_cannot_commit_is_refused_by_name_before_any_row_runs(tm
 def test_the_engine_key_is_the_hot_workers_engine_identity_but_the_rows_own_workload_fields():
     ident = {"workload": {"row": "a", "model": "m", "max_model_len": 288}, "workload_path": "workloads/a.json", "engine_kwargs": {"x": 1}}
     taps = SimpleNamespace(given=lambda: {"norm": "/x/norm.so"})
-    k = CG.engine_key(SimpleNamespace(committer="c", hidden_so="/h.so", hidden_ns="n", tap_sources=taps), lambda argv: json.loads(json.dumps(ident)), [])
-    assert k == {"workload": {"model": "m", "max_model_len": 288}, "engine_kwargs": {"x": 1}, "committer": "c", "hidden_so": "/h.so",
-                 "hidden_ns": "n", "taps": {"norm": "/x/norm.so"}}
+    k = CG.engine_key(SimpleNamespace(committer="c", tap_sources=taps), lambda argv: json.loads(json.dumps(ident)), [])
+    assert k == {"workload": {"model": "m", "max_model_len": 288}, "engine_kwargs": {"x": 1}, "committer": "c", "taps": {"norm": "/x/norm.so"}}
 
 
 # ---------------------------------------------------------------------------------------------------------------- one row

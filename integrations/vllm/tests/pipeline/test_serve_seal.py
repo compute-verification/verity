@@ -265,12 +265,12 @@ def test_the_ports_identities_are_the_manifests_ids_and_compiled_positions():
 
 
 def test_a_committer_without_the_commit_of_records_parts_is_named():
-    manifest = {"identities": [{"family": "norm_scales"}, {"family": "fa2_hidden_m1_stream"}, {"family": "instance_outputs"}]}
+    manifest = {"identities": [{"family": "norm_scales"}, {"family": "instance_outputs"}]}
     com = SimpleNamespace(name="native_collect_v2_auto_nw_hp+rows-sha512+sampler_inputs")
-    assert ss.parts_missing(com, manifest, hidden_required=True) == ["hidden_m1", "norm_scale", "plan"]
-    com.name = "native_collect_v2_auto_nw_hp+rows-sha512+hidden_m1+norm_scale+plan"
-    assert ss.parts_missing(com, manifest, hidden_required=True) == []
-    assert ss.parts_missing(SimpleNamespace(name="c+plan"), {"identities": []}, hidden_required=False) == []
+    assert ss.parts_missing(com, manifest) == ["norm_scale", "plan"]
+    com.name = "native_collect_v2_auto_nw_hp+rows-sha512+norm_scale+plan"
+    assert ss.parts_missing(com, manifest) == []
+    assert ss.parts_missing(SimpleNamespace(name="c+plan"), {"identities": []}) == []
 
 
 def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_token_budget():

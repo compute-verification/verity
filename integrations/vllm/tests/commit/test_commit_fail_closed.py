@@ -102,14 +102,13 @@ def test_missing_counters_or_nothing_bound_is_fail():
 
 
 # ---- REL-02 (R13 rel; reviewer R-14): a required producer that never fires must FAIL even with expected == committed and 0 errors
-def _decl(fa2_tensors=48, with_fa2=True):
+def _decl(sampled_tensors=32, with_sampled=True):
     classes = [{"class": "input_token_ids", "how": "bound-as-leaf", "tensors": 32, "bytes": 1},
                {"class": "instance_outputs_native", "how": "bound-as-leaf", "tensors": 6000, "bytes": 1},
-               {"class": "sampled_token_ids", "how": "bound-as-leaf", "tensors": 32, "bytes": 1},
                {"class": "weights", "how": "registered-input", "tensors": 200, "bytes": 1},
                {"class": "norm_bf16tof32_lift", "how": "derived-from-bound", "bytes": None}]
-    if with_fa2:
-        classes.append({"class": "fa2_hidden_m1_stream", "how": "bound-as-leaf", "tensors": fa2_tensors, "bytes": 1})
+    if with_sampled:
+        classes.append({"class": "sampled_token_ids", "how": "bound-as-leaf", "tensors": sampled_tensors, "bytes": 1})
     return {"classes": classes}
 
 
@@ -118,22 +117,22 @@ def test_x05_all_required_classes_bound_passes():
     assert ok and why == "PASS"
 
 
-def test_x05_hopper_signature_tap_loaded_zero_launches_fails():
-    # R-14 / F-hw-08: tap attached, FA3 executes, FA2 never called -> class declared with tensors 0, expected == committed
-    ok, why = commit_verdict(_rec(), True, declaration=_decl(fa2_tensors=0))
-    assert not ok and "fa2_hidden_m1_stream" in why and "never fired" in why
+def test_x05_a_producer_declared_with_zero_tensors_fails():
+    # R-14: a source attached that never fired -> its class declared with tensors 0, expected == committed
+    ok, why = commit_verdict(_rec(), True, declaration=_decl(sampled_tensors=0))
+    assert not ok and "sampled_token_ids" in why and "never fired" in why
 
 
-def test_x05_omitted_tap_not_declared_fails():
-    # --hidden-so left off the command line: the class is not even declared -> FAIL (before REL-02 this was PASS)
-    ok, why = commit_verdict(_rec(), True, declaration=_decl(with_fa2=False))
-    assert not ok and "required class 'fa2_hidden_m1_stream' not declared" in why
+def test_x05_omitted_producer_not_declared_fails():
+    # a required source left unattached: the class is not even declared -> FAIL (before REL-02 this was PASS)
+    ok, why = commit_verdict(_rec(), True, declaration=_decl(with_sampled=False))
+    assert not ok and "required class 'sampled_token_ids' not declared" in why
 
 
 def test_x05_required_set_is_overridable_but_declared_zero_still_fails():
-    ok, _ = commit_verdict(_rec(), True, declaration=_decl(with_fa2=False), required_classes=("weights", "instance_outputs_native"))
+    ok, _ = commit_verdict(_rec(), True, declaration=_decl(with_sampled=False), required_classes=("weights", "instance_outputs_native"))
     assert ok
-    ok, why = commit_verdict(_rec(), True, declaration=_decl(fa2_tensors=0), required_classes=("weights",))
+    ok, why = commit_verdict(_rec(), True, declaration=_decl(sampled_tensors=0), required_classes=("weights",))
     assert not ok and "tensors=0" in why
 
 
@@ -148,8 +147,6 @@ def test_e2e_tiny_arena_forces_commit_fail(tmp_path: Path):
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
            "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "0", "--arena-mb", "1", "--arena-unchecked",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
-    if os.environ.get("VERITY_E2E_HIDDEN_SO"):
-        cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
     p = subprocess.run(cmd, capture_output=True, text=True)
     assert p.returncode == 3, f"expected exit 3 (Commit FAIL), got {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
     v = json.loads((tmp_path / "out" / "verdict.json").read_text())
@@ -168,8 +165,6 @@ def test_e2e_windowed_stall_forces_commit_fail(tmp_path: Path):
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
            "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
-    if os.environ.get("VERITY_E2E_HIDDEN_SO"):
-        cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
     p = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert p.returncode == 3, f"expected exit 3 (Commit FAIL), got {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
     v = json.loads((tmp_path / "out" / "verdict.json").read_text())
@@ -191,8 +186,6 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
            "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--open-after-release", "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]   # row_pod.sh's P0 defaults
-    if os.environ.get("VERITY_E2E_HIDDEN_SO"):
-        cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
     p = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert p.returncode == 3, f"expected exit 3 (Commit FAIL), got {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
     v = json.loads((tmp_path / "out" / "verdict.json").read_text())
@@ -262,8 +255,6 @@ def test_e2e_collector_dead_hang_exits_rc3_within_grace(tmp_path: Path):
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
            "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
-    if os.environ.get("VERITY_E2E_HIDDEN_SO"):
-        cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
     p = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert p.returncode == 3, f"expected exit 3 from the dead-watchdog, got {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
     assert "FAULT hang_after_dead" in p.stdout, "the fault never armed: the negative did not test the hang path"

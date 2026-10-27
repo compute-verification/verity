@@ -179,7 +179,7 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
 
         def shape():
             r.B = r.I = r.O = r.LP = r.T = 1
-            r.ck = r.tgt = r.hidden_so = r.code9 = ""
+            r.ck = r.tgt = r.code9 = ""
         monkeypatch.setattr(r, "shape", shape)
         r.prepare()
         return r

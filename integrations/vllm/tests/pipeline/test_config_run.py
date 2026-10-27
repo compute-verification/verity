@@ -63,17 +63,17 @@ def test_a_config_run_that_stops_still_writes_its_record(tmp_path, monkeypatch):
 
 def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(tmp_path):
     r = _row(tmp_path, "--config-run", "1", "--replay-k", "128")
-    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.B = 1
     cmd = r.commit_cmd([])
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
     assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
     assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
     assert cmd[cmd.index("--replay-draw") + 1] == "uniform", "the gate's k units are a uniform draw unless the row asks for family"
     fam = _row(tmp_path / "fam", "--config-run", "1", "--replay-draw", "family")
-    fam.hidden_so, fam.B = "/x/verity_fa2_matReqG.so", 1
+    fam.B = 1
     assert fam.commit_cmd([])[fam.commit_cmd([]).index("--replay-draw") + 1] == "family"
     row = _row(tmp_path / "row")
-    row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
+    row.B = 1
     plain = row.commit_cmd([])
     assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a row of record keeps its pairs"
 
@@ -82,7 +82,7 @@ def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path
     pytest.importorskip("torch")                      # commit.py imports torch at module level (check runs with CPU torch)
     from verity_vllm.pipeline import cli
     r = _row(tmp_path, "--config-run", "1", "--replay-k", "128")
-    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.B = 1
     cmd = r.commit_cmd([])
     args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
     assert (args.only_arm, args.bounded_staging, args.replay_k, args.replay_draw, args.pairs, args.warmup) == ("instrumented", True, 128,
@@ -105,20 +105,20 @@ def test_the_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pass, r
 
 def test_a_deferred_config_run_passes_the_flag_and_parses(tmp_path):
     r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
-    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.B = 1
     cmd = r.commit_cmd([])
     assert "--replay-deferred" in cmd
     plain = _row(tmp_path / "plain", "--config-run", "1")
-    plain.hidden_so, plain.B = "/x/verity_fa2_matReqG.so", 1
+    plain.B = 1
     assert "--replay-deferred" not in plain.commit_cmd([])
     of_record = _row(tmp_path / "row", "--replay-deferred", "1")
-    of_record.hidden_so, of_record.B = "/x/verity_fa2_matReqG.so", 1
+    of_record.B = 1
     assert "--replay-deferred" not in of_record.commit_cmd([]), "only a config run defers its replay"
     pytest.importorskip("torch")
     from verity_vllm.pipeline import cli
     assert cli.parse("commit", cmd[cmd.index("commit") + 1:], {}).replay_deferred == "full"
     slim = _row(tmp_path / "slim", "--config-run", "1", "--replay-deferred", "slim")
-    slim.hidden_so, slim.B = "/x/verity_fa2_matReqG.so", 1
+    slim.B = 1
     sc = slim.commit_cmd([])
     assert cli.parse("commit", sc[sc.index("commit") + 1:], {}).replay_deferred == "slim"
 
@@ -327,8 +327,6 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
     monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
     monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
-    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")      # never the host's pod-layout build (unreadable to other users on node 1)
-    Path(t.hidden_so).touch()
     ran = []
     monkeypatch.setattr(t, "manifest_global", lambda *a: ran.append("manifest_global") or 0)
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
@@ -546,7 +544,7 @@ def test_the_record_carries_the_engine_s_cublas_workspace_pin(tmp_path):
 
 def test_a_config_baseline_keeps_the_control_arm(tmp_path):
     r = _row(tmp_path, "--config-run", "1", "--config-baseline", "1")
-    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.B = 1
     cmd = r.commit_cmd([])
     assert "--only-arm" not in cmd and cmd[cmd.index("--pairs") + 1] == "1" and "--bounded-staging" in cmd
 

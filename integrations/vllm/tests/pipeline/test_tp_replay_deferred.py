@@ -660,8 +660,6 @@ def test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it(tmp_pat
     monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
     monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
-    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
-    Path(t.hidden_so).touch()
     ran = []
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append((stage, cmd)) or (0 if stage == "commit.tp_commit" else rc_replay))
     t.commit()
@@ -729,8 +727,6 @@ def test_a_tp_commit_that_replayed_in_process_at_an_unproven_world_leaves_the_re
     monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
     monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
-    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
-    Path(t.hidden_so).touch()
     ran = []
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
     t.commit()

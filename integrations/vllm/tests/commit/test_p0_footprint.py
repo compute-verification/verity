@@ -154,8 +154,6 @@ def test_e2e_windowed_roots(tmp_path: Path):
     base = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
             "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", os.environ.get("VERITY_E2E_B", "1"),
             "--engine-arg", "gpu_memory_utilization=" + os.environ.get("VERITY_E2E_UTIL", "0.35"), "--retain", "host"]
-    if os.environ.get("VERITY_E2E_HIDDEN_SO"):
-        base += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
     roots = []
     win = ["--window-mb", os.environ.get("VERITY_E2E_WINDOW_MB", "256"), "--window-slots", "8"]
     arms = [("block", ["--window-mb", "0"]), ("win", win + ["--no-bounded-staging"])]

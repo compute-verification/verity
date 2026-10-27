@@ -84,13 +84,15 @@ def test_code_identity_refuses_a_tree_outside_a_repository(tmp_path):
 def test_job_key_changes_with_engine_args_extension_and_env_but_not_per_job_fields(tmp_path, monkeypatch):
     t = _tree(tmp_path)
     monkeypatch.chdir(t)
-    so = tmp_path / "tap.so"
+    (tmp_path / "hg").mkdir()
+    so = tmp_path / "hg" / "hidden_gpu_tree.so"
     so.write_bytes(b"ELF0")
     for k in list(os.environ):
         if k.startswith(hc.ENV_PREFIXES):
             monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("HIDDEN_GPU_BUILD", str(tmp_path / "hg"))
     monkeypatch.setenv("VERITY_TIMELINE", "/x/a.jsonl")
-    base = ["--case", "LLAMA32_1B", "--workload", "wl.json", "--max-num-seqs", "1", "--hidden-so", str(so), "--out", "o1", "--label", "row-a", "--pairs", "3"]
+    base = ["--case", "LLAMA32_1B", "--workload", "wl.json", "--max-num-seqs", "1", "--out", "o1", "--label", "row-a", "--pairs", "3"]
     k0 = hc.job_key(base, t)["key"]
     # per-job fields: out / label / pairs / timeline path
     monkeypatch.setenv("VERITY_TIMELINE", "/x/b.jsonl")
