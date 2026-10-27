@@ -142,7 +142,8 @@ def push_targets(directory: str, args: list[str]) -> list[str]:
 #: Branches only drive and the lander push, from their own processes rather than an agent's shell (INF-110)
 PROTECTED = {"main", "next"}
 
-#: `git config` forms that print values, where an installation token sits (http.*.extraheader, url.*.insteadof): INF-105
+#: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
+#: so even `--name-only` prints it (INF-105, INF-297)
 CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "--get-urlmatch"}
 CREDENTIAL_KEYS = ("extraheader", "insteadof", "token", "password", "credential")
 
@@ -167,10 +168,10 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
         if sub == "config":
             rest = args[1:]
             names = [a for a in rest if not a.startswith("-")]
-            if "--name-only" not in rest and (set(rest) & CONFIG_DUMPS
-                                              or (len(names) == 1 and any(k in names[0].lower() for k in CREDENTIAL_KEYS))):
-                return ("this `git config` would print values, and the checkout's http.*.extraheader carries a GitHub token "
-                        "(INF-105). List names only: `git config --name-only --list`.")
+            if set(rest) & CONFIG_DUMPS or (len(names) == 1 and any(k in names[0].lower() for k in CREDENTIAL_KEYS)):
+                return ("this `git config` would print a GitHub token: it sits in http.*.extraheader's value and in "
+                        "url.*.insteadof's name, so `--name-only` lists it too (INF-105, INF-297). Read the one key you need: "
+                        "`git config --get user.name`.")
     return None
 
 

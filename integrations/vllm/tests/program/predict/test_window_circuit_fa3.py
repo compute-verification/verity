@@ -51,8 +51,8 @@ def test_an_fa3_head_is_v20s_calls_over_its_kv_groups_gathers():
     `AttnHeadEnd_v1` at FA3's reciprocal, a unit a head each (2 slots, 2 layers, 4 heads: 16 a T). At position 4 slot 0's
     heads 0 and 1 read KV group 0's keys as one `AllGather_v1{5, 16}` row over the RoPE'd keys of positions 0..4 (RoPE units
     24p + 8), slot 1's head 0 its own (24p + 10), and the end reads its block's running sum and output. Two windows of the
-    class are one circuit, blocks included, with the weights pinned no input row is free, and every wire reads its own slot
-    at its step or before."""
+    class are one circuit, blocks included, with the weights and the scan state pinned no input row is free, and every wire
+    reads its own slot at its step or before."""
     reg = _registered()
     circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
     other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)

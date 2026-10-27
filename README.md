@@ -1,12 +1,6 @@
 # Verity
 
-Verity verifies how AI datacenters are used. It represents a datacenter's computations exactly as Boolean circuits,
-proves claims about them, and derives compute, memory and network accounting from those proofs. The intended
-application is enforcing an international agreement to
-[deliberately pace AI development](https://www.pacingthefrontier.com/), so it aims for security against a
-developer who controls the hardware and its vendor.
-
-This repository, its code, its Lean and its documents, is written by AI agents.
+[ai-written overview]
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): the design, its layers and the Glossary.
 - [GLOSSARY.md](GLOSSARY.md): the notation every guarantee is stated in, and the older names it replaces.

@@ -438,7 +438,9 @@ class Linear:
           which its start and state changes move, and its last comment.
         - title: it starts with ring tags or a sender's signature (`unsigned` would change it), or ends in "…": a Slack
           post's first line, not a deliverable.  An area prefix (`pous: …`) and a long title are fine.
-        - landed: In Progress or In Review with GitHub PRs attached, every one merged or closed.
+        - landed: In Progress or In Review with GitHub PRs attached, every one merged or closed, and no comment since the
+          last of them closed (its metadata's closedAt; an attachment's own updatedAt never moves): a comment naming the
+          piece left answers it.
         - lane: its team has no handle (`owners`, team key to handle) and it has no `lane:<handle>` label.
         `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE.  A team these credentials can't see
         (`unread`) has no issues here, so it adds no finding and no error."""
@@ -468,6 +470,8 @@ class Linear:
             lane = label or owners.get(key) or NO_LANE
             prs = [a["metadata"] for a in i["attachments"]["nodes"]
                    if a.get("sourceType") == "github" and "/pull/" in (a.get("url") or "") and (a.get("metadata") or {}).get("status")]
+            shut = [_epoch(p.get("closedAt") or p.get("mergedAt")) for p in prs]
+            closed = max(shut) if shut and all(shut) else None
             last = max((t for t in (_epoch(c["createdAt"]) for c in i["comments"]["nodes"]) if t), default=None)
             kids = [_epoch(s) for c in (i.get("children") or {}).get("nodes", [])
                     for s in (c.get("updatedAt"), *(x["createdAt"] for x in c["comments"]["nodes"]))]
@@ -496,8 +500,9 @@ class Linear:
                 and "retitle it to the deliverable, with no handle, sender, time or trailing \u2026 "
                     f"(`research msg linear edit {ident} --title T`)",
                 "landed": state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
+                and not (last and closed and last > closed)
                 and f"every attached PR is merged or closed ({nums}): move it to Done if its done-condition holds, else to "
-                    "In Progress naming the piece left",
+                    f"In Progress with a comment naming the piece left (`research msg linear comment {ident} TEXT`)",
                 "lane": key not in owners and not label
                 and f"team {key} has no handle: add `{LANE_LABEL}<owner>`",
             }

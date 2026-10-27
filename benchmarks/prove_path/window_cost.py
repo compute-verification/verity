@@ -569,9 +569,9 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
     for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
     bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
     every position as often (`TokenFeed_v1` at its prompt position, `SlotRow_v1` at the first). No lever but ``P``, whose
-    shared rows are another layout (``step.py export --shared``), changes a template's output rows outside attention."""
+    shared rows are another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
     if "P" in levers:
-        raise ValueError("P's shared rows are commit_slots' own layout (step.py export --shared --row-bytes), not this one")
+        raise ValueError("P's shared rows are FAMILIES' shared-row layout (e2e_h200.window.shared_layout), not this one")
     S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
     here = []
     for u in rest:
