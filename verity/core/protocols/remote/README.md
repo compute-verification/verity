@@ -17,7 +17,7 @@ some older names until they are renamed: `Dampener*` means overhead, `*Horizon` 
   `Accounting.Guarantees.Remote*`: PoUB's, despite the name;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), a challenger reached over the network;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), a network certifier reached over the network;
-- the inference-only policy's remote regime (`Nci.Guarantees.DampenerRemote`), the overhead bound over this protocol
+- the inference-only policy's remote regime (`InferenceOnly.Guarantees.DampenerRemote`), the overhead bound over this protocol
   (see the guarantee below).
 
 ## Parties
@@ -39,7 +39,7 @@ some older names until they are renamed: `Dampener*` means overhead, `*Horizon` 
 | Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 
-**Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
+**Coming, not there yet:** the inference-only policy (`InferenceOnly`, its Lean check still named `NciCheck`) is to join as a third
 subprotocol. Under it, the declared circuit divides into inference blocks of bounded size, each reading a bounded amount
 of fresh input (input that isn't registered information). Its check reads only the declared circuit and the registered
 information, so it needs no hardware at the site. On `main`, `Core.Remote.components` holds only the two rows above.
@@ -100,8 +100,8 @@ each piece is proved.
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, `Properties.Pouw.Period.CheckedCreditPeriod` (`Security/Properties/Pouw/`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod`) | **proved** | — |
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
-| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
+| The overhead over remote, per period | `InferenceOnly.Guarantees.DampenerRemote` (`Security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The overhead over a monitoring period | `InferenceOnly.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee | **open** | — |
 
 The pieces compose by hand today: no Lean theorem states remote's guarantee from the rows above.
@@ -139,16 +139,16 @@ PoUW:
   the data sheet's, and the folds are optimal. The time credit `Accounting.Guarantees.Compose.CircuitCredit` reads them,
   and the live-words credit over a monitoring period doesn't.
 
-The overhead (`Security/Definitions/Nci/Assumptions/Remote.lean`):
+The overhead (`Security/Definitions/InferenceOnly/Assumptions/Remote.lean`):
 
-- `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p.
-- `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q, whatever
+- `InferenceOnly.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p.
+- `InferenceOnly.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q, whatever
   came before.
-- `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- `Nci.Assumptions.BaselineRegistered`: the data the registration names was public, not computed off the books before.
-- `Nci.Assumptions.WeightsIncompressible`: no small subcircuit rebuilds the weights it uses from fewer bits than
+- `InferenceOnly.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
+- `InferenceOnly.Assumptions.BaselineRegistered`: the data the registration names was public, not computed off the books before.
+- `InferenceOnly.Assumptions.WeightsIncompressible`: no small subcircuit rebuilds the weights it uses from fewer bits than
   their width.
-- `Nci.Complies`: the declaration meets the inference-only policy.
+- `InferenceOnly.Complies`: the declaration meets the inference-only policy.
 
 ## Results per monitoring period
 
