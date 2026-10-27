@@ -317,8 +317,8 @@ abbrev PeriodCredit := (key ledger pins main period : Json) → R (List Json)
 commitments are one (scheme, epoch and layout) and the openings carry the same coin, or two different messages, one hashed
 in checking each opening, have one SHA-512 digest. It doesn't bound the salt's choice among a weights' root's epochs: the
 prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes, and that choice rests
-on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a
-complete salt-only session that no accepted pass presents (ci's review of #3968). -/
+on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until the period check refuses a
+complete salt-only session that no accepted pass presents. -/
 def LiveCoinBinding : Prop :=
   ∀ (s s' : String) (e e' : Nat) (fs fs' : Families) (r : ByteArray) (o o' : LiveOpening) label index after after',
     liveReason ⟨s, e, fs, r⟩ o label index after = .ok none →
@@ -337,8 +337,7 @@ history, both passes of epoch `k` over the weights' root `w`, were salted by one
 salts agree unless two different messages hashed in checking their salt coins have one SHA-512 digest. It doesn't bound
 the salt's choice among a weights' root's epochs: the prover picks `pass_index`, so it can open several epochs over one
 `W` and present the salt it likes, and that choice rests on the grinding term over every epoch the prover can open, at
-most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's
-review of #3968). -/
+most n·ε for n epochs, until the period check refuses a complete salt-only session that no accepted pass presents. -/
 def OnePair (check : Check) : Prop :=
   ∀ key ledger pins main session session' m m' salt salt',
     check key ledger pins main session m = .ok salt → check key ledger pins main session' m' = .ok salt' →
@@ -351,7 +350,7 @@ def OnePair (check : Check) : Prop :=
 history, any two acceptances by one session were opened on one epoch root. It doesn't bound the salt's choice among a
 weights' root's epochs: the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it
 likes, and that choice rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until
-CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968). -/
+the period check refuses a complete salt-only session that no accepted pass presents. -/
 def OneRoot (check : Check) : Prop :=
   ∀ key ledger pins main session session' m m' salt salt',
     check key ledger pins main session m = .ok salt → check key ledger pins main session' m' = .ok salt' →

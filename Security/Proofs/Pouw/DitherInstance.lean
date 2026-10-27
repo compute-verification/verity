@@ -8,7 +8,7 @@ import Proofs.Pouw.Dither
 * `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open
   parameter: an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's
   verdict, with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`.
-  The sampling blocks' work fits the period from the clocks (CMP-154): `RootAfterCoin` puts block `b`'s work inside
+  The sampling blocks' work fits the period from the clocks: `RootAfterCoin` puts block `b`'s work inside
   its window, from its coins at `t b` to its root's arrival, G2 bounds its use by `ρ_r` times that window, and the
   challenger's order (block `b + 1`'s coins after block `b`'s roots) makes the windows disjoint inside `[0, T]`
   (`sum_windows_le_T`). No count of sampling blocks or of selected ones is read.

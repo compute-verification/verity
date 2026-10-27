@@ -26,7 +26,7 @@ service refuses a run outside a scope, so no premise here is a check's outcome.
 
 **The service premises per prover.** `ServiceSoundStaged` and `ServiceSoundOverlap` bound every adversary's binding
 break by one `δb`, which is false below 1 at SHA-512: a machine that hard-codes a collision opens a committed leaf two
-ways (note:proofs/20261018T1604Z-report-redteam-2474, side finding). `ServiceSoundStagedPerProver` and
+ways (a red team's side finding). `ServiceSoundStagedPerProver` and
 `ServiceSoundOverlapPerProver` restate them in the form C-Flock's link bound has (`LinkCRZC`, `linkBoundZC`): each
 round's break is at most a constant plus a weight times the probability that the analysis's finder for that adversary
 (`Finders`) finds a collision, and `ecr/sha-512` (`Claims.ExpectedCR`) enters only the floors' bound, at that
@@ -35,7 +35,7 @@ adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins 
 of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
 finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
 because the floors of `Definitions.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover beside
-them are proved from these (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
+them are proved from these.
 
 **At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
 columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
@@ -358,7 +358,7 @@ each call's error table at the call's operand commitment, before its draw; every
 by the play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
 
 **Superseded by `ServiceSoundStagedJ10RPerProver`**, for `ServiceSoundStaged`'s reason: one `δb` for every adversary is
-false below 1 at SHA-512 (note:proofs/20261018T1604Z-report-redteam-2474). It mirrors the premise today's floor of
+false below 1 at SHA-512. It mirrors the premise today's floor of
 record is proved from, so that the call-scope floor `StagedFloorKOneSidedJ10R` is that floor read at the call. -/
 def ServiceSoundStagedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (JStage St n L B n') R) (δb δz : ℝ) : Prop :=

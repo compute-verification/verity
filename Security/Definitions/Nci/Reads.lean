@@ -3,7 +3,7 @@ import Definitions.Nci
 /-!
 # NCI in reads form: the read factor, and reads in a set of gates
 
-`readFactor K b_w b_a d` is the actual-circuit model's `f(K)` (`note:console/20261012T0645Z-draft-actual-circuit-model`,
+`readFactor K b_w b_a d` is the actual-circuit model's `f(K)` (its
 section 6): the least number of bits of novel information an IU that reads at most `K` bits pays a product of an updated
 matrix multiplication chain, at widths `b_w` of a weight entry and `b_a` of an activation entry and smallest inner
 dimension `d`. NCI's slowdown factor is `F = f(K) / (2α)`.

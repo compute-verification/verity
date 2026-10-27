@@ -2,7 +2,7 @@ import Proofs.Pouw.Dither
 import Proofs.Pouw.ShaRealize
 
 /-!
-# `WorkSound`'s premises hold together (RT-LEAN L7, RT-LEAN-2 L38)
+# `WorkSound`'s premises hold together (RT-LEAN L7)
 
 The headline isn't vacuous: on the witness machine, round and period below, every premise of
 `Definitions.Pouw.Guarantees.Dither.WorkSound` holds at once, at `k = 2` rounds and the non-uniform prices
@@ -729,7 +729,7 @@ theorem twε_lt (A : Prover tw twRound 2) : twε A < 1 := by
 theorem twκ_lt (A : Prover tw twRound 2) : twκ A < 1 := by
   norm_num [twκ, twδ]
 
-/-- **The witness statement** (RT-LEAN L7, RT-LEAN-2 L38): every premise of `WorkSound`, in its order, at the witness
+/-- **The witness statement** (RT-LEAN L7): every premise of `WorkSound`, in its order, at the witness
 machine `tw`, round `twRound` and period `twPd`, with `k = 2`, `Reg` every instance, `μ = (2, 1, 1)`,
 `H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1`, `η = 1/7`, `δ = 1/2`, `β = K = κ_S = 0`, the cap `Q = 8`,
 `κ_dmm = κ_dsha = 0`, and for every prover `B_adv = |Adv|`, `ξ = 0`, `κ_x = 0` and `κ_sha = 0`; then the

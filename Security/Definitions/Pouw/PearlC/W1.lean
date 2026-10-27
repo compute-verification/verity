@@ -103,7 +103,7 @@ element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm
 - program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
   data (every operand is an address).
 
-**The text bound** (`Prog.bounded`; W1RT-1's fix F2, `note:compute-accounting/20261024T1730Z-report-w1-redteam`). At
+**The text bound** (`Prog.bounded`; W1RT-1's fix F2). At
 every layout a program has at most `2^64` code nodes (`Code.size`) and `2^64` constants. W1 charges only the path a run
 takes, so with unbounded text a tree of `ite`s on the salt's 256 bits holds one leaf per salt. That is a table of the
 reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions (W1RT-1). Under the bound
