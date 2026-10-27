@@ -1,4 +1,4 @@
-"""Advice v1: `decode(encode(a)) == a` on the replay's step traces and a TRACE-CORPUS trace, under the uniform codebook
+"""Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
 and a fitted one; the engine's arrival order is sent as its deviations from the warden's release order and recovered
 from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
 registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
@@ -91,8 +91,8 @@ def test_the_case_set_covers_hits_resumes_and_async():
 
 
 def _corpus(tmp_path: Path) -> Path:
-    """ENC-DERIVED's TRACE-CORPUS fixture (4 s at 12/s on 100 KV blocks, prefix caching, preemptions) with each batch in
-    Model Runner V2's order (the scheduler's, sorted stably by n) and each stop-id finish marked `eos`."""
+    """The derived rules' trace-corpus fixture (4 s at 12/s on 100 KV blocks, prefix caching, preemptions) with each
+    batch in Model Runner V2's order (the scheduler's, sorted stably by n) and each stop-id finish marked `eos`."""
     src = FIXTURES / "corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp_path / f)
@@ -114,7 +114,7 @@ def _corpus(tmp_path: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def smallkv(tmp_path_factory):
-    """The TRACE-CORPUS fixture's trace, record, advice and registration: sync scheduling on 100 blocks, where the pool
+    """The trace-corpus fixture's trace, record, advice and registration: sync scheduling on 100 blocks, where the pool
     bound fails and the replay evicts."""
     t = R.read_corpus_trace(_corpus(tmp_path_factory.mktemp("smallkv")), ingress="warden")
     rec = V.record_of(t, STOPS)
@@ -147,7 +147,7 @@ def _ordinals(t, rec) -> list[int]:
 def test_the_order_is_sent_as_its_deviations_from_release_order():
     """Two requests released in one bucket that the engine took the other way round: the record's release order puts
     the later arrival first, so v1 sends one order entry, (its position, rank 1), and decodes back the advice, the
-    engine's arrival order and each I1 request's warden ordinal (`streams`, IO-TIE's tie). Another rank decodes to
+    engine's arrival order and each I1 request's warden ordinal (`streams`, the I/O tie). Another rank decodes to
     another advice or is refused, and a rank or position past the requests left is refused."""
     t = step_trace("async-light")
     c = t.certified(0.1)
