@@ -645,8 +645,9 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
       pp_hash(p, h, ctl, cur, ntile, tiles_m, tiles_n, [&]() { return issued() + (uint32_t)p.ppm >= g0; }, i >= ntile);
     if (i >= ntile) break;
     // the mainloops take turns (CUTLASS's order barrier): until the other warpgroup has issued k-tile g0 - 1, this tile's
-    // first stages' full barriers can sit a phase behind, and a parity wait passes on the other tile's fill
-    while (issued() < g0) {}
+    // first stages' full barriers can sit a phase behind, and a parity wait passes on the other tile's fill. The poll
+    // sleeps: a tight loop of shared loads takes the shared memory pipe the other warpgroup's wgmma reads its operands on
+    while (issued() < g0) __nanosleep(20);
     __syncwarp();
     int tm, tn;
     raster((int)blockIdx.x + i * (int)gridDim.x, tiles_m, tiles_n, p.group, tm, tn);
