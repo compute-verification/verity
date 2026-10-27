@@ -7,8 +7,11 @@ eager attention and the causal-LM cross-entropy, at smollm2-135m's shape (`CONFI
     LinearTorchDx_v1{M, K, N}   (dy: Array<M, Array<N, BF16>>, wt: Array<K, Array<N, BF16>>) -> Array<M, Array<K, BF16>>
     LinearTorchDw_v1{M, K, N}   (dyt: Array<N, Array<M, BF16>>, xt: Array<K, Array<M, BF16>>) -> Array<N, Array<K, BF16>>
     TrainStep_v1{L, B, S}       (ids, labels: Array<M, U32>, n: Array<S, U16> of kind position, cs: Array<S, Array<D, BF16>>,
-                                 embed: Array<V, Array<H, BF16>>, each layer's weights (`LAYER`), norm: Array<H, BF16>)
-                                -> Tuple<loss: F32, each parameter's gradient in the parameters' order>
+                                 embed.w: Array<V, Array<H, BF16>>, layer i's weights l{i}.NAME.w (`LAYER`),
+                                 norm.w: Array<H, BF16>) -> Tuple<loss: F32, each weight's gradient in the parameters' order>
+
+The weights are in HF's ``named_parameters`` order, and a weight's name is its node's with ``.w``, so a walk's values name
+both apart (`program_walk`).
 
 `LinearTorch`, `LinearTorchDx` and `LinearTorchDw` are F.linear's three GEMMs at x (M, K), W (N, K): the forward, dX = dY·W and
 dW = dYᵀ·X, each `cublas_bf16.train_linear`'s row GEMM batched over its first operand's rows with the second shared. A
@@ -70,9 +73,10 @@ CONFIG = {"H": 576, "NH": 9, "KVH": 3, "D": 64, "I": 1536, "V": 49152}
 EPS = 0x3727C5AC
 #: words of one SiluTorch_v1 / SiluTorchBackward_v1 call, a third of a token's MLP row
 ACT_N = 512
-#: a layer's weights: name -> (rows, columns)
-LAYER = {"ln1": (None, "H"), "q": ("NH·D", "H"), "k": ("KVH·D", "H"), "v": ("KVH·D", "H"), "o": ("H", "NH·D"),
-         "ln2": (None, "H"), "gate": ("I", "H"), "up": ("I", "H"), "down": ("H", "I")}
+#: a layer's weights in HF's ``named_parameters`` order, the order clip_grad_norm_'s ``_foreach_norm`` reads the gradients in:
+#: name -> (rows, columns)
+LAYER = {"q": ("NH·D", "H"), "k": ("KVH·D", "H"), "v": ("KVH·D", "H"), "o": ("H", "NH·D"), "gate": ("I", "H"),
+         "up": ("I", "H"), "down": ("H", "I"), "ln1": (None, "H"), "ln2": (None, "H")}
 #: -100, HF's ignore index, as the low 32 bits of its int64 label
 IGNORE = 0xFFFFFF9C
 #: the loss's gradient seed, 1.0
@@ -137,10 +141,11 @@ def params(L: int, B: int, S: int) -> tuple[tuple[str, Any], ...]:
     """`TrainStep_v1{L, B, S}`'s parameters, in order."""
     c, d, M = CONFIG, _dims(), B * S
     out: list[tuple[str, Any]] = [("ids", Array(M, U32)), ("labels", Array(M, U32)), ("n", Array(S, U16)),
-                                  ("cs", _mat(S, c["D"])), ("embed", _mat(c["V"], c["H"]))]
+                                  ("cs", _mat(S, c["D"])), ("embed.w", _mat(c["V"], c["H"]))]
     for i in range(L):
-        out += [(f"l{i}.{k}", Array(d[cols], BF16) if rows is None else _mat(d[rows], d[cols])) for k, (rows, cols) in LAYER.items()]
-    return (*out, ("norm", Array(c["H"], BF16)))
+        out += [(f"l{i}.{k}.w", Array(d[cols], BF16) if rows is None else _mat(d[rows], d[cols]))
+                for k, (rows, cols) in LAYER.items()]
+    return (*out, ("norm.w", Array(c["H"], BF16)))
 
 
 def _ret(L: int, B: int, S: int) -> Tuple:
@@ -263,10 +268,10 @@ class _Step:
 
     def build(self) -> Coll:
         B, p, M, H, V = self.B, self.p, self.M, self.H, self.V
-        x = B.call(bind(TE.EmbeddingTorch, M=M, V=V, H=H), p["ids"], p["embed"], name="embed")
+        x = B.call(bind(TE.EmbeddingTorch, M=M, V=V, H=H), p["ids"], p["embed.w"], name="embed")
         fw = []
         for i in range(self.L):
-            w = {k: p[f"l{i}.{k}"] for k in LAYER}
+            w = {k: p[f"l{i}.{k}.w"] for k in LAYER}
             n = f"l{i}."
             y1, hb1, r1 = self.norm(n + "ln1", x, w["ln1"])
             q, k, v = (self.linear(n + j, y1, w[j]) for j in ("q", "k", "v"))
@@ -285,8 +290,8 @@ class _Step:
             fw.append({"w": w, "x": x, "y1": y1, "hb1": hb1, "r1": r1, "v": v, "a": a, "o_in": o_in, "h2": h2, "y2": y2,
                        "hb2": hb2, "r2": r2, "gate": gate, "up": up, "act": act, "mul": mul})
             x = self.add(n + "h3", h2, down)
-        yn, hbn, rn = self.norm("norm", x, p["norm"])
-        logits = self.linear("logits", yn, p["embed"])
+        yn, hbn, rn = self.norm("norm", x, p["norm.w"])
+        logits = self.linear("logits", yn, p["embed.w"])
 
         t = _shift(B, p["labels"], self.nb, self.s)
         rows = B.batch(bind(TL.LogSoftmaxRow, V=V), logits, t, axes=(0, 0), name="loss.rows").reshape(Array(M, Array(3, F32)))
@@ -295,9 +300,9 @@ class _Step:
         dlogits = B.batch(bind(TL.LogSoftmaxNllBackwardRow, V=V), logits, t, rows.take(1, 0), rows.take(1, 1), g,
                           axes=(0, 0, 0, 0, None), name="logits.dx")
 
-        dlm_x, dlm_w = self.linear_backward("lm_head", dlogits, p["embed"], _transpose(B, yn, M, H))
-        dh, dnw = self.norm_backward("norm", dlm_x, x, p["norm"], rn, hbn)
-        grads: dict[str, Coll] = {"norm": dnw}
+        dlm_x, dlm_w = self.linear_backward("lm_head", dlogits, p["embed.w"], _transpose(B, yn, M, H))
+        dh, dnw = self.norm_backward("norm", dlm_x, x, p["norm.w"], rn, hbn)
+        grads: dict[str, Coll] = {"norm.w": dnw}
         for i in reversed(range(self.L)):
             f, w, n = fw[i], fw[i]["w"], f"l{i}."
             d = {}
@@ -312,7 +317,7 @@ class _Step:
             dy2 = self.add(n + "mlp.dx", dup_x, dgate_x)
             dln2, d["ln2"] = self.norm_backward(n + "ln2", dy2, f["h2"], w["ln2"], f["r2"], f["hb2"])
             dh2 = self.add(n + "h2.grad", dh, dln2)
-            do, d["o"] = self.linear_backward(n + "o", dh2, w["o"], _transpose(B, f["o_in"], M, self.p[n + "o"].type.elem.n))
+            do, d["o"] = self.linear_backward(n + "o", dh2, w["o"], _transpose(B, f["o_in"], M, w["o"].type.elem.n))
             a = f["a"]
             ab = B.batch(bind(TA.EagerAttentionTorchBackward, **self.att), self.seqs(do), a[1], a[2], self.seqs(f["v"]), a[3],
                          a[4], p["cs"], axes=(0, 0, 0, 0, 0, 0, None), name=n + "attn.dx")
@@ -324,8 +329,8 @@ class _Step:
             dy1 = self.add(n + "qkv.dx", self.add(n + "kv.dx", dv_x, dk_x), dq_x)
             dln1, d["ln1"] = self.norm_backward(n + "ln1", dy1, f["x"], w["ln1"], f["r1"], f["hb1"])
             dh = self.add(n + "x.grad", dh2, dln1)
-            grads |= {f"l{i}.{k}": d[k] for k in LAYER}
-        grads["embed"] = B.call(bind(TE.EmbeddingBackwardTied, M=M, V=V, H=H), p["ids"], dh, dlm_w, name="embed.dw")
+            grads |= {f"l{i}.{k}.w": d[k] for k in LAYER}
+        grads["embed.w"] = B.call(bind(TE.EmbeddingBackwardTied, M=M, V=V, H=H), p["ids"], dh, dlm_w, name="embed.dw")
         names = [name for name, _ in params(self.L, self.nb, self.s) if name not in ("ids", "labels", "n", "cs")]
         return tuple_of(loss[0], *(grads[name] for name in names))
 
