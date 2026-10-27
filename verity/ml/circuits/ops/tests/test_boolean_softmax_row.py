@@ -7,7 +7,12 @@ composition. Each is Boolean with one 16-bit output a key, and a row of no words
 `SoftmaxRowPad_v1{N}` at n is `SoftmaxRow_v1{N=n}` of the first n words then +0, and `QkSoftmaxRowPad_v1{T, D=64}` at n is
 `QkSoftmaxRow_v1{T=n}` on the first n key rows then +0 (`qk_softmax_row_pad_reference`), whatever the masked words or rows
 hold (NaN, inf, uniform words), at every n of a short row and at n = 1, 2, 5, 17, 31 and 32 of T = 32; n = 0 writes +0 and
-n > T is n = T; n is a position-kind port; the reference refuses n outside 1..T."""
+n > T is n = T; n is a position-kind port; the reference refuses n outside 1..T.
+
+`QkSoftmaxPvPad_v1{T, K, D=64}` is the unfused chain it replaces, `QkSoftmaxRowPad_v1{T, D}`'s probability row into
+`PvRowPad_v2{T, K, D}` at the same n, word for word at every key count of a short head and at the frozen shape's statics
+(T = K = 32), whatever the key and value rows at and past n hold; its n is a position-kind port, its one output the head's
+D words, and it refuses what either half refuses."""
 from __future__ import annotations
 
 import numpy as np
@@ -268,6 +273,68 @@ def test_n_is_a_position_kind_port() -> None:
     with pytest.raises(PT.PortError, match="takes kind=position") as e:
         Program(undeclared)
     assert e.value.code == "E_PORT_KIND"
+
+
+def _head(T: int, K: int) -> object:
+    return bind(SR.QkSoftmaxPvPad, T=T, K=K, D=64, **BG.GEMM_HOPPER)
+
+
+def _attention(rng, heads: int, T: int, counts: np.ndarray) -> tuple[np.ndarray, np.ndarray, list[np.ndarray]]:
+    """`_heads`' q and key rows and T value rows (a third of the heads uniform words), each head's key and value rows at and
+    past its key count junk (`_junk`)."""
+    q, k = _heads(rng, heads, T)
+    v = _operands(rng, (heads, T, 64))
+    v[2 * (heads // 3):] = rng.integers(0, 1 << 16, v[2 * (heads // 3):].shape)
+    past = np.arange(T)[None, :] >= counts[:, None]
+    k[past], v[past] = _junk(rng, (int(past.sum()), 64)), _junk(rng, (int(past.sum()), 64))
+    return q, k, [np.ascontiguousarray(v[:, t]) for t in range(T)]
+
+
+def _chain(K: int, q: np.ndarray, k: np.ndarray, vs: list[np.ndarray], counts: np.ndarray) -> np.ndarray:
+    """The unfused chain: `QkSoftmaxRowPad_v1{T, D}`'s probability row, then `PvRowPad_v2{T, K, D}` of it at the same n."""
+    T = k.shape[1]
+    p = np.asarray(BS.evaluate_words(_pad(T), q, k, counts)).astype(np.uint16).reshape(len(q), T)
+    pv = bind(BG.PvRowPad, T=T, K=K, D=64, **BG.GEMM_HOPPER)
+    return np.asarray(BS.evaluate_words(pv, p, *vs, counts)).astype(np.uint16).reshape(len(q), 64)
+
+
+def _fused_head(K: int, q: np.ndarray, k: np.ndarray, vs: list[np.ndarray], counts: np.ndarray) -> np.ndarray:
+    return np.asarray(BS.evaluate_words(_head(k.shape[1], K), q, k, *vs, counts)).astype(np.uint16).reshape(len(q), 64)
+
+
+def test_the_head_is_the_padded_unit_then_the_padded_pv_row() -> None:
+    """T = 2 keys padded to K = 16, n over 0..3, 0x8000 and 0xFFFF: the fused head's words are the unfused chain's."""
+    rng = np.random.default_rng(1000)
+    counts = np.concatenate([np.arange(90) % 4, [0x8000, 0xFFFF]]).astype(np.uint16)
+    q, k, vs = _attention(rng, len(counts), 2, counts)
+    assert np.array_equal(_fused_head(16, q, k, vs, counts), _chain(16, q, k, vs, counts))
+
+
+@pytest.mark.slow
+def test_the_head_at_the_frozen_statics_is_the_padded_unit_then_the_padded_pv_row() -> None:
+    """T = K = 32, D = 64, the ``pv`` fusion's proof block (`e2e_h200.plan`), at n = 0, 1, 2, 5, 17, 31, 32, 33 and 0xFFFF with
+    junk at and past n: equal to the unfused chain word for word. A short head can't show the mask at the far end of a
+    32-word softmax sum and a 32-key PV coordinate."""
+    rng = np.random.default_rng(1032)
+    counts = np.repeat(np.array([0, 1, 2, 5, 17, 31, 32, 33, 0xFFFF], np.uint16), 4)
+    q, k, vs = _attention(rng, len(counts), 32, counts)
+    assert np.array_equal(_fused_head(32, q, k, vs, counts), _chain(32, q, k, vs, counts))
+
+
+def test_the_head_reads_n_as_a_position_and_writes_only_its_row() -> None:
+    """n is a position-kind port and the output is the head's D words, no probability row; a T past K, a D off the step and
+    no keys are refused."""
+    target = _head(2, 16)
+    params, ret = target.signature()
+    assert [p for p, _ in params] == ["q", "k", "v0", "v1", "n"]
+    assert PT.facts(Program(target).root).node(len(params) - 1).one.kind == "position"
+    assert BL.is_boolean(target) and BL.elements(ret) == [16] * 64
+    with pytest.raises(ValueError, match="T=17 is not in 1..K=16"):
+        _head(17, 16)
+    with pytest.raises(ValueError, match="multiple of the 16-wide step"):
+        bind(SR.QkSoftmaxPvPad, T=2, K=16, D=40, **BG.GEMM_HOPPER)
+    with pytest.raises(ValueError, match="T=0 is not in 1..K=16"):
+        _head(0, 16)
 
 
 @pytest.mark.parametrize("n", [0, 4, -1, True, 1.0])
