@@ -243,39 +243,49 @@ def test_challenger_keeps_the_order_and_never_redraws():
 
 
 # ---------------------------------------------------------------------------------------------------- Dither's no-fold call
-# Known answers of dither.py (#4974 at d848cc79d7: `words`, `commit` under prf_salt(call_key(Ks, 3), p), `pad_rows`,
-# `Shape.domain`) on salt bytes 0..63, coin 64..127, Ks 128..191 and B (and the served A) from default_rng(11)
+# Known answers of dither.py (#4974 at 1a428ae983: `values_buffer`, `commit` under salts(Ks, 3 leaves), `pad_rows`,
+# `Shape.domain`) on salt bytes 0..63, coin 64..127, operand-root receipt 128..191, Ks 192..255, call 3, and B (and the
+# served A) from default_rng(11)
 DITHER = {
     "pad": ((128, 128, 768, 256, 512, 1024), False, 64,
             "ca33cc7f8f39b599e894626cb0315b32399636eb01065485b117da6dd27b41f6cb2882fdab22f1be6c9187947a3ef3482378d8ddd41f45c74aad749c3a1a8625",
-            "87e1ecd5e70b7752c7fa17f4b612e2ac7aa5d8ce706cd35b11a40f81b6bee445f68510c850903fecc072bd25e0f0681b0e122c1e7311a0cb09d37bbc101ee6b1",
+            "1e47bddbd672cda9e491849a4d36601324c6f53bbaf1846421d0fdc0cf661feaca9a94e4d551d983bd10d3a8b2d0880c87d3feefefeb3408400a435c42394358",
             "82bacbfb81da17626b1f693ee3b1d705c30d29c72fc0c18e4b97167747a3ca86d44765f37af617d96a8c01b5414f4bf7c3e0993cf8344052ea453bde1e73f050",
-            "b6e4f4aafc1f927063fb2ebc3dddddebae81b983de66e896d61d72d4ce2e4c08f09faaa18b95b2a61e3ca43396259f5a7ca5250a13f9adc951edeb8c8d474406"),
-    "served": ((128, 256, 1024, 128, 1024, 2048), True, 32,
-               "04e8ad032050e4cc8cd8499402bab20d2910cfd6ecf46858bb4518d2918fcb9635595bd9b4dd2de3683bbe93109a6b1884c2ba7f986ce9e48c433a19700fb911",
-               "6190dc3a8eb662afbfab9ed0f971aff78c7aaba9951c613acbe78b1e980b9565c8bebca831384589b00ec65b2e2c594b629e4293da4d778fef87fc4d08e0124c",
-               "8d9e34924189d8061168a0d39b53b5fc6de70863711c4e0a160438d4c0331707b15131d29b63abdc96f741e3b630c9a1909de9c3557494d7a218d05fe690fd8e",
-               "f634c088c0c0bace599978a0ccb01996b373dc5f24476f52f75bac97d6cc2a8ca437974e9e725408d86b0a33e18565981c928d4f0842cbb7e896bdf91fa29939"),
+            "6421cee42b8709156a8a1cd0f3e635d30ffb46e24c9dc02bf237e7b945cafa5fded2781bbf7889c099204de7ab94bd73f1f3899bd1a2935097222d8dc95241f5"),
+    "served-s1": ((128, 256, 1024, 128, 1024, 16384), True, 8,
+                  "a74b8f1974578405b71e32f67a5a82e64270344f1d2e92b4eff7a91d8daefca6d52142d7efa0e6e861bd1acdce45ee0e3118d5b8ddd207333fc7c23f4e05b052",
+                  "16d2aa6c56d874d28a29497562987e9e79aaddc63606eb6a185115f7bb1b580db0012fae9441a383041000e1e4d4165de20b7b526a48842ee4a6fd50b26794a2",
+                  "",
+                  "4adf24d3810b2fc8265abc628048a008b8953dfbc8c8d2ae3e903010d59ca57a9352da0982a04a65f8c378587ddd64a8acc4171ce0f5d975393764d4f5bd4a27"),
+    "served-s4": ((128, 128, 2048, 128, 512, 8192), True, 20,
+                  "1874fd6268c6e4b9cff84849612586c42971a64a7cdb7538e27b974237662d05f1c72ee420eb622d0e126593e7de6b57eca7307e960e008ca5a85788e5f7259a",
+                  "8f6ab51000cd9b0886323c15a35bcb4004afb77ff1ae1e9e97b79c53c5dd6899b191e2d7f093f3513cb41e5c1dc9eb29da0d7a029d89126874ff758aa9f675fb",
+                  "",
+                  "a35c4d0d56e43d4cbcba147e3df21668b90691967dfd29b8e7a22871eabcc30532275b7a24e571c039a5479c9114c751374c231fd794f072578a55c2808f0b93"),
 }
 
 
 @pytest.mark.parametrize("case", sorted(DITHER))
 def test_fill_is_dithers_no_fold_call(case):
-    """The GPU is checked against v31's Fill; Fill against dither.py's own answers (pad, words, domain, root)."""
-    (m, n, k, lp, L, row), served, leaves, words_h, root_h, pad_h, dom_h = DITHER[case]
-    f = v31.Fill(m, n, k, lp, L, row)
+    """The GPU is checked against v31's Fill; Fill against dither.py's own answers (pad, values, domain, root)."""
+    (m, n, k, lp, L, row), served, leaves, values_h, root_h, pad_h, dom_h = DITHER[case]
+    f = v31.Fill(m, n, k, lp, L, row, served)
     rng = np.random.default_rng(11)
     B = rng.integers(-128, 128, size=(n, k)).astype(np.int8)
-    A = rng.integers(-128, 128, size=(m, k)).astype(np.int8) if served else None
-    seeds = v31.call_seeds(bytes(range(64)), bytes(range(64, 128)))
-    pad = v31.pad_rows(seeds, range(m), k)
-    assert hashlib.sha512(pad.tobytes()).hexdigest() == pad_h
-    assert np.array_equal(v31.pad_rows(seeds, range(5, 9), k), pad[5:9])
-    words = v31.words_buffer(f, v31.fill_words(f, pad if A is None else A, B, v31.Coins.expand(f, seeds)))
-    assert hashlib.sha512(words).hexdigest() == words_h
+    if served:
+        A = rng.integers(-128, 128, size=(m, k)).astype(np.int8)
+        seeds = v31.served_seeds(bytes(range(64, 128)), bytes(range(128, 192)), 3)
+        assert set(seeds) == set(v31.STREAMS)
+    else:
+        seeds = v31.fill_seeds(bytes(range(64)), bytes(range(64, 128)))
+        A = v31.pad_rows(seeds, range(m), k)
+        assert hashlib.sha512(A.tobytes()).hexdigest() == pad_h
+        assert np.array_equal(v31.pad_rows(seeds, range(5, 9), k), A[5:9])
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
+    assert hashlib.sha512(values).hexdigest() == values_h
     assert f.leaves == leaves and f.domain().domain_id.hex() == dom_h
-    assert v31.fill_commit(f, words, v31.call_key(bytes(range(128, 192)), 3)).root.hex() == root_h
-    assert v31.fill_seeds_from(v31.fill_seeds_bytes(seeds)) == seeds
+    assert v31.fill_commit(f, values, bytes(range(192, 256)), 3 * leaves).root.hex() == root_h
+    assert v31.fill_seeds_from(v31.fill_seeds_bytes(seeds), served) == seeds
 
 
 def _fill_answer(f: v31.Fill, cm, B: np.ndarray, A: np.ndarray | None):
@@ -285,27 +295,40 @@ def _fill_answer(f: v31.Fill, cm, B: np.ndarray, A: np.ndarray | None):
     return answer
 
 
-@pytest.mark.parametrize("cheat", [None, "skip", "forge"])
-@pytest.mark.parametrize("served", [False, True])
-def test_fill_verdicts(cheat, served):
-    """Honest calls pass every proof block; a call that leaves a noise tile out of X W'^T, or overwrites T_2, is refused."""
-    f = v31.Fill(256, 128, 2048, 256, 512)
+@pytest.mark.parametrize("cheat", [None, "skip", "forge", "forgeO", "nodither"])
+@pytest.mark.parametrize("served,L", [(False, 512), (True, 512), (True, 2048)])
+def test_fill_verdicts(cheat, served, L):
+    """Honest calls pass every proof block. Refused: a call that leaves a noise tile out of X W'^T, overwrites T_2 (or, at
+    S = 1, O), overwrites O, or (served) leaves the dithers out of O."""
+    f = v31.Fill(256, 128, 2048, 256, L, 1024, served)
+    if not served and cheat in ("forgeO", "nodither"):
+        pytest.skip("a filler call commits no O")
     rng = np.random.default_rng(5)
     B = rng.integers(-128, 128, size=(f.n, f.k)).astype(np.int8)
-    seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
-    A = rng.integers(-128, 128, size=(f.m, f.k)).astype(np.int8) if served else None
-    T = v31.fill_words(f, v31.pad_rows(seeds, range(f.m), f.k) if A is None else A, B, v31.Coins.expand(f, seeds),
-                       skip=5 if cheat == "skip" else None)
-    if cheat == "forge":
+    if served:
+        seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 0)
+        A = rng.integers(-128, 128, size=(f.m, f.k)).astype(np.int8)
+    else:
+        seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
+        A = None
+    Aop = v31.pad_rows(seeds, range(f.m), f.k) if A is None else A
+    co = v31.Coins.expand(f, seeds)
+    T, O = v31.fill_values(f, Aop, B, co, skip=5 if cheat == "skip" else None)
+    if cheat == "forge" and f.W >= 2:
         T[1] ^= 0x0F0F
-    cm = v31.fill_commit(f, v31.words_buffer(f, T), v31.call_key(rng.bytes(64), 0))
+    if cheat == "forgeO" or (cheat == "forge" and f.W < 2):
+        O[::3] ^= 0x10000
+    if cheat == "nodither":
+        O = v31.imatmul(Aop, B) & 0xFFFFFFFF
+    cm = v31.fill_commit(f, v31.fill_buffer(f, T, O), rng.bytes(64), 7 * f.leaves)
     picks = v31.fill_picks(f, rng.bytes(64), 48)
     assert {s for _, _, s in picks} == set(range(1, f.S + 1))
     ok, fails, line = v31.fill_verdict(f, seeds, cm.root, picks, _fill_answer(f, cm, B, A), "t")
-    assert ok == (cheat is None), line
-    assert line.startswith("ACCEPT" if cheat is None else "REFUSE")
-    if cheat:
-        assert all("mod 2^16" in x for x in fails)
+    refused = cheat is not None and not (cheat == "skip" and f.S == 1)   # at S = 1 the noise never enters O
+    assert ok == (not refused), line
+    assert line.startswith("REFUSE" if refused else "ACCEPT")
+    if refused:
+        assert all(("mod 2^32" if cheat in ("forgeO", "nodither") or f.S == 1 else "mod 2^16") in x for x in fails), fails
     bad = dict(_fill_answer(f, cm, B, A)(*picks[0]))
     p0 = next(iter(bad["rows"]))
     row, _, path = bad["rows"][p0]
@@ -313,31 +336,38 @@ def test_fill_verdicts(cheat, served):
     assert "don't open the root" in v31.fill_check(f, seeds, cm.root, *picks[0], bad)
 
 
-def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys):
-    """`v31 fill-bench`'s sample files: a tile's words and leaves from its A and B rows and those rows' coins alone, and the
-    params file as fill-params writes it."""
-    f = v31.Fill(256, 384, 1024, 256, 512, 2048)
+@pytest.mark.parametrize("served", [False, True])
+def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
+    """`v31 fill-bench`'s sample files: a tile's values and leaves from its A and B rows and those rows' coins alone, and
+    the params file as fill-params writes it."""
+    f = v31.Fill(256, 384, 1024, 256, 512, 2048, served)
     rng = np.random.default_rng(2)
     B = rng.integers(-128, 128, size=(f.n, f.k)).astype(np.int8)
-    seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
-    ks, key = rng.bytes(64), rng.bytes(64)
-    A = v31.pad_rows(seeds, range(f.m), f.k)
-    cm = v31.fill_commit(f, v31.words_buffer(f, v31.fill_words(f, A, B, v31.Coins.expand(f, seeds))), key)
-    assert v31.main(["v31", "fill-params", str(tmp_path / "p"), "--L", "512", "--row", "2048", "x:256:384:1024"]) == 0
-    assert (tmp_path / "p" / v31.fill_params_name(256, 384, 1024, 256, 512, 2048)).stat().st_size == len(v31.fill_params(f, ks))
+    if served:
+        seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 5)
+        A = rng.integers(-127, 128, size=(f.m, f.k)).astype(np.int8)
+    else:
+        seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
+        A = v31.pad_rows(seeds, range(f.m), f.k)
+    ks, off = rng.bytes(64), 5 * f.leaves
+    cm = v31.fill_commit(f, v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds))), ks, off)
+    args = ["--served"] if served else []
+    assert v31.main(["v31", "fill-params", str(tmp_path / "p"), "--L", "512", "--row", "2048", "x:256:384:1024", *args]) == 0
+    name = v31.fill_params_name(256, 384, 1024, 256, 512, 2048, served)
+    assert (tmp_path / "p" / name).stat().st_size == len(v31.fill_params(f, ks))
     s = tmp_path / "s"
     s.mkdir()
     (s / "seeds.bin").write_bytes(v31.fill_seeds_bytes(seeds))
-    (s / "ks.bin").write_bytes(key)
     (s / "params.bin").write_bytes(v31.fill_params(f, ks))
     tiles = [0, 4]
-    (s / "sample.json").write_text(json.dumps({"m": f.m, "n": f.n, "k": f.k, "lp": f.lp, "L": f.L, "row": f.row,
-                                               "tiles": tiles, "root": cm.root.hex()}))
+    (s / "sample.json").write_text(json.dumps({"m": f.m, "n": f.n, "k": f.k, "lp": f.lp, "L": f.L, "row": f.row, "o": served,
+                                               "off": off, "tiles": tiles, "root": cm.root.hex()}))
+    tb = f.lpt * f.row
     for i, tile in enumerate(tiles):
         tm, tn = divmod(tile, f.n // v31.TILE)
         (s / f"t{i}_A.bin").write_bytes(A[tm * 128:(tm + 1) * 128].tobytes())
         (s / f"t{i}_B.bin").write_bytes(B[tn * 128:(tn + 1) * 128].tobytes())
-        (s / f"t{i}_words.bin").write_bytes(cm.words[tile * f.S * 32768:(tile + 1) * f.S * 32768])
+        (s / f"t{i}_words.bin").write_bytes(cm.values[tile * tb:(tile + 1) * tb])
         (s / f"t{i}_leaves.bin").write_bytes(b"".join(cm.levels[0][tile * f.lpt:(tile + 1) * f.lpt]))
     assert v31.main(["v31", "fill-sample", str(s)]) == 0
     lv = bytearray((s / "t1_leaves.bin").read_bytes())
