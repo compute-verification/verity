@@ -169,7 +169,7 @@ Until then, vllm's #4061 has `records_audit` label the bound vacuous whenever #`
   2,752,512 free input bits, counted from 334e's `window/program.json` by `freeInputs`'s definition (#4055). Once the
   advice is the only free input outside the registration (for 2a, after NET-68), c is `advice.bits`, the
   registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, `BitsCount` charges their sum.
+  several windows, c is their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -232,14 +232,12 @@ none: their bounds carry the collision events.
   `PlainLiveAcc` isn't listed, since no locked statement reads it.
 - The rest of what locked statements take from `trees.except`: [e2e_chains/README.md](e2e_chains/README.md).
 
-No link above reads the rest. `TrustedHost` is why `Carries` holds of the real run, and the wire and advice
-assumptions enter through the wire bounds, which have no sampled form yet.
+No link above reads the rest. `TrustedHost` is why `Carries` holds of the real run, and the wire assumptions enter
+through the wire bounds, which have no sampled form yet.
 - `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`).
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. W3 (`Padded`), W5 (`UntimedStatus`) and W6
   (`FailClosed`) are stated there, but no listed guarantee reads them, so the lock doesn't list them.
-- The advice (`Security/Definitions/NetworkCertifier/Assumptions/AdviceString.lean`): `NetTiming.BitsCount`,
-  `NetTiming.CompilerDeterministic` and `NetTiming.CompilerPrecommitted`.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
 
 **CHAINMAP's status per protocol, and the premises in `Proofs/`** (lean's list, REROWS's sort, the form conditions,

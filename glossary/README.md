@@ -124,7 +124,6 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
 | "block" for a section of a record ("the workload record's sampling block") | section |
 | "block" for a model's transformer layer; the model's `blocks.N` module paths, the tap family `moe_block_stream` | layer |
-| "block" for a bucket of the network certifier's timing advice; the Lean's `OccupancyReadsOwnBlock`, `EncardAccSeqsLeBlocks`, until network accounting renames them | bucket |
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
 | "physical block" (#4732) | server-time block |
 | "isolation unit" (IU) | isolation block |

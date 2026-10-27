@@ -1454,22 +1454,6 @@
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
   },
-  "NetTiming.BitsCount": {
-   "owner": "@network-accounting",
-   "digest": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b"
-  },
-  "NetTiming.CompilerDeterministic": {
-   "owner": "@network-accounting",
-   "digest": "a3885e87bc70035c2b57e25c218870889da0a4197bfc059a90a23d1122bfe6ba"
-  },
-  "NetTiming.CompilerPrecommitted": {
-   "owner": "@network-accounting",
-   "digest": "789f1bc116d4abd0f277dc8273cc6b357d59f49e5b918ffc734aeec3bd4acef2"
-  },
-  "NetTiming.FramesReadNoTimingAdvice": {
-   "owner": "@network-accounting",
-   "digest": "fd7a18966dce0b0e94501f13840cbe1a5cd700e5872d74b49775862e57fdcd3f"
-  },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
    "digest": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
@@ -1481,10 +1465,6 @@
   "NetTiming.Layout.Fits": {
    "owner": "@network-accounting",
    "digest": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb"
-  },
-  "NetTiming.OccupancyReadsOwnBlock": {
-   "owner": "@network-accounting",
-   "digest": "3e0f6592aa67809f7000885433abc0a57646746fa961c9ceb71d982c21bfe373"
   },
   "NetTiming.Packed": {
    "owner": "@network-accounting",
@@ -8777,20 +8757,6 @@
    "assumptions": [],
    "type_hash": "fdfab1c44d76caa6294c61288540dfde050ca2359206918637a50e713c6b9185"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeBlocks : NetTiming.Guarantees.EncardAccSeqsLeBlocks"],
-   "assumptions": [],
-   "type_hash": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts : NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts"
-   ],
-   "assumptions": [],
-   "type_hash": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8"
-  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -8843,43 +8809,6 @@
    "assumptions": [],
    "type_hash": "43967fd407da24e706715b2b9d480f1e32e3241ad802b706264dbc8fb5365ce0"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRate"
-   ],
-   "assumptions": [],
-   "type_hash": "74ecb898b782ea54232a47453d3d84b864debb5e3aab20c6944a0d5b8446106e"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1 : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1"
-   ],
-   "assumptions": [],
-   "type_hash": "9d968ee8cd314d2f358b07d062e218a6b24ef0ed4d1bf6669caaec94c0801c65"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole :",
-    "  NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Whole"
-   ],
-   "assumptions": [],
-   "type_hash": "e325afe3f888dd63288e0fe976f8db0cdf14176affccd4cfd774ddd7c84149e8"
-  },
-  "NetTiming.SecurityProofs.EncardChargedLe": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardChargedLe : NetTiming.Guarantees.EncardChargedLe"],
-   "assumptions": [],
-   "type_hash": "886ea913690fe8450cf3a35d36d9851949a8c17ee3fb4b36b0b98d45a6aa050a"
-  },
-  "NetTiming.SecurityProofs.EncardChargedLeWhole": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardChargedLeWhole : NetTiming.Guarantees.EncardChargedLeWhole"],
-   "assumptions": [],
-   "type_hash": "f2a2d719baba9fdf466d8e10f46568de1eb8e122081e96ce9ee29c1821503164"
-  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -8896,58 +8825,6 @@
    ],
    "assumptions": [],
    "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled : NetTiming.Guarantees.EncardDecodableWithinLeCompiled"
-   ],
-   "assumptions": [],
-   "type_hash": "657c317522e5a4e8cb952c9be17bd49ad0133334cd5b944fe4c6809862fe943f"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow :",
-    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindow"
-   ],
-   "assumptions": [],
-   "type_hash": "1f6fae37b38a9fb93b51665c9c08523c8e03a5ec15ac11f07ae0a3d736096581"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1 :",
-    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1"
-   ],
-   "assumptions": [],
-   "type_hash": "d88f0cba3aa004a8778740fc4e4abff70e425bb894d4c7ce024701cb880b4a50"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole :",
-    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Whole"
-   ],
-   "assumptions": [],
-   "type_hash": "cfd41c372494a150174d3fa1cd9f980b13245e6aaf566a4d5da82e4bfeccd550"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1 : NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1"
-   ],
-   "assumptions": [],
-   "type_hash": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole :",
-    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Whole"
-   ],
-   "assumptions": [],
-   "type_hash": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "owner": "@network-accounting",
@@ -9011,18 +8888,6 @@
    "assumptions": [],
    "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1"
   },
-  "NetTiming.SecurityProofs.EncardWardenDecodableLe": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe"],
-   "assumptions": [],
-   "type_hash": "f652ef6d0e0b6ac58e33d5ba4f7f26d4ccb5c9db7156cb9ca7c5b50b8bff4bb3"
-  },
-  "NetTiming.SecurityProofs.EncardWardenViewsLe": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe"],
-   "assumptions": [],
-   "type_hash": "d6974fee407458e73267a6a10bb63f96db93ba6a1694f632f3d133c831879026"
-  },
   "NetTiming.SecurityProofs.ExpectedRowCausal": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal"],
@@ -9064,12 +8929,6 @@
    "signature": ["NetTiming.SecurityProofs.SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered"],
    "assumptions": [],
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3"
-  },
-  "NetTiming.SecurityProofs.WardenViewEqClientView": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView"],
-   "assumptions": [],
-   "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
   "Pous.SecurityProofs.BackgroundRebuildExcluded": {
    "owner": "@memory-accounting",
@@ -11643,8 +11502,6 @@
    "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -12072,9 +11929,6 @@
    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each draw a call of any shape (OJSpot), the round's run one straight-line program over every call's bits, both sides shared across each call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlapJ10R (ServiceSoundOverlap with the seed identified with the overlapped window's call coins), KScopeOverlapOneSidedJ10R (Theorem K's scope across calls: products one-sided per call at every bit point of the other calls' (OneSidedAtJ), the error each call's int8-wrapped prefix product, and charging purity across calls mod 2 at every segment's frame, which no check of the service refuses a run outside of) and ChargeVF3j16OverlapJ10R (the active vector VF3j-16's prices with B_theta complete, each product counted once). Its floor and luck are OverlapFloorKOneSided's: c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
-   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "frozen (no-function): It bounds AccSeqsWithin, the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes BitsCount about an abstract charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, an abstract charge and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, BitsCount about the charge, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, an abstract charge and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, BitsCount about the charge, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Verity.SecurityProofs.IsZeroGadget": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RangeGadget": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.AdaEqAmpere": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
@@ -12120,9 +11974,6 @@
    "Nci.Cover.SecurityProofs.KeyedActivationReads": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named ColumnsIncompressible (Security/Definitions/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, concluding the named ActivationReads (Security/Definitions/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoveringBoundAdditive": "frozen (no-function): CoveringBoundTwoCosts's additive form: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ConditionalParameterHardAt (Security/Definitions/Nci/Assumptions/CoverAdditive.lean) and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "NetTiming.SecurityProofs.WardenViewEqClientView": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-host (TrustedHost) for the device; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
-   "NetTiming.SecurityProofs.EncardWardenViewsLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-host (TrustedHost) for the device, a cap on the schedules' cells and the set the data lies in; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
-   "NetTiming.SecurityProofs.EncardWardenDecodableLe": "frozen (no-function,world-unlisted): It is stated over the warden's code as Definitions.NetworkCertifier.Warden states it (wardenCode), run by an arbitrary device on arbitrary server behaviors, and takes trusted-host (TrustedHost) for the device, a cap on the schedules' cells, BitsCount about an abstract charge and the content premise about the data; no compiled warden program implements that code yet, so no function names it under shape.properties, and such a program with a proof that it equals wardenCode is the restatement path.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "Pous.SecurityProofs.BackgroundRebuildExcluded": "frozen (no-function,hash): an ideal-permutation bound whose precondition, an abort past `auditCap`, neither Lean verdict checks.",
@@ -12171,18 +12022,10 @@
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorK per prover (CMP-33): the same floor and the same luck 3/4, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (RunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeAffine and ChargeVF3j16, as StagedFloorK does. It is a sibling of StagedFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSidedJ10R per prover (CMP-33; J10-R's call design, RT-ALGO-17): the same floor and the same parity luck 0.854, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (JRunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundStagedJ10RPerProver (ServiceSoundStagedJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOneSidedJ10R and ChargeVF3j16J10R, as StagedFloorKOneSidedJ10R does. c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSidedJ10R per prover (CMP-33; J10-R's call design, RT-ALGO-17): the same floor and the same parity luck 0.854 per call, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (JORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapJ10RPerProver (ServiceSoundOverlapJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R, as OverlapFloorKOneSidedJ10R does. c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
-   "NetTiming.SecurityProofs.EncardChargedLe": "frozen (no-function): It counts the decision streams by AdviceV1.charges, the definitions' mirror of arith_encode.py's reference_charge (ChargeCount_v1{N}'s charge), not a compiled program's code: circuit-check holds ChargeCount_v1's circuit to that reference, and no Lean program of the network check computes the charge yet, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": "frozen (no-function): It bounds AccSeqsWithin with advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Definitions/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.Remote.SketchBoundLine": "frozen (no-function,hash): It carries the receipts' sketch bound to the memory line's coins (Accounting.Remote.Draw.Coins n κ X at X a sketch outcome, the space LineHeld is stated over), not the verifier's code: SketchBound at δ on the line's trace read on the sketch outcomes (Accounting.Remote.Held.Trace.sketch, a block computed on outside the node counted with the chips') is SketchBoundAt at δ on the line's trace, so Accounting.SecurityProofs.Remote.SketchBoundDeployed on that trace, its prover's coins carrying the openings coins, gives LineHeld's SketchBoundAt premise at its δs, timing.sketch_failure (red team RD-25, note:20261025T0040Z-report-sketch-lift).",
-   "NetTiming.SecurityProofs.EncardChargedLeWhole": "frozen (no-function): It counts each window's decisions, hits and order entries by WindowCharge.charges, the definitions' mirror of window_charge.py's reference_window (ChargeCount_v2{N, H, O}'s charge, every count coded inside the coder as code_v1 codes it), not a compiled program's code: circuit-check holds ChargeCount_v2's circuit to that reference, and no Lean program of the network check computes the charge yet, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": "frozen (no-function): It bounds AccSeqsWithin with each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
    "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
    "Flock.SecurityProofs.IntegrityPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
