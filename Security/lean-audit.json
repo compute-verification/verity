@@ -9676,22 +9676,22 @@
   "Pouw.SecurityProofs.Dither.FleetSound_honest": {
    "owner": "@compute-research",
    "signature": [
-    "Pouw.SecurityProofs.Dither.FleetSound_honest (n : Nat) :",
+    "Pouw.SecurityProofs.Dither.FleetSound_honest :",
     "  And",
     "    (Pouw.Dither.MomentSound Pouw.Witness.tw Pouw.Witness.twRound 2 Pouw.Witness.twVerdict Pouw.Witness.twDev",
     "      Pouw.Witness.twPd 1 (fun x => 1 / 7) 14 Pouw.Witness.twη fun x => 0)",
-    "    (And (Pouw.Assumptions.OwnDither Pouw.Witness.twRound 2 (instHAdd.hAdd n 1) fun ω => ω)",
+    "    (And (Pouw.Assumptions.OwnDither Pouw.Witness.twRound 2 (instHAdd.hAdd 1 1) fun ω => ω)",
     "      (And (Pouw.Assumptions.CoinsConfidential (fun ω => ω) fun x x_1 => Pouw.Witness.honest)",
-    "        (∀ (u : Fin (instHAdd.hAdd n 1)) (ω : Fin (instHAdd.hAdd n 1) → Fin 2 → Prod Pouw.Witness.TDraw (Fin 2))",
+    "        (∀ (u : Fin (instHAdd.hAdd 1 1)) (ω : Fin (instHAdd.hAdd 1 1) → Fin 2 → Prod Pouw.Witness.TDraw (Fin 2))",
     "          (o : Unit), Pouw.Witness.honest.Passes Pouw.Witness.twVerdict Pouw.Witness.twDev o (ω u))))"
    ],
    "assumptions": [],
-   "type_hash": "494d7ee1b583868bd3079dc3d995af6ec22f780ba3cc900d2e761eac2e816de0"
+   "type_hash": "01d13c6e0c23f9756366e4cb0acb611ec476815d3f094c7058ed9b4b8b5f5037"
   },
   "Pouw.SecurityProofs.Dither.FleetSound_nontrivial": {
    "owner": "@compute-research",
    "signature": [
-    "Pouw.SecurityProofs.Dither.FleetSound_nontrivial (n : Nat) :",
+    "Pouw.SecurityProofs.Dither.FleetSound_nontrivial :",
     "  Exists fun A =>",
     "    Not",
     "      (Real.instLE.le",
@@ -9700,14 +9700,14 @@
     "            And S.Nonempty",
     "              (Exists fun z =>",
     "                And",
-    "                  (∀ (u : Fin (instHAdd.hAdd n 1)),",
+    "                  (∀ (u : Fin (instHAdd.hAdd 1 1)),",
     "                    SetLike.instMembership.mem S u →",
     "                      And (A.Passes (fun x x_1 x_2 x_3 => True) Pouw.Witness.twDev oω.fst (oω.snd u))",
     "                        (Pouw.Witness.twPd.Fits (A.timedUse oω.fst (oω.snd u)) (z u)))",
     "                  (Not",
     "                    (Exists fun d =>",
     "                      And",
-    "                        (∀ (u : Fin (instHAdd.hAdd n 1)),",
+    "                        (∀ (u : Fin (instHAdd.hAdd 1 1)),",
     "                          SetLike.instMembership.mem S u →",
     "                            And (Real.instLE.le 0 (d u))",
     "                              (Pouw.Witness.twPd.FreedWithin 1 (z u) (instHAdd.hAdd (1 / 7) (instHDiv.hDiv (d u) 14))",
@@ -9717,7 +9717,7 @@
     "        (instHAdd.hAdd Pouw.Witness.twδ (Finset.univ.sum fun _u => 0)))"
    ],
    "assumptions": [],
-   "type_hash": "6b0566aca86ffff9d0c7bc2cbd8811fa1d5376eb3876dd9a3976c229cc653670"
+   "type_hash": "1021bf668ccc5adaf21e8a9122b217b4a1c15713c87042b47fef896f46517cba"
   },
   "Pouw.SecurityProofs.Dither.FreedOfFloor": {
    "owner": "@compute-research",

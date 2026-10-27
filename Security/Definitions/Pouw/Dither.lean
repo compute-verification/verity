@@ -137,8 +137,8 @@ of the words the commitment binds (`ExtractAdv` links them).
   probability set from its public shape (RT-PROTO-2 P15, P20), and `ok` and `opens` hold where it isn't selected
   (`ditherSelected`, the served design; `noFoldRound` checks its cells on every coin).
 
-The commitment's hash is the random oracle `Orc` (a uniform table: SHA-512 as a random oracle, the named use pending
-Daniel), which `commit`, `opens` and `accept` read. The proof layer (C-Flock's proofs of the opened words) is the
+The commitment's hash is the random oracle `Orc` (a uniform table: SHA-512 as a random oracle, a named use not yet
+decided), which `commit`, `opens` and `accept` read. The proof layer (C-Flock's proofs of the opened words) is the
 service's, not the round's. -/
 structure RoundProto where
   Inst : Type
@@ -283,7 +283,7 @@ section Prover
 
 /-- **The prover of a monitoring period of `nsb` sampling blocks**, one sampling block at a time (RT-LEAN L1 and
 L18), each in three phases: the commit phase, the challenge phase and the response phase, every commitment of a
-block bound before any of its coins (Daniel, 26 Oct, 11:09 AM PDT). It keeps a state `St` across sampling blocks,
+block bound before any of its coins. It keeps a state `St` across sampling blocks,
 starting from `start`, fixed before the period. Every program reads the oracle `P.Orc` (the block's hash, RT-LEAN L26),
 so its queries are inside priced programs. The challenger issues every live coin; the network certifier only watches
 the boundary. Sampling block `b`, in the order of its coins:
@@ -477,7 +477,7 @@ def Fits (X : G.Res → ℝ) (z : Pd.J → ℝ) : Prop := (∀ j, 0 ≤ z j) ∧
 /-- A strategy's value: its `W` credits at `rv` each, plus its other work's. -/
 def value (W : ℝ) (z : Pd.J → ℝ) : ℝ := W * Pd.rv + ∑ j, Pd.val j * z j
 
-/-- **Freed compute is at most `ε C`** (R-ACCEL-1, Daniel 25 Oct): a strategy credited `W` with other work `z` gets
+/-- **Freed compute is at most `ε C`**: a strategy credited `W` with other work `z` gets
 no more credited work plus other work out of the period's devices than an honest strategy on the same devices, plus
 `ε C`. An honest strategy is credited `W'` at the honest use `W' · hon` and does other work `z'` beside it. Its dual is
 a price on the resources (`Definitions.Pouw.Guarantees.Dither.FreedOfFloor`). This is the definition's one place. -/
