@@ -34,7 +34,7 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked here. Its root would be the
 request's body, whose reads `NciCheck.Desc` holds as segments of gates, each Definition's return coalesced into runs
-(`Desc.coalesce`): on rank 0, about 1.3·10^7 segments, read in about 12 s (`nci_cost.py glm`'s `summarize_steps`).
+(`Desc.coalesce`); `nci_cost.py glm` counts and times them (`summarize_steps`).
 
 DIR/results.json has a row per check: the Program (SHA-512 digest, bytes, root nodes, gates), the division, the verdict
 summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's IUs.

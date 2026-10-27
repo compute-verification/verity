@@ -38,14 +38,11 @@ one Definition the node's root calls once, each collective reading the other ran
 `peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
 per layer, per Call) aren't checked here: their root would be the request's body, whose reads `NciCheck.Desc` holds as
-segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`), about 1.3·10^7 on rank 0, read in
-about 12 s (`nci_cost.py glm`). Three of rank 0's Definitions (the
-router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
-`--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
-per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
-peak RSS; `$OUT/ius/` has each verdict's isolation blocks. A rank's check takes about 3.3 minutes and 7 GB, most of it
-decoding the descriptor, the node's (a 2.2 GB descriptor, 8.3·10^12 gates) about 6.5 minutes and 50 GB, and the whole run
-about 25 minutes (r20261027-083006-08ec).
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `nci_cost.py glm` counts and times
+them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
+all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
+(`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
+summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's isolation blocks.
 
 ~~~sh
 research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \

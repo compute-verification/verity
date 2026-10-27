@@ -844,7 +844,7 @@ def Seg.joinWith (f : Piece → Piece → Option Piece) (out : Array Seg) (s : S
 /-- A return's segments with its gates coalesced, the same positions in the same order: runs of a progression joined
 (`Piece.join`), then runs of one length and stride at one step stacked as rows (`Piece.stack`). A body unrolled element
 by element, one primitive node an element, returns its elements every few gates: one piece, where `down` gives one per
-node (GLM-5.3's FP8 group quantizer: 6,192 return pieces, and as many segments in every read of them). -/
+node, and as many segments in every read of them. -/
 def coalesce (segs : Array Seg) : Array Seg :=
   (segs.foldl (Seg.joinWith Piece.join) #[]).foldl (Seg.joinWith Piece.stack) #[]
 
