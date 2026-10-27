@@ -151,7 +151,8 @@ Landing:
   `ruff.toml`: the rest of the tree (all but the integration's lint and `archive/`) is held to the no-growth list
   `tests/lint/allowlists/repo_ruff.json` by the same gate; its `noqa` lines aren't counted. Since drive lands before the
   suites run, the gate lints each PR's own changed Python too (22:45Z), and refuses a PR whose ruff findings under the root
-  config grow, per file and rule: the fix is the code, never the list.
+  config grow, per file and rule: the fix is the code, never the list. The list counts per (file, rule) too, the gate's key
+  (23:47Z), and a rename moves its entries with it (`test_repo_ruff.py --move OLD NEW`); the gate refuses one that doesn't.
 
 Protocols and claims:
 

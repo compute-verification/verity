@@ -46,8 +46,9 @@ like source: the base's lint code, run on the PR's tree, must find nothing the P
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
-tracked file outside this lint's and `archive/`), except that its stale entries don't fail: its list may hold the findings of
-PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` deletes what a tree no
+tracked file outside this lint's and `archive/`), except that it counts findings per (file, rule), an entry
+`{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
+PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
 longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
@@ -55,8 +56,11 @@ and refuses a PR that grows a ratchet (naming the entries it added) or that the 
 It lints the PR's own Python too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run): ruff, under `main`'s
 root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files and `archive/`, before and after, and
 a PR whose (file, rule) count grows is refused, naming each new finding `file:line RULE message`. Fix the code; the list
-never takes a new finding. A renamed file keeps its findings, and a file the PR doesn't touch is never linted. If ruff
-can't run where drive runs the gate, the gate can't judge, and the sync leaves the PR out.
+never takes a new finding. (file, rule) is the repository lint's key too, so a finding moved to another function passes both.
+A renamed file keeps its findings, but the repository lint reads no history, so its entries move with it
+(`python3 tests/lint/test_repo_ruff.py --move OLD NEW`, in the same change): a rename that leaves them behind is refused,
+naming each entry and that command. A file the PR doesn't touch is never linted. If ruff can't run where drive runs the
+gate, the gate can't judge, and the sync leaves the PR out.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more

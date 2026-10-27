@@ -5,7 +5,7 @@
 # finds a stale `noqa`. The style rules a few comments also name (ANN001, ANN201, PLC0415, N812, D401, SLF001, I001, SIM115, D107,
 # ARG002, E702, E741, PERF203) have thousands of findings the code never suppressed, so they're off and those comments are stale.
 # Two lints hold the findings to lists that only shrink: integrations/vllm/tests/lint/test_ruff.py the integration's (and
-# verity/ml/definitions'), tests/lint/test_repo_ruff.py every other tracked file's. The ratchet gate
+# verity/ml/definitions'), tests/lint/test_repo_ruff.py every other tracked file's, per (file, rule). The ratchet gate
 # (integrations/vllm/tools/ratchet_gate.py) judges a change here by running the base's copy on the change's tree, and refuses a
 # PR whose own Python outside the integration's lint gains a finding under main's copy. The formatter stays off.
 target-version = "py312"
