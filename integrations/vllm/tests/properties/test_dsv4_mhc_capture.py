@@ -140,7 +140,7 @@ def test_the_failed_h200_capture_is_pinned() -> None:
     """The small committed cut of the failed capture pins the before counts and why no raw-word replay is possible."""
     path = Path(__file__).with_name("fixtures") / "dsv4_mhc_capture_20261013.json"
     rec = json.loads(path.read_text())
-    assert rec["run_record"] == "art:7a87428ee4b0cb9ae98420432f65c493e8f12f2d0b7bf5b90cc927a86f1129ab" and rec["head"] == "c07829364"
+    assert rec["run"] == "r20261013-115825-580e" and rec["head"] == "c07829364"
     assert rec["raw_arrays_preserved"] is False
     assert rec["operand_source"].startswith("seed-regenerated from the capture's deterministic")
     assert rec["probe"] == {"step": ["g8_w26_f133"], "rounding": ["rne"], "sqrsum": [],
