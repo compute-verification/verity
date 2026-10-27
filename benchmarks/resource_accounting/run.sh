@@ -13,8 +13,8 @@
 #  3. on the CPUs, after the lease: the retained pass (verify_run.py --fast, which must ACCEPT) and its no-write control
 #     (which must REJECT), from scratch; their verify.json files go to $OUT/verify.
 # PHASE=prepare, gpu or verify runs one step alone (default all three), over SCRATCH=<dir>, a scratch the caller owns and keeps
-# between them, where step 1's builds are made once and reused; LEG=<name> keeps that leg's retained passes apart there.
-# LEASE=held runs step 2 under the caller's own lease (window.sh: several legs under one timed lease).
+# between them, where step 1's builds are made once and reused; LEG=<name> keeps that run's retained passes apart there.
+# LEASE=held runs step 2 under the caller's own lease (window.sh: several runs under one timed lease).
 # POUS=1 (one shape; --cwd clone, since the memory challenger's Lean verdict builds in the tree) adds the PoUS arm: before the
 # lease, pod.sh PREPARE=1 builds that verdict; under it, once the shape's points are measured alone, chain.py starts
 # pod.sh IMPL=p2-v3-mc-gpu (P2's timed audit: the GPU responder and the memory challenger, signed with the PoUS lanes' LMS key
@@ -54,7 +54,7 @@ LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}; LEASE=${LEASE:-1 --wai
 [ "$LEASE_MIN" -le 30 ] || { echo "RUN_FAIL_LEASE: LEASE_MIN=$LEASE_MIN is over 30 minutes" >&2; exit 2; }
 stamp() { echo "ra-matmul: $* at $(date -u +%H:%M:%SZ)"; }
 on() { case $PHASE in all|"$1") return 0 ;; *) return 1 ;; esac; }
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 PASSES=$S/passes${LEG:+/$LEG}
 
@@ -95,7 +95,7 @@ if on prepare || on gpu; then
   esac
 fi
 
-# pod.sh PREPARE=1 once per scratch (its marker), so legs sharing a scratch build the verdict once
+# pod.sh PREPARE=1 once per scratch (its marker), so runs sharing a scratch build the verdict once
 pous_prepare() {
   if [ -f "$S/pous-prepared" ]; then stamp "PoUS prepared in this scratch already"; return 0; fi
   stamp "PoUS prepare"

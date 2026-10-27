@@ -358,9 +358,9 @@ theorem Committed.unpinned_of_rep (ht : tags.typed = false) (hC : Committed tags
     (h : c.outRowPorts = Array.replicate c.outPorts.size 1) : HmRow.pinnedCount c.metaJ = 0 := by
   rcases hC with hC | hC
   · obtain ⟨hp, hc⟩ := parse_untyped ht hC
-    exact unpinned_of_rep hp hc h
+    exact FlockSoundness.Discharge.Hidden.unpinned_of_rep hp hc h
   · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases hC
-    exact unpinned_of_rep hp hck h
+    exact FlockSoundness.Discharge.Hidden.unpinned_of_rep hp hck h
 
 /-- **An untyped hidden statement of one output row per output port pins no output** (`Committed.unpinned_of_rep`). -/
 theorem setupHidden_unpinned (ht : tags.typed = false)

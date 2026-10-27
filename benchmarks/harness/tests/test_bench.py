@@ -246,6 +246,58 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
     assert _parser().parse_args(["run", "x"]).direct is None
 
 
+@pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
+def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
+    """The Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
+    settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
+    one GPU through its slot and gpu-lease, the wait for other leases on the node inside the spec's max_minutes."""
+
+    from research.pods.nebius.slot_only import through_slot
+
+    root = Path(__file__).resolve().parents[3]
+    name = f"llama31-8b-fp8-1gpu-commit-served-width-{gpu}"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
+        rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
+    assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
+        gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
+    attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
+    assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
+    from verity_bench.vllm.runner import engine_args
+    assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
+            if key.startswith("attention")} == attention
+    assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
+    assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
+
+    assert node in jobs.DIRECT_NODES
+    plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    commands = []
+    assert jobs.dispatch(plan, name, root=root, direct=node,
+                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == 3
+    for command in commands:
+        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == "120m"
+        assert through_slot(workload)
+        lease = workload[workload.index("--", 4) + 1:]
+        assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
+
+
+def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
+    """The DC VMs' pinned-vLLM Python is $WORK/cp/venv312: the launcher takes it when none before it exists."""
+
+    root = Path(__file__).resolve().parents[3]
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    python = tmp_path / "cp" / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$0"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == str(python)
+
+
 def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
@@ -323,6 +375,17 @@ def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
     assert capped.max_warmups == 8 and capped.config_sha256 != replace(capped, max_warmups=None).config_sha256
     with pytest.raises(ValueError, match="max_warmups must be at least warmups"):
         load_spec(_spec_with(tmp_path, "warmups = 3\nmax_warmups = 2"))
+
+
+def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
+    from verity_bench.vllm.presets import ENGINE_SETTINGS
+
+    path = tmp_path / "spec.toml"
+    path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
+        "[preset.engine_settings]\n", '[preset.engine_settings]\nmoe_backend = "triton"\n'))
+    refusal = f"unknown engine_settings ['moe_backend']; known: {list(ENGINE_SETTINGS)}"
+    with pytest.raises(ValueError, match=re.escape(refusal)):
+        load_spec(path)
 
 
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
@@ -458,7 +521,7 @@ def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
 
     kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
     kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
-    phase_gpus = {"gpu1": 1, "gpu8-timed": 8}
+    phase_gpus = {"gpu1": 1}
     specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
     assert specs
     for spec in specs:
@@ -466,7 +529,7 @@ def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
         assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
     with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
-        jobs.queue_kind(4)
+        jobs.queue_kind(8)
 
 
 def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
@@ -784,13 +847,18 @@ def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
 
+def _serving_defaults_preset():
+    preset = load_spec("llama32-1b-bf16-rtx-served-arm").preset
+    return replace(preset, engine_settings={**preset.engine_settings, "serving_defaults": True})
+
+
 def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
     from verity_bench.vllm.runner import engine_args
 
-    served_preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    served_preset = _serving_defaults_preset()
     for resident in (True, False):
         args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
-        assert args["kv_cache_memory_bytes"] == 10 * 2**30
+        assert args["kv_cache_memory_bytes"] == 4 * 2**30
         assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
     assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
     pinned = load_spec("llama31-8b-fp8-1gpu").preset
@@ -800,9 +868,6 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
                                               "cudagraph_capture_sizes": [1, 8, 32, 128]}
     assert engine_args(pinned, "fp8", resident=False, eager=False)["kv_cache_memory_bytes"] == 56 * 2**30
     assert "compilation_config" not in engine_args(pinned, "fp8", resident=False, eager=True)
-    assert not {"attention_backend", "attention_config", "moe_backend"} & set(args)
-    moe = engine_args(load_spec("qwen3-30b-a3b-bf16-b200-served").preset, "bfloat16", resident=False, eager=False)
-    assert (moe["attention_backend"], moe["attention_config"], moe["moe_backend"]) == ("FLASH_ATTN", {"flash_attn_version": 2}, "triton")
 
 
 def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
@@ -829,7 +894,7 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
     monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
     factory = runner.ProcessEngineFactory()
     factory.context = Context()
-    preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    preset = _serving_defaults_preset()
     for arm in resolve_arms("stock"):
         factory.create(arm, preset, resident=True)
         factory.create(arm, preset, resident=True)
@@ -1603,9 +1668,9 @@ def _repo(tmp_path):
     (repo := tmp_path / "repo").mkdir()
     (repo / "uv.lock").write_text("lock\n")
     (repo / "pyproject.toml").write_text("")
-    env = {**os.environ, "GIT_AUTHOR_DATE": f"@{COMMITTED} +0000", "GIT_COMMITTER_DATE": f"@{COMMITTED} +0000"}
-    subprocess.run("git init -q && git add . && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "
-                   "commit -qm points", shell=True, cwd=repo, env=env, check=True)
+    dates = f"GIT_AUTHOR_DATE='@{COMMITTED} +0000' GIT_COMMITTER_DATE='@{COMMITTED} +0000'"
+    subprocess.run(f"git init -q && git add . && {dates} git -c user.name=t -c user.email=t@example.com "
+                   "-c commit.gpgsign=false commit -qm points", shell=True, cwd=repo, check=True)
     return repo, subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
 
@@ -1665,7 +1730,7 @@ def _stores(tmp_path, remote_attempts):
 
 
 def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tmp_path):
-    """BENCH-10: the lookup read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
+    """The lookup once read only this machine's catalog, so a fresh VM saw every point as missing (and `run` would
     have launched them again). It pulls the remote's attempts since the commit, once, and nothing older."""
 
     from research.store.local import LocalStore

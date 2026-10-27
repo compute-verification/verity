@@ -90,6 +90,19 @@ def test_the_keep_map_merges_by_module():
     assert why == ["modules.m.a: changed on both sides, differently"]
 
 
+def test_p16s_public_table_merges_by_command():
+    """Two PRs that each add a command run from outside the integration both keep theirs; one command given two callers
+    refuses."""
+    row, tie, pin = {"row": "benchmarks/row.sh"}, {"tie": "benchmarks/tie.sh"}, {"pin": "benchmarks/pin.sh"}
+    base = {"rule": "P16 (every CLI command has a caller)", "public": row, "entries": [A]}
+    merged, why = MA.merge(base, {**base, "public": {**row, **tie}}, {**base, "public": {**row, **pin}})
+    assert why == [] and merged["public"] == {**row, **tie, **pin}
+    assert MA.dump(merged).splitlines()[2:7] == ['  "public": {', '    "row": "benchmarks/row.sh",',
+                                                '    "tie": "benchmarks/tie.sh",', '    "pin": "benchmarks/pin.sh"', "  },"]
+    _, why = MA.merge(base, {**base, "public": {"row": "benchmarks/a.sh"}}, {**base, "public": {"row": "benchmarks/b.sh"}})
+    assert why == ["public.row: changed on both sides, differently"]
+
+
 def test_every_list_is_written_back_byte_for_byte():
     """The merged file is written as the lints' files are, so a merge rewrites only the entries it changed."""
     paths = sorted(R.ALLOWLISTS.glob("*.json")) + [KEEP]

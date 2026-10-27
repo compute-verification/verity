@@ -2,8 +2,9 @@
 // compression of a 96-byte message) on sm_90a / sm_100a, the floor of any H1 + fx1 kernel on these cards: a unit derives
 // h1tile.Layout's `blocks` from seed_j and `lanes` from sigma_R (576 + 32 at K = 4096, 1856 + 32 at K = 14336).
 //
-//   ca     compute accounting's benchmarks/pouw/served_h1/noise.cu `h1_noise`, copied verbatim:
-//          one thread a block, codec_tensor's sha512_compress (K from constant memory, rounds rolled by 16)
+//   ca     compute accounting's benchmarks/pouw/served_h1/noise.cu `h1_noise`, copied verbatim but for the compression:
+//          one thread a noise chunk, sx::compress<0, 2> (sha512x.cuh; codec_tensor's sha512_compress statement for
+//          statement, K from constant memory)
 //   mid    one warp an (S, chunk) item, J blocks a lane (t = chunk 32 J + 32 j + lane): the message's words 0..10 are the
 //          seed's, so rounds 0..10 (the midstate) and every schedule term free of word 11 (t) are computed once an item,
 //          then each block runs rounds 11..79 on them (h1sha.cuh's noise_mid and noise_block, h1u.cu's own)
@@ -33,9 +34,8 @@ extern "C" __global__ void h1_noise(const u64* __restrict__ seeds, u64 n, u32 nb
   w[14] = 0;
   w[15] = 96 * 8;
   u64 s[8];
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sh::kSha512Iv[j];
-  sh::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 2>(s, w);
   if (sink) {
     u32 x = 0;
 #pragma unroll
@@ -109,8 +109,8 @@ extern "C" int kn_mid(const void* seeds, unsigned S, unsigned nb, unsigned J, vo
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// kernels-j10's tile-width price (measured only): h1u.cu's h1s_noise and h1j_noise with the layout's counts and the seeds'
-// row stride (u64 words) as arguments, so an r x c tile's noise (nb = r rb + c cb blocks, its rows_nb = r rb row blocks first,
+// The tile-width price (measured only): h1u.cu's h1s_noise and h1j_noise with the layout's counts and the seeds'
+// row stride (u64 words) as arguments, so an r x c tile's noise (nb = r rb + c cb blocks, its rows_nb = r rb row tiles first,
 // h1tile.Layout's order) runs at any c. Unit u = ri ncb + cj hashes its blocks t >= t0: t0 = 0 for a band leader
 // (cj % band == 0), rows_nb otherwise (J10: a non-leader reads its leader's rows); band 1 is per-unit noise.
 __global__ void __launch_bounds__(256) h1_noise_band(const u64* __restrict__ seeds, u32 stride, u32 S, u32 ncb, u32 nb,

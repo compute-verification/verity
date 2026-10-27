@@ -174,7 +174,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
     assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
-    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], u, 1) for u in range(T)]
+    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], c["tile0"], c["tiles"])
+                                                                    for c in com["calls"]]
     assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "zy", "salt", "position", "roots"]
     assert U.window_ports(win.program) == {**{f"a_k{K}[{i}]": f"a{i}" for i in range(R)},
                                            **{f"b_k{K}[{j}]": f"b{j}" for j in range(C)}, "zy": "zy"}
@@ -253,19 +254,32 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     drawn = [calls[0][0] + 1, calls[1][0]]
     found = {u: RN.findings_of(docs[c]) for c, u in enumerate(drawn)}
     assert found[drawn[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
-    entries = [*com["registered"], okr.entry()]
-    assert RN.credit_registration(desc, drawn, entries, found, wr) is None
+    entries, ok = com["registered"], {"value": "ok", "root": okr.root.hex()}
+    assert RN.credit_registration(desc, drawn, entries, found, wr, ok) is None
     okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
-    assert RN.credit_registration(desc, drawn, [*com["registered"], dict(okr.entry(), domain=okd)], found, wr) is None, (
+    assert RN.credit_registration(desc, drawn, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
         "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
         "reads no entry of them")
-    for bad_entries, root, why in (
-            ([*RN.unrooted(com)["registered"], okr.entry()], wr, f"registered value a/{K}@0's domain is not"),
-            (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
-            (entries[1:], wr, f"against b/{K}, which the window registers not")):
-        got = RN.credit_registration(desc, drawn, bad_entries, found, root)
+    # ok-unrooted: the sessions opened ok at its rows registered without the window root (the domain a file states
+    # without it, which flock-verify roots its known rows at), and credit's step-5 rule refuses them
+    oku = RN.unrooted_ok(win, com)
+    assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
+    assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
+                                           16, U.V2, None).root
+    bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
+    for bad, why in ((bad_found, f"call 0's session of unit {drawn[0]} opened the ok rows at another port, value or root"),
+                     ({drawn[0]: found[drawn[0]], drawn[1]: {p: e for p, e in found[drawn[1]].items() if p != "o1"}},
+                      f"call 1's session of unit {drawn[1]} opened the ok rows"),
+                     ({u: dict(f, o2=f["o1"]) for u, f in found.items()}, "opened the ok rows at another port")):
+        got = RN.credit_registration(desc, drawn, entries, bad, wr, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
-    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr)[0] == "missing"
+    for bad_entries, root, why in (
+            (RN.unrooted(com)["registered"], wr, f"registered value a/{K}@0's domain is not"),
+            (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
+            ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the window registers not")):
+        got = RN.credit_registration(desc, drawn, bad_entries, found, root, ok)
+        assert got is not None and got[0] == "registration" and why in got[1], got
+    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr, ok)[0] == "missing"
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
