@@ -226,6 +226,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
                                    indent=1, sort_keys=True))
     got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []),
                  *(["--weights", str(weights["opening"])] if weights else []),
+                 *(["--pouw-live", str(scratch / f"w{index}-salt-host")] if getattr(a, "pouw_live", False) else []),
                  *(["--out-opening", str(tie.pop("opening"))] if tie else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
@@ -361,6 +362,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--requests", default="3,7")
     ap.add_argument("--steps", type=int, default=2)
     ap.add_argument("--pouw", choices=["h1"], help="the loop's PoUW window and its audit (ALLP-H1LOOP's, until it lands)")
+    ap.add_argument("--pouw-live", action="store_true", help="with --pouw h1 --registered: the H1 window's salt from a "
+                    "salt-only session (serve --pouw-live), here a development gate in scratch, not vy-challenger-1")
     ap.add_argument("--deployment", default=M.REFERENCE, help="the census deployment the monitoring periods are over")
     ap.add_argument("--onsite", help="onsite's executable (`onsite check`), for when its components are ports")
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
