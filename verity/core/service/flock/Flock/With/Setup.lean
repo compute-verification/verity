@@ -928,8 +928,8 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let u? ← (draw.mapM Draw.UnitDraw.ofJson : V _)
   if let some u := u? then
     match u.law with
-    | .subset _ => splits u.units.size
-    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+    | .subset _ | .stratified .. => splits u.units.size
+    | _ => throw Draw.TABLES_LAW
   -- without a draw, the population's units (`setupH` checks a draw's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
