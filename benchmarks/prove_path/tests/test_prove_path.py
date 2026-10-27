@@ -942,12 +942,10 @@ INT8_V1 = {"modules_to_not_convert": ["lm_head"], "quant_method": "verity_int8",
 def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> Path:
     """TINY's checkpoint under ``d`` (random bf16 weights by their HF names, one safetensors shard, and its config.json) and a
     manifest pinning the shard at ``model`` and ``revision``: the manifest. ``int8``: as `engine.int8_checkpoint`'s v1 recipe
-    makes one, each decoder linear an I8 weight and its F32 ``weight_scale`` [N, 1], under ``INT8_V1``."""
+    makes one, each decoder linear an I8 weight under its row rule and its F32 ``weight_scale`` [N, 1], under ``INT8_V1``."""
     import struct
 
     import numpy as np
-
-    from verity_vllm.engine.int8_checkpoint import channel_scales, quantize
 
     rng, H, I, D = np.random.default_rng(3), TINY["hidden_size"], TINY["intermediate_size"], 16
 
@@ -958,8 +956,8 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
         if not int8:
             return {name + ".weight": bf16(n, k)}
         w = rng.random((n, k), dtype=np.float32) - np.float32(0.5)
-        s = channel_scales(w)
-        return {name + ".weight": quantize(w, s), name + ".weight_scale": np.asarray(s, np.float32).reshape(n, 1)}
+        s = np.maximum(np.abs(w).max(axis=1, keepdims=True), np.float32(1e-30)) / np.float32(127)
+        return {name + ".weight": np.clip(np.rint(w / s), -127, 127).astype(np.int8), name + ".weight_scale": s}
     t = {"model.embed_tokens.weight": bf16(TINY["vocab_size"], H), "model.norm.weight": bf16(H)}
     for i in range(TINY["num_hidden_layers"]):
         p = f"model.layers.{i}."
@@ -996,7 +994,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
 
     from verity_vllm.pipeline import advice as ADV
     from verity_vllm.program.predict import window_weights as WW
-    from verity_vllm.program.predict.window_builder import Grain
+    from verity_vllm.program.predict.window_weights import Grain
 
     grain = Grain(gemm_words=512, rows=9, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
@@ -1057,7 +1055,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
 
     from verity_vllm.pipeline import advice as ADV
     from verity_vllm.program.predict import window_weights as WW
-    from verity_vllm.program.predict.window_builder import Grain
+    from verity_vllm.program.predict.window_weights import Grain
 
     grain = Grain(gemm_words=512, rows=9, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
