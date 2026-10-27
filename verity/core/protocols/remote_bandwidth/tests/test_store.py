@@ -95,14 +95,19 @@ def root_of(s: store.Store, key: bytes = KEY) -> bytes:
 def test_the_local_canonical_json_is_ml_circuits_codecs_on_the_shapes_pins_use():
     """This protocol may not import `verity.ml.circuits`, so `store.canonical_json` is its own: the same bytes as
     `codec.canonical_json` on a pin's checkpoint ({file: SHA-512 hex}), a pin, a models.json entry and core's
-    `models.json` itself, whose every role's `checkpoint_sha512` it reproduces."""
+    `models.json` itself, whose every role's `checkpoint_sha512` it reproduces. A string past ASCII without DEL,
+    which codec refuses, it escapes, as `RemoteAudit.Store.pyJson` does."""
     files = {"model-00002-of-00002.safetensors": "ab" * 64, "config.json": "cd" * 64, "tokenizer.json": "0f" * 64}
     pin = {"name": "QWEN25_32B_BF16", "checkpoint": files, "checkpoint_sha512": "12" * 64}
     entry = {"checkpoint_sha512": "34" * 64, "files": files, "recipe": "bf16/v1", "repo": "Qwen/Qwen2.5-32B",
              "revision": "1818d35814b8319459f4bd55ed1ac8709630f003"}
     models = json.loads(MODELS_JSON.read_text())
-    for doc in (files, pin, entry, {"ROLE": entry}, models, {"é": [1, -2, None, True]}):
+    for doc in (files, pin, entry, {"ROLE": entry}, models, {"e\t~": [1, -2, None, True]}):
         assert store.canonical_json(doc) == circuits_codec.canonical_json(doc)
+    for doc in ({"é": [1]}, ["\x7f"]):
+        with pytest.raises(ValueError, match="not ASCII without DEL"):
+            circuits_codec.canonical_json(doc)
+        assert store.canonical_json(doc) == json.dumps(doc, separators=(",", ":")).encode()
     assert models
     for role, e in models.items():
         assert store.checkpoint_sha512(e["files"]) == e["checkpoint_sha512"], role
