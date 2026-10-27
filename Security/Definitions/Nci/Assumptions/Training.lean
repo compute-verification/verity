@@ -11,13 +11,13 @@ conjunction of `WeightsIncompressible`, `ActivationsIncompressible` and `Partial
 (`Nci.SecurityProofs.trainingIncompressible_iff`), and the support-form assumptions imply it
 (`Nci.SecurityProofs.trainingIncompressible_of_support`).
 
-It is NCI's one incompressibility premise (card 90f5557c, 19 Oct 2026); the older assumptions stay beside it until the
-guarantees that read them move to it. It is about the reference circuit, not a declared one: Daniel's "analysis
-simplification, known false" (9 Oct, 02:46Z) is about `ActivationsIncompressible` and `PartialSumsIncompressible` on a
-declared circuit and does not reach it (card 7d82eba8). The reference circuit runs the chain gate for gate, one gate
-per product, with ordinary matrix multiplications and no Strassen-like algorithm; that is a stated assumption (Daniel,
-19 Oct 2026, 10:47 AM PDT), and in Lean it is the `Chain` the guarantees take. The packed forms relax it to at most `k`
-products to a gate, as in `Dot16` steps (`PackedChain`, `PackedTrainingIncompressible`, card badb84c0, 20 Oct 2026).
+It is NCI's one incompressibility premise; the older assumptions stay beside it until the
+guarantees that read them move to it. It is about the reference circuit, not a declared one: `ActivationsIncompressible`
+and `PartialSumsIncompressible` are false on a declared circuit, whose wiring the prover controls, and that does not
+reach it. The reference circuit runs the chain gate for gate, one gate
+per product, with ordinary matrix multiplications and no Strassen-like algorithm; that is a stated assumption, and in
+Lean it is the `Chain` the guarantees take. The packed forms relax it to at most `k`
+products to a gate, as in `Dot16` steps (`PackedChain`, `PackedTrainingIncompressible`).
 
 The chain guarantees restated on it (`Nci.Guarantees.IncompressibleContainedTraining`) conclude what the support forms
 do from a weaker premise, since the support forms with `WeightsIncompressible` imply it; the thread guarantees read only

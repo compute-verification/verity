@@ -27,8 +27,7 @@ where the premise that the committed leaves are g1's narrows the windows and lea
 `Proofs.Accounting.Headline.FpG1` shows that an honest g1 window meets every premise. What
 these lemmas add is that g1's transcript is the record's: every entry plus its coin is an s8 value inside the record's
 operand ranges, and the int8 GEMM the record's MMA computes is the served model's exact product up to the coin's two
-rank-one terms. The record's premises read at g1's values as they do at any other (RT2-FP-13,
-note:20261019T1100Z-draft-rt2-fp):
+rank-one terms. The record's premises read at g1's values as they do at any other (RT2-FP-13):
 
 * the luck premises (`OperandHMu`, `ReceiptLuckAt`, `WholeLuckAt`) are Props of the receipt game over every level a
   prover commits, and nothing checks g1's grids, so a g1 prover is one of the record's provers;

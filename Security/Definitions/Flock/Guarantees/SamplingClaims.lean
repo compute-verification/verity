@@ -5,7 +5,7 @@ import Definitions.Claims.Sampling
 
 `SamplingClaimsStated` reads every claim of `Definitions.Claims.Sampling`, the shared claims they instantiate, and the
 named assumptions and trusted base they use, so the Lean check records each one's text (and every definition it reads)
-under `reads`: a changed claim is a changed record, which reaches Daniel when it lands. It says nothing about the
+under `reads`: a changed claim is a changed record, which is reported when it lands. It says nothing about the
 verifier. A claim leaves it when a guarantee states that claim at the deployed sampled verifier, and the guarantee's own
 record holds the text from then on.
 -/
