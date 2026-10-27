@@ -1,6 +1,6 @@
-"""The evidence the Definitions' conformance texts and the row kernels' provenance records cite (evidence-store runs,
-records and art ids, the harness commits that ran them, capture dates), read from `evidence.json`, keyed by the capture or
-probe they identify."""
+"""The evidence the Definitions' conformance texts and the row kernels' provenance records cite, read from `evidence.json` and
+keyed by the capture or probe they identify: evidence-store art ids under the role each plays (``run_record``, the record a
+run published; ``art``, its output), record digests, the harness commits that ran them and capture dates."""
 from __future__ import annotations
 
 import json

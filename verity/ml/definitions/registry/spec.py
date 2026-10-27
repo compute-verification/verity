@@ -1,4 +1,4 @@
-"""Composites of the speculative-decoding (two-model draft/target) typed serving program — lane SD.
+"""Composites of the speculative-decoding (two-model draft/target) typed serving program.
 
 The B1 composites (`b1.py`) are reused unchanged for both models' scans; this module adds the *acceptance*
 and the *state transition* of one speculative step as represented computations, and two programs:
@@ -40,8 +40,8 @@ DRAFT_CONFIG = {
     "H": 896, "NL": 24, "NH": 14, "KVH": 2, "D": 64, "I": 4864, "V": 151936,
     "QKV": 1152, "GU": 9728, "EPS": 1e-6, "ROPE_THETA": 1_000_000.0, "MAX_POS": 32768, "BIAS": True,
     "tie_word_embeddings": True,
-    # FA2's head-dim-64 splitkv trait visits 128-key blocks (kBlockN = 128; hdim 128: 64).  Measured (lane SD, pod
-    # vllm-rc-a100, sd-count draft steps 2-6): with 64-key blocks every draft Attention at a position with more than 64
+    # FA2's head-dim-64 splitkv trait visits 128-key blocks (kBlockN = 128; hdim 128: 64).  Measured (an A100, sd-count draft
+    # steps 2-6): with 64-key blocks every draft Attention at a position with more than 64
     # visible keys mismatches in a few words, every one with <= 64 keys is exact.
     "FA2_BN": 128,
     "profile": {"attention": "FA2 flash_fwd_splitkv_kernel<64,64,128,4> (head dim 64: 128-key blocks; trait inferred from the t>=64 mismatch boundary)",

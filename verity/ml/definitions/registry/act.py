@@ -63,7 +63,7 @@ ZERO_BITS = 0x00000000
 LN_F32_OVERFLOW = math.log((2.0 - 2.0 ** -24) * 2.0 ** 127)
 
 CONFORMANCE = ("exact-model-tested: SiluMulBf16_v1 on finite ordinary words; the edge words (NaN, gate -inf, gates past expf "
-               f"overflow, gate -0, up -0) as measured ({EVIDENCE['silu_edge_cases']['run']}, silu-edge-cases)")
+               f"overflow, gate -0, up -0) as measured ({EVIDENCE['silu_edge_cases']['result']}, silu-edge-cases)")
 
 
 def silu_f32_bits(g: int) -> int:

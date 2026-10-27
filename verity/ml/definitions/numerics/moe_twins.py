@@ -10,7 +10,7 @@ from verity.ml.definitions.registry.prims import bits_of, f32_of
 
 def nv_expf_bits(x: int) -> int:
     """The same sequence evaluated directly on one f32 encoding (for probes / difftests; `NvExpf` is the Program-side
-    statement of it and the two are asserted equal by the lane's tests)."""
+    statement of it and the two are asserted equal by the tests)."""
     t = P.F32Fma.evaluate(x, 0x3BBB989D, 0x3F000000)
     s = F32Sat.evaluate(t)
     jb = F32FmaRm.evaluate(s, bits_of(252.0), bits_of(12582913.0))

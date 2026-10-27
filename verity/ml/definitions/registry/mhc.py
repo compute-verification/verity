@@ -95,13 +95,13 @@ F_ONE, F_NEG_INF = 0x3F800000, 0xFF800000
 
 _CONF = ("model-untested: read from the TileLang kernels' generated CUDA and PTX at the commits the module docstring pins; "
          "tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
-_STEP_PROBE = EVIDENCE["hopper_tf32_k8_step_probe"]["run"]
-_TF32_CONF = (f"exact-model-tested: {_STEP_PROBE}'s probe on a cc 9.0 GPU (132 SMs) fitted this k8 step alone (one group, "
+_STEP_PROBE = EVIDENCE["hopper_tf32_k8_step_probe"]["run_record"]
+_TF32_CONF = (f"exact-model-tested: a probe on a cc 9.0 GPU (132 SMs; {_STEP_PROBE}) fitted this k8 step alone (one group, "
               "26 bits, floor -133) on exact products after each f32 operand is rounded RNE to TF32")
 _DG_CONF = ("model-untested: read from DeepGEMM 8b1392b9's cc 9.0 TF32 hc-prenorm GEMM (the header and lines :150-240 the module "
             "docstring names) on the candidate HopperTf32WgmmaDot8_v1; tests/properties/dsv4_mhc_capture_gpu.py is its hardware check")
 _BROADCAST_CONF = ("exact-model-tested: vLLM d9105ea80 tilelang_kernels.py:453-454 copies each loaded bf16 embedding word to "
-                   f"every hc_mult stream; {EVIDENCE['dsv4_mhc_capture']['run']} checked every residual_out copy in the cc 9.0 broadcast "
+                   f"every hc_mult stream; dsv4_mhc_capture ({EVIDENCE['dsv4_mhc_capture']['run_record']}) checked every residual_out copy in the cc 9.0 broadcast "
                    "cases")
 
 #: The candidate k8 step's grouped sum: the sm_90 BF16 step's adder (`HOPPER_BF16_WGMMA_K16`) over the eight products
