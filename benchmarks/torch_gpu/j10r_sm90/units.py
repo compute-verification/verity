@@ -93,7 +93,7 @@ class H1u:
         return int(self.h.kh_words(k))
 
     def ws_bytes(self, m: int, n: int, k: int) -> int:
-        """A call's row workspace: kh_j10r_jw_bytes (h1u_jw.patch's builds: its column blocks and W' too), else
+        """A call's row workspace: kh_j10r_jw_bytes (an H1U_JW build's: its column blocks and W' too), else
         kh_j10r_rows_bytes."""
         if hasattr(self.h, "kh_j10r_jw_bytes"):
             self.h.kh_j10r_jw_bytes.restype = ctypes.c_ulonglong
