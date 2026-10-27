@@ -315,6 +315,7 @@ import Proofs.Flock.Claims.Recursion.HresAsm
 import Proofs.Flock.Claims.Recursion.ResEndsW
 import Proofs.Flock.Claims.Recursion.ResStepsWV
 import Proofs.Flock.Claims.Recursion.ResStepsWD
+import Proofs.Flock.Claims.Recursion.ResNextW
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
