@@ -55,28 +55,28 @@ structure SampledIn (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V
 
 namespace SampledIn
 
-variable {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)} (S : SampledIn V θ F c σ)
+variable {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
 
 /-- **The session's bound is at most the vocabulary's error**: where the vocabulary's finder meets its premise, the
 session's finders meet theirs and `deltaPub` is at most the published `δ`; elsewhere the error is `⊤`. -/
-theorem bound_le : S.A.bound S.τ ≤ V.error .sampled θ F c σ := by
+theorem bound_le (S : SampledIn V θ F c σ) : S.A.bound S.τ ≤ V.error .sampled θ F c σ := by
   by_cases hcr : V.FinderCR .sampled θ F c σ
-  · rw [Flock.Guarantees.LiveAt.bound, if_pos (S.cr hcr), Vocab.error, Accounting.condError, if_pos hcr]
+  · rw [Flock.Guarantees.LiveAt.bound, ite_eq_left (S.cr hcr), Vocab.error, Accounting.condError, ite_eq_left hcr]
     dsimp only [PeriodLive.error]
     exact S.delta_le.trans le_self_add
-  · rw [Vocab.error, Accounting.condError, if_neg hcr]
+  · rw [Vocab.error, Accounting.condError, ite_eq_right hcr]
     exact le_top
 
 /-- **The target's event at the coupled strategy**: sampled proofs' verdict accepts while its claim fails with
 probability at most the vocabulary's error. -/
-theorem le_error :
+theorem le_error (S : SampledIn V θ F c σ) :
     Game.prob (fun o => V.Verdict .sampled o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ ≤
       V.error .sampled θ F c σ := by
   by_cases hH : ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
       (V.certOf θ).ε * V.units F
   · refine (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ).trans ?_
     rw [Game.prob_false]
-    exact zero_le _
+    exact zero_le
   · have hA : ¬ S.A.Holds S.q (V.certOf θ).ε S.τ := fun h => hH (by
       have h' : ((S.A.wrongE S.q S.τ).card : ℝ) ≤ (V.certOf θ).ε * S.n := h
       have hu : ((V.units F : ℕ) : ℝ) = S.n := by exact_mod_cast S.units_eq
