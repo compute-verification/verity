@@ -5672,6 +5672,12 @@
    "assumptions": [],
    "type_hash": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007"
   },
+  "Flock.SecurityProofs.DeltaPubDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed"],
+   "assumptions": [],
+   "type_hash": "a813a423e9fcecd92d7162f686abe1533dde2a5b1b1e1a17c659b78b3a361e5c"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -5901,9 +5907,6 @@
    "signature": ["Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK"],
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
-  },
-  "Flock.SecurityProofs.DeltaPubDeployed": {
-   "owner": "@proofs"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "owner": "@proofs",
@@ -36376,7 +36379,15 @@
     "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
     "Flock.Guarantees.SampledKSLivePub": "d3f967c477902566490163001fb7605945785000bf19a79330f51ba829118bf1"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
+  },
+  "Proofs.Flock.Bridge.PublicDeployed": {
+   "digest": "ec0aeebbc912b6af0ab01c53496fda04c4414600addf1604dc41a01295d300bb",
+   "definitions": {
+    "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
+    "Flock.Guarantees.DeltaPubDeployed": "ea36f50d3234447fc82529abdbbac712789c6d8b357f7d74764ae7376087e22f"
+   },
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
   "Proofs.Flock.Bridge.Refused": {
    "digest": "03c8629c14e93927bf2373c5847707d8f319b1d89607fb258f7a9d3d16944469",
@@ -40360,7 +40371,7 @@
     "FlockSoundness.Discharge.ZkLink.ksClosedM1": "7c15d0f99d5d1410d07f04db7c4641abfb062e0106f6de11c87d5538801dc20a",
     "FlockSoundness.Discharge.ZkLink.rateM1": "f5dd0e040b4db220db97929c7a4504a5573b97c7335d216000a0212eea49f545"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered": {
    "digest": "5f05d9c0d438af3248be184b3f3c16ff38a4f45bf9e78cdbbd38ee44776978d8",
