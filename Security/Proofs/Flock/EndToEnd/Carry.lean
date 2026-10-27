@@ -158,6 +158,7 @@ theorem errZC_le_trial {t : ℕ} (ht : t ∈ x.sessions) (τ : Strategy (W t).ga
     rw [errAt_eq_expect, errAt_eq_expect, x.expect_trial τ hne]
     refine congrArg (fun f => expect f _ _) (funext fun o => ?_)
     simp only [ind, x.rd_some ht]
+    congr
   · unfold errZC
     rw [dite_eq_right_of_eq_false (eq_false hne)]
     exact errAt_nonneg _ _ _ w
