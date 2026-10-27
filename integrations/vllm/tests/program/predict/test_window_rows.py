@@ -80,11 +80,12 @@ def _registered():
 @pytest.fixture(scope="module")
 def window():
     """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
-    state's, `STATE` committed as a stand-in for the network certifier's, as `Rows` and `Window` take them) and each
-    slot's `Slot` of its lane's row (`scan_slots`)."""
+    state's, `STATE` committed as a stand-in for the network certifier's, in ``row/v2`` rows as the scan's units commit
+    their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(), CLASS, None, GRAIN)
     fields = _weights(low.fn)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))])
+    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+                                 schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
@@ -395,10 +396,13 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     (``row-seg``), each committed under the committer's key at a nonce of its own: the table and a weight are core's commits
     of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
     registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
-    root. The scan state is no value of the committer's but the network certifier's, a row a bucket of the window. Another
-    parameter is refused."""
+    root. The scan state is no value of the committer's but the network certifier's, a row a bucket of the window. Each
+    value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
+    reads = low.circuit.registered.reads
+    lays = {r.reader: dict(IF.layout(low.circuit.template(r.reader)).schemas) for r in reads}
+    assert {(r.param, got[r.param].schema) for r in reads} == {(r.param, lays[r.reader][r.port]) for r in reads}
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
