@@ -40,15 +40,27 @@ section spec
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw : Option Lean.Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
-/-- The flat twin's layout, at public inputs (`flat_layout`). -/
+/-- The flat twin's layout, at public inputs (`flat_layoutC`). -/
 theorem flat_layoutP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st) :
-    Layout (Hidden.flatTwin st) :=
-  layout_of (st := Hidden.flatTwin st) (parse_facts (Hidden.parse_untyped ht s.parse).1) s.pin rfl rfl s.m s.kLog
+    Layout (Hidden.flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [Hidden.parseCommit_flat hi] at hP
+    exact layout_of (st := Hidden.flatTwin st) (parse_facts (Hidden.parse_untyped ht hP).1) s.pin rfl rfl s.m s.kLog
+  · have hT := s.parse
+    rw [Hidden.parseCommit_tmpl hi] at hT
+    exact layout_of_tmpl (st := Hidden.flatTwin st) hT s.pin rfl rfl s.m s.kLog
 
-/-- The flat twin's unit facts, at public inputs (`flat_unitFacts`). -/
+/-- The flat twin's unit facts, at public inputs (`flat_unitFactsC`). -/
 theorem flat_unitFactsP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st) :
-    Aliased.UnitFacts tags (Hidden.flatTwin st) :=
-  Hidden.unitFacts_of_parse (st := Hidden.flatTwin st) (Hidden.parse_untyped ht s.parse).1 rfl
+    Aliased.UnitFacts tags (Hidden.flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [Hidden.parseCommit_flat hi] at hP
+    exact Hidden.unitFacts_of_parse (st := Hidden.flatTwin st) (Hidden.parse_untyped ht hP).1 rfl
+  · have hT := s.parse
+    rw [Hidden.parseCommit_tmpl hi] at hT
+    exact Hidden.unitFacts_tmpl (st := Hidden.flatTwin st) hT rfl
 
 /-- **An untyped hidden statement at public inputs reads its flat twin's rows at every unit slot's row it keeps**, at
 unsegmented output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/

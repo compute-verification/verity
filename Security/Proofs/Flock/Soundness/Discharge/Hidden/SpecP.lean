@@ -26,7 +26,7 @@ structure SpecP (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List
     (draw : Option Lean.Json) (own : Option ByteArray) (pi : HmIn.Ports) (st : Stmt) : Prop where
   tagsEq : st.tags = tags
   leaf : st.leaf = default
-  parse : HmOut.parse tags cf tables = .ok st.c
+  parse : HmOut.parseCommit tags cf tables = .ok st.c
   ports : HmIn.parse st.c = .ok pi
   merkle : MerkleScheme.find? st.c.leafScheme = some st.merkle
   pub : ∃ pop, HmIn.loadPublic tags st.c pi pf = .ok pop ∧ HmIn.checkOwn pi pop own = .ok () ∧
