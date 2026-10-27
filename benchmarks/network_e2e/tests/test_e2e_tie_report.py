@@ -1,14 +1,13 @@
-"""Adversarial cases, turned into regressions of
-what the end-to-end report (`e2e.py`) marks OK on the advice profile. There the I/O tie is the only check of the served
-content (N2 gives no verdict, and the rehearsal's own check reads the certified I/O, not the committed tokens), so the
-tie is a required gate (`chain.tie_gate`):
+"""Adversarial cases, turned into regressions of what the end-to-end report (`e2e.py`) marks OK on the advice
+profile. There the I/O tie is the only check of the served content (N2 gives no verdict, and the rehearsal's own check
+reads the certified I/O, not the committed tokens), so the tie is a required gate (`chain.tie_gate`):
 
 1. Positive control: the tie ran and refused the honest run, so the report is NOT OK.
 2. An honest tie that raises gives the honest run no verdict, which fails the report; token's refusal by the tie, which
    did run on it, stays token's verdict rather than falling back to pending.
 3. One ``--ids`` map is handed to every run, so it must cover each run's certified requests (`chain.uncovered`): a map
    that is nobody's ids gives the honest run no verdict, and the tie doesn't run on it. So does one that names a
-   request with fewer ids than it served (`test_e2e_tie_coverage_phase14.py`).
+   request with fewer ids than it served (`test_e2e_tie_coverage.py`).
 
 Beside them: without IO-TIE in the tree or without the ids the report is NOT OK and says why, never listing the tie as
 not run; and a part the tie must establish beside its verdict (`chain.TIE_REQUIRED`, the hook for the compact

@@ -9,7 +9,7 @@ the advice profile, where the tie is the only check of the served content, the r
 
 The fix: `uncovered` holds each certified request's sampled ids to its served outputs (``io.json``'s
 ``output``): fewer ids than outputs, an empty list for a request that served any among them, is a gap, so the run has
-no verdict and the report isn't OK (`test_e2e_tie_phase12.py` holds that end to end).
+no verdict and the report isn't OK (`test_e2e_tie_report.py` holds that end to end).
 """
 from __future__ import annotations
 
