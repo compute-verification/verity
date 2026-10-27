@@ -625,6 +625,87 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
+def test_a_pr_holding_an_older_head_of_an_unmarked_pr_waits_for_it_and_shared_history_alone_holds_nothing(world):
+    """CI-178, 25 Oct: #4412 branched from #4382 at an older head; #4382 moved on unmarked, and drive, which looked only for
+    #4382's current head, admitted #4412 with #4382's unmarked commits in it."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`
+    q = world.queue()
+    q.sync()                                                                    # the queue sees #5 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # #5 moved on from `old`, unmarked
+    base = world.change({"m.txt": "landed\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    world.gh.put(8, world.change({"y.txt": "y\n"}, base=base))                 # shares only `main`'s history with #5
+    world.gh.put(9, world.change({"z.txt": "z\n"}, base=world.gh.prs[5].head))  # on #5's current head: as before
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [8]
+    assert entries[7].state == "waiting" and entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+    assert entries[7].after == entries[7].older == (5,) and entries[5].after == ()
+    assert entries[8].after == () and entries[9].why == "contains #5, which isn't admitted" and entries[9].older == ()
+    assert q.status()[7].why == entries[7].why
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    assert [m.pr for m in q.sync()[0]] == [8, 5, 7, 9]
+
+
+@pytest.mark.parametrize("marked_at", ["nowhere", "older head"])
+def test_a_pr_holding_an_older_head_of_a_pr_not_admitted_at_its_current_head_waits_for_it(world, marked_at):
+    """CI-178: as above, with #5 unmarked or marked only at the older head #7 holds."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=marked_at == "older head")
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`, marked
+    q = world.queue()
+    q.sync()
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # #5 moved on from `old`
+    members, entries = q.sync()
+    assert 7 not in [m.pr for m in members] and entries[7].state == "waiting", entries[7].why
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    assert [m.pr for m in q.sync()[0]] == [5, 7]
+
+
+def _merge(world: World, into: str, other: str) -> str:
+    """A merge commit of ``other`` into ``into`` (first parent ``into``)."""
+    _git(world.dev, "checkout", "-q", "--detach", into)
+    _git(world.dev, "merge", "-q", "--no-edit", other)
+    sha = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+@pytest.mark.parametrize("marked", [True, False])
+def test_the_pr_that_merged_another_prs_branch_waits_for_it_and_never_the_other_way_by_number(world, marked):
+    """27 Oct (infra's hold of #4429 at a03f1af6): #4772, opened first, merged #4855's branch, and #4855 moved on; a rule that
+    took the lower number to carry the higher one's commits made #4855, queued, wait for #4772.  The shared commits are on
+    #4855's first-parent line and reach #4772 only through a merge, so #4772 carries #4855: #4772 waits for #4855, #4855 for
+    nothing.  The queue never saw #4855 at the merged head: ancestry alone decides it."""
+    period = world.change({"p.txt": "period\n"})
+    world.gh.put(6, world.change({"m.txt": "merged main\n"}, base=period))        # #4855's branch
+    soundness = world.change({"s.txt": "soundness\n"})
+    world.gh.put(5, _merge(world, soundness, world.gh.prs[6].head))              # #4772 merges #4855's branch
+    world.gh.put(6, world.change({"p.txt": "period 2\n"}, base=world.gh.prs[6].head), ready=marked)  # #4855 moves on
+    members, entries = world.queue().sync()
+    assert entries[6].after == () and entries[5].after == entries[5].older == (6,)
+    if marked:
+        assert [m.pr for m in members] == [6, 5]
+    else:
+        assert members == [] and entries[6].why.startswith("not marked ready")
+        assert entries[5].why == "contains #6's commits (at an older head), which isn't admitted"
+
+
+def test_prs_that_merely_share_commits_wait_for_nothing(world):
+    """Two PRs that each merged a third branch (on neither first-parent line), and two forked from a commit the queue never saw
+    either at (on both): neither knows which carries the other, so neither waits, whatever their numbers."""
+    third = world.change({"t.txt": "third\n"})
+    world.gh.put(9, _merge(world, world.change({"a9.txt": "9\n"}), third), ready=False)
+    world.gh.put(10, _merge(world, world.change({"a10.txt": "10\n"}), third))
+    fork = world.change({"f.txt": "fork\n"})
+    world.gh.put(11, world.change({"a11.txt": "11\n"}, base=fork), ready=False)
+    world.gh.put(12, world.change({"a12.txt": "12\n"}, base=fork))
+    members, entries = world.queue().sync()
+    assert {n: entries[n].after for n in (9, 10, 11, 12)} == {9: (), 10: (), 11: (), 12: ()}
+    assert [m.pr for m in members] == [10, 12]
+
+
 def _resolved_main(world: World, head: str) -> str:
     """``head`` with `main` merged into it, each conflict taken from `main`: it contains ``head`` but no longer conflicts."""
     _git(world.dev, "fetch", "-q", "origin")

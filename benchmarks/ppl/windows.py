@@ -2,8 +2,7 @@
 tokenizer without special tokens, cut into consecutive windows of T tokens, each led by the tokenizer's BOS if it has
 one (Qwen2.5's has none). Window i holds tokens [i * body, (i + 1) * body) of the stream, body = T - len(lead).
 
-This is the recipe of tonight's harnesses (`windows.py` on WikiText-2, `c4_windows.py` on C4), so Llama's windows are
-theirs token for token. `windows.lock.json` pins each (tokenizer, set, context) list's sha256; a run checks it."""
+`windows.lock.json` pins each (tokenizer, set, context) list's sha256; a run checks it."""
 from __future__ import annotations
 
 import gzip
@@ -75,7 +74,7 @@ def dataset_path(name: str, data_dir: Path) -> Path:
 
 
 def encoder(tokenizer) -> tuple[Callable[[str], list[int]], int | None]:
-    """An HF tokenizer's encoding without special tokens, as tonight's scripts called it, and its BOS (or None)."""
+    """An HF tokenizer's encoding without special tokens, and its BOS (or None)."""
     return (lambda s: tokenizer(s, add_special_tokens=False)["input_ids"]), tokenizer.bos_token_id
 
 
@@ -96,8 +95,8 @@ def build(name: str, ctx: int, encode: Callable[[str], list[int]], bos: int | No
 
 
 def check(family: str, name: str, ctx: int, windows: np.ndarray, calibration: bool = False) -> None:
-    """Refuse windows whose shape isn't the context's, or whose digest (of their int64 bytes, as tonight's
-    `c4_windows.py` printed it) isn't the lock's for (tokenizer family, set, context)."""
+    """Refuse windows whose shape isn't the context's, or whose digest (of their int64 bytes) isn't the lock's for
+    (tokenizer family, set, context)."""
     n = len(methodology.CALIBRATION["windows"]) if calibration else methodology.CONTEXTS[ctx]
     if windows.shape != (n, ctx):
         raise ValueError(f"{key(name, ctx, calibration)}: windows {windows.shape}, the methodology's {(n, ctx)}")

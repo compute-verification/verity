@@ -62,7 +62,8 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **Replica**: the devices serving one copy of the model, behind one network certifier boundary, whose runs the challenger
   puts in one sequence. **G** is the number of replicas a claim registers.
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
-- **ε_skip**: Dither's ε, the share of W_reg a period may skip. **δ_coin** is the sampling failure probability and
+- **ε_skip**: Dither's ε, the share of W_reg a period may skip: the Notation's ε_W, PoUW's part of the fleet's ε_skip
+  (`glossary/README.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
   **δ_crypto** the cryptographic one. **k_infil** and **k_exfil** are the bits the certifier counts into and out of the
   replica.
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year
@@ -156,7 +157,12 @@ NOFOLD-OPT's picks (CMP-172, runs r20261027-031621-5469 and r20261027-032610-3a3
 16 KiB rows, γ being the call's time over the plain s8 GEMM's at η 0.85 with the hashing overlapped:
 - static, RTX PRO 6000: L = 1,024 with L′ = 128 (t = 8), at γ 1.10 / 1.05 / 1.15 for 8B / 70B / V4, when registration
   pins B (the weight root is a published checkpoint's, or the weights expand from a public seed). The credit rests on
-  that pin, which goes to Daniel. Without it, L = 768 with L′ = 256 (t = 3), at γ 1.38 / 1.22 / 1.53.
+  that pin.
+  - **Decided** (compute-research, under Daniel's delegation, 26 Oct, 8:46 PM PDT): the demo registers a published
+    checkpoint's weights pinned by digest, such as Llama-3.1-8B and 70B quantized to s8, which meets the condition, so
+    the RTX PRO 6000 runs L = 1,024 with L′ = 128.
+  - For weights the prover chooses, the general case, the setting that leaks nothing is L = 768 with L′ = 256 (t = 3),
+    at γ 1.38 / 1.22 / 1.53.
 - The decided L = 4,096 to 8,192 at L′ = 512 is peel-bound on the RTX PRO 6000, at γ 1.20 to 1.41: the peel costs 4L′/K
   of extra tensor work, so what lowers γ is a small L′ at t ≤ 8, not a large L. t stays at most 8 because a proof
   block's cost at A = 0 falls as c_t/t, and at t = 8 it is 1.15 times the public best.
@@ -308,30 +314,41 @@ cap, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4 (
 ### Coins
 
 The challenger issues every live coin, in each replica's one sequence of runs; under the MVP it runs on the replica's
-certifier device (see "The boundary"). Each coin is derived inside the challenger
-as `derive(K_ch, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`), where:
-- K_ch is the challenger's secret for the period, and never leaves it;
+certifier device (see "The boundary"). Before the monitoring period it draws a random coin c for each draw and commits
+to them in one root (see "The coin commitment"). Once the receipt a draw follows is in, it opens that draw's c against
+the root and derives the draw's coins from c and the receipt, inside the challenger,
+as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the domain tag, the coin and
+the receipt, as v3.2's RP25 and RP26 derive them, under tags distinct from PoUW's noise-seed tags), where:
+- c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
+  root before its last root, and receives the paths and the root at close (@proofs, 27 Oct, 04:16Z; ONE-4's withheld
+  mode, #4888): opening draw j to it early would hand it the root before later blocks' roots;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
 - ctx = {period, replica, sampling block index, receipt}, where receipt is the digest of the certifier's signed receipt
   of what the coin follows: the registration for `weights`, the block's operand roots for `seeds`, and its value roots
   for `check`.
 
-No context repeats under a key, and no coin can be computed before the receipt it reads. Keyed by roots alone, a
+So a derived coin never has to open against the root; its c does. No c serves two draws, no context repeats, and no
+coin can be computed before the receipt it reads. Derived from roots alone, a
 repeated junk root would repeat its "not selected", and repeated operands would repeat their dither: either raises
 ε_skip to the credited share. This is the premise POOL-THM's `IndependentCoins` rests on, with SHA-512 as the
 derivation's random oracle.
 
-Only expanded coins leave the challenger. A key sent for local expansion would make a whole block's outsourcing cost 256
-bits, and P18's β would fail.
+Only expanded coins enter the boundary, never a c, which is stricter than ONE-4's withheld mode, where the prover gets the
+raw coin. A c sent in for local expansion would make a whole block's outsourcing cost one coin's bits, and P18's β would
+fail.
 
 **The coin commitment** (soundness's ruling, Daniel, 26 Oct, 6:15 PM PDT; settled 27 Oct, 03:45Z). The challenger
-commits to its coins, and the commitment reaches the prover only after the prover has committed, so no soundness
-statement takes a hiding premise on it.
+commits to its coins c before the monitoring period, and the commitment reaches the prover only after the prover has
+committed, so no soundness statement takes a hiding premise on it.
 - The public configuration names each replica's drawing challenger, its identity and LMS key, and never its coin root.
 - Before the monitoring period, the challenger sends its committed root to the network certifiers over their private
-  links (`WitnessPathPrivate`).
+  links (`WitnessPathPrivate`), never to the prover first.
+- A draw's c opens against the root, to the certifiers, only after the receipt the draw follows, and the draw's coins
+  are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
+  can't know them before it sends the roots.
 - A multi-server replica has one draw, from the challenger on its lowest-numbered server. Each server's certifier exempts
-  from k_infil only the coin frames that open against that root, and counts everything else as ingress (RP5). Each
+  from k_infil only the coin frames derived from a c that opened against that root, with the receipt they name, and
+  counts everything else as ingress (RP5). Each
   certifier re-clocks the forwarded coins on its own ingress grid (RP6), with the certifiers' clocks synced under the
   one-clock rule (see "The boundary").
 
@@ -368,12 +385,13 @@ k_exfil. Dither needs these of the challenger and the certifier:
 - **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the drawing server's coins are made
   on its certifier's device and are never imports there. Every other server's certifier, and any certifier whose
   challenger has a device of its own, excludes them only so (RP5):
-  - k_infil leaves out only a coin frame that opens against the drawing challenger's committed root and carries its
-    expected (period, replica, sampling block, kind, sequence number) once, at its expected length.
+  - k_infil leaves out only a coin frame derived from a c that opened against the drawing challenger's committed root,
+    with the receipt it names, and carrying its expected (period, replica, sampling block, kind, sequence number) once,
+    at its expected length.
   - Every other byte counts: malformed, unverifiable, duplicate, replayed or late messages into k_infil, and the
     stream's reverse traffic (acknowledgements, flow control) into k_exfil.
   - The certifier holds the committed root, the challenger's LMS public key from the configuration, and the schedule
-    of expected frames and lengths. It needs no coin value beyond opening it.
+    of expected frames and lengths. It needs each opened c only to check the frames derived from it.
 - **Each certifier re-clocks the stream** (RP6). It terminates the forwarded stream and sends it into its boundary on
   its own ingress grid: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure.
   Otherwise the packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
@@ -505,9 +523,8 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     through the period, each fixed before its own run's challenge phase but after earlier answers' releases, so the rule
     is to be read per statement for a stream (RS6).
 - **τ_ans**, from a passing measured run (see "Timing").
-- **The coin root** (see "Coins"): what it commits to, how a coin derived from its receipt opens against a root sent
-  before the monitoring period, and when the prover receives the root, are the challenger's spec, as remote bandwidth's
-  are on #4968 and the network certifier's coin link's on #4946.
+- **The coin root** (see "Coins"): how a certifier checks a forwarded frame's derivation from its opened c is the
+  challenger's spec, as remote bandwidth's is on #4968 and the network certifier's coin link's on #4946.
 - **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price** (Daniel's open Ask).
