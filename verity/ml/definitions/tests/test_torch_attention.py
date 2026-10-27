@@ -8,9 +8,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.circuits.types import Array
 from verity.ml.definitions.numerics import torch_kernels as TK
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry import torch_attention as TA
 
 F32_SPECIALS = np.array([0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000,
@@ -114,6 +116,122 @@ def test_repeat_kv_backward_is_the_reduce_kernels_fold(NREP) -> None:
     _same(evaluate_words(bind(TA.RepeatKvBackward, NREP=NREP, N=4), g), TK.repeat_kv_backward(g))
 
 
+# --- the step's blocks ---------------------------------------------------------------------------------------------------------
+
+def _probe(sig, body):
+    return bind(CompositeDefinition("TransposeProbe", 1, (), lambda S: sig, body, register=False))
+
+
+@pytest.mark.parametrize("M,F", [(5, 3), (130, 130)])
+def test_the_transpose_is_its_tiles(M, F) -> None:
+    """One tile, and a tile of each shape (128 and 2 rows, 128 and 2 columns)."""
+    d = _probe(((("x", Array(M, Array(F, TA.BF16))),), Array(F, Array(M, TA.BF16))), lambda B, S, x: TA.transpose(B, x, M, F))
+    x = np.random.default_rng(M).integers(0, 1 << 16, (2, M, F), dtype=np.uint64).astype(np.uint16)
+    _same(evaluate_words(d, x), x.transpose(0, 2, 1))
+
+
+def test_the_transposes_are_each_matrix_at_its_base() -> None:
+    """Three 130 x 3 column blocks of a 130 x 9 matrix, each row 9 words past the last: tiles of 128 and 2 rows."""
+    M, F, H = 130, 3, 3
+    d = _probe(((("x", Array(M, Array(H * F, TA.BF16))),), Array(H, Array(F, Array(M, TA.BF16)))),
+               lambda B, S, x: TA._stack(TA.transposes(B, x, M, F, [h * F for h in range(H)], H * F), range(H)))
+    x = np.random.default_rng(9).integers(0, 1 << 16, (2, M, H * F), dtype=np.uint64).astype(np.uint16)
+    _same(evaluate_words(d, x).reshape(2, H, F, M), x.reshape(2, M, H, F).transpose(0, 2, 3, 1))
+
+
+def rope_table(N: int, D: int) -> np.ndarray:
+    """HF's bf16 [cos | sin] rows at rope_theta 1e5, cos and sin of each half computed in f32."""
+    inv = (1.0 / 1e5 ** (np.arange(0, D, 2, dtype=np.float32) / D)).astype(np.float32)
+    a = np.arange(N, dtype=np.float32)[:, None] * inv[None, :]
+    return np.concatenate([_bf16(np.cos(a)), _bf16(np.sin(a))], 1)
+
+
+def _heads(x, H: int, D: int) -> np.ndarray:
+    """(N, H·D) token-major rows as (H, N, D)."""
+    return x.reshape(x.shape[0], H, D).transpose(1, 0, 2)
+
+
+def _tokens(x) -> np.ndarray:
+    """(H, N, D) as (N, H·D)."""
+    return x.transpose(1, 0, 2).reshape(x.shape[1], -1)
+
+
+def attention(q, k, v, cs, n, NH: int, KVH: int, D: int):
+    """The forward block's model on one sequence, composed of its Definitions' models: (o, qe, ke, y, p) in its layouts."""
+    N, R = q.shape[0], NH // KVH
+    qe = _heads(TK.rope_hf(q.reshape(N * NH, D), np.repeat(cs, NH, 0)).reshape(N, NH * D), NH, D)
+    ke = _heads(TK.rope_hf(k.reshape(N * KVH, D), np.repeat(cs, KVH, 0)).reshape(N, KVH * D), KVH, D)
+    s = BC.bmm_rows(qe, np.repeat(ke, R, 0).transpose(0, 2, 1))
+    y, p = (a.reshape(NH, N, N) for a in TK.eager_softmax(s.reshape(NH * N, N), np.tile(n, NH), D))
+    o = BC.bmm_rows(p, np.repeat(_heads(v, KVH, D), R, 0))
+    return _tokens(o), _tokens(qe), _tokens(ke), y.transpose(1, 0, 2), p.transpose(1, 0, 2)
+
+
+def _unrepeat(g, KVH: int):
+    """repeat_kv's backward on (NH, N, D): each KV head's R query heads summed, as (N, KVH·D)."""
+    NH, N, D = g.shape
+    R = NH // KVH
+    if R == 1:
+        return _tokens(g)
+    g = g.reshape(KVH, R, N, D).transpose(0, 2, 1, 3).reshape(KVH * N, R, D)
+    return _tokens(TK.repeat_kv_backward(g).reshape(KVH, N, D))
+
+
+def attention_backward(do, qe, ke, v, y, p, cs, NH: int, KVH: int, D: int):
+    """The backward block's model, composed of its Definitions' models: (dq, dk, dv) in projection space."""
+    N, R = do.shape[0], NH // KVH
+    dO, Q = _heads(do, NH, D), _heads(qe, NH, D)
+    K, V = np.repeat(_heads(ke, KVH, D), R, 0), np.repeat(_heads(v, KVH, D), R, 0)
+    Y, P = y.transpose(1, 0, 2), p.transpose(1, 0, 2)
+    dP = BC.bmm_rows(dO, V.transpose(0, 2, 1))
+    dS = TK.eager_softmax_backward(dP.reshape(-1, N), Y.reshape(-1, N), D).reshape(NH, N, N)
+    dQ, dK, dV = BC.bmm_rows(dS, K), BC.bmm_rows(dS.transpose(0, 2, 1), Q), BC.bmm_rows(P.transpose(0, 2, 1), dO)
+    dq = TK.rope_hf_backward(_tokens(dQ).reshape(N * NH, D), np.repeat(cs, NH, 0)).reshape(N, NH * D)
+    dk = TK.rope_hf_backward(_unrepeat(dK, KVH).reshape(N * KVH, D), np.repeat(cs, KVH, 0)).reshape(N, KVH * D)
+    return dq, dk, _unrepeat(dV, KVH)
+
+
+def _projections(rng, N: int, H: int, D: int) -> np.ndarray:
+    """A projection's (N, H·D) bf16 output: normal words with a few specials."""
+    x = _bf16(rng.normal(0, 1.5, (N, H * D)))
+    at = rng.random(x.shape) < 0.01
+    x[at] = rng.choice(BF16_SPECIALS, int(at.sum()))
+    return x
+
+
+def _split(out, *shapes):
+    out, parts, a = np.asarray(out).reshape(-1), [], 0
+    for s in shapes:
+        n = int(np.prod(s))
+        parts.append(out[a:a + n].reshape(s))
+        a += n
+    assert a == out.size
+    return parts
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("NH,KVH", [(4, 2), (2, 2)])
+def test_the_attention_blocks_are_their_definitions_models(NH, KVH) -> None:
+    """One sequence of N = 16 tokens, D = 16, with two query heads a KV head and with one, forward then backward on the saved
+    values: every word of every output. It catches what no test of a single Definition can: the blocks' wiring of the heads,
+    the bmm's rows and operands, the transposes, and the softmax rows (about 1 minute and 2 GB a case)."""
+    N, D = 16, 16
+    rng = np.random.default_rng(NH)
+    q, k, v = _projections(rng, N, NH, D), _projections(rng, N, KVH, D), _projections(rng, N, KVH, D)
+    cs, n = rope_table(N, D), np.arange(1, N + 1)
+    want = attention(q, k, v, cs, n, NH, KVH, D)
+    st = dict(N=N, NH=NH, KVH=KVH, D=D)
+    got = evaluate_words(bind(TA.EagerAttentionTorch, **st), q[None], k[None], v[None], cs[None], n.astype(np.uint16)[None])
+    for g, w in zip(_split(got, *(w.shape for w in want)), want, strict=True):
+        _same(g, w)
+    _, qe, ke, y, p = want
+    do = _projections(rng, N, NH, D)
+    want = attention_backward(do, qe, ke, v, y, p, cs, NH, KVH, D)
+    got = evaluate_words(bind(TA.EagerAttentionTorchBackward, **st), *(a[None] for a in (do, qe, ke, v, y, p, cs)))
+    for g, w in zip(_split(got, *(w.shape for w in want)), want, strict=True):
+        _same(g, w)
+
+
 # --- the models against torch's CPU autograd ---------------------------------------------------------------------------------
 
 def _torch():
@@ -187,6 +305,10 @@ def test_the_eager_softmax_matches_torch_to_rounding() -> None:
     (TA.EagerSoftmax, {"N": 4, "D": 7}), (TA.EagerSoftmaxBackward, {"N": 1025, "D": 64}), (TA.RopeHf, {"D": 3}),
     (TA.RopeHfBackward, {"D": 0}), (TA.RepeatKvBackward, {"NREP": 1, "N": 4}), (TA.RepeatKvBackward, {"NREP": 17, "N": 4}),
     (TA.RepeatKvBackward, {"NREP": 3, "N": True}),
+    (TA.EagerAttentionTorch, {"N": 24, "NH": 4, "KVH": 2, "D": 16}), (TA.EagerAttentionTorch, {"N": 16, "NH": 4, "KVH": 3, "D": 16}),
+    (TA.EagerAttentionTorch, {"N": 2064, "NH": 1, "KVH": 1, "D": 16}), (TA.EagerAttentionTorch, {"N": 16, "NH": 2, "KVH": 2, "D": 8}),
+    (TA.EagerAttentionTorchBackward, {"N": 1040, "NH": 1, "KVH": 1, "D": 16}),
+    (TA.EagerAttentionTorchBackward, {"N": 16, "NH": 34, "KVH": 2, "D": 16}),
 ], ids=lambda a: getattr(a, "name", repr(a)))
 def test_bind_refuses_statics_outside_the_kernels_range(d, statics) -> None:
     with pytest.raises(ValueError, match="refuses this binding"):

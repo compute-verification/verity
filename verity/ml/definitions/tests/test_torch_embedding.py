@@ -11,9 +11,8 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.types import Array
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_embedding as TE
 
@@ -107,15 +106,6 @@ def test_an_entrys_row_is_its_kernel_on_each_feature(M) -> None:
     got = evaluate_words(bind(TE.EmbeddingBackwardEntry, M=M, H=H), vs, np.broadcast_to(t, (len(vs), M)),
                          np.broadcast_to(g.T, (len(vs), H, M)))
     _same(got, TK.embedding_dense_backward(t, g, ENTRIES))
-
-
-@pytest.mark.parametrize("M,F", [(5, 3), (130, 130)])
-def test_the_transpose_is_its_tiles(M, F) -> None:
-    """One tile, and a tile of each shape (128 and 2 rows, 128 and 2 columns)."""
-    sig = ((("x", Array(M, Array(F, TE.BF16))),), Array(F, Array(M, TE.BF16)))
-    d = CompositeDefinition("TransposeProbe", 1, (), lambda S: sig, lambda B, S, x: TE.transpose(B, x, M, F), register=False)
-    x = np.random.default_rng(M).integers(0, 1 << 16, (2, M, F), dtype=np.uint64).astype(np.uint16)
-    _same(evaluate_words(bind(d), x), x.transpose(0, 2, 1))
 
 
 def test_the_tied_gradient_is_the_lm_heads_plus_each_entrys_row() -> None:

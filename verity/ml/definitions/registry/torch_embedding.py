@@ -35,9 +35,9 @@ M / 32 chunks, the last of M mod 32 tokens.
 
 **The step's blocks** wire these with no gate of their own. `EmbeddingBackwardEntry{M, H}` is entry v's row, its kernel
 (`kernel(M)`) on each of the H features' columns. `EmbeddingBackwardTied{M, V, H}` is the tied weight's gradient: the
-embedding's output gradient g, committed token-major, transposed by `Transpose_v1` tiles of at most 128 x 128 (`transpose`),
-each entry's row with its id a constant of the circuit, then c10's bf16 ``+`` of the LM head's dW w and that row,
-`Bf16AddF2fp_v2` on each word (autograd adds the two uses' gradients, the LM head's first).
+embedding's output gradient g, committed token-major, transposed by `Transpose_v1` tiles of at most 128 x 128
+(`torch_attention.transpose`), each entry's row with its id a constant of the circuit, then c10's bf16 ``+`` of the LM head's
+dW w and that row, `Bf16AddF2fp_v2` on each word (autograd adds the two uses' gradients, the LM head's first).
 """
 from __future__ import annotations
 
@@ -50,16 +50,15 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean.elementwise import specialized
-from verity.ml.circuits.refs import Coll, Explicit, concat, strided_view
+from verity.ml.circuits.refs import Coll, Explicit, concat
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 
-from .torch_attention import SM120, SM120_SHAPES, SM120_STEP
-from .torch_train import Transpose
+from .torch_attention import SM120, SM120_SHAPES, SM120_STEP, transpose
 
 __all__ = ["EmbeddingBackwardEntry", "EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardSortEnd",
            "EmbeddingBackwardSortRun", "EmbeddingBackwardSortStep", "EmbeddingBackwardTied", "EmbeddingBackwardTorch", "kernel",
-           "plus_zero_bf16", "transpose"]
+           "plus_zero_bf16"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -75,8 +74,6 @@ FEATURE_MAX, CHUNK = 3072, 32
 #: the tokens of one `EmbeddingBackwardSortRun` in `EmbeddingBackwardTorch`, a proof block
 RUN = 8192
 M_MAX = 1 << 24
-#: a `Transpose_v1` tile's most rows and columns: a row of 128 bf16 words is one 256 B commitment row
-TILE = 128
 _SORT = f"at M = 4,096 in {SM120_SHAPES}, all 576 features of 65 entries (the model: of all 3,859 the tokens hold)"
 _IN_SORT = f"exact-model-tested; inside EmbeddingBackwardTorch_v1, {_SORT}: {SM120}"
 _FEATURE = f"at M = 256 in {SM120_STEP}, all 576 features of the 253 entries its tokens hold and of 32 they don't"
@@ -242,22 +239,6 @@ EmbeddingBackwardEntry = CompositeDefinition(
     doc="entry v's row of embedding_dense_backward_cuda over M tokens: kernel(M) on each of the H features' gradient columns",
     conformance=f"exact-model-tested; at M = 256, 13 features of the 253 entries the tokens of {SM120_STEP} hold, and at "
                 f"M = 4,096, 8 features of 4 entries in {SM120_SHAPES}: {SM120}", refuse=_refuse_all("M", "H"))
-
-
-def transpose(B, x: Coll, R: int, C: int) -> Coll:
-    """A token-major R x C matrix of bf16 words as its C x R transpose, by `Transpose_v1` tiles of at most TILE x TILE, one
-    batch a tile shape."""
-    L = BF16.leaves
-    rows = [(r, min(TILE, R - r)) for r in range(0, R, TILE)]
-    cols = [(c, min(TILE, C - c)) for c in range(0, C, TILE)]
-    out = {}
-    for rn, cn in sorted({(rn, cn) for _, rn in rows for _, cn in cols}):
-        at = [(r, c) for r, n in rows for c, k in cols if (n, k) == (rn, cn)]
-        tiles = Coll(Array(len(at), Array(rn, Array(cn, BF16))),
-                     concat([strided_view(x, L * (r * C + c), L * cn, L * C, 1, L * rn * cn) for r, c in at]))
-        y = B.batch(bind(Transpose, R=rn, C=cn), tiles, axes=(0,))
-        out.update({rc: y[i] for i, rc in enumerate(at)})
-    return Coll(Array(C, Array(R, BF16)), concat([out[(r, j - j % TILE)][j % TILE].refs for j in range(C) for r, _ in rows]))
 
 
 def _ids(B, n: int) -> Coll:
