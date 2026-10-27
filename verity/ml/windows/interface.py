@@ -5,7 +5,7 @@ at a time, in four records:
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
-   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as network-accounting's N1 states it. The
+   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
    window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
@@ -31,8 +31,10 @@ only to refuse it.
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
 bit concatenation of its leaves, then one output row ``o<j>`` per return field, zero-padded to whole u16 words: C-Flock's
-`UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone. A Boolean-profile
-port's leaves (one bit each) are read as their `boolean.word_type` words.
+`UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone; an integration's
+lowering refuses, with `check_proof_block`, a template whose rows C-Flock's composer would refuse (more than 256 rows, none
+past 111 bytes, or past a C-Flock block of 2^27 bits). A Boolean-profile port's leaves (one bit each) are read as their
+`boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
 the wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
@@ -279,6 +281,49 @@ def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tupl
     or per row of a cut one (`Layout.cut`), then one per return field."""
     lay = layout(fn)
     return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
+
+
+#: C-Flock's composer's sizes (`verity_flock.circuit`, which ``verity`` may not import; the windows tests hold them to
+#: its own): a C-Flock block of at most 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits,
+#: PER_SLOT compressions a sha512x3 slot, the mask's 2^MASK_LOG
+K_MAX, K_MIN, SLOT_LOG, PER_SLOT, MASK_LOG = 27, 20, 18, 3, 14
+#: the row bytes a row's last SHA-512 block holds beside the padding's 17: a longer row has a compression before it
+LAST_BLOCK_BYTES = 111
+#: the most rows a proof block may have: at one more, its hm96 range alone fills a C-Flock block of 2^K_MAX bits
+MAX_ROWS = 1 << (K_MAX - SLOT_LOG - 1)
+
+
+def rows_k_log(row_bytes: Sequence[int]) -> int:
+    """The log of the C-Flock block that rows of ``row_bytes`` bytes alone need (C-Flock's composer's ranges for one unit:
+    its hm96 slots, one a row and a power of two in all, the mask, then its sha512x3 slots); the unit's gates come on top."""
+    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in row_bytes if b > LAST_BLOCK_BYTES)
+    bits = ((1 << (len(row_bytes) - 1).bit_length()) + 1 + -(-comps // PER_SLOT)) << SLOT_LOG
+    return max(K_MIN, (bits - 1).bit_length())
+
+
+def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
+    """Refuse (ValueError) a template whose proof block, its unit's rows under ``cuts`` (`unit_rows`), C-Flock's composer
+    would refuse: more than `MAX_ROWS` rows, none past `LAST_BLOCK_BYTES` bytes (the sha512x3 range, which holds the pin,
+    would have no slot), or past a C-Flock block of 2^`K_MAX` bits. Its message names the template, its cuts, its rows and
+    the fix. Returns the rows' `rows_k_log`, the least the proof block's ``k_log`` can be."""
+    lay = layout(fn)
+    rows = [(p, 2 * w) for p, w, _ in lay.cut(cuts)] + [(p, 2 * w) for p, w in lay.outs]
+    sizes: dict[str, list[int]] = {}
+    for p, b in rows:
+        sizes.setdefault(p.split("#")[0], []).append(b)
+    name = descriptor_id(fn) + (f" cut {dict(cuts)}" if cuts else "") + ": " + ", ".join(
+        f"{p} {len(bs)} rows of {bs[0]} B" if len(bs) > 1 else f"{p} {bs[0]} B" for p, bs in sizes.items())
+    if len(rows) > MAX_ROWS:
+        raise ValueError(f"{name}: {len(rows)} rows, past a proof block's {MAX_ROWS}, since their hm96 slots alone would fill "
+                         f"a C-Flock block of 2^{K_MAX} bits: cut its ports fewer ways, or bind the Definition smaller")
+    if all(b <= LAST_BLOCK_BYTES for _, b in rows):
+        raise ValueError(f"{name}: no row past {LAST_BLOCK_BYTES} B, so none has a compression before its last SHA-512 block "
+                         "and C-Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
+                         "the Definition larger")
+    if (k := rows_k_log([b for _, b in rows])) > K_MAX:
+        raise ValueError(f"{name}: its rows alone need a C-Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
+                         "smaller, so that each unit reads and writes fewer row bytes")
+    return k
 
 
 def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
@@ -937,7 +982,7 @@ class Circuit:
     """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
-    layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
+    layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`Layout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`)."""
     name: str
