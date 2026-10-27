@@ -374,16 +374,16 @@ def test_a_shared_row_members_units_read_their_rows_through_its_refs(tmp_path):
     shared = written(tmp_path / "shared", CS.Member("t", ports, outs, n, 0, (("x", n), ("w", 2)), name="t/c0"),
                      {"x": x, "w": w, "o0": o0}, refs)
     assert shared["shared_rows"] == {"x": n, "w": 2, "o0": n}
-    assert np.array_equal(L.member_rows(tmp_path / "plain", plain), want)
-    assert np.array_equal(L.member_rows(tmp_path / "shared", shared), want)
+    assert np.array_equal(L.member_rows(tmp_path / "plain", {"members": [plain]}, 0), want)
+    assert np.array_equal(L.member_rows(tmp_path / "shared", {"members": [shared]}, 0), want)
     with pytest.raises(ValueError, match="shared-row member's"):
-        L.member_rows(tmp_path / "shared", shared | {"shared_rows": {"x": n, "w": 3, "o0": n}})
+        L.member_rows(tmp_path / "shared", {"members": [shared | {"shared_rows": {"x": n, "w": 3, "o0": n}}]}, 0)
     with pytest.raises(ValueError, match="instances' rows"):
-        L.member_rows(tmp_path / "plain", plain | {"n": n - 1})
+        L.member_rows(tmp_path / "plain", {"members": [plain | {"n": n - 1}]}, 0)
     pub = tmp_path / "shared" / "m0-public.bin"
     pub.write_bytes(pub.read_bytes()[:-4 * n * 3] + np.where(refs == 1, 2, refs).astype("<u4").tobytes())
     with pytest.raises(ValueError, match="past its port's table"):
-        L.member_rows(tmp_path / "shared", shared)
+        L.member_rows(tmp_path / "shared", {"members": [shared]}, 0)
 
 
 def n2(exit: int = 0, **member) -> dict:
