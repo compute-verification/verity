@@ -4,9 +4,10 @@ sfu (machine_model/data/cover/rows.toml, CMP-166) within that pipe's ρ, alone a
     python3 pipes_verdict.py OUT/rows.jsonl
 
 Rates are warp instructions a SM-clock. alu's ρ is 64 lanes (2), sfu's 16 (0.5), f64's 2 (0.0625); a BAR.RED is charged
-16 alu lanes, half a LOP3. The add rows are on fma, issue-bound (4), so their probes only report where the card runs
-them. A 64-bit conversion's pair runs beside 24 MUFU.EX2 (on a unit of its own the two would pass 0.5) and beside DFMA
-(reported against f64's ρ). The role-split barrier (mix_bar16_lop3) runs beside a LOP3 stream that isn't waiting on it.
+16 alu lanes, half a LOP3. The 32-bit conversions are held to sfu, alone and beside 8 MUFU.EX2, and the 64-bit ones to
+f64, alone and beside DFMA (sharing f64's pipe they hold 0.0625); one 64-bit pair beside 24 MUFU.EX2 is only reported
+(on the XU the two would hold 0.5). The add rows are on fma, issue-bound (4), so their probes only report where the card
+runs them. The role-split barrier (mix_bar16_lop3) runs beside a LOP3 stream that isn't waiting on it.
 """
 from __future__ import annotations
 
@@ -19,8 +20,8 @@ ALU, XU, F64, ISSUE = 2.0, 0.5, 0.0625, 4.0
 PARTNERS = {"LOP3.LUT": "lop3", "MUFU.EX2": "mufu", "DFMA": "dfma"}
 OFF_PIPE = {"FADD"}
 ON_ALU = ("plop3", "sgxt", "bmsk")
-ON_XU = ("i2f_f2i", "i2f16_f2i16", "f2f64", "frnd")
-ON_XU64 = ("f2f64", "i2f64", "s64")
+ON_XU = ("i2f_f2i", "i2f16_f2i16", "frnd", "cvt_s32", "cvt_u16", "cvt_s8", "cvt_frnd", "cvt_i2i", "cvt_i2ip")
+ON_F64 = ("f2f64", "i2f64", "s64", "cvt_u64", "cvt_frnd64", "cvt_f64_u32", "cvt_f64_s64")
 ON_FMA = ("iadd64", "iabs")
 
 
@@ -68,7 +69,7 @@ def verdict(rows: dict[str, dict]) -> tuple[bool, list[str]]:
         if load > ALU * SLACK:
             failed.append(f"LOP3 + BAR.RED.OR/2 {load:.4f} > alu's {ALU:g}")
 
-    for name in ON_XU64:
+    for name in ON_F64:
         alone, xu, f64 = need(name), need(f"mix_{name}_mufu24"), need(f"mix_{name}_dfma")
         if alone is None or xu is None or f64 is None:
             continue
@@ -77,13 +78,13 @@ def verdict(rows: dict[str, dict]) -> tuple[bool, list[str]]:
         xx, xm = _split(xu)
         fx, fd = _split(f64)
         pair, beside = sum(xx.values()) + xm, sum(fx.values()) + fd
-        where = "on f64" if beside <= F64 * SLACK else "beside f64"
-        said.append(f"{what} {x:.4f} alone, {sum(xx.values()):.4f} + {xm:.4f} = {pair:.4f} beside 24 MUFU, "
-                    f"{sum(fx.values()):.4f} + {fd:.4f} = {beside:.4f} beside DFMA ({where})")
-        if x > XU * SLACK:
-            failed.append(f"{what} alone {x:.4f} > sfu's {XU:g}")
-        if pair > XU * SLACK:
-            failed.append(f"{what} beside 24 MUFU {pair:.4f} > sfu's {XU:g}")
+        where = "on the XU" if pair <= XU * SLACK else "beside the XU"
+        said.append(f"{what} {x:.4f} alone, {sum(fx.values()):.4f} + {fd:.4f} = {beside:.4f} beside DFMA, "
+                    f"{sum(xx.values()):.4f} + {xm:.4f} = {pair:.4f} beside 24 MUFU ({where})")
+        if x > F64 * SLACK:
+            failed.append(f"{what} alone {x:.4f} > f64's {F64:g}")
+        if beside > F64 * SLACK:
+            failed.append(f"{what} beside DFMA {beside:.4f} > f64's {F64:g}")
 
     alone, beside = need("bar16"), need("mix_bar16_lop3")
     if alone is not None and beside is not None:

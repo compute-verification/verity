@@ -9,17 +9,18 @@
 //                                    ptxas keeps a C++ bool loop's state in registers (LOP3, ISETP and SEL, no PLOP3)
 //   iadd64, iabs                     the add rows the table puts on fma (issue-bound), alone and beside 8 LOP3; ptxas 13.0
 //                                    lowers a 32-bit add.u32 or sub.u32 to IADD3 or IMAD, never IADD
-//   i2f_f2i, i2f16_f2i16, f2f64, frnd
-//                                    the table's sfu conversions (a chain alternates a conversion and its inverse; FRND's
-//                                    with an FADD): each alone and beside 8 MUFU.EX2 (mix_X_mufu); on the XU, each alone
-//                                    and the pair together hold at most 0.5
+//   i2f_f2i, i2f16_f2i16, frnd,      the table's 32-bit conversions on sfu (a chain alternates a conversion and its inverse,
+//   cvt_s32, cvt_u16, cvt_s8,        FRND.FLOOR's with an FADD, I2I and I2IP's a saturating narrowing): each alone and
+//   cvt_frnd, cvt_i2i, cvt_i2ip      beside 8 MUFU.EX2 (mix_X_mufu); on the XU, each alone and the pair together hold at
+//                                    most 0.5
 //   bar_or, mix_bar_or_lop3          BAR.RED.OR alone and beside 16 LOP3: on the collective at 16 alu lanes, LOP3's rate
 //                                    plus half the barrier's holds at most 2 (this mix is barrier-bound)
 //   bar16, mix_bar16_lop3            BAR.RED.OR on named barrier 1 in 16 warps, alone and beside 32 LOP3 a trip in the
 //                                    other 16 (an `until` role, so the LOP3 stream never waits on the barrier)
-//   dfma, f2f64, i2f64, s64          64-bit conversions (f32<->f64, s32<->f64, f32<->s64): each alone, one pair beside 24
-//   mix_X_mufu24, mix_X_dfma         MUFU.EX2 (on a unit of their own, pair and MUFU together would pass 0.5), and two
-//                                    pairs beside 2 DFMA (sharing f64's pipe, they hold 0.0625 together)
+//   dfma, f2f64, i2f64, s64,         64-bit conversions (f32<->f64, s32<->f64, f32<->s64, f32<->u64, FRND.F64, u32<->f64,
+//   cvt_u64, cvt_frnd64,             s64<->f64): each alone, one pair beside 24 MUFU.EX2 (mix_X_mufu24: on a unit of
+//   cvt_f64_u32, cvt_f64_s64         their own, pair and MUFU together would pass 0.5), and two pairs beside 2 DFMA
+//                                    (mix_X_dfma: sharing f64's pipe, they hold 0.0625 together)
 #include "../probe.cuh"
 
 constexpr int TPB = 1024;
@@ -248,6 +249,64 @@ __device__ __forceinline__ void bar_or_chains(const OpArgs& a) {
   OP_SINK(s)
 }
 
+// A conversion chain on N of 8 chains, its state of the functor's type T: a conversion and its inverse (or one
+// conversion) a step.
+__device__ __forceinline__ uint32_t fold_of(uint32_t x) { return x; }
+__device__ __forceinline__ uint32_t fold_of(unsigned long long x) { return (uint32_t)x ^ (uint32_t)(x >> 32); }
+__device__ __forceinline__ uint32_t fold_of(double x) { return fold_of((unsigned long long)__double_as_longlong(x)); }
+template <typename T>
+__device__ __forceinline__ T seed_of(uint32_t s) {
+  if constexpr (sizeof(T) == 8 && T(0.5) != T(0)) return (double)(s & 0xffffu) + 0.25;
+  else if constexpr (sizeof(T) == 8) return (unsigned long long)s << 7;
+  else return s;
+}
+#define CVT(NAME, T, ...)                                                          \
+  struct NAME {                                                                  \
+    using type = T;                                                              \
+    __device__ __forceinline__ T operator()(T x) const { __VA_ARGS__ return x; } \
+  };
+CVT(CvtS32, uint32_t, float f; asm volatile("cvt.rp.f32.s32 %0, %1;" : "=f"(f) : "r"(x));
+    asm volatile("cvt.rzi.s32.f32 %0, %1;" : "=r"(x) : "f"(f));)
+CVT(CvtU16, uint32_t, float f; asm volatile("cvt.rn.f32.u16 %0, %1;" : "=f"(f) : "r"(x));
+    asm volatile("cvt.rzi.u16.f32 %0, %1;" : "=r"(x) : "f"(f));)
+CVT(CvtS8, uint32_t, float f; asm volatile("cvt.rn.f32.s8 %0, %1;" : "=f"(f) : "r"(x));
+    asm volatile("cvt.rni.s8.f32 %0, %1;" : "=r"(x) : "f"(f));)
+CVT(CvtFrnd, uint32_t, float f = __uint_as_float(x); asm volatile("cvt.rzi.f32.f32 %0, %0;" : "+f"(f));
+    asm volatile("cvt.rni.f32.f32 %0, %0;" : "+f"(f)); x = __float_as_uint(f);)
+CVT(CvtI2i, uint32_t, asm volatile("cvt.sat.s8.s32 %0, %0;" : "+r"(x));)
+CVT(CvtI2ip, uint32_t, asm volatile("cvt.pack.sat.s8.s32.b32 %0, %0, %0, %0;" : "+r"(x));)
+CVT(CvtU64, unsigned long long, float f; asm volatile("cvt.rn.f32.u64 %0, %1;" : "=f"(f) : "l"(x));
+    asm volatile("cvt.rzi.u64.f32 %0, %1;" : "=l"(x) : "f"(f));)
+CVT(CvtFrnd64, double, asm volatile("cvt.rmi.f64.f64 %0, %0;" : "+d"(x)); asm volatile("cvt.rzi.f64.f64 %0, %0;" : "+d"(x));)
+CVT(CvtF64U32, uint32_t, double d; asm volatile("cvt.rn.f64.u32 %0, %1;" : "=d"(d) : "r"(x));
+    asm volatile("cvt.rzi.u32.f64 %0, %1;" : "=r"(x) : "d"(d));)
+CVT(CvtF64S64, unsigned long long, double d; asm volatile("cvt.rn.f64.s64 %0, %1;" : "=d"(d) : "l"(x));
+    asm volatile("cvt.rzi.s64.f64 %0, %1;" : "=l"(x) : "d"(d));)
+
+template <typename Op, int P, int Q, int N>
+__device__ __forceinline__ void cvt_chains(const OpArgs& a) {
+  using T = typename Op::type;
+  T v[8];
+#pragma unroll
+  for (int u = 0; u < 8; u++) v[u] = seed_of<T>((unsigned)a.iters * 977u + threadIdx.x * 8u + (unsigned)u);
+  Partner<P, Q> pt(a);
+  const uint32_t k1 = 0x3C013C01u ^ (uint32_t)a.mode, k2 = 0x00010001u ^ (uint32_t)(a.mode << 3);
+  const Op op;
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int u = 0; u < 8; u++) {
+      if (u < N) v[u] = op(v[u]);
+      pt.step(u, k1, k2);
+    }
+  }
+  OP_END
+  uint32_t s = pt.out();
+#pragma unroll
+  for (int u = 0; u < 8; u++) s ^= fold_of(v[u]);
+  OP_SINK(s)
+}
+
 // f32 <-> s64 conversions on N of 8 chains.
 template <int P, int Q, int N>
 __device__ __forceinline__ void s64_chains(const OpArgs& a) {
@@ -338,7 +397,6 @@ OP_KERNEL(mix_i2f_f2i_mufu, TPB) { chains<I2fF2i, 2, 8>(a, 0u, 0u); }
 OP_KERNEL(i2f16_f2i16, TPB) { i2f16<0, 0>(a); }
 OP_KERNEL(mix_i2f16_f2i16_mufu, TPB) { i2f16<2, 8>(a); }
 OP_KERNEL(f2f64, TPB) { chains<F2f64, 0, 0>(a, 0x3F800000u, 0u); }
-OP_KERNEL(mix_f2f64_mufu, TPB) { chains<F2f64, 2, 8>(a, 0x3F800000u, 0u); }
 OP_KERNEL(frnd, TPB) { chains<Frnd, 0, 0>(a, 0x3F800000u, KHALF); }
 OP_KERNEL(mix_frnd_mufu, TPB) { chains<Frnd, 2, 8>(a, 0x3F800000u, KHALF); }
 OP_KERNEL(bar_or, TPB) { bar_or_chains<0, 0>(a); }
@@ -352,6 +410,23 @@ OP_KERNEL(mix_i2f64_dfma, TPB) { chains<I2fF64, 3, 2, 2>(a, 0u, 0u); }
 OP_KERNEL(s64, TPB) { s64_chains<0, 0, 8>(a); }
 OP_KERNEL(mix_s64_mufu24, TPB) { s64_chains<2, 24, 1>(a); }
 OP_KERNEL(mix_s64_dfma, TPB) { s64_chains<3, 2, 2>(a); }
+#define CVT32(n, OP)                                                     \
+  OP_KERNEL(n, TPB) { cvt_chains<OP, 0, 0, 8>(a); }                     \
+  OP_KERNEL(mix_##n##_mufu, TPB) { cvt_chains<OP, 2, 8, 8>(a); }
+#define CVT64(n, OP)                                                     \
+  OP_KERNEL(n, TPB) { cvt_chains<OP, 0, 0, 8>(a); }                     \
+  OP_KERNEL(mix_##n##_mufu24, TPB) { cvt_chains<OP, 2, 24, 1>(a); }     \
+  OP_KERNEL(mix_##n##_dfma, TPB) { cvt_chains<OP, 3, 2, 2>(a); }
+CVT32(cvt_s32, CvtS32)
+CVT32(cvt_u16, CvtU16)
+CVT32(cvt_s8, CvtS8)
+CVT32(cvt_frnd, CvtFrnd)
+CVT32(cvt_i2i, CvtI2i)
+CVT32(cvt_i2ip, CvtI2ip)
+CVT64(cvt_u64, CvtU64)
+CVT64(cvt_frnd64, CvtFrnd64)
+CVT64(cvt_f64_u32, CvtF64U32)
+CVT64(cvt_f64_s64, CvtF64S64)
 OP_KERNEL(bar16, TPB) { bar_split<0>(a); }
 OP_KERNEL(mix_bar16_lop3, TPB) { bar_split<32>(a); }
 
@@ -374,7 +449,6 @@ static const OpProbe PROBES[] = {
     PR("i2f16_f2i16", i2f16_f2i16, "I2F.S16=8,F2I.S16.TRUNC.NTZ=8"),
     PR("mix_i2f16_f2i16_mufu", mix_i2f16_f2i16_mufu, "I2F.S16=8,F2I.S16.TRUNC.NTZ=8,MUFU.EX2=8"),
     PR("f2f64", f2f64, "F2F.F64.F32=8,F2F.F32.F64=8"),
-    PR("mix_f2f64_mufu", mix_f2f64_mufu, "F2F.F64.F32=8,F2F.F32.F64=8,MUFU.EX2=8"),
     PR("frnd", frnd, "FRND.FLOOR=8,FADD=8"),
     PR("mix_frnd_mufu", mix_frnd_mufu, "FRND.FLOOR=8,FADD=8,MUFU.EX2=8"),
     PR("bar_or", bar_or, "BAR.RED.OR*=8"),
@@ -388,6 +462,20 @@ static const OpProbe PROBES[] = {
     PR("s64", s64, "I2F.S64=8,F2I.S64.TRUNC=8"),
     PR("mix_s64_mufu24", mix_s64_mufu24, "I2F.S64=1,F2I.S64.TRUNC=1,MUFU.EX2=24"),
     PR("mix_s64_dfma", mix_s64_dfma, "I2F.S64=2,F2I.S64.TRUNC=2,DFMA=2"),
+#define PR32(n, A, B) PR(#n, n, A "=8" B), PR("mix_" #n "_mufu", mix_##n##_mufu, A "=8" B ",MUFU.EX2=8")
+#define PR64(n, A, B)                                                              \
+  PR(#n, n, A "=8," B "=8"), PR("mix_" #n "_mufu24", mix_##n##_mufu24, A "=1," B "=1,MUFU.EX2=24"), \
+      PR("mix_" #n "_dfma", mix_##n##_dfma, A "=2," B "=2,DFMA=2")
+    PR32(cvt_s32, "I2F.RP", ",F2I.TRUNC.NTZ=8"),
+    PR32(cvt_u16, "I2F.U16", ",F2I.U16.TRUNC.NTZ=8"),
+    PR32(cvt_s8, "I2F.S8", ",F2I.S8.NTZ=8"),
+    PR32(cvt_frnd, "FRND.TRUNC", ",FRND=8"),
+    PR32(cvt_i2i, "I2I.S8.S32.SAT", ""),
+    PR32(cvt_i2ip, "I2IP.S8.S32.SAT", ""),
+    PR64(cvt_u64, "I2F.U64", "F2I.U64.TRUNC"),
+    PR64(cvt_frnd64, "FRND.F64.FLOOR", "FRND.F64.TRUNC"),
+    PR64(cvt_f64_u32, "I2F.F64.U32", "F2I.U32.F64.TRUNC"),
+    PR64(cvt_f64_s64, "I2F.F64.S64", "F2I.S64.F64.TRUNC"),
     {.name = "bar16", .kernel = (const void*)bar16, .tpb = TPB, .expect = "BAR.RED.OR*=8", .warps = "16"},
     {.name = "mix_bar16_lop3", .kernel = (const void*)mix_bar16_lop3, .tpb = TPB,
      .expect = "BAR.RED.OR*=8;LOP3.LUT=32", .warps = "16;16", .until = 2},
