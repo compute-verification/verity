@@ -50,8 +50,8 @@ uv run machine-model render theta            # θ's rates, capacities, clocks, e
 
 The data, each kind of thing a file or a line of its own:
 
-- `data/model.toml`: the constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest
-  GEMM, the CUDA kinds, the adopted design, the epochs in order and the `current` vector.
+- `data/model.toml`: the card the device is (`card`, a SKU of `verity/hardware/cards/`), the constants (R*, the honest
+  kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest GEMM, the CUDA kinds, the adopted design, the epochs in order and the `current` vector.
 - `data/rows.csv`: one line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status
   (`measured`, `ASSUMED`, `provisional`, `joint`, `datasheet`), the runs or notes it rests on, and what it is.
 - `data/census/EPOCH.csv`: the census lines from EPOCH, a file for each epoch that brought any: one line per instruction
@@ -81,12 +81,14 @@ The data, each kind of thing a file or a line of its own:
 - `data/forms.toml`: the MMA forms the cheater's tensor route mixes: each census kind's shape, split, sparsity, why its
   product is exact, and its SASS.
 - `data/table.toml`: the cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2
-  bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
+  bandwidth it is bound by (the most L2 read in any measured pattern, + 2%). Its `[card]` keys (SMs) are the card's.
 - `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
   prices it on, the conditions no computation shows, and its scope, per node ("The headline is per node").
 - `data/theta.toml` (and `data/devices/sm_90/theta.toml`, the H200's): θ, the accelerator model's parameters:
   every tensor rate by format and shape, every lane pipe, the register file, shared memory, L1, L2 and HBM, the
-  capacities and clocks, each with its vendor document and page first, then the census or run that measured it, or the
+  capacities and clocks. A number the device's card file states as a ceiling is read from it (`card = "EXPR"`, e.g.
+  `"rate.tensor / weight.s8"`; `verity_machine_model/card.py`), which holds its value and source; any other has its
+  vendor document and page first, then the census or run that measured it, or the
   run that would (`gap`); the exact paths (b1, INT4, FP4) with their ISA reference; the FP8 atoms' semantics; the
   units that write registers, which B_RF's LP reads; a verdict for every unit RT-UNITS lists (`[[unit]]`); the
   public SHA-512 figures our compressions are read against (`[[public]]`); our kernel's SASS a compression
@@ -97,6 +99,8 @@ The data, each kind of thing a file or a line of its own:
 The code:
 
 - `verity_machine_model/model.py`: reading `data/` (or a device's directory).
+- `verity_machine_model/card.py`: the device's card file (`verity.hardware`), and the `card = "EXPR"` numbers θ,
+  `sheet.toml` and `table.toml` read from it, ceilings only.
 - `verity_machine_model/lp.py`: the LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py`
   `solve` computes it.
 - `verity_machine_model/attacks.py`: an attack's X, the cheapest of a design, and the check: every price at or below
@@ -448,7 +452,7 @@ designs and honest kernels. The directory follows these rules:
   `census(m, epoch, DIR)` take the directory.
 - To price a design on the device, it gains the rest of `data/`'s files, and `--device sm_NN` (or `--data DIR`) reads
   it:
-  - `model.toml`: its epoch, its vector and its CUDA lane classes, and optionally `uniform_forms`, the lane classes
+  - `model.toml`: its card (`card`), its epoch, its vector and its CUDA lane classes, and optionally `uniform_forms`, the lane classes
     with a uniform-datapath form: a filler whose mix has another class has no uniform route (sm_90's datapath is
     integer only, so an FFMA filler stays on lanes). Without it every filler may move there. The constants only
     `solve` reads stay out.
@@ -457,7 +461,7 @@ designs and honest kernels. The directory follows these rules:
   - `designs.toml` and `designs/`: each design at each L, read on the device's `designs.toml` (the proof block and the
     coins), with the device's honest kernel, operand floor φ_del, clock and ε_clock, luck budget and baseline. The
     noise, ε_skip and ε_mand are sm_120's design's, and its title is that design's at L.
-  - `table.toml`: the table route at the device's SMs and f_max. Without an `l2`, the L2 isn't measured, and the route
+  - `table.toml`: the table route at the device's SMs and f_max (its `[card]` keys, read from the card file). Without an `l2`, the L2 isn't measured, and the route
     is bound by its slots alone.
 
   `data/adapt.toml` holds for every device. A census with no uniform-datapath line (`UNI`) closes the uniform route.
@@ -473,7 +477,8 @@ sm_90's `DS-90` and sm_100's `DS-100` are the same, after DC-90 and DC-100, in `
 `data/devices/sm_100/census/DS-100.csv`. Each also reads one measured row, `DS_uniform`: no document states the
 uniform datapath's rate, so the sheet's uniform pipe is the census's UP line. Their constants are each directory's
 `sheet.toml`, with the document that
-states each one and its grade (note:20261019T0511Z-draft-mm-sheets): `machine-model --device sm_90 sheet` derives every
+states each one and its grade (SMs, f_max, the tensor peaks and the pipes the card file holds are read from it, `card =
+"EXPR"`, the grade and document staying beside them) (note:20261019T0511Z-draft-mm-sheets): `machine-model --device sm_90 sheet` derives every
 DS line from it, checks it against the census file and checks each per-clock peak against the figure its document prints
 at the clock it's quoted at. `sheet --lean` prints the Lean module `sheet.toml` names
 (`Security/Definitions/Accounting/Sheets/`), which the tests hold to that output and whose `machine_eq_census` proves

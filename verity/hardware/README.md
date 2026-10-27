@@ -27,3 +27,7 @@ load("rtx-pro-6000-server")["host"]["ops"]      # {'value': 1045299200000000.0, 
 **Changing a number:** change the card file, then its Lean table to match. `tests/test_lean.py` evaluates each Lean
 `card` arm as an exact rational and fails on any number that differs, and on a store, resource or format of
 `Security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.
+
+Readers, which move with a changed ceiling: the machine model's θ, data sheets and table route
+(`benchmarks/pouw/machine_model/verity_machine_model/card.py`, each device's `model.toml` naming its SKU) and H1's device
+records (`verity/core/protocols/pouw/circuit/h1device.py`).
