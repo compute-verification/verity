@@ -79,8 +79,8 @@ best effort): the cache is regional and may drop a value at any time, so a cold 
 Vercel pushes a Python subscriber only from its Python framework build, which compiles a `[[tool.vercel.subscribers]]`
 entry in `pyproject.toml` into a queue-triggered function ([Python SDK](https://vercel.com/docs/queues/python-sdk),
 "Consuming messages in push mode"); a `vercel.json` `experimentalTriggers` entry is documented for JavaScript functions.
-This project's build (`framework: null`, `buildCommand`, `api/index.py`) compiled neither, so from 19 to 23 Oct
-production published every event and consumed none, while health looked clean (console, 23 Oct). So the service polls:
+This project's build (`framework: null`, `buildCommand`, `api/index.py`) compiles neither, so a push subscriber would
+never run: production would publish every event and consume none while health looks clean. So the service polls:
 
 - `subscriber.drain` calls the SDK's `poll(topic, "slack-events-drain", limit=10, lease_duration=120)`, which
   authenticates as `send` does. Entering a delivery renews its lease while the handler runs and acknowledges it on a

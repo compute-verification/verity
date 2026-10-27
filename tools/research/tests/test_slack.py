@@ -552,7 +552,7 @@ def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost
 
 
 def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
-    """A burst of doorbells draws a 429 from Slack; giving up there left the last handles unrung (15 Oct review)."""
+    """A burst of doorbells draws a 429 from Slack; giving up there would leave the last handles unrung."""
     waits: list[float] = []
     monkeypatch.setattr(slack, "_sleep", waits.append)
     broker.fails = [http_error(429, {"error": "rate_limited"}, Retry_After="2"), http_error(429, {"error": "rate_limited"}, Retry_After="99")]
@@ -669,7 +669,7 @@ def test_manifest_diff_skips_a_false_default_one_side_omits():
 
 def test_the_app_manifest_keeps_the_live_request_urls_and_events():
     """apply replaces the whole manifest, so one without the interactivity URL (the #ask-daniel card buttons) or the event
-    subscriptions (the events service) would switch them off (infra caught it on 19 Oct and merged the live blocks in)."""
+    subscriptions (the events service) would switch them off, so the repository's manifest carries the live blocks."""
     m = json.loads(REAL_MANIFEST.read_text())
     assert m["settings"]["interactivity"]["is_enabled"] and m["settings"]["interactivity"]["request_url"].startswith("https://")
     ev = m["settings"]["event_subscriptions"]
@@ -1114,7 +1114,7 @@ def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, regist
     ("The 13:00Z checkpoint is late", None), ("comms 23:59Z: late", "comms 23:59Z (sent 13:22Z): late"),
 ])
 def test_a_hand_typed_header_time_gets_the_real_send_time_beside_it(text, stamped):
-    """26 Oct: hand-typed times in posts ran up to 15 min off, which misordered MEM-69's salts (top, TOP-90)."""
+    """Hand-typed times in posts run up to 15 min off and misorder posts, so a header time that far off shows the real one."""
     now = datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc)
     assert slack.stamp_time(text, now) == (stamped or text)
 
@@ -1595,16 +1595,16 @@ def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alon
 
 
 def test_groups_sync_never_sets_a_groups_members(fake, registry, capsys):
-    """Agent-role groups are routing labels with no members, so a mention notifies no person (Daniel, 19 Oct: the old groups
-    had him as their only member). sync creates and updates without a member list and never calls usergroups.users.*."""
+    """Agent-role groups are routing labels with no members, so a mention notifies no person. sync creates and updates
+    without a member list and never calls usergroups.users.*."""
     fake.groups = [{"id": "SINFRA", "name": "infra", "handle": "infra", "description": "old", "date_delete": 0}]
     assert run(capsys, "groups", "sync", "--apply")[0] == 0
     calls = [(m, p) for m, p in fake.calls if m.startswith("usergroups.")]
     assert calls and not any(m.startswith("usergroups.users.") or "users" in p for m, p in calls)
 
 def test_a_retired_group_id_still_routes_and_groups_sync_never_re_enables_it_or_a_group_with_members(fake, registry, capsys):
-    """19 Oct: the seven old groups, whose only member was Daniel, were renamed aside and disabled for empty ones. Posts from
-    old checkouts still tag the old ids, so a handle's retired_usergroups still route; and sync must never re-enable a group
+    """A retired group is renamed aside, and disabled once empty. Posts from old checkouts still tag the old ids, so a
+    handle's retired_usergroups still route; and sync must never re-enable a group
     that has members (that would notify them without touching membership), nor touch a retired one at all."""
     reg = json.loads(registry.read_text())
     infra = next(h for h in reg["handles"] if h["handle"] == "infra")
@@ -1841,7 +1841,7 @@ def test_wait_gives_up_after_the_deadline_and_its_grace(route, registry, capsys,
 @pytest.mark.parametrize("argv", [card_argv("--wait", "--every", "600", kind="blocking", deadline="2:45 PM"),
                                   ["ask-daniel", "status", "42", "--wait", "--every", "600"]], ids=["post", "status"])
 def test_wait_stops_at_twenty_minutes_with_the_card_pending_and_says_how_to_check_back(route, registry, capsys, monkeypatch, argv):
-    """No tool call may block more than 20 minutes (Daniel, 19 Oct); a card's deadline can be a week away."""
+    """No tool call may block more than 20 minutes; a card's deadline can be a week away."""
     from research import waitcap
 
     slept: list[float] = []
@@ -2790,7 +2790,7 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
 
 
 def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, registry, routes_dirs, capsys):
-    """console's inbox reopened at 21:38Z on 16 Oct; senders whose clone still held it closed rang no one (17 Oct review)."""
+    """An inbox reopened since this clone was pulled: a sender whose clone still holds it closed rings the published route."""
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}console. pointers", username="console", bot_id=BOT)
     add_route(routes_dirs[0], "console", root["ts"], closed="2026-10-14T22:45Z")                   # this clone: closed
     add_route(routes_dirs[1], "console", root["ts"], holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc",
@@ -3352,7 +3352,7 @@ def test_a_single_file_in_a_checkout_older_than_the_registry_reads_it_from_origi
     assert out.returncode == 2 and "after `git fetch origin main`" in out.stderr
 
 
-# ---- routing and authorship under attack (the comms red team, 18 Oct) ----------------------------------------------------
+# ---- routing and authorship under attack ------------------------------------------------------------------------------
 
 def test_a_forward_loop_or_a_chain_past_three_hops_rings_no_closed_inbox(fake, registry, routes_dirs, capsys):
     """`Routes.resolve` stops after 3 hops and handed back the closed route it stopped on; `deliver` rang that retired
@@ -3523,8 +3523,8 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
 
 
 def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_given(fake, registry, capsys, monkeypatch):
-    """#ask-the-team: the bot may post there but lacks channels:history, so finding a reply's thread failed the whole post
-    (top, 19 Oct). A refused read keeps the thread as given; any other failure still stops it."""
+    """#ask-the-team: the bot may post there but lacks channels:history, so finding a reply's thread must not fail the whole
+    post. A refused read keeps the thread as given; any other failure still stops it."""
     root = fake.add(COORD, text="a question from Daniel", username="daniel", bot_id=BOT)
     real, error = slack.post, ["missing_scope"]
 
