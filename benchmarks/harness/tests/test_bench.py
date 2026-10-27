@@ -653,7 +653,7 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
 
 @pytest.mark.parametrize("resident_failure", [None, "candidate"])
 def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
-    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms:
+    """A `blocks` engine's first timed rep after one warm-up was slow on the bandwidth arms:
     the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
     own summary stays in the schedule."""
 
@@ -742,7 +742,7 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
     assert "device" not in HostProbe().close()
 
 
-def test_resident_failure_falls_back_to_alternating_blocks():
+def test_resident_failure_falls_back_to_blocks():
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure="candidate")
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, factory=factory, git_commit="abc")
@@ -842,7 +842,7 @@ def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
     }
 
 
-def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
+def test_blocks_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
@@ -1097,7 +1097,7 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
     """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
     the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control.
-    A live run's coins name its session, its salt epoch and that epoch's root over the weights' root."""
+    A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
     from verity.core.protocols.pouw.salt import epoch_open_root
@@ -1486,8 +1486,8 @@ def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_f
         assert tpot[arm]["ratio_to_stock"]["mean"] == pytest.approx(2, rel=0.005)
 
 
-def test_a_block_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
-    """Red team, attacks 1 and 3: in blocks the gate's engine and the timed engines are different lifetimes, and the
+def test_a_blocks_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
+    """Red team, attacks 1 and 3: in `blocks` the gate's engine and the timed engines are different lifetimes, and the
     identity recorded the gated one's KV pool, so a timed engine with another pool went unnoticed."""
 
     factory = FakeFactory(resident_failure="candidate", kv_after_gate={"candidate": 491_376})

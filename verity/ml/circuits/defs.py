@@ -178,8 +178,8 @@ def _static_key(v: StaticValue):
 
 
 class IdentityConflict(ValueError):
-    """`E_IDENTITY`: two different definitions claim the same fully qualified id within one program (frontend
-    rulings §8.1/§8.3). Never resolved first-wins — neither by the binding cache nor by the codec."""
+    """`E_IDENTITY`: two different definitions claim the same fully qualified id within one program. Never
+    resolved first-wins — neither by the binding cache nor by the codec."""
 
 
 def same_definition(a: "FunctionDefinition", b: "FunctionDefinition") -> bool:

@@ -1,4 +1,4 @@
-"""X-03 per-layer attention plane classes (F-r19-int-22): the expected hidden-plane inventory of a step is DERIVED per attention layer from
+"""X-03 per-layer attention plane classes: the expected hidden-plane inventory of a step is DERIVED per attention layer from
 the Program's attention Call statics (NH, KVH, D, window) x the step's active-sequence set; uniformity across layers is a consequence for
 one-class Programs, not a rule.  Synthetic declarations and inventories only (class labels A/B; no model is named).  Offline (no CUDA)."""
 from __future__ import annotations
@@ -359,7 +359,7 @@ def test_committer_reads_the_active_set_from_step_rows_first_and_names_the_layer
     decls = two_class(4)
     com = _com(4)
     com.attention_layer_decls = decls
-    com.step_rows = {0: [(f"r{i}", i, i + 1) for i in range(8)]}         # BIND-01 record: 8 active sequences, one row each
+    com.step_rows = {0: [(f"r{i}", i, i + 1) for i in range(8)]}         # the binding record: 8 active sequences, one row each
     names = _step(decls, 8)
     names = [n for n in names if "/L2/" not in n] + whole(2, 8 * KVH, NH // KVH)   # layer 2 (class B) committed class A's row
     com._layouts[0] = _layout(names, n_seq=8, tokens=8)
