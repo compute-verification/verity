@@ -105,8 +105,9 @@ class Handshake:
         key = bytes.fromhex(self.peer_hello["key"])
         try:
             ok = bool(self.verify(key, signed(self.peer, *self._hellos()), msg.body))
-        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
-            ok = False
+        except Exception as e:
+            raise Refused("handshake-signature", f"{self.peer}'s signature over the exchange doesn't parse: "
+                                                 f"{type(e).__name__}: {e}") from e
         if not ok:
             raise Refused("handshake-signature", f"{self.peer}'s signature over the exchange doesn't verify")
         self.frames.append(bytes(data))

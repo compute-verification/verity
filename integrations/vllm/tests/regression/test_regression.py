@@ -7,7 +7,7 @@ historical "does v2 reproduce v1" comparison, where the labelled decisions below
 tests.regression.rebaseline run --record DIR --oracle frozen|expected` runs either and records every result for `write` / `table`.
 
 THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit 89af272a8c1d37a44b3e8f3253378d7a152fc281, tagged
-`v1-reference`) and the R19 rows it recorded.  Twelve rows are frozen in `fixtures.toml` (row -> files -> sha256/bytes) and
+`v1-reference`) and the R19 rows it recorded.  Twelve rows are frozen in `files.toml` (row -> files -> sha256/bytes) and
 `expected/<row>.json` (the contract: lifted from each row's OWN documents by `lift_expected.py`, then re-baselined on v2 by
 `rebaseline.py` -- never typed by hand):
 
@@ -75,7 +75,7 @@ HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
 `r19-reference-v1`).  A recorded `check` sets `VERITY_REGRESSION=1` and runs the T0 tier less the checks that recompute from a
 row's Programs (`REBUILD = True`, marked `rebuild`: manifest_digest, step_segmentation and the #57 negative), which
-`tools/verity/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input fixtures.toml names that does not resolve, or
+`tools/verity/check/post_train.py` runs after each train on main with `VERITY_REGRESSION_REBUILD=1` (`-m "regression and rebuild"`).  Under `VERITY_STORE_REQUIRED=1` (both of them) an input files.toml names that does not resolve, or
 an absent `expected/<row>.json`, FAILS: the only skips are a tier not asked for, a check that does not apply to the row, and a check
 retired on the row (`[rows.<row>.retired.<check>]`: `reason`, `since`, `needs`; `python -m tests.regression.decisions` lists them).
 Self-check (the current code against its own records):
