@@ -287,6 +287,32 @@
   "Properties.NciDesc",
   "Definitions.Pouw.Window"
  ],
+ "claims": {
+  "modules": ["Properties.RemoteAudit.Component"],
+  "witnesses": {
+   "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": {
+    "fails": "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+    ]
+   },
+   "Properties.RemoteAudit.Component.LineHeldAtComponentBy": {
+    "fails": "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
+     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites"
+    ]
+   }
+  },
+  "not": {
+   "Properties.RemoteAudit.Component.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Component.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Component.LineHeldAtComponent": "a closed statement: the `LineHeldAtComponentBy` form at the deployed verifier (`Properties.RemoteAudit.Component.lineHeldAtComponent_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Component.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtComponent` reads in its event: an event, no claim",
+   "Properties.RemoteAudit.Component.HeldBy": "the line's credit at a verifier's record, which `LineHeldAtComponentBy` reads in its event: an event, no claim",
+   "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim"
+  }
+ },
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
@@ -1754,6 +1780,24 @@
    "signature": ["Properties.RemoteAudit.Component.acceptIsVerified : Properties.RemoteAudit.Component.AcceptIsVerified"],
    "assumptions": [],
    "type_hash": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959"
+  },
+  "Properties.RemoteAudit.Component.acceptIsVerified_complete": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.acceptIsVerified_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.lineHeldAtComponent_bites": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.lineHeldAtComponent_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "owner": "@memory-accounting",
