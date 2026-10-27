@@ -19,6 +19,10 @@ The two counts through the wire (`EncardDecodableLeConstantRate` and its per-win
 which their honest lemma concludes for the honest certifier `fxHonestI` at `fxRate`, with W2 and J, its two named
 assumptions, holding there too. At the verifier that accepts everything a sender whose secret is its frame's length
 (`fxLeakI`) has every secret decoded (`fxLeak_not_le`).
+
+The six ingress counts take that every status is complete (`StatusComplete`, acceptance as it bears on ingress), which
+#4871's rule doesn't hold to witnesses, so their entries name their kind. Their honest lemma concludes it for
+`fxHonestI`, with W2, W4 and J; their nontrivial lemmas decode every message of `fxLeakI` from its records or its wire.
 -/
 
 namespace NetTiming.Witness
@@ -108,5 +112,63 @@ theorem EncardDecodableLeConstantRatePerWindow_nontrivial :
     ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z (1 * 1)) ∧ fxLeakDec (fxLeakI.wireRun z (1 * 1)) = z}.encard ≤
       ((Fintype.card Unit * (syncOne.size * 1 ^ 1) ^ 1 : ℕ) : ℕ∞) :=
   fxLeak_not_le _
+
+/-! ## Into X -/
+
+/-- **The honest certifier's run has every status complete, and it meets W2, W4 and J**: at one frame a bucket on its
+one link, with the wire its record. -/
+theorem Ingress_honest :
+    StatusComplete 1 (fxHonestI.obsRun () 1) ∧ Packed fxHonestI.certifier ∧
+      Allocated fxHonestI.certifier (fun _ => 1) ∧ JitterBounded fxHonestI.certifier 1 ∧
+      Regenerates fxHonestI.certifier (fun _ o => o) :=
+  ⟨fxHonestI_complete, fxHonestI_w4.1, fxHonestI_w4.2, fx_wire.2.1, fx_wire.1⟩
+
+/-- **`EncardIngressObsDecodableLe`'s bound fails at the verifier that accepts everything**, at one frame a bucket on
+one link: there a decoder of `fxLeakI`'s records recovers every message. -/
+theorem EncardIngressObsDecodableLe_nontrivial :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.obsRun z 1) = z}.encard ≤
+      (((∏ _ℓ : Fin 1, (1 + 1)) ^ 1 * 1 ^ 1 : ℕ) : ℕ∞) :=
+  fxLeakObs_not_le _
+
+/-- **`EncardIngressDecodableLe`'s bound fails at the verifier that accepts everything**: a decoder of `fxLeakI`'s
+wire recovers every message. -/
+theorem EncardIngressDecodableLe_nontrivial :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.wireRun z 1) = z}.encard ≤
+      (((∏ _ℓ : Fin 1, (1 + 1)) ^ 1 * 1 ^ 1 : ℕ) : ℕ∞) :=
+  fxLeak_not_le _
+
+/-- **`EncardIngressObsDecodableLeContents`'s bound fails at the verifier that accepts everything**, at one content
+assignment. -/
+theorem EncardIngressObsDecodableLeContents_nontrivial :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.obsRun z 1) = z}.encard ≤
+      ({fun _ => []} : Set (Fin 1 → List (List Bool))).encard *
+        (((∏ _ℓ : Fin 1, (1 + 1)) ^ 1 * 1 ^ 1 : ℕ) : ℕ∞) := by
+  rw [Set.encard_singleton, one_mul]
+  exact fxLeakObs_not_le _
+
+/-- **`EncardIngressDecodableLeContents`'s bound fails at the verifier that accepts everything**, at one content
+assignment. -/
+theorem EncardIngressDecodableLeContents_nontrivial :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.wireRun z 1) = z}.encard ≤
+      ({fun _ => []} : Set (Fin 1 → List (List Bool))).encard *
+        (((∏ _ℓ : Fin 1, (1 + 1)) ^ 1 * 1 ^ 1 : ℕ) : ℕ∞) := by
+  rw [Set.encard_singleton, one_mul]
+  exact fxLeak_not_le _
+
+/-- **`EncardIngressObsDecodableLePerWindow`'s bound fails at the verifier that accepts everything**, over one window
+of one bucket. -/
+theorem EncardIngressObsDecodableLePerWindow_nontrivial :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z (1 * 1)) ∧ fxLeakDec (fxLeakI.obsRun z (1 * 1)) = z}.encard ≤
+      ((((∏ _ℓ : Fin 1, (1 + 1) ^ 1) * 1 ^ 1) ^ 1 : ℕ) : ℕ∞) :=
+  fxLeakObs_not_le _
+
+/-- **`EncardIngressObsDecodableLeContentsPerWindow`'s bound fails at the verifier that accepts everything**, over one
+window of one bucket at one content assignment. -/
+theorem EncardIngressObsDecodableLeContentsPerWindow_nontrivial :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z (1 * 1)) ∧ fxLeakDec (fxLeakI.obsRun z (1 * 1)) = z}.encard ≤
+      ({fun _ => []} : Set (Fin 1 → List (List Bool))).encard *
+        ((((∏ _ℓ : Fin 1, (1 + 1) ^ 1) * 1 ^ 1) ^ 1 : ℕ) : ℕ∞) := by
+  rw [Set.encard_singleton, one_mul]
+  exact fxLeakObs_not_le _
 
 end NetTiming.Witness

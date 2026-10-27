@@ -33,8 +33,10 @@ witnesses):
   verifier that accepts everything, `acceptAll`, one step's sequences are infinitely many
   (`accSeqsAt_acceptAll_infinite`).
 * `fxHonestI`: the honest certifier at `fxRate`, whose first step is `fxHonest` (`fxHonestI_obsRun`), and `fxLeakI`, a
-  sender whose secret is its one frame's length, which `fxLeakDec` reads back from the wire. Both meet W2 with the wire
-  their record and J at `D = 1` (`fx_wire`), and at `acceptAll` every secret of `fxLeakI` is decoded (`fxLeak_not_le`).
+  sender whose secret is its one frame's length, which `fxLeakDec` reads back from the wire or the record. Both meet W2
+  with the wire their record and J at `D = 1` (`fx_wire`), `fxHonestI` meets W4 at one frame a bucket
+  (`fxHonestI_w4`) with every status complete (`fxHonestI_complete`), and at `acceptAll` every secret of `fxLeakI` is
+  decoded (`fxLeak_not_le`, `fxLeakObs_not_le`).
 -/
 
 namespace NetTiming.Witness
@@ -512,5 +514,24 @@ theorem fxLeak_not_le (N : ℕ) :
     Set.eq_univ_of_forall fun z => fxLeak_decodes z
   rw [this, Set.encard_univ, ENat.card_eq_top_of_infinite]
   simp
+
+/-- As `fxLeak_not_le`, with the decoder reading the records rather than the wire. -/
+theorem fxLeakObs_not_le (N : ℕ) :
+    ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.obsRun z 1) = z}.encard ≤ N := by
+  have : {z : ℕ | acceptAll (fxLeakI.obsRun z 1) ∧ fxLeakDec (fxLeakI.obsRun z 1) = z} = Set.univ :=
+    Set.eq_univ_of_forall fun z =>
+      ⟨trivial, by simp [fxLeakDec, fxLeakI, Interaction.obsRun, Interaction.trace]⟩
+  rw [this, Set.encard_univ, ENat.card_eq_top_of_infinite]
+  simp
+
+/-- `fxHonestI` meets W4 with one frame a bucket: its one slot is a packed row. -/
+theorem fxHonestI_w4 : Packed fxHonestI.certifier ∧ Allocated fxHonestI.certifier fun _ => 1 :=
+  ⟨fun _ _ _ _ s s' _ h => by rwa [Subsingleton.elim s s'], fun _ _ _ _ => Nat.lt_succ_iff.1 (rowCount _).2⟩
+
+/-- `fxHonestI`'s first step has every status complete. -/
+theorem fxHonestI_complete : StatusComplete 1 (fxHonestI.obsRun () 1) := by
+  intro t ht
+  obtain rfl : t = 0 := by omega
+  exact ⟨Nat.one_pos, fun _ => rfl⟩
 
 end NetTiming.Witness

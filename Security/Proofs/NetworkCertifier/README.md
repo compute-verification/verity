@@ -141,9 +141,10 @@ WitnessToys.lean  the instances they are stated at, built by hand (the negation'
 PeriodWitnesses.lean  the monitoring period's two pairs (PeriodLeakAccepted, HorizonLeakAccepted), in the
                                          lock's `witnesses`: no binder over the instance, the sampled verifier's
                                          code the one named assumption (Assumptions/SampledCode.lean)
-CountWitnesses.lean  the nine egress counts' pairs, six over `AccSeqs`, one under a sampled audit and
-                                         two through the wire: the honest step accepted at the shipped schedule
-                                         at one bucket (`fxRate`) or at the negation (`notStmt`), and each bound
+CountWitnesses.lean  the fifteen counts' pairs: nine egress (six over `AccSeqs`, one under a sampled
+                                         audit, two through the wire) and six ingress. The honest step is
+                                         accepted at the shipped schedule at one bucket (`fxRate`) or at the
+                                         negation (`notStmt`), or has every status complete, and each bound is
                                          false at the verifier that accepts everything (`acceptAll`), in the
                                          lock's `witnesses`
 Assumptions/SampledCode.lean  `NetTiming.Assumptions.SampledCodeRuns`: the sampled verifier the service runs
