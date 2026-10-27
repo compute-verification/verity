@@ -138,10 +138,10 @@ theorem col_val_compHP (a : AcceptedHP T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin
     (h2 : c0 < (unitRows a.st a.L.unit_built).nIn + (unitRows a.st a.L.unit_built).nComp)
     (hx : x.val = a.st.c.upv * (unitRows a.st a.L.unit_built).nIn +
       (u' * ((unitRows a.st a.L.unit_built).nComp + 1) + (1 + (c0 - (unitRows a.st a.L.unit_built).nIn)))) :
-    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + c0 := by
+    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + upos a.st.c c0 := by
   unfold AcceptedHP.col
   rw [Fin.val_cast]
-  exact Layout.stackPlace_val_comp _ _ _ _ _ hu' h1 h2 x hx
+  exact a.L.col_val_comp a.regs hg hu' h1 h2 x hx
 
 /-- **A drawn unit's returned output holds its output row's message bit**, at public inputs (`out_copyH`). -/
 theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
@@ -163,6 +163,7 @@ theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
   dsimp only at ho hrf hg x hu' hj h1 h2 hx hjo hk hw hcol ⊢
   obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' s.parse
   have P := parse_facts hpa
+  rw [upos_flat P.tmpl] at hcol
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have L0 := flat_layoutP ht' s
