@@ -489,7 +489,7 @@ def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool
 
 
 def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]] | None:
-    """`regenerated_records` of a check whose files aren't in the store (one still running, which drive lands with `--defer`),
+    """`regenerated_records` of a check whose files aren't in the store (a Lean check still running, which drive's landing lands on),
     read from its run dir on its node with ``fetch`` (`fetch_run`), each record's sha256 taken of the bytes fetched; None when
     its run can't be read or holds no report of its Lean check.  `Unreadable` when the report can't be parsed, or names a
     record the run dir doesn't hold."""
@@ -530,9 +530,8 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited (CI-64).
 
-    ``deferred`` is the check drive lands the parent on with `--defer` while its deferred steps still run (`Driver.verdict`),
-    which has no passing attempt yet: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its
-    records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
+    ``deferred`` is the Lean check drive lands the parent on (`Driver._unvouched`), which may have no passing attempt yet: it
+    vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
     digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
     With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
     commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
@@ -1641,7 +1640,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
     does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
     ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
-    `Check:` trailer, and one made with `--defer` has no passed attempt in the store yet (CI-81).  Returns the argv started,
+    `Check:` trailer, and the Lean check one lands on may have no passed attempt in the store yet (CI-81).  Returns the argv started,
     None when the declaration names none."""
     from .store import tools_registry
 

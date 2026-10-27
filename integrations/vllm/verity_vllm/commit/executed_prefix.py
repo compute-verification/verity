@@ -15,7 +15,7 @@ The first record: OLMoE B2 i32/o32 mixedstop (cp-moe, lane e32550951): r0 served
 index 10, LAG 1), r1 32 / 32 (cap) -- G6 PASS with the lag exercised; the Commit's population, placed over every request's cap, required
 r0's 20 unexecuted steps (bound 13808/19988) and failed by name.
 
-Daniel's ruling puts this in a box -- the ACTIVE-REFERENCE table only, on three conditions `check.executed_prefix.link_to_match_account` checks:
+This holds in a box -- the ACTIVE-REFERENCE table only, on three conditions `check.executed_prefix.link_to_match_account` checks:
 (a) n_exec is determined from the properly LINKED serving transcript: the Commit's own served tokens count only because they EQUAL the Match
 record's served output (capture/tokens.json of the same attempt) and the Match account (GM-01 G6: PASS, the same two lengths per request)
 -- "the committer says EOS happened here" is never sufficient by itself; (b) the lag rule is attested: declared == the engine's read-back ==
@@ -23,16 +23,16 @@ the record's tokens.json; (c) any actual execution past the boundary FAILS (`row
 active-reference implementation classification only.  In the lifted fixed Program the corresponding positions are REQUIRED logical values
 assigned the canonical inactive representation tau(e) = bot; there is no not-required-because-not-executed category.
 
-A config run has no Match stage.  Its linked serving transcript is the Commit's own token record (`check.commit_tokens`): the driver's
+A config run has no Match phase.  Its linked serving transcript is the Commit's own token record (`check.commit_tokens`): the driver's
 served tokens beside the commitment, each opened from the run root and verified equal to the committed sampled id it was served from
 (`link_to_commit_account`).  The prefix then rests on committed values, not on the committer's count; with a Match record too, both hold
 when the row committed its sampled ids, and the Match record alone when it committed none.
 
-PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -- how far each request actually ran)
+PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -- how far each request actually ran)
   Purpose: per request, derive the two lengths every Commit consumer counts on -- served_output_len (tokens served, EOS included) and
     executed_prefix_len (cap on a length stop; served + LAG on an EOS stop) -- from the served tokens + the Program's DECLARED stop
     rule (eos ids, lag), never from the trace; then accept it only when LINKED to an account of the same attempt: the Match account,
-    or, with no Match stage, the Commit's token record bound to the commitment (`check.commit_tokens`).
+    or, with no Match phase, the Commit's token record bound to the commitment (`check.commit_tokens`).
   Inputs: served tokens per request, caps, `eos_of_record` + `lag` (global_program.stop_rule / Workload_v1.lag), the Match account
     (match/capture/tokens.json + global_match.json G6 via `check.executed_prefix.load_match_account`), the token record's link
     (binding.coverage.commit_account_link), the binding map (for `rows_past_the_stop`), the C2 boundary linkage's horizon.
