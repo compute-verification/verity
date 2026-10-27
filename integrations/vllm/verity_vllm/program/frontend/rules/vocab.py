@@ -457,7 +457,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # DeepGEMM's `fp8_einsum("bhr,hdr->bhd")` on one token (DeepSeek-V4's wo_a); `rules/vllm_bindings/fp8.py` asks for it
            "deepgemm_fp8_einsum_grouped": lambda H, K, N, G: ir_bind(_deepgemm.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
-           # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           # (`registry/layer_norm.py`, `observe/fold/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
            "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N),
            # the exact-int8 profile (`TargetProfile.int8_exact`, `engine.int8_ops`): `rules/vllm_bindings/int8.py` asks for them

@@ -52,7 +52,7 @@ REGISTRATION, REGISTRATION_LEAN = "verity/nci/v1", "NciCheck.Protocol.protocol"
 COMMITTER_LEAN = "SampledProofs.OneStageZk.protocol"
 #: the network certifier's period check, whose public carries K and eps
 CERTIFIER = "verity/certifier/v0"
-#: a proof unit's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
+#: a proof block's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
 OUT_BITS = 16
 #: what `horizon_leak`'s K rests on until its two per-window inputs are discharged
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -103,38 +103,44 @@ def bind(protocol: str, components: Sequence[tuple[str, str]]) -> bytes:
 
 
 def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
-                  registration: Mapping[str, Any], registration_digest: str) -> tuple[bytes, bytes, bytes]:
-    """Onsite's params, commitment and evidence from each component's case and its commitment's digest (its answer's
-    ``commitment``), both keyed by the component's protocol id, and the registration's case and digest: what ``onsite
-    check`` reads (the composition README's table). The commitment is the binding of the components' digests, then the
-    registration's digest."""
+                  protocol: str = PROTOCOL, registration: Mapping[str, Any] | None = None,
+                  registration_digest: str = "") -> tuple[bytes, bytes, bytes]:
+    """The product ``protocol``'s (onsite's by default) params, commitment and evidence from each component's case and its
+    commitment's digest (its answer's ``commitment``), both keyed by the component's protocol id, and onsite's
+    registration case and digest: what ``onsite check`` and ``product IDS check`` read (the composition README's table).
+    The commitment is the binding of the components' digests, then the registration's digest when there is one."""
     ids = sorted(cases)
 
     def entry(i: str, c: Mapping[str, Any]) -> dict[str, Any]:
         return {"commitment": c["commitment"], "evidence": c["evidence"], "id": i, "params": c["params"]}
 
-    params = canonical_json({"components": [{"id": i, "params": cases[i]["params"]} for i in ids],
-                             "registration": {"id": REGISTRATION, "params": registration["params"]}})
-    commitment = bind(PROTOCOL, [(i, digests[i]) for i in ids]) + bytes.fromhex(registration_digest)
-    evidence = canonical_json({"components": [entry(i, cases[i]) for i in ids],
-                               "registration": entry(REGISTRATION, registration)})
-    return params, commitment, evidence
+    params: dict[str, Any] = {"components": [{"id": i, "params": cases[i]["params"]} for i in ids]}
+    evidence: dict[str, Any] = {"components": [entry(i, cases[i]) for i in ids]}
+    commitment = bind(protocol, [(i, digests[i]) for i in ids])
+    if registration is not None:
+        params["registration"] = {"id": REGISTRATION, "params": registration["params"]}
+        evidence["registration"] = entry(REGISTRATION, registration)
+        commitment += bytes.fromhex(registration_digest)
+    return canonical_json(params), commitment, canonical_json(evidence)
 
 
-def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
-                 registration: Mapping[str, Any], registration_digest: str) -> dict[str, Any]:
-    """``onsite check`` on the components' cases and the registration's (`onsite_inputs`), with every blob file a case
-    names (``blobs``, the files integrity's audit on the proofs reads) after them: its answer line, parsed."""
-    params, commitment, evidence = onsite_inputs(cases, digests, registration, registration_digest)
+def onsite_check(exe: str | Sequence[str], cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
+                 protocol: str = PROTOCOL, registration: Mapping[str, Any] | None = None,
+                 registration_digest: str = "") -> dict[str, Any]:
+    """``onsite check`` (or ``product IDS check``: ``exe`` as an argv, with ``protocol`` its product's id) on the
+    components' cases and onsite's registration case (`onsite_inputs`), with every blob file a case names (``blobs``, the
+    files integrity's audit on the proofs reads) after them: its answer line, parsed."""
+    params, commitment, evidence = onsite_inputs(cases, digests, protocol, registration, registration_digest)
     blobs = [str(b) for i in sorted(cases) for b in cases[i].get("blobs") or ()]
+    argv = [exe] if isinstance(exe, str) else list(exe)
     with tempfile.TemporaryDirectory() as d:
         files = []
         for name, data in (("params.json", params), ("commitment.bin", commitment), ("evidence.json", evidence)):
             (Path(d) / name).write_bytes(data)
             files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files, *blobs], capture_output=True, text=True, check=False)
+        p = subprocess.run([*argv, "check", *files, *blobs], capture_output=True, text=True, check=False)
     if p.returncode not in (0, 1, 2):
-        raise RuntimeError(f"onsite check exited {p.returncode}: {p.stderr[-2000:]}")
+        raise RuntimeError(f"{' '.join(argv)} check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
@@ -142,6 +148,7 @@ def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapp
 PORTS = {
     "SampledProofs.OneStageZk.protocol": ("sampled-proofs", "verity/sampled-proofs/one-stage/v2"),
     "PouwCheck.protocol": ("pouw", "verity/pouw/v1"),
+    "PouwCheck.Period.protocol": ("pouw", "verity/pouw/period/v1"),
     "NetworkCheck.Check.protocol": ("certifier", "verity/network-certificate/v4"),
     "NetworkCheck.Period.protocol": ("certifier", "verity/certifier/v0"),
     "PousCheck.RunProtocol.protocol": ("pous", "verity/pous/p2/v4/run"),
@@ -210,7 +217,7 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
         else:
             rcase, rdigest = NO_CASE, ""
             source[REGISTRATION] = f"no case (registration {reg.get('verdict', 'missing')})"
-        got = onsite_check(exe, cs, digests, rcase, rdigest)
+        got = onsite_check(exe, cs, digests, registration=rcase, registration_digest=rdigest)
         reason = got.get("reason") or ""
         if reg.get("verdict") == "reject":
             agree = got["verdict"] == "reject" and reason.startswith(f"registration: {REGISTRATION} reject: ")
@@ -253,7 +260,7 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
 def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: int | None = None) -> dict[str, Any]:
     """The network certifier's K over a monitoring period of ``count`` periods like ``periods`` (accepted
     ``verity/certifier/v0`` publics; by default those periods alone), its windows one sequence, each on its own live
-    coins (`NetTiming.Guarantees.HorizonLeakAccepted`, #4367, on `HorizonWrongUnitsLe`, #4355): the faulty units are
+    coins (`NetTiming.Guarantees.HorizonLeakAccepted`, #4367, on `HorizonWrongUnitsLe`, #4355): the faulty proof blocks are
     paid for once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its audits, so
     ``K = log2 #Ss + Σ_c log2(cap_c + 1) + Fmax·(16 + log2(N + 1)) + Σ_i (free_i + k_i·log2 Dj)``, ``N = Σ_i n_i``,
     except with probability ``δ + Σ_i (e_i + e'_i)``: δ once, and each window's soundness and leak errors, which have no

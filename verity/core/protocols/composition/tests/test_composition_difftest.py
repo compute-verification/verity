@@ -1,7 +1,8 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
 core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
-fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, the network certifier's period `build`,
+fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases` and, made once, `pouw_period_cases`'
+periods, the network certifier's period `build`,
 sampled proofs' audits as v2's cases, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`), and onsite's registration case from NCI's declarations
 (on v2's own registration record and log, mostly, else on NCI's own, which onsite refuses: one registration digest in
@@ -15,9 +16,11 @@ integrity is undecided at best and no product accepts here."""
 from __future__ import annotations
 
 import collections
+import functools
 import hashlib
 import itertools
 import json
+import random
 import shutil
 from pathlib import Path
 
@@ -40,6 +43,16 @@ JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max
 #: PoUW's mutations of its window that leave the case's framing whole (`case-*` break the line `serve` reads, which a
 #: composition's evidence can't carry).
 POUW_REFUSALS = [n for n in R.POUW_CASES.NAMES if not n.startswith("case-") and n != "answer-undecided"]
+
+
+@functools.cache
+def pouw_periods() -> dict[str, list[dict]]:
+    """PoUW's periods by the verdict they aim at, made once (a period of the auditor's ledger and its windows is slow to
+    make): a few honest ones, and one of each refusal of `credit.period_credit` and of each break of the protocol's
+    framing. A period is accepted or rejected, never undecided."""
+    PPC = R.POUW_PERIOD_CASES
+    return {R.ACCEPT: [PPC.instance(random.Random(f"honest/{s}")) for s in range(3)],
+            R.REJECT: [PPC.instance(random.Random(f"{n}/0"), n) for n in PPC.NAMES]}
 
 OS = R.ONE_STAGE
 #: The files every product case hands its components as blobs: v2's cases name them as their circuit and public file.
@@ -107,7 +120,7 @@ PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "cas
 NCI_CASES = {R.ACCEPT: ("honest",), R.REJECT: tuple(m for m in R.NCI.MUTATIONS if m != "honest")}
 
 #: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
-KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken-params", "broken-evidence"]
+KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", "broken-params", "broken-evidence"]
 
 
 def kinds(C) -> list[str]:
@@ -120,6 +133,8 @@ def kinds(C) -> list[str]:
         return list(R.WIPE_CASES.KINDS)
     if C is R.NCI_CHECK:
         return list(NCI_CASES)
+    if C is R.POUW_PERIOD:
+        return [R.ACCEPT, R.REJECT]
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
 
 
@@ -134,6 +149,8 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.POUW:
         name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
+    elif C is R.POUW_PERIOD:
+        case = draw(st.sampled_from(pouw_periods()[kind]))
     elif C is R.CERTIFIER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.WIPE:

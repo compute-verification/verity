@@ -51,7 +51,10 @@
   committed by the certifier under its salts and pinned by the verifier from the certifier's signed record alone. The
   circuit declares each output unit's ``o0`` a registered read of it, so its output row is committed under the
   certifier's salt (`out_opening`, `opened_out`) and the Lean verifier's registered reads refuse a unit whose output
-  isn't the row the certifier relayed.
+  isn't the row the certifier relayed. In the wired circuit ``out`` is one row of H words a down_proj unit, request
+  (r, step s) row ``r·S + s``, the egress's order: each down_proj unit's ``o0`` reads it, and in place of the ``down``
+  tie the next step's plain quantize unit's ``x`` reads the same row, so one value fills each row once. Both sides take
+  the width from the circuit (`interface.read_shape`).
 """
 from __future__ import annotations
 
@@ -243,8 +246,6 @@ class TorchLoop:
                  tamper_activations: bool = False) -> None:
         if tamper_activations and not wired:
             raise ValueError("tamper_activations tampers the wired circuit's quantize units: give wired")
-        if tie and wired:
-            raise ValueError("the output tie reads the per-coordinate circuit's output units: give tie or wired")
         self.model, self.requests, self.steps, self.tamper, self.run_id = model, list(requests), steps, tamper, run_id
         self.registered, self.tamper_weights, self.tie = registered, tamper_weights, tie
         self.wired, self.tamper_activations = wired, tamper_activations
@@ -289,7 +290,8 @@ class TorchLoop:
     def wired_circuit(self) -> IF.Circuit:
         """The wired circuit (module docstring): the linears, then the quantize units of the two edges (the second's only past
         one step), every tie a registered read (`ties_of`); with ``registered``, linear unit (l, s, r) also reads row ``l`` of
-        ``w`` and ``sw``."""
+        ``w`` and ``sw``; with ``tie``, down_proj unit (s, r)'s ``o0`` and, below the last step, plain quantize unit (s, r)'s
+        ``x`` read row ``r·S + s`` of `OUT`, H words a row."""
         h, r, s = self.model.h, len(self.requests), self.steps
         mm = linear_template(h)
         templates = [(mm, 2 * r * s), (quant_template(h, True), r * s)] + ([(quant_template(h, False), r * (s - 1))] if s > 1 else [])
@@ -297,6 +299,12 @@ class TorchLoop:
         for value, n, words, ports in self.ties_of():
             params[value] = n * words
             reads += [IF.Read(t, p, value, at, (n,), 0, (words,)) for t, p, at in ports]
+        if self.tie:
+            value, port = OUT
+            params[value] = r * s * h
+            reads.append(IF.Read(descriptor_id(mm), port, value, r * s, (s, r), 0, (h, s * h)))
+            if s > 1:
+                reads.append(IF.Read(descriptor_id(quant_template(h, False)), "x", value, 0, (s - 1, r), 0, (h, s * h)))
         if self.registered:
             lw = dict(IF.layout(mm).rows)
             params |= {v: 2 * lw[p] for v, p in WIRED_WEIGHTS}
@@ -307,15 +315,15 @@ class TorchLoop:
         """The wired circuit's ties, each ``(value, rows, words a row, ports)``: every ``(template, port, unit)`` of
         ``ports`` reads the value's row i at that template's unit ``unit + i``, its writer's output port and its reader's
         input port alike. Linear unit (request r, step s, layer l) is ``l·R·S + s·R + r``, quantize unit (r, s) of either
-        edge ``s·R + r``."""
+        edge ``s·R + r``. With ``tie`` there is no ``down``: `OUT` fills both its ports (`wired_circuit`)."""
         h, r, s = self.model.h, len(self.requests), self.steps
         tm, tq, tp = (descriptor_id(t) for t in (linear_template(h), quant_template(h, True), quant_template(h, False)))
         rs, n = r * s, r * (s - 1)
         out = [("up", rs, h, ((tm, "o0", 0), (tq, "x", 0))), ("up_codes", rs, h // 2, ((tq, "o0", 0), (tm, "x", rs))),
                ("up_scale", rs, 2, ((tq, "o1", 0), (tm, "sx", rs)))]
         if s > 1:
-            out += [("down", n, h, ((tm, "o0", rs), (tp, "x", 0))), ("down_codes", n, h // 2, ((tp, "o0", 0), (tm, "x", r))),
-                    ("down_scale", n, 2, ((tp, "o1", 0), (tm, "sx", r)))]
+            out += [*([] if self.tie else [("down", n, h, ((tm, "o0", rs), (tp, "x", 0)))]),
+                    ("down_codes", n, h // 2, ((tp, "o0", 0), (tm, "x", r))), ("down_scale", n, 2, ((tp, "o1", 0), (tm, "sx", r)))]
         return out
 
     def output_units(self) -> list[list[int]]:
@@ -401,7 +409,7 @@ class TorchLoop:
                          "up_codes": np.concatenate([IF.words(c, 8, R, h // 2) for _y, c, _s in quants[True]]),
                          "up_scale": np.concatenate([IF.words(c, 32, R, 2) for _y, _c, c in quants[True]])}
         if S > 1:
-            self.tie_rows |= {"down": np.concatenate([o for _x, _s, o in linears[1][:-1]]),
+            self.tie_rows |= {**({} if self.tie else {"down": np.concatenate([o for _x, _s, o in linears[1][:-1]])}),
                               "down_codes": np.concatenate([IF.words(c, 8, R, h // 2) for _y, c, _s in quants[False]]),
                               "down_scale": np.concatenate([IF.words(c, 32, R, 2) for _y, _c, c in quants[False]])}
         reqs = [f"r{r}" for r in range(R)]

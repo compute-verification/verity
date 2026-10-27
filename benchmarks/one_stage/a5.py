@@ -673,6 +673,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
+    archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
+    for mm in members:
+        mm["st"]["archived"] = archived
 
     def member_session(i: int, mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s firewalled session on its proved units ``local`` (drawn, and a work draw's closure), on port
@@ -784,39 +787,44 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
-    # negatives: each re-decides one input altered
+    # negatives: each re-decides one input altered (``a.skip_negatives``: not this audit; a run of several audits runs them
+    # once, in its first)
     neg: dict[str, dict] = dict(more_negatives or {})
-    by_template: dict[str, list] = {}
-    for mm in members:
-        by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
-    defs = [tuple(x) for x in by_template.values()]
-    fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
-        else P.population_program(defs[0][0], defs[0][1] - 1)
-    v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
-    neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    other = CS.expected_ports(replace(mine, run="00" * 32))
-    v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
-    neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    first = members[0]["m"].key
-    flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-    v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
-    neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
-    neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(wiring_negatives(mine.members, publics))
-    if proved:
-        v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
-        neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(output_negatives(a, union_draw, sorted(proved)))
-    neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
-    neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
-    neg.update(coin_neg)
-    if linked is not None:
-        neg.update(registered_negatives(a, *linked))
-        key = next(iter(row_verdicts))
-        other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
-        neg["verdict-reports-another-registered-root"] = {
-            "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
+    if getattr(a, "skip_negatives", False):
+        neg.update(coin_neg)
+        summary["negatives_skipped"] = True
+    else:
+        by_template: dict[str, list] = {}
+        for mm in members:
+            by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
+        defs = [tuple(x) for x in by_template.values()]
+        fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
+            else P.population_program(defs[0][0], defs[0][1] - 1)
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
+        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        other = CS.expected_ports(replace(mine, run="00" * 32))
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
+        neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        first = members[0]["m"].key
+        flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
+        neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
+        neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(wiring_negatives(mine.members, publics))
+        if proved:
+            v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
+            neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(output_negatives(a, union_draw, sorted(proved)))
+        neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
+        neg.update(coin_neg)
+        if linked is not None:
+            neg.update(registered_negatives(a, *linked))
+            key = next(iter(row_verdicts))
+            other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
+            neg["verdict-reports-another-registered-root"] = {
+                "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}

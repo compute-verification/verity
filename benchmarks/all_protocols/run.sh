@@ -7,13 +7,11 @@
 # setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol), the streamed
 # wipe's (wipe-protocol) and NCI's check of record (nci), in scratch and the clone; the legs find them in period.json's
 # tools. Its arguments go to the runner (--of-record, --windows N, --start I, --tamper W,..., --pouw h1, --registered,
-# --wired, --tie, --tie-tamper W,... with CERTIFIER_TAMPER=byte, --registration-tamper W,...), which checks them (--check) before anything builds;
-# ALLP_FLOCK_WORK=DIR keeps M0's build across runs. S1's run of record, the one way a run of it counts (README), and its
-# companion run, the wiring's evidence:
-#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
-#     bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
-#   ... bash benchmarks/all_protocols/run.sh --registered --wired --pouw h1 --law work:14 --jobs 1 --session-jobs 1 \
-#     --windows 2 --tamper 0
+# --wired, --tie, --tie-tamper W,... with CERTIFIER_TAMPER=byte, --registration-tamper W,...), which checks them (--check)
+# before anything builds; ALLP_FLOCK_WORK=DIR keeps M0's build across runs. S1's run of record, the one way a run of it
+# counts (README), every layer chained and the output tied:
+#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
+#     bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH

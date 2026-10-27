@@ -14,7 +14,7 @@
   `CoreOnsite.lean` as written;
 * windows audited at once each get their report, and the monitoring-period report over all of them leads the line;
 * under ``--pouw h1`` PoUW's audit of the H1 window runs before the legs, on the window's own PoUW circuit;
-* the network certifier's K over a week, a month and a year with the faulty units paid for once
+* the network certifier's K over a week, a month and a year with the faulty proof blocks paid for once
   (`HorizonLeakAccepted`), each window's K beside it;
 * the loop's window keeps only its public files, and its circuit is the one registered before it ran (slow).
 """
@@ -149,7 +149,7 @@ def test_a_failing_leg_is_an_error_and_the_others_still_run(tmp_path):
 
 
 PORTS = sorted(C.PORTS, key=lambda x: C.PORTS[x][1])
-EVERY_PORT = [x for x in PORTS if x != "NetworkCheck.Check.protocol"]
+EVERY_PORT = [x for x in PORTS if x not in ("NetworkCheck.Check.protocol", "PouwCheck.protocol")]
 
 
 def test_onsite_decides_once_every_component_is_a_port(tmp_path):
@@ -274,7 +274,7 @@ def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_p
 
 def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
-    assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.protocol",
+    assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.Period.protocol",
                       "RemoteAudit.Protocol.protocol", "SampledProofs.OneStageZk.protocol",
                       "MemoryChallenger.WipeProtocol.protocol"], "onsite's components changed"
     named = sorted(e.component for e in T.TABLE if e.onsite)

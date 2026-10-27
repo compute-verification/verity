@@ -38,12 +38,18 @@ component's `answer` on its case, then decides, reject first:
 On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
 keyed by the component's id. On rejection or undecided nothing is public.
 
+`Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
+states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
+and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
+component accepts its own case, and the commitment is `bind` of the components' digests.
+
 ## Components
 
 | component | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | communication (the network certifier over the period: its link-windows certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| work (PoUW's period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| work (PoUW's window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | integrity (sampled proofs' one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
@@ -91,7 +97,7 @@ adds nothing to what is public or kept.
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
-each component's own Python (PoUW's `core_check.case`; for integrity, v2's framing over sampled proofs' one-stage
+each component's own Python (PoUW's `core_check.case`, and for its period `period_check.case`; for integrity, v2's framing over sampled proofs' one-stage
 difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
 certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
 `wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to;

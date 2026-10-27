@@ -1,9 +1,10 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS's run check), bandwidth (the remote bandwidth session), communication (the network certifier over the
-# period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW's
+# period credit, `verity/pouw/period/v1`), space (PoUS's run check), bandwidth (the remote bandwidth session),
+# communication (the network certifier over the period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`), after
+# NCI's registration check (`verity/nci/v1`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite"]
+defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
 [leanOptions]
 autoImplicit = false
@@ -21,7 +22,8 @@ path = "../interface"
 name = "core_composition"
 path = "../composition"
 
-# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
+# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
+# `PouwCheck.Period`).
 [[require]]
 name = "core_sampled_proofs"
 path = "../../service/sampled_proofs"
@@ -62,3 +64,12 @@ name = "CoreOnsite"
 [[lean_exe]]
 name = "onsite"
 root = "OnsiteMain"
+
+# A configuration's product: `Core.Composition.productB` over exactly the components its `protocols` lists (onsite for all
+# six), `product IDS id | check | serve` (CoreProduct.lean).
+[[lean_lib]]
+name = "CoreProduct"
+
+[[lean_exe]]
+name = "product"
+root = "ProductMain"
