@@ -64,7 +64,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     assert c.boolean and len(c.units) == 1 and len(c.groups) == 1
     prog, q = c.program, c.query()
     part, n, digest = P.partition(prog, q), P.units(prog, q), P.program_digest(prog)
-    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, WINDOW["run"])}
+    ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, WINDOW["run"])}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     x_root = hashlib.sha512(b"x").digest()
     served = [{"port": p, "root": x_root.hex() if p == "x" else "cd" * 64, **ports[p]} for p in ports]

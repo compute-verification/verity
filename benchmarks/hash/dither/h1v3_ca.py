@@ -1,9 +1,8 @@
-"""A CPU twin of CA's one-stream tile, PouwH1Tile_v3 with the exact wrap correction, for this lane's gates: the word-level
-functions below are copied verbatim from verity/core/protocols/pouw/circuit/h1tile.py on cursor/h1-v3-1172 at 5f54fbe355
-(H1V3's owner, 08:59Z), which isn't on main yet. They run on main's h1tile (Layout, noise, fold_keys, FOLD: v3's are
-main's, bit for bit), seeds and segment. `reference(..., stream=True)` is v3's unit on words: each cell's z =
-O' - sum_d 128^d D_d plus 256 X (wb+ - wb-)^T mod 2^32, and the receipt (v1's). Replace this file by an import once v3
-lands.
+"""The unpeeled one-stream unit of CA's PouwH1Tile_v3 with the exact wrap correction, on words, for this lane's gates:
+`reference(..., stream=True)`'s z is each cell's O' - sum_d 128^d D_d plus 256 X (wb+ - wb-)^T mod 2^32, X (B + c)^T (v3
+before the peel, cursor/h1-v3-1172 at 5f54fbe355), and the receipt (v1's). The word functions are h1tile's own (wrap_bits,
+wrap_seg, one_stream, lane_sets, col_wrap: v3's, and v4's); only the unpeeled `stream_cell` and `reference`, which h1tile
+now states peeled (z = A B^T, `peel_seg`), are kept here.
 """
 from __future__ import annotations
 
@@ -11,48 +10,10 @@ from typing import Sequence
 
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.circuit import segment as SG
-from verity.core.protocols.pouw.circuit.h1tile import FOLD, M32, Layout, fold_keys, noise
+from verity.core.protocols.pouw.circuit.h1tile import (FOLD, M32, Layout, col_wrap, fold_keys, lane_sets, noise,  # noqa: F401
+                                                       one_stream, wrap_bits, wrap_seg)
 
-SOURCE = "verity/core/protocols/pouw/circuit/h1tile.py @ cursor/h1-v3-1172 5f54fbe355"
-
-
-def _sx(v: int) -> int:
-    v &= 0xFF
-    return v - 256 if v & 0x80 else v
-
-
-def wrap_bits(b: int, c: int, u: int) -> int:
-    """W' = B + c + U's int8 wrap at one entry: 1 (wb⁺) where B + c + U > 127, 2 (wb⁻) where it is < -128, else 0."""
-    s = _sx(b) + (c & 1) + _sx(u)
-    return 1 if s > 127 else 2 if s < -128 else 0
-
-
-def wrap_seg(acc: int, x: Sequence[int], wb: Sequence[int]) -> int:
-    """acc + 256 sum_e x_e (wb⁺_e - wb⁻_e) mod 2^32 over one segment: the wrap correction of a cell's one stream, x the int8
-    encodings of X and wb `wrap_bits`' (both bits set: 0), so a flipped bit moves the sum by ±256 x_e."""
-    return (acc + (sum(_sx(xe) * ((w & 1) - (w >> 1 & 1)) for xe, w in zip(x, wb)) << 8)) & M32
-
-
-def one_stream(op: int, d: Sequence[int]) -> int:
-    """cgemm.cu's served output from a cell's absorbed words: O' - sum_d 128^d D_d mod 2^32 (d = 1 .. m - 1)."""
-    return (op - sum(w << 7 * (t + 1) for t, w in enumerate(d))) & M32
-
-
-def lane_sets(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], rows: list, cols: list, lay: Layout,
-              ln: int) -> list[list[int]]:
-    """Lane ln's absorbed sets on words (`segment.call_words`): T_0 .. T_(KS-1), O', D_1 .. D_(m-1), 32 entries each."""
-    R, Cs = lay.rows(ln), lay.cols(ln)
-    seg = [range(32 * s, 32 * s + 32) for s in range(lay.ks)]
-    xr = [[[a[i][t] for t in ts] for i in R] for ts in seg]
-    bb = [[[rows[i][0][t] for t in ts] for i in R] for ts in seg]
-    wr = [[[b[j][t] for t in ts] for j in Cs] for ts in seg]
-    cc = [[[cols[j][0][t] for t in ts] for j in Cs] for ts in seg]
-    return SG.call_words(xr, bb, wr, cc, [cols[j][1] for j in Cs], [[rows[i][1][d] for i in R] for d in range(lay.m - 1)])
-
-
-def col_wrap(b_j: Sequence[int], col: tuple) -> list[int]:
-    """Column j's wrap bits at every entry of K (`wrap_bits` of B, its coin bit and U, U repeating every 32 entries)."""
-    return [wrap_bits(v, col[0][t], col[1][t % 32]) for t, v in enumerate(b_j)]
+SOURCE = "h1tile's word functions; the unpeeled stream_cell and reference of cursor/h1-v3-1172 at 5f54fbe355"
 
 
 def stream_cell(op: int, d: Sequence[int], x_i: Sequence[int], wb_j: Sequence[int]) -> int:

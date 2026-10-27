@@ -10,7 +10,9 @@ What this module DECIDES (structure + correspondence, no by-name table):
   collective SITE's at its enclosing module, invocation k (`collective_sites`); at `<module>/<fx node>` when another fx node of the
   module produces a member of the same name at the step (`Population.contested`): two producers never share an identity.
 * WHAT the member is called, structurally (`member_name`): the port name when the Definition returns a tuple (`<hint>.<port>` when
-  the Build recorded a hint, which names the Call); else the recorded return-slot hint; else `out`.  How a runtime tensor carries
+  the Build recorded a hint, which names the Call); else the recorded return-slot hint; else `out`.  Rows of one fx node's output at a
+  step that the Program computes at several widths (a linear narrowed to the columns read, `program.prune.narrowed`) are one member
+  per width: the widest rows keep the name, the narrower are `<member>@<width>` (`Population.narrowed`).  How a runtime tensor carries
   it (vLLM's return slots, a tap's label) is the binding's (`verity_vllm.query.manifest.bind`), never a spelling here.
 * WHEN: the step of a Call = the number of sampling events before it (the sampling event ENDS a step).
 * Shared module instances (`op_path_aliases`): two module bodies that read the SAME registered parameter and have the same body
@@ -36,12 +38,13 @@ indexer's projections on its short path) computes nothing anything depends on.  
 the manifest lists each of its outputs under `unreturned`, spelt as a required one would be, so the omission is auditable.
 
 The identity ENCODINGS, each one constant the manifest and the committing tap share: a collective's rank-local operand as
-`part_rank<r>` / `shard_rank<r>` beside its output; a collective SITE at (enclosing module, k) and a norm's collective under the norm
-(`collective_names`); the sampler rows under the fixed path `runner.sampler`; the token ids under the consuming module as `in`; the
-attention hidden stream under `fa2.m1/L<k>`; the weights as `<field>/weight`.  Kernel geometry (the FA hidden stream, the MoE block
-planes) and the identity constants (`SCHEMA`, `IDENTITY_KEY`, the row order, the digest) are the manifest format's
-(`verity_vllm.query.manifest.format`).  A row carries its Call's `spec`, `port` and `position` (Program order) for the binding,
-outside the digest.
+`part_rank<r>` / `shard_rank<r>` beside its output; a narrowed linear's rows as `<member>@<width>` beside the whole rows' `<member>`; a
+collective SITE at (enclosing module, k) and a norm's collective under the norm (`collective_names`); the sampler rows under the fixed
+path `runner.sampler`; the token ids under the consuming module as `in`; the attention hidden stream under `fa2.m1/L<k>`; the weights
+as `<field>/weight`.  Kernel geometry (the FA hidden stream, the MoE block planes) and the identity constants (`SCHEMA`,
+`IDENTITY_KEY`, the row order, the digest) are the manifest format's (`verity_vllm.query.manifest.format`).  A row carries its Call's
+`spec`, `port` and `position` (Program order) for the binding, a narrowed one the member it narrows and its columns of those rows
+(`narrowed_of`, `columns`), and one whose Values start at row r0 > 0 of their runtime tensor those rows (`runtime_rows`), outside the digest.
 """
 
 from __future__ import annotations
@@ -58,9 +61,9 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
-from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
-from verity_vllm.query import word as word_query
+from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
+from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
+from verity.ml.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
 from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
                                            module_body_boundary)
@@ -93,10 +96,10 @@ def partition_of(program_digest: str) -> dict[str, Any]:
 #: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 #: the sampling events that consume a registered runtime input (seed / splits) beside the logits
-STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
+STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - set(GREEDY_SELECTS)
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "Attention_v10", "Attention_v11",
+FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "Attention_v10", "Attention_v11", "Attention_v18",
                                       "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
 #: the parameters of a `registered_values` Program's supplied inputs (`Population.supplied`): `values`, and `run` / `run_<i>` per request
 SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
@@ -138,9 +141,11 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
     """module -> (canonical module, invocation) for module bodies that are one shared instance, and the faults.
 
     Two bodies are one instance when they read the SAME non-empty set of registered parameters and have the same body signature (the
-    multiset of (Definition, hint) of their Calls); the canonical body is the one a shared parameter is registered under (vLLM registers a
-    shared module under the first path that holds it); invocation = the body's order among the group.  Fail-closed: a group with no or
-    several canonical candidates, or unequal signatures, is not aliased and is reported."""
+    (Definition, hint) of their Calls); the canonical body is the one a shared parameter is registered under (vLLM registers a shared
+    module under the first path that holds it); invocation = the body's order among the group.  Bodies under one registered owner
+    need only the same set of (Definition, hint), not the same counts: `dead_free` drops one invocation's dead rows, as the last
+    layer's prompt queries before the last, never its body.  Without one, only bodies equal Call for Call are one instance.
+    Fail-closed: a group with no or several canonical candidates is not aliased and is reported."""
     reads: dict[str, set[str]] = defaultdict(set)
     sig: dict[str, Counter] = defaultdict(Counter)
     first: dict[str, int] = {}
@@ -157,21 +162,25 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
         if fs and m:
             # keyed by (parameters read, body signature): a body with another signature reading the same parameter is a different
             # logical producer (a tied embedding read by the logits Gemm), never an invocation of this one
-            groups[(frozenset(fs), tuple(sorted(sig[m].items())))].append(m)
+            groups[(frozenset(fs), frozenset(sig[m]))].append(m)
     out: dict[str, tuple[str, int]] = {}
     faults: list[str] = []
-    for (fs, _sig), mods in groups.items():
-        if len(mods) < 2:
-            continue
-        mods = sorted(mods, key=first.__getitem__)
-        canon = [m for m in mods if any(under(f, m) for f in fs)]
-        if len(canon) != 1:
-            faults.append(f"shared parameters {sorted(fs)[:2]} read by {len(mods)} identical bodies with {len(canon)} registered owner(s): not aliased")
-            continue
-        c0 = canon[0]
-        rest = [m for m in mods if m != c0]
-        for k, m in enumerate([c0] + rest):
-            out[m] = (c0, k)
+    for (fs, _sig), group in groups.items():
+        by_count: dict[frozenset, list[str]] = defaultdict(list)
+        for m in group:
+            by_count[frozenset(sig[m].items())].append(m)
+        for mods in [group] if sum(any(under(f, m) for f in fs) for m in group) == 1 else by_count.values():
+            if len(mods) < 2:
+                continue
+            mods = sorted(mods, key=first.__getitem__)
+            canon = [m for m in mods if any(under(f, m) for f in fs)]
+            if len(canon) != 1:
+                faults.append(f"shared parameters {sorted(fs)[:2]} read by {len(mods)} identical bodies with {len(canon)} registered owner(s): not aliased")
+                continue
+            c0 = canon[0]
+            rest = [m for m in mods if m != c0]
+            for k, m in enumerate([c0] + rest):
+                out[m] = (c0, k)
     return out, faults
 
 
@@ -437,11 +446,44 @@ class Population:
         coll = self.partial_of.get(v)
         if coll is not None:
             return self._partial(port.name, self.collectives[coll], port.elems, _dtype(port.width))
+        member = self.narrowed.get(v) or member_name(c, port, self.corr.name(c.id))
         if v in self.interior:
-            return CallMember(port.name, member_name(c, port, self.corr.name(c.id)), port.elems, _dtype(port.width), "call_boundaries")
+            return CallMember(port.name, member, port.elems, _dtype(port.width), "call_boundaries")
         if c.id in self.norm_site:                       # the norm's own outputs: its ports, or the one all-reduced tensor
             return CallMember(port.name, port.name if len(c.port_table) > 1 else NORM_SITE_MEMBER, port.elems, _dtype(port.width))
-        return CallMember(port.name, member_name(c, port, self.corr.name(c.id)), port.elems, _dtype(port.width))
+        return CallMember(port.name, member, port.elems, _dtype(port.width))
+
+    @functools.cached_property
+    def narrowed(self) -> dict[ValueRef, str]:
+        """The required Values of the rows a Program narrowed, each -> its member: one fx node's Calls of one Definition at a step whose
+        rows have several widths (`program.prune.narrowed` binds a linear whose output only some columns of are read at the columns
+        read: the last layer's fused qkv on the prompt rows before the last, whose queries nothing reads, beside the last row's whole
+        qkv).  The widest rows keep the member and each narrower width is its own, `format.NARROWED_MEMBER` (`out@1024`), so the key and
+        value rows never stand for the whole rows or the reverse.  Calls of several Definitions under one name stay one member, which
+        `request_manifest` refuses as two producers."""
+        widths: dict[tuple[int, str, str, str], dict[int, list[ValueRef]]] = defaultdict(lambda: defaultdict(list))
+        families: dict[tuple[int, str, str, str], set[str]] = defaultdict(set)
+        for cid, ports in self._ports().items():
+            c = self.P.call(cid)
+            if c.family in SAMPLING_EVENTS or cid in self.collectives or cid in self.norm_site:
+                continue
+            n = self.corr.name(cid)
+            for p in ports:
+                v = ValueRef(cid, p)
+                if v in self.plane_fed or v in self.partial_of:
+                    continue
+                port = c.port(p)
+                key = (self.step_of(cid), n.module, n.node, member_name(c, port, n))
+                widths[key][port.elems].append(v)
+                families[key].add(c.family)
+        out: dict[ValueRef, str] = {}
+        for key, by_width in widths.items():
+            if len(by_width) > 1 and len(families[key]) == 1:
+                widest = max(by_width)
+                for w, vs in by_width.items():
+                    if w != widest:
+                        out.update(dict.fromkeys(vs, fmt.NARROWED_MEMBER.format(member=key[3], width=w)))
+        return out
 
     def _ports(self) -> dict[int, list[str]]:
         if self._ports_of is None:
@@ -544,6 +586,27 @@ def unreturned_rows(pop: Population, aliases: Mapping[str, tuple[str, int]], ide
     return out
 
 
+def group_rows(groups: Mapping[tuple[int, str, str], Mapping[str, Any]], aliases: Mapping[str, tuple[str, int]], impl, add,
+               unmodelled: Counter) -> None:
+    """One identity row per (step, module, member) group of Call-produced required Values (`request_manifest`'s; `add`: its row adder):
+    `rows` x `width` elements under the module, or under its shared instance's canonical module at its invocation.  A group of width 0
+    is unmodelled.  Where its Calls' Values lie (`Correspondence.rows`, `columns`): `runtime_rows`, and a narrowed group's `columns`."""
+    for (step, mod, member), g in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])):
+        if g["width"] <= 0:
+            unmodelled[f"{g['family']} under {impl(mod)} ({member}: width 0)"] += 1
+            continue
+        rr, cols = runtime_rows(g["at"]), g["columns"]
+        extras = {"rows": g["rows"], "width": g["width"], "dtype": g["dtype"], "spec": g["family"], "port": g["port"], "position": g["position"],
+                  "fx_nodes": len(g["nodes"]), "boundary": {"crossing_rows": g["crossing"], "returned_rows": g["returned"]},
+                  **({"narrowed_of": g["narrowed_of"]} if g["narrowed_of"] else {}),
+                  **({"runtime_rows": rr} if rr else {}), **({"columns": list(next(iter(cols)))} if g["narrowed_of"] and len(cols) == 1 and None not in cols else {})}
+        if mod in aliases:
+            canon, k = aliases[mod]
+            add(g["manifest_family"], step, k, impl(canon), member, 0, g["rows"] * g["width"], program_op_path=impl(mod), **extras)
+        else:
+            add(g["manifest_family"], step, 0, impl(mod), member, 0, g["rows"] * g["width"], **extras)
+
+
 def cached_prefix_inputs(P: ProgramView, res: Mapping[str, Any]) -> frozenset[ValueRef]:
     """A warm request Program's `prefix` input (its derive's `res["prefix"]["input"]`, the wrapper's input index): rows 0..C-1 of every
     layer's key and value, the producing requests' committed rows (no identity of this request names them)."""
@@ -626,29 +689,22 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             if g is None:
                 g = groups[(step, mod, member)] = {"rows": 0, "width": cm.width, "dtype": cm.dtype, "family": c.family, "spec": c.definition,
                                                    "manifest_family": cm.family, "nodes": set(), "port": cm.port,
-                                                   "position": [cid, [p.name for p in c.port_table].index(cm.port)], "crossing": 0, "returned": 0}
+                                                   "position": [cid, [p.name for p in c.port_table].index(cm.port)], "crossing": 0, "returned": 0,
+                                                   "narrowed_of": member_name(c, c.port(cm.port), n) if v in pop.narrowed else None,
+                                                   "at": [], "columns": set()}
             elif g["family"] != c.family or g["width"] != cm.width:
                 unmodelled[f"{c.family} under {impl(mod)} ({member}: two producers {g['family']} {g['width']} / {c.family} {cm.width})"] += 1
                 continue
             g["rows"] += 1
             g["nodes"].add(n.node)
+            g["at"].append(None if carried else corr.rows.get(cid))
+            g["columns"].add(corr.columns.get(cid))
             if v in B.values:
                 g["crossing"] += 1
             if carried or v in policy.protocol_required:
                 g["returned"] += 1
 
-    for (step, mod, member), g in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])):
-        if g["width"] <= 0:
-            unmodelled[f"{g['family']} under {impl(mod)} ({member}: width 0)"] += 1
-            continue
-        extras = {"rows": g["rows"], "width": g["width"], "dtype": g["dtype"], "spec": g["family"], "port": g["port"], "position": g["position"],
-                  "fx_nodes": len(g["nodes"]), "boundary": {"crossing_rows": g["crossing"], "returned_rows": g["returned"]}}
-        if mod in aliases:
-            canon, k = aliases[mod]
-            add(g["manifest_family"], step, k, impl(canon), member, 0, g["rows"] * g["width"], program_op_path=impl(mod), **extras)
-        else:
-            add(g["manifest_family"], step, 0, impl(mod), member, 0, g["rows"] * g["width"], **extras)
-
+    group_rows(groups, aliases, impl, add, unmodelled)
     unreturned = unreturned_rows(pop, aliases, identity)
 
     # --- the token ids a module body consumes: prompt input or a sampling event's output -------------------------------------------
@@ -674,21 +730,22 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             if m not in attn_bodies:
                 attn_bodies.append(m)
             st = c.statics
-            a = attn.setdefault((step_of(c.id), m), {"rows": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
+            a = attn.setdefault((step_of(c.id), m), {"rows": 0, "end": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
             a["rows"] += 1
+            a["end"] = max(a["end"], corr.rows.get(c.id, -1) + 1)     # the launch runs the query rows `dead_free` dropped (`runtime_rows`)
             a["T_max"] = max(a["T_max"], int(st.get("T", 0)))
     tap = "fa3.m1" if (hidden_family or "")[:3] == "fa3" else "fa2.m1"
     for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
-        layer = attn_bodies.index(mod)
+        layer, rows = attn_bodies.index(mod), max(a["rows"], a["end"])
         if hidden_family[:3] == "fa3":
-            geo = fmt.fa3_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq)
+            geo = fmt.fa3_geometry(a["T_max"], rows, a["NH"], a["KVH"], a["D"], n_seq)
         else:
             win = (attn_obs.get(impl(mod)) or attn_obs.get(mod) or {}).get("sliding_window")
             w0 = win[0] if isinstance(win, (list, tuple)) and win else (win if isinstance(win, int) else -1)
-            geo = fmt.fa2_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
+            geo = fmt.fa2_geometry(a["T_max"], rows, a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
         HB, M, NB, BN, gname = geo
         add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, fmt.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
-            geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": a["rows"]}, attention_module=impl(mod))
+            geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": rows}, attention_module=impl(mod))
 
     # --- MoE block planes (kernel geometry, v1's): per (MoE body, step) ----------------------------------------------------------------
     moe_layers: set[int] = set()

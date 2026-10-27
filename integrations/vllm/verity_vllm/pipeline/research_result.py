@@ -18,6 +18,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity_vllm import settings
 from verity_vllm.config import option
 
 RECORDS = ("stages.txt", "row.log", "source_identity.json", "admission.json", "verdict.json", "timeline_report.json",
@@ -78,7 +79,7 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
                 files.append(f"evidence/{rel}")
     return {
         "schema": "research/result/v0.1",
-        "run_id": run_id or os.environ.get("RESEARCH_RUN_ID") or "",
+        "run_id": run_id or settings.RESEARCH_RUN_ID or "",
         "workload_fingerprint": fp,
         "validation": {"status": status, "checker": "verity_vllm.ops.row_pod stages.txt", "detail": detail or "no stages.txt",
                        "evidence": [f for f in files if f.endswith("stages.txt")]},

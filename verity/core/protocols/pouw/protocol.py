@@ -21,6 +21,9 @@ from typing import Any, Protocol, runtime_checkable
 from verity.ml.randomness import Part, frame
 
 U64 = 1 << 64
+CALL_RANGE = 1 << 32
+"""Call indices of one epoch (one salt) lie below this: -h3's row seed (`pearl_c.row_seed`) packs the index into the high
+half of a u64."""
 
 
 class DomainError(ValueError):

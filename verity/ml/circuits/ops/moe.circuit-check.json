@@ -1,10 +1,12 @@
 {
  "pieces": {
   "MoeSelectBf16x128_v1": {
-   "and": 2072
+   "and": 2072,
+   "type": "bd130666db2473da9181f4f7032e6bf52f8b82400afe25672fe2295c3ce2d7a21a0a5cdffb4f0f77430208349b066a048eb6f6395f88a0c08cca15d12717ad6c"
   },
   "MoeSelectBf16x3_v1": {
-   "and": 93
+   "and": 93,
+   "type": "6f3eb5c5945699badc2f21a2e18c6ed633493574a3ecab2ecbbb7c1b45b14a51e5ff115cc04f307542a740bcf11ccb2d8059a949e9ad0bba37dae98d0d60e32c"
   }
  }
 }

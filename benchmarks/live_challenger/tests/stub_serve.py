@@ -1,6 +1,7 @@
 """`serve.py` as its own process, with the Lean verifier's coins stubbed: a test doesn't build `sampled-proofs-verifier`, so
 `one_stage.verifier.coins` answers seeded bytes and appends each request's size to $COINS_LOG, or refuses as a Lean that
-can't answer when $COINS_REFUSE is set.
+can't answer when $COINS_REFUSE is set.  The stub stands in for the Lean, so it carries the Lean's claim instance
+(`one_stage.verifier.CLAIM`), unless $COINS_UNNAMED is set.
 
     python stub_serve.py SERVE_PY [serve.py's arguments]
 """
@@ -26,6 +27,8 @@ def coins(n: int) -> bytes:
     return rng.randbytes(n)
 
 
+if not os.environ.get("COINS_UNNAMED"):
+    coins.claim = V.CLAIM
 V.coins = coins
 sys.argv = sys.argv[1:]
 runpy.run_path(str(serve), run_name="__main__")

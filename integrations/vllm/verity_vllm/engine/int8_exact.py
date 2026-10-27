@@ -25,8 +25,10 @@ row's value.  CPU and CUDA run the same padding.
 its T slots (`rows`, H1's static layout: slot i < M is row i under s_a[i], every later slot an empty row, zero codes under
 scale 0) in `UNIT` = 32 x 32 units, one record each, unit (row block, column block) in row-major order (the compiled
 Program's), each `ZY_BYTES` bytes: its exact s32 z_u = X_u W_u^T over the whole K, row-major, then y_u = dq(z_u, s_a, s_w)
-in bf16, row-major, little-endian (`zy_records`).  An empty slot's z is 0 and its y dq(0, 0, s_w) = +0, so its bytes are
-zero.  The z and y words are the record's two halves, and each unit's z is its own cells.
+in bf16, row-major, little-endian (`zy_records`).  An empty slot's z is 0 and its y dq(0, +0, s_w) (`h1zy.dequant`): +0,
+so zero bytes, under a finite positive s_w, 0x8000 under a negative one and a NaN (0x7FFF on CUDA, 0x7FC0 or 0xFFFF from
+torch's CPU cast) under an infinite or NaN one.  The z and y words are the record's two halves, and each unit's z is its own
+cells.
 """
 from __future__ import annotations
 
@@ -129,11 +131,12 @@ def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torc
 
 
 def applied_record(model: Any) -> dict[str, dict[str, Any]]:
-    """What every linear layer ran, by module name: its quant method's class, int8 arm (None for a method without one) and the
-    calls it served (None for a method that does not count them).  Structural, as `kernel_readback.int8_exact_of`."""
+    """What every linear layer and fused-MoE layer ran, by module name: its quant method's class, int8 arm (None for a method
+    without one) and the calls it served (None for a method that does not count them).  Structural, as
+    `kernel_readback.int8_exact_of`."""
     out = {}
     for name, m in model.named_modules():
         qm = getattr(m, "quant_method", None)
-        if qm is not None and any(c.__name__ == "LinearMethodBase" for c in type(qm).__mro__):
+        if qm is not None and any(c.__name__ in ("LinearMethodBase", "FusedMoEMethodBase") for c in type(qm).__mro__):
             out[name] = {"method": type(qm).__name__, "arm": getattr(qm, "int8_arm", None), "calls": getattr(qm, "calls", None)}
     return out

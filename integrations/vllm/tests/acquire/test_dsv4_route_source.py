@@ -22,6 +22,9 @@ from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
 from verity_vllm.pipeline import cli
 
+#: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
+pytestmark = pytest.mark.slow
+
 #: every row-counted committed name -> its row count
 COUNTED = {n: CM.row_count_of(CMAP, tap) for p in RS.PHASES for n, (tap, _layer) in CM.committer_names(CMAP, ENV, phase=p, rank=3).items()
            if CM.row_count_of(CMAP, tap)}

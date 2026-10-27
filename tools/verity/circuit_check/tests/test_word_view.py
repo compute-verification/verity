@@ -1,5 +1,4 @@
-"""The word view of a Boolean Definition with a port of single bits (kept apart from `test_circuit_check`, whose import builds the
-whole suite)."""
+"""The word view of a Boolean Definition with a port of single bits, without circuit-check's catalog."""
 from __future__ import annotations
 
 import numpy as np
@@ -13,7 +12,7 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     Boolean version that flips one bit of every output word is caught."""
     import verity.ml.circuits.evaluation.bits as EB
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import boolean_dsa_topk as BT
+    from verity.ml.definitions.registry import boolean_dsa_topk as BT
 
     t = bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8)
     F = CK.Findings()

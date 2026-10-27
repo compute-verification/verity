@@ -241,15 +241,46 @@ theorem pad_const_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st
   · exact hzero
   · exact hpin
 
+/-- **The constant bits of template instance `g`'s row `p`'s compressions' messages**, in every block of a satisfying
+witness of the untyped statement: wherever `HmRow.constBit` gives compression `k`'s block a constant (from block
+`bits / 1024` on, `constBit_row`), Δ's one copy holds it there. -/
+theorem msg_const_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
+    (hp : p < st.c.ports.size) (hup : st.c.ports[p]!.segs = none) :
+    ∀ k < st.c.ports[p]!.chunks, ∀ t < 1024, ∀ v,
+      HmRow.constBit st.c.ports[p]! (HmRow.tailOf st.c.ports[p]!) k t = some v →
+        blockBit (L.model regs) z o (shaBase st.c g p k + shaIn st.c (2 * shaSub st.c p k + 1) + t) = v := by
+  have R := RowRanges.ofL L F.parse F.check
+  have hrw : RowWires st.c := F.parse.rowWires
+  have hpin := pin_bit L hz o
+  have hzero := zero_bit L F hupv (by omega) hz o
+  intro k hk t ht v hv
+  have hs : shaSub st.c p k < 3 := (rowSlot_lt hp hk).2
+  have hkb : st.c.ports[p]!.bits / 1024 ≤ k := by
+    refine Nat.le_of_not_lt fun hlt => ?_
+    rw [constBit_row st.c.ports[p]! (HmRow.tailOf st.c.ports[p]!) ht (by omega)] at hv
+    cases hv
+  have hx : shaBase st.c g p k + shaIn st.c (2 * shaSub st.c p k + 1) + t = shaPos st.c g p k (512 + t) :=
+    msgColOf_pos R (g := g) hp hk t
+  have hf := msgConst_filterAll R (pin := st.pin) hg hp hup hkb hk ht
+  rw [hv, msgColOf_pos R (g := g) hp hk] at hf
+  simp only [bitCopy] at hf
+  rw [hx, inBit_copyAll L F hda hrw hz o (Or.inl rfl) (shaPos_at R hg hp hk (off := 512 + t) (by omega))
+    (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
+  cases v
+  · exact hzero
+  · exact hpin
+
 /-- **A row's `b ‖ c` under its own prefix**, in every block of a satisfying witness of the untyped statement, for any
-rows: at a row of `16 · words` bits whose bytes fill its compressions' blocks and end, with their padding, in its `hm96`
-slot's block (`sha512/row/v1` or `sha512/row/v2`), the commit string of the row's prefix `HmRow.prefixOf` and the bytes
-`Typed.msgCol` reads, under the salt its `hm96` slot reads. -/
+rows: at an unsegmented row of `16 · words` bits whose bytes and their padding fill its compressions' blocks and end in
+its `hm96` slot's block (`sha512/row/v1` or `sha512/row/v2`), the commit string of the row's prefix `HmRow.prefixOf` and
+the bytes `Typed.msgCol` reads, under the salt its `hm96` slot reads. -/
 theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hb : st.c.ports[p]!.bits = 16 * st.c.ports[p]!.words)
-    (h1 : 128 * st.c.ports[p]!.chunks ≤ 2 * st.c.ports[p]!.words)
+    (h1 : 128 * st.c.ports[p]!.chunks ≤ 2 * st.c.ports[p]!.words + 16)
     (h2 : 2 * st.c.ports[p]!.words + 17 ≤ 128 * (st.c.ports[p]!.chunks + 1))
     (hup : st.c.ports[p]!.segs = none) :
     bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
@@ -268,7 +299,7 @@ theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.
     exact port_commit_rowsP st.c _ g p (size_prefixOf _) hs hb (rowSlots_size hp) h0 h1 h2 R.rowNets
       (fun k hk => (rowSlot_lt hp hk).2)
       (fun k hk => shaSlot_flat L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)) hhm hcv0 hchain hcvh
-      hconst
+      hconst (msg_const_tgt L F hda hupv hz o hg hp hup)
 
 end Bc
 

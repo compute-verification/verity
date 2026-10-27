@@ -642,8 +642,8 @@ def test_f32_to_bf16_cast_is_round_to_nearest_even():
 def test_verdict_requires_the_pin_on_a_row_record_and_fails_by_name():
     """commit_verdict: a served weight that differs from the checkpoint of record is a named FAIL at every B; on a row-procedure record
     (binding block) an absent / not-evaluated pin is 'weights unpinned' (fail closed); legacy records without a binding block are untouched."""
-    from verity_vllm.check.verdict import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
+    from verity_vllm.check.commit_pass import commit_verdict
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
@@ -667,8 +667,8 @@ def test_verdict_reads_a_components_only_replay_by_its_method_rel_m0621():
     """[rel M-0621] compiled S3 writes its form-(A) replay under value_correspondence.components and leaves the top level empty: the O1 gate
     reads the components where the top level is absent -- only a component that says it is a sampled exact replay counts; another method
     (an oracle compare, a root compare) never stands in for the replay of record."""
-    from verity_vllm.check.verdict import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
+    from verity_vllm.check.commit_pass import commit_verdict
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "weights_pin": {"result": True, "compared": 10}}
     comps_ok = {"sampled_replay": {"result": True, "grade": "complete", "method": "sampled-exact-replay(kernel launches)"},
@@ -830,3 +830,26 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
         assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
     finally:
         os.unlink(exp)
+
+
+def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):
+    """When code_version raises, derived.code_source says so: next to the git HEAD that replaced it, or, when git fails too, as the
+    reason code is null, rather than a null that reads like a tree with neither EXPORT.json nor .git."""
+    import subprocess
+    import types
+    import verity_vllm.pipeline.experiment as EX
+
+    def broken(_root):
+        raise ValueError("EXPORT.json is not JSON")
+    monkeypatch.setattr(EX, "code_version", broken)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: types.SimpleNamespace(stdout="c" * 40 + "\n"))
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] == "c" * 40 and dv["code_source"] == "git (code_version raised ValueError: EXPORT.json is not JSON)"
+
+    def no_git(*_a, **_k):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(subprocess, "run", no_git)
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] is None
+    assert dv["code_source"] == ("unreadable: code_version raised ValueError: EXPORT.json is not JSON; "
+                                 "git rev-parse raised FileNotFoundError: git")

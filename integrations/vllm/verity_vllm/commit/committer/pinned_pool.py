@@ -4,6 +4,7 @@ Exact mode (the default; `VERITY_PINNED_EXACT=0` for torch's allocator) maps sha
 registers it with `cudaHostRegister`, so the process RSS is the pool's accounting and `release()` returns it to the OS (`_pinned_block`).
 A fresh block's pages are faulted in by `populate_threads` helper threads before the caller registers it, and `reserve` makes a burst
 of blocks together.  torch is imported where a block is made: the offline core builds a pool and never allocates from it.
+`lend` takes a run's blocks out of the pool for a reader on another thread (a served window's seal) and `restore` brings them back.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import ctypes
 import errno
 import os
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -92,7 +94,7 @@ def _register(blk: Any, mm: Any, times: dict[str, float] | None = None) -> None:
 def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float] | None = None) -> tuple[Any, Any, str]:
     """One page-locked host block of `nbytes`.  Returns (block view, its owner tensor, mode).
 
-    [R17 fp8, F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
+    [F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
     the next power of two and never returns a freed block to the OS (torch 2.13.0+cu129 on cp-h100, measured: 3 GiB -> RSS +4 GiB,
     5 GiB + 7 B -> +8 GiB, 1 GiB + 1 B -> +2 GiB; `del` -> +0).  Pinned pages are committed at allocation, so the process RSS and the
     cgroup (as shmem) take the ROUNDED size at once while `bytes_total` counts the requested one: on the B8 FP8 row that gap was
@@ -100,7 +102,7 @@ def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float
     exact=True: a MAP_SHARED|MAP_ANONYMOUS mmap of the page-rounded size + `cudaHostRegister` on it -> page-locked for the D2H copies
     (measured 29 GB/s, = torch's pinned blocks), RSS == the pool's accounting, `cudaHostUnregister` + munmap on `release()` returns it to
     the OS.
-    [R17 fp8, F-fp8-FORKPIN (B8 attempt 2, 03:0xZ)] the block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies
+    [F-fp8-FORKPIN (B8 attempt 2, 03:0xZ)] the block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies
     DMA-pinned PRIVATE pages eagerly at fork() (copy_present_pte -> page_needs_cow_for_dma), so every child the C2 sampled replay forks
     (its evaluator Pool) got its own copy of the whole 59,350 MiB frozen pool at fork time -- cgroup anon 135 -> 239 GB (the cap) in a
     minute, 20 OOM-killed children in three (measured on a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB; shared-registered
@@ -143,6 +145,7 @@ class PinnedPool:
         self._ready: list[Any] = []           # blocks `reserve` made, in the order the takes after it allocate them
         self.reserved_bytes = 0
         self.reserve_unused = 0               # reserved blocks no take asked for (folded into the free list by `reset`): 0 when exact
+        self._returned: deque = deque()       # lent blocks back from their reader (`restore`, any thread), free from the next `reset`
 
     def fresh(self) -> PinnedPool:
         """An empty pool with this one's settings (block size, mode, helper threads)."""
@@ -211,6 +214,7 @@ class PinnedPool:
         owners = self._owners
         self.free, self.all, self._owners, self.in_use, self.cur, self.off, self.mode = [], [], [], [], None, 0, None
         self._ready = []
+        self._returned.clear()
         self.deferred_unmaps = 0
         import sys
 
@@ -257,10 +261,23 @@ class PinnedPool:
         self.free.extend(self.in_use)
         self.reserve_unused += len(self._ready)
         self.free.extend(self._ready)
+        while self._returned:
+            self.free.extend(self._returned.popleft())
         self._ready = []
         self.in_use = []
         self.cur = None
         self.off = 0
+
+    def lend(self) -> list[Any]:
+        """The blocks this run took, out of the pool until `restore` brings them back: the retained values of a closed run stay
+        intact while the next run takes blocks of its own, so the pool grows by what is out.  `release` unmaps lent blocks too:
+        restore them first."""
+        lent, self.in_use, self.cur, self.off = self.in_use, [], None, 0
+        return lent
+
+    def restore(self, blocks: list[Any]) -> None:
+        """`lend`'s blocks back, from any thread: free for the takes after the next `reset`."""
+        self._returned.append(list(blocks))
 
     def take_block(self, nbytes: int) -> Any:
         """A whole block for a SHORT-LIVED buffer (returned with `give_back`, unlike `take` slices which live until `reset`)."""

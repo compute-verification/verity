@@ -150,6 +150,18 @@ theorem InnerAccepts.toColl {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin 
     (h : InnerAccepts H D I DO) : InnerAcceptsColl H D I DO :=
   fun decO x Ω P ω r c ws hg => Or.inl (h decO x Ω P ω r c ws hg)
 
+/-- **`InnerAcceptsColl` at the statement `x`**: the bound at one statement reads `InnerAcceptsColl` only there, so a
+bound scoped to statements of one shape needs V*'s circuits only at that shape. -/
+def InnerAcceptsCollAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+    (x : Msg) : Prop :=
+  ∀ (decO : List (ℕ × Col) → List T) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
+    (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
+    (D.innerView H x r ws).out = .acc ∨ ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
+
+theorem InnerAcceptsColl.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (h : InnerAcceptsColl H D I DO) (x : Msg) : InnerAcceptsCollAt H D I DO x :=
+  fun decO => h decO x
+
 /-- **`InnerAccepts` from V\*'s circuits at the three inner shapes**: an accepted run's statement parses (`Refuses`),
 its form is dense, holo or sparse (`Form.shape_cases`), and `E_O`'s witnesses are in the outer relation at the run's V*
 statements (`eoGives_outerHolds`). -/
@@ -178,6 +190,16 @@ theorem innerAcceptsColl_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner
   · exact hH x s hs hf Ω P ω r hg.1 ws ho ht
   · exact hS x s hs hf Ω P ω r hg.1 ws ho ht
 
+/-- **`InnerAcceptsColl` at a dense statement from V\*'s circuits at the dense shape**: an accepted run's statement
+parses (`Refuses`), and at `x` every parse is dense. -/
+theorem innerAcceptsCollAt_of_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+    {DO : Flock.Deploy Coin Col T} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
+    (hD : VStarAccepts H D I DO Form.Dense) {x : Msg} (hx : ∀ s, D.parse x = some s → s.form.Dense) :
+    InnerAcceptsCollAt H D I DO x := by
+  intro decO Ω P ω r c ws hg
+  obtain ⟨s, hs, -⟩ := hRef x Ω P ω r hg.1
+  exact hD x s hs (hx s hs) Ω P ω r hg.1 ws (eoGives_outerHolds hg) (hT decO x Ω P ω r c ws hg)
+
 /-! ## The collision's cost -/
 
 /-- **An accepted run whose inner view rejects**, at the tape, the compiled verifier's coins and `E_O`'s: `E_O` gives
@@ -202,14 +224,14 @@ theorem unifMap_judged {Ω R C : Type} [Fintype Ω] [Fintype R] [Fintype C] [Non
 /-- **A rejected inner view is a collision at every fork**: where `InnerAcceptsColl` holds, it is a collision among the
 judged run's recorded calls, which `Be`'s fork at any round `j` records as well (`findColl_isSome_of_sub`; every call
 `Be` reads is a true evaluation, by `CallsTrue` and `CallsNil`). -/
-theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
-    (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
+theorem Pr_innerRejects_le_fork_at {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+    {DO : Flock.Deploy Coin Col T} {x : Msg} (hA : InnerAcceptsCollAt H D I DO x) (hT : CallsTrue H D I DO)
+    (hN0 : CallsNil H D) (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
     Pr (InnerRejects H D I DO decO P x) ≤ Pr (forkColl H D I DO decO P x j) := by
   rw [← (unifMap_judged (Ω := Ω) (R := Fin (D.V.k x) → Coin) (C := (EO D I DO decO).C x)).Pr]
   refine Pr_mono fun t ht => ?_
   obtain ⟨ws, hg, hrej⟩ := ht
-  rcases hA decO x Ω P t.1 t.2.1 t.2.2.2.1 ws hg with hacc | ⟨u, v, huv, -⟩
+  rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hg with hacc | ⟨u, v, huv, -⟩
   · exact absurd hacc hrej
   · have hws : ((EO D I DO decO).eval H P x t.1 t.2.1 t.2.2.2.1).1.getD [] = ws := by
       rw [hg.2]; rfl
@@ -224,6 +246,12 @@ theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner C
     obtain ⟨⟨u', v'⟩, huv'⟩ := Option.isSome_iff_exists.1
       (findColl_isSome_of_sub H htrue hsub (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩))
     exact ⟨u', v', huv', findColl_spec H _ htrue u' v' huv'⟩
+
+theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
+    (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
+    Pr (InnerRejects H D I DO decO P x) ≤ Pr (forkColl H D I DO decO P x j) :=
+  Pr_innerRejects_le_fork_at (hA.toAt x) hT hN0 decO P j
 
 /-- **A rejected inner view costs at most `Pr[Be]`**: it is a collision at each of `Be`'s forks
 (`Pr_innerRejects_le_fork`), and `Be` averages its forks. -/

@@ -75,7 +75,7 @@ inductive By where
   | statement
   /-- the firewall's own commitment of its own witness (the outer firewall's level-0 recheck) -/
   | recheck
-  /-- the firewall's own opening of that commitment (the outer firewall's shadow) -/
+  /-- the firewall's own opening of that commitment (the session's Lean finish's, `Finish.openLive`) -/
   | shadow
   /-- a value the firewall computes from its own tape and the values it passed (`final_c'`, the inner proof) -/
   | own

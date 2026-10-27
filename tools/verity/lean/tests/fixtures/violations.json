@@ -69,9 +69,20 @@
   "fails": "layers: Control.Defs imports Control.Assumptions"
  },
  "reads_outside_spec": {
+  "write": {"Control/Extra.lean": "namespace Control\n\ndef twice (n : Nat) : Nat := n + n\n\nend Control\n"},
+  "replace": {"Control/Thms.lean": ["import Control.Defs\n\nnamespace Control\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = n + n := by\n  unfold double",
+                                    "import Control.Defs\nimport Control.Extra\n\nnamespace Control\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = twice n := by\n  unfold double twice"]},
+  "fails": "reads: Control.main_thm read Control.twice in Control.Extra, outside the spec"
+ },
+ "trees_reads": {
   "replace": {"Control/Thms.lean": ["theorem main_thm (h : Control.Hyp) (n : Nat) : double n = n + n := by\n  unfold double",
                                     "def twice (n : Nat) : Nat := n + n\n\ntheorem main_thm (h : Control.Hyp) (n : Nat) : double n = twice n := by\n  unfold double twice"]},
-  "fails": "reads: Control.main_thm read Control.twice in Control.Thms, outside the spec"
+  "fails": "trees: Control.main_thm read Control.twice in Control.Thms, a module of the proofs tree (Control.Thms)"
+ },
+ "trees_imports": {
+  "write": {"Control/Thms/Lemma.lean": "theorem Control.lemma : True := trivial\n"},
+  "replace": {"Control/Defs.lean": ["/-! What", "import Control.Thms.Lemma\n/-! What"]},
+  "fails": "trees: Control.Defs, of the definitions tree, imports Control.Thms.Lemma, of the proofs tree (Control.Thms)"
  },
  "reads_unlocked": {
   "policy": {"meaning": ["Control.Assumptions"]},
@@ -203,5 +214,106 @@
   "replace": {"Control/Defs.lean": ["def Small (n : Nat) : Prop := n < 10",
                                     "def Small (n : Nat) : Prop := n < 10\n\ndef Big (n : Nat) : Prop := 10 ≤ n"]},
   "fails": "claims: Control.Big (Control.Defs) is a claim definition with no witnesses"
+ },
+ "premise_under_let": {"replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"], "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem let_thm : let k := 1; Control.Hyp2 k → double k = k + k := by\n  intro k _\n  unfold double\n  omega\n\ntheorem helper : double 0 = 0 := rfl"]}, "policy": {"guarantees": {"Control.let_thm": {"owner": "@lean"}}}, "fails": "assumptions: Control.Hyp2 is a premise of Control.let_thm, an assumption the lock doesn't list"},
+ "premise_wrapped": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem wrapped_mdata : no_index (∀ k : Nat, Hyp2 k → True) := fun _ _ => trivial\n\ntheorem wrapped_redex : (fun P : Nat → Prop => ∀ k, P k → True) Hyp2 := fun _ _ => trivial\n\ntheorem wrapped_redex_body : ∀ k : Nat, (fun h : Prop => h → True) (Hyp2 k) := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.wrapped_mdata": {"owner": "@lean"}, "Control.wrapped_redex": {"owner": "@lean"}, "Control.wrapped_redex_body": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.wrapped_mdata, Control.wrapped_redex, Control.wrapped_redex_body, an assumption the lock doesn't list"
+ },
+ "premise_in_hypothesis": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem packed_and : ∀ k, Hyp2 k ∧ True → True := fun _ _ => trivial\n\ntheorem packed_iff : ∀ k, (Hyp2 k ↔ True) → True := fun _ _ => trivial\n\ntheorem packed_not : ∀ k, ¬ Hyp2 k → True := fun _ _ => trivial\n\ntheorem packed_exists : ∀ n : Nat, (∃ k, Hyp2 (k + n)) → True := fun _ _ => trivial\n\ntheorem packed_id : ∀ k, id (Hyp2 k) → True := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.packed_and": {"owner": "@lean"}, "Control.packed_exists": {"owner": "@lean"}, "Control.packed_id": {"owner": "@lean"}, "Control.packed_iff": {"owner": "@lean"}, "Control.packed_not": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.packed_and, Control.packed_exists, Control.packed_id, Control.packed_iff, Control.packed_not, an assumption the lock doesn't list"
+ },
+ "premise_in_conclusion": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem nested_and : ∀ k : Nat, True ∧ (Hyp2 k → True) := fun _ => ⟨trivial, fun _ => trivial⟩\n\ntheorem nested_or : ∀ k : Nat, True ∨ (Hyp2 k → True) := fun _ => Or.inl trivial\n\ntheorem nested_exists : ∃ k : Nat, Hyp2 k → True := ⟨0, fun _ => trivial⟩\n\ntheorem nested_ite : ∀ k : Nat, if k = 0 then (Hyp2 k → True) else True := by intro k; split <;> simp\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.nested_and": {"owner": "@lean"}, "Control.nested_exists": {"owner": "@lean"}, "Control.nested_ite": {"owner": "@lean"}, "Control.nested_or": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.nested_and, Control.nested_exists, Control.nested_ite, Control.nested_or, an assumption the lock doesn't list"
+ },
+ "premise_in_field": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "structure Good where\n  k : Nat\n  h : Hyp2 k\n\nstructure Outer where\n  g : Good\n\ntheorem field_subtype : ∀ s : {k : Nat // Hyp2 k}, s.1 = s.1 := fun _ => rfl\n\ntheorem field_structure : ∀ g : Good, g.k = g.k := fun _ => rfl\n\ntheorem field_nested : ∀ o : Fin 2 → Outer, o = o := fun _ => rfl\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.field_nested": {"owner": "@lean"}, "Control.field_structure": {"owner": "@lean"}, "Control.field_subtype": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.field_nested, Control.field_structure, Control.field_subtype, an assumption the lock doesn't list"
+ },
+ "premise_typed_by_abbrev": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Pred := Nat → Prop\n\ndef Hyp2 : Pred := fun n => n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem typed_and : ∀ k, Hyp2 k ∧ True → True := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.typed_and": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.typed_and, an assumption the lock doesn't list"
+ },
+ "premise_in_statement": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Stmt : Prop := ∀ k, Hyp2 k → True\n\nnamespace Guarantees\n\ndef G0 : Prop := ∀ k, Hyp2 k → True\ndef G1 : Prop := G0\ndef G2 : Prop := G1\ndef G3 : Prop := G2\n\nend Guarantees\n\ntheorem statement_def : Stmt := fun _ _ => trivial\n\ntheorem statement_deep : Guarantees.G3 := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.statement_deep": {"owner": "@lean"}, "Control.statement_def": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.statement_deep, Control.statement_def, an assumption the lock doesn't list"
+ },
+ "premise_in_conclusion_statement": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Accepted (r : Nat) : Prop := double r = r + r\n\ndef Exec (k : Nat) : Prop := ∀ r, Accepted r → Hyp2 r → k = k\n\ntheorem conclusion_statement : ∀ k : Nat, k = k → Exec k := fun _ _ _ _ _ => rfl\n\ntheorem conclusion_statement_conjunct : ∀ k : Nat, True ∧ Exec k := fun _ => ⟨trivial, fun _ _ _ => rfl⟩\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.conclusion_statement": {"owner": "@lean"}, "Control.conclusion_statement_conjunct": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.conclusion_statement, Control.conclusion_statement_conjunct, an assumption the lock doesn't list",
+  "not": ["assumptions: Control.Accepted"]
+ },
+ "premise_in_match": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def MStmt (n : Nat) : Prop := match n with\n  | 0 => True\n  | k + 1 => Hyp2 k → True\n\ntheorem match_branch : ∀ n : Nat, match n with\n  | 0 => True\n  | k + 1 => Hyp2 k → True := by intro n; cases n <;> simp\n\ntheorem match_def : ∀ n, MStmt n := by intro n; cases n <;> simp [MStmt]\n\ntheorem match_destructure : ∀ p : Nat × Nat, (let (a, _) := p; Hyp2 a → True) := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.match_branch": {"owner": "@lean"}, "Control.match_def": {"owner": "@lean"}, "Control.match_destructure": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.match_branch, Control.match_def, Control.match_destructure, an assumption the lock doesn't list"
+ },
+ "premise_in_argument": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def AllR (p : Nat → Prop) : List Nat → Prop\n  | [] => True\n  | x :: xs => p x ∧ AllR p xs\n\ntheorem argument_inductive : List.Pairwise (fun a _ => Hyp2 a → True) [1, 2] := by simp\n\ntheorem argument_recursive : ∀ xs : List Nat, AllR (fun x => Hyp2 x → True) xs := by\n  intro xs; induction xs <;> simp_all [AllR]\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.argument_inductive": {"owner": "@lean"}, "Control.argument_recursive": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.argument_inductive, Control.argument_recursive, an assumption the lock doesn't list"
+ },
+ "premise_own_packed": {
+  "replace": {"Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Wrap (n : Nat) : Prop := n + 0 = n\n\ntheorem own_exists : (∃ x, Wrap x) → True := fun _ => trivial\n\ntheorem own_and : ∀ k, Wrap k ∧ True → True := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.own_and": {"owner": "@lean"}, "Control.own_exists": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Wrap is a premise of Control.own_and, Control.own_exists, an assumption the lock doesn't list"
+ },
+ "premise_not_in_event": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "open Classical in\nnoncomputable def prob (p : Nat → Prop) : Nat := if p 0 then 1 else 0\n\ndef Bound (E : Nat → Prop) (e : Nat) : Prop := prob E ≤ e\n\ninductive Likely (E : Nat → Prop) : Prop\n  | mk : prob E ≤ 1 → Likely E\n\ntheorem event_anchor : ∀ k, Hyp2 k → True := fun _ _ => trivial\n\ntheorem event_bound : prob (fun o => Hyp2 o → o = o) ≤ 1 := by unfold prob; split <;> omega\n\ntheorem event_def : Bound (fun o => Hyp2 o → o = o) 1 := by unfold Bound prob; split <;> omega\n\ntheorem event_inductive : Likely (fun o => Hyp2 o → o = o) := .mk (by unfold prob; split <;> omega)\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.event_anchor": {"owner": "@lean"}, "Control.event_bound": {"owner": "@lean"}, "Control.event_def": {"owner": "@lean"}, "Control.event_inductive": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.event_anchor, an assumption the lock doesn't list"
+ },
+ "premise_in_forall": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "inductive AllI (p : Nat → Prop) : List Nat → Prop\n  | nil : AllI p []\n  | cons {x : Nat} {xs : List Nat} : p x → AllI p xs → AllI p (x :: xs)\n\ntheorem forall_inductive : AllI (fun x => Hyp2 x → True) [] := .nil\n\ntheorem forall_outside : Int.Internal.Linear.OrOver 1 (fun x => Hyp2 x → True) := by simp [Int.Internal.Linear.OrOver]\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.forall_inductive": {"owner": "@lean"}, "Control.forall_outside": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.forall_inductive, Control.forall_outside, an assumption the lock doesn't list"
+ },
+ "premise_match_hypothesis": {
+  "replace": {"Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Wrap (n : Nat) : Prop := n + 0 = n\n\ntheorem match_own : ∀ n : Nat, (match n with\n  | 0 => True\n  | k + 1 => Wrap k) → True := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.match_own": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Wrap is a premise of Control.match_own, an assumption the lock doesn't list",
+  "not": ["assumptions: Control.match_own.match_"]
+ },
+ "premise_module_in_statement": {
+  "write": {"Control/Prem.lean": "/-! A premises module (`shape.premises`) outside an assumptions module. -/\n\nnamespace Control\n\ndef Fits (n : Nat) : Prop := n < 2 ^ 448\n\nabbrev Within (n : Nat) : Prop := Fits n\n\nend Control\n",
+            "Control/PremThms.lean": "import Control.Defs\nimport Control.Prem\n\nnamespace Control\n\ndef Accepted (n : Nat) : Prop := double n = n + n\n\ndef Held : Prop := ∀ n, Fits n → Accepted n → double n = n + n\n\ntheorem statement_premise : Held := fun _ _ h => h\n\ntheorem conclusion_premise : ∀ k : Nat, True ∧ (Within k → True) := fun _ => ⟨trivial, fun _ => trivial⟩\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.PremThms"]},
+  "policy": {"guarantees": {"Control.conclusion_premise": {"owner": "@lean"}, "Control.statement_premise": {"owner": "@lean"}},
+             "shape": {"premises": ["Control.Assumptions", "Control.Prem"], "statements": ["Control.Defs"]}},
+  "fails": "assumptions: Control.Fits is a premise of Control.conclusion_premise, Control.statement_premise, an assumption the lock doesn't list",
+  "not": ["assumptions: Control.Accepted", "assumptions: Control.Within"]
+ },
+ "premise_alias_hiding": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 : Prop := ∀ n : Nat, 0 + n = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "def Twice : Prop := Hyp ∧ Hyp\n\ndef Sneaky : Prop := Hyp ∧ Hyp2\n\ntheorem twice_thm (_h : Twice) : True := trivial\n\ntheorem sneaky_thm (_h : Sneaky) : True := trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.sneaky_thm": {"owner": "@lean"}, "Control.twice_thm": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Sneaky is a premise of Control.sneaky_thm, an assumption the lock doesn't list; run `check.py --update` to add it with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"Control.Sneaky\": {\"owner\": \"@lean\", \"digest\": ",
+  "not": ["assumptions: Control.Twice", "guarantees: Control.twice_thm assumes"]
+ },
+ "premise_abbrev_hiding": {
+  "replace": {"Control/Assumptions.lean": ["def Hyp : Prop := ∀ n : Nat, n + 0 = n", "def Hyp : Prop := ∀ n : Nat, n + 0 = n\n\ndef Hyp2 (n : Nat) : Prop := n + 0 = n"],
+              "Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "abbrev Sneaky (n : Nat) : Prop := Hyp ∧ Hyp2 n\n\ntheorem abbrev_thm : ∀ n, Sneaky n → True := fun _ _ => trivial\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.abbrev_thm": {"owner": "@lean"}}},
+  "fails": "assumptions: Control.Hyp2 is a premise of Control.abbrev_thm, an assumption the lock doesn't list"
  }
 }

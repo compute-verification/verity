@@ -6123,7 +6123,7 @@
    },
    "gated": false,
    "local_path": "/workspace/fs/glm53/aca966e4e02791568aa6a4ced368624b3d897f42",
-   "note": "Z.ai's block-FP8 GLM-5.3 (GlmMoeDsaForCausalLM), on vy-glm53-fs (755.7 GB); every file hashed there (SHA256SUMS beside it, LFS sha256s equal to the hub's); sizes are the hub tree's",
+   "note": "Z.ai's block-FP8 GLM-5.3 (GlmMoeDsaForCausalLM), on vy-glm53-fs (755.7 GB); every file hashed there (SHA256SUMS beside it, LFS sha256s equal to the hub's); sizes are the hub tree's; copies also read from: vy-nebius-cpu-1's /workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/<revision> (from the hub, 23 Oct, every shard checked against this pin by GLM53_INT8's make) and vy-nebius-cpu-3's same path",
    "repo": "zai-org/GLM-5.3",
    "resolved_at": "2026-10-12T21:42:00Z",
    "resolved_by": "glm53-h8",

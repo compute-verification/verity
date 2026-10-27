@@ -32,10 +32,10 @@ from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
 from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity_vllm.program.registry import b1, lifted as L
+from verity.ml.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
-from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.b1 import weights_type
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 from verity.ml.circuits.types import Array, Tuple, Value
 
@@ -185,6 +185,7 @@ def runs(wl_u, wl_l):
     return tu, _request_outs(wl_u, ou), tl, _request_outs(wl_l, ol)
 
 
+@pytest.mark.slow
 def test_a_stops_early_and_b_continues_with_every_gate_of_b_bit_equal_to_the_unlifted_workload(wl_u, wl_l, runs):
     tu, ou, tl, ol = runs
     assert ou["A"] == Y_RAW and 17 not in ou["B"], "fixture: A emits the EOS at event 3, B never"
@@ -227,6 +228,7 @@ def test_a_stops_early_and_b_continues_with_every_gate_of_b_bit_equal_to_the_unl
     assert [tl[g] for g in range(*sh)] == [tu[g] for g in range(*wl_u.address_map()["shared"]["gates"])]
 
 
+@pytest.mark.slow
 def test_a_s_bot_is_confined_to_its_own_steps_from_a_r_on_and_b_s_state_is_never_bot(wl_l, runs):
     _, _, tl, ol = runs
     a_A = L.activity_prefix(ol["A"], EOS, CAP)
@@ -309,6 +311,7 @@ def _prompt_b_transcript(wl_u, prompts):
     return _request_outs(wl_u, ou)["B"]
 
 
+@pytest.mark.slow
 def test_negative_a_bot_smuggled_into_the_shared_weights_is_refused_at_the_boundary_and_bypassed_deactivates_no_request_legitimately(wl_u, wl_l):
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
     name, t = next((n, t) for n, t in wl_u.fn.signature()[0] if n.startswith("shared."))
@@ -442,6 +445,7 @@ def component_b():
     return W.request_component(desc, REGISTRY, [("prompt", repr(Array(LP, I32))), ("weights", repr(weights_type(TINY)))])
 
 
+@pytest.mark.slow
 def test_f_pad_19_the_hook_takes_one_cap_per_request_and_refuses_a_served_length_by_name(component, component_b):
     reqs = [W.WorkloadRequest("A", 0, LP, CAP, 0, component), W.WorkloadRequest("B", 1, LP, CAP_B, 0, component_b)]
     prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}

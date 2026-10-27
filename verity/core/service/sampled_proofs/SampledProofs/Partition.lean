@@ -90,50 +90,14 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
       throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than the widest class, {UNIT_CLASS_MAX}"
   return calls
 
-/-- `partition._committed_bits`: per unit `[lo, hi)` of one activation of definition `d` (its local gates, as
-`Flock.Qcall.gates` lays them out), the bits it commits: the summed declared widths of its gates that are Input gates, or
-that a later gate of the activation reads or the activation returns, constants included. Nothing outside an activation
+/-- `partition._committed_bits`: per unit `[lo, hi)` of one activation of a Definition, laid out as `G`
+(`Flock.Qcall.gates`), the bits it commits: the summed declared widths of its gates that are Input gates, or that a later
+gate of the activation reads or the activation returns (`Gates.readTo`), constants included. Nothing outside an activation
 reads its gates but through its returns, so in any program this bounds the claims' `Prog.Boundary` count, as `Q_call`'s
-width rule bounds its computing gates'. -/
-def committedBits (P : Flock.Program.Prog) (d : Nat) (units : Array (Nat × Nat)) : V (Array Nat) := do
-  let defn := P.defs[d]!
-  let lo := defn.paramLeaves
-  let n := defn.gates
-  let starts := (defn.params.foldl (fun (acc : Array Nat × Nat) (_, t) => (acc.1.push acc.2, acc.2 + t.leaves)) (#[], 0)).1
-  let top : Flock.Program.Scope := .top d lo (some starts)
-  let mut prim : Array Nat := if defn.prim then #[d] else Array.mkEmpty n
-  let mut last : Array Int := Array.replicate n (-1)
-  let mut stack : Array (Flock.Program.Scope × Nat × Nat) := if defn.prim then #[] else #[(top, 0, 0)]
-  while stack.size > 0 do
-    let (sc, k, m) := stack.back!
-    let body := (P.defs[sc.d]!).body
-    if k ≥ body.nodes.size then
-      stack := stack.pop
-      continue
-    let node := body.nodes[k]!
-    if m ≥ node.members then
-      stack := stack.set! (stack.size - 1) (sc, k + 1, 0)
-      continue
-    stack := stack.set! (stack.size - 1) (sc, k, m + 1)
-    let callee := P.defs[node.fn]!
-    let o := sc.off + body.offsets[k]!
-    if !callee.prim then
-      stack := stack.push (.child sc node.fn (o + m * callee.gates) k m, 0, 0)
-      continue
-    let j := o + m - lo
-    for g in ← Flock.Program.operands P sc node m do
-      if lo ≤ g && g - lo < j then last := last.set! (g - lo) j
-    prim := prim.push node.fn
-  if prim.size != n then throw s!"{defn.key}: {prim.size} gates laid out, {n} declared"
-  for g in ← if defn.prim then pure #[lo] else defn.body.ret.toArray.mapM (Flock.Program.resolve P top) do
-    if lo ≤ g && g < lo + n then last := last.set! (g - lo) n
-  return units.map fun (a, b) => (List.range (b - a)).foldl (fun bits i =>
-    let f := P.defs[prim[a + i]!]!
-    if Flock.Program.isInputId f.key || last[a + i]! ≥ b then
-      bits + match f.ret with
-        | .value w => w
-        | _ => 0
-    else bits) 0
+width rule bounds its computing gates'. `committedBitsRef` is the walk of its own it was, which the difftest holds it to. -/
+def committedBits (G : Flock.Qcall.Gates) (units : Array (Nat × Nat)) : Array Nat :=
+  units.map fun (a, b) => (List.range (b - a)).foldl (fun bits i =>
+    if Flock.Program.isInputId G.prim[a + i]! || G.readTo[a + i]! ≥ b then bits + G.width[a + i]! else bits) 0
 
 /-- `partition._template_bits`: the bits one instance of template `d` commits, the summed widths, as its return type gives
 them, of the distinct gates of its activation that it returns. Decoding keeps Input gates to the root's body, and nothing
@@ -175,7 +139,7 @@ def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit :
   for c in cs do
     if seen.contains c.d then continue
     seen := seen.push c.d
-    let bits ← committedBits P c.d (c.c.units.map fun u => (u.lo, u.hi))
+    let bits := committedBits c.c.gates (c.c.units.map fun u => (u.lo, u.hi))
     if let some u := (List.range bits.size).find? (fun u => (unitClass bits[u]!).isNone) then
       throw s!"query-refused: unit {u} of {(P.defs[c.d]!).key} commits {bits[u]!} bits, more than the widest class, {UNIT_CLASS_MAX}"
 

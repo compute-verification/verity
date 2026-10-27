@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 `checked_of_accepts`: at an outcome `verify --zk --registered F` accepts, the shadow layout's registered reads that are
 the verifier's own at the outcome's draw (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
 The one table's statement is setupH's at the record's draw `d`, over `HmRow.drawn c pub d` (`setupH_drawn`);
-`checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), which opens each drawn
+`checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), at a circuit naming each port
+once (`dupName_of_checkRegistered`, `names_once_of_dupName`), which opens each drawn
 instance's row of each of `own`'s ports at the position `own` gives for its unit, through the path the header gives
 (`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The drawn
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the layout's
@@ -29,8 +30,39 @@ theorem acceptsZK_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Tran
 
 /-- `checkRegistered` accepting a statement is `Registered.check` accepting it. -/
 theorem checkRegistered_ok {st : Stmt} {r : Option (Array Registered.Port)} (h : checkRegistered st r = .ok ()) :
-    Registered.check st.c st.pub r (Registered.derived st.partition) = .ok () :=
-  h
+    Registered.check st.c st.pub r (Registered.derived st.partition) = .ok () := by
+  unfold checkRegistered at h
+  split at h
+  · cases hn : Registered.namesOnce st.c with
+    | error e => rw [hn] at h; cases h
+    | ok u => rw [hn] at h; exact h
+  · exact h
+
+/-- `checkRegistered` accepting with the verifier's own registered reads: no port of the circuit repeats a name. -/
+theorem dupName_of_checkRegistered {st : Stmt} {own : Array Registered.Port}
+    (h : checkRegistered st (some own) = .ok ()) : Registered.dupName st.c = none := by
+  unfold checkRegistered Registered.namesOnce at h
+  cases hd : Registered.dupName st.c with
+  | none => rfl
+  | some q => rw [hd] at h; cases h
+
+/-- A circuit with no repeated port name (`Registered.dupName`) names each of its ports once. -/
+theorem names_once_of_dupName {c : Circuit} (hd : Registered.dupName c = none) :
+    ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
+  intro q q' he
+  unfold Registered.dupName at hd
+  rw [List.find?_eq_none] at hd
+  have key : ∀ a b : Fin c.ports.size, a.val < b.val → c.ports[a].name = c.ports[b].name → False := by
+    intro a b hab hn
+    apply hd b.val (List.mem_range.2 b.isLt)
+    rw [List.any_eq_true]
+    refine ⟨a.val, List.mem_range.2 hab, ?_⟩
+    rw [getElem!_pos c.ports a.val a.isLt, getElem!_pos c.ports b.val b.isLt]
+    simpa using hn
+  rcases Nat.lt_trichotomy q.val q'.val with hlt | heq | hgt
+  · exact (key q q' hlt he).elim
+  · exact Fin.ext heq
+  · exact (key q' q hgt he.symm).elim
 
 /-- `Registered.check` accepting with the verifier's own `own`: the public file has tables `t`, its header names the
 units `idx`, and `checkPort` accepts each of `own`'s ports. -/
@@ -87,7 +119,7 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
                 Classical.not_not] at hi'
               obtain ⟨hr, hreads⟩ := hi'
               have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, hreads, by simpa using ho⟩
+              exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
             · split at h
               · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
               · split at h <;> exact absurd h (Registered.throw_ne_ok _ _)

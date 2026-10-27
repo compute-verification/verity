@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import time
 
+from verity_vllm.records.commit_run import SCHEMA
+
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
 import contextlib
@@ -60,8 +62,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
+from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
@@ -71,13 +74,12 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
+from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
-from verity_vllm.pipeline import remote_session as RS  # noqa: E402
-
-SCHEMA = "verity/commit-integ/delta/v1"
+from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
 
 # [R16 sys, BRIEF §5/§10] automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
@@ -128,7 +130,7 @@ POOL_CARRY_BYTES = 20 << 30
 
 
 def c2_programs_forecast(programs_root: str | None, program_dir: str | None, factor: float = C2_PROGRAMS_OBJECT_FACTOR) -> dict[str, Any]:
-    """[R17 fp8, F-fp8-C2PROG] EMPIRICAL FORECAST of the host bytes the C2 sampled replay's loaded Programs take in this process: the
+    """[F-fp8-C2PROG] EMPIRICAL FORECAST of the host bytes the C2 sampled replay's loaded Programs take in this process: the
     instance files it will load (`build_request_*/instances.json.gz` under --programs-root, or --program-dir's), streamed and counted
     (rows = `{"i": ` occurrences, json bytes = decompressed size; nothing is parsed or kept), x `factor` json byte -> object bytes.  One
     calibration point (B8, 7,853,122 rows, 628 B/row json, 9,387 B/row objects); the run measures the real number (C2 PROGRAMS FREED)."""
@@ -171,7 +173,7 @@ def c2_programs_forecast(programs_root: str | None, program_dir: str | None, fac
 
 
 def cgroup_mem_current() -> dict[str, int | None]:
-    """[R17 fp8] the container's memory accounting (what the OOM-killer reads): current / peak / max of the cgroup, bytes (None outside one)."""
+    """The container's memory accounting (what the OOM-killer reads): current / peak / max of the cgroup, bytes (None outside one)."""
     out: dict[str, int | None] = {"current": None, "peak": None, "max": None}
     for k, paths in (("current", ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory/memory.usage_in_bytes")),
                      ("peak", ("/sys/fs/cgroup/memory.peak", "/sys/fs/cgroup/memory/memory.max_usage_in_bytes")),
@@ -254,9 +256,10 @@ def admission_lag(wl: dict) -> int:
 
 
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
-    """[rev M-0485; R17-1 / DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
+    """[DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
-    checkpoint's generation_config / config + the workload's sampling block (None = undeclared); `lag` = the workload Program's declared
+    checkpoint's generation_config / config + the workload record's sampling block, read from the file `wl` was loaded from, as GP-01
+    reads it (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an
     unattested engine leaves it None (every EOS stop then fails by name) -- never the engine value as the rule, never inferred from the
@@ -264,13 +267,15 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "async_scheduling": None, "notes": [], "srule": None}
     try:
         from verity_vllm.pipeline import global_program as _GP
-        _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
+        from verity_vllm.program.workload import eos_lag_rows_declared
+        from verity_vllm.records.workload import Workload
+        _srule = _GP.stop_rule(eng.cp.get("local_path"), None, Workload.load(wl["source"]).sampling)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
         _decl_lag = _GP.workload_target(wl.get("target")).lag()
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
-        _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
+        _eng_lag = eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
         out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"R17-1: the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")
@@ -287,14 +292,14 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
 
 
 def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], caps: dict[str, int]) -> dict:
-    """[R16 compiled, H100 B8] The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
+    """The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
     order as the collector recorded it (which requests ran in which step); a request's OBSERVED arrival is the first committed step it ran
     in.  The serving loop admits a request once the engine's forwards reach its declared arrive_step (`arrivals.ForwardCounter`: the
     bookkeeping iteration after the last request finishes runs no forward pass) OR immediately when the engine is idle (nothing running),
     so on a workload with gaps (r0's cap shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
-    fails by name.  [R17-1 / F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
+    fails by name.  [F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
     served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record), no longer the bare cap."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
@@ -364,7 +369,7 @@ def _process_state() -> dict[str, Any]:
 
 
 def cuda_census() -> dict[int, tuple[int, str]]:
-    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (R16 sys hot worker: the post-job residue audit
+    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (the hot worker's post-job residue audit
     diffs this against the census taken right after the engine build; storage held only from C++ is invisible here, so a residue that shows
     in torch.cuda.memory_allocated but not in the census points at a native holder)."""
     out: dict[int, tuple[int, str]] = {}
@@ -411,6 +416,8 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
+        if getattr(args, "commit_scheme", None) == SR.NAME:
+            raise ValueError(f"--committer {kind} commits vllm-v1 only: {SR.NAME} is native_collect_v2b's (or name --commit-scheme vllm-v1)")
         return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, populate_threads=getattr(args, "pinned_populate_threads", None),
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
                                    batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)), regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
@@ -463,8 +470,7 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
     raise ValueError(kind)
 
 
-from verity_vllm.check.commit_rules import (HIDDEN_CLASS_BY_FA, REQUIRED_CLASSES_DEFAULT, class_coverage, hidden_classes_required,  # noqa: E402
-                                            required_classes_default)
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
@@ -502,7 +508,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
                     d[f"{m.name}/{pl}"] = _hl.blake2b(mv(m.dev_off + off, m.dev_off + off + nb), digest_size=8).hexdigest()
                     off += nb
         cur[step] = d
-        dump = os.environ.get("VERITY_DUMP_STEP")
+        dump = settings.VERITY_DUMP_STEP
         if dump and int(dump) == step:
             # raw bytes of this step's FA2 L0 row (and the whole layout) for offline byte-level diffs across pairs
             for m in com._layouts[step]:
@@ -538,13 +544,13 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
 def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None,
                    finish_reasons: dict | None = None) -> dict[str, Any]:
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
-    -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
+    -- together the executed prefix of record every population consumer is placed over (F-moe-r17-03)."""
     """R14 BIND-01: the binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B, partition as PT
-    from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
+    from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
+    from verity_vllm.check import commit_tokens as CT
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
     # gprog's workload digest or the labelled components fold).  The committer's own digest seeds the step roots and is recorded beside
@@ -694,7 +700,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     elif comp is not None and not comp.get("ok"):                                  # [R15 B8] an omitted / relabelled / duplicated request, named
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=comp.get("error") or "composition check failed")
     ctx_ok, ctx_why = B.map_context_check(bmap, rc)
-    picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode())
+    picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode(), **CC.identities(rc))
     bound = [(i, e, leaf) for i, e, leaf in picks if e is not None]
     unbound = [B.identity_dict(i) for i, e, _ in picks if e is None]
     ops, ok = [], []
@@ -737,7 +743,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
 
 
 def _positions_digest(positions) -> str | None:
-    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest (rev F-r17b-13)."""
+    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest."""
     pos = sorted({(int(s), int(i)) for s, i in (positions or [])})
     if not pos:
         return None
@@ -745,7 +751,7 @@ def _positions_digest(positions) -> str | None:
 
 
 def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, tokens_ref: dict | None = None) -> dict[str, Any]:
-    """R13 P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
+    """The P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
     open the challenge positions (+ forced picks: a leaf of the prefill step, a leaf inside an FA2 hidden `fa2.m1/` row, a leaf of the last
     step) and verify each against the ORIGINAL roots.  Value bytes come from the host copy when the committer retained one (`--retain host`),
     otherwise from a REPLAY: the same workload is executed again under the collector (values kept on host for this run only); BI determinism
@@ -760,7 +766,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     freed = frozen.release_staging(levels_to_host=True)
     retained_after = frozen._retained_device_bytes()
     has_host = all(b is not None and not b.is_cuda for b, _u in frozen._gpu_blocks.values()) and bool(frozen._gpu_blocks)
-    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=b"after-release/" + str(pair).encode()))
+    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=b"after-release/" + str(pair).encode(), **CC.positions(rc)))
     forced: list[tuple[int, int]] = []
     steps_sorted = sorted(frozen._layouts)
     forced_why: dict[tuple[int, int], str] = {}
@@ -823,6 +829,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         com.pool = com.pool.fresh()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
         t_r = time.perf_counter()
         try:
+            com.replay_row_keys = dict(frozen.row_keys) if getattr(com, "rows", False) else None   # rows-sha512: the run's salts, or no root to match
             com.reset()
             com.install()
             r2 = run_workload(eng, reqs, sampling)
@@ -894,7 +901,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            # original is the whole-run root (every regenerated byte) + the tokens
            "replay_dependencies": ({"engine": "same vLLM engine process as the original run (no reload; weights of record in-process)",
                                     "requests": len(reqs), "sampling": dict(sampling) if isinstance(sampling, dict) else str(sampling),
-                                    "batch_invariant": os.environ.get("VLLM_BATCH_INVARIANT"), "release_before_replay": freed,
+                                    "batch_invariant": settings.raw("VLLM_BATCH_INVARIANT"), "release_before_replay": freed,
                                     "committed_weights_root": (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None,
                                     "original_run_root": rc.run_root.hex(), "checked_by": ["replay_run_root == original", "replay_tokens_equal",
                                                                                             "every opening verified against the ORIGINAL root"]}
@@ -958,9 +965,9 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append("--moe-source on")
     if str(args.committer).startswith("plugin:"):
         why.append("plugin committer")
-    if os.environ.get("VERITY_FAULT", "").strip():
-        why.append(f"VERITY_FAULT={os.environ['VERITY_FAULT']!r} (deliberate fault: negative test)")
-    if os.environ.get("VERITY_SWITCH"):
+    if settings.VERITY_FAULT:
+        why.append(f"VERITY_FAULT={settings.raw('VERITY_FAULT')!r} (deliberate fault: negative test)")
+    if settings.raw("VERITY_SWITCH"):
         why.append("VERITY_SWITCH (interpreter switch interval is process-wide)")
     if args.remote_verifier:
         why.append("--remote-verifier (the store binder goes on the engine at its build)")
@@ -987,19 +994,19 @@ def resolve_staging(args: Options) -> Options:
 def staging_environ(args: Options) -> None:
     """The resolved staging options into the environment the committers read (`resolve_staging`), and the late-read
     negative's flush points."""
-    os.environ["VERITY_RETAIN"] = args.retain
-    os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
+    settings.put("VERITY_RETAIN", args.retain)
+    settings.put("VERITY_WINDOW_MB", str(args.window_mb))
     if args.window_slots is not None:
-        os.environ["VERITY_WINDOW_SLOTS"] = str(args.window_slots)
-    os.environ["VERITY_STAGING_BOUNDED"] = "1" if args.bounded_staging else "0"
+        settings.put("VERITY_WINDOW_SLOTS", str(args.window_slots))
+    settings.put("VERITY_STAGING_BOUNDED", "1" if args.bounded_staging else "0")
     if args.bounded_staging:
-        os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
+        settings.put("VERITY_LEARN_HOST_BUDGET_MB", str(int(args.learn_budget_mb)))
     if args.retain_exclude:
         if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
             raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
-        os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
+        settings.put("VERITY_RETAIN_EXCLUDE", args.retain_exclude)
     if args.footprint:
-        os.environ["VERITY_FOOTPRINT"] = args.footprint
+        settings.put("VERITY_FOOTPRINT", args.footprint)
         Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
     if args.late_read:
         # deliberate late read: the P0 flush after qkv_proj is deferred to the next legal point (past RoPE's in-place q/k rewrite)
@@ -1016,7 +1023,8 @@ class Options:
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
-    committer: str = option("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | native_collect* | native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, "vllm-v1"), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name (any other committer, an old record's configuration)")
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
@@ -1066,8 +1074,8 @@ class Options:
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
-    replay_challenger: str | None = option("--replay-challenger", default=None, metavar="HOST:PORT", help="the served C2 replay's challenge from the auditor host's challenger (verity_vllm.pipeline.replay_coin: its replay coin 0, opened after the run root); without it the challenge is --replay-challenge or this process's own, recorded as such")
-    replay_session: str | None = option("--replay-session", default=None, metavar="JSON", help="with --replay-challenger: the challenger gate's open answer for the Commit's session, {\"session\", \"seq\", \"root\", \"commitment\"} and its \"secret\" (verity_vllm.protocol_options.pouw_h1_challenger.session_of), which the replay challenge's record carries")
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (ssh -R)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
@@ -1076,13 +1084,13 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.store.remote.CommitSession); a rejected session fails the Commit")
+    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.remote_bandwidth.remote.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.store.binder.Binder.register_filler)")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.remote_bandwidth.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
+    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.protocols.remote_bandwidth.in_place)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
     memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
@@ -1105,19 +1113,18 @@ class Options:
 def main(args: Options, argv: list[str] | None = None) -> None:
     global TL
     _rs = RS.session_of(args)
-    if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
+    if settings.VERITY_HOT_SUBMIT and _HOT is None:
         # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
         # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
         from verity_vllm.pipeline import hot as _HC
-        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")),
-                            idle_s=float(os.environ.get("HOT_IDLE", "900")),
-                            timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
+        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(settings.HOT_ROOT),
+                            idle_s=settings.HOT_IDLE, timeout_s=settings.HOT_TIMEOUT))
     TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
-    if os.environ.get("VERITY_TRACEDUMP"):
+    if (tracedump := settings.VERITY_TRACEDUMP) is not None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
-        faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
+        faulthandler.dump_traceback_later(tracedump, repeat=True)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
@@ -1132,8 +1139,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
     if _sid_out is not None:   # [R18 infra, r18-int-2; rev n1] native_host._gpu_ext_load writes its import-site document beside this one
-        os.environ["VERITY_SOURCE_IDENTITY_DIR"] = str(Path(args.out))
-    os.environ["VERITY_WEIGHTS_HASH"] = args.weights_hash       # read by native_host.register_weights (this process and the forked replay)
+        settings.put("VERITY_SOURCE_IDENTITY_DIR", str(Path(args.out)))
+    settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     if _HOT is not None:
         _unsafe = hot_unsafe_reasons(args)
         if _unsafe:
@@ -1142,7 +1149,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     args = resolve_staging(args)
     _planner = RB.prepare(args)
     compiled_src = None
-    fault = os.environ.get("VERITY_FAULT", "").strip()
+    fault = settings.VERITY_FAULT
     compiled_kernels = None
     if args.compiled_taps == "kernels":
         if args.only_arm == "control":
@@ -1186,8 +1193,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_manifest = None
     if getattr(args, "padded_finalize", False) and not args.required_manifest:
         raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record (B9.1); nothing to pad without it")
-    from verity_vllm.pipeline import replay_coin as RCN
-    replay_session = RCN.session_option(args.replay_challenger, args.replay_challenge, getattr(args, "replay_session", None))
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
@@ -1207,7 +1212,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         compiled_src.use_plan(required_manifest, out / "compiled_source_plan")     # [v2 acquire] the engine build's wrap_model wraps the plan's boundaries
     # [R16 sys, F-stoch-03] the collector's fail-fast watchdog writes this marker (then _exit(3)) when a "collector dead" run does not fail
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
-    os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
+    settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
@@ -1217,6 +1222,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
     kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
     multi = bool(args.arms)
+    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor host's session, reserved before any root (or None: a measurement)
     coms: dict[str, Any] = {}
     # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
     # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
@@ -1236,7 +1242,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings), execution=va.execution_of_workload(wl))
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
     _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --remote-verifier: the session's engine is built here
     _live = (_HOT or {}).get("eng")
     if _live is not None:
@@ -1260,7 +1266,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
                               target=_ekw["target"], execution=_ekw["execution"])     # [R15 EXEC-02 M-0078] the row's execution decides enforce_eager (header: versions.json)
         TL.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
-               engine_reused=False, restart_reason=((_HOT or {}).get("restart_reason") or os.environ.get("VERITY_HOT_RESTART_REASON")
+               engine_reused=False, restart_reason=((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
                                                     or "fresh process (one commit_delta per Commit stage)"))
         if _HOT is not None:
             gc.collect()
@@ -1274,7 +1280,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         required_classes, hidden_family = HS.with_hidden_class(required_classes_default(fa_version), None) + ("compiled_kernel_buffers",), None
         print(f"[delta] required classes (served): {required_classes}", flush=True)
     elif not required_classes_cli:
-        required_classes = HS.with_hidden_class(required_classes_default(fa_version), hidden_family := HS.attention_hidden(required_manifest, eng.model)["family"])
+        required_classes, hidden_family = classes_of_record(required_manifest, eng.model, fa_version)
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
             required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
@@ -1291,7 +1297,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     versions["argv"] = list(argv) if argv is not None else sys.argv
     # [R16 sys, BRIEF §10] hot/cold process + engine reused or restarted (+ reason) in the record itself, not only on the timeline
     versions["hot"] = {"hot_process": _HOT is not None, "engine_reused": _live is not None,
-                       "restart_reason": None if _live is not None else ((_HOT or {}).get("restart_reason") or os.environ.get("VERITY_HOT_RESTART_REASON")
+                       "restart_reason": None if _live is not None else ((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
                                                                           or "fresh process (one commit_delta per Commit stage)"),
                        "worker_job": (_HOT or {}).get("jobs"), "worker_pid": os.getpid() if _HOT is not None else None,
                        "engine_built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((_HOT or {}).get("t_built") or time.time())),
@@ -1358,11 +1364,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
 
     run_id = f"{Path(args.workload).stem}"
-    if os.environ.get("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
+    if switch := settings.raw("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
         import sys as _sys
 
-        _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
-        print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
+        _sys.setswitchinterval(float(switch))
+        print(f"[delta] sys.setswitchinterval({switch})", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
@@ -1382,135 +1388,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
-        _hidden_required = hidden_classes_required(required_manifest)
-        if args.hidden_so and _hidden_required is False:
-            # a tap that never fires would fail the identity check and the required classes as an omitted producer
-            if not required_classes_cli:
-                required_classes = tuple(c for c in required_classes if c not in HIDDEN_CLASS_BY_FA.values())
-            print(f"[delta] hidden source NOT attached: the required-value manifest names no {' / '.join(HIDDEN_CLASS_BY_FA.values())} identity "
-                  f"(families {sorted((required_manifest.get('populations') or {}).get('by_family') or {})}); required classes "
-                  f"{list(required_classes)}", flush=True)
-        # MLA / DSA sparse MLA: no hidden class, no FA2 source
-        if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
-            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-            # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
-            # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
-            # the attention implementation the built engine executes (`observed_flash_attn_version`, the TargetProfile fact): a mismatch is
-            # refused here, before any run (F-hw-08: the FA2 tap under FA3 never fires).
-            src_cls = getattr(com, "hidden_source_cls", None)                # R11: native_collect_v2 supplies its C++ FA2 glue
-            if args.tap_cap_mb is not None:
-                os.environ["VERITY_FA2_TAP_CAP_MB"] = str(int(args.tap_cap_mb))   # [R18 tap] read by NativeHiddenM1Source at construction
-            com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                                 fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
-            print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)
-            _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
-            if _hsrc is not None and hasattr(_hsrc, "tap_cap_bytes"):
-                # [R18 tap, F-r17-23] the bounded tap's per-window telemetry + summary live in the attempt dir (fa2_tap_windows.jsonl / fa2_tap_bound.json)
-                if args.out:
-                    _hsrc.telemetry_path = str(Path(args.out) / "fa2_tap_windows.jsonl")
-                print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
-                      f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
-                      f"telemetry {_hsrc.telemetry_path}", flush=True)
-        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
-        if args.memory_map:
-            from verity_vllm.acquire.sources import kv_slots_source
-            kv_slots_source.attach(com)
-        # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
-        # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
-        # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
-        # Program has no MOE-01 rows -- the MoeFfnFixedL_v1 row's identity is the module output (leg (a)) -- and the manifest names no
-        # `moe_block_stream` identity: the source is then NOT attached (mode auto, the manifest decides; the reason is on the log), and
-        # `--moe-source on` is refused by name.  A manifest that names the planes (MOE-01 rows) attaches exactly as before.
-        _moe_planes_required = None
-        if required_manifest is not None:
-            _moe_planes_required = int(((required_manifest.get("populations") or {}).get("by_family") or {}).get("moe_block_stream", 0) or 0) > 0
-        if args.moe_source != "off" and _moe_planes_required is False:
-            if args.moe_source == "on":
-                print(f"[delta] REFUSE: --moe-source on but the required-value manifest {args.required_manifest} names no moe_block_stream identity "
-                      f"(the Program has no MOE-01 rows -- a padded construction's MoE identity is the module output): the source would stage "
-                      f"planes the arena has no slot for", flush=True)
-                sys.exit(3)
-            print(f"[delta] MoE block source NOT attached: the required-value manifest names no moe_block_stream identity (families "
-                  f"{list((required_manifest.get('populations') or {}).get('by_family') or {})}; the Program's MoE construction has no MOE-01 rows) -- "
-                  f"nothing is staged that the manifest does not name", flush=True)
-        if args.moe_source != "off" and _moe_planes_required is not False and hasattr(com, "attach_source") and getattr(com, "model", None) is not None:
-            from verity_vllm.acquire.sources.moe_source import MoeBlockSource
-            msrc = MoeBlockSource(com, com.model)
-            if msrc.layers:
-                com.attach_source(msrc)
-                moe_attached = True
-                if args.required_classes is None and "moe_block_stream" not in required_classes:
-                    required_classes = required_classes + ("moe_block_stream",)     # a bound MoE block is a required class of an MoE model (REL-02)
-                print(f"[delta] MoE block source attached: {len(msrc.layers)} MoE layers -> committer {com.name}; required classes {list(required_classes)}", flush=True)
-            elif args.moe_source == "on":
-                print("[delta] REFUSE: --moe-source on but the model has no MoE-runner modules", flush=True)
-                sys.exit(3)
-        # [R19 int-20, F-r19-int-20] MANIFEST-DRIVEN INPUT ACQUISITION: a promoted manifest row (an interior Program row whose output another
-        # module reads -- e.g. a value produced in a parent module's forward body and consumed by a child leaf, which no module OUTPUT
-        # carries) is observed at its first consumer's input: the committer acquires `<consumer>/in` (the embedding-ids mechanism, by the
-        # manifest instead of by class) and the binding map binds it to the producer's identity.  Armed BEFORE size_arena / install; a
-        # table the manifest cannot state unambiguously is refused by name (binding.PROMOTED_INPUT_RULE), never guessed.
-        if required_manifest is not None and hasattr(com, "acquire_inputs") and getattr(com, "model", None) is not None:
-            from verity_vllm.commit.binding import promoted_input_acquisition
-
-            _pia = promoted_input_acquisition(required_manifest)
-            if _pia["problems"]:
-                print(f"[delta] REFUSE: the required-value manifest's promoted members have no unambiguous observation point: {_pia['problems'][:4]}", flush=True)
-                sys.exit(3)
-            if _pia["names"]:
-                _mods = dict(com.model.named_modules())
-                _absent = sorted(c for c in _pia["consumers"] if c not in _mods)
-                com.acquire_inputs = dict(_pia["consumers"])
-                print(f"[delta] acquisition extended by the manifest (promoted members): {len(_pia['names'])} consumer input(s) "
-                      f"{sorted(_pia['names'])} bind {sorted(v[0] + '/' + v[1] for v in _pia['names'].values())} "
-                      f"({sum(p['rows_n'] for p in _pia['producers'].values())} promoted manifest rows; "
-                      f"{', '.join(f'{op}: {p['spec']} width {p['width']} {p['dtype']} at {p['consumer']}' for op, p in sorted(_pia['producers'].items()))})", flush=True)
-                if _absent:
-                    print(f"[delta] NOTE: {len(_absent)} promoted-member consumer(s) are not modules of the built model ({_absent[:3]}): their identities stay unbound (coverage names them)", flush=True)
-        # [X-03 F-r19-int-22] the per-layer attention plane class is DERIVED from the Program's attention Call statics (NH, KVH, D, window per
-        # layer -- the Build record's `attention_impls_observed`, the facts each Call's Definition and `inert_window` were selected from) x
-        # the step's active sequences (fa2_plane_classes): a windowed layer's decode launch stages 6 per-sequence planes while a global GQA
-        # layer's stages one swapped row, so "every layer the same count" is a consequence for one-class Programs, not a rule.  Without the
-        # record the committer keeps the R13 uniformity rule (fails closed on a two-class Program, as before) and says so here.
-        if required_manifest is not None and hasattr(com, "identity_check"):
-            from collections import Counter as _Cnt
-
-            from verity_vllm.acquire import fa2_plane_classes as FP
-
-            _impls, _impls_path = FP.attention_impls_of_record(program_dir=getattr(args, "program_dir", None), programs_root=getattr(args, "programs_root", None))
-            _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
-            if _decls:
-                com.attention_layer_decls = _decls
-                _cls = sorted(_Cnt(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls).items())
-                print(f"[delta] X-03 attention plane classes: {len(_decls)} layer declaration(s) from {_impls_path} -> classes {_cls}; "
-                      f"per-layer expectation derived per step (fa2_plane_classes), uniformity not assumed", flush=True)
-            else:
-                print(f"[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under "
-                      f"--program-dir/--programs-root ({getattr(args, 'program_dir', None)!r}, {getattr(args, 'programs_root', None)!r}); "
-                      f"the R13 uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
-        # [v2 acquire, Phase 4a] the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the built engine's
-        # runtime tree): the plan is written into the attempt dir first; an UNSUPPORTED Value refuses by name.  An external source (the
-        # served values) acquires every value itself: the committer wraps nothing.
-        if served is not None:
-            print(f"[delta] committer {com.name}: no acquisition plan (the served source acquires every value of the Build)", flush=True)
-        else:
-            if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
-                print(f"[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got {kind})", flush=True)
-                sys.exit(3)
-            from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
-            from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
-
-            try:
-                _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
-                for _ln in _docs.log_lines("delta"):
-                    print(_ln, flush=True)
-                _rec = _apply_plan(com, _docs.plan)
-            except _IncompletePlan as e:
-                print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
-                sys.exit(3)
-            (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
-            print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan, "
-                  f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
+        _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
+                                required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
+                                fa_version=fa_version, cb_plan=cb_plan, served=served)
+        required_classes, moe_attached, _hidden_required = _att.required_classes, _att.moe_attached or moe_attached, _att.hidden_required
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
@@ -1583,8 +1464,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 #            factor 2.0 (the per-token widths of the declaration under-size these planes; bounded, not explained)
                 # A blanket x1.15 on the total held on B1 only because hidden is 78 % of the stream; on B8 (hidden 92 %) it under-sizes the
                 # kept raw by ~7 GiB while over-sizing the levels. Env overrides for a re-derivation, never for a launch.
-                _f_hidden = float(os.environ.get("VERITY_ADMIT_HIDDEN_FACTOR", "1.05"))
-                _f_other = float(os.environ.get("VERITY_ADMIT_OTHER_FACTOR", "2.0"))
+                _f_hidden = settings.VERITY_ADMIT_HIDDEN_FACTOR
+                _f_other = settings.VERITY_ADMIT_OTHER_FACTOR
                 # the run's stream under the workload's DECLARED schedule (per step; the hidden family's share), not the envelope's
                 # any-packing worst case (`retained_bytes_bound` = ceil(B x max_prompt / T_prefill) prefills of the worst step: 3x for the
                 # B8 1024/128 row whose 8 prompts prefill in ONE step) -- both are on the record
@@ -1615,7 +1496,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                             # engine growth after admission (torch host allocator, vLLM bookkeeping, CUDA context, the warm-ups'
                                             # buffers) + pool rounding: B1 timelines RSS 2,218 -> 5,757 MiB before the first pool block (+3,539
                                             # MiB), rounding <= 190 MiB -> 6 GiB (the earlier 4 GiB left 516 MiB on bounded-none try 3)
-                                            slack_bytes=int(float(os.environ.get("VERITY_ADMIT_SLACK_GIB", "6")) * (1 << 30)),
+                                            slack_bytes=int(settings.VERITY_ADMIT_SLACK_GIB * (1 << 30)),
                                             # a 2nd+ pair's frozen pool beside the pinned cache of the first (B1 PAIRS=3 curve, FP8-STAGING §3.4)
                                             pairs=int(getattr(args, "pairs", 1) or 1))
                 _admit.update({"envelope_retained_bytes_bound": int(asz["retained_bytes_bound"]), "schedule_run_bytes": int(_ssb["run_bytes"]),
@@ -1676,7 +1557,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 adm = ADM.admission(asz, reqs, host_cap, retain=str(getattr(com, "retain", "host")),
                                     max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
                                     envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers))
-                adm["override"] = os.environ.get("VERITY_ADMIT_OVER_BOUND") == "1"
+                adm["override"] = settings.VERITY_ADMIT_OVER_BOUND
                 adm["host_cap_source"] = host_cap_src
                 adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"
                 # [revb M-0254, fp8 x stoch on one tree] a --bounded-staging run pins the NON-excluded families sparsely and opens the excluded
@@ -1704,7 +1585,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # [rev S-r17-09 n2] an uncomputed admission is not an admission: a --retain host run is REFUSED by name (rc 3) unless
                 # VERITY_ADMIT_OVER_BOUND=1; a non-host retention (nothing pinned for the run) records the error and proceeds
                 _host = str(getattr(com, "retain", "host")) == "host" and not bool(getattr(com, "bounded", False))   # a bounded run: the HOST BOUND above governs (M-0254)
-                _ovr = os.environ.get("VERITY_ADMIT_OVER_BOUND") == "1"
+                _ovr = settings.VERITY_ADMIT_OVER_BOUND
                 asz["admission"] = {"admitted": (None if not _host else False), "override": _ovr, "host_cap_source": host_cap_src,
                                     "why": f"admission not computed: {_ae!r}"[:300] + (" -- refused: an uncomputed admission is not an admission (--retain host)" if _host and not _ovr else "")}
                 (out / f"admission_{kind}.json").write_text(json.dumps(asz["admission"], indent=1, default=str) + "\n")
@@ -1718,39 +1599,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
                       f"{wi['largest_tensor_bound'] >> 20} MiB); layout {wi['layout']}; in-place hashing: {wi['in_place_hashing']}", flush=True)
                 (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
-            # [COORD R17-29 planner, RECORD ONLY] the one planner's plan beside the governing admission -- admission_planner_<kind>.json +
-            # its DOMINANT line, printed before the run; it does not refuse or admit tonight (the admission_of_record above governs); every
-            # Commit thereby yields the per-term predicted-vs-measured line (calibrate on verdict.json / footprint.jsonl at the end)
-            try:
-                from verity_vllm.pipeline.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
-                _others = 0
-                with contextlib.suppress(Exception):          # co-tenants: the cgroup's ANON bytes minus this process (file cache is reclaimable)
-                    for _ln in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
-                        if _ln.startswith("anon "):
-                            _others = max(0, int(_ln.split()[1]) - int((rss_kb()[0] or 0) * 1024))
-                _wi = locals().get("wi") or {}
-                _mode = {"retain": getattr(com, "retain", None), "bounded": bool(getattr(com, "bounded", False)),
-                         "retain_exclude": sorted(getattr(com, "retain_exclude", ()) or ()), "open_after_release": bool(getattr(args, "open_after_release", False)),
-                         "openings": int(args.openings), "pairs": int(getattr(args, "pairs", 1) or 1),
-                         "window_bytes": int(_wi.get("window_bytes") or getattr(com, "win_bytes", 0) or (256 << 20)), "slots": int(_wi.get("slots") or 8),
-                         "scratch_bytes": _wi.get("largest_tensor_bound"), "learn_budget_bytes": int(getattr(com, "learn_budget_bytes", 0) or (4 << 30)),
-                         "chunk_bytes": int(getattr(com, "chunk", 256) or 256)}
-                _smp_max = int((sampling or {}).get("max_tokens") or 1)
-                _preqs = [{**r, "max_tokens": int(r.get("max_tokens") or _smp_max)} for r in reqs]
-                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()]
-                _pl = _planner_plan(asz, _preqs, mode=_mode, engine_rss_bytes=int((rss_kb()[0] or 0) * 1024), host_cap_bytes=host_cap,
-                                    host_cap_source=asz.get("host_memory_cap_source"), others_current_bytes=_others,
-                                    max_num_batched_tokens=(asz.get("envelope") or {}).get("max_num_batched_tokens"), calibration=_cal)
-                _pl.pop("_sched", None)
-                _pl["record_only"] = True
-                _pl["governing_admission"] = (asz.get("admission_of_record") or {}).get("governing")
-                _pl["admission_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                (out / f"admission_planner_{kind}.json").write_text(json.dumps(_pl, indent=1, default=str) + "\n")
-                print(f"[delta] PLANNER (R17-29, record only; {_pl['mode_key']}): host bound {_pl['host_bound_mib']} MiB, calibrated {_pl['calibrated_bound_bytes'] >> 20} MiB "
-                      f"(x{_pl['calibration']['factor']:.3f}, {_pl['calibration']['entries']} records), effective cap {((_pl['effective_cap_bytes'] or 0) >> 20) or None} MiB "
-                      f"(co-tenants {_others >> 20} MiB) -> would {_pl['decision']}; DOMINANT: {_pl['dominant']['text']}", flush=True)
-            except Exception as _pe:                          # the planner is on the record tonight, never on the path of the Commit
-                print(f"[delta] PLANNER (record only) not computed: {type(_pe).__name__}: {_pe}", flush=True)
         if args.flip_weight:
             # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it
             _fw = str(args.flip_weight).split(":")
@@ -1909,7 +1757,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
-            t_run0 = time.perf_counter()
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
@@ -1953,10 +1800,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
+                # the run's coins, drawn once its root of record is fixed (the auditor host's session; without one, this process's own)
                 from verity_vllm.commit.challenge import challenge_positions, run_root_of
-
-                sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
+                sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode(), **CC.positions(rc, coins))
                 TL.start("validate.openings", pair=pair)
                 t_o = time.perf_counter()
                 skipped = None
@@ -2078,7 +1924,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _c = {f"r{i}": int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for i, q in enumerate(reqs)}
                         # [R17-1 / F-moe-r17-03] the SAME executed prefix of record binding_record placed the population over (served tokens of
                         # this run + the declared stop rule / LAG): the layouts-only requirement and its per-step composition sizes follow it
-                        from verity_vllm.check import executed_prefix as _EP
+                        from verity_vllm.commit import executed_prefix as _EP
                         _epr_cov = _EP.executed_prefix_of_record(sorted(_c, key=lambda k: int(k[1:])), {_rid_of(_o, str(k)): [int(t) for t in v] for k, v in r["tokens"].items()},
                                                                  caps=_c, eos_of_record=stop_of_record.get("eos"), lag=stop_of_record.get("lag"))
                         _n_exec = {k: int(_epr_cov["requests"][k]["executed_prefix_len"]) for k in _c}
@@ -2243,7 +2089,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"steps {ckc.get('sampled_steps')} {ckc.get('mismatch', [])[:2]} {ckc.get('missing', [])[:2]} {ckc.get('errors', [])[:1]} {ckc.get('error', '')}", flush=True)
                 if served is not None:
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
-                    _chal, _chal_rec = RCN.drawn(args.replay_challenger, rc.run_root, replay_session, args.replay_challenge)
+                    _chal, _chal_rec = CC.replay_challenge(rc, args.replay_challenge)
                     _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge drawn after the run root
                     components.update(_sc2["components"])
                     components["replay_challenge"] = _chal_rec
@@ -2304,6 +2150,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         oc = OC.oracle_compare(_oracle, _bm, _ocr, producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
                                                query_families=OC.query_families_of(required_manifest),   # [revb n-2.14-1] identities per Q(P) family
+                                               runtime_rows=OC.runtime_rows_of(required_manifest if isinstance(required_manifest, dict) else None),
                                                own=frozenset().union(*(getattr(s, "own_names", ()) for s in getattr(com, "sources", ()))))
                         oc["producer_facts"] = oracle_producers[1]
                         oc["value_source"] = _ocr.record()
@@ -2472,6 +2319,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               + (f" ({_delta.get('why')})" if not _delta.get("ok") else ""), flush=True)
     for c in coms.values():
         c.close()
+    if coins is not None and (_why := coins.close()):
+        print(f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {_why}", flush=True)
     TL.start("closure.summary")
     if args.only_arm:
         # [R15 compiled] one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
@@ -2583,7 +2432,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
     RS.into_verdict(_rs, verdict)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
-    AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
     TL.event("process.end", "mark", rc=(3 if fails else 0), s=round(time.time() - _T_PROCESS0, 3), commit_pass=verdict["commit_pass"])
     if fails:

@@ -12,7 +12,7 @@ import pytest
 from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.observe.events import RunHeader, StepLink, StepStart, ViewDesc
 from verity_vllm.observe.fold.fold import FoldError, fold
-from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # noqa: F401  (memory fixture lives there)
+from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # memory fixture lives there
 from tests.observe.test_fold_synthetic import memory  # noqa: F401
 from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Array, Value

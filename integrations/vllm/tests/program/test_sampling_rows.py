@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
+"""`verity.ml.definitions.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
 evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`; on the R16 GPU fixture rows both equal the device's
 served token and the device kernel's masked row.  [R17 stoch, COORD R17-34 (3) lever (a)]  CPU only; the `div.full` model
 (TemperatureScale) needs the in-tree MUFU tables (`rms_relation.tables`) -- those tests skip without them, the noise / log / select tests do not.
@@ -12,9 +12,9 @@ import struct
 import numpy as np
 import pytest
 
-from verity_vllm.program.registry import sampling as SP
-from verity_vllm.program.registry import sampling_twins
-from verity_vllm.program.registry import sampling_rows as SR
+from verity.ml.definitions.registry import sampling as SP
+from verity.ml.definitions.registry import sampling_twins
+from verity.ml.definitions.registry import sampling_rows as SR
 
 HERE = os.path.dirname(__file__)
 FIX = os.path.join(HERE, "data", "topp_split_fixture")
@@ -22,7 +22,7 @@ FIX = os.path.join(HERE, "data", "topp_split_fixture")
 
 def _tables_ok() -> bool:
     try:
-        from verity_vllm.program.registry.prims import DivFullRcp
+        from verity.ml.definitions.registry.prims import DivFullRcp
         DivFullRcp.evaluate(SP.f32_bits(0.8))
         return True
     except Exception:  # noqa: BLE001
@@ -219,7 +219,7 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
     """`__nv_logf` of a negative word and `__nv_log1pf` of a word below -1 (-inf included) are libdevice's invalid -inf + inf:
     `sampling.LOG_INVALID_NAN` on the scalar lane, the rows twin and the float32 transcription alike, whatever the host's default
     NaN. -0 and the negative subnormals (flushed to -0) keep logf's -inf, and log1pf keeps -0 at -0 and -inf at -1."""
-    from verity_vllm.program.kernels import libdevice_sampling as L
+    from verity_vllm.program import libdevice_sampling as L
 
     rng = np.random.default_rng(5)
     edges = [0x80000000, 0x80000001, 0x807FFFFF, 0x80800000, 0xBF7FFFFF, 0xBF800000, 0xBF800001, 0xFF7FFFFF, 0xFF800000]
@@ -250,7 +250,7 @@ PROBE = "art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5"
 
 def _gpu_paths(name: str) -> list:
     """The `_v2` logs: the scalar function and, for logf, the registered `NvLogf_v2`."""
-    from verity_vllm.program.registry import topp_word_gates as TWG
+    from verity.ml.definitions.registry import topp_word_gates as TWG
     return [getattr(SP, f"{name}_gpu")] + ([TWG.NvLogfV2.evaluate] if name == "nv_logf" else [])
 
 
@@ -261,6 +261,7 @@ def test_the_v2_logs_are_the_gpus_words_on_the_probes_edges(name):
         assert got == list(PROBE_EDGES[name].values()), (name, f, [hex(g) for g in got])
 
 
+@pytest.mark.slow
 def test_the_v2_logs_are_the_gpus_words_on_every_probed_input(tmp_path):
     """Every input word of the probe (20,007 for logf, 20,005 for log1pf: the edges, then random negatives and NaNs), against each FTZ
     build's output on the L40S and the H100.  Skipped where the evidence store is unreachable."""
@@ -361,7 +362,7 @@ def _cases(V: int, n: int, seed: int):
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.program.registry import sampling_topp_difftest as D
+    from verity.ml.definitions.registry import sampling_topp_difftest as D
     V = 1024
     for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
         words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),
@@ -379,7 +380,7 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.program.registry import sampling_topp_difftest as D
+    from verity.ml.definitions.registry import sampling_topp_difftest as D
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))
     meta = json.load(open(os.path.join(FIX, "fstoch01_rows.npz.json")))
     first = True

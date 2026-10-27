@@ -5,6 +5,7 @@ library itself on a GPU node (gpu.sh)."""
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import random
 import re
 import sys
@@ -19,7 +20,8 @@ import conformance as cf  # noqa: E402
 import vclib  # noqa: E402
 from verity.ml.commitments import RangeIndexedDomain, hm96  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
-from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_bytes, sha512_row_digest, sha512_row_prefix  # noqa: E402
+from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, row_bytes, sha512_row_digest,  # noqa: E402
+                                           sha512_row_prefix, sha512_row_v2_digest)
 
 HEADER = (LIB / "vc.h").read_text()
 SOURCE = (LIB / "vc.cu").read_text()
@@ -176,6 +178,27 @@ def test_an_empty_trees_records_are_all_outside_and_unwritten_ones_fail():
 def test_parse_openings_refuses_a_buffer_of_another_size():
     with pytest.raises(ValueError):
         vclib.parse_openings(bytes(vclib.OPEN_HEAD), 2, 1)
+
+
+@pytest.mark.parametrize("case", cf.SV.CASES, ids=[c[0] for c in cf.SV.CASES])
+def test_splitks_vectors_are_row_v2_over_each_chunk_leafs_bytes(case):
+    """What case_splitk's device commit hashes, `sha512/row/v2` over a chunk leaf's raw K / n + 4 bytes at
+    vclib.chunk_rows' row bits, is each pinned leaf's words_sha512 input and row digest (credit's word-level
+    `registered.row_digest`), so the GPU's roots are SPLITK's at the vectors' leaves and nothing else."""
+    name, _value, k, count, _nonce, _windowed = case
+    v = cf.splitk_vectors()[name]
+    leaves = [leaf for r in cf.SV.rows(name, k, count) for leaf in cf.SV.Z.chunk_leaves(r, k)]
+    spec, _stride = vclib.chunk_rows(bytes(64), k, v["n"])
+    assert len(leaves) == v["leaves"] == len(v["leaf"]) and {8 * len(x) for x in leaves} == {spec.row_bits}
+    assert [hashlib.sha512(x).hexdigest() for x in leaves] == [e["words_sha512"] for e in v["leaf"]]
+    assert [sha512_row_v2_digest(x, spec.row_bits).hex() for x in leaves] == [e["row_digest"] for e in v["leaf"]]
+
+
+def test_chunk_rows_spec_is_row_v2_of_a_chunk_leaf():
+    spec, stride = vclib.chunk_rows(bytes(64), 14336, 4, ("chacha64", bytes(32), cf.SV.A_NONCE))
+    assert (spec.row_bits, stride, spec.schema) == (8 * 3588, 3600, b"hm96-sha512/row/v2")
+    assert spec.salt_source == vclib.SALT_CHACHA64 and spec.salt_nonce == cf.SV.A_NONCE
+    assert vclib.chunk_rows(bytes(64), 4096, 1)[1] == 4112
 
 
 def test_row_bytes_are_what_the_served_kernel_hashes():

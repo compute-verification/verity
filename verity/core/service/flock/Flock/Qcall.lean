@@ -52,12 +52,40 @@ structure Gates where
   recomputed : Array (Nat × Nat)
   /-- computing gates before each local gate: `pre[g]` for `g ≤ n` -/
   pre : Array Nat
+  /-- every local gate's last reader, whatever its kind (`n` when returned, -1 unread): what a unit commits beyond its
+  computing gates (`SampledProofs.Partition.committedBits`) -/
+  readTo : Array Int := #[]
   deriving Inhabited
 
 def Gates.nc (G : Gates) : Nat := G.keep.size
 
-/-- The gates of one activation of definition `d` (core's `CallGates`). -/
-def gates (P : Prog) (d : Nat) : V Gates := do
+/-- `reads` after gate `q`'s operands `os`: each operand once, in first-read order, unless `skip`ped, as `(f o, q)`. -/
+def dedupReads (os : Array Int) (skip : Int → Bool) (f : Int → Nat) (q : Nat) (reads : Array (Nat × Nat)) :
+    Array (Nat × Nat) :=
+  (os.foldl (fun (s : Array (Nat × Nat) × Std.HashSet Int) o =>
+    if s.2.contains o || skip o then s else (s.1.push (f o, q), s.2.insert o)) (reads, {})).1
+
+/-- `dedupReads` as `gates` first wrote it, the operands read so far in an array searched per operand: quadratic in a gate's
+fan-in, kept as the reference `dedupReads` is proved equal to (`dedupReads_eq`). -/
+def dedupReadsLoop (os : Array Int) (skip : Int → Bool) (f : Int → Nat) (q : Nat) (reads : Array (Nat × Nat)) :
+    Array (Nat × Nat) := Id.run do
+  let mut reads := reads
+  let mut got : Array Int := #[]
+  for o in os do
+    if got.contains o || skip o then continue
+    got := got.push o
+    reads := reads.push (f o, q)
+  return reads
+
+/-- `Gates.readTo` from the activation's operands (relative to its first gate) and its returned gates. -/
+def readToOf (n lo : Nat) (ops : Array (Array Int)) (ret : Array Nat) : Array Int :=
+  let r := (List.range n).foldl (fun r j => ops[j]!.foldl (fun r o => if o ≥ 0 then r.set! o.toNat (j : Int) else r) r)
+    (Array.replicate n (-1 : Int))
+  ret.foldl (fun r g => if lo ≤ g && g < lo + n then r.set! (g - lo) (n : Int) else r) r
+
+/-- The gates of one activation of definition `d` (core's `CallGates`), each gate's reads deduplicated by `dedup`. -/
+def gatesWith (dedup : Array Int → (Int → Bool) → (Int → Nat) → Nat → Array (Nat × Nat) → Array (Nat × Nat)) (P : Prog)
+    (d : Nat) : V Gates := do
   let defn := P.defs[d]!
   let lo := defn.paramLeaves
   let n := defn.gates
@@ -145,14 +173,60 @@ def gates (P : Prog) (d : Nat) : V Gates := do
       first := first.insert key j
       tok := tok.push j
     let q := idx[j]!.toNat
-    let mut got : Array Int := #[]
-    for o in ops[j]! do
-      if got.contains o || (o ≥ 0 && !computing[o.toNat]!) then continue
-      got := got.push o
-      reads := reads.push (if o < 0 then nc + (lo + o).toNat else idx[o.toNat]!.toNat, q)
+    reads := dedup ops[j]! (fun o => o ≥ 0 && !computing[o.toNat]!)
+      (fun o => if o < 0 then nc + (lo + o).toNat else idx[o.toNat]!.toNat) q reads
   let pre := (Array.range n).foldl (fun (acc : Array Nat) j => acc.push (acc.back! + if computing[j]! then 1 else 0)) #[0]
   return { n, inputs := lo, computing, width, prim := prim.map fun p => (P.defs[p]!).key, last, keep, idx, reads, outputs,
-           recomputed, pre }
+           recomputed, pre, readTo := readToOf n lo ops retGates }
+
+/-- The gates of one activation of definition `d` (core's `CallGates`). -/
+def gates (P : Prog) (d : Nat) : V Gates := gatesWith dedupReads P d
+
+/-- `gates` with each gate's reads deduplicated as first written (`dedupReadsLoop`): the reference `gates` equals
+(`gates_ref`). -/
+def gatesRef (P : Prog) (d : Nat) : V Gates := gatesWith dedupReadsLoop P d
+
+theorem dedupReads_eq : dedupReads = dedupReadsLoop := by
+  funext os skip f q reads
+  have loop : dedupReadsLoop os skip f q reads = (os.foldl (fun (s : Array (Nat × Nat) × Array Int) o =>
+      if s.2.contains o || skip o then s else (s.1.push (f o, q), s.2.push o)) (reads, #[])).1 := by
+    unfold dedupReadsLoop
+    simp only [Id.run]
+    have h : (fun o (s : Array (Nat × Nat) × Array Int) =>
+        if (s.snd.contains o || skip o) = true then (pure (ForInStep.yield (s.fst, s.snd)) : Id _)
+        else pure (ForInStep.yield (s.fst.push (f o, q), s.snd.push o))) =
+        fun o s => pure (ForInStep.yield (if s.2.contains o || skip o then s else (s.1.push (f o, q), s.2.push o))) := by
+      funext o s
+      split <;> simp_all
+    rw [h, Array.forIn_pure_yield_eq_foldl]
+    rfl
+  rw [loop]
+  unfold dedupReads
+  rw [← Array.foldl_toList, ← Array.foldl_toList]
+  suffices h : ∀ (l : List Int) (hs : Std.HashSet Int) (arr : Array Int) (r : Array (Nat × Nat)),
+      (∀ x, hs.contains x = arr.contains x) →
+      (l.foldl (fun (s : Array (Nat × Nat) × Std.HashSet Int) o =>
+        if s.2.contains o || skip o then s else (s.1.push (f o, q), s.2.insert o)) (r, hs)).1 =
+      (l.foldl (fun (s : Array (Nat × Nat) × Array Int) o =>
+        if s.2.contains o || skip o then s else (s.1.push (f o, q), s.2.push o)) (r, arr)).1 by
+    exact h _ _ _ _ (by simp)
+  intro l
+  induction l with
+  | nil => intro hs arr r _; rfl
+  | cons o l ih =>
+    intro hs arr r hc
+    simp only [List.foldl_cons]
+    rw [hc o]
+    split
+    · exact ih _ _ _ hc
+    · apply ih
+      intro x
+      have e : (o == x) = (x == o) := by rw [Bool.eq_iff_iff]; simp only [beq_iff_eq]; exact eq_comm
+      rw [Std.HashSet.contains_insert, Array.contains_push, hc x, Bool.or_comm, e]
+
+theorem gates_ref : gates = gatesRef := by
+  funext P d
+  simp only [gates, gatesRef, dedupReads_eq]
 
 /-- The first computing gate wider than X bits (local), or none. -/
 def Gates.widest (G : Gates) (X : Nat) : Option Nat := G.keep.find? (G.width[·]! > X)

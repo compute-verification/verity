@@ -59,14 +59,6 @@ CAP = 14400
 BOOLEAN_DERIVE_SCALE = 4
 
 
-def _tail(path: str, n: int = 300) -> str:
-    try:
-        lines = open(path, errors="replace").read().splitlines()
-    except OSError:
-        return ""
-    return (lines[-1] if lines else "")[:n]
-
-
 def _stamp() -> str:
     return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
@@ -483,7 +475,7 @@ class SingleRow(Row):
             rcs = self.run_tl("match.stoch_recompute", to_c, f"{d}/match_stoch.log",
                               self.cli("stoch-recompute", "--run", f"{d}/match", "--workload", self.wl, "--build", d, "--out", f"{d}/match_stoch.json",
                                        py=self.py312))
-            self.log(f"stoch value check rc={rcs}: {_tail(f'{d}/match_stoch.log')}")
+            self.log(f"stoch value check rc={rcs}: {R.tail(f'{d}/match_stoch.log')}")
         wall = int(time.time()) - t0
         gm = 97 if gm_rc is None else gm_rc
         self.tl("match.summary", "start")
@@ -604,7 +596,7 @@ class SingleRow(Row):
             slug, why = R.manifest_not_of_record(R.load_json(f"{d}/manifest.json"), self.program_digest(), self.ck_)
             if not why:
                 man = f"{d}/manifest.json"
-                self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
+                self.log(f"required-value manifest of record: {man} (built at the Build stage: {R.tail(f'{d}/manifest.log', 200)})")
             else:
                 prev = f"{d}/manifest.{slug}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
@@ -656,7 +648,7 @@ class SingleRow(Row):
                 rc = subprocess.run(self.cli("weights-of-record", "--program-dir", pd, "--checkpoint-dir", ck, "--out", wor,
                                              *([f"--supersedes={prev}"] if prev else [])),
                                     stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
-            last = _tail(f"{d}/weights_of_record.log", 10**6)
+            last = R.tail(f"{d}/weights_of_record.log", 10**6)
             if rc == 0:
                 self.tl(f"{stage}.weights_of_record", "end", ("rc", 0))
                 self.log(f"weights of record: {last}")
@@ -692,7 +684,7 @@ class SingleRow(Row):
             self.log("manifest of record VERIFIED (manifest_verify: rebuilt by the query path from this attempt's Program x workload == used; commit/manifest_verify.json)")
         else:
             self.tl("validate.manifest_verify", "end", ("rc", 1))
-            self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
+            self.log(f"manifest of record VERIFY FAILED: {R.tail(f'{d}/manifest_verify.log', 200)}")
 
     def commit_prepare(self) -> tuple[int, list[str], str]:
         """The Commit stage up to its command line -> (its timeout, its command, its manifest of record or "")."""

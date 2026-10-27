@@ -58,6 +58,9 @@ pub struct IrUnitNet {
     /// A cut lowering's cut structure (its final `CUT <json>` line: `words`, `tail`, per-unit `in` / `out` ports), covered by
     /// `sha256` and so by the pin (red-team-flock-2 IR4).
     pub cut: Option<serde_json::Value>,
+    /// A net committed at a position map (the Lean `Net.ofRowsAt`, a templated unit's `Tmpl.posMap`; its final
+    /// `ORDER <json>` line): logical row `x` is row `order[x]`, so the rows are evaluated in that order, not by column.
+    pub order: Option<Vec<usize>>,
     /// `a` and `b` as [`IrUnitNet::eval64_flat`] reads them, built on its first call: `a` and `b` must not change after it.
     pub flat: FlatCache,
 }
@@ -85,7 +88,7 @@ impl Clone for FlatCache {
 impl Flat {
     fn of(net: &IrUnitNet) -> Option<Flat> {
         let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
-        if u == 0 || cp != u - 1 || first > cp || net.a[cp] != [cp] || net.b[cp] != [cp] {
+        if u == 0 || cp != u - 1 || first > cp || net.a[cp] != [cp] || net.b[cp] != [cp] || net.order.is_some() {
             return None;
         }
         const CHUNK: usize = 1 << 14;
@@ -211,14 +214,25 @@ impl IrUnitNet {
         };
         let leaves = tagged("LEAVES ");
         let cut = tagged("CUT ");
-        assert!(rest.next().is_none(), "netlist text after the rows that is not its LEAVES and CUT lines, in that order");
+        let order: Option<Vec<usize>> = tagged("ORDER ").map(|v| serde_json::from_value(v).expect("the ORDER line is not a list of columns"));
+        assert!(rest.next().is_none(), "netlist text after the rows that is not its LEAVES, CUT and ORDER lines, in that order");
+        if let Some(o) = &order {
+            let first = in_words * WORD;
+            let mut seen = vec![false; useful];
+            assert!(o.len() > first && o.last() == Some(&const_pos), "ORDER: the constant is not the last logical row");
+            for (x, &p) in o.iter().enumerate() {
+                assert!(p < useful && !std::mem::replace(&mut seen[p], true), "ORDER: column {p} is placed twice or past the rows");
+                assert!(x >= first || p == x, "ORDER: input row {x} moves");
+            }
+            assert!(seen.iter().enumerate().all(|(p, &s)| s || (a[p].is_empty() && b[p].is_empty())), "ORDER: an unplaced row is not empty");
+        }
         let unit_log = (useful.next_power_of_two().trailing_zeros() as usize).max(7);
         // D11: an output group lies inside its unit's slot, so a region at its column stays in the slot
         if let Some(g) = out_groups.iter().find(|g| g.col + g.words > (1 << unit_log) / WORD) {
             panic!("flock-ir-unit/v2: output group at word {} ({} words) overruns its unit's {} words (D11)", g.col, g.words, (1usize << unit_log) / WORD);
         }
         IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log, sha256,
-                    leaves, cut, flat: FlatCache::default() }
+                    leaves, cut, order, flat: FlatCache::default() }
     }
 
     /// Whether column `i` is an input column (its row is `A = B = [i]`).
@@ -252,7 +266,11 @@ impl IrUnitNet {
             }
         }
         z[self.const_pos] = !0;
-        for i in first..u {
+        let rows: Box<dyn Iterator<Item = usize> + '_> = match &self.order {
+            Some(o) => Box::new(o[first..].iter().copied()),
+            None => Box::new(first..u),
+        };
+        for i in rows {
             if i == self.const_pos {
                 continue;
             }
@@ -823,7 +841,42 @@ mod tests {
         }
         IrUnitNet { name: "t".into(), useful, const_pos: cp, in_groups: vec![], out_groups: vec![], in_words, out_cols: vec![], a, b,
                     unit_log: useful.next_power_of_two().trailing_zeros().max(7) as usize, sha256: [0; 32], leaves: None, cut: None,
-                    flat: FlatCache::default() }
+                    order: None, flat: FlatCache::default() }
+    }
+
+    /// `net` committed at a position map (`Net.ofRowsAt`): the computed rows scattered over twice their span, the constant
+    /// last, every reference read through the map.
+    fn placed(net: &IrUnitNet) -> IrUnitNet {
+        let (first, cp) = (net.in_words * WORD, net.const_pos);
+        let span = 2 * (cp - first) + 1;
+        let pos: Vec<usize> = (0..=cp).map(|x| if x < first { x } else if x == cp { first + span } else { first + (x - first) * 7919 % span }).collect();
+        let size = first + span + 1;
+        let (mut a, mut b) = (vec![Vec::new(); size], vec![Vec::new(); size]);
+        for x in 0..=cp {
+            a[pos[x]] = net.a[x].iter().map(|&c| pos[c]).collect();
+            b[pos[x]] = net.b[x].iter().map(|&c| pos[c]).collect();
+        }
+        IrUnitNet { useful: size, const_pos: size - 1, a, b, unit_log: size.next_power_of_two().trailing_zeros().max(7) as usize,
+                    order: Some(pos), ..net.clone() }
+    }
+
+    #[test]
+    fn a_placed_net_evaluates_as_its_logical_rows_moved() {
+        for (seed, in_words, useful) in [(5u64, 1usize, 300usize), (0x51ed, 2, 3000)] {
+            let net = random_net(seed, in_words, useful);
+            let at = placed(&net);
+            let pos = at.order.clone().unwrap();
+            let input = |col: usize| (col as u64 + 3).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+            let (z, a, b) = net.eval64(input);
+            let (pz, pa, pb) = at.eval64_flat(input);
+            assert!(at.flat.0.get().is_some_and(|f| f.is_none()), "a placed net took the one-pass path");
+            for x in 0..net.useful {
+                assert_eq!((pz[pos[x]], pa[pos[x]], pb[pos[x]]), (z[x], a[x], b[x]), "net {seed}: logical row {x}");
+            }
+            let mut gap = vec![true; at.useful];
+            pos.iter().for_each(|&p| gap[p] = false);
+            assert!((0..at.useful).filter(|&p| gap[p]).all(|p| (pz[p], pa[p], pb[p]) == (0, 0, 0)), "net {seed}: a gap row is not zero");
+        }
     }
 
     #[test]

@@ -8,7 +8,8 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
@@ -17,7 +18,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
                                                                    gemm_pins_for, lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.registry.dsa_norm import check_block
+from verity.ml.definitions.registry.dsa_norm import check_block
 
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------

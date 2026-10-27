@@ -33,8 +33,8 @@ from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.program.registry.prims import BF16, I32  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
+from verity.ml.definitions.registry.prims import BF16, I32  # noqa: E402
 from verity.ml.circuits.refs import Coll, concat  # noqa: E402
 from verity.ml.circuits.types import Array  # noqa: E402
 
@@ -633,7 +633,7 @@ def _miswired_serve(kind: str):
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
     from verity.ml.circuits.defs import CompositeDefinition
-    from verity_vllm.program.registry.b1 import Embedding, Final, LayerPost, LayerPre, kv_type
+    from verity.ml.definitions.registry.b1 import Embedding, Final, LayerPost, LayerPre, kv_type
     from verity.ml.circuits.refs import tuple_of  # noqa: F401
     C, LP = TINY, 2
 

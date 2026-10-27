@@ -1,9 +1,4 @@
-import Proofs.Flock.Soundness.Accounting.Bound
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.GCongr
+import Definitions.Flock.Accounting.Fast100
 
 /-!
 # The bound for `fast100` run twice on one root
@@ -31,9 +26,6 @@ open Real
 
 /-! ## Rational upper bounds, term by term -/
 
-/-- A rational upper bound on `√(2^-r)`: exact for even `r`, `√(1/2) ≤ 0.70710679` for odd. -/
-def sqrtUp (r : ℕ) : ℚ := (if r % 2 = 0 then 1 else 70710679 / 10 ^ 8) * (1 / 2) ^ (r / 2)
-
 theorem sqrtUp_nonneg (r : ℕ) : 0 ≤ sqrtUp r := by
   unfold sqrtUp; split_ifs <;> positivity
 
@@ -44,20 +36,12 @@ theorem sqrt_rate_le (l : Level) (hr : l.logInvRate ≤ 7) :
   generalize l.logInvRate = r at hr ⊢
   interval_cases r <;> norm_num [sqrtUp]
 
-/-- `(√ρ + η)^Q`, rationally. -/
-def queryUp (l : Level) : ℚ := (sqrtUp l.logInvRate + 1 / 200) ^ l.queries
-
 theorem queryError_le (l : Level) (hr : l.logInvRate ≤ 7) :
     l.queryError ≤ (queryUp l : ℝ) := by
   unfold Level.queryError queryUp eta
   push_cast
   gcongr
   exact sqrt_rate_le l hr
-
-/-- A closed-form upper bound on the MCA numerator `a` (`Level.mcaA`) for rates `2^-1 … 2^-7`. -/
-def mcaUp (l : Level) : ℚ :=
-  (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / 3 * 2 ^ (3 * l.logInvRate + 2 + l.logCols)
-    + 401 / 2 * 2 ^ (l.logInvRate + 1)
 
 theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols) :
     0 ≤ l.mcaA ∧ l.mcaA ≤ (mcaUp l : ℝ) := by
@@ -185,10 +169,6 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
 theorem mcaA_le (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols) :
     l.mcaA ≤ (mcaUp l : ℝ) := (mcaA_bounds l hr hc).2
 
-/-- The folding rounds of a level, rationally. -/
-def foldUp (l : Level) (L : ℕ) : ℚ :=
-  l.lanes * (2 * L) / 2 ^ 256 + (2 ^ l.lanes - 1) * mcaUp l / 2 ^ 256
-
 theorem foldError_le (l : Level) (L : ℕ) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols) :
     l.foldError L ≤ (foldUp l L : ℝ) := by
   unfold Level.foldError foldUp qK
@@ -199,33 +179,8 @@ theorem foldError_le (l : Level) (L : ℕ) (hr : l.logInvRate ≤ 7) (hc : 1 ≤
     linarith
   gcongr
 
-/-- Unordered pairs, rationally. -/
-def pairsUp (L : ℕ) : ℚ := (L : ℚ) * ((L : ℚ) - 1) / 2
-
 theorem pairs_eq (L : ℕ) : pairs L = (pairsUp L : ℝ) := by
   unfold pairs pairsUp; push_cast; ring
-
-def midUp (l l' : Level) : ℚ :=
-  foldUp l (max l.listBound l'.listBound)
-    + pairsUp l'.listBound * (((l'.logCols + l'.lanes : ℕ) : ℚ) / 2 ^ 128) ^ 2
-    + 2 * l'.listBound / 2 ^ 128
-    + queryUp l
-    + l'.listBound * ceilLog2 l.queries / 2 ^ 128
-    + l'.listBound / 2 ^ 128
-
-def lastUp (l : Level) : ℚ :=
-  foldUp l l.listBound + queryUp l + ceilLog2 l.queries / 2 ^ 128 + 1 / 2 ^ 128
-
-def ligUp : List Level → ℚ
-  | [] => 0
-  | [l] => lastUp l
-  | l :: l' :: rest => midUp l l' + ligUp (l' :: rest)
-
-/-- The level conditions the rational bounds need: rates `2^-1 … 2^-7`, at least two message
-columns. Every `fast100` level satisfies them (checked below). -/
-def Level.Ok (l : Level) : Prop := 1 ≤ l.logInvRate ∧ l.logInvRate ≤ 7 ∧ 1 ≤ l.logCols
-
-instance instDecidableOk (l : Level) : Decidable l.Ok := by unfold Level.Ok; infer_instance
 
 theorem midLevelError_le (l l' : Level) (hl : l.Ok) :
     midLevelError l l' ≤ (midUp l l' : ℝ) := by
@@ -259,15 +214,6 @@ theorem ligeritoError_le : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) →
 
 /-! ## The statement ranges -/
 
-/-- The statement shapes covered: at most `2^27` witness bits per block, 1024 public regions,
-64 coordinates per link point. -/
-def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
-
-/-- The worst-case numerator of `piopError` over the covered statements. -/
-def piopNumMax (m L₀ : ℕ) : ℕ :=
-  (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
-    + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀
-
 theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
     piopError m st.kLog st.nClaims L₀ ≤ ((piopNumMax m L₀ : ℚ) / 2 ^ 128 : ℚ) := by
   obtain ⟨hk, hR, _⟩ := hst
@@ -282,12 +228,6 @@ theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
       + L₀ * (m - st.kLog) + L₀ * (2 + 2 * (st.kLog - 6) + 63) + L₀ * (7 * st.nClaims + 1) + L₀
       ≤ (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
       + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀)
-
-/-- The rational bound on one rep over the covered statements. -/
-def repUp (s : Schedule) : ℚ := (piopNumMax s.m s.listBound₀ : ℚ) / 2 ^ 128 + ligUp s.levels
-
-/-- The rational bound on the link term over the covered statements. -/
-def linkUp (s : Schedule) : ℚ := s.listBound₀ * 1024 * (64 / 2 ^ 128) ^ 2
 
 theorem repError_le (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : Stmt) (hst : st.InRange) :
     repError s st ≤ (repUp s : ℝ) := by

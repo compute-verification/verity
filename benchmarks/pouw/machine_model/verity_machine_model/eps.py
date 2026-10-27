@@ -6,7 +6,7 @@ verified, has the core ε, Corollary D3's
 
 ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
 (LEDGER, note:20261017T1723Z-draft-ledger; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
-of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
+of the proof block and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp
   instructions of class k, and a program takes at least its largest row.
@@ -21,8 +21,9 @@ of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fra
   lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction)
   when every class of its mix has a uniform form there (the device's `uniform_forms`; sm_90's datapath has no FFMA).
   A design's `[fold_routes]` are its fold's other bit-exact programs (the check reads the fold's result, not its
-  program): the cheater and ♭ fold on lanes by any mix of them and the design's fold, honest by the design's fold (its
-  kernel's). The cheater minimizes
+  program): the cheater folds on lanes by any mix of them and the design's fold, ♭ by the built ones alone (its
+  `counted` routes, which no run has built, are the cheater's only), honest by the design's fold (its kernel's). The
+  cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
   ε_machine = 1 − T_cheat/T_honest, and against honest as built (the tensor route alone) beside it. The cheater's
@@ -49,12 +50,12 @@ of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fra
 - **ε_skip** is SKIP's calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
-- **ε_adapt** is the proof unit's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
+- **ε_adapt** is the proof block's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
   when σ is drawn after the commitment and before evaluation. A design names its unit (`unit`).
 
 A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (decision
 79's, with the names tonight's notes and data used as `aliases`), the noise on each product (`[noise]`, a leaf of
-NOISE for each of PRODUCTS), the fold, the filler, the proof unit, the coins and its perplexity arm (`ppl`, a spec in
+NOISE for each of PRODUCTS), the fold, the filler, the proof block, the coins and its perplexity arm (`ppl`, a spec in
 benchmarks/ppl/specs/), with the ε terms' accounting beside them.
 
 - **The MMA forms** are census kinds, each priced on every row by its own line; a row a form has no line on (VF3q-16's
@@ -253,16 +254,21 @@ class Design:
     ppl: str = ""                # its perplexity arm, benchmarks/ppl/specs/PPL.toml; "": none on main
     noise: dict[str, str] | None = None   # each of PRODUCTS: a leaf of NOISE
     sums: str = "vsum"           # a peel's sums kernel, a key of SUMS
-    unit: str = ""               # the proof unit, a table of data/adapt.toml
+    unit: str = ""               # the proof block, a table of data/adapt.toml
     coin_bits: int = 1           # a noised entry's coin on {0, …, 2^coin_bits − 1}
     coins_source: str = ""
     fold_routes: dict[str, dict[str, float]] = field(default_factory=dict)   # the fold's other bit-exact programs,
                                                                              # lane instructions a word (the cheater's
-                                                                             # and ♭'s, not honest's)
+                                                                             # and, the built ones, ♭'s; not honest's)
     fold_routes_source: str = ""
+    counted_routes: tuple[str, ...] = ()     # the fold routes no run has built: the cheater's alone, never ♭'s
 
     def fold_cost(self) -> float:
         return sum(self.fold.values())
+
+    def built_routes(self) -> dict[str, dict[str, float]]:
+        """The fold routes ♭ may fold by: every one a run has built, at its built (or measured) cost."""
+        return {n: r for n, r in self.fold_routes.items() if n not in self.counted_routes}
 
     def with_fold_cost(self, r: float) -> Design:
         """The design with its fold scaled to r lane instructions a word, in the same mix of classes, and each of its
@@ -361,7 +367,7 @@ def design(name: str, data: Path = DATA) -> Design:
     if t.get("sums", "vsum") not in SUMS:
         raise SystemExit(f"{name}: sums {t['sums']!r} is not a peel sums kernel ({', '.join(SUMS)})")
     if t["unit"] not in adapts(data):
-        raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof unit of adapt.toml ({', '.join(adapts(data))})")
+        raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof block of adapt.toml ({', '.join(adapts(data))})")
     coins = t["coins"]
     index_bits = t.get("table", {}).get("bits", coins["bits"])
     if index_bits < coins["bits"]:
@@ -369,9 +375,13 @@ def design(name: str, data: Path = DATA) -> Design:
                          "on the indexed operand has at least the coins' bits")
     fr = dict(t.get("fold_routes", {}))
     fr_source = fr.pop("source", "")
+    counted = tuple(fr.pop("counted", ()))
     if (fr and not fr_source) or not all(isinstance(v, dict) and v for v in fr.values()):
         raise SystemExit(f"{name}: [fold_routes] names each other bit-exact program of the fold as a table of lane "
                          "instructions a word by class, with one `source`")
+    if set(counted) - set(fr) or len(set(counted)) != len(counted):
+        raise SystemExit(f"{name}: [fold_routes] `counted` lists the routes no run has built, each once, by their names "
+                         f"in the table ({sorted(set(counted) - set(fr))} aren't)")
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
                   fold_name=fold.pop("name"), fold=fold, filler=(filler,) if filler.per_word else (),
                   skip=_parts(t.get("skip", {})),
@@ -385,7 +395,7 @@ def design(name: str, data: Path = DATA) -> Design:
                   aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
                   sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"],
                   fold_routes={k: {c: float(x) for c, x in v.items()} for k, v in fr.items()},
-                  fold_routes_source=fr_source)
+                  fold_routes_source=fr_source, counted_routes=counted)
 
 
 def profiles(data: Path = DATA) -> list[str]:
@@ -416,7 +426,7 @@ def table(data: Path = DATA, q: float | None = None, l2: float | None = None, nb
 
 @dataclass(frozen=True)
 class Adapt:
-    """ε_adapt for a proof unit (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order,
+    """ε_adapt for a proof block (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order,
     with the unit's selection rule."""
     name: str
     eps: float
@@ -425,7 +435,7 @@ class Adapt:
 
 
 def _adapt_file(data: Path) -> Path:
-    """A proof unit's ε_adapt doesn't depend on the device: a device directory reads data/adapt.toml."""
+    """A proof block's ε_adapt doesn't depend on the device: a device directory reads data/adapt.toml."""
     p = data / "adapt.toml"
     return p if p.is_file() else DATA / "adapt.toml"
 
@@ -433,7 +443,7 @@ def _adapt_file(data: Path) -> Path:
 def adapt(name: str, data: Path = DATA) -> Adapt:
     t = tomllib.loads(_adapt_file(data).read_text())
     if name not in t or not isinstance(t[name], dict):
-        raise SystemExit(f"no proof unit {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
+        raise SystemExit(f"no proof block {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
     return Adapt(name=name, eps=t[name]["eps"], source=t[name]["source"], selection=t[name].get("selection", ""))
 
 
@@ -552,10 +562,10 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     MMA (default honest's), its MMA on any of `forms` (default honest's own) at that form's instructions a word. q None
     closes the lane route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's
     baseline program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes
-    on an L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route. The cheater, and ♭
-    (`fold_menu`), fold a word on lanes by the design's fold or any of its `fold_routes`, in any mix (the words folded
-    by each route, after the rest: [z_j]), and the cheater alone on the uniform datapath at the least of their
-    instruction counts; honest folds by the design's fold."""
+    on an L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route. The cheater folds a
+    word on lanes by the design's fold or any of its `fold_routes`, in any mix (the words folded by each route, after
+    the rest: [z_j]), and alone on the uniform datapath at the least of their instruction counts; ♭ (`fold_menu`) folds
+    the same way by the built ones alone (`Design.built_routes`), and honest by the design's fold."""
     uni = UNI in pi.c
     if not uni:
         q_uniform = None
@@ -578,7 +588,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     fl = [{k: pw * v / sum(f.mix.values()) / LANES for k, v in f.mix.items()} for f, pw in fillers]
     S = list(pi.cuda)
     nf = len(fillers)
-    menu = d.fold_routes if cheat or fold_menu else {}
+    menu = d.fold_routes if cheat else d.built_routes() if fold_menu else {}
     fold_u = min((d.fold_cost(), *(sum(r.values()) for r in menu.values())))
     nv0 = 8 + len(S) + 3 * nf + len(forms)
     nv = nv0 + len(menu)
@@ -610,8 +620,11 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             a[i] = (r.get(k, 0.0) - d.fold.get(k, 0.0)) / LANES
         return a
 
-    cols = {k: col(k) for k in {k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
-            | {k for f in fl for k in f} | ({UNI} if uni else set()) | {k for r in menu.values() for k in r}}
+    # Sorted: each facet's row sums the classes in this order, and in a set's (string-hash) order the last bits, and on a
+    # tie face the LP's vertex, would vary from one interpreter to the next.
+    cols = {k: col(k) for k in sorted({k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
+                                      | {k for f in fl for k in f} | ({UNI} if uni else set())
+                                      | {k for r in menu.values() for k in r})}
     missing = set(cols) - set(pi.c)
     if missing:
         raise SystemExit(f"{pi.vector}: no census line for {', '.join(sorted(missing))}")
@@ -753,8 +766,9 @@ def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
 def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H",
           table: Table | None = None) -> Setup:
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
-    the tensor route at the noise's φ_del, the fold at the cheapest mix of the design's fold and its `fold_routes` on
-    Π (the check reads the fold's result, not its program), the fillers on their own routes and the baseline program,
+    the tensor route at the noise's φ_del, the fold at the cheapest mix of the design's fold and its built
+    `fold_routes` on Π (the check reads the fold's result, not its program; a counted route is the cheater's alone),
+    the fillers on their own routes and the baseline program,
     with no overhead. `table` opens the cheater's table route, priced for the design's `index_bits`. The cheater writes
     on any MMA form Π prices, honest on its own."""
     table = d.table(table)
@@ -803,7 +817,7 @@ class Eps:
     deficit: float                   # d̄
     luck: float                      # (T_cheat − T_lucky)/T_baseline
     clock: float
-    adapt: Adapt | None = None       # the proof unit's ε_adapt; None charges none
+    adapt: Adapt | None = None       # the proof block's ε_adapt; None charges none
 
     @property
     def route(self) -> float:
@@ -829,7 +843,7 @@ class Eps:
         return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
 
     def sample(self) -> float:
-        """ε_sample = ε_adapt, the sampling compiler's: the proof unit's and its selection rule's, 0 at 100% sampling.
+        """ε_sample = ε_adapt, the sampling compiler's: the proof block's and its selection rule's, 0 at 100% sampling.
         It is reported beside `core`, never inside it."""
         return self.adapt.eps if self.adapt else 0.0
 
@@ -848,7 +862,7 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
         lanes: bool | None = None, uniform: bool | None = None, q_uniform: float | None = None,
         table: Table | None = None, adapt: Adapt | None = None) -> Eps:
     """Under the model and floor credits ε_sched and ε_clock leave ε (honest's time above the credit is in γ,
-    `credit_ratio`). `table` opens the cheater's table route; `adapt` charges a proof unit's ε_adapt."""
+    `credit_ratio`). `table` opens the cheater's table route; `adapt` charges a proof block's ε_adapt."""
     s = setup(d, pi, data, operands, credit, table)
     run = replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler))   # honest runs every filler, credited or not
     hs = setup(run, pi, data, "free") if credit == "floor" or any(f.p >= 1 for f in d.filler) else s

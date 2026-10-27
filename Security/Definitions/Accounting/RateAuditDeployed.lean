@@ -5,7 +5,7 @@ import Definitions.Accounting.RateAuditHorizon
 /-!
 # The remote rate audit as deployed: one game (trusted)
 
-The game the composed guarantee (`Models/Accounting/Guarantees/RateAuditDeployed.lean`) is about: a session of `n`
+The game the composed guarantee (`Definitions/Accounting/Guarantees/RateAuditDeployed.lean`) is about: a session of `n`
 windows on one store, each window `P` chained passes seeded by Fiat–Shamir, which the prover may grind, closed by one
 pooled draw of `d` openings. It puts together what the pieces state separately:
 
@@ -168,9 +168,10 @@ def correct (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Ora
 
 end PIDevice
 
-/-- A deployed window: `P` chained passes whose roots the prover grinds, as `GrindChain`, each pass's device a
-`PIDevice`. Pass `j`'s device and its `G` candidate roots are any function of the earlier passes' coins (the candidates
-also of the store), and the kept candidate any function of pass `j`'s whole oracle family. -/
+/-- A deployed window: `P` chained passes whose roots the prover grinds against their Fiat–Shamir seeds
+(`fiat-shamir`), as `GrindChain`, each pass's device a `PIDevice`. Pass `j`'s device and its `G` candidate roots are
+any function of the earlier passes' coins (the candidates also of the store), and the kept candidate any function of
+pass `j`'s whole oracle family. -/
 structure DeployedWindow (P N b h ρ S L q r s G : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → PIDevice N b h ρ S L q
   cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Fin G → Bits r

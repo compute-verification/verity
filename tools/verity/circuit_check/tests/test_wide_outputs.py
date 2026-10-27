@@ -1,5 +1,4 @@
-"""The whole lowering of a primitive whose output leaf is wider than a 64-bit lane (kept apart from `test_circuit_check`, whose
-import builds the whole suite)."""
+"""The whole lowering of a primitive whose output leaf is wider than a 64-bit lane, without circuit-check's catalog."""
 from __future__ import annotations
 
 import pytest

@@ -2,8 +2,8 @@ import NciCheck.Baseline
 
 /-! `nci-check [--unrolled] INSTANCE TRUSTED`: the verdict on one instance, as JSON on stdout. By default the instance is
 `NciCheck.Desc`'s (θ and the owners per root node) with θ's `provenance`, checked at the size of the description and then
-against the trusted input `TRUSTED` (the service's registration log, accepted digests, the run's record and the program
-function's parameters: `NciCheck.Baseline`); `--unrolled` reads one of `NciCheck.Check` (per gate) and runs the unrolled
+against the trusted input `TRUSTED` (the deployment's registration log, the run's record and the program function's
+parameters: `NciCheck.Baseline`); `--unrolled` reads one of `NciCheck.Check` (per gate) and runs the unrolled
 check, the reference the description-sized one is held to. `nci-check --policy [--unrolled] INSTANCE` runs the policy
 check alone, without θ's provenance: a measurement of `NciCheck.Desc` (`benchmarks/verifier_cost/`), not the check of
 record. -/

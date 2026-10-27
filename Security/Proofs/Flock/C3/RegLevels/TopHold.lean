@@ -593,6 +593,7 @@ theorem innerCommits_top {tr : Json} {record : String} {reg : Json} {bound : Opt
   split at h
   · cases h
   simp (config := { zeta := false }) only [jpMain] at h
+  obtain ⟨_, -, h⟩ := eok_bind h
   obtain ⟨held, hheld, h⟩ := eok_bind h
   split at h
   rotate_left

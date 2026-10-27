@@ -1,5 +1,5 @@
-"""A firewalled session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one `flock-circuit`'s
-firewalled prover sends (`firewall::LeanHello`): held byte for byte to the `Hello`s Rust's `SessionConfig::hello_with_nonce`
+"""A firewalled session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the firewall's Lean
+session loop sends in the prover's place (`Session.helloOf`): held byte for byte to the `Hello`s Rust's `SessionConfig::hello_with_nonce`
 sent in the recorded `--zk` sessions of `test_lean_zk.py`'s fixture (one table, two tables, m = 26 and a drawn session), at
 each record's nonce and draw; at a nonce of its own, a fresh one each session; and its protocol's refusals. A request is
 `draw LEN [NONCE]` and `LEN` bytes of the verifier's draw; a statement the setup refuses is answered `refused WHY` and the

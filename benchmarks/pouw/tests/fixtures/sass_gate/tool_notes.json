@@ -46,5 +46,29 @@
    "branch": "Build cuda_12.9.r12.9/compiler.36037853_0",
    "args": "-arch sm_120a -m 64"
   }
+ ],
+ "plain90": [
+  {
+   "tool": "ptxas",
+   "version": "Cuda compilation tools, release 13.0, V13.0.88",
+   "branch": "Build cuda_13.0.r13.0/compiler.36424714_0",
+   "args": "-arch sm_90a -m 64"
+  }
+ ],
+ "refused90": [
+  {
+   "tool": "ptxas",
+   "version": "Cuda compilation tools, release 13.0, V13.0.88",
+   "branch": "Build cuda_13.0.r13.0/compiler.36424714_0",
+   "args": "-arch sm_90a -m 64"
+  }
+ ],
+ "units_softmax90": [
+  {
+   "tool": "ptxas",
+   "version": "Cuda compilation tools, release 13.0, V13.0.88",
+   "branch": "Build cuda_13.0.r13.0/compiler.36424714_0",
+   "args": "-v -arch sm_90a -m 64 -fmad false"
+  }
  ]
 }

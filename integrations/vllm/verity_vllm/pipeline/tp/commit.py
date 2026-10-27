@@ -9,9 +9,11 @@ hiding leaves over the rank's `chunk-leaf-v1` step stream, frame-v3-sha512 trees
     tp_run_root = SHA-512("verity/tp-run-root/v2" || u32 world || (u32 rank_r || root_r) for r in 0..world-1)
 i.e. per-rank run roots combined deterministically, rank-tagged, in rank order — the option "per-rank roots combined into the run
 root" of the charter.  ``--commit-scheme vllm-v1`` (by name: tests, an old record's configuration) commits vllm-v1's 32-byte roots
-under the SHA-256 form ``verity/tp-run-root/v1``.  Every rank's root is fixed (finalize on every rank returns) BEFORE the challenge is sampled; the challenge of
-rank r is `challenge_positions(tp_run_root, leaves_per_step_r, k, salt=pair/rank r)` — positions of every rank derive from the
-combined root, so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
+under the SHA-256 form ``verity/tp-run-root/v1``.  Every rank's root is fixed (finalize on every rank returns) BEFORE the pair's coins
+are drawn (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host's challenger opens them after the TP run root;
+without it they are this process's own, a measurement); the challenge of rank r is `challenge_positions(tp_run_root,
+leaves_per_step_r, k, salt=pair/rank r)` from the pair's positions coin, and its population openings come from the identities coin,
+so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
 results than `world` from the collective RPC, or an exception) fails the run; REL-02 required classes are checked PER RANK; the
 per-rank X-03 verdict (`commit_verdict`) must PASS on every rank; control vs instrumented tokens (the engine's = rank 0's sampler)
 must be equal.  Output: `runs.jsonl` (one row per arm per pair: wall, per-rank commit blocks, the combined root, verdict) and
@@ -32,13 +34,14 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+from verity_vllm import settings
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.config import group, option
 from verity_vllm.engine import served as SV
-from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline import commit_coins as CC, replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import config_run as TPC
 from verity_vllm.pipeline.tp import phases as PH
@@ -48,8 +51,7 @@ from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline.tp import run_root as RT
-
-SCHEMA = "verity/commit-integ/delta-tp/v1"
+from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
@@ -180,6 +182,8 @@ class Options:
     serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE (R16 tp TP-10, pin's acceptance set 'TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves " "rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the " "world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). " "The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (rev-cb M-0610 flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="[manbind MAN-06d, M-0608] verifier-issued POST-COMMITMENT challenge (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string: the Commit reserves one session before its engine and opens it on its first instrumented pair's TP run root, and each pair's opening positions and population identities are its coins, opened after that pair's TP run root (verity_vllm.pipeline.commit_coins); without it each pair's coins are this process's own, a measurement that credits nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units over the world, split across the ranks (rank r: k // W, one more for r < k %% W), each rank's share stratified by family, in place of the per-stratum sample")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it; the config run: one instrumented run)")
@@ -201,10 +205,10 @@ def main(args: Options) -> int:
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.check.verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
     from verity_vllm.pipeline.tp.capture import parse_engine_args
-    from verity_vllm.engine.rank_worker import EXTENSION
+    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
     if args.world is not None:
         args.tp = int(args.world)
@@ -229,6 +233,7 @@ def main(args: Options) -> int:
 
     (out := Path(args.out)).mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
+    coins = CC.of_options(args, sum(a != "control" for _p, a in schedule(args.pairs, args.only_arm)))    # before any root (None: a measurement)
     TPL.acquire()             # a leased Commit's GPUs, all at once, to its last run's finalize (pipeline.tp.lease); the target reads the device
     target = PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
     target_env, target_kw = TT.apply(target, wl["execution"])    # as `tp-capture` applies it, and every rank's engine checked against it (`tp.target`)
@@ -236,7 +241,7 @@ def main(args: Options) -> int:
     env_flags = {**prof.apply_env(), **target_env}
     engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw.update({"enable_prefix_caching": False, "max_num_seqs": int(args.max_num_seqs), **target_kw})
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k not in ("tensor_parallel_size",)})
     kw.update(parse_engine_args(args.engine_arg), worker_extension_cls=EXTENSION)
@@ -251,7 +256,7 @@ def main(args: Options) -> int:
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "effective_execution": va.effective_execution_doc(llm), "target": TT.as_json(target), "served": served,
-                "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
+                "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))}),
                 "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo,
                 "root_combination": f"tp_run_root = {'SHA-512' if rows else 'SHA-256'}(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": root_tag.decode(), "commit_scheme": args.commit_scheme,
@@ -494,9 +499,11 @@ def main(args: Options) -> int:
                     served = SRT.commit(llm, args, root, claimed, world, root_tag) if args.serving_rows and pair == 0 else None
                     per_rank = {}
                     reasons = []
-                    # every rank's root is fixed; the challenge of every rank derives from the COMBINED root (one RPC: each rank opens its own)
-                    positions = {str(int(f["rank"])): [list(p) for p in challenge_positions(root, f["leaves_per_step"], args.openings, salt=f"{pair}/rank{int(f['rank'])}".encode())]
-                                 for f in fin}
+                    # every rank's root is fixed and the TP run root with them: the pair's coins come now, and every rank's draws derive from them (one RPC: each rank opens its own)
+                    coin = CC.tp_draw(coins, root)
+                    src_pos, src_id = CC.tp_keys(coin)
+                    positions = {str(int(f["rank"])): [list(p) for p in challenge_positions(root, f["leaves_per_step"], args.openings, salt=f"{pair}/rank{int(f['rank'])}".encode(),
+                                                                                            legacy=False, source=src_pos)] for f in fin}
                     op = llm.collective_rpc("tp2_commit_open", timeout=args.rpc_timeout, kwargs={"positions_by_rank": positions, "claimed_roots": claimed})
                     for f in sorted(fin, key=lambda f: f["rank"]):
                         rk = int(f["rank"])
@@ -561,7 +568,8 @@ def main(args: Options) -> int:
                         for rk_c, croot in sorted(claimed.items()):
                             # one RPC per rank so each rank verifies against ITS claimed root (the commitment-vector entry)
                             po_r = llm.collective_rpc("tp2_commit_open_population", timeout=args.rpc_timeout,
-                                                      kwargs={"k": args.openings, "salt": f"{pair}/population", "combined_root_hex": root.hex(), "claimed_root_hex": croot})
+                                                      kwargs={"k": args.openings, "salt": f"{pair}/population", "combined_root_hex": root.hex(), "source_hex": src_id.hex(),
+                                                              "claimed_root_hex": croot})
                             po.extend(o for o in po_r if str(int(o["rank"])) == rk_c)
                         for o in po:
                             rk = int(o["rank"])
@@ -659,7 +667,7 @@ def main(args: Options) -> int:
                                "negatives": versions["negatives"],
                                "reason": "; ".join(reasons) if reasons else None, "replay_pending_ranks": [int(r_) for r_ in pending] or None}
                         (out / ("coverage.json" if pair == 0 else f"coverage_pair{pair}.json")).write_text(json.dumps(cov, indent=1, default=str) + "\n")
-                    row["commit"] = {"tp_run_root": root.hex(), "world": world, "per_rank": per_rank, "root_combination": versions["root_combination"],
+                    row["commit"] = {"tp_run_root": root.hex(), "coins": coin, "world": world, "per_rank": per_rank, "root_combination": versions["root_combination"],
                                      "commitment_vector": [{"rank": int(f["rank"]), "run_root": f["run_root"], "leaves": f["leaves"], "steps": f["steps"]} for f in sorted(fin, key=lambda f: f["rank"])],
                                      "root_form": f"{root_tag.decode().removeprefix('verity/')} (PROVISIONAL tagged {'SHA-512' if rows else 'SHA-256'} over the per-rank roots; canonical form per R13 12:25Z ruling = the per-rank entries of `commitment_vector` in the challenge-v1 commitment vector)",
                                      "leaves": sum(c["leaves"] for c in per_rank.values()), "bytes_bound": sum(c["bytes_bound"] for c in per_rank.values()),
@@ -689,6 +697,8 @@ def main(args: Options) -> int:
                 break
         if stopped:
             break
+    if coins is not None and (why_c := coins.close()):
+        print(f"[tp2commit] the challenger session did not close (its ledger has no end, and its coins credit nothing): {why_c}", flush=True)
     if args.trace_dir and not stopped:
         gc.collect()
         with PH.TL.span("work.trace"):

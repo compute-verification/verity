@@ -116,9 +116,9 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
   rw [hP] at hP'
   cases hP'
   obtain ⟨xS, emb, hinj, hemb, hrun⟩ :=
-    hframe x (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r u hu
+    hframe x (Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w) ω r u hu
   have hr := hrun (FlockComplete.ZkTables.honestPR (c.wit s xS (found H (commit c) s.roots w (c.reads s xS)))) (ω xS)
-    fun hist hS h => refP_session H c.step c.parse c.reads (commit c) c.wit w hs h ω
+    fun hist hS h => refP_session H FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w hs h ω
   have h0 := hr r fun _ _ => rfl
   exact ⟨xS, c.wit s xS (found H (commit c) s.roots w (c.reads s xS)), ω xS, emb, hinj, hemb,
     (FlockDeploy.scopeMatches_zk rel xS).2 (hscope x s Pt hs hP hin _ ω r u xS _ hu h0),
@@ -128,8 +128,8 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
 /-- **At the deployed record, the run accepts when its sessions do.** -/
 theorem acceptsSessions_deploy (H : Msg → Msg) (haccept : AcceptsFramed c H) : AcceptsSessions H (deploy rel c) := by
   rintro x w hx - ω r hsess
-  exact haccept x (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r hx
-    (fun hist m h => refP_say H c.step c.parse c.reads (commit c) c.wit w h ω) hsess
+  exact haccept x (Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w) ω r hx
+    (fun hist m h => refP_say H FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w h ω) hsess
 
 theorem nPU_deploy (x : Msg) : nPU (deploy rel c) x = units c x := rfl
 
@@ -144,7 +144,7 @@ theorem sessionSlots_units (H : Msg → Msg) (hslots : DrawSlots (deploy rel c))
 /-- **At the deployed record, the checked units' sessions are the first `sessions x` slots'.** -/
 theorem sessionsAmong_deploy (H : Msg → Msg) (h : SessionSlots c H) : SessionsAmong H (deploy rel c) c.sessions := by
   rintro x w hx - ω r u hu
-  exact h x hx (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r u hu
+  exact h x hx (Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w) ω r u hu
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling completeness at the deployed record**: the reference prover is accepted with probability at least

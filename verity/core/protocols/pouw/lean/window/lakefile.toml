@@ -4,8 +4,11 @@
 # window's round coins, which read the proof service's challenger (`core_sampled_proofs`'s `SampledProofs.Challenger`).
 # Its properties are stated in `Security/Properties/Pouw.lean`. `PouwWindow.Difftest` and the difftest server, which hold it
 # to the Python, run on the shared harness (`verity_difftest`), which nothing under the root `PouwWindow` imports.
+# `pouw-leaf-own` is the leaf verifier's check of a drawn-leaf statement's `--registered` file against the accepted
+# registration and produced record (`PouwWindow.RegFile`), and of each of its sessions' draws against the draw policy, every
+# unit (`PouwWindow.FullDraw`).
 name = "pouw_window"
-defaultTargets = ["PouwWindow", "pouw-window-difftest"]
+defaultTargets = ["PouwWindow", "pouw-window-difftest", "pouw-leaf-own"]
 
 [leanOptions]
 autoImplicit = false
@@ -30,3 +33,7 @@ roots = ["PouwWindow", "PouwWindow.Difftest"]
 [[lean_exe]]
 name = "pouw-window-difftest"
 root = "PouwWindow.DifftestMain"
+
+[[lean_exe]]
+name = "pouw-leaf-own"
+root = "PouwWindow.LeafOwnMain"

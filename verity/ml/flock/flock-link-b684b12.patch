@@ -1,3 +1,33 @@
+diff --git a/crates/flock-core/src/lib.rs b/crates/flock-core/src/lib.rs
+index 6db94da..515a584 100644
+--- a/crates/flock-core/src/lib.rs
++++ b/crates/flock-core/src/lib.rs
+@@ -25,7 +25,8 @@ use std::{
+ };
+ 
+ pub use flock_parallel::{
+-    all_core_pool, run_hetero_chunks, run_hetero_chunks_stateful, set_utility_qos,
++    THREAD_STACK, all_core_pool, run_hetero_chunks, run_hetero_chunks_stateful, set_utility_qos,
++    spawn_scoped,
+ };
+ use rayon::{ThreadPoolBuilder, current_num_threads};
+ #[cfg(target_os = "linux")]
+@@ -82,12 +83,11 @@ pub fn init_perf_thread_pool() -> Option<usize> {
+     let n = perf_core_count();
+     match ThreadPoolBuilder::new()
+         .num_threads(n)
+-        // 8 MB workers (default 2 MB): the prover's kernels carry large NEON
++        // THREAD_STACK workers (default 2 MB): the prover's kernels carry large
+         // frames (bitslice planes, encode/product scratch, unreduced
+         // accumulators), and rayon work-stealing NESTS such frames on one
+-        // stack — marginal under LTO, sporadic overflow. Virtual reservation
+-        // only; pages commit on touch.
+-        .stack_size(8 << 20)
++        // stack. Virtual reservation only; pages commit on touch.
++        .stack_size(THREAD_STACK)
+         .build_global()
+     {
+         Ok(()) => Some(n),
 diff --git a/crates/flock-core/src/pcs.rs b/crates/flock-core/src/pcs.rs
 index c3362dc..c36ce18 100644
 --- a/crates/flock-core/src/pcs.rs
@@ -87,6 +117,28 @@ index c3362dc..c36ce18 100644
              x_outers[i],
              &proof.ring_switches[i],
              grinding.ring_switch_bits,
+diff --git a/crates/flock-core/src/pcs/commit.rs b/crates/flock-core/src/pcs/commit.rs
+index 497b3fc..ad02bf3 100644
+--- a/crates/flock-core/src/pcs/commit.rs
++++ b/crates/flock-core/src/pcs/commit.rs
+@@ -514,7 +514,7 @@ fn commit_into_pipelined(
+         let receiver = Mutex::new(receiver);
+         std::thread::scope(|scope| {
+             for _ in 0..N_HELPERS {
+-                scope.spawn(|| {
++                crate::spawn_scoped(scope, || {
+                     crate::set_utility_qos();
+                     loop {
+                         let job = receiver.lock().unwrap().recv();
+@@ -930,7 +930,7 @@ pub fn prefault_codeword_during<R>(
+     // under witness generation. (commit_into rewrites all slots, so the
+     // zero values themselves don't matter — the page faults do.)
+     scope(|s| {
+-        let h = s.spawn(move || {
++        let h = crate::spawn_scoped(s, move || {
+             set_background_qos();
+             let mut buf: Vec<F128> = alloc_uninit_f128_vec(codeword_len);
+             unsafe {
 diff --git a/crates/flock-core/src/proof.rs b/crates/flock-core/src/proof.rs
 index 1ba322d..3719295 100644
 --- a/crates/flock-core/src/proof.rs
@@ -122,7 +174,7 @@ index 1ba322d..3719295 100644
  #[derive(Clone, Debug, PartialEq, Eq)]
  pub struct ZClaim {
 diff --git a/crates/flock-core/src/verifier.rs b/crates/flock-core/src/verifier.rs
-index bfd1d70..db04e30 100644
+index bfd1d70..94c5691 100644
 --- a/crates/flock-core/src/verifier.rs
 +++ b/crates/flock-core/src/verifier.rs
 @@ -12,7 +12,8 @@ use lincheck::{
@@ -144,6 +196,15 @@ index bfd1d70..db04e30 100644
      },
      r1cs::BlockR1cs,
      union::UnionInstance,
+@@ -119,7 +120,7 @@ fn verifier_pool() -> &'static ThreadPool {
+             // recursive Ligerito verifier — so give it an ample stack. A rayon
+             // worker otherwise defaults to ~2 MiB (vs the 8 MiB main thread),
+             // which the recursion overflows.
+-            .stack_size(64 * 1024 * 1024)
++            .stack_size(crate::THREAD_STACK)
+             .thread_name(|_| "flock-verify".to_string())
+             .build()
+             .expect("build single-thread verifier pool")
 @@ -264,7 +265,7 @@ pub fn verify_ligerito_union_ag<Ch: Challenger>(
          &proof.pcs_open,
          pcs_params,
@@ -317,6 +378,72 @@ index bfd1d70..db04e30 100644
          })
          .map_err(FlockVerifyError::PcsOpen)?;
      Ok(claims.clone())
+diff --git a/crates/flock-parallel/src/lib.rs b/crates/flock-parallel/src/lib.rs
+index 534e206..6bc0f92 100644
+--- a/crates/flock-parallel/src/lib.rs
++++ b/crates/flock-parallel/src/lib.rs
+@@ -11,6 +11,25 @@ use std::{
+ 
+ use rayon::{ThreadPool, ThreadPoolBuilder, current_num_threads, scope as rayon_scope};
+ 
++/// The stack of every thread Flock starts, in its rayon pools and beside
++/// them: 64 MiB, where Rust's and rayon's default is 2 MiB. A large
++/// statement's proof nests deep frames on one stack, and rayon's
++/// work-stealing nests them further. Virtual reservation only; pages commit
++/// on touch.
++pub const THREAD_STACK: usize = 64 << 20;
++
++/// `Scope::spawn` on a [`THREAD_STACK`] stack (`std::thread::scope`'s own
++/// spawn takes Rust's 2 MiB default).
++pub fn spawn_scoped<'s, 'e, T: Send + 's>(
++    s: &'s std::thread::Scope<'s, 'e>,
++    f: impl FnOnce() -> T + Send + 's,
++) -> std::thread::ScopedJoinHandle<'s, T> {
++    std::thread::Builder::new()
++        .stack_size(THREAD_STACK)
++        .spawn_scoped(s, f)
++        .expect("failed to spawn a helper thread")
++}
++
+ static ALL_CORE_POOL: OnceLock<ThreadPool> = OnceLock::new();
+ 
+ /// Size the all-core pool explicitly, before its first use. For embedders
+@@ -23,7 +42,7 @@ pub fn init_all_core_pool(threads: usize) -> bool {
+         .set(
+             ThreadPoolBuilder::new()
+                 .num_threads(threads)
+-                .stack_size(8 << 20)
++                .stack_size(THREAD_STACK)
+                 .build()
+                 .expect("failed to build the all-core rayon pool"),
+         )
+@@ -57,7 +76,7 @@ pub fn all_core_pool() -> &'static ThreadPool {
+             });
+         ThreadPoolBuilder::new()
+             .num_threads(threads)
+-            .stack_size(8 << 20)
++            .stack_size(THREAD_STACK)
+             .build()
+             .expect("failed to build the all-core rayon pool")
+     })
+@@ -111,7 +130,7 @@ pub fn run_hetero_chunks<F: Fn(usize) + Sync>(n_chunks: usize, f: F) {
+     let pull = &pull;
+     scope(|s| {
+         for _ in 0..2 {
+-            s.spawn(move || {
++            spawn_scoped(s, move || {
+                 set_utility_qos();
+                 pull();
+             });
+@@ -166,7 +185,7 @@ where
+     let pull = &pull;
+     scope(|sc| {
+         for _ in 0..2 {
+-            sc.spawn(move || {
++            spawn_scoped(sc, move || {
+                 set_utility_qos();
+                 pull();
+             });
 diff --git a/crates/flock-prover/src/prover.rs b/crates/flock-prover/src/prover.rs
 index 5a99842..d9b38b7 100644
 --- a/crates/flock-prover/src/prover.rs

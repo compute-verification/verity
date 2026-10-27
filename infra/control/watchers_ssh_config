@@ -1,8 +1,6 @@
 # ssh's config for the watchers' loops on the control pod (bin/ssh): the node aliases agent VMs have, so a loop written for an
-# agent VM (`ssh n1 ...`) runs unchanged. The hosts are the registry's (machines.d). Options given on a command line win.
-Host n1 vy-nebius-1
-  HostName 81.85.2.165
-Host n2 vy-nebius-2
+# agent VM (`ssh n2 ...`) runs unchanged. The hosts are the registry's (machines.d). Options given on a command line win.
+Host n2 vy-nebius-2 vy-n2
   HostName 81.85.2.121
 Host cpu1 vy-nebius-cpu-1
   HostName 81.85.4.185

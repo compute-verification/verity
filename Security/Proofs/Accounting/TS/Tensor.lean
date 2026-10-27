@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS
+import Definitions.Accounting.Guarantees.TS
 
 /-!
 # The tensor slots and the output count

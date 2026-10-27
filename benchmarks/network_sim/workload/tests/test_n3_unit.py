@@ -1,4 +1,4 @@
-"""N3's proof unit for one port-window (`n3_unit`): a descriptor puts its declared frame on its outbox rows, an outbox
+"""N3's proof block for one port-window (`n3_unit`): a descriptor puts its declared frame on its outbox rows, an outbox
 holds its unit's messages' bytes, every opening the unit makes is its tree's, N2's frames root in gates is N2's, and the
 circuit equals its Python reference. An honest window gives ok; a flipped bit, an extra frame, written fill, a wrong
 outbox row (in a byte its segment reads or one it doesn't, or a nonzero row for an empty segment), descriptor salt,
@@ -472,8 +472,8 @@ def lab_setup(B: int, d: int = 4, requests: int = 2):
     payloads = {s: F.encode(m, values) for s, m in program.messages.items()}
     frames = {}
     for b in program.blocks:
-        egress = [encode_frame(DATA, CANONICAL_STREAM, event_body(program.event(b, p, payloads[m.stream])), B)
-                  for p, (_, m, _) in enumerate(program.events[b])]
+        egress = [encode_frame(DATA, CANONICAL_STREAM, event_body(program.event(b, p, program.payload(b, p, payloads))), B)
+                  for p in range(len(program.events[b]))]
         frames[b] = (egress, [f for s in program.sessions[b] for f in cut(program.request(s, payloads), B)])
     return public, witness, frames, B, payloads
 

@@ -119,7 +119,7 @@ if fetched:
                                         cache_dir=os.path.join(os.environ["HF_HOME"], "hub"))
     if ent.get("recipe"):          # no hub repo holds a recipe pin: made here from its BF16 pin (engine/fp8_checkpoint.py, int8_checkpoint.py)
         from verity_vllm.engine import fp8_checkpoint as F, int8_checkpoint as I8
-        recipe = {r.id: r for r in (F.FP8, I8.INT8)}[ent["recipe"]["id"]]
+        recipe = {r.id: r for r in (F.FP8, *I8.RECIPES.values())}[ent["recipe"]["id"]]
         base = F.base_entry(ent, entries, recipe)
         if not all((Path(base["local_path"]) / f).exists() for f in base["safetensors_sha256"]):
             print("downloaded", fetch(base), flush=True)
@@ -210,7 +210,7 @@ else:  # cpu mode: torch must import and run on the host; whether it also sees a
 check("vllm_import", lambda: __import__("vllm").__version__)
 check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__version__) or (_ for _ in ()).throw(RuntimeError(__import__("vllm").__version__)))
 check("verity_from_tree", lambda: under("verity.ml.circuits", core))
-check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
+check("verity_vllm_from_tree", lambda: under("verity_vllm.program", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("sampled_proofs_from_tree", lambda: under("verity.core.protocols.sampled_proofs.plan", verifiers))   # the program tests import it
 def distributions_from_tree():

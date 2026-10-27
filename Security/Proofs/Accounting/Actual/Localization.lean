@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Localization
+import Definitions.Accounting.Guarantees.Localization
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Physical
 import Proofs.Accounting.Actual.Split

@@ -6,7 +6,7 @@ import Properties.SampledProofs.Draw
 
 `Accounting.Compose.Declared` gives each gate its proof unit (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
-(`Models.Accounting.Guarantees.Compose`) draws, proves and charges tiles by them, its draw `Pouw.Window.subsetDraw`
+(`Definitions.Accounting.Guarantees.Compose`) draws, proves and charges tiles by them, its draw `Pouw.Window.subsetDraw`
 (`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
 program `p` and query:
 * **units**: the service draws and proves the units of the verifier's own partition of its program

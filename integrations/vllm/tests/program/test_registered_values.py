@@ -10,10 +10,10 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.constants import program_data
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import value_inputs as VI
+from verity.ml.definitions.registry import b1, hopper
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import value_inputs as VI
 
 
 def _bf16(rng, n: int, scale: float = 1.0) -> list[int]:
@@ -62,7 +62,7 @@ def test_attention_scale_input():
     """Two key blocks (T = BN + 4): the second block rescales, so every use of the scale is exercised."""
     rng = np.random.default_rng(3)
     T, NH, KVH, D, BN = 20, 2, 1, 16, 16
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     old = bind(b1.AttentionV3, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
     new = bind(VI.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=BN)
     for _ in range(2):
@@ -77,7 +77,7 @@ def test_fa2_check_inf_attention_scale_input(masked_from):
     """The FA2 per-iteration Check_inf chain (`Attention_v5`, the RTX PRO 6000's) over two key blocks, block 0 guarded or not."""
     rng = np.random.default_rng(4)
     T, NH, KVH, D, BN = 20, 2, 1, 16, 16
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     st = dict(T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=masked_from)
     old, new = bind(F2.AttentionV5, **st), bind(F2.AttentionV11, **st)
     assert new.id.startswith("Attention_v11{")
@@ -88,6 +88,7 @@ def test_fa2_check_inf_attention_scale_input(masked_from):
     assert _const_id(scale) not in _held(new)
 
 
+@pytest.mark.slow
 def test_derive_registered_values_evaluates_like_the_constants_program():
     """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
     `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""
@@ -95,7 +96,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.kernels.serve3_reference import materialize
+    from verity.ml.definitions.numerics.serve3_reference import materialize
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):
@@ -104,7 +105,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
     const = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve")
     reg = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve", registered_values=True)
     assert const.ok and reg.ok, reg.unsupported
-    eps, scale = P.bits_of(np.float32(C["EPS"])), b1._scale_log2_bits(C["D"])
+    eps, scale = P.bits_of(np.float32(C["EPS"])), b1.scale_log2_bits(C["D"])
     fields = reg.provenance["supplied"]["registration"]["fields"]
     assert [(f["name"], f["width"], int(f["bits"], 16)) for f in fields] == [("eps", 32, eps), ("scale_log2_d16", 32, scale)]
     prog, twin = reg.program, Program(const.flat_definition)
@@ -130,13 +131,14 @@ def test_target_profile_registered_values_is_declared_true_or_absent():
     assert both["registered_values"] is True and both["ir"] == "boolean"
 
 
+@pytest.mark.slow
 def test_derive_registered_values_on_bits_reads_the_values_through_boolean_definitions():
     """The tiny registered-values serve on bits: every Call has a Boolean version (the norms with eps an input, `Attention_v14`),
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""
     import torch
 
     from verity.ml.circuits import boolean as BL
-    from verity_vllm.program import boolean as BB
+    from verity.ml.definitions import boolean as BB
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
 

@@ -1,3 +1,4 @@
+import Proofs.Accounting.Headline.EpsJl
 import Proofs.Accounting.Headline.Sm120
 
 /-!
@@ -12,8 +13,8 @@ with the data's hypotheses discharged and the terms bounded as at the data sheet
   (`sm120m_wStar`); each fold route costs at least the lane fold's `≈ 0.1204` there (`sm120m_phiStar`);
 * (I5) `SideUnits` and FILL-OPT hold at any run: the model has no side unit and no filler;
 * the folded branch (`Λ = κ/ln(8/7)`): `identity` at `d̄ = ā = 0` gives
-  `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − (N_w w* + N_w φ*)/B_♭`, `epsJl_le` bounds `ε_jl` by
-  `κ·41 ln 2/(48,000 · 2/15)` at `p = 7/8`, and their sum is below `591/100000`, by `decide` on the rationals
+  `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − (N_w w* + N_w φ*)/B_♭`, `epsJl_le` (`Headline/EpsJl.lean`) bounds
+  `ε_jl` by `κ·41 ln 2/(48,000 · 2/15)` at `p = 7/8`, and their sum is below `591/100000`, by `decide` on the rationals
   (`sm120m_final`), and it binds;
 * the unfolded branch (`Λ = (κ + f)/ln 2`, a run that skips folds charged at the whole-unit luck `½`): the floor is
   `(N_w w* + N_w φ*)/B_♭ · (1 − 41/48000)` (`Whole.unfolded_floor`), below `591/100000` by `decide`
@@ -28,35 +29,6 @@ The argument is `sm120MeasuredHeadline_bind`, with binding at `δ_bind` (`ProofL
 namespace Accounting.SecurityProofs.TS.Headline
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
-
-/-- `ε_jl ≤ κ·41·0.6931471808/6400` at `p = 7/8`, `48,000` rounds and `δ′ ≥ 2^-41`, from `ln 2 < 0.6931471808` and
-`ln(8/7) ≥ 2/15`, the first term of `ln(1 + 1/a) = Σ_k 2/(2k + 1)·(2a + 1)^-(2k+1)` at `a = 7`. -/
-theorem epsJl_le {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
-    [Fintype X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ) (hκ : 0 ≤ Z.kappa Fl lam) (S : ℕ)
-    (hS : (S : ℝ) = 48000) (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    Z.epsJl Fl lam (7 / 8) δ' S ≤ Z.kappa Fl lam * (41 * (6931471808 / 10000000000) / 6400) := by
-  have hlog2 : Real.log 2 < 6931471808 / 10000000000 := lt_of_lt_of_eq Real.log_two_lt_d9 (by norm_num)
-  have hδpos : 0 < δ' := lt_of_lt_of_le (by positivity) hδ'
-  have hinv : 1 / δ' ≤ (2 : ℝ) ^ 41 := by
-    have h := one_div_le_one_div_of_le (by positivity : (0 : ℝ) < (1 / 2) ^ 41) hδ'
-    rwa [show (1 : ℝ) / (1 / 2) ^ 41 = 2 ^ 41 by norm_num] at h
-  have hlogδ : Real.log (1 / δ') ≤ 41 * (6931471808 / 10000000000) := by
-    calc Real.log (1 / δ') ≤ Real.log ((2 : ℝ) ^ 41) := Real.log_le_log (one_div_pos.mpr hδpos) hinv
-      _ = 41 * Real.log 2 := by rw [Real.log_pow]; norm_num
-      _ ≤ 41 * (6931471808 / 10000000000) := by linarith
-  have hlogp : (2 : ℝ) / 15 ≤ Real.log (1 / (7 / 8)) := by
-    have h0 := le_hasSum (Real.hasSum_log_one_add_inv (by norm_num : (0 : ℝ) < 7)) 0 fun j _ => by
-      first
-        | positivity
-        | (dsimp only; positivity)
-    rw [show (1 : ℝ) / (7 / 8) = 1 + 7⁻¹ by norm_num]
-    refine Eq.trans_le ?_ h0
-    norm_num
-  have hq : Real.log (1 / δ') / (Real.log (1 / (7 / 8)) * 48000) ≤ 41 * (6931471808 / 10000000000) / 6400 :=
-    div_le_div₀ (by norm_num) hlogδ (by norm_num) (by linarith)
-  unfold Model.epsJl
-  rw [hS]
-  exact (mul_div_assoc _ _ _).trans_le (mul_le_mul_of_nonneg_left hq hκ)
 
 /-- VF3s-16's row `r` as rationals, by class index. -/
 def vfCoef (r i : ℕ) : ℚ := Sparse.coeff (Sm120Measured.vf3s16.getD r []) i

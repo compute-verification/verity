@@ -9,7 +9,6 @@ from __future__ import annotations
 import ast
 import importlib
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -19,16 +18,10 @@ from circuit_check import cli
 from circuit_check import targets as TG
 
 FIXTURE = Path(__file__).parent / "fixtures" / "split" / "prims_serve.json"
-REG = "verity_vllm.program.registry"
+REG = "verity.ml.definitions.registry"
 #: the family's Definition modules (`FAMILY` of integrations/vllm `tests/program/test_prims_serve_boundaries.py`)
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
-
-
-def _suite() -> dict:
-    """`TG.suite()`, shared with `test_circuit_check` when it is loaded (building it is about a minute)."""
-    other = sys.modules.get("test_circuit_check")
-    return other.SUITE if other is not None and hasattr(other, "SUITE") else TG.suite()
 
 
 def _digest(fn) -> str | None:
@@ -64,17 +57,11 @@ def _family_ids() -> dict[str, str]:
 
 
 @pytest.fixture(scope="module")
-def now() -> dict:
+def now(suite) -> dict:
     """The fixture's fields on this tree: every circuit-check task whose target is of a family Definition, in task order, with
     its descriptor digest; the family's registered ids; and the pins of those targets."""
     TG.load_registries()
-    suite = _suite()
-    real = TG.suite
-    TG.suite = lambda: suite
-    try:
-        tasks = cli._tasks([], CK.Options(), True, None)
-    finally:
-        TG.suite = real
+    tasks = cli._tasks([], CK.Options(), True, None)
     family_ids = _family_ids()
     fam = set(family_ids)
     families = {fid: TG.family(fn) for fid, fn in suite.items()}

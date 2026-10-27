@@ -54,7 +54,6 @@ reads. -/
 def zkEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (s : Fin ((V true).k x) → Coin) : Prop :=
   (Claims.run sha512 P (V true) x ω s).out = .acc ∧ Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω s).vLog
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -75,7 +74,6 @@ def zkForkEv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (j₀ : Fin ((V
     Claims.TiedColl sha512 ((Claims.run sha512 P (V true) x ω s).vLog ++
       (Claims.run sha512 P (V true) x ω (Claims.forkCoins j₀ s s')).vLog)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -100,7 +98,6 @@ def ZkClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mP
     (pL : LiveOutJ (J x) mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → zkEv₁ P x ω (Φ (u, r'))
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -206,7 +203,6 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
                 zkForkEv P x (rd j (.inr ())) ω s.1 s.2) +
                 Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inr ())).val ω)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -301,41 +297,6 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
                 zkForkEv P x (rd j (.inr ())) ω s.1 s.2) +
                 Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inr ())).val ω)
 
-end Gen
-
-/-- **A simulator gives the masked live sessions' bound at the deployed decoders off the table on a witness lane**:
-the events an accepting fork or run with its collision, the first bound by `zk_first_of_sim`, the self-clash bound by
-`liveMix_le_Pr`, the fork bounds as `ZkSimWJ` gives them. -/
-theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω _ _ P
-  obtain ⟨rd, hrd, hr0, δ, hδ, hfit, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
-  refine ⟨rd, hrd, hr0, δ, hδ, hfit, fun j i => zkForkEv P x (rd j i), fun _ => zkEv₁ P x, fun _ _ _ _ _ he => he.2.2,
-    fun _ _ _ he => he.2, fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩, fun _ _ _ he => he.1, fun ω j hj C hC => ?_⟩
-  obtain ⟨N, dg, w, τ, _, _, P', Φ, hΦ, hσ, hrun, hj'⟩ := hω ω
-  obtain ⟨hsc, hRS, hPads, hTau, h₀⟩ := hj' j hj C hC
-  have hlen : (tables true x).length = sts.size := by
-    unfold tables
-    rw [hset]
-    simp
-  have hJ : (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length ≤ sts.size := by
-    rw [tabsJ_length, hlen]
-  have hjJ : j < (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
-    rw [tabsJ_length]
-    exact hj
-  exact ⟨dg, N x, zkRoot P x ω, τ, inferInstance, inferInstance,
-    fun u => liveStrat (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length)
-      (fun _ => spec.mPts) N dg w sha512 P' x (ω, u), hσ,
-    zk_first_of_sim P x ω C j (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) spec.mPts
-      hset hd hJ hjJ N dg w P' Φ ⟨hΦ, hrun⟩,
-    hRS, hPads, hTau, h₀,
-    liveMix_le_Pr (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts)
-      N dg w sha512 P' x ω _ (zkEv₁ P x ω) Φ (hΦ _) hsc⟩
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 /-- **A simulator gives the masked live sessions' bound at the deployed decoders off the table on a witness lane**:
 the events an accepting fork or run with its collision, the first bound by `zk_first_of_sim`, the self-clash bound by
 `liveMix_le_Pr`, the fork bounds as `ZkSimWJ` gives them. -/
@@ -365,6 +326,12 @@ theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x := by
       N dg w sha512 P' x ω _ (zkEv₁ P x ω) Φ (hΦ _) hsc⟩
 
 end Gen
+
+/-- **A simulator gives the masked live sessions' bound at the deployed decoders off the table on a witness lane**:
+the events an accepting fork or run with its collision, the first bound by `zk_first_of_sim`, the self-clash bound by
+`liveMix_le_Pr`, the fork bounds as `ZkSimWJ` gives them. -/
+theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x :=
+  Gen.zkXferWJ_of_simWJ (S := S₀) (x := x) (hx := hx)
 
 namespace Gen
 

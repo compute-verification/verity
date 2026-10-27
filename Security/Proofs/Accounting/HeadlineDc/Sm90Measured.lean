@@ -11,12 +11,12 @@ rows (issue, JI90_0, JI90_1; `sm90m_isCert`), `p = 7/8`, `p₀ = ½` and `Λ = m
   (`sm90m_bnd`); `w90M` is the cheapest word route's price on π*'s three rows, so each writer kind's word costs at
   least it (`sm90m_writers`), and so do the vector and table words at `½`, priced at each row's ALU coefficient,
   which is that row's least over the vector classes (`sm90m_vec`, `sm90m_wv`), so `w* ≥ w90M` (`sm90m_wStar`); each
-  of the 14 fold routes costs at least the cheapest one's price on π*'s rows (`sm90m_fold`, `sm90m_phiStar`);
+  of the 56 fold routes costs at least the cheapest one's price on π*'s rows (`sm90m_fold`, `sm90m_phiStar`);
 * A6 (`SheetWords`) gives (I2)/(I4) `WordsWritten` and, at `q = q_T = ½` and `b_T = 0`, (I3) `ScalarRoute`
   (`scalarRoute_half`); (I5) `SideUnits` and FILL-OPT hold at any run, since the model has no side unit and no filler;
-* the folded branch from those bounds (`folded_of_lower`): below `1544/100000` by `decide` (`sm90m_folded_q`), and it
-  binds;
-* the unfolded branch (`unfolded_of_lower`): below `1544/100000` by `decide` (`sm90m_unfolded_q`);
+* the folded branch from those bounds and `ln(8/7) ≥ 2/15` (`folded_of_lower_at`, `Headline.epsJl_le`, as sm_120's
+  measured headline reads it): below `1412/100000` by `decide` (`sm90m_folded_q`), and it binds;
+* the unfolded branch (`unfolded_of_lower`): below `1412/100000` by `decide` (`sm90m_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
@@ -67,7 +67,7 @@ def price90M (i : ℕ) : ℚ :=
     lam90 6 * dot (vfRow90 6) 50 (Sm90Measured.d2s.folds.getD i [])
 
 /-- The cheapest fold route's price at π*. -/
-def phi90M : ℚ := ((List.range 14).map price90M).foldr min (price90M 0)
+def phi90M : ℚ := ((List.range 56).map price90M).foldr min (price90M 0)
 
 theorem sm90m_lamSum : dot (fun _ => 1) 15 lamv90 = 1 := by decide +kernel
 
@@ -93,19 +93,19 @@ theorem sm90m_wv :
       lam90 6 * (1 / 2 / 32 * vfRow90 6 0) := by
   decide +kernel
 
-theorem sm90m_fold : ∀ i < 14, phi90M ≤
+theorem sm90m_fold : ∀ i < 56, phi90M ≤
     lam90 0 * dot (vfRow90 0) 50 (Sm90Measured.d2s.folds.getD i []) +
       lam90 5 * dot (vfRow90 5) 50 (Sm90Measured.d2s.folds.getD i []) +
       lam90 6 * dot (vfRow90 6) 50 (Sm90Measured.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm90m_folded_q :
-    (1 - 1544 / 100000 : ℚ) * B90M ≤ 4096 * w90M * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+    (1 - 1412 / 100000 : ℚ) * B90M ≤ 4096 * w90M * (1 - 41 * (6931471808 / 10000000000) / 6400) +
       4096 * phi90M := by
   decide +kernel
 
 theorem sm90m_unfolded_q :
-    (1 - 1544 / 100000 : ℚ) * B90M ≤ (4096 * w90M + 4096 * phi90M) * (1 - 41 / 48000) := by
+    (1 - 1412 / 100000 : ℚ) * B90M ≤ (4096 * w90M + 4096 * phi90M) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm90m_hG : ∀ r k, Sm90Measured.model.G.a r k = (vfRow90 r k.val : ℝ) := fun _ _ => rfl
@@ -246,24 +246,25 @@ theorem sm90m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90Measured.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm90Measured.model sm90m_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 1544/100000`. -/
+/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 1412/100000`, with `ln(8/7) ≥ 2/15`. -/
 theorem sm90m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    1 - 1544 / 100000 ≤ 1 - Sm90Measured.model.epsSkip Sm90Measured.flat Sm90Measured.lamStar -
+    1 - 1412 / 100000 ≤ 1 - Sm90Measured.model.epsSkip Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsCert Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsRoute Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsMand Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsJl Sm90Measured.flat Sm90Measured.lamStar (7 / 8) δ' Sm90.checks := by
-  refine folded_of_lower Sm90Measured.model Sm90Measured.flat Sm90Measured.lamStar sm90m_isCert sm90m_wf rfl
-    rfl Sm90.checks sm90_S δ' hδ' _ _ _ sm90m_wStar sm90m_phiStar ?_
+  refine folded_of_lower_at Sm90Measured.model Sm90Measured.flat Sm90Measured.lamStar sm90m_isCert sm90m_wf rfl
+    rfl Sm90.checks sm90_S δ' hδ' _ _ _ sm90m_wStar sm90m_phiStar (41 * (6931471808 / 10000000000) / 6400) le_rfl
+    (by norm_num) ?_
   have hB : (0 : ℝ) < (B90M : ℝ) := by exact_mod_cast sm90m_Bpos
   have h := (Rat.cast_le (K := ℝ)).mpr sm90m_folded_q
   push_cast at h
   rw [sm90m_Nw, sm90m_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 1544/100000`. -/
+/-- The unfolded branch's floor at π* is at least `1 − 1412/100000`. -/
 theorem sm90m_unfolded :
-    1 - 1544 / 100000 ≤ (Sm90Measured.model.Nw * Sm90Measured.model.wStar Sm90Measured.lamStar +
+    1 - 1412 / 100000 ≤ (Sm90Measured.model.Nw * Sm90Measured.model.wStar Sm90Measured.lamStar +
       (1 - Sm90Measured.model.muF) * Sm90Measured.model.Nw *
         Sm90Measured.model.phiStar Sm90Measured.lamStar) /
         Sm90Measured.model.bnd Sm90Measured.flat * (1 - 41 / 48000) := by

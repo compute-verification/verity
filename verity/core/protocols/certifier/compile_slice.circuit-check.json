@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "CompileSliceBlocks_v1{R=2,W=1,A=2,M=2,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=0,NB=20,IW=3,AS=1,EW=0,Q=3,D=2,P=6,K=3,CN=0,CTW=0,CU=0,G=2}": {
+   "and": 32236
+  },
+  "CompileSliceBlocks_v1{R=2,W=1,A=2,M=4,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=20,IW=3,AS=0,EW=0,Q=3,D=5,P=4,K=3,CN=6,CTW=4,CU=4,G=2}": {
+   "and": 59341
+  },
+  "CompileSlice_v1{R=2,W=1,A=2,M=2,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=0,NB=20,IW=3,AS=1,EW=0,Q=3,D=2,P=6,K=3,CN=0,CTW=0,CU=0}": {
+   "and": 32236
+  },
+  "CompileSlice_v1{R=2,W=1,A=2,M=4,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=20,IW=3,AS=0,EW=0,Q=3,D=5,P=4,K=3,CN=6,CTW=4,CU=4}": {
+   "and": 59341
+  }
+ }
+}

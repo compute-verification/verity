@@ -6,7 +6,7 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.torch_frontend import shape_of, width_of
+from verity_vllm.program.frontend.value_types import shape_of, width_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 
@@ -44,7 +44,7 @@ class AllocViewRule(ViewRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend.torch_frontend import type_of_tensor
+        from verity_vllm.program.frontend.value_types import type_of_tensor
         written = _written_region(node, ctx)
         if written is None:
             ctx.define(node, Alloc(type_of_tensor(node.meta["val"]), node), view_of=node.args[0])

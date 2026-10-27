@@ -11,6 +11,7 @@ import pytest
 
 from test_appends import N, Run, honest_session, pages, salts, store
 from verity.core.protocols.remote_bandwidth import audit, codec, coins
+from verity.core.protocols.sampled_proofs.challenger import CoinError
 
 
 def test_an_honest_session_opens_one_live_coin_an_append_and_each_page_decodes_under_its_own() -> None:
@@ -87,6 +88,17 @@ def test_an_append_no_root_follows_is_a_failure_at_the_last_close() -> None:
     assert r.s.close(1) == audit.Verdict(1, False, "coin")
     assert r.s.coins.appends == 2 and r.s.windows[1].draws is None and r.s.outcome == "coin"
     assert r.s.coins.opened(coins.OPENINGS)[0].index == 0 and len(r.s.coins.opened(coins.OPENINGS)) == 1
+
+
+def test_a_session_that_reserves_no_append_coins_has_no_append_family_and_refuses_an_append() -> None:
+    """A session reserves only the coins it will use (`coins.families`): with no append coins its layout has no append
+    family, an append is the session's `coin` rejection with nothing opened, and asking its coins for one is refused."""
+    r = Run(store(), appends=0)
+    assert r.s.commitment.families == ((coins.CHALLENGE, 2), (coins.OPENINGS, 2))
+    assert r.s.append(hashlib.sha512(b"page").digest(), 1) == audit.Verdict(0, False, "coin")
+    assert r.s.coins.appends == 0 and r.s.coins.opened(coins.APPEND) == () and r.s.extent == N
+    with pytest.raises(CoinError, match="no append family"):
+        r.s.coins.append(bytes(64))
 
 
 def test_an_append_after_the_last_window_s_roots_are_final_draws_no_coin() -> None:

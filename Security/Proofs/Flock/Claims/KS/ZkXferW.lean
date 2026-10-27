@@ -162,7 +162,6 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
               (σL u)).toReal) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -254,37 +253,6 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
               (σL u)).toReal) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-end Gen
-
-/-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a draw (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
-(`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
-accepts with no opening off `C` on a witness lane unless it self-clashes. -/
-theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
-    ZkLiveAccWJ x := by
-  intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
-  obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨d, hd⟩ := acc_draw_of_setup hno hset
-  obtain ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ :=
-    hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
-  refine ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
-  obtain ⟨dg, N, rootB₀, τ, _, _, σL, hσ, htr, hadv, hP, hTau, h₀, hsc⟩ := hω ω j hj C hC
-  have hN := wordLenJ_zkTabs hs hin hset h0 L hz hk hlay hj
-  have hg := tabsJ_get (tables true x).length (zkTabs h0 L hz hk hlay) (finJ (zkTabs h0 L hz hk hlay) hj)
-  refine ⟨OkOffWJ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)) j rootB₀ C,
-    AccTxJ ins.read.I d j rootB₀ C, opnD sts _, dg, decD _, fun _ _ => true, fun _ _ _ => [],
-    fun rs j => Exec.capOfRoot rs[j.val]!, N, rootB₀, fun o h => ⟨h.1, ?_⟩, fun _ _ h => h.1,
-    decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j rootB₀ C, τ, inferInstance, inferInstance, σL, hσ, htr,
-    hadv, hP, hTau, h₀, hsc⟩
-  have h2 := h.2 rfl
-  rw [hg] at h2
-  exact h2 hN
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 /-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
 carries a draw (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
@@ -310,6 +278,14 @@ theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha5
   exact h2 hN
 
 end Gen
+
+/-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
+carries a draw (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
+(`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
+accepts with no opening off `C` on a witness lane unless it self-clashes. -/
+theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
+    ZkLiveAccWJ x :=
+  Gen.zkLiveAccWJ_of_xferWJ (S := S₀) (x := x) (hno := hno) (hx := hx)
 
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the
 live sessions' bound at the deployed decoders off the table on a witness lane at the statements some run accepts
@@ -318,7 +294,6 @@ theorem zk_KS_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x →
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   zk_KS_of_liveAccWJ (fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)) hext
-
 
 namespace Gen
 

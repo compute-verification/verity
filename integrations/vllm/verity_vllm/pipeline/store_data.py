@@ -1,5 +1,5 @@
-"""The `research data` CLI as the pipeline and `verity_vllm.records` run it: this interpreter's `research`, in this process's
-environment."""
+"""The `research data` CLI as the pipeline and the circuit database (`circuit_db`) run it: this interpreter's `research`, in this
+process's environment."""
 from __future__ import annotations
 
 import json

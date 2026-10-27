@@ -1,4 +1,4 @@
-"""`ncp-v2` as a Program: NCP-INT's noised GEMM with the two-level key, cut into its proof units.
+"""`ncp-v2` as a Program: NCP-INT's noised GEMM with the two-level key, cut into its proof blocks.
 
 A weight's Y strips and c₀ depend only on B, the salt, the weight id and the column ids, so they are formed once per run
 and weight, by `NcpWeight{K,N,PERM}`, whose root body holds only `NcpFormY` instances.  One linear call ``A·Bᵀ`` (A: m × k
@@ -50,6 +50,7 @@ from verity.ml.circuits.types import Array, Tuple, Value
 
 import verity.ml.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
 import verity.ml.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
+from verity.ml.circuits.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
 
 from ..protocol import DomainError
 from ..schemes.ncp import BETA, admissible_perm, shift_perm, word_perm
@@ -202,19 +203,8 @@ NcpTileDef = CompositeDefinition(
         "(A·Bᵀ exactly, mod 2^32).", conformance="protocol-defined")
 
 
-def _dequant_body(B, S, z, s, t, bias):
-    st = B.call(REGISTRY["F32Mul_v2"], s, t)
-    v = B.call(REGISTRY["F32Mul_v2"], st, B.call(W.PouwI32ToF32Rn, z))
-    return B.call(REGISTRY["Bf16Add_v1"], B.call(REGISTRY["F32ToBf16Rn_v1"], v), bias)
-
-
-NcpDequantDef = CompositeDefinition(
-    "NcpDequant", 1, (), lambda S: ((("z", U32), ("s", F32), ("t", F32), ("bias", BF16)), BF16), _dequant_body,
-    doc="y = bf16(fp32(s_i)·fp32(t_j)·Z) + bias_j: a width-rule unit after the Z separator.", conformance="protocol-defined")
-
 NcpNode = bind(NcpNodeDef)
 NcpKey = bind(NcpKeyDef)
-NcpDequant = bind(NcpDequantDef)
 
 
 # ---- the linear call -----------------------------------------------------------------------------------------------------

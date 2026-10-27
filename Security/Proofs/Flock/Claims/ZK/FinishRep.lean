@@ -194,17 +194,23 @@ theorem repFw_eq (io : Asks M) (hs : Hashes M) (st : Setup) (hm : st.merkle = Me
     (hthrow : ∀ {α β : Type} (e : String) (f : α → M β), (throw e : M α) >>= f = throw e) :
     repFw io hs (fun lv g s => pure (commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt =
       repFwC io.toC hs st sch tPad rep dom g cm0.toC extras pads.toC ic.toC vals extra lanePad salt := by
-  unfold repFw repFwC
+  unfold repFw repCons repPiop repOpening repFwC
   simp only [hm, zerocheckFw_eq, lincheckFw_eq, ringSwitchP_eq, ligeritoPZk_fw, basisVals_eq, PadsZk.toC_h,
-    InnerCommit.toC_root, Commit.toC_cap, flat_eq]
+    InnerCommit.toC_root, Commit.toC_cap, flat_eq, bind_assoc]
   refine bind_congr fun ⟨zp, zc⟩ => ?_
+  try simp only [bind_assoc]
   refine bind_congr fun ⟨lp, lc⟩ => ?_
+  try simp only [pure_bind, bind_assoc]
   refine bind_congr fun ⟨ss, T, sws⟩ => ?_
+  try simp only [bind_assoc]
   refine bind_congr fun ⟨lg, zl, rec⟩ => ?_
+  try simp only [pure_bind, bind_assoc]
   refine bind_congr fun tr' => ?_
   refine bind_congr fun ⟨rp, _⟩ => ?_
+  try simp only [bind_assoc]
   refine bind_congr fun lgc => ?_
-  dsimp only
+  try simp only [pure_bind]
+  try dsimp only
   split
   · rw [tmw_throw_bind hthrow, tmw_throw_bind hthrow]
   · rename_i hf

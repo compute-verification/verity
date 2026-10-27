@@ -445,7 +445,7 @@ def classRows : List (String × String × ℕ) := [
 
 /-- Rows `(id, class, k)` of the H1 + fx1 tile's primitives, each as its word Definition and on bits: the segment dots
 s8-family steps, the fold's steps folds, the wrap and digit tests and v4's dead-tile mask compare-selects, and the rest
-roundings. -/
+(J10-R's `PouwCallSeeds` and `PouwAdd64` among them) roundings. -/
 def h1ClassRows : List (String × String × ℕ) := [
   ("PouwSegDot_v2", "family s8", 32),
   ("PouwSegDot0_v1", "family s8", 32),
@@ -495,6 +495,10 @@ def h1ClassRows : List (String × String × ℕ) := [
   ("PouwOrBit_v2", "compare_select", 0),
   ("PouwMask32_v1", "compare_select", 0),
   ("PouwMask32_v2", "compare_select", 0),
+  ("PouwCallSeeds_v1", "roundings", 0),
+  ("PouwCallSeeds_v2", "roundings", 0),
+  ("PouwAdd64_v1", "roundings", 0),
+  ("PouwAdd64_v2", "roundings", 0),
   ("GemmAccumulatorS8_v2", "unlisted", 0)]
 
 /-- Rows `(id, class, k)` of ids `classOf` classes by their family's full pattern, and ids it refuses: another

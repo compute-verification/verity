@@ -12,10 +12,10 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program.kernels import inductor_rows as TW
-from verity_vllm.program.registry import hopper
-from verity_vllm.program.registry import inductor as I
-from verity_vllm.program.registry.fa3_check_inf import AttentionHeadV4
+from verity.ml.definitions.numerics import inductor_rows as TW
+from verity.ml.definitions.registry import hopper
+from verity.ml.definitions.registry import inductor as I
+from verity.ml.definitions.registry.fa3_check_inf import AttentionHeadV4
 
 U16 = np.uint16
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -61,7 +61,7 @@ QK_HEAD = [{"D": 128, "EPS": 1e-6, "XBLOCK": 2, "R0_BLOCK": 128, "NUM_WARPS": 2}
            {"D": 128, "EPS": 1e-6, "XBLOCK": 64, "R0_BLOCK": 64, "NUM_WARPS": 16}]
 
 
-@pytest.mark.parametrize("S", LAYOUTS, ids=lambda S: f"N{S['N']}-R{S['R0_BLOCK']}-W{S['NUM_WARPS']}")
+@pytest.mark.parametrize("S", [pytest.param(S, marks=pytest.mark.slow) if S is LLAMA else S for S in LAYOUTS], ids=lambda S: f"N{S['N']}-R{S['R0_BLOCK']}-W{S['NUM_WARPS']}")
 def test_the_norm_twins_are_the_definitions(S: dict) -> None:
     rng = np.random.default_rng(S["N"])
     N = S["N"]

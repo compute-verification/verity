@@ -40,7 +40,7 @@ sys.setrecursionlimit(100000)
 from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.ml.circuits.program import input_id, is_input  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity_vllm.program.boolean import load_program  # noqa: E402
+from verity.ml.definitions.boolean import load_program  # noqa: E402
 
 #: flock-circuit's spec shape: a statement's m = k_log + nbl, nbl >= 3, is at most 35 (`a6.M_MAX`)
 M_MAX = 35
@@ -217,7 +217,7 @@ def descend(ch: list[tuple[object, int]]) -> tuple[list[dict], list[dict]]:
 def boolean_route(fn, unit_gates: int) -> dict:
     """`descend` on fn's Boolean version's chain (`program.boolean.boolean_version`, descending into Boolean callees); with the
     version's id (``boolean``) and its unit when one lowers, empty when fn has no Boolean version."""
-    from verity_vllm.program.boolean import boolean_version
+    from verity.ml.definitions.boolean import boolean_version
     try:
         bv = boolean_version(fn)
     except LookupError:
@@ -274,8 +274,8 @@ def probe_kind(fam: str, fn, unit_gates: int, boolean_first: bool = False) -> di
 def definition(spec: str):
     """The registered specialization a Definition id names (``Fam_vN{K=V,...}``, each value a Python literal or else a
     registered Definition's id)."""
-    from verity_vllm.program.registry.catalog import load as load_registry
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity.ml.definitions.call_scope import specialization
     load_registry()
     fam, _, body = spec.partition("{")
     statics, depth, cur = {}, 0, ""

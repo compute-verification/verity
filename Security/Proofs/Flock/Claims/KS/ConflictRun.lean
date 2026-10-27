@@ -230,27 +230,6 @@ theorem verdict_within {zk : Bool} {spec : SessionSpec} {tabs : Array Setup} {re
   · exact (With.verifyWithM_sim (within L) (within_hashes L) spec tabs record proofs) () h
   · exact (With.zk_verifyWithM_sim (within L) (within_hashes L) spec tabs record proofs) () h
 
-/-- **An accepted run at `sha512`**: the statement sets up, the run decides on its last message, read as a final
-message on the statement, and on the link of the prover's first message; the custody checks pass; and the shipped
-verdict accepts with SHA-512 answered only within the run's verifier log. -/
-theorem acc_within {zk : Bool} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {r : Fin ((V zk).k x) → Coin} (h : (Claims.run sha512 P (V zk) x ω r).out = .acc) :
-    ∃ s spec sts link c₁ mids f, setupOf zk x = some (s, spec, sts) ∧
-      lastFinal (Claims.run sha512 P (V zk) x ω r).seen = some f ∧
-      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧ checks zk s spec x link c₁ mids f = .ok () ∧
-      verdictM zk (hashesIn ((Claims.run sha512 P (V zk) x ω r).vLog.map Prod.fst)) spec (tabsOf sts) f.record
-        f.proofs = .ok () := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := acc_decide h
-  obtain ⟨hv, hc⟩ := decision_runs (setupOf_some (act_decide hact)).2 hrun
-  obtain ⟨rest, hhead⟩ := run_head sha512 P (V zk) x ω r h
-  obtain ⟨rest', has, hlink⟩ := act_decide_link hact
-  rw [hhead] at hlink
-  refine ⟨s, spec, sts, link, c₁, mids, f, act_decide hact, ?_, hlink, hc, verdict_within hv⟩
-  have hl := act_decide_final hact
-  rw [List.getLast?_map, Option.bind_map] at hl
-  exact hl
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -276,6 +255,18 @@ theorem acc_within {zk : Bool} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Ms
   exact hl
 
 end Gen
+
+/-- **An accepted run at `sha512`**: the statement sets up, the run decides on its last message, read as a final
+message on the statement, and on the link of the prover's first message; the custody checks pass; and the shipped
+verdict accepts with SHA-512 answered only within the run's verifier log. -/
+theorem acc_within {zk : Bool} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V zk).k x) → Coin} (h : (Claims.run sha512 P (V zk) x ω r).out = .acc) :
+    ∃ s spec sts link c₁ mids f, setupOf zk x = some (s, spec, sts) ∧
+      lastFinal (Claims.run sha512 P (V zk) x ω r).seen = some f ∧
+      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧ checks zk s spec x link c₁ mids f = .ok () ∧
+      verdictM zk (hashesIn ((Claims.run sha512 P (V zk) x ω r).vLog.map Prod.fst)) spec (tabsOf sts) f.record
+        f.proofs = .ok () :=
+  Gen.acc_within (S := S₀) (zk := zk) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (h := h)
 
 /-! ## The tables' Merkle scheme -/
 

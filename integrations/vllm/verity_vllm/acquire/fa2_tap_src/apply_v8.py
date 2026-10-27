@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R13 lane fa2: turn a pinned vllm-flash-attn tree (506341a1) into the v8 tapped tree = R9 `verity_tap_v7.patch` + the
+"""Turn a pinned vllm-flash-attn tree (506341a1) into the v8 tapped tree = R9 `verity_tap_v7.patch` + the
 head-dim-parametric M1 layout (C-FA2-HDIM).
 
   apply_v8.py <tree>/csrc/flash_attn/src <this src dir>

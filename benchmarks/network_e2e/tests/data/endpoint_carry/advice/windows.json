@@ -1,0 +1,45 @@
+{
+ "schema": "verity-vllm/advice-windows-index/v1",
+ "run": "r20261025-060356-5c72",
+ "trace": "r20261025-060356-5c72",
+ "T": 600,
+ "windows": {
+  "113": {
+   "registration": "w113/registration.json",
+   "root": "de087e22bc3b1b4d320fe3651d1511f78f4e8fe39fcadcacb889047fe1df6dd363aeb0213162350fcbdb6cbad07b467be5a5e6ca318ae668e9bc84035c5a4156",
+   "bits": 908,
+   "commit": {
+    "run_id": "r20261025-060356-5c72/w113",
+    "run_root": "3298067d79bf578586ef226dcf38532fa2803f6948f88e567a82b3e395d069db87cf98c8afde2107946cd1420d803036b00f5957d164230bb7276ac5722e9bc0"
+   }
+  },
+  "114": {
+   "registration": "w114/registration.json",
+   "root": "c032dc560f702ebb9a9cb88e58aad8732efe37a742fb47adde1264c76e00c0b5e75bd4f76b2cf225a8dd11eade2b61d9bfa13df449e531075a25cc390a6f224e",
+   "bits": 3372,
+   "commit": {
+    "run_id": "r20261025-060356-5c72/w114",
+    "run_root": "d5b9f2525ad6a874965a993e3b4876143318774d00450b80161edd084cd77cdbe7bcae7ac54a7ff9e228d0ee359d8886fcee02e7a19f0a00eff3c18ad19ba184"
+   }
+  },
+  "115": {
+   "registration": "w115/registration.json",
+   "root": "ededb39e61b2e8125d716957995bc0226cf92375f5d56a2d465475b8eefa38789508c6c970344c5baced6921b3627fb1a6deaf2f3f453c47242798634a236654",
+   "bits": 10698,
+   "commit": {
+    "run_id": "r20261025-060356-5c72/w115",
+    "run_root": "cebaf0e7bc40c0bb3df47fd642231c8b09abb1b842512488d4e4885dea30d5d5fcbac18efd6f3c59d1182b50d697a7c19ce77c660c5c92246efacfa5d509da0b"
+   }
+  },
+  "116": {
+   "registration": "w116/registration.json",
+   "root": "180d0d241c58ddb8f6d366ba62fc0fe059b82fb0b390d09c5f2782af5474e42f0102b72a33b924da1690cd41122d9aa6e05cf29b36bf8e9e3ef8c8b6b0da92ec",
+   "bits": 1672,
+   "commit": {
+    "run_id": "r20261025-060356-5c72/w116",
+    "run_root": "3ec528ef735c0da585f8add9f1a84478d8f730eb7eb44b9efe7b06afdb9f9b72618cafd2bfddc4a9bb91085db01947b23c8c1c75cfd80f94bcb16f680a0768ce"
+   }
+  }
+ },
+ "open": []
+}

@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from verity_vllm.check.replay import coverage as COV, opening as OP
+from verity_vllm.records.required_manifest import SCHEMA
 
 ROT = "model.layers.0.self_attn.rotary_emb"
 W = 8                                                                            # words per identity
@@ -101,13 +102,15 @@ def test_the_store_and_the_population_reconciliation_resolve_through_the_same_ta
     bmap, committed, manifest = _world()
     ids = [{"family": "instance_outputs", "request_id": "r0", "step": 0, "op_path": ROT, "output_member": "0", "invocation": n, "element_range": [0, W],
             "rank": 0, "spec": "RoPE_v1{}"} for n in range(4)]
-    man = dict(manifest, identities=ids, query={"id": "Q_module_v1"}, header={})
+    man = dict(manifest, schema=SCHEMA, program_digest="ab" * 64, manifest_digest="cd" * 64, requests=["r0"], identities=ids,
+               query={"id": "Q_module_v1"})
     table = OP.alias_table(man)
     assert table == {f"model.layers.{n}.self_attn.rotary_emb": (ROT, n) for n in range(1, 4)}
     # the Program's row addresses, per-layer paths: every manifest identity is addressed (0 without rows) iff the aliases resolve
     addresses = {("r0", 0, ROT if n == 0 else f"model.layers.{n}.self_attn.rotary_emb", "0"): {"class": "vu", "rows": 1, "spec": "RoPE_v1{}", "why": None}
                  for n in range(4)}
     qp = COV.query_population(man, addresses, set(), ranks=[0])
+    assert "manifest_refused" not in qp["query_checks"] and qp["query_total"]["identities"] == 4
     assert qp["query_checks"]["identities_without_rows"]["n"] == 0 and qp["query_checks"]["vus_outside_query"]["n"] == 0
     store = OP.CommittedStore.of_record(bmap, committed, man)
     for (rid, step, op, mem) in addresses:

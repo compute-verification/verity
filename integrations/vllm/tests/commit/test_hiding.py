@@ -12,7 +12,8 @@ import pytest
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import vectors as V
 from verity_vllm.acquire.committer_api import Opening
-from verity_vllm.commit import hiding, scheme
+from verity.ml.windows import hiding
+from verity_vllm.commit import scheme
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 from verity_vllm.commit.native_ranges import RangeOpening
 

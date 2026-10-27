@@ -13,7 +13,8 @@ contract: `json.dumps({**head, "rows": list(instance_rows(program))})`, whatever
 The text is compressed by `ParallelGzip`: one gzip member whose deflate blocks are compressed on threads.
 
 `read_instances(path)` reads the whole document back, as `json.load` does, with equal argument items sharing one list (the rows
-are a few times the file instead of 56 times).  `query.program_view.iter_instance_rows` streams the rows one at a time.
+are a few times the file instead of 56 times), and each repeat of an operand's text (a weight read every token's Call repeats)
+read as a copy of the first one's list.  `query.program_view.iter_instance_rows` streams the rows one at a time.
 """
 
 from __future__ import annotations
@@ -319,49 +320,168 @@ class _Text:
             self._more()
 
 
-def read_instances(path: str, *, expand: bool = True) -> dict[str, Any]:
-    """`json.load` of an instance-sequence file, the same document (with `expand`, each row's arguments `compact.expanded_file_args`),
-    decoded a row at a time with every argument item that equals one already read being that item's list: a causal attention's key
-    operand repeats the call before's items, so decoded one list per occurrence the rows were 56 times the file (GLM-5.3 TP8 B8 I256,
-    8 request Programs of 2.5 GB: 139.5 GB).  The rows' keys, specs and forms are shared the same way.  A reader must not modify an
-    item in place: equal items are one list."""
-    from verity_vllm.program.compact import _FILE_SPACES, runs_from_file_items
-    items: dict[tuple, list] = {}
-    strs: dict[str, str] = {}
+#: an operand `read_instances` keeps the text of, to read each later occurrence of that text as a copy of its list: at least
+#: `OPERAND_MEMO_MIN` characters, every item shared, up to `OPERAND_MEMO_BYTES` characters in all and `_MEMO_WAYS` operands per first
+#: `_MEMO_KEY` characters.  Every token's Call reads its layer's weights again: GLM-5.3 TP8 B1 I256 rank 0's rows are 7.4 of 8.4 GB
+#: BatchedGemm text, 137.4M of its 144.7M items repeats.
+OPERAND_MEMO_MIN = 256
+OPERAND_MEMO_BYTES = 1 << 28
+_MEMO_KEY = 64
+_MEMO_WAYS = 4
+_ARGS = '"args": ['
+_ARGS_LAST = '"args": []}'
+_HEAD_MAX = 1 << 12
+_WS = " \t\n\r"
+_MORE = object()
 
-    def item(it):
+
+def _skip(buf: str, q: int) -> int:
+    n = len(buf)
+    while q < n and buf[q] in _WS:
+        q += 1
+    return q
+
+
+class _Rows:
+    """`read_instances`' rows: argument items equal to one already read are its list (`items`), keys, specs and forms are shared
+    (`strs`), and an operand whose text was kept (`memo`) is read again as a copy of its list, the same items."""
+
+    def __init__(self, expand: bool) -> None:
+        from verity_vllm.program.compact import _FILE_SPACES, runs_from_file_items
+        self.expand, self.spaces, self.runs = expand, _FILE_SPACES, runs_from_file_items
+        self.items: dict[tuple, list] = {}
+        self.strs: dict[str, str] = {}
+        self.memo: dict[str, list[tuple[str, list]]] = {}
+        self.memo_bytes = 0
+        self.loose = 0                        # items left as decoded: an operand holding one is not kept
+        self.dec = json.JSONDecoder()
+
+    def item(self, it: list) -> list:
         try:
-            return items.setdefault(tuple(it), it)
+            return self.items.setdefault(tuple(it), it)
         except TypeError:                     # an item that is not a flat list of scalars: as decoded
+            self.loose += 1
             return it
 
-    def run(t):
-        got = items.get(t)
+    def run(self, t: tuple) -> list:
+        got = self.items.get(t)
         if got is None:
-            got = items[t] = list(t)
+            got = self.items[t] = list(t)
         return got
 
-    def operand(a):
+    def operand(self, a):
         if not isinstance(a, list):
             return a
-        if expand and any(len(it) == 8 and it[0] in _FILE_SPACES for it in a if isinstance(it, list)):
-            return [run(t) for t in runs_from_file_items(a)]
+        if self.expand and any(len(it) == 8 and it[0] in self.spaces for it in a if isinstance(it, list)):
+            run = self.run
+            return [run(t) for t in self.runs(a)]
+        item = self.item
         return [item(it) if isinstance(it, list) else it for it in a]
 
-    def row(r):
+    def row(self, r, ops: list | None = None):
         if not isinstance(r, dict):
             return r
-        out = {}
+        strs, out = self.strs, {}
         for k, v in r.items():
             k = strs.setdefault(k, k)
             if k == "args" and isinstance(v, list):
-                v = [operand(a) for a in v]
+                v = ops if ops is not None else [self.operand(a) for a in v]
             elif k in ("spec", "form") and isinstance(v, str):
                 v = strs.setdefault(v, v)
             out[k] = v
         return out
 
-    dec = json.JSONDecoder()
+    def list_operand(self, buf: str, q: int) -> tuple[list, int]:
+        """The operand whose text starts at `buf[q]` (a "["), and the index past it.  A kept text that `buf` continues with at `q` is
+        that operand: a JSON list ends at its own "]"."""
+        key = buf[q:q + _MEMO_KEY]
+        ways = self.memo.get(key)
+        if ways is not None:
+            for text, op in ways:
+                if buf.startswith(text, q):
+                    return op.copy(), q + len(text)
+        a, e = self.dec.raw_decode(buf, q)
+        loose = self.loose
+        op = self.operand(a)
+        if e - q >= OPERAND_MEMO_MIN and self.loose == loose and self.memo_bytes < OPERAND_MEMO_BYTES:
+            ways = self.memo.setdefault(key, [])
+            if len(ways) < _MEMO_WAYS and dict not in map(type, op):
+                ways.append((buf[q:e], op))
+                self.memo_bytes += e - q
+        return op, e
+
+    def written_row(self, buf: str, p: int, eof: bool):
+        """The row whose text starts at `buf[p]` (a "{") laid out as the writers lay it out, its arguments last after `"args": [`,
+        and the index past it; `_MORE` if `buf` ends inside it, None if it is laid out otherwise (to be decoded whole)."""
+        more = None if eof else _MORE
+        n = len(buf)
+        j = buf.find(_ARGS, p, p + _HEAD_MAX)
+        if j < 0:
+            return more if n - p < _HEAD_MAX else None
+        s = buf[p:j] + _ARGS_LAST
+        try:
+            head, end = self.dec.raw_decode(s)
+        except json.JSONDecodeError:
+            return None
+        if end != len(s) or type(head) is not dict or next(reversed(head), None) != "args":
+            return None                       # "args" is not a key there, or not the row's last
+        ops: list = []
+        q = j + len(_ARGS)
+        try:
+            while True:
+                q = _skip(buf, q)
+                if q >= n:
+                    return more
+                if buf[q] == "]" and not ops:
+                    q += 1
+                    break
+                if buf[q] == "[":
+                    op, q = self.list_operand(buf, q)
+                else:
+                    op, q = self.dec.raw_decode(buf, q)
+                    if q >= n:
+                        return more           # a number may go on in the next chunk
+                ops.append(op)
+                q = _skip(buf, q)
+                if q >= n:
+                    return more
+                q += 1
+                if buf[q - 1] == "]":
+                    break
+                if buf[q - 1] != ",":
+                    return None
+            q = _skip(buf, q)
+            if q >= n:
+                return more
+        except json.JSONDecodeError:
+            return more
+        return (self.row(head, ops), q + 1) if buf[q] == "}" else None
+
+    def next_row(self, t: _Text):
+        """The row at `t`, consumed: in the writers' layout a field at a time (`written_row`), else decoded whole."""
+        while t.peek() == "{":
+            got = self.written_row(t.buf, t.pos, t.eof)
+            if got is None:
+                break
+            if got is _MORE:
+                t._more()
+                continue
+            r, t.pos = got
+            if t.pos > _CHUNK:
+                t.buf, t.pos = t.buf[t.pos:], 0
+            return r
+        return self.row(t.value(self.dec))
+
+
+def read_instances(path: str, *, expand: bool = True) -> dict[str, Any]:
+    """`json.load` of an instance-sequence file, the same document (with `expand`, each row's arguments `compact.expanded_file_args`),
+    decoded a row at a time with every argument item that equals one already read being that item's list: a causal attention's key
+    operand repeats the call before's items, so decoded one list per occurrence the rows were 56 times the file (GLM-5.3 TP8 B8 I256,
+    8 request Programs of 2.5 GB: 139.5 GB).  The rows' keys, specs and forms are shared the same way, and an operand whose text was
+    read before is a new list of the same items, read without decoding it again (`OPERAND_MEMO_MIN`).  A reader must not modify an
+    item in place: equal items are one list."""
+    R = _Rows(expand)
+    dec = R.dec
     doc: dict[str, Any] = {}
     with _open_text(path) as f:
         t = _Text(f)
@@ -381,7 +501,7 @@ def read_instances(path: str, *, expand: bool = True) -> dict[str, Any]:
                         t.pos += 1
                     else:
                         while True:
-                            rows.append(row(t.value(dec)))
+                            rows.append(R.next_row(t))
                             if t.peek() == "]":
                                 t.pos += 1
                                 break

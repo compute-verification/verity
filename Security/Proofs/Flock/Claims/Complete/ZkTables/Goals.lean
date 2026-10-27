@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
+import Proofs.Flock.Claims.Complete.Json.Text
 
 /-!
 # The record's checks at the honest masked run of several tables
@@ -146,6 +147,7 @@ structure RecordJsonAt (o : Run H rel) : Prop where
   repStream : ∀ i < o.tabs.size, ∀ r < 2,
     (o.sess.streams.find? (·.name == s!"{o.spec.tables[i]!}/rep{r}")).isSome = true
   repExtras : ∀ i < o.tabs.size, o.tabs[i]!.extra o.sess.points = .ok (o.extras i)
+  canonical : Flock.RecordText.check o.record = .ok ()
 
 /-- **The record's checks hold at every run** where the statement's `hello` prints. -/
 theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : RecordJsonAt o := by
@@ -174,6 +176,9 @@ theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
   refine
     { draw := ?_
       liveReads := hlv
+      canonical := by
+        rw [hrec]
+        exact check_printJ S (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_draw hdraw))
       rootB := by rw [hlive, hlink]; exact list_bytes_beq_self _
       publicsLink := ?_
       points := by rw [hlive]; exact beq_self_eq_true _
@@ -194,7 +199,7 @@ theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
     | some d =>
       rintro ⟨d', hd', hs⟩
       rw [hd']
-      exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+      exact (drawEq_iff _ _).2 (.some hs)
   · rw [hlive, hlink]
     dsimp only
     have : (o.spec.tables.map fun _ => ByteArray.empty).toList = (o.tabs.map fun _ => ByteArray.empty).toList := by
@@ -278,6 +283,7 @@ theorem recordAt_of (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
   { finalFits := hFi.finalFits
     draw := hJ.draw
     liveReads := hJ.liveReads
+    canonical := hJ.canonical
     rootB := hJ.rootB
     publicsLink := hJ.publicsLink
     points := hJ.points

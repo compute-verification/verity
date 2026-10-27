@@ -20,13 +20,14 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
+from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_path, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
@@ -114,6 +115,45 @@ def jit_cache(env: dict[str, str], tree: str | None = None, key: Callable[[], st
     env.update({"CUDA_CACHE_PATH": path, "CUDA_CACHE_MAXSIZE": str(4 << 30)})
 
 
+def _links(d: str, targets: dict[str, str]) -> bool:
+    try:
+        return sorted(os.listdir(d)) == sorted(targets) and all(os.readlink(os.path.join(d, n)) == t for n, t in targets.items())
+    except OSError:
+        return False
+
+
+def cublas_names(env: dict[str, str], py: str, root: str | None = None) -> str | None:
+    """Put first on ``env``'s ``LD_LIBRARY_PATH`` a directory whose ``libcublas.so`` and ``libcublasLt.so`` are links to the cuBLAS of
+    ``py``'s venv (``site-packages/nvidia/*/lib/<name>.so.N``, the library torch loads), and return it.  vLLM's flashinfer autotune
+    (its cache's metadata, `flashinfer.autotuner._get_cublas_version`) loads cuBLAS by the unversioned name, which a wheel doesn't
+    ship, so without it ld.so.cache gives a node's system CUDA's and the stage maps two cuBLAS: the route pin
+    (`check.replay.driver.cublas_versions`) reads exactly one.  The loader reads ``LD_LIBRARY_PATH`` once, when a process starts, so
+    this is the stages' environment, which every rank worker vLLM spawns inherits.  The directory is ``root`` (default: the temp dir)
+    named for the links' targets, so every stage on one venv has the same environment.  None, and ``env`` as it was, when the venv
+    has no cuBLAS wheel; ValueError when it has more than one library of a name."""
+    site = os.path.join(glob.escape(os.path.dirname(os.path.dirname(py))), "lib", "python*", "site-packages", "nvidia", "*", "lib")
+    found = {f"{n}.so": sorted({os.path.realpath(p) for p in glob.glob(os.path.join(site, f"{n}.so.*"))}) for n in ("libcublas", "libcublasLt")}
+    if not any(found.values()):
+        return None
+    if any(len(f) != 1 for f in found.values()):
+        raise ValueError(f"not one cuBLAS of each name in {py}'s venv: {found}")
+    targets = {n: f[0] for n, f in found.items()}
+    d = os.path.join(root or tempfile.gettempdir(), "verity-cublas-names-" + hashlib.sha256(json.dumps(targets).encode()).hexdigest()[:16])
+    if not _links(d, targets):
+        tmp = tempfile.mkdtemp(prefix=".verity-cublas-names-", dir=os.path.dirname(d))
+        for n, t in targets.items():
+            os.symlink(t, os.path.join(tmp, n))
+        try:
+            os.rename(tmp, d)
+        except OSError:
+            shutil.rmtree(tmp)
+        if not _links(d, targets):
+            raise ValueError(f"{d} holds other than the links {targets}")
+    rest = [p for p in env.get("LD_LIBRARY_PATH", "").split(":") if p and p != d]
+    env["LD_LIBRARY_PATH"] = ":".join([d, *rest])
+    return d
+
+
 class Row:
     """One row's run: ``row`` id, checkpoint ``role``, HF ``repo`` and ``rev``, the requested ``stages``.
 
@@ -126,7 +166,7 @@ class Row:
         self.py = env.py
         self.py312 = env.py312 or env.py
         self.d = f"{env.sweep_dir}/{row}"
-        self.wl = f"workloads/{row}.json"
+        self.wl = row_path(row)
         self.timeline = env.timeline or f"{self.d}/timeline.jsonl"
         self.child_env: dict[str, str] = {}
         self._running: set[int] = set()
@@ -155,6 +195,11 @@ class Row:
         jit_cache(env, self.tree, lambda: jit_key(self.py, env["CUDA_HOME"], self.row, self.tree) if self.bi_eager() else None)
         if GL.leased(env):
             GL.hide_devices(env)
+        try:
+            cublas_names(env, self.py)
+        except (OSError, ValueError) as e:
+            print(f"PRECHECK_FAIL_CUBLAS_NAMES: {e}", file=sys.stderr)
+            raise Stop(3)
         self.child_env = env
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)

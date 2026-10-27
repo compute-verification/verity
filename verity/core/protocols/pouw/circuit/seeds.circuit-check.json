@@ -1,7 +1,11 @@
 {
  "definitions": {
+  "PouwAdd64_v2": {
+   "and": 63
+  },
   "PouwNoiseBlock_v2": {
-   "and": 77290
+   "and": 77290,
+   "type": "79bfe6e5759db2cc2f588dd49fda3255b336bd418b7a1c538f61240660c0313151a5e35802b5652dda837ac50e40caa8720cb1520c365e0e299e07b0a4103c6c"
   }
  }
 }

@@ -16,8 +16,8 @@ from verity_vllm.program.frontend import (Arr, DeadGateWarning, FrontendError, O
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.program.registry.prims import BF16, F32, I32  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
+from verity.ml.definitions.registry.prims import BF16, F32, I32  # noqa: E402
 
 meta = lambda *shape, dtype=torch.bfloat16: torch.empty(shape, dtype=dtype, device="meta")  # noqa: E731
 
@@ -185,7 +185,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
     # and the program-level check catches the same conflict on an already-built program (no first-wins on decode paths)
     from verity.ml.circuits.defs import CompositeDefinition, Builder
     from verity.ml.circuits.refs import Coll
-    from verity_vllm.program.registry.prims import Bf16Add, Bf16AddF2fp
+    from verity.ml.definitions.registry.prims import Bf16Add, Bf16AddF2fp
     from verity.ml.circuits.types import Array
 
     def leaf(prim):
@@ -203,7 +203,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
 def test_r1_registry_version_in_provenance():
     rep = export_report(ex.Gemm, static={"K": 32, "N": 4}, dead_gates="ignore")
     reg = rep.provenance["registry"]
-    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity_vllm.program.registry.prims" in reg["sources"]
+    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity.ml.definitions.registry.prims" in reg["sources"]
     assert rep.provenance["torch"] == torch.__version__ and rep.provenance["mode"] == "authoring"
     assert rep.provenance["rules"] == []
 
@@ -306,7 +306,7 @@ def test_r5_inner_axis_select_and_permute_are_strided_views():
 
 
 def test_r5_permute_fallback_is_explicit_under_a_limit():
-    from verity_vllm.program.frontend import torch_frontend as tf
+    from verity_vllm.program.frontend import strided_views as tf
 
     @function(name="Perm5")
     def Perm(x: Arr[2, 3, 4, BF16]) -> Arr[4, 3, 2, BF16]:
@@ -334,7 +334,7 @@ def test_a_permute_of_the_leading_axes_past_the_explicit_limit_is_a_concat_of_ro
     """DeepSeek-V4's `fused_inv_rope_fp8_quant` output [G, T, d] read as [T, G, d]: past the Explicit limit, a permute that keeps the
     trailing axes in place reorders whole rows (one part each) where the leaf-by-leaf fallback refuses; under the Build's default
     meta device."""
-    from verity_vllm.program.frontend import torch_frontend as tf
+    from verity_vllm.program.frontend import strided_views as tf
     monkeypatch.setattr(tf, "_EXPLICIT_LIMIT", 8)
 
     @function(name="Perm5d")

@@ -9,6 +9,12 @@ export O=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$O"
 export PY=/workspace/jobs/venv312/bin/python HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PPL_DATA=$RESEARCH_RUN_DIR/inputs
 export PPL_ARGS=${PPL_ARGS:?}
+# a streamed model's pull window (stream.Hub, under TMPDIR) goes with the run, a cancelled one too: research cancel
+# SIGTERMs the whole scope, so Python's own cleanup never runs
+S=$(mktemp -d "${TMPDIR:-/tmp}/ppl-$(basename "$RESEARCH_RUN_DIR").XXXX") || exit 1
+export TMPDIR=$S
+trap 'rm -rf "$S"' EXIT
+trap 'exit 143' TERM INT
 # shellcheck disable=SC2016
 gpu-lease "${PPL_GPUS:-1}" --wait --max-min "${PPL_MAX_MIN:-120}" -- bash -c '
   q=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit

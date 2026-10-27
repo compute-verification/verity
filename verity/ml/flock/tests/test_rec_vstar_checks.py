@@ -505,14 +505,21 @@ SPARSE = (18, 13, 6, 0)
 R_SHAPE = (23, 2)
 
 
+def _past_v_star(j: int) -> int:
+    """Candidate 3's statement ``j`` past V*'s holo statements at its inner shape: RecSparse at 0, R's levels at 1 to 3,
+    R's opening at 4."""
+    return len(_v_star(*C3, holo=True)) + j
+
+
 def _c3(m: int, k: int, c: int, sparse: tuple, r: tuple) -> list[list]:
-    """Candidate 3's V* list, as `rec_vstage.stage --sparse` names its units: V*'s, then RecSparse over the two reps, R's levels
+    """Candidate 3's V* list, as `rec_vstage.stage --sparse` names its units: V*'s holo statements (candidate 3's inner
+    circuits are private: its sparse phase reads h, which only a holo session sends), then RecSparse over the two reps, R's levels
     over its one stream's openings (`rec_vstage.stage_stacked`), the parts of R's opening (`rec_residuals.stage_opening`), and
     the RecCaps last."""
     from verity_flock import rec_sparse as SP
 
     sh = A.Shape(r[0], 6, r[1], salt_len=0, opening_only=True)
-    return (_v_star(m, k, c) + [[SP.unit_name(SP.Shape(*sparse)), 2]]
+    return (_v_star(m, k, c, holo=True) + [[SP.unit_name(SP.Shape(*sparse)), 2]]
             + [[O.stacked_name(1 << lv.lanes, lv.d - lv.cap), lv.q] for lv in sh.sched.levels]
             + [[f"rec-opening/m{r[0]}-c{r[1]}-p{j}", 1] for j in range(len(RR.parts(RR.spec(sh))))] + _caps(m, k, c))
 
@@ -524,11 +531,11 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
     count, which the table's has at another), an opening at another shape, a RecSparse at another, R named without the
     sparse phase whose claims it opens, the sparse phase without R, which opens them, and R at another m than the bucket's
     `table_m`."""
-    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    inner = _inner(tmp_path / "c3.json", *C3, holo=True, sparse=SPARSE, stacked=R_SHAPE)
     rc, line = _statements(inner)
     want = _c3(*C3, SPARSE, R_SHAPE)
     assert rc == 0 and line["statements"] == want, line
-    assert [s[0] for s in want[6:]] == ["rec-sparse/n18-e13-s6-t0", "rec-open-stacked/l64-h4", "rec-open-stacked/l16-h3",
+    assert [s[0] for s in want[_past_v_star(0):]] == ["rec-sparse/n18-e13-s6-t0", "rec-open-stacked/l64-h4", "rec-open-stacked/l16-h3",
                                         "rec-open-stacked/l16-h1", "rec-opening/m23-c2-p0", "rec-cap/n128-l1",
                                         "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"], want
     rc, line = _statements(inner, "--unit", "rec-open-stacked/l16-h1", "--instances", "71")
@@ -547,13 +554,13 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
         rc, line = _statements(inner, "--unit", name, "--instances", str(n))
         assert rc == 1 and line["error"].startswith(why), (name, line)
     for f, why in (
-            (_inner(tmp_path / "no-sparse.json", *C3, stacked=R_SHAPE),
+            (_inner(tmp_path / "no-sparse.json", *C3, holo=True, stacked=R_SHAPE),
              "candidate 3's V* list: the inner shape names R's shape (m 23, claims 2) and no RecSparse shape (rec-inner "
              "--sparse): R opens the sparse phase's claims, so RecSparse is missing"),
-            (_inner(tmp_path / "no-r.json", *C3, sparse=SPARSE),
+            (_inner(tmp_path / "no-r.json", *C3, holo=True, sparse=SPARSE),
              "candidate 3's V* list: the inner shape names RecSparse (rec-sparse/n18-e13-s6-t0) and no R's shape (stacked): "
              "R opens the sparse phases' claims, so R is missing"),
-            (_inner(tmp_path / "r24.json", *C3, sparse=SPARSE, stacked=(24, 2)),
+            (_inner(tmp_path / "r24.json", *C3, holo=True, sparse=SPARSE, stacked=(24, 2)),
              "candidate 3's V* list: R's m 24 is not rec-sparse/n18-e13-s6-t0's table_m 23")):
         rc, line = _statements(f)
         assert rc == 1 and line["error"] == why, line
@@ -566,7 +573,7 @@ def test_a_rec_sparse_reads_file_holds_every_message_port(tmp_path):
     reads is left unregistered."""
     from verity_flock import rec_sparse as SP
 
-    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    inner = _inner(tmp_path / "c3.json", *C3, holo=True, sparse=SPARSE, stacked=R_SHAPE)
     unit = ["--unit", SP.unit_name(SP.Shape(*SPARSE)), "--instances", "2"]
     rc, line = _statements(inner, *unit)
     own = line["own"]
@@ -595,19 +602,19 @@ def _staged(d: Path, text: str, part: dict, program) -> Path:
 
 def test_r_levels_circuit_file_is_v_stars_under_its_own_name(l16_h1, tmp_path):
     """R's last level at m 23 (`rec-open-stacked/l16-h1` over 71 openings) as `rec_outer.stage` writes it with
-    `stacked_name` is V*'s file byte for byte, as candidate 3's statement 9; the circuit table's `rec-open/l16-h1` file is
-    refused at candidate 3's shape as R's level under the table's name."""
+    `stacked_name` is V*'s file byte for byte, as candidate 3's fourth statement past V*'s; the circuit table's
+    `rec-open/l16-h1` file is refused at candidate 3's shape as R's level under the table's name."""
     name = O.stacked_name(16, 1)
     own = _l16_h1(tmp_path / "level", 71, name)
-    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
-    assert _c3(*C3, SPARSE, R_SHAPE)[9] == [name, 71]
+    inner = _inner(tmp_path / "c3.json", *C3, holo=True, sparse=SPARSE, stacked=R_SHAPE)
+    assert _c3(*C3, SPARSE, R_SHAPE)[_past_v_star(3)] == [name, 71]
     rc, line = _statements(inner, "--circuit", str(tmp_path / "level" / "circuit.txt"), "--instances", "71", "--rec-part",
-                           "9", "--rec-bindings", str(own))
+                           str(_past_v_star(3)), "--rec-bindings", str(own))
     assert rc == 0 and line["checked"] == [name, 71] and line["own"] == [], line
     honest, table_own = l16_h1
     (tmp_path / "table.txt").write_bytes(honest)
-    rc, line = _statements(inner, "--circuit", str(tmp_path / "table.txt"), "--instances", "142", "--rec-part", "9",
-                           "--rec-bindings", str(table_own))
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "table.txt"), "--instances", "142", "--rec-part",
+                           str(_past_v_star(3)), "--rec-bindings", str(table_own))
     assert rc == 1 and line["error"].startswith(
         "rec-open/l16-h1: R's level stacked/L2 is rec-open-stacked/l16-h1, never under the circuit table's name rec-open/…"), line
 
@@ -626,30 +633,30 @@ def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
                             str(tmp_path / "sparse" / "partition.json"), str(tmp_path / "sparse" / "program.json")],
                            capture_output=True, text=True)
     assert fresh.returncode == 0 and json.loads(fresh.stdout) == json.loads(own.read_text()), fresh.stderr
-    j = len(_v_star(*C3))
+    j = _past_v_star(0)
     flags = ["--circuit", str(tmp_path / "sparse" / "circuit.txt"), "--instances", "2", "--rec-part", str(j),
              "--rec-bindings", str(own)]
     r22 = (SP.table_m(SP.Shape(1, 6, 1, 0)), 2)
-    rc, line = _statements(_inner(tmp_path / "s.json", *C3, sparse=(1, 6, 1, 0), stacked=r22), *flags)
+    rc, line = _statements(_inner(tmp_path / "s.json", *C3, holo=True, sparse=(1, 6, 1, 0), stacked=r22), *flags)
     assert rc == 0 and line["checked"] == ["rec-sparse/n1-e6-s1-t0", 2], line
     assert line["own"] == [["h", "rec-c38", [0, 1]], ["claim", "rec-claim", [0, 1]]], line
     assert line["statements"] == _c3(*C3, (1, 6, 1, 0), r22), line
-    rc, line = _statements(_inner(tmp_path / "s2.json", *C3, sparse=(1, 6, 2, 0), stacked=r22), *flags)
+    rc, line = _statements(_inner(tmp_path / "s2.json", *C3, holo=True, sparse=(1, 6, 2, 0), stacked=r22), *flags)
     assert rc == 1 and line["error"] == (
         "rec-sparse/n1-e6-s1-t0: a RecSparse unit, and the bucket's is rec-sparse/n1-e6-s2-t0 (rec-inner --sparse)"), line
 
 
 def test_r_openings_circuit_file_is_v_stars(once, tmp_path):
     """R's opening at m 23 (`rec-opening/m23-c2-p0`, one part), as `rec_residuals.stage_opening` writes it, is V*'s file byte
-    for byte as candidate 3's statement 10, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
+    for byte as candidate 3's fifth statement past V*'s, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
     minutes and 2.2 GB (each side builds the opening's unit; Python's is `test_rec_opening_unit.opening`'s, made once): no
     cheaper test writes Lean's opening unit, so none other catches its bytes drifting from the one the prover commits and
     the Lean verifier recomputes."""
     sh = A.Shape(R_SHAPE[0], 6, R_SHAPE[1], salt_len=0, opening_only=True)
     [p] = RR.parts(RR.spec(sh))
     [f] = opening(once, R_SHAPE[0])
-    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE), "--circuit", str(f),
-                           "--instances", "1", "--rec-part", "10", "--rec-bindings",
+    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, holo=True, sparse=SPARSE, stacked=R_SHAPE), "--circuit", str(f),
+                           "--instances", "1", "--rec-part", str(_past_v_star(4)), "--rec-bindings",
                            str(_bindings(f.parent, tmp_path / "bindings.json")))
     nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
     assert rc == 0 and line["checked"] == ["rec-opening/m23-c2-p0", 1], line
@@ -665,7 +672,7 @@ def test_a_claim_port_reads_its_own_reps_row_of_rec_claim(tmp_path):
     `rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`), and one missing them is refused by the first."""
     from verity_flock import rec_sparse as SP
 
-    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    inner = _inner(tmp_path / "c3.json", *C3, holo=True, sparse=SPARSE, stacked=R_SHAPE)
     msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
     for unit, n, other, honest, bad in (
             ("rec-sparse/n18-e13-s6-t0", 2, [["v", "rec-sparse-v", [0, 1]]] + msgs, [["claim", "rec-claim", [0, 1]]],

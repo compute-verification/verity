@@ -9,7 +9,8 @@ import numpy as np
 
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.commit.opened import UnverifiedUnlinked
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.program.sampling_event import circuit_token_id
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore
 
@@ -24,11 +25,11 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     prompt ids; at each later step == the request's committed `sampled_token_ids` of the previous step (i64 slot 0 of its block).
     `workload_requests`: [{"request_id": r<k>, "arrive_step", "prompt_token_ids", "steps": [engine steps], "seed": declared or None,
     "cached": C}]: a warm request's arrival step embeds prompt[C:] (its rows 0..C-1 are the producers', which the replay reads).
-    [R16 pin, ruling 36] + `prescribed_input_linkage` (seed / splits); `splits_of_record` = {request_id: {"derived": num_SMs} | other}.
+    Plus `prescribed_input_linkage` (seed / splits); `splits_of_record` = {request_id: {"derived": num_SMs} | other}.
     `store`: a CommittedStore-like reader (has/words) in place of (bmap, committed) -- tests.
-    [rev M-0485] `eos_of_record`: the Program's declared stop rule (global_program.stop_rule eos_token_ids; None = undeclared): a request
+    `eos_of_record`: the Program's declared stop rule (global_program.stop_rule eos_token_ids; None = undeclared): a request
     linked over FEWER steps than its declared cap must end on a declared EOS id, else unlinked by name.
-    [padrev M-0517, RULING 21] `eos_lag_rows`: the placeholder rows the ATTESTED scheduler runs after an EOS (RunHeader.profile.engine_kwargs
+    `eos_lag_rows`: the placeholder rows the ATTESTED scheduler runs after an EOS (RunHeader.profile.engine_kwargs
     .async_scheduling True -> 1, False -> 0; None = unattested -> every early stop is refused by name).  The EOS is verified at
     steps[-1 - lag]; the trailing `lag` step(s) are the placeholder(s) fed the EOS (their committed embed input == that EOS id, recorded).
     A read whose opening does not verify against the run root is an unlinked pair by name."""
@@ -71,6 +72,11 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                 unlinked.append({"request_id": rid, "engine_step": s, "kind": "chain", "why": why if w is None else swhy})
                 continue
             tid, sid = int(np.asarray(w).astype(np.int64)[0]), int(np.asarray(sw).astype(np.int64)[0])
+            try:
+                circuit_token_id(sid)
+            except ValueError as err:
+                unlinked.append({"request_id": rid, "engine_step": s, "kind": "chain", "why": f"the committed sampled id of step {s - 1}: {err}"})
+                continue
             if tid == sid:
                 linked += 1
             else:
@@ -149,7 +155,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
 
 
 def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None) -> tuple[dict[str, int], bool]:
-    """[rev M-0570 (1), compiled f3fdaba37] the arrivals every C2 consumer (population placement, sampled replay, boundary linkage,
+    """The arrivals every C2 consumer (population placement, sampled replay, boundary linkage,
     CompiledKernelCheck) counts from: the ENGINE schedule of record's observed arrive steps when the population was placed on the observed
     committed-step axis (`schedule.use == "observed"`: every declared request observed, contiguous, exactly its cap), else the declaration.
     Returns (arrivals, moved) -- `moved` iff an arrival differs from the declaration.  A missing / failed schedule leaves the declaration."""
@@ -163,7 +169,7 @@ def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None
 
 
 def linkage_horizon(arrive: int, declared_cap: int, program_steps: int | None, executed: int | None = None) -> list[int]:
-    """[R16 pin, coord ruling 35 sixth consumer (sys M-0466)] the engine steps a request is linked over: its Program OF RECORD's steps
+    """The engine steps a request is linked over: its Program OF RECORD's steps
     (T_r + 1: the served shape at B=1 eos-truncated / GP-01 composed at B>=2), capped by the declared cap; the cap alone when the Program's
     step count is unknown (older records).  A request whose committed steps are FEWER than its Program of record still fails by name
     (the chain rule inside the horizon is unchanged); the cap's never-executed steps are not 'unlinked' -- the Program never had them."""
@@ -196,7 +202,7 @@ def _word_int(w: np.ndarray) -> int:
 
 
 def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]], *, splits_of_record: dict[str, Any] | None = None) -> dict[str, Any]:
-    """[R16 pin, coord ruling 36] Commit-side linkage of the stochastic Program's PRESCRIBED inputs to their approved source.
+    """Commit-side linkage of the stochastic Program's PRESCRIBED inputs to their approved source.
     `workload_requests[i]["seed"]` = the request's DECLARED seed (the SamplingParams.seed the run was asked for; None on a greedy row);
     `splits_of_record` = {request_id: {"derived": num_SMs}} from the Build result's `sampling` (None / non-derived = no splits rule).
     SEED: for every (step, request) that committed a `runner.sampler/sampled_token_ids` word, the committed `runner.sampler/seed` word
@@ -264,7 +270,7 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
         splits_rec["why"] = f"num_SMs of record disagree across the request Programs: {sorted(nsms)}"
         unlinked.append({"request_id": None, "engine_step": None, "kind": "splits", "why": "num_SMs of record disagree across the request Programs: " + str(sorted(nsms))})
     else:
-        from verity_vllm.program.registry.topp_geometry import splits_for_v1
+        from verity.ml.definitions.registry.topp_geometry import splits_for_v1
         nsm = nsms.pop()
         splits_rec["num_sms"] = nsm
         sched: dict[int, int] = {}

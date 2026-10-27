@@ -1,4 +1,4 @@
-"""[R15 compiled] Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
+"""Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
 (summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
@@ -26,12 +26,12 @@ def _json(p: Path, name: str) -> dict:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
-def _bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, float]:
-    import random
+def _bootstrap_ci(xs: list[float], n: int = 4000, *, seed: int) -> tuple[float, float]:
+    from verity_vllm.commit import challenge as CH
 
     if len(xs) < 2:
         return (float("nan"), float("nan"))
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     means = sorted(statistics.fmean(rng.choices(xs, k=len(xs))) for _ in range(n))
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
@@ -373,7 +373,7 @@ def main(a: Options) -> None:
                       "commit_pass": (t.get("commit") or {}).get("commit_pass"), "run_root": (t.get("commit") or {}).get("run_root")})
     deltas = [p["delta_wall_s"] for p in pairs]
     ratio = [p["treatment_wall_s"] / p["control_wall_s"] for p in pairs if p["control_wall_s"]]
-    lo, hi = _bootstrap_ci(deltas)
+    lo, hi = _bootstrap_ci(deltas, seed=0)
     commit_pass = bool(trt) and all(bool((r.get("commit") or {}).get("commit_pass")) for r in trt) and not problems
     fail_reasons = [(r.get("commit") or {}).get("commit_fail_reason") for r in trt if not (r.get("commit") or {}).get("commit_pass")]
     tv = _json(T, "verdict.json")

@@ -172,6 +172,57 @@ def test_reference_follows_the_seed():
         assert other[0] == z and all(x != y for x, y in zip(other[1], rc))
 
 
+def _xor_rows(parts):
+    xor = [0] * len(parts[0])
+    for p in parts:
+        xor = [x ^ v for x, v in zip(xor, p)]
+    return xor
+
+
+@pytest.mark.parametrize("r,c", [(8, 16), (32, 32)])
+def test_the_receipt_is_the_lanes_partials_xored(r, c):
+    """Each lane's partial (`lane_partials`, `fold`) is its 2 (KS + m) words before the XOR across lanes, so the receipt is
+    the partials XORed word by word, and no two lanes' partials are equal. Gated by v4's admit bits, a live tile's are the
+    ungated ones and a dead tile's are zero words, whose XOR is v4's zero receipt."""
+    rng = random.Random(5)
+    a, b = _rows(rng, r, 64, -127, 127), _rows(rng, c, 64, -127, 127)
+    lay = H.Layout(r, c, 64)
+    parts = H.lane_partials(a, b, SALT, 3, ROOTS)
+    rc = H.reference(a, b, SALT, 3, ROOTS)[1]
+    assert len(parts) == lay.lanes and {len(p) for p in parts} == {2 * lay.sets}
+    assert _xor_rows(parts) == rc and len({tuple(p) for p in parts}) == lay.lanes
+    one = [int(i == r - 1) for i in range(r)]
+    assert H.lane_partials(a, b, SALT, 3, ROOTS, gated=one) == parts
+    dead = H.lane_partials(a, b, SALT, 3, ROOTS, gated=[0] * r)
+    assert dead == [[0] * (2 * lay.sets)] * lay.lanes
+    assert _xor_rows(dead) == H.reference(a, b, SALT, 3, ROOTS, stream=True, gated=[0] * r)[1]
+    with pytest.raises(ValueError, match="admit bits"):
+        H.lane_partials(a, b, SALT, 3, ROOTS, gated=[1] * (r - 1))
+
+
+def test_live_salt_is_the_round_key_stream():
+    """A live window's unit salt is round r's `window.round_key` stream's first 64 bytes, from the round's 64-byte coin and
+    root; another round, root or coin gives another salt, and the unit's receipt follows it."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    count = iter(range(1 << 20))
+    ch = Wd.live_challenger(7, 2, entropy=lambda n: hashlib.shake_256(next(count).to_bytes(8, "big")).digest(n))
+    rec = Ch.LiveRecord(ch, Wd.ROUND, clock=lambda: 0.0)
+    roots = [hashlib.sha512(b"round 0").digest(), hashlib.sha512(b"round 1").digest()]
+    o0, o1 = rec.record(roots[0]), rec.record(roots[1])
+    assert rec.reason() is None and len(o0.coin) == 64
+    s0 = H.live_salt(ch.commitment, o0.coin, 0, roots[0])
+    assert len(s0) == H.SALT_BYTES == 64 and s0 == Wd.round_key(ch.commitment, o0.coin, 0, roots[0]).stream(0, 64)
+    others = {H.live_salt(ch.commitment, o1.coin, 1, roots[1]), H.live_salt(ch.commitment, o0.coin, 1, roots[0]),
+              H.live_salt(ch.commitment, o0.coin, 0, roots[1]), H.live_salt(ch.commitment, o1.coin, 0, roots[0])}
+    assert s0 not in others and len(others) == 4
+    rng = random.Random(5)
+    a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 8, 64, -60, 60)
+    assert H.reference(a, b, s0, 3, ROOTS)[1] != H.reference(a, b, H.live_salt(ch.commitment, o1.coin, 1, roots[1]), 3,
+                                                             ROOTS)[1]
+
+
 @compiles
 @pytest.mark.slow
 def test_h1_tile_is_its_reference():

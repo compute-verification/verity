@@ -1,6 +1,6 @@
-"""`Plan.from_array`, a pass's plan checked and encoded in numpy (`verity.ml.kernels.plans`), against `Plan` on the same
-rows: the same plan, encoding, digest and positions, or the same refusal, at every edge of the format, on the pinned
-vectors' plans, and on random plans and their near misses."""
+"""`Plan.from_array`, a pass's plan checked and encoded column by column from an array's buffer, against `Plan` on the
+same rows: the same plan, encoding, digest and positions, or the same refusal, at every edge of the format, on the
+pinned vectors' plans, and on random plans and their near misses."""
 
 from __future__ import annotations
 
@@ -78,6 +78,18 @@ def test_the_format_s_edges(runs, blocks, want) -> None:
     if all(x >= 0 for r in runs for x in r):
         for dtype in (np.uint64, np.uint32, np.uint8, ">u8"):
             same(np.array(runs, dtype), blocks)
+
+
+@pytest.mark.parametrize("dtype", [np.int64, np.int32, np.int16, np.int8, np.uint64, np.uint32, np.uint16, np.uint8])
+def test_native_integers_are_read_from_the_buffer(monkeypatch, dtype) -> None:
+    """The tests above aren't vacuous: an array of native integers in C order is checked and encoded from its buffer,
+    never through `Plan(rows)`, which every other array falls back to."""
+    want = Plan(((7, 3), (0, 2), (12, 1)), N)
+    monkeypatch.setattr(Plan, "__init__", lambda *_: pytest.fail("fell back to Plan(rows)"))
+    got = Plan.from_array(np.array([[7, 3], [0, 2], [12, 1]], dtype), N)
+    assert got == want and got.digest == want.digest and list(got) == list(want)
+    with pytest.raises(ValueError, match="disjoint"):
+        Plan.from_array(np.array([[0, 5], [3, 4]], dtype), N)
 
 
 @pytest.mark.parametrize("runs, blocks, accepted", [

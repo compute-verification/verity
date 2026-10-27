@@ -319,6 +319,7 @@ def f1(f1_gate, f1_inner, once):
 
     def inputs(d):
         (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
+        (d / "draw.json").write_text(json.dumps({"law": "subset", "population": 2, "k": 2, "units": [0, 1]}))
         tops = [g / "v" / p for p in F1_PARTS if not p.startswith("alg/")]
         (d / "rows.json").write_text(json.dumps(S.shared_rows([g / "v" / p for p in F1_PARTS if p.startswith("alg/")], (),
                                                               tops)))
@@ -408,15 +409,20 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
     names = [nm for nm, _ in F1_STATEMENTS]
 
     def run():
+        # the gate's record predates `rec_live.record_bytes`, the format the verifier reads (`RecSetup.checkReads`)
+        transcript = d / f"transcript-{part}.json"
+        transcript.write_text(RL.record_bytes(json.loads((g / "inner" / "s1" / "public.json").read_text())))
         p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
                        "--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition",
                        str(v / "partition.json"), "--program", str(v / "program.json"), "--registered",
                        str(v / "registered.json"), "--rec-inner", str(d / "inner.json"), "--rec-part",
                        str(names.index(_unit(g, part))), "--rec-bindings", str(d / f"bindings-{part}.json"), "--rec-rows",
                        str(d / "rows.json"), "--rec-inner-circuit", str(st / "circuit.txt"), "--rec-inner-public",
-                       str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"), "--rec-inner-session",
-                       str(g / "inner" / "s1" / "session"), "--rec-inner-transcript",
-                       str(g / "inner" / "s1" / "public.json"), "--session", str(g / "v-sess" / part)])
+                       str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"),
+                       "--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os",
+                       "--rec-inner-draw", str(d / "draw.json"), "--rec-inner-session",
+                       str(g / "inner" / "s1" / "session"), "--rec-inner-transcript", str(transcript), "--session",
+                       str(g / "v-sess" / part)])
         return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
 
     r = _kept(once, f"verify-f1-{part}", run)

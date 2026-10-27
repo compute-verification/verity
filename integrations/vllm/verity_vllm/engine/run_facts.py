@@ -163,8 +163,8 @@ def model_config_subset(engine: Engine) -> dict:
             # [SHARED-CODE lane cov-ln, additive] the LayerNorm / GPT-NeoX family's keys (absent on every other config, so their
             # records are unchanged): eps and rotary base under their names, the partial-rotary fraction, the parallel residual
             "layer_norm_eps", "layer_norm_epsilon", "rotary_emb_base", "rotary_pct", "partial_rotary_factor", "use_parallel_residual",
-            # [ADAPTER lane glm47-flash, additive] multi-head latent attention's and the MoE routing's keys, which root_policy's config
-            # root requires of an MLA configuration (absent on dense configurations; a MoE one gains the routing keys its profile's
+            # [ADAPTER lane glm47-flash, additive] multi-head latent attention's and the MoE routing's keys, which an MLA configuration's
+            # config root requires (absent on dense configurations; a MoE one gains the routing keys its profile's
             # header check compares when recorded)
             "q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim", "first_k_dense_replace",
             "moe_intermediate_size", "num_experts", "num_local_experts", "n_routed_experts", "num_experts_per_tok", "norm_topk_prob",
@@ -188,16 +188,16 @@ def host_doc() -> dict:
             if line.startswith("model name"):
                 doc["cpu"] = line.split(":", 1)[1].strip()
                 break
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         pass
     try:
         q = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         doc["cpu_quota"] = None if q[0] == "max" else float(q[0]) / float(q[1])
-    except Exception:  # noqa: BLE001
+    except (OSError, IndexError, ValueError, ZeroDivisionError):
         pass
     try:
         doc["clocksource"] = Path("/sys/devices/system/clocksource/clocksource0/current_clocksource").read_text().strip()
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         pass
     n = 20000
     t0 = time.perf_counter()
@@ -213,7 +213,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     def ver(name: str) -> str | None:
         try:
             return md.version(name)
-        except Exception:  # noqa: BLE001
+        except md.PackageNotFoundError:
             return None
 
     import triton
@@ -225,7 +225,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     try:
         props = torch.cuda.get_device_properties(0)
         doc["gpu"] = {"name": props.name, "cc": f"{props.major}.{props.minor}", "sms": int(props.multi_processor_count)}
-    except Exception:  # noqa: BLE001
+    except (AssertionError, RuntimeError, torch.cuda.DeferredCudaCallError):
         pass
     doc["host"] = host_doc()
     if engine is not None:                    # [GEN batch SHARED-CODE] the effective LLM(**kw) of this run (CLI overrides included)
@@ -242,6 +242,6 @@ def versions_doc(engine: Engine | None = None) -> dict:
         export = Path("EXPORT.json")
         if export.exists():
             doc["export"] = json.loads(export.read_text())
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         pass
     return doc

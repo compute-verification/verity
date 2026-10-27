@@ -8,14 +8,14 @@ or when attribution is complete (value-partial by snapshot gaps, M-0217, is not 
 """
 from __future__ import annotations
 
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 
 WP_OK = {"result": True, "why": None, "root_of_record": "ab" * 32, "compared": 163, "mismatched": [], "missing": [], "unpinned": []}
 VC_OK = {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}
 
 
 def _base(n_req: int) -> dict:
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
     return {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6},
             "value_correspondence": VC_OK, "weights_pin": WP_OK}

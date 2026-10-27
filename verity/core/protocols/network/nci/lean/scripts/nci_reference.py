@@ -19,9 +19,11 @@ A primitive is taken as the descriptor declares it, as C-Flock's decoder takes i
     check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
 
 `check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
-prover's registration log, the accepted digests, the run's own record and the program function's parameters), with
-`NciCheck.Baseline`'s codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance
-expanded by `expand_baseline`.
+deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s
+codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
+`expand_baseline`. θ holds registered public data only: an entry of any kind but `registered`, an earlier run's `output`
+among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its first record, the first
+run's own included; any other record is refused `theta-not-at-deployment-start`.
 """
 from __future__ import annotations
 
@@ -199,6 +201,9 @@ def evaluate_desc(inst) -> dict:
         raise Malformed("not-topological")
     if walk_bound(program) > FUEL // 2:
         raise Malformed("program")
+    if any(n.form == "scan" and n.n == 0 and n.out.leaves > 0
+           for fn in program.defs.values() if hasattr(fn, "body") for n in fn.body.nodes):
+        raise Malformed("program")
     inp, reg, spans = root_nodes(inst["program"])
     K = len(inp)
     seen: set[int] = set()
@@ -240,8 +245,8 @@ def check_desc(inst) -> dict:
 
 REGISTRATION_V1 = "verity/registration/v1"
 REGISTRATION_V2 = "verity/registration/v2"
-TRUSTED_KEYS = {"log", "accepted", "run", "params"}
-FORMS = {"registered": {"kind", "registration", "value", "root"}, "output": {"kind", "record", "port", "root"}}
+TRUSTED_KEYS = {"log", "run", "params"}
+REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 
 
 def record_digest(rec: dict) -> str:
@@ -285,8 +290,8 @@ def owners(program, params) -> list[int | None] | None:
 
 
 def trusted_of(tr) -> dict:
-    """The trusted input: the log with each record's digest (R6's chain), the accepted digests, the run's position, the
-    program function's parameters; `trusted` otherwise."""
+    """The trusted input: the log with each record's digest (R6's chain), the run's position, the program function's
+    parameters; `trusted` otherwise."""
     if not (isinstance(tr, dict) and set(tr) == TRUSTED_KEYS and isinstance(tr["log"], list)):
         raise Malformed("trusted")
     digests: list[str] = []
@@ -297,9 +302,8 @@ def trusted_of(tr) -> dict:
             digests.append(record_digest(rec))
         except (ValueError, TypeError) as e:
             raise Malformed("trusted") from e
-    acc, run, ps = tr["accepted"], tr["run"], tr["params"]
-    if not (isinstance(acc, list) and all(isinstance(a, str) for a in acc) and isinstance(run, str) and run in digests
-            and isinstance(ps, list)):
+    run, ps = tr["run"], tr["params"]
+    if not (isinstance(run, str) and run in digests and isinstance(ps, list)):
         raise Malformed("trusted")
     params = []
     for p in ps:
@@ -311,7 +315,7 @@ def trusted_of(tr) -> dict:
             raise Malformed("trusted") from e
     if len({n for n, _ in params}) != len(params):
         raise Malformed("trusted")
-    return {"log": tr["log"], "digests": digests, "accepted": acc, "run": digests.index(run), "params": params}
+    return {"log": tr["log"], "digests": digests, "run": digests.index(run), "params": params}
 
 
 def last_with(rec: dict, field: str, key: str, value: str):
@@ -331,7 +335,7 @@ def provenance(inst, tr, node) -> None:
     if not (isinstance(prov, list) and len(prov) == len(inst["theta"])):
         raise Malformed("theta-provenance")
     for p in prov:
-        if not (isinstance(p, dict) and isinstance(p.get("kind"), str) and p["kind"] in FORMS and set(p) == FORMS[p["kind"]]
+        if not (isinstance(p, dict) and p.get("kind") == "registered" and set(p) == REGISTERED_KEYS
                 and all(isinstance(v, str) for v in p.values())):
             raise Malformed("theta-provenance")
     T = trusted_of(tr)
@@ -348,17 +352,12 @@ def provenance(inst, tr, node) -> None:
     run = T["log"][T["run"]]
     for t, p in zip(inst["theta"], prov, strict=True):
         k = node(offs, t)
-        output = p["kind"] == "output"
-        D = p["record" if output else "registration"]
+        D = p["registration"]
         if D not in T["digests"]:
             raise Malformed("theta-record-unknown")
-        d = T["digests"].index(D)
-        if d >= T["run"]:
-            raise Malformed("theta-not-earlier")
-        if output and D not in T["accepted"]:
-            raise Malformed("theta-uncertified")
-        src = T["log"][d]
-        e = last_with(src, "roots", "port", p["port"]) if output else last_with(src, "registered", "value", p["value"])
+        if T["digests"].index(D) != 0:
+            raise Malformed("theta-not-at-deployment-start")
+        e = last_with(T["log"][0], "registered", "value", p["value"])
         if e is None or e.get("root") != p["root"]:
             raise Malformed("theta-root")
         if run.get("program") != digest or own[k] is None:
@@ -368,13 +367,8 @@ def provenance(inst, tr, node) -> None:
         if mine is None or mine.get("root") != p["root"]:
             raise Malformed("theta-unbound")
         bits = 16 * -(-nodes[k].fn.ret.w // 16)
-        if output:
-            l, m = e.get("leaves"), dims(mine)
-            fits = _nat(l) and m is not None and l == m[0] and m[0] * m[1] == counts[i] and m[2] == bits
-        else:
-            m = dims(e)
-            fits = m is not None and m[0] * m[1] == counts[i] and m[2] == bits
-        if not fits:
+        m = dims(e)
+        if not (m is not None and m[0] * m[1] == counts[i] and m[2] == bits):
             raise Malformed("theta-width")
 
 

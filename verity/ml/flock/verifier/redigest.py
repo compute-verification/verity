@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transcript_check as tc  # noqa: E402
+from record_text import session_text  # noqa: E402
 
 
 def layout(b, zk=False):
@@ -143,7 +144,7 @@ def retain(src, out, checks=()):
     def write(name, r):
         d = out / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(r))
+        (d / "session.json").write_text(session_text(r))
         for rep in (0, 1):
             shutil.copy(src / f"{table}.rep{rep}.bin", d / f"{table}.rep{rep}.bin")
 
@@ -209,8 +210,10 @@ MUTANTS = [
     ("lig-sibling-l0", 0, flip("lig.l0.sib", 3, 5), reject("merkle:")),
     ("lig-row-l1", 0, flip("lig.l1.rows", 7), reject("merkle:")),
     ("lig-row-final", 0, flip("lig.final.rows", 7), reject("merkle:")),
-    ("lig-query-nonce", 0, flip("lig.qn", 0), ACCEPT),
-    ("lig-claim-nonce", 0, flip("lig.cbn", 1), ACCEPT),
+    ("lig-query-nonce", 0, flip("lig.qn", 0), {**reject("grinding_nonce ≠ 0"), "upstream_accepted": True}),
+    ("lig-claim-nonce", 0, flip("lig.cbn", 1), {**reject("claim_batch_grinding_nonce ≠ 0"), "upstream_accepted": True}),
+    ("lig-consistency-nonce", 0, flip("lig.consn", 0),
+     {**reject("consistency_batch_grinding_nonce ≠ 0"), "upstream_accepted": True}),
     ("rep1-zc-final-a", 1, flip("zc.fa"), reject("zerocheck: SumcheckFinalFailed")),
     ("rep1-lig-yr", 1, flip("lig.yr", 1), reject("ligerito: final check failed")),
 ]
@@ -239,7 +242,7 @@ def main(src, out):
                 p["sha256"], p["bytes"] = hashlib.sha256(b).hexdigest(), len(b)
         d = out / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(rec))
+        (d / "session.json").write_text(session_text(rec))
         (d / f"{table}.rep{rep}.bin").write_bytes(b)
         shutil.copy(src / f"{table}.rep{1 - rep}.bin", d / f"{table}.rep{1 - rep}.bin")
         manifest.append({"name": name, "rep": rep, "expect": expect})

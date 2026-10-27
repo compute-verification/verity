@@ -1,9 +1,10 @@
 """The firewall's release side (`verity_flock.firewall`, live PROTOCOL.md §10.5), one rule a test. A recursive session's V*
 statements go in their order, each once, and it ends at its first stop, inner or outer: its stop is its one failure, and
 the firewall serves nothing more of it, so a later V* statement's outer session is refused before anything reaches the
-challenger, and so is a statement asked out of its order (the one it skipped, never opened, is the stop). Outer proofs go
-one at a time across streams: a second requester waits for the first's release or failure, and the record shows the order.
-The worker and the challenger here are the test's, on socket pairs; the clock is never read."""
+challenger, and so is a statement asked out of its order (the one it skipped, never opened, is the stop). This relay takes
+outer proofs one at a time across streams, stricter than AGENTS.md's independent sessions: a second requester waits for
+the first's release or failure, and the record shows the order. The worker and the challenger here are the test's, on
+socket pairs; the clock is never read."""
 from __future__ import annotations
 
 import json

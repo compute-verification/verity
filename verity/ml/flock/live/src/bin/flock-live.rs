@@ -414,7 +414,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "aborted": rec["aborted"],
                           "rounds": rec["verdict"]["rounds"], "streams": rec["verdict"]["streams"]});
         use std::io::Write;
@@ -451,8 +451,8 @@ fn selftest(st: Arc<Stmt>) {
     t("fork_child_message_altered_after_coin", "neg3 R2+R3", Plan { tamper: Some(Tamper::Alter { stream: "blake3/rep1/f0".into(), round: 2 }), ..h() }, true, false, &mut all);
     t("parent_message_sent_after_its_coin", "brief R2", Plan { tamper: Some(Tamper::Defer { stream: "blake3/rep0".into(), round: 5 }), ..h() }, true, false, &mut all);
     t("fork_child_message_sent_after_its_coin", "brief R2+R3", Plan { tamper: Some(Tamper::Defer { stream: "blake3/rep0/f0".into(), round: 1 }), ..h() }, true, false, &mut all);
-    t("prover_chosen_pow_nonce_honest", "neg4 R4 (coin independent: accepted)", Plan { pow_nonce: 0x5eed_1234, ..h() }, true, true, &mut all);
-    t("pow_nonce_altered_after_coin", "neg4 R4", Plan { pow_nonce: 0x5eed_1234, tamper: Some(Tamper::Nonce), ..h() }, true, false, &mut all);
+    t("prover_chosen_pow_nonce_refused", "neg4 R4 (a nonce other than 0: refused, D21)", Plan { pow_nonce: 0x5eed_1234, ..h() }, true, false, &mut all);
+    t("pow_nonce_altered_after_coin", "neg4 R4", Plan { tamper: Some(Tamper::Nonce), ..h() }, true, false, &mut all);
     t("fastx1_session", "neg5 R7", Plan { hello: Some(json!({"profile":"fast","reps":1,"flavor":"rs","tables":[TABLE]}).to_string()), reps: 1, profile: vec!["fast"], ..h() }, true, false, &mut all);
     t("fast100x1_lone_rep_hello", "neg5 R7", Plan { hello: Some(json!({"profile":"fast100","reps":1,"flavor":"rs","tables":[TABLE]}).to_string()), reps: 1, ..h() }, true, false, &mut all);
     t("lone_rep_under_r2_hello", "neg5 R7", Plan { reps: 1, ..h() }, true, false, &mut all);
@@ -519,6 +519,7 @@ fn bench(st: Arc<Stmt>) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let n: usize = arg("--n", "4096").parse().unwrap();
     if cmd == "serve-gpu" {

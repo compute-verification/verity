@@ -20,8 +20,8 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_attention as BAt
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -69,6 +69,7 @@ PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnB
           bind(BAt.AttnBlockV9, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
           bind(BAt.AttentionHeadV9, T=40, D=16, BN=16, MASKED_FROM=2, **FA3),
           bind(BAt.AttentionV9, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=1, **FA3)]
+SLOW_PIN = PINNED[5].id
 
 #: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
 #: profiles; v8 and v9 with an unguarded block, a head with an unguarded block, and GQA; v16 (v9 with the scale an input) with a
@@ -118,7 +119,8 @@ def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
     return out
 
 
-@pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
+@pytest.mark.slow
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == SLOW_PIN else t for t in PINNED], ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)
@@ -189,6 +191,7 @@ def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word
         assert b[fam] <= 2 * w[fam], (fam, b[fam], w[fam])
 
 
+@pytest.mark.slow
 def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
     """On random words, the special words (signed zeros, infinities, NaNs, subnormals) and every mantissa at exponent 0x7F."""
     target = bind(BAt.Fa3InvSum)
@@ -199,6 +202,7 @@ def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
     assert np.array_equal(got, np.asarray(E.evaluate_batch(TR.word_of(target), words)).astype(np.uint64))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
 def test_the_switch_maps_its_word_view_to_it(target) -> None:
     """`boolean_version` of each word chain is the Boolean chain whose word view it is: `Attention_v4` (FA3's per-iteration

@@ -19,8 +19,9 @@ commitment and salt, and `C*` of any shape) and sees all of them, so no statemen
 `Decodes` and `leaves` are declarative: they name each block by its segment and index rather than by the check's loop,
 and read only the code's primitives (the keys, `P2.decodeValue`, `Merkle.packageLeaf`).
 
-`Deployed` is proved (`Properties.Proofs.Pous`) and a guarantee of this package (`lean-audit.json`); `AcceptsDecodes`
-and `PublishesRoot` are open. What is not a claim is stated in `Properties.Proofs.Pous`, open: the converse of
+All three are proved and guarantees of this package (`lean-audit.json`): `Deployed` in `Proofs.Properties.Pous`,
+`AcceptsDecodes` and `PublishesRoot` in `Proofs.Properties.Pous.Setup`. What is not a claim is stated in
+`Proofs.Properties.Pous`, open: the converse of
 `AcceptsDecodes` (completeness: a `C*` that decodes to the committed `W` is accepted), with its instance, and the code's
 block decoder read as the trusted model's (`DecodeIsModel`).
 -/

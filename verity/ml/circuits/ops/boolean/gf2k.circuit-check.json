@@ -1,16 +1,20 @@
 {
  "definitions": {
   "Gf128Mul_v1": {
-   "and": 2187
+   "and": 2187,
+   "type": "8f202ff8b45b7edcd564d45bfc3cfaa6d019c87665e8d8f6f2f6e19ad06bc78c64d25552bf778f264d97556ac7f76cde07ab56704e8e53daa8fe571179bead48"
   },
   "Gf256Mul_v1": {
-   "and": 6561
+   "and": 6561,
+   "type": "cab1f8be22a5ba903f37dddbf8bac46e484405531e29f0fdc8ea0c36be76fca73f333b2929ff97cf6b8c0d6fc82fa2ef9cb6c5068281411dabace67280ea2740"
   },
   "GfResiduals_v1{S={45bd63c5a436}}": {
-   "and": 2187
+   "and": 2187,
+   "type": "989be68ae23966dd75ce3f12d067f87ee02718074a08a58809298d095c0ffaca603aa89bc69ae7c6ff913f368ae51a5b1fa522392c298c88aebeb7579d26b365"
   },
   "GfScale_v1{L=2}": {
-   "and": 4374
+   "and": 4374,
+   "type": "fab9530ed79c464725792e4ecb42d729e088ad6fb436f2282e5307992887f67e90dc685dd72a96c296d24041bf78b1679618f4999082ad63969be110006848aa"
   }
  }
 }

@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 
 from verity_vllm.check.c2_rules import _replay_seed_of_record
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.sample import challenge_seed
 
 # the shape of rev M-0579's recomputed fact (qwen A100 int-3 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)
@@ -23,7 +23,7 @@ SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
 ROOT_FORM = "run root (first 8 bytes, after commitment)"
 
 BASE = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": RUN_ROOT,
-        "binding": {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
+        "binding": {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
         "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
         "boundary_linkage": {"result": True, "pairs": 32, "linked": 32, "unlinked_n": 0},
         "weights_pin": {"result": True, "compared": 163, "mismatched": [], "missing": []}}

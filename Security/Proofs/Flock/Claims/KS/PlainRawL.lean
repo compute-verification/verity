@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.KS.PlainOffLive
 import Proofs.Flock.Claims.KS.PlainLeafKS
 import Proofs.Flock.Claims.KS.SessionRaw
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain table bound at one tape, each slot at read sets, at any leaf
@@ -135,7 +136,7 @@ open Classical in
 /-- **The plain bound at one tape and table, from salted sessions after `Commit`, each slot's term raw, at any
 leaf**: `plain_le_sessionsEU`'s proof at `session_sound_of_table_accL_nodeOff`, so each plain fork slot keeps its
 per-position off mass at its node, averaged over the mixture. -/
-theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plain_le_sessionsRawLK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -147,15 +148,15 @@ theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (τ : Type) [Fintype τ] [Nonempty τ] (cap₀ : Model.Cap Refine.Dig)
     (σ : τ → Strategy (sessAfterL execArith Refine.H512 Refine.enc512 Lf
       (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀))
-    (hacc : (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+    (hacc : (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VK keep) x ω r).out = .acc ∧
         ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p) ≤
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (VK keep) x ω r).seen 0) p.val = some u ∧ u ≠ C p) ≤
       (∑ t, expect (ind fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
           ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
           ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL)))
         (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
           ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t)) / Fintype.card τ) :
-    Claims.accPr sha512 (V false) P x ω ≤ εtable false x +
+    Claims.accPr sha512 (VK keep) P x ω ≤ εtable false x +
       (∑ t, expect (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
           SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL))
         (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
@@ -168,9 +169,9 @@ theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
             (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ))
           (lockSessL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
             PT_LOCAL spec.mPts [] [] (Claims.Flock.oracleOf C) cap₀) (σ t)) / Fintype.card τ +
-      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VK keep) x ω r).out = .acc ∧
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (VK keep) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
   have hper : ∀ t, expect (ind fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
         ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
         ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL)))
@@ -229,20 +230,59 @@ theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
   have hdiv := div_le_div_of_nonneg_right hsum (Nat.cast_nonneg (Fintype.card τ))
   rw [Claims.Flock.mean_add, Claims.Flock.mean_add, Claims.Flock.mean_const, mean_sum_sum,
     εtable_one_plain h hsch L] at hdiv
-  have hsplit : Claims.accPr sha512 (V false) P x ω ≤
-      (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+  have hsplit : Claims.accPr sha512 (VK keep) P x ω ≤
+      (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VK keep) x ω r).out = .acc ∧
         ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p) +
-      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (VK keep) x ω r).seen 0) p.val = some u ∧ u ≠ C p) +
+      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VK keep) x ω r).out = .acc ∧
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (VK keep) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
     unfold Claims.accPr
     refine le_trans (Claims.Pr_mono fun r hr => ?_) (Claims.Pr_or_le _ _)
     by_cases hq : ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-        Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p
+        Claims.Flock.lookCol (cols false (Claims.run sha512 P (VK keep) x ω r).seen 0) p.val = some u ∧ u ≠ C p
     · exact Or.inr ⟨hr, hq⟩
     · exact Or.inl ⟨hr, hq⟩
   linarith [hsplit, hacc, hdiv]
+
+/-- `plain_le_sessionsRawLK` at the deployed plain verifier (`keep := id`). -/
+theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+    (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
+    (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
+    (C : Fin (wordLen false x) → List 𝔽)
+    (hT : ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+      (Claims.Flock.oracleOf C))
+    (τ : Type) [Fintype τ] [Nonempty τ] (cap₀ : Model.Cap Refine.Dig)
+    (σ : τ → Strategy (sessAfterL execArith Refine.H512 Refine.enc512 Lf
+      (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀))
+    (hacc : (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+        ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p) ≤
+      (∑ t, expect (ind fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL)))
+        (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t)) / Fintype.card τ) :
+    Claims.accPr sha512 (V false) P x ω ≤ εtable false x +
+      (∑ t, expect (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
+          SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL))
+        (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t)) / Fintype.card τ +
+      ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
+        (∑ t, Lock.nodeE (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ)
+          (Lock.nodeOff (fun d (outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8))) =>
+              opRL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD 0 dfltOutL))
+            (rowT (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).lanes (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).logLen)
+            (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ))
+          (lockSessL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
+            PT_LOCAL spec.mPts [] [] (Claims.Flock.oracleOf C) cap₀) (σ t)) / Fintype.card τ +
+      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p :=
+  plain_le_sessionsRawLK id (x := x) (spec := spec) (st := st) (Lf := Lf) (h := h) (L := L) (m := m) (k0 := k0) (l₀ := l₀) (l₁ := l₁) (rest := rest) (ext := ext) (hsch := hsch) (hk0 := hk0) (hm := hm) (hlay := hlay) (Ω := Ω) (P := P) (ω := ω) (C := C) (hT := hT) (τ := τ) (cap₀ := cap₀) (σ := σ) (hacc := hacc)
 
 open Classical in
 /-- **A plain run accepts with probability at most `ε_table`, its one-run event's, each slot's read-set term and

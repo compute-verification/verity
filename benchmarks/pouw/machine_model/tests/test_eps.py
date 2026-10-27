@@ -224,7 +224,7 @@ def test_luck_and_the_total():
 
 
 def test_adapt_is_a_proof_units_term():
-    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof unit's."""
+    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035
     assert {E.design(n).unit for n in E.designs()} == {"whole"}   # decision 72: whole dot products
@@ -233,7 +233,7 @@ def test_adapt_is_a_proof_units_term():
     assert e0.terms()["adapt"] is None and e.terms()["adapt"] == 0.0035
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck - 0.0035) * (1 - e.clock))
     assert E.eps(DUO, PI, 8, adapt=E.adapt("per-stage")).total() == pytest.approx(e0.total())
-    with pytest.raises(SystemExit, match="no proof unit 'none'"):
+    with pytest.raises(SystemExit, match="no proof block 'none'"):
         E.adapt("none")
     assert all(E.adapt(n).selection for n in E.adapts())
 
@@ -312,7 +312,7 @@ def test_the_table_route_is_bound_by_L2():
 
 
 def test_designs_read_what_exists():
-    """Every design reads the census, names a leaf of NOISE for each product, a proof unit and, where one is on main,
+    """Every design reads the census, names a leaf of NOISE for each product, a proof block and, where one is on main,
     its perplexity arm; decision 79's three names are designs, and each alias names one design."""
     c = census(model(), vector(PIN).epoch)
     for n in E.designs():
@@ -392,7 +392,7 @@ def test_cli(capsys):
     assert "ε core     " in out and "ε_sample" not in out and "ε_luck     0.153%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled"]) == 0
     out = capsys.readouterr().out
-    assert "ε_adapt 0.350%: proof unit whole" in out and "ε_sample   0.350%" in out
+    assert "ε_adapt 0.350%: proof block whole" in out and "ε_sample   0.350%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled", "--adapt", "segment"]) == 0
     assert "ε_sample   21.000%" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="--checking sampled"):
@@ -438,7 +438,7 @@ def test_cli(capsys):
     assert main(["eps", "--vector", PIN, "--table", "dither-c", "dither-2s", "--operands", "floor", "--credit",
                  "floor", "--checking", "sampled"]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert "checking sampled" in lines[0] and "the proof unit (each design its own)" in lines[0]
+    assert "checking sampled" in lines[0] and "the proof block (each design its own)" in lines[0]
     head = lines[1].split()
     assert head[-4:] == ["|", "unit", "adapt", "sample"] and lines[2].split()[-4:-2] == ["|", "whole"]
     assert head[head.index("floor") + 1:head.index("floor") + 3] == ["luck", "core@2"]
@@ -585,22 +585,31 @@ def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
     """RT2-HOPPER-9, -11 and RT3-DC-1, -4: the bit-exact checkpoint routes (four segments' words in one STG.128, an XOR on
     the uniform datapath, shared-memory and L2 atomics, a transpose through shared memory), each instruction at its
     census class, and the check reads the checkpoint word, not its program, so the cheater folds by any mix of the
-    design's fold and its `[fold_routes]`, RT4-SHEET-7's generic-address L2 XORs (ATOM.E, no AT90 line) among them. With
-    ♭ at REDUX they beat it by 1.47% on DS-90 and 1.97% on DC-90-ri, where the cheater folds by the generic CP_RED2 and
-    CP_RED8 and the global CP_RED8 (ATOME32, REDG32 and REDUX on the JI90 lines the H200 measured beside the IGMMA,
-    r20261021-070616-d06c and r20261021-074303-da7f); ♭ on the same menu folds by cp-red2 (3 LOP3 and 2 REDG a segment)
-    on DS-90 and by the generic cp-red2 and cp-red8 on DC-90-ri, and ε_machine is 0 there and 0.047% on DC-90-ri.
-    Honest's kernel folds by REDUX, so γ doesn't move."""
+    design's fold and its `[fold_routes]`, RT4-SHEET-7's generic-address L2 XORs (ATOM.E, no AT90 line) among them, and
+    after them the counted folds, none built: RT4-SHEET-13's and -14's moves of LI on li and each route, and li-bulk's
+    BT1024 and trimmed W = ∞ members (RT4-SHEET-22); li-bulk itself (RT4-SHEET-17) is built, at its measured cost. With
+    ♭ at REDUX they beat it by 1.47% on DS-90 and 2.25% on DC-90-ri, where the cheater folds by the generic CP_RED2 and
+    li-bulk's trimmed W = ∞ member (ATOME32, REDUX and the stores on the JI90 lines the H200 measured beside the IGMMA,
+    r20261021-070616-d06c, r20261021-074303-da7f and r20261021-161119-62ac). ♭ folds by the built routes alone: by
+    cp-red2 (3 LOP3 and 2 REDG a segment) on DS-90, as the cheater does, and on DC-90-ri by CP_RED2 and CP_RED8 (global
+    and generic tie there), so ε_machine is 0 on DS-90 and 0.330% on DC-90-ri. Honest's kernel folds by REDUX, so γ
+    doesn't move."""
     d = DEVICES / "sm_90"
     ds = E.design("dither-2s-licpw-redux-p1-l32", d)
-    assert list(ds.fold_routes) == ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8",
-                                    "cp-red-generic", "cp-red2-generic", "cp-red8-generic", "cp-xt"] and ds.fold_routes_source
+    built = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-red-generic",
+             "cp-red2-generic", "cp-red8-generic", "cp-xt"]
+    counted = [r + m for r in ("li", *built) for m in ("-rt3", "-wideh", "-rt3-wideh")]
+    assert list(ds.fold_routes) == [*built, *counted, "li-bulk", "li-bulk-bt1024", "li-bulk-trim-inf"]
+    assert ds.counted_routes == (*counted, "li-bulk-bt1024", "li-bulk-trim-inf")
+    assert list(ds.built_routes()) == [*built, "li-bulk"]
+    assert ds.fold_routes_source
     assert ds.with_fold_cost(0.5).fold_routes["cp-seg4u"]["UNI"] == pytest.approx(0.0078125 * 0.5 / ds.fold_cost())
-    plain = replace(ds, fold_routes={})
-    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.019724, 0.000473)):
+    plain = replace(ds, fold_routes={}, counted_routes=())
+    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.022499, 0.003303)):
         pi = E.machine(vec, d)
         s, s0 = E.setup(ds, pi, d, "free", "floor"), E.setup(plain, pi, d, "free", "floor")
         assert not s0.baseline.folds and s.baseline.T < s0.baseline.T
+        assert set(s.baseline.folds) <= set(ds.built_routes()), vec
         assert replace(s0, design=ds).machine_eps(q) == pytest.approx(attack, abs=1e-6), vec
         assert s.machine_eps(q) == pytest.approx(eps, abs=1e-6), vec
         h = E.setup(ds, pi, d, "free", "H")
@@ -611,6 +620,28 @@ def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
     assert s.baseline.folds == s.cheat(0.5).folds == pytest.approx({"cp-red2": 1.0})
     assert s.baseline.T * 128 == pytest.approx(4.1875)
     assert E.setup(plain, s.machine, d, "free", "floor").baseline.T * 128 == pytest.approx(4.25)
+
+
+def test_flat_never_folds_by_a_counted_route(tmp_path):
+    """♭ is credited only with programs a run has built, so it folds by the design's fold and its built routes alone,
+    and a design's `counted` routes are the cheater's only: priced at a thousandth of their counts, they leave ♭ where
+    it is on every H200 vector and lower the cheater's time. A `counted` name off the table is refused."""
+    d = DEVICES / "sm_90"
+    ds = E.design("dither-2s-licpw-redux-p1-l32", d)
+    cheap = replace(ds, fold_routes={n: {k: v / 1000 if n in ds.counted_routes else v for k, v in r.items()}
+                                     for n, r in ds.fold_routes.items()})
+    for vec in ("DS-90", "DC-90", "DC-90-ri"):
+        pi = E.machine(vec, d)
+        s, c = E.setup(ds, pi, d, "free", "floor"), E.setup(cheap, pi, d, "free", "floor")
+        assert set(s.baseline.folds) <= set(ds.built_routes()) and set(c.baseline.folds) <= set(ds.built_routes()), vec
+        assert c.baseline.T == pytest.approx(s.baseline.T, rel=1e-12), vec
+        assert set(c.cheat(0.5).folds) & set(ds.counted_routes) and c.cheat(0.5).T < s.cheat(0.5).T, vec
+    data = tmp_path / "sm_90"
+    shutil.copytree(d, data)
+    f = data / "designs" / "dither-2s-licpw-redux-l32.toml"
+    f.write_text(f.read_text().replace('"li-bulk-trim-inf",\n]', '"li-bulk-trim-inf", "li-bulk-bt2048",\n]', 1))
+    with pytest.raises(SystemExit, match="`counted` lists the routes no run has built"):
+        E.design("dither-2s-licpw-redux-l32", data)
 
 
 def test_the_l2_xor_checkpoints_on_the_menu_span_their_family():

@@ -112,6 +112,13 @@ def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
     assert O.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
 
 
+def test_a_window_with_no_draws_is_malformed(store) -> None:
+    """A window whose draws are empty (none a session makes) is `malformed` at `decide`, as at `verify`."""
+    w = window(store)
+    w.session.windows[0].draws = ()
+    assert w.session.decide(0, []) == audit.Verdict(0, False, "malformed")
+
+
 def test_the_plan_link_and_the_public_rows(store) -> None:
     w = window(store)
     d = w.session.drawn(0)[0]

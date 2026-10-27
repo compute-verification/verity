@@ -4,7 +4,9 @@ import Proofs.Pouw.PearlC.DeviceChainCapGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.FreezeP
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)
@@ -220,26 +222,62 @@ end Gamma
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384 : Pouw.Guarantees.PearlC.GammaSm120v1Rev1_16384 := @Pouw.PearlC.pearlCGammaSm120v1Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384 : Pouw.Guarantees.PearlC.GammaSm120v1Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.GammaSm120v2Cap1000_16384 := @Pouw.PearlC.pearlCGammaSm120v2Cap1000_16384
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.GammaSm120v2Cap1000_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2Cap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_16384 := @Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_16384
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainCap_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2ChainCap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2ChainCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainCap_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1Rev1_16384 := @Pouw.PearlC.pearlCSampledSm120v1Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v1Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192 : Pouw.Guarantees.PearlC.SampledSm120v1Rev1_8192 := @Pouw.PearlC.pearlCSampledSm120v1Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192 : Pouw.Guarantees.PearlC.SampledSm120v1Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v1Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384 := @Pouw.PearlC.pearlCSampledSm120v2Cap1000_16384
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v2Cap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192 := @Pouw.PearlC.pearlCSampledSm120v2Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v2Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384 := @Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_16384
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevChainCap_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192 := @Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevChainCap_of_w1 hTT)

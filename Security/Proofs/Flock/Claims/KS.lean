@@ -65,6 +65,20 @@ import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
 import Proofs.Flock.Claims.KS.PlainDrawSim
+import Proofs.Flock.Claims.KS.PlainDrawKDefs
+import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.KS.PlainDrawRColsE
+import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Claims.KS.PlainDrawAccK
+import Proofs.Flock.Claims.KS.PlainDrawDecK
+import Proofs.Flock.Claims.KS.PlainLeafDecK
+import Proofs.Flock.Claims.KS.PlainClashLaterK
+import Proofs.Flock.Claims.KS.PlainClash0K
+import Proofs.Flock.Claims.KS.PlainLeafClashK
+import Proofs.Flock.Claims.KS.PlainDrawJ
+import Proofs.Flock.Claims.KS.PlainDrawJMove
+import Proofs.Flock.Claims.KS.PlainDrawJRun
+import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
@@ -152,8 +166,11 @@ import Proofs.Flock.Claims.KS.ZkKSAlign
 import Proofs.Flock.Claims.KS.SlotDistOn
 import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.KS.ZkUntrim
+import Proofs.Flock.Claims.KS.Extend
 import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.KS.PlainUntrim
 import Proofs.Flock.Claims.KS.ZkOuter
+import Proofs.Flock.Claims.KS.PlainAccPrR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -337,8 +354,18 @@ simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the en
 `FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's draw reads `verify` at the setup at that draw,
 not the record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
 `Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
-`FlockDeploy.KS.plainVerdictAt_of_run`). The acceptance lemmas the plain decoders read hold at a draw value by their
-proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
+`FlockDeploy.KS.plainVerdictAt_of_run`), and at every `keep` an accepting run of `VK keep` gives it read through
+`keep`, its rounds the live outcome's up to their digests (`PlainDrawK`:
+`Claims.Bridge.PlainDraw.AcceptsAtDK`, `Claims.Bridge.PlainDraw.RecordsLiveAtDK`,
+`FlockDeploy.KS.plainVerdictAtK_of_run`), and the acceptance lemmas and decoders below hold at it by their proofs
+(`PlainDrawAccK`, `PlainDrawDecK`: `FlockDeploy.KS.plain_hdecAtK`, `FlockDeploy.KS.plain_hdecHAtK`), the rep's run
+reading no round's digest (`FlockSoundness.Discharge.PlaysCoin.repRun_of_erase`), and so do the decoders at plain
+SHA-512 leaves and the later entries (`PlainLeafDecK`: `FlockDeploy.KS.plain_hdecHUAtK`; `PlainClashLaterK`:
+`FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`) and the level-0 clashes
+(`PlainClash0K`, `PlainLeafClashK`: `FlockDeploy.KS.plain_clash₀AtK`, `FlockDeploy.KS.plain_clash₀HUAtK`,
+`FlockDeploy.KS.plain_laterClashHUAtK`). The acceptance lemmas the plain
+decoders read hold at a draw value by their proofs, through `keep` and at `keep := id`
+(`PlainDrawAccK`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyDK`; `PlainDrawAcc`:
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
 `FlockDeploy.KS.plain_hdecHAt`), and the plain table bound at a statement holds from a simulator at that verdict, with
@@ -639,9 +666,12 @@ the untrimmed with `ExtendJ` (`Flock.TrimBridge.KS_both_of_tableBoundJR`), so fr
 on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy.KS.zk_KS_untrim_of_extendJ`). And
 `ExtendJ` holds at the untrimmed instance at every relation: an unopened position takes a full-width column whose first
 lane no trace one agreement short of its radius has there, which Johnson's bound leaves room for in GF(2^128), so the
-table still does not extract (`ZkExtend`: `Claims.GS.exists_avoid`, `FlockDeploy.KS.zk_fill_step`,
-`FlockDeploy.KS.zk_extendJ`). So masked KS at the untrimmed instance holds with no premise too
-(`FlockDeploy.KS.zk_KS_untrim`). The chain reads the verifier only through its setup (`FlockDeploy.KS.ZkSetup`), and
+table still does not extract (`Extend`: `Claims.GS.exists_avoid`, `Claims.Flock.fill_step`,
+`Claims.Flock.extendJ_of_fill`; `ZkExtend`: `FlockDeploy.KS.zk_extendJ`). So masked KS at the untrimmed instance holds
+with no premise too (`FlockDeploy.KS.zk_KS_untrim`). The same fill, at the plain code, extends plain's one-table form
+(`Claims.Flock.extend_of_fill`), which carries plain's table bound to columns that may be zero
+(`Claims.Flock.tableBoundθ_of_extend`), so plain KS holds at the untrimmed record too, with no premise (`PlainUntrim`:
+`FlockDeploy.KS.plain_extend`, `FlockDeploy.KS.plain_KS_untrim`). The chain reads the verifier only through its setup (`FlockDeploy.KS.ZkSetup`), and
 its setup-dependent part is restated over one (`FlockDeploy.KS.Gen`), `deployZk`'s at `FlockDeploy.KS.S₀`. At the
 recursion's outer setup (`FlockDeploy.KS.SO`: the recursive setup, and the verdict's last refusals after the checks)
 the chain's instance is the outer verifier's record (`ZkOuter`: `FlockDeploy.KS.deployZk_SO`), so masked KS holds

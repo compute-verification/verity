@@ -3,8 +3,8 @@ A proof file is the one encoding of what it decodes to (§8.1, D17 and D18 of §
 file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). `decodeProof`
 accepts the plain file in the deployed form, with the zk patch's `zk_level0 = None` after the pair; `verify` reads a file
 through its statement's pin (`plainBytes`), so upstream's form, without the tag, passes under `--upstream-plain` alone.
-Each form is refused where the other is pinned, and so is every other byte after the end and a plain file whose
-`matrix_evals` holds one pair, each with its reason.
+Each form is refused where the other is pinned, and so is every other byte after the end, a plain file whose
+`matrix_evals` holds one pair, and a query, claim or consistency grinding nonce other than 0 (R4), each with its reason.
 -/
 import Flock.ZkProof
 
@@ -89,5 +89,22 @@ def read (up : Bool) (file : ByteArray) : V Proof := decodeProof sh (plainBytes 
 #guard why (Zk.decode sh (zkFile sh)) == "accepted"
 #guard why (Zk.decode sh (zkFile sh ++ zeros 1)) ==
   s!"zk proof: the file has {(zkFile sh).size + 1} bytes and its encoding ends at byte {(zkFile sh).size}"
+
+/-- `file` with the byte `k` before `stop` set to 1. In the pair's last 152 bytes (at `R = 1`), `k = 152`, `64` and `16`
+are the first query, claim and consistency nonces' low bytes. -/
+def flip (file : ByteArray) (stop k : Nat) : ByteArray := file.set! (stop - k) 1
+
+def zkStop : Nat := (pair sh (2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES) 0).size
+
+-- R4: every grinding nonce is 0, and any other is refused, in both decoders.
+#guard [false, true].all fun up => why (read up (flip (if up then canon else tagged) canon.size 152)) ==
+  "grinding_nonce ≠ 0 (R4)"
+#guard [false, true].all fun up => why (read up (flip (if up then canon else tagged) canon.size 64)) ==
+  "claim_batch_grinding_nonce ≠ 0 (R4)"
+#guard [false, true].all fun up => why (read up (flip (if up then canon else tagged) canon.size 16)) ==
+  "consistency_batch_grinding_nonce ≠ 0 (R4)"
+#guard why (Zk.decode sh (flip (zkFile sh) zkStop 152)) == "grinding_nonce ≠ 0 (R4)"
+#guard why (Zk.decode sh (flip (zkFile sh) zkStop 64)) == "claim_batch_grinding_nonce ≠ 0 (R4)"
+#guard why (Zk.decode sh (flip (zkFile sh) zkStop 16)) == "consistency_batch_grinding_nonce ≠ 0 (R4)"
 
 end Flock.Test.ProofCanon

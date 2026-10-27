@@ -1,4 +1,8 @@
-# G2's curve renderer (curve.py): not a package. Its selection logic runs here as a suite
+# G2's curve renderer (curve.py) and its served arm's (served.py): not a package. Their selection logic runs here as a suite
 # (`uv run tools/verity/check/suites.py benchmarks/g2`); the rendering itself reads the evidence store.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.verity.tests]
+# The served arm's arms and its runner (benchmarks/served_commit), tested over stand-ins for the arms they build on.
+inputs = ["benchmarks/served_commit/served_arm.py", "benchmarks/served_commit/served_arm.sh"]

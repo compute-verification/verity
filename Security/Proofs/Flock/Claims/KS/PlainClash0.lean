@@ -1,22 +1,33 @@
 import Proofs.Flock.Claims.KS.PlainParts
+import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
 # The live self-clash at level 0
 
 A live self-clash at level 0 is two openings of one position to different columns among table 0's level-0 openings,
-each verifying against the outcome's cap, at the pendings the reps' decoded tapes play to. Where `verify` accepts what
-`wrPD` writes for the outcome at the setup at the draw, those tapes play to the deployed reps' pendings, whose output's
-level-0 openings are the reps' `plainRepColsOf` entries at `wrPD`'s proof files (`accepts_opens₀LD`), so the clash is
-two of those entries at one position with different columns. At the concrete simulator, where `P`'s run accepts, the
-outcome is the run's and those entries are the run's raw columns (`rawCols_plain`), so a live self-clash at level 0
-gives the run a raw clash at level 0.
+each verifying against the outcome's cap, at the pendings the reps' decoded tapes play to. Where `verify` accepts a
+transcript recording an outcome at the setup at the draw, those tapes play to the deployed reps' pendings, whose
+output's level-0 openings are the reps' `plainRepColsOf` entries at the transcript's proof files (`accepts_opens₀LDK`),
+so the clash is two of those entries at one position with different columns. At the concrete simulator, where `P`'s
+run accepts, the outcome is the run's and those entries are the run's raw columns (`rawCols_plain`), so a live
+self-clash at level 0 gives the run a raw clash at level 0.
+
+The draw-layer lemmas are proved once, at `VK keep` over any transcript recording the outcome (`RecordsLiveAtDK`),
+and `clash₀_wrPD`, `clash₀_wrPDH`, `plain_clash₀At` and `plain_clash₀HAt` are them at `keep := id` and `wrPD`;
+`PlainClash0K` has them at `wrPDK keep`. The hidden-output lemmas are proved once more, at a leaf form `F` (its model
+leaf, tag premise, verdicts and digest length): hm96 here and plain SHA-512 leaves in `PlainLeafClash` are instances.
+The entries are `plainRepColsOf` at the decoded rep streams' rounds, which reads their coins only.
 
 * `playsT_det`: a run on one tape ends at one outcome (`Game.PlaysT.det`).
-* `EntriesClash`: two of the reps' entries at one position with different columns, at the setup at the draw.
-* `clash₀_wrPD`, `clash₀_wrPDH`: the level-0 self-clash at `wrPD` at the deployed plain decoders is an
-  `EntriesClash`, at public and at hidden outputs.
-* `Clash₀L`, `LaterClashL`: `SelfClashL`'s two cases, at level 0 and past it.
-* `plain_clash₀At`, `plain_clash₀HAt`: those at the statement's draw, at `plainTab`.
+* `EntriesClash`: two of the reps' entries at one position with different columns, at the setup at the draw;
+  `EntriesClashK` over `Record.decodeWithK keep`, with `entriesClash_iff_K_id` at `keep := id`.
+* `clash₀_wrK_of`, `clash₀_wrKHLf_of`: the level-0 self-clash at the deployed plain decoders is an `EntriesClashK`, at
+  public outputs and at hidden outputs under a leaf form; `clash₀_wrKH_of` at hm96; `clash₀_wrPD`, `clash₀_wrPDH` at
+  `wrPD`.
+* `Clash₀LLf`, `LaterClashLLf`: `SelfClashL`'s two cases, at level 0 and past it, at a model leaf; `Clash₀L`,
+  `LaterClashL` at `leaf512`.
+* `plain_clash₀AtK_of`, `plain_clash₀HLfAtK_of`: those at the statement's draw, at `plainTab`; `plain_clash₀HAtK_of` at
+  hm96; `plain_clash₀At`, `plain_clash₀HAt` at `wrPD`.
 * `rawCols_plain`: an accepted plain run's raw columns are its reps' `plainRepColsOf` entries.
 * `plainClashQ₀`: so a level-0 self-clash at the concrete simulator's outcome gives `P`'s accepting run a raw clash.
 * `plainClashQ_or`, `PlainSimLaterClashAt`, `plainSimClashAt_of_later`: so `PlainSimClashAt` needs only its case
@@ -58,17 +69,42 @@ def EntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
         Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds t.proofs[1]! ∧
       a ≠ b
 
+/-- **Two of the reps' entries at one position with different columns**, in `t` at the setup at `d`, the session the
+record decodes to through `keep` (`EntriesClash`). -/
+def EntriesClashK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+    setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
+    _root_.Flock.fast100 st.m = some sch ∧
+    sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+    sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+    ∃ (q : ℕ) (a b : List 𝔽),
+      (q, a) ∈ Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₀.rounds
+          t.proofs[0]! ++
+        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds t.proofs[1]! ∧
+      (q, b) ∈ Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₀.rounds
+          t.proofs[0]! ++
+        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds t.proofs[1]! ∧
+      a ≠ b
+
+/-- **`EntriesClash` is `EntriesClashK` at `keep := id`.** -/
+theorem entriesClash_iff_K_id (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) :
+    EntriesClash I d t ↔ EntriesClashK id I d t := by
+  unfold EntriesClash EntriesClashK
+  simp only [decodeWithK_id_std]
+
 open DecodeZL Integrate in
 /-- **A level-0 self-clash at the deployed plain decoders is a clash of the reps' entries**, at one table: where
-`verify` accepts what `wrPD` writes for `o` at the setup at the draw `dj S`, two pendings the reps' decoded tapes play
-to (`hp`), whose output at `o`'s cap and openings has two openings of one position to different columns verifying at
-level 0 (`hcl`), give two of the reps' `plainRepColsOf` entries at the setup's table, its `fast100` schedule and
-`wrPD`'s proof files at one position with different columns. -/
-theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+`verify` at `keep` accepts a transcript `t` recording `o` at the setup at the draw `dj S` (`hrl`), two pendings the
+reps' decoded tapes play to (`hp`), whose output at `o`'s cap and openings has two openings of one position to different
+columns verifying at level 0 (`hcl`), give two of the reps' `plainRepColsOf` entries at the setup's table, its `fast100`
+schedule and `t`'s proof files at one position with different columns. -/
+theorem clash₀_wrK_of (keep : Bool → Bool)
+    {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
     (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg)
-    (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtD I (some (dj S)) (wrPD I (dj S) o))
+    (o : Tables.LiveOutJ 1 mPts) {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep I (dj S) o t)
+    (hacc : AcceptsAtDK keep I (some (dj S)) t)
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R) o.pts r)
       (Tables.repTapeJ (fun _ => DecodeZL.decAt (Integrate.tablesAt ht dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
@@ -78,13 +114,12 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
       (Model.pathLen (lvOf (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch 0))
       (opens₀L (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch (tableOutL H512 enc512 leaf512
         (capOfRoot o.rootB[0]!) pend' (DecodeZL.opnAt (Integrate.tablesAt ht dj x₀) I dj S R o.proofs)))) :
-    EntriesClash I (dj S) (wrPD I (dj S) o) := by
-  change AcceptsAtD I (some (dj S)) (wrPD (J := 1) I (dj S) o) at hacc
+    EntriesClashK keep I (dj S) t := by
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
-  obtain ⟨hprf, hrec⟩ := recordsLive_wrPD1 I (dj S) o hacc
+  obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o hrl hacc
   obtain ⟨hSD, hmPts⟩ := hS
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAt_of_acceptsD ht hc ho hh hc1 dj x₀ hacc hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneD hrr hl hc1 hacc
+  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAt_of_acceptsDK keep ht hc ho hh hc1 dj x₀ hacc hSD hmPts
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneDK keep hrr hl hc1 hacc
   rw [HiddenExec.setupOne_public hh] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
@@ -103,7 +138,7 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
   have hcap : sess.rootB[0]! = o.rootB[0]! := hroot
   have hv' := hv
   rw [hn, hcap] at hv'
-  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LD hacc
+  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LDK keep hacc
   rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
   obtain ⟨rfl, rfl⟩ := hsu'
   rw [hdec, Except.ok.injEq] at hdec'
@@ -116,7 +151,7 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
   obtain ⟨-, hent⟩ := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot o.rootB[0]!)
     (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPD (J := 1) I (dj S) o).proofs[0]!, (wrPD (J := 1) I (dj S) o).proofs[1]!]))
+        #[t.proofs[0]!, t.proofs[1]!]))
     hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl) hv'
   rw [hn'] at hent
   rw [hmP, hpts] at hreps
@@ -134,9 +169,9 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
     obtain ⟨s, p, Tv, hs, hp, hplay, hlen, hret⟩ := hreps r
     obtain ⟨s', hs', hrs⟩ := hstreams r
     obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
-    rw [← hrs]
-    exact repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf (by rw [hms]; rfl) hS' hsch hpl
-      (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decode_roundsWF hdec s'
+    exact PlaysCoin.repRun_of_erase hrs <| repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf
+      (by rw [hms]; rfl) hS' hsch hpl
+      (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decodeWithK_roundsWF keep With.std hdec s'
         (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
   have hpe : ∀ r : Fin 2, Tables.sel pend' r = pend r := fun r =>
     playsT_det (hp r) (by
@@ -145,10 +180,10 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
       fin_cases r <;> exact this)
   have hpe' : pend' = (pend 0, pend 1) := Prod.ext (hpe 0) (hpe 1)
   subst hpe'
-  have hprf' : (wrPD (J := 1) I (dj S) o).proofs = o.proofs := hprf
+  have hprf' : t.proofs = o.proofs := hprf
   have hopn : opnAt (tablesAt (Reg := Reg) ht dj x₀) I dj S R o.proofs =
       opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPD (J := 1) I (dj S) o).proofs[0]!, (wrPD (J := 1) I (dj S) o).proofs[1]!] := by
+        #[t.proofs[0]!, t.proofs[1]!] := by
     rw [hprf']
     unfold opnAt
     rw [hst]
@@ -163,11 +198,11 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
   obtain ⟨u, hu, v, hv, huv, -, -, hne⟩ := hcl
   have hmem : ∀ z ∈ opens₀L (schedOf sch) (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPD (J := 1) I (dj S) o).proofs[0]!, (wrPD (J := 1) I (dj S) o).proofs[1]!])),
+        #[t.proofs[0]!, t.proofs[1]!])),
       (z.1, z.2.1) ∈ Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₀.rounds
-          (wrPD (J := 1) I (dj S) o).proofs[0]! ++
+          t.proofs[0]! ++
         Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds
-          (wrPD (J := 1) I (dj S) o).proofs[1]! := fun z hz => by
+          t.proofs[1]! := fun z hz => by
     have h' := List.mem_map_of_mem (f := fun x : ℕ × List 𝔽 × List UInt8 × List Dig => (x.1, x.2.1)) hz
     rw [hent] at h'
     exact h'
@@ -176,36 +211,39 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
   exact hmem v hv
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
-`clash₀_wrPD` at the hidden tables and their openings `opnAtH`. -/
-theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs, at a leaf form `F`, is a clash of the reps'
+entries**, at `keep` over any transcript recording `o`: `clash₀_wrK_of` at the hidden tables and their openings
+`opnAtH`. -/
+theorem clash₀_wrKHLf_of (keep : Bool → Bool) (F : LeafForm)
+    {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
-    (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtD I (some (dj S)) (wrPD I (dj S) o))
+    (hT : F.TagsOk I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep I (dj S) o t)
+    (hacc : AcceptsAtDK keep I (some (dj S)) t)
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
       (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
         (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
-    (hcl : ClashL H512 enc512 leaf512 (capOfRoot o.rootB[0]!)
+    (hcl : ClashL H512 enc512 F.lf (capOfRoot o.rootB[0]!)
       (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).lanes
       (Model.pathLen (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0))
-      (opens₀L (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 leaf512
+      (opens₀L (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 F.lf
         (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)))) :
-    EntriesClash I (dj S) (wrPD I (dj S) o) := by
-  change AcceptsAtD I (some (dj S)) (wrPD (J := 1) I (dj S) o) at hacc
+    EntriesClashK keep I (dj S) t := by
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
-  obtain ⟨hprf, hrec⟩ := recordsLive_wrPD1 I (dj S) o hacc
+  obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o hrl hacc
   obtain ⟨hSD, hmPts⟩ := hS
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsD ht hc hh hc1 dj x₀ hacc hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneD hrr hl hc1 hacc
+  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsDK keep ht hc hh hc1 dj x₀ hacc hSD hmPts
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ :=
+    accepts_repsOneDLfK keep F.lf hrr hc1 (F.verdicts keep hh hl hacc) hacc
   rw [setupOne_hidden hh] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
   have hmP : st.mPts = mPts := hmPts st hst
   obtain ⟨-, hr⟩ := setupHidden_wf hst
   have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
-  have hms : st.merkle = MerkleScheme.hm96Sha512 := setupHidden_hm96 hl hst
+  have hms : st.merkle.digestLen = 64 := F.digestLen hst hl
   obtain ⟨pend, hreps, hv⟩ := hk hwf hr hm
   have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
       (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
@@ -217,7 +255,7 @@ theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (h
   have hcap : sess.rootB[0]! = o.rootB[0]! := hroot
   have hv' := hv
   rw [hn, hcap] at hv'
-  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LD hacc
+  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LDLfK keep F.lf hacc
   rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
   obtain ⟨rfl, rfl⟩ := hsu'
   rw [hdec, Except.ok.injEq] at hdec'
@@ -228,9 +266,9 @@ theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (h
       (Model.extraClaims (stmtOf #[st][0] hwf (regionsOf #[st][0])) PT_LOCAL q pts).length = 2 * st.regions.size :=
     hn
   obtain ⟨-, hent⟩ := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot o.rootB[0]!)
-    (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) (pend 0, pend 1)
+    (tableOutL H512 enc512 F.lf (capOfRoot o.rootB[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPD (J := 1) I (dj S) o).proofs[0]!, (wrPD (J := 1) I (dj S) o).proofs[1]!]))
+        #[t.proofs[0]!, t.proofs[1]!]))
     hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl) hv'
   rw [hn'] at hent
   rw [hmP, hpts] at hreps
@@ -248,9 +286,9 @@ theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (h
     obtain ⟨s, p, Tv, hs, hp, hplay, hlen, hret⟩ := hreps r
     obtain ⟨s', hs', hrs⟩ := hstreams r
     obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
-    rw [← hrs]
-    exact repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf (by rw [hms]; rfl) hS' hsch hpl
-      (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decode_roundsWF hdec s'
+    exact PlaysCoin.repRun_of_erase hrs <| repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf
+      hms hS' hsch hpl
+      (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decodeWithK_roundsWF keep With.std hdec s'
         (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
   have hpe : ∀ r : Fin 2, Tables.sel pend' r = pend r := fun r =>
     playsT_det (hp r) (by
@@ -259,10 +297,10 @@ theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (h
       fin_cases r <;> exact this)
   have hpe' : pend' = (pend 0, pend 1) := Prod.ext (hpe 0) (hpe 1)
   subst hpe'
-  have hprf' : (wrPD (J := 1) I (dj S) o).proofs = o.proofs := hprf
+  have hprf' : t.proofs = o.proofs := hprf
   have hopn : opnAtH (tablesAtH (Reg := Reg) dj x₀) I dj S R o.proofs =
       opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPD (J := 1) I (dj S) o).proofs[0]!, (wrPD (J := 1) I (dj S) o).proofs[1]!] := by
+        #[t.proofs[0]!, t.proofs[1]!] := by
     rw [hprf']
     unfold opnAtH
     rw [hst]
@@ -275,19 +313,83 @@ theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (h
     simp [stmtOf, regionsOf]
   rw [hopn, hsch] at hcl
   obtain ⟨u, hu, v, hv, huv, -, -, hne⟩ := hcl
-  have hmem : ∀ z ∈ opens₀L (schedOf sch) (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) (pend 0, pend 1)
+  have hmem : ∀ z ∈ opens₀L (schedOf sch) (tableOutL H512 enc512 F.lf (capOfRoot o.rootB[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[(wrPD (J := 1) I (dj S) o).proofs[0]!, (wrPD (J := 1) I (dj S) o).proofs[1]!])),
+        #[t.proofs[0]!, t.proofs[1]!])),
       (z.1, z.2.1) ∈ Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₀.rounds
-          (wrPD (J := 1) I (dj S) o).proofs[0]! ++
+          t.proofs[0]! ++
         Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds
-          (wrPD (J := 1) I (dj S) o).proofs[1]! := fun z hz => by
+          t.proofs[1]! := fun z hz => by
     have h' := List.mem_map_of_mem (f := fun x : ℕ × List 𝔽 × List UInt8 × List Dig => (x.1, x.2.1)) hz
     rw [hent] at h'
     exact h'
   refine ⟨spec, st, sess, sch, s₀, s₁, hsu, hdec, hf, hs₀, hs₁, u.1, u.2.1, v.2.1, hmem u hu, ?_, hne⟩
   rw [huv]
   exact hmem v hv
+
+open DecodeZL HiddenExec HiddenDec in
+/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
+`clash₀_wrK_of` at the hidden tables and their openings `opnAtH`; `clash₀_wrKHLf_of` at `hm96`. -/
+theorem clash₀_wrKH_of (keep : Bool → Bool)
+    {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep I (dj S) o t)
+    (hacc : AcceptsAtDK keep I (some (dj S)) t)
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
+      (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
+    (hcl : ClashL H512 enc512 leaf512 (capOfRoot o.rootB[0]!)
+      (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).lanes
+      (Model.pathLen (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0))
+      (opens₀L (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 leaf512
+        (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)))) :
+    EntriesClashK keep I (dj S) t :=
+  clash₀_wrKHLf_of keep LeafForm.hm96 ht hc dj x₀ hT hS R o hrl hacc pend' hp hcl
+
+open DecodeZL Integrate in
+/-- **A level-0 self-clash at the deployed plain decoders is a clash of the reps' entries**: `clash₀_wrK_of` at
+`keep := id` and what `wrPD` writes for `o`. -/
+theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtD I (some (dj S)) (wrPD I (dj S) o))
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R) o.pts r)
+      (Tables.repTapeJ (fun _ => DecodeZL.decAt (Integrate.tablesAt ht dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
+    (hcl : ClashL H512 enc512 leaf512 (capOfRoot o.rootB[0]!)
+      (lvOf (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch 0).lanes
+      (Model.pathLen (lvOf (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch 0))
+      (opens₀L (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch (tableOutL H512 enc512 leaf512
+        (capOfRoot o.rootB[0]!) pend' (DecodeZL.opnAt (Integrate.tablesAt ht dj x₀) I dj S R o.proofs)))) :
+    EntriesClash I (dj S) (wrPD I (dj S) o) :=
+  (entriesClash_iff_K_id _ _ _).2 <| clash₀_wrK_of id ht hc ho dj x₀ hT hS R o
+    (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD I (dj S) o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
+
+open DecodeZL HiddenExec HiddenDec in
+/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
+`clash₀_wrKH_of` at `keep := id` and what `wrPD` writes for `o`. -/
+theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtD I (some (dj S)) (wrPD I (dj S) o))
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
+      (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
+    (hcl : ClashL H512 enc512 leaf512 (capOfRoot o.rootB[0]!)
+      (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).lanes
+      (Model.pathLen (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0))
+      (opens₀L (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 leaf512
+        (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)))) :
+    EntriesClash I (dj S) (wrPD I (dj S) o) :=
+  (entriesClash_iff_K_id _ _ _).2 <| clash₀_wrKH_of id ht hc dj x₀ hT hS R o
+    (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD I (dj S) o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
 end Claims.Bridge.PlainDraw
 
@@ -300,6 +402,18 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
+/-- **A self-clash at level 0** at a table's output, at the model leaf `lf`: `SelfClashL`'s first case. -/
+def Clash₀LLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : Accounting.Schedule)
+    (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+  ClashL H512 enc512 lf out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
+
+/-- **A self-clash past level 0** at a table's output, at the model leaf `lf`: `SelfClashL`'s second case. -/
+def LaterClashLLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : Accounting.Schedule)
+    (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+  ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
+    ClashL H512 enc512 lf cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
+      (slotOpensL out r ℓ (lvOf sch ℓ).queries)
+
 /-- **A self-clash at level 0** at a table's output: `SelfClashL`'s first case. -/
 def Clash₀L (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 leaf512 out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
@@ -310,22 +424,24 @@ def LaterClashL (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UI
     ClashL H512 enc512 leaf512 cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw**: `clash₀_wrPD` at the statement's
-draw `d` and no drawn unit, as `plain_hdecAt` is `decodesTable_wrPD_sc` there. -/
-theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw**: `clash₀_wrK_of` at the statement's
+draw `d` and no drawn unit, as `plain_hdecAtK_of` is `decodesTable_wrK_sc_of` there. -/
+theorem plain_clash₀AtK_of (keep : Bool → Bool)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
     (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
-    (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep ins.read.I d o t) (hacc : AcceptsAtDK keep ins.read.I (some d) t)
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
       o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
         (fun _ _ _ => []) o 0 r) (sel pend' r))
     (hcl : Clash₀L ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
       (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
-    EntriesClash ins.read.I d (wrPD ins.read.I d o) := by
+    EntriesClashK keep ins.read.I d t := by
   obtain ⟨ht, hc, ho, hT, hst, rfl, -, -⟩ := plain_setupH hs hin hset h hh hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
@@ -347,29 +463,31 @@ theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fa
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩
-  refine clash₀_wrPD ht hc ho (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hacc pend' ?_ ?_ <;>
+  refine clash₀_wrK_of keep ht hc ho (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hrl hacc pend' ?_ ?_ <;>
     rw [e]
   · exact hp
   · exact hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
-`clash₀_wrPDH` at the statement's draw `d` and no drawn unit, as `plain_hdecHAt` is `decodesTable_wrPD_scH` there. -/
-theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under a leaf form
+`F`**: `clash₀_wrKHLf_of` at the statement's draw `d` and no drawn unit. -/
+theorem plain_clash₀HLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true)
-    (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (hl : ins.read.I.tags.merkleLeaf = F.tag) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
     (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
-    (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep ins.read.I d o t) (hacc : AcceptsAtDK keep ins.read.I (some d) t)
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
       o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
         (fun _ _ _ => []) o 0 r) (sel pend' r))
-    (hcl : Clash₀L ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+    (hcl : Clash₀LLf F.lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 F.lf (capOfRoot o.rootB[0]!) pend'
       (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
-    EntriesClash ins.read.I d (wrPD ins.read.I d o) := by
-  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hl hd
+    EntriesClashK keep ins.read.I d t := by
+  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHiddenT hs hin hset h hh hl hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
     rw [hsch] at e
@@ -390,10 +508,72 @@ theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩
-  refine clash₀_wrPDH ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hacc pend' ?_ ?_ <;>
-    rw [e]
+  refine clash₀_wrKHLf_of keep F ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hrl hacc pend'
+    ?_ ?_ <;> rw [e]
   · exact hp
   · exact hcl
+
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
+`clash₀_wrKH_of` at the statement's draw `d` and no drawn unit, as `plain_hdecHAtK_of` is `decodesTable_wrK_scH_of`
+there; `plain_clash₀HLfAtK_of` at `hm96`. -/
+theorem plain_clash₀HAtK_of (keep : Bool → Bool)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true)
+    (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
+    (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
+    {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep ins.read.I d o t) (hacc : AcceptsAtDK keep ins.read.I (some d) t)
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
+      o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+        (fun _ _ _ => []) o 0 r) (sel pend' r))
+    (hcl : Clash₀L ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+      (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
+    EntriesClashK keep ins.read.I d t :=
+  plain_clash₀HLfAtK_of keep AtDraw.LeafForm.hm96 hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl hacc
+    pend' hp hcl
+
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw**: `plain_clash₀AtK_of` at
+`keep := id` and what `wrPD` writes for `o`. -/
+theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
+    (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
+    (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
+      o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+        (fun _ _ _ => []) o 0 r) (sel pend' r))
+    (hcl : Clash₀L ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+      (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
+    EntriesClash ins.read.I d (wrPD ins.read.I d o) :=
+  (entriesClash_iff_K_id _ _ _).2 <| plain_clash₀AtK_of id hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o
+    (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
+
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
+`plain_clash₀HAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
+theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true)
+    (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
+    (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
+    (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
+      o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+        (fun _ _ _ => []) o 0 r) (sel pend' r))
+    (hcl : Clash₀L ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+      (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
+    EntriesClash ins.read.I d (wrPD ins.read.I d o) :=
+  (entriesClash_iff_K_id _ _ _).2 <| plain_clash₀HAtK_of id hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
+    (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
 /-- **An accepted plain run's reps' columns, every one**: `cols_plain` before `distinctBelow`, so `plainRawCols` is
 `plainRepColsOf` at `shapeOf` with `2 · |regions|` extra claims, on the live session's first two rep streams and proof

@@ -26,11 +26,11 @@
 * `DeepGemmFp8EinsumRule`: the o-projection's `fp8_einsum` over that quant's words and scales derives per token word for word the
   grouped DeepGEMM twin (`kernels.deepgemm_twins`), and another expression or recipe refuses by name;
 * `SiluAndMulWithClampRule`: the shared expert's clamped SwiGLU derives per row word for word the twin the capture holds to the
-  served kernel (`dsv4_moe_capture_gpu.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
+  served kernel (`dsv4_moe_twin.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
 * `TopkSoftplusSqrtHashRule`: a hash layer's router derives per token word for word the capture's twin over the table's ids
-  (`dsv4_moe_capture_gpu.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
+  (`dsv4_moe_twin.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
 * `Dsv4TopkRule`: a scored layer's `_dsv4_topk_kernel` launch derives per token word for word the capture's twin
-  (`dsv4_moe_capture_gpu.router_twin`), and another kernel body or specialization refuses by name;
+  (`dsv4_moe_twin.router_twin`), and another kernel body or specialization refuses by name;
 * `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
   its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
   a batch, block or shape the capture does not give, or a launch that also routes other requests' tokens, refuses by name;
@@ -67,19 +67,19 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.export_ops import CollectiveBus, TPStub
 from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
 from verity_vllm.program.frontend.vllm_meta import ScheduledWithPeers, with_peers
-from verity_vllm.program.kernels import deepgemm_twins as DT
-from verity_vllm.program.kernels import dsv4_compressor_twin as DC
-from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
-from verity_vllm.program.kernels import flashmla_prefill_twin as FP
-from verity_vllm.program.kernels import flashmla_twin as FT
-from verity_vllm.program.kernels import marlin_moe_rows as MR
-from verity_vllm.program.kernels import mhc_twin as W
-from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import bf16_gemm_check as BC
-from verity_vllm.program.registry import hopper
+from verity.ml.definitions.numerics import deepgemm_twins as DT
+from verity.ml.definitions.numerics import dsv4_compressor_twin as DC
+from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as TQ
+from verity.ml.definitions.numerics import flashmla_prefill_twin as FP
+from verity.ml.definitions.numerics import flashmla_twin as FT
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import mhc_twin as W
+from verity.ml.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
+from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
-from tests.properties.dsv4_moe_capture_gpu import clamp_twin, hash_twin, router_twin
 
 
 class _Overlapped(nn.Module):
@@ -805,10 +805,10 @@ def flashmla_small(served, monkeypatch):
 
 
 @pytest.mark.parametrize("ratio, window, calls, p0, paths", [
-    (4, 28, (30, 1, 1), 0, [("prefill", list(range(7))), ("decode", []), ("decode", [7])]),
-    (128, 8, (128, 1), 0, [("prefill", [0]), ("decode", [])]),
+    pytest.param(4, 28, (30, 1, 1), 0, [("prefill", list(range(7))), ("decode", []), ("decode", [7])], marks=pytest.mark.slow),
+    pytest.param(128, 8, (128, 1), 0, [("prefill", [0]), ("decode", [])], marks=pytest.mark.slow),
     (1, 8, (12, 1), 0, [("prefill", []), ("decode", [])]),
-    (4, 28, (26, 1, 1), 5, [("prefill", list(range(1, 7))), ("decode", [7]), ("decode", [])]),
+    pytest.param(4, 28, (26, 1, 1), 5, [("prefill", list(range(1, 7))), ("decode", [7]), ("decode", [])], marks=pytest.mark.slow),
     (4, 28, (1,), 8, [("decode", [])]),
     (128, 8, (1,), 8, [("decode", [])]),
 ])
@@ -854,6 +854,7 @@ def _decode_splits(lens: list[tuple[int, int]], req: int, window: int) -> tuple[
     return FT.request_splits(metas, ns, req, sum(-(-n // SPARSE_BN) for n in lens[req]))
 
 
+@pytest.mark.slow
 def test_a_decode_takes_its_splits_among_the_launchs_decodes(flashmla_small):
     """FlashMLA plans a step's decodes together: the request's decode at position 30, second of 31 decodes beside a prefill, takes
     the splits of its index among their lengths, which differ from its splits alone and from those of the first decode."""
@@ -1172,6 +1173,7 @@ def _derive_marlin(model, xs, monkeypatch, served=MARLIN_SMALL):
     return derive_report(model, inputs, mode="profile", profile=PROFILE_B1_EAGER_V3.name, name="marlin", rules=vllm_ruleset()), inputs
 
 
+@pytest.mark.slow
 def test_the_marlin_moes_align_and_expert_gemms_derive_per_pair_word_for_word_the_twin(served, monkeypatch):
     rng = np.random.default_rng(11)
     model, xs = _MarlinLaunches(rng), _marlin_inputs(rng)

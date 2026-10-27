@@ -2,7 +2,8 @@
 `LlamaDecoderLayer` / `Qwen2DecoderLayer` compute them with SDPA attention (the engine's check window compares them bit
 for bit on every layer when transformers is importable). The layer's linears and attention dispatch to an arm's chains;
 with no arm they are the bf16 reference: `F.linear`, and `F.scaled_dot_product_attention(is_causal=True,
-enable_gqa=True)`, PyTorch's SDPA, as HF's `sdpa_attention_forward` calls it."""
+enable_gqa=True)`, PyTorch's SDPA, as HF's `sdpa_attention_forward` calls it. GLM-5.3's layers are `glm.py`'s
+(`make_layer`)."""
 from __future__ import annotations
 
 import json
@@ -10,17 +11,24 @@ import math
 import struct
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 
+import models
 from matmul import MM, Run, Softmaxed, run_chain
 
+#: F8_E4M3 is read as its bytes: a block-FP8 layer decodes them with their scales (`glm.dequant`)
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "I64": torch.int64, "I32": torch.int32,
-          "I8": torch.int8, "U8": torch.uint8}
-ARCHS = {"LlamaForCausalLM": "llama", "Qwen2ForCausalLM": "qwen2"}
+          "I8": torch.int8, "U8": torch.uint8, "F8_E4M3": torch.uint8}
+ARCHS = {"LlamaForCausalLM": "llama", "Qwen2ForCausalLM": "qwen2", "GlmMoeDsaForCausalLM": "glm_moe_dsa"}
+#: GLM-5.3's config fields its layers read (`glm.GlmLayer`)
+GLM_KEYS = ("q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim", "n_routed_experts",
+            "num_experts_per_tok", "moe_intermediate_size", "n_group", "topk_group", "norm_topk_prob",
+            "routed_scaling_factor", "scoring_func", "topk_method", "n_shared_experts", "mlp_layer_types", "index_topk",
+            "hidden_act")
 #: a KV group's s x s work runs on all query rows at once while a (rep, s, s) float64 tensor is within ROWS_WHOLE bytes,
 #: else on chunks of ROWS_BYTES (32K), as attention.py
 ROWS_WHOLE, ROWS_BYTES = 2 ** 32, 2 ** 31
@@ -42,6 +50,8 @@ class Config:
     tie: bool
     qkv_bias: bool
     rope: dict
+    #: GLM-5.3's own fields (`GLM_KEYS`); its head_dim is the RoPE slice's, qk_rope_head_dim, as HF's config sets it
+    glm: dict = field(default_factory=dict)
 
     @property
     def rep(self) -> int:
@@ -59,31 +69,58 @@ class Config:
         rope.setdefault("rope_theta", c.get("rope_theta", rope.get("rope_theta")))
         rope.setdefault("rope_type", rope.get("type", "default"))
         heads = c["num_attention_heads"]
+        glm = {k: c[k] for k in GLM_KEYS} if arch == "glm_moe_dsa" else {}
+        head_dim = glm["qk_rope_head_dim"] if glm else c.get("head_dim") or c["hidden_size"] // heads
         return Config(arch, c["hidden_size"], c["num_hidden_layers"], heads, c.get("num_key_value_heads", heads),
-                      c.get("head_dim") or c["hidden_size"] // heads, c["intermediate_size"], c["rms_norm_eps"],
-                      c["vocab_size"], bool(c.get("tie_word_embeddings", False)), arch == "qwen2", rope)
+                      head_dim, c["intermediate_size"], c["rms_norm_eps"], c["vocab_size"],
+                      bool(c.get("tie_word_embeddings", False)), arch == "qwen2", rope, glm)
 
 
 # ---------------------------------------------------------------- weights
 
 class Weights:
     """Tensors by name from a snapshot's safetensors (read directly: an 8-byte header length, a JSON header, the bytes),
-    a layer at a time; a background thread prefetches the next layer."""
+    a layer at a time; a background thread prefetches the next layer.
 
-    def __init__(self, snapshot: Path):
+    A streamed model's shards (`models.pin_of`) that the snapshot lacks are pulled when a read needs them
+    (`stream.Hub`) and deleted once every tensor in them that a decoder layer below `layers` or the top reads is read."""
+
+    def __init__(self, snapshot: Path, layers: int | None = None):
         self.snap = Path(snapshot)
         idx = self.snap / "model.safetensors.index.json"
         files = sorted(set(json.loads(idx.read_text())["weight_map"].values())) if idx.exists() else ["model.safetensors"]
+        pin = models.pin_of(self.snap)
+        self.hub = None
+        self.headers: dict = {}
         self.where: dict = {}
         for fn in files:
-            with open(self.snap / fn, "rb") as f:
-                n = struct.unpack("<Q", f.read(8))[0]
-                header = json.loads(f.read(n))
+            if (self.snap / fn).is_file():
+                with open(self.snap / fn, "rb") as f:
+                    n = struct.unpack("<Q", f.read(8))[0]
+                    header = json.loads(f.read(n))
+            elif pin is not None:
+                if self.hub is None:
+                    import stream
+                    self.hub = stream.Hub(pin)
+                n, header = self.headers[fn] = self.hub.header(fn)
+            else:
+                raise FileNotFoundError(self.snap / fn)
             for name, meta in header.items():
                 if name != "__metadata__":
                     self.where[name] = (fn, 8 + n + meta["data_offsets"][0], meta["data_offsets"][1] - meta["data_offsets"][0],
                                         DTYPES[meta["dtype"]], tuple(meta["shape"]))
+        self.left: dict = {fn: set() for fn in self.headers}
+        for n, w in self.where.items():
+            if w[0] in self.left and self._read_by(n, layers):
+                self.left[w[0]].add(n)
+        self.lock = threading.Lock()
         self.pending: dict = {}
+
+    @staticmethod
+    def _read_by(name: str, layers: int | None) -> bool:
+        if layers is None or not name.startswith("model.layers."):
+            return True
+        return int(name.split(".")[2]) < layers
 
     def read(self, names) -> dict:
         out = {}
@@ -91,13 +128,23 @@ class Weights:
         for n in names:
             by_file.setdefault(self.where[n][0], []).append(n)
         for fn, ns in by_file.items():
-            with open(self.snap / fn, "rb") as f:
+            path = self.snap / fn if fn not in self.headers else self.hub.path(fn, self.headers[fn])
+            with open(path, "rb") as f:
                 for n in sorted(ns, key=lambda x: self.where[x][1]):
                     _, off, size, dtype, shape = self.where[n]
                     f.seek(off)
                     buf = bytearray(f.read(size))
                     out[n] = torch.frombuffer(buf, dtype=dtype).view(shape) if size else torch.empty(shape, dtype=dtype)
+            if fn in self.headers:
+                with self.lock:
+                    self.left[fn] -= set(ns)
+                    if not self.left[fn]:
+                        self.hub.done(fn)
         return out
+
+    def close(self) -> None:
+        if self.hub is not None:
+            self.hub.close()
 
     def layer_names(self, li: int) -> list[str]:
         p = f"model.layers.{li}."
@@ -204,7 +251,8 @@ class Layer:
         steps = run.steps_for("linear", name) if run is not None else []
         if not steps:
             return F.linear(x, w, b)
-        mm = MM("linear", name, run, x.reshape(-1, x.shape[-1]).float(), w, maps=(lambda t: t.float(),))
+        mm = MM("linear", name, run, x.reshape(-1, x.shape[-1]).float(), w, maps=(lambda t: t.float(),),
+                extra={"weight64": w.double})
         y = run_chain(steps, mm)
         if b is not None:
             y = y + b.float()
@@ -300,8 +348,18 @@ def hf_layer(cfg: Config, snapshot: Path, li: int, layer: Layer):
     return hl.eval(), rot_cls(hc).to(dev)
 
 
+def make_layer(cfg: Config, li: int, tensors: dict, device):
+    if cfg.arch == "glm_moe_dsa":
+        import glm
+        return glm.GlmLayer(cfg, li, tensors, device)
+    return Layer(cfg, li, tensors, device)
+
+
 def check_reference(gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.Tensor, cos, sin, out: torch.Tensor) -> None:
     """The engine's bf16 layer output equals HF's layer on the same input, bit for bit (and its RoPE tables HF's)."""
+    if cfg.arch == "glm_moe_dsa":
+        import glm
+        return glm.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out)
     hf = hf_layer(cfg, snapshot, layer.li, layer)
     if hf is None:
         gates.skip("hf_reference", "transformers is not importable")

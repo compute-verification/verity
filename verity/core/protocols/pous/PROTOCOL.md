@@ -288,6 +288,11 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
+  - Above 2^23 blocks the run protocol takes `p2.wide_certificate`, the per-period guarantee
+    `Pous.Period.SecurityProofs.periodHeldAt`: every block count from 2^19 to 2^27 at the registered width and prime,
+    the same `⌊ρ·blocks·w⌋` at `1% + 2^-128`, so Demo B's 1038 segments of 2^16 blocks certify 1,060,008,348,186 bits
+    (`PeriodHeldDemo`). It is in the ring model and rests on the open conjecture `P2RingRoundSecureWide`, the device
+    model `RingDeviceAt` and the coin commitments' hiding at that count (`p2.WIDE_CLAIMS`).
   - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854,029 ns), half the fastest 16,448-bit root with 8 cores of one chiplet
     cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
     (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
@@ -428,7 +433,7 @@ auditor's own PRF outputs, so a label the server didn't keep is a label it can't
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
 `tests/test_pous_streamed_wipe.py`, its verdict's Lean port `MemoryChallenger.StreamedWipe`
 (`verity/core/devices/memory_challenger/lean/`), its timing `benchmarks/pous/streamed_wipe/`, and its guarantees
-`Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Models/Pous/Guarantees/StreamedWipe.lean`, the
+`Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Definitions/Pous/Guarantees/StreamedWipe.lean`, the
 game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
 `PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
 
@@ -513,6 +518,30 @@ At the deployed fill, `N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half
   count `C(N, r) ≤ N^r ≤ 2^(36·r)` spends the difference: `k · (D/N) = 28.434 > 41 · ln 2` for sampling, and
   `17 + 548 · (D − 1) + 41 = 8,554,279,510` bits for compression, each `2^-41`.
 
+At `k = 2152` reads and `δ = 2^-128`, `StreamedWipeMeetsFamily`
+(`Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`, with its instances `StreamedWipeMeets96GiB` and
+`StreamedWipeMeets141GB`, proved in `Security/Proofs/Pous/StreamedWipe/Family.lean`) proves `⌈M/19⌉ + E` bits for every
+fill of `N ≥ 2^19` labels (one 32 MiB segment or more, no upper limit) at `g = N − ⌈N/24⌉`: `2152/24 > 129 · ln 2` for
+sampling, and with the count `C(N, r) ≤ 2^N` the compression term needs `q ≥ E + 512 · (⌈N/24⌉ − 1) + N + 141`, below
+`⌈M/19⌉ + E` since `512/24 + 1 < 512/19` bits a label, each `2^-129`.
+`(18/19)^2152 ≈ 2^-167.9`, but sampling can't take all of `f = 1/19`: the missing labels' bits and the count come out of
+the same `M/19`. At `k = 2152` this split reaches about `f = 1/23`, and `f = 1/19` from about `k = 1,765`.
+
+For any read count, `StreamedWipeMeetsReads` (`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`, proved in
+the same `Family.lean`, the family being its instance at `r = 24`) proves `512 · (⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`
+bits at `2^-128` for every `k` and `r` with `(r − 1)^k · 2^129 ≤ r^k` (that is `(1 − 1/r)^k ≤ 2^-129`), every fill of
+`N ≥ 1` labels and `R` bits of the server outside the fill, which count in full. So `f ≈ 1/r + 1/512` at
+`k ≈ 129 · ln 2 · r ≈ 89.4 · r`. Its H200 instance, `StreamedWipeMeets141GB5`, meets the onsite target of at most
+5 GB a device: at `N = 2,203,125,000` (141·10⁹ bytes) with the 2.3 GB driver reserve, the least ratio is `r = 59` and its
+least read count `k = 5231`, for `39,721,768,854 + E` bits (the fill's 21,321,768,854, about 2.665 GB, plus the reserve:
+about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
+
+`verity/wipe/v0` publishes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
+--reads`, 2152 by default) and its commitment names, at `r = ratio(k)`, the largest `r` the condition allows, with `R`
+every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; up to
+`MAX_READS = 2^17` reads). One 32 MiB segment at `k = 2152` (`r = 24`) is 11,709,069 bits plus the egress, under the
+family's `⌈M/19⌉ = 14,128,182`; the H200 at `k = 5231` is `StreamedWipeMeets141GB5`'s figure.
+
 **What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
 an efficient prover. The physical premises are the game's shape, and the deployment must make them true:
 
@@ -523,7 +552,7 @@ an efficient prover. The physical premises are the game's shape, and the deploym
 - C5, *no side channel*: no label leaves except through that egress, and nothing reaches the server during the
   challenges but the indices and what the outside sends.
 
-**Measured** (`r20261019-061002-ee6b`, vy-nebius-2, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
+**Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
 
 | | |
@@ -708,8 +737,8 @@ the timed audit and the simulator with the dense codec as default.
 
 - **Trusted without proof:** `Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
   `Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
-  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Models/Pous/Assumptions.lean`,
-  `Security/Models/Pous/Guarantees.lean` and, for the lemmas, `Security/Proofs/Pous/Statements.lean`.
+  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Definitions/Pous/Assumptions.lean`,
+  `Security/Definitions/Pous/Guarantees.lean` and, for the lemmas, `Security/Proofs/Pous/Statements.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
 - **Proofs:** `Security/Proofs/Pous/`, checked by Verity's `tools/verity/lean/check.py` against `lean-audit.json`.
@@ -828,7 +857,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 ## Guarantees and lemmas
 
 The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
-computes) are in `Security/Models/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
+computes) are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
 category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
 transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
@@ -864,6 +893,8 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `SegTagAuditSecure`, `DomainSepEquiv`, `TagInjective14` | the tagged keying's transfer: the tagged scheme is as secure as the global one, and the tags relabel the global indices injectively (448 distinct tags) | proved |
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
+| `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB`, `StreamedWipeMeets141GB` | the streamed-label wipe at `k = 2152` reads: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB and 141 GB the explicit thresholds | proved |
+| `StreamedWipeMeetsReads`, `StreamedWipeMeets141GB5` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`, `verity/wipe/v0`'s figure at the session's `k`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GB and its 2.3 GB reserve) at `k = 5231`, `q ≥ 39,721,768,854 + E` bits, at most 5 GB | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
@@ -882,9 +913,10 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   whose leaves have the published root, every one of the device's 105 recorded answers was the challenged block of
   `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS forgery. `RunCheckAccepts` is
   proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
-  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It follows from
-  `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot` (`runCertifies_of`), which are open, so it is a
-  statement no guarantee states yet (`unstated`).
+  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It is proved
+  (`Pous.EndToEnd.SecurityProofs.runCertifies`) from `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot`
+  (`PousCheck.Properties.SecurityProofs.acceptsDecodes` and `publishesRoot`, guarantees), and `periodHeld` reads it; no
+  guarantee states it alone (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
   commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
@@ -918,7 +950,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-nebius-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
+  earlier copy: `trusted-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
@@ -934,7 +966,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 Two gaps stood between these statements and the deployed verifier:
 
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
-  `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
+  `SessionLog` under its host presumption, which `trusted-host` covers as network-accounting widens it
   (pending network-accounting's widening, Daniel decision 2). Every session names its setup: a `SessionCommitment`'s
   `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
   challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
@@ -945,10 +977,9 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-nebius-host` (`verity.core.claims`) as network-accounting widens it, in Daniel's words: "An auditor-trusted
-  device (a network certifier, the memory challenger) runs its stated code on its Nebius host, and its host never
-  restores an earlier copy of the state the device keeps there"
-  (pending network-accounting's widening, Daniel decision 2). This log is part of that state, as is the LMS leaf state.
+  `trusted-host` (`verity.core.claims`; Daniel decision 2): "the auditor's device runs its stated code, timing
+  included, on a host the prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
+  host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. The Lean states the check's side (`RunCheckAccepts`: an accepted session
@@ -960,7 +991,7 @@ Two gaps stood between these statements and the deployed verifier:
   verifier's own list (`TRUSTED.json`, never the run's record). `check/tests/test_run.py` holds the two
   to one another, and `Accepted` is now setup's acceptance and this check's.
 
-## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
+## Named assumptions (`Security/Definitions/Pous/Assumptions.lean`)
 
 Each is a `Prop` taken as a hypothesis, never an `axiom`.
 

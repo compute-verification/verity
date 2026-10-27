@@ -134,7 +134,7 @@ class Signature:
 # --- the messages ------------------------------------------------------------------------------------------------------------
 
 #: role -> its tag, which every digest of the role begins with. The network certificate's is the message's own,
-#: distinct from the ids of the checks that read it (`verity/network-certificate/v3`, `verity/network-records/v2`).
+#: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`).
 ROLES = {"network-certificate": "verity/network-certificate-message/v2",
          "memory-challenger-record": "verity/memory-challenger-record/v1"}
 DIRECTIONS = ("egress", "ingress")
@@ -319,22 +319,24 @@ class LeafState:
 
     ``path`` holds ``{"public", "H", "next", "sessions", "check"}`` as JSON (``sessions`` the ids `start` has recorded, in
     hex, and ``check`` the first 16 bytes of SHA-512 over the rest), and ``path.journal`` every leaf reserved, one per line.
-    Opening takes ``path.lock`` exclusively for the object's life (a second signer on the same state is refused), and refuses
-    a state that is missing, unreadable, another key's, or behind its own journal or ``floor`` (the caller's next leaf known
-    unused, such as 1 + the last q it published). `reserve` writes the advanced state and its journal line and fsyncs both
-    before it returns the leaf, so a crash never reuses one: at worst the journal misses the one leaf the state already
-    skipped. `start` records a session id as started the same way, and refuses one already recorded, so no two signers of
-    the key run one session. A restore of both files from one snapshot is past what a file can see; ``floor`` is its guard
-    for leaves, and for session ids there is none: both rest on its host never restoring an earlier copy of the state.
+    Opening takes ``path.lock`` exclusively for the object's life: a second signer on the same state is refused, or with
+    ``wait`` waits on the lock until the first closes the state, so signers that each open it only to sign take turns.
+    Opening refuses a state that is missing, unreadable, another key's, or behind its own journal or ``floor`` (the
+    caller's next leaf known unused, such as 1 + the last q it published). `reserve` writes the advanced state and its
+    journal line and fsyncs both before it returns the leaf, so a crash never reuses one: at worst the journal misses the
+    one leaf the state already skipped. `start` records a session id as started the same way, and refuses one already
+    recorded, so no two signers of the key run one session. A restore of both files from one snapshot is past what a file
+    can see; ``floor`` is its guard for leaves, and for session ids there is none: both rest on its host never restoring
+    an earlier copy of the state.
     """
 
-    def __init__(self, path: str | os.PathLike, public: bytes, H: int, *, floor: int = 0) -> None:
+    def __init__(self, path: str | os.PathLike, public: bytes, H: int, *, floor: int = 0, wait: bool = False) -> None:
         self.path, self.public, self.H = Path(path), bytes(public), H
         self._journal = self.path.with_name(self.path.name + ".journal")
         self._lock = open(self.path.with_name(self.path.name + ".lock"), "a+")
         self._session: bytes | None = None
         try:
-            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(self._lock, fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self._lock.close()
             raise StateError(f"{self.path} is held by another signer") from None

@@ -21,7 +21,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
     commit  -> vllm-verdict/v1        verdict.json (the verdict of record, vllm-verdict/v1), commit/ (commit_delta's verdict.json,
                                       sampled_replay_p*.json, versions.json, manifest_verify.json, ...; small files), weights_of_record.log,
                                       manifest.log, manifest_verify.log; meta {row, stage, program_digest, verdict, outcome, stage_status};
-                                      refs.build, refs.match  (commit_summary.json and the finalize board are retired: F-r19-int-21 / P5);
+                                      refs.build, refs.match  (commit_summary.json and the finalize board are retired);
                                       a config run (`config` verdict line) decides in config_record.json instead, at TP1 and TP
     replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
                                       commit/summary.json, as tp-commit-replay folded it); and one vllm-replay-slim/v1 per slim keep
@@ -32,7 +32,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
 
 A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
 the build entry takes each rank's build_step/, build_request*/ and build_workload/{workload_program.json, descriptor.json.gz} (every
-Program a rank serves, so `verity_vllm.records.programs` decodes the row from this artifact alone), the match entry tp.match's
+Program a rank serves, so `pipeline.circuit_db.programs` decodes the row from this artifact alone), the match entry tp.match's
 match/tp2_match.json (+ the fold Match's), the verdict entry tp.commit's commit/ (its decision document is commit/summary.json: a TP
 Commit writes no verdict.json), and `program_digest` is the TP manifest's key digest -- the `tp-ranks` fold of the rank workload
 digests (the manifest's rank merge), with `rank_workload_digests` beside it.  A Commit stage that reported PASS without its decision

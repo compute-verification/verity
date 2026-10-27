@@ -12,9 +12,9 @@ import time
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.check.match.batch_decomp import derived_shape
+from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.program import workload as W
-from verity_vllm.program.boolean import word_descriptor
+from verity.ml.definitions.boolean import word_descriptor
 
 
 def load_desc(d: str) -> dict:
@@ -105,7 +105,7 @@ def registration_refusal(dirs: list[str]) -> str | None:
 
 
 def component_provenance(d: str, desc: dict) -> dict:
-    """[rev-pm M-0123 E] the component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
+    """The component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
     result.json/artifact.json's program_digest.  `refusal` names the mismatch (fail closed); a component dir with no recorded digest is
     refused too (a descriptor without provenance is not a Build artifact)."""
     from verity.ml.circuits.codec import program_digest

@@ -30,7 +30,6 @@ def wordLenJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℕ :=
   | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -49,7 +48,6 @@ def wideJ (zk : Bool) (x : Claims.Msg) (j : ℕ) (u : List 𝔽) : Prop :=
   match (tables zk x)[j]? with
   | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes
   | none => False
-
 
 namespace Gen
 
@@ -252,117 +250,6 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
   Gen.runOf_eqJ (S := S₀) (zk := zk) (seen := seen) (f := f) (x := x) (s := s) (spec := spec) (sts := sts) (lv := lv)
     (rr := rr) (j := j) (hf := hf) (hx := hx) (hs := hs) (hlv := hlv) (hr := hr)
 
-/-- **An accepted masked run opens a column of table `j` only as a Merkle opening** of table `j`'s level 0 in its
-own log: at the statement's setup, table `j`'s `--zk` schedule and the link of the tape's first message, a column `u`
-the run's reader opens at `q` is the witness lanes of an opened row whose opening against `root_B[j]` of the link
-passed, every SHA-512 input of it in the run's verifier log. -/
-theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
-    {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
-    (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) q = some u) :
-    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
-      (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
-      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
-      Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
-        (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
-        (Claims.run sha512 P (V true) x ω r).vLog q row ∧
-      u = (row.toList.map FlockLevel3.GF128.of).take (2 ^ (sch.levels.getD 0 default).lanes) := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
-  generalize hL : (Claims.run sha512 P (V true) x ω r).vLog = L at hv ⊢
-  obtain ⟨hx, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hc
-  obtain ⟨hroot, -⟩ := Claims.Bridge.Custody.custody_ok hcu
-  unfold cols at hu
-  split at hu
-  swap
-  · simp [Claims.Flock.lookCol] at hu
-  rename_i rr hrr
-  obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eqJ hf hx hs hlv hrr
-  simp only [↓reduceIte] at hu
-  have hmem := lookCol_mem hu
-  obtain ⟨ρ, hρ, hp⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hmem)
-  obtain ⟨k, hk, rfl⟩ : ∃ k < 2,
-      ρ = (lv.streams.getD (2 * j + k) #[], f.proofs.getD (2 * j + k) ByteArray.empty) := by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hρ
-    rcases hρ with rfl | rfl
-    · exact ⟨0, by omega, rfl⟩
-    · exact ⟨1, by omega, rfl⟩
-  have hstsj : j < sts.size := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, -⟩
-    exact h0
-  have hstj : sts[j] = st := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, e⟩
-    exact e
-  have hj : j < (tabsOf sts).size := by simpa [tabsOf] using hstsj
-  have htj : (tabsOf sts)[j] = Setup.ofCircuit st := by rw [tabsOf_getElem hj]; simp only [hstj]
-  replace hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok () := hv
-  obtain ⟨sess, hdec, hsz, hreps⟩ :=
-    FlockSoundness.ZkQuery.zkQueryRound_verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs hv
-  obtain ⟨sch, tPad, hsch, hrep⟩ := hreps j hj
-  obtain ⟨stream, extras', zp, hstream, hext', hzp, hlt, hcols, hmc, hcap⟩ := hrep k hk
-  simp only [htj] at hsch hext' hzp hlt hcols hmc
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes (L.map Prod.fst)) spec f.record) sess hdec
-  obtain ⟨hrB, hpts, hlsz, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
-  rw [hpts, hext] at hext'
-  cases hext'
-  have htab : j < spec.tables.size := by rw [← hsz]; exact hj
-  obtain ⟨hk', hrs⟩ := Claims.Bridge.Custody.repStreams_getElem spec htab hk
-  obtain ⟨y, hy, hfa⟩ := hstreams (2 * j + k) hk'
-  rw [hrs] at hy
-  have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
-  subst hys
-  have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hcolsEq : Claims.Flock.zkRepColsOf
-      (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-        (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
-      (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) =
-      (Claims.Flock.zkRepCols (sch.levels.getD 0 default)
-        (y.rounds[Claims.Flock.zkQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
-          (2 + extras.size)]!).coins zp.proof.ligerito.initialProof.rows).map
-        (fun p => (p.1, p.2.take (2 ^ (sch.levels.getD 0 default).lanes))) := by
-    rw [← hcols]
-    have e1 : lv.streams.getD (2 * j + k) #[] = lv.streams[2 * j + k]! := by
-      rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]
-    have e2 : f.proofs.getD (2 * j + k) ByteArray.empty = f.proofs[2 * j + k]! := by
-      rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]
-    rw [e1, e2]
-    refine zkRepColsOf_congr _ _ fun i => ?_
-    rw [← Array.getElem?_toList, ← Array.getElem?_toList]
-    exact (hcoins i).symm
-  have hp2 : (q, u) ∈ (Claims.Flock.zkRepCols (sch.levels.getD 0 default)
-      (y.rounds[Claims.Flock.zkQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
-        (2 + extras.size)]!).coins zp.proof.ligerito.initialProof.rows).map
-      (fun p => (p.1, p.2.take (2 ^ (sch.levels.getD 0 default).lanes))) := by
-    rw [← hcolsEq]
-    exact hp
-  obtain ⟨⟨q', w⟩, hw, hqw⟩ := List.mem_map.1 hp2
-  simp only [Prod.mk.injEq] at hqw
-  obtain ⟨rfl, rfl⟩ := hqw
-  obtain ⟨i, hi, -, hiq, hiu⟩ := mem_zkRepCols hw
-  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 (setupOf_zk hs) j hstsj
-    rw [hstj] at this
-    exact this
-  rw [hms] at hmc
-  have hruns := With.merkleCheckWith_sim (back (L.map Prod.fst))
-    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) MerkleScheme.hm96Sha512)
-    MerkleScheme.hm96Sha512 _ _ _ _ _ _ _ _ () hmc
-  rw [opsWith_hm96] at hruns
-  obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
-  obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
-  refine ⟨s, spec, sts, st, sch, tPad, link, zp.proof.ligerito.initialProof.rows[i]!, hs, hst, hsch, hlink,
-    ⟨Or.inl rfl, zp.proof.cap, zp.proof.ligerito.initialProof.salts.getD i ByteArray.empty,
-      sibsOf zp.proof.ligerito.initialProof.siblings
-        ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) i,
-      hcs, hcw, ?_, ?_, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i, ?_⟩, by rw [hiu]⟩
-  · rw [hcap, hrB, ← hroot, Array.toArray_toList]
-  · rw [← hiq]
-    exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi
-  · rw [opensInsOf_hm96, ← hiq]
-    exact hlog i hi
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -478,6 +365,23 @@ theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
     exact hlog i hi
 
 end Gen
+
+/-- **An accepted masked run opens a column of table `j` only as a Merkle opening** of table `j`'s level 0 in its
+own log: at the statement's setup, table `j`'s `--zk` schedule and the link of the tape's first message, a column `u`
+the run's reader opens at `q` is the witness lanes of an opened row whose opening against `root_B[j]` of the link
+passed, every SHA-512 input of it in the run's verifier log. -/
+theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+    {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
+    (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) q = some u) :
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
+      (link : List ByteArray × List ByteArray) (row : Array F128),
+      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
+      Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
+        (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
+        (Claims.run sha512 P (V true) x ω r).vLog q row ∧
+      u = (row.toList.map FlockLevel3.GF128.of).take (2 ^ (sch.levels.getD 0 default).lanes) :=
+  Gen.zk_openingJ (S := S₀) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (j := j) (q := q) (u := u) (h := h) (hu := hu)
 
 namespace Gen
 

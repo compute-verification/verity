@@ -146,7 +146,6 @@ def ZkLiveAccAtWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabit
             (liveSession dg (tabsJ (tables true x).length T).length mPts N) (σL u)).toReal) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -226,38 +225,6 @@ def ZkLiveAccAtWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabit
             (liveSession dg (tabsJ (tables true x).length T).length mPts N) (σL u)).toReal) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-end Gen
-
-/-- **The live sessions' bound off the table on a witness lane gives the masked sessions' after `Commit` there**
-(`ZkSessWJ`), the mixture at table `j` the simulated strategies after `Commit` there (`simAtJZ`) of live strategies
-whose roots agree, the decoded self-clashes on accepted live runs bounding theirs (`mean_selfClash_le_liveJZ`). -/
-theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
-    {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAccAtWJ A Hs Ok x T) : ZkSessWJ A Hs Ok x T := by
-  intro Ω _ _ P
-  obtain ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hl Ω P
-  refine ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hok => ?_⟩
-  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hacc', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau,
-    h₀, hsc⟩ := hω ω j hj C hok
-  have hlen := take_gamesZC_length A Hs (tabsJ (tables true x).length T) (capOf rootB₀) (finJ T hj)
-  refine ⟨τ, inferInstance, inferInstance, _, _, capOf rootB₀ (finJ T hj),
-    fun u => simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
-      (tabsJ_get _ T _), ?_, hadv, hP, hTau, h₀, ?_⟩
-  · refine le_trans htr (le_trans (mean_live_le_simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
-      (finJ T hj) (tabsJ_get _ T _)) ?_)
-    rw [hlen]
-    exact div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ =>
-      expect_mono (ind_mono fun outs h =>
-        ⟨accUpTo_of_okAll ok hacc' (finJ T hj).isLt h, (hok' _ (h _)).2⟩) _ _) (Nat.cast_nonneg _)
-  · rw [hlen]
-    exact le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
-      (finJ T hj) (tabsJ_get _ T _)) hsc
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 /-- **The live sessions' bound off the table on a witness lane gives the masked sessions' after `Commit` there**
 (`ZkSessWJ`), the mixture at table `j` the simulated strategies after `Commit` there (`simAtJZ`) of live strategies
 whose roots agree, the decoded self-clashes on accepted live runs bounding theirs (`mean_selfClash_le_liveJZ`). -/
@@ -284,6 +251,15 @@ theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
       (finJ T hj) (tabsJ_get _ T _)) hsc
 
 end Gen
+
+/-- **The live sessions' bound off the table on a witness lane gives the masked sessions' after `Commit` there**
+(`ZkSessWJ`), the mixture at table `j` the simulated strategies after `Commit` there (`simAtJZ`) of live strategies
+whose roots agree, the decoded self-clashes on accepted live runs bounding theirs (`mean_selfClash_le_liveJZ`). -/
+theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
+    {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAccAtWJ A Hs Ok x T) : ZkSessWJ A Hs Ok x T :=
+  Gen.zkSessWJ_of_liveW (S := S₀) (K := K) (D := D) (Sl := Sl) (A := A) (Hs := Hs) (Ok := Ok) (x := x) (mPts := mPts)
+    (T := T) (hl := hl)
 
 namespace Gen
 
@@ -342,7 +318,6 @@ def ZkLiveAccWJ (x : Claims.Msg) : Prop :=
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAccAtWJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -356,12 +331,6 @@ def ZkLiveAccWJ (x : Claims.Msg) : Prop :=
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAccAtWJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 /-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
 round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/

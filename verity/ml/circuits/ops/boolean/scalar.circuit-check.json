@@ -1,64 +1,92 @@
 {
  "definitions": {
   "Bf16GtStrict_v2": {
-   "and": 56
+   "and": 56,
+   "type": "a5379155b406649e2ef782738c80dfaa1c610745b8b327f83816b9ebaa3ca18aec418ecfd00f7ddb20c490f4a64be3df83b9f2473503947e54433fed0d481318"
   },
   "BitAnd_v2": {
-   "and": 1
+   "and": 1,
+   "type": "8e47d8cd9768498638703b36a64d7d91075d9e9df6c953535c6d430aeb1583d4e55fedc651d172339e138820d0124162e633ff547b39b7afa3f33fcbbf3ec376"
   },
   "BitNot_v2": {
-   "and": 0
+   "and": 0,
+   "type": "214e21bea584bffb3e036758a28caa85da5a2a2aaba8960fec76fd1a1ffafa8bd2a4cd4e189d9a3c9f32ea87906a7f6e7a61f29bdcd39a208f63ddd051c4a5fd"
   },
   "BitOr_v2": {
-   "and": 1
+   "and": 1,
+   "type": "d51dffa61a74c24be7f8b10c9c28934550204facbd9d50908bb92e1eedb3b0fd8ddb588edc630a91dd14505ab4b87e4eda1bd200e8fc27d692144e3e8d9539b5"
   },
   "E4m3ToF32_v2": {
-   "and": 15
+   "and": 15,
+   "type": "525fc160cee444ac95266ef9ff389f0f10013e714d9914e97d73a2b3dca42dffe1a9f5b370e07ff375797109a79022bae6363161ac5bb6f266449a34db7f8a73"
   },
   "F32BitsShl23_v2": {
-   "and": 0
+   "and": 0,
+   "type": "57b3350f012e6c3577d0d0d061b8ad83f579d08f7db10c8a301192dc436036b2505ef0699a7fe6617523f56bb12f479d60e833b5168b7db7f249a72235b23a26"
   },
   "F32Eq_v2": {
-   "and": 117
+   "and": 117,
+   "type": "5ddf28f5a66fc738f8e9fb26a9d595db3e864da039d1ab738c4954885487fcc53d1ad4d461ab15848c96896e38112ec3b6247ea714ab8aa596a34a1d558cb14d"
   },
   "F32Fabs_v2": {
-   "and": 0
+   "and": 0,
+   "type": "2ef2138c7fdf93083a4469cbdd2cfe744b9a97ff1abdcaedaf74b4f970ccd3b9513895d56c9eb3f76cc89e5b1410ad9fbe922c8fa32b93f32e596e758ab3a7bc"
   },
   "F32Fmaxf_v2": {
-   "and": 314
+   "and": 314,
+   "type": "ca7e38a0996f56778b3bfefdd2eb3071cabeaa8640ebab41bd26395c499e6348011da26183b158668ca4b3ebe5cc117518610aeab1f7baa3b41225693e6c3662"
   },
   "F32Fminf_v2": {
-   "and": 314
+   "and": 314,
+   "type": "979cdbfd37c782e3a214f883e429d838e1dffe0438220881a4a5b94b3248d9b8a66aa4dd78658b54ed9de0ffb906411a729b613032c59b6fc16f5f81a983e6fa"
   },
   "F32IsFinite_v2": {
-   "and": 7
+   "and": 7,
+   "type": "a580cc6f40eeaab5974af2aa7c8ac2f072b5aceeeba62717e9b55658c3b0e97dd8ee9d6d3c2342197456ec0facb66f7209a74c951eaef49e78ecdec37f9aea1d"
   },
   "F32Neg_v2": {
-   "and": 0
+   "and": 0,
+   "type": "52a55f837389018827a6375d11bf733dec7bb12e07582e98299360d3ca00ab5a1b22d05fbd6d52431858943a85fff107c155e66a1b254d0f8072e1c59ed0dcc8"
   },
   "F32Sat_v2": {
-   "and": 100
+   "and": 100,
+   "type": "f7e4015a51bbb3fb378398df6c073a99c5675f425c38b2fd2b37488c5033b1f272b28b92b3604556bfcc9383179df94d2c82c0fa6e6b29abc33ab1d9d486f7f6"
   },
   "F32ToE2m1Sat_v2": {
-   "and": 60
+   "and": 60,
+   "type": "40295d17ad4cbd332269f0329e2eae989a4bdc4e1547504571d49415f7a7109229cbd55ac702b8bad9eefa5cb9c9ea75c2f834845a7ea566cf2c64e1d3178ea7"
   },
   "F32ToE4m3Sat_v2": {
-   "and": 231
+   "and": 231,
+   "type": "c829613225c8094a00a7d5879c141a0161bf25c61baa78b38ecdb9863fcf64a2b29cd93a4c611b06df128c2eb555a382e97ee142697de05d6782bdf859e524cf"
+  },
+  "F32ToS8RniSat_v2": {
+   "and": 313,
+   "type": "6405d1274bd794cfaa10913eb09790adfd2353b5d6a23e6b181684ea600386dd9a5902de982730dfbb889e8440f02a3e0a501468ad31de59bcd5463b941ec357"
   },
   "I32Eq_v2": {
-   "and": 31
+   "and": 31,
+   "type": "e6c5987b632f7266ce5ea88e03c5d12419121b8be4a3ae1789b83a8a6030a183041238e67d1c84560ee3f99496a70bc39e17b2a821943a3430670a822938de7f"
   },
   "I32Le_v2": {
-   "and": 32
+   "and": 32,
+   "type": "51b66b35b02dd4be55f369796552383c7f18c86192bd224425395aa9d07c29341d0a6fedf2e7dab74208f33c9b531177ce7deec2e0938a2e82b4cab784824246"
   },
   "SelectBf16_v2": {
-   "and": 16
+   "and": 16,
+   "type": "be45c3c6eddf06df158637cfba8a8a0a7bea8b74734fce8a4730ae568ef13fef3b3398ff99d3b55cfd8eb20ac314dda31fc5c3074633ec391b79b12a231229e0"
   },
   "SelectF32_v2": {
-   "and": 32
+   "and": 32,
+   "type": "64702e7f4c5feecadee7614261e0546630268f7e4b5586f1bab199d2ee6ef3c6871d3429ef2651902b06812dc3525c0591fdc9bb6be439d5cd5ce85938dede8f"
   },
   "SelectI32_v2": {
-   "and": 32
+   "and": 32,
+   "type": "64702e7f4c5feecadee7614261e0546630268f7e4b5586f1bab199d2ee6ef3c6871d3429ef2651902b06812dc3525c0591fdc9bb6be439d5cd5ce85938dede8f"
+  },
+  "U32Hi16_v2": {
+   "and": 0,
+   "type": "e7ebb71b3fc56c69c7c3d08c281006c50e8e8eadfd90f141dbd7d12f40a8c35f462fc8f977929b6d1f26dcca82329aefaaa8694ed76ee569b8de9386b34ec285"
   }
  }
 }

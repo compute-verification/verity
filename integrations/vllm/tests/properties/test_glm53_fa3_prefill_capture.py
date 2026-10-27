@@ -18,9 +18,9 @@ from tests.properties import glm53_fa3_prefill_capture_gpu as X
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
-from verity_vllm.program.kernels import fa2_relation, fa3_model as FM
-from verity_vllm.program.registry import attention_vocab, hopper
-from verity_vllm.program.registry import fa3_check_inf as F3
+from verity.ml.definitions.numerics import fa2_relation, fa3_model as FM
+from verity.ml.definitions.registry import attention_vocab, hopper
+from verity.ml.definitions.registry import fa3_check_inf as F3
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 COMBINE = ("void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdCombine<cute::tuple<cute::C<8>, cute::C<128> >, "
@@ -101,6 +101,7 @@ def _split_plan(splits: dict[tuple, list[int]]):
     return plan
 
 
+@pytest.mark.slow
 def test_a_split_job_takes_the_split_twins_words_and_checks_the_rules_split_count(tmp_path, monkeypatch) -> None:
     """A 100-row sequence the stubbed plan runs as 3 splits of one 80-key block each (rows 80..99 see two splits), alone and
     beside a 3-row one: its rows against the split twin, its sampled rows' heads against `AttentionHeadSplit_v1`, a flipped word

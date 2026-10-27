@@ -1,67 +1,88 @@
 {
  "definitions": {
   "BlockOpeningCheck_v1{N=32,C=5,K=2,MASKED=1,BYTES=64,ROWS=2,LEAF=3,P=4,DR=1,DP=2,DV=1}": {
-   "and": 2579999
+   "and": 2579999,
+   "type": "18600f0845eb8e524e1d23adb47ded0968f6dd92ea2d38c84f7892305b2713809e04189b7e1c60162dd08741b78b006b0c69b0e985a1c68f035ec8bc1449d071"
   },
   "BlockVerdict_v1{W=16}": {
-   "and": 21
+   "and": 21,
+   "type": "350b956a19ff31f720fadaa26b49acc24ba19267754c77254d6015dab1702ce8e85760c71679a1107579f9f9ce922b78aeaa8130bf7a54441a3478f0edc14cec"
   },
   "BlockVerdict_v1{W=64}": {
-   "and": 69
+   "and": 69,
+   "type": "5fa24ac4d12cb5b1900f91891dd05a0b621694386dec3b373d3a92bcd6a9c947eb9696c404d1a739d9282372c69458b4c8af497de7e235bc964e8724050b9925"
   },
   "CodecBinding_v1{N=512,C=569}": {
-   "and": 158365
+   "and": 158365,
+   "type": "86bed707cfd971b32d5186ff3bc374324ae28ad58335425d05666f5b94d316629a8efdfa5299fd41c2f043eb32db1065d1c525edf9c69ab74b6b79d9a744c336"
   },
   "CodecLess_v1{N=32,C=5}": {
-   "and": 38
+   "and": 38,
+   "type": "98d37017116f55ddd7897ac30389ad24f296e62c359db8b115c5c9480c9324d41b4995dd24de93bc3bcac288c4a3cb987c61f1bc4ee497a55096050d425f02f1"
   },
   "CodecLess_v1{N=512,C=569}": {
-   "and": 638
+   "and": 638,
+   "type": "8c05162cfc318cdea9b56fb63c37f7b6a7dca2dff7f7151c129dcf47a39bd6c03e1855d8a597a7e5fe3755b1b5ac2d9075965ad0ceb973dfb4177bd34d9aff14"
   },
   "CodecMatch_v1{N=32}": {
-   "and": 32
+   "and": 32,
+   "type": "8cd616aed48c8000f85a040b6e550a7e3b546dfcdec5cb441638a1cb2569c4ad4dee3abe29e2cbd172ad1fe91852508b58f1fdaea1b4f8fee250229b9b360289"
   },
   "CodecMatch_v1{N=512}": {
-   "and": 512
+   "and": 512,
+   "type": "42ec4592c1a11a43121198f854fa99f365892f0c3442cb8164a43a674c5a0e4572ecb539cd4a62e2ce0a8e0e0301b22133d8a9b0dfdd9f869a3f4be167074d18"
   },
   "CodecModAdd_v1{N=32,C=5}": {
-   "and": 141
+   "and": 141,
+   "type": "d10ce658791b81a86ecaaf0fdc887db7e114a482a5168508faaba621731528b5874066357d155e024243aa3ad002f2099f82ba88c7c404ab5356acc7140cc901"
   },
   "CodecModAdd_v1{N=512,C=569}": {
-   "and": 2301
+   "and": 2301,
+   "type": "b1ddd720036b985aaee616457569b86ebc1e4cfad55c426cb12fe53b08c55769c8973e68f0352a2692bec550e719367c460a99d48df9010efd8569209b15b663"
   },
   "CodecRound_v1{N=1024,C=105,MASK=1}": {
-   "and": 473154
+   "and": 473154,
+   "type": "45ab5d1f74d42735b4f3ae8afb0225b2eb1678b3d736184ba529c710bd475810b83870137d0c836400bbf74d2242b9c5c04db9f4bb7b3fc662f9c62240d4a043"
   },
   "CodecRound_v1{N=32,C=5,MASK=0}": {
-   "and": 1963
+   "and": 1963,
+   "type": "88fc8fba4e9c28b2cdeb22ee39950da3dd5cb9c80c86ca81973f213566f61cb7c82f51b0cf1b70e3a706ea748e95fbefe1e5f32a1e99e97509eb7e45d6f43b06"
   },
   "CodecRound_v1{N=32,C=5,MASK=1}": {
-   "and": 2066
+   "and": 2066,
+   "type": "e8db5f17c4be9430d543b96caa7c47771c05ccd1e6ee2c1bd8afd1218dae351ec80d93839aa0189b6a03e5101a0350b3112594bc58f2569323a27a7bbf923dbf"
   },
   "CodecRound_v1{N=512,C=569,MASK=0}": {
-   "and": 158233
+   "and": 158233,
+   "type": "427010c63b553860d4db91240be201dbf165a582e3e8faed246f50e64b7bd574fe132f1b61880a0a5589dd808d0fe80513d22c4032e982555bedd4f8a5089b3a"
   },
   "CodecWord_v1{N=32,C=5,K=2,MASKED=1}": {
-   "and": 4099
+   "and": 4099,
+   "type": "56ce38ea912fdd184eb928ca9b6c936638467304db260de5f8d3d4be823011b3df11d223ed22c94a9c7dd7a5ac366e5f70755fd3dfca8168997b9e007e9df6a9"
   },
   "CodecWord_v1{N=512,C=569,K=2,MASKED=0}": {
-   "and": 317616
+   "and": 317616,
+   "type": "758d2344082a8236bb020904477b01478e1e59960290138c55752059ffc5656870c15d9ce0def38ecd288a1934656bda4eacde6288428872d1d7270e11e8347d"
   },
   "LeafMatch_v1{LEAF=16,P=48}": {
-   "and": 9798
+   "and": 9798,
+   "type": "c4e04f05145e2e58c6d2bc4fff7b2939ff54753eafa9ad26a441d025afca4107c8c1bc36cbd08bd9e03bbbc0c1f63e7c80a0ccf4d29a9195e9bc6487a147bca9"
   },
   "LeafMatch_v1{LEAF=3,P=4}": {
-   "and": 2231
+   "and": 2231,
+   "type": "1c8a86a5001a063a5e979f8d7f0e7f0a9ffb378e0f40bc7349b4ca6ddaaa1a76a22739229cfba578c117268ac56ec2ddde3bd6006c7fac97a57b583fa396cb7e"
   },
   "RowCompress_v1": {
-   "and": 81402
+   "and": 81402,
+   "type": "f004e89187484a24e2955cc1ca0a3854fe0b9618117948ccd191b942a337955ec1b03bcbb85ba1daddd24fb153687f596e10d081976d0a0b5e0a97082c9d1d2b"
   },
   "SketchRow_v1{BYTES=4096}": {
-   "and": 56605
+   "and": 56605,
+   "type": "daae64a806f27c7ee3027361f4d6f8dfc90a223158003ac41967126d777077d478b1e1a8b5cae4d239b538b3521327fd395f7621c92297b05a62168168ea6fff"
   },
   "SketchRow_v1{BYTES=64}": {
-   "and": 904
+   "and": 904,
+   "type": "ba330ed668f48fc1232f56bf63abbbb3cc381c71bdaf2eae692127eb2a8995c698c34c0fb1072a7469ea424f30f0258e9641054fa5f57917257b517b94bff60f"
   }
  }
 }

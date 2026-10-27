@@ -111,10 +111,10 @@ class Topup:
     def now(self, stream: int) -> float:
         return self.so.tu_now_ms(stream)
 
-    def log(self) -> list[tuple[float, float, float, int, int, int]]:
-        """Every chunk finished: its start and end (ms on the GPU's clock since the start event), bytes, region, the first
-        4 bytes of its root as a big-endian integer, and its number."""
-        out, first = [], 0
+    def log(self, first: int = 0) -> list[tuple[float, float, float, int, int, int]]:
+        """Every chunk finished (from the `first`-th): its start and end (ms on the GPU's clock since the start event),
+        bytes, region, the first 4 bytes of its root as a big-endian integer, and its number."""
+        out = []
         buf = (ctypes.c_double * (6 * 65536))()
         while True:
             n = self.so.tu_log(first, buf, 65536)

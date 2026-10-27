@@ -126,7 +126,7 @@ def err (x : Except String Unit) : Option String := match x with | .error e => s
 -- row k; a reads file with a claim port at another row is refused
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := ByteArray.empty, leaves := 2, words := none, wordBits := 16, domain := ByteArray.empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def sparseMsgsOwn (rd : List Nat) : Array Registered.Port :=
   ((sparseMsgs (.sparse sp18 38)).map fun q => port q.1 q.2.1 rd).toArray
 def sparseOwn (claim : List Nat) : Array Registered.Port :=
@@ -151,15 +151,21 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
 #guard err (checkOwn openSt (openOwn [0])) == some
   "rec-opening/m23-c2-p0: the registered reads' port claim1 under rec-claim reading [0] is not the statement's: the statement's is claim1 under rec-claim reading [1]"
 
-#guard err (checkCandidate3 c3 full.toArray) == none
-#guard err (checkCandidate3 c3 (full.drop 1).toArray) ==
+def c3h : Inner := { c3 with holo := true }
+
+#guard err (checkCandidate3 c3h full.toArray) == none
+#guard err (checkCandidate3 c3h (full.drop 1).toArray) ==
   some "candidate 3's V* list has no RecSparse statement (rec-sparse/n18-e13-s6-t0), and the inner shape names its sparse phase"
-#guard err (checkCandidate3 c3 (full.filter (·.name != "rec-open-stacked/l16-h3")).toArray) ==
+#guard err (checkCandidate3 c3h (full.filter (·.name != "rec-open-stacked/l16-h3")).toArray) ==
   some "candidate 3's V* list has no level 1 of R's openings (rec-open-stacked/…), and the inner shape names R (m 23, claims 2)"
-#guard err (checkCandidate3 c3 full.dropLast.toArray) ==
+#guard err (checkCandidate3 c3h full.dropLast.toArray) ==
   some "candidate 3's V* list has no part of R's opening (rec-opening/m23-c2-p0), and the inner shape names R (m 23, claims 2)"
-#guard err (checkCandidate3 c3 (full.dropLast ++ [op 24]).toArray) ==
+#guard err (checkCandidate3 c3h (full.dropLast ++ [op 24]).toArray) ==
   some "candidate 3's V* list: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at R's shape (m 23, claims 2, META's stacked)"
+-- a sparse phase at public circuits is refused, whatever the list: RecSparse reads h, which only a holo session sends
+#guard err (checkCandidate3 c3 full.toArray) == some
+  "the inner shape names a RecSparse shape (rec-sparse/n18-e13-s6-t0) at public circuits: the sparse phase reads h, which only a holo inner session (rec-inner --hide) sends"
+#guard err (checkSparseHolo c3h) == none && err (checkSparseHolo { c3 with sparse := none }) == none
 -- a session without candidate 3's phases needs none of them
 #guard err (checkCandidate3 { c3 with sparse := none, stacked := none } #[]) == none
 

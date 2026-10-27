@@ -67,6 +67,7 @@ structure RecordAt (o : Run H rel) : Prop where
   finalFits : o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
   draw : drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
   liveReads : liveOf o.spec o.record = .ok o.live
+  canonical : Flock.RecordText.check o.record = .ok ()
   rootB : (o.live.rootB.toList == o.link.1) = true
   publicsLink : (o.live.publics.toList == o.link.2) = true
   points : (o.live.points == pointsOf o.spec (Claims.coinSeq o.r 0)) = true
@@ -133,6 +134,7 @@ theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
       finalFits := fun o => (hRec o).finalFits
       draw := fun o => (hRec o).draw
       liveReads := fun o => (hRec o).liveReads
+      canonical := fun o => (hRec o).canonical
       rootB := fun o => (hRec o).rootB
       publicsLink := fun o => (hRec o).publicsLink
       points := fun o => (hRec o).points
@@ -178,6 +180,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
         exact ⟨o.recordFits, by change o.proofs.size = 2 at hsz; omega, hb⟩
       draw := JsonRT.drawMatchesZk_goal S h64 hS hP (o.toZk h1)
       liveReads := JsonRT.liveReadsZk_goal S h64 hS hP (o.toZk h1)
+      canonical := JsonRT.canonicalZk_goal S h64 hS hP (o.toZk h1)
       rootB := JsonRT.custodyRootBZk_goal S h64 hS hP (o.toZk h1)
       publicsLink := JsonRT.custodyPublicsZk_goal S h64 hS hP (o.toZk h1)
       points := JsonRT.custodyPointsZk_goal S h64 hS hP (o.toZk h1)

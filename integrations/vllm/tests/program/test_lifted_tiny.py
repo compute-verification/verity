@@ -35,9 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verity.ml.circuits import Program, bind  # noqa: E402
 from verity.ml.circuits.codec import decode_program, encode_program, program_digest  # noqa: E402
 from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition  # noqa: E402
-from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3  # noqa: E402
-from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
-from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
+from verity.ml.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3  # noqa: E402
+from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
+from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1  # noqa: E402
 from verity.ml.circuits.types import Array, Record, Tuple, Value  # noqa: E402
 
@@ -304,7 +304,7 @@ def test_every_registered_gather_family_is_specified_with_its_own_extension():
     reference gather `GatherF32x{V}_v1` (ref_prims, OOR 0x7FC00000) lifts to `LGatherRow32x{V}` with ITS extension, read from
     the original; a strict lift would let an unselected ⊥ row poison an Active read (A5).  Two originals of one `(w, N)` with
     different extensions cannot share the id: refused by name."""
-    from verity_vllm.program.registry import ref_prims as R
+    from verity.ml.definitions.registry import ref_prims as R
     g32 = R.gather_f32(4)
     lg = L.lifted_prim_v1(g32)
     assert lg is L.l_gather_row(32, 4) and lg.id == "LGatherRow32x4_v1" and getattr(lg, "lift_class", None) == "specified"
@@ -561,6 +561,7 @@ def _is_const(prim) -> bool:
     return getattr(prim, "family", None) == "Const"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("ell", [0, 3])
 def test_lserve_bot_steps_are_bot_at_every_gate_they_own_by_enablement(ell):
     """R17-43 / LIFTING-SPEC v0.6 A9.3 + A13.1 (replaces the propagation reading of DP-pad-01 (a)): with the committed EOS at `out[ell]`,
@@ -638,7 +639,7 @@ def test_lsplits_for_candidate_pad04():
     """CANDIDATE PAD-04 / F-pad-11: `LSplitsForSMS<SMS>_v1` — payload agreement with stoch's `SplitsFor_v1` (the verbatim vLLM
     doubling loop) for every `1 ≤ n ≤ 64` at 142 / 132 / 108 SMs; `Active(0)` → ⊥ (no live row, no event); ⊥ → ⊥; INV → INV_6;
     `n > 64` refused by name (structural bound, asserted at build); the table flips stoch named (17, 34, 35, 67.. are beyond 64)."""
-    from verity_vllm.program.registry import topp_geometry
+    from verity.ml.definitions.registry import topp_geometry
     for sms in (142, 132, 108):
         lp, up = L.l_splits_for(sms), L.splits_for_prim(sms)
         assert lp.id == f"LSplitsForSMS{sms}_v1" and up.id == f"SplitsForSMS{sms}_v1" and lp.lifted_from is up
@@ -693,6 +694,7 @@ def test_lserve_length_cap_all_active():
     assert len(bots) == 1 and p3.circuit.gate(bots[0]).prim.id == "LBot32_v1"
 
 
+@pytest.mark.slow
 def test_lserve_eos_set_semantics():
     """The declared EOS SET (P2): any member stops; the set's order is irrelevant; a set is a different Program (digest)."""
     _, _, a = _lserve((17, 63))
@@ -1024,7 +1026,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     from verity.ml.circuits.codec import decode_program, encode_program
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.refs import coll_concat
-    from verity_vllm.program.registry.prims import I32
+    from verity.ml.definitions.registry.prims import I32
 
     def twin_sig(S):
         return (("x", Array(S.N, I32)),), Array(S.N, I32)

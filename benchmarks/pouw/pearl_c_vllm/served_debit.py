@@ -14,8 +14,8 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
   `laterZeroPromos`), whose adds the debit already holds.  Under a format with the row cap (-h3) the rule also caps each
-  credited A row (`clear_work.row_cap`), and ``row_ratio_max`` is the largest row's debit over its cap (the tile rule
-  checked as far as it ran: the rows up to the first one over).
+  credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
+  its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
@@ -88,7 +88,7 @@ from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
+from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
@@ -306,7 +306,8 @@ def _measure(item) -> dict:
         if chains:
             out["atoms"], out["later_zero_promotions"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
-            out["row_ratio_max"] = max(float(d / c) for (d, c), _ in _SEEN[1:])
+            widen = CW.row_cap_multiple(scheme, u.shape.k)
+            out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
 

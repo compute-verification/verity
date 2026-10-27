@@ -30,7 +30,7 @@ class _SplitKernelProxy:
         def run(*args: Any, **kw: Any):
             try:                                              # vLLM launches on a literal tuple grid; a callable (meta) grid is left unread
                 g0 = None if callable(grid) else (int(grid[0]) if isinstance(grid, (tuple, list)) else int(grid))
-            except Exception:  # noqa: BLE001
+            except (TypeError, ValueError, IndexError):
                 g0 = None
             s = kw.get("S")
             sink.append((name, g0, int(s) if isinstance(s, int) else None))

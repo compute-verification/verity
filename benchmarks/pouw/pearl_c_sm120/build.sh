@@ -3,9 +3,10 @@
 #   pearl_c_sm120.cubin  pearl_c_sm120.cu with nvcc >= 12.8 for sm_120a (-fmad=false, no FTZ or fast-math flag, no -lineinfo,
 #                        so the same bytes from any directory), refused unless ptxas reports no warning, spill or stack frame
 #                        and the SASS has the intended tensor-core instructions and nothing lowered: every FP8 atom a
-#                        QMMA.16832.F32.E4M3.E4M3 (64 per 128-deep stage in the 128 x 128 GEMMs on the mainloop, 8 per 64-deep
-#                        stage in the 64 x 64 and 128 x 32 ones, at least one in form_s5 and words), every peel step an
-#                        HMMA.16816.F32.BF16 (64 in each gemm_pearlc and gemm_pearlc_s, none elsewhere), no other MMA
+#                        QMMA.16832.F32.E4M3.E4M3 (64 per 128-deep stage in the 128 x 128 GEMMs on the mainloop, 4 per k32
+#                        in the 64 x 64 and 128 x 32 ones, at least one in form_s5 and words), every peel step an
+#                        HMMA.16816.F32.BF16 (64 in each 128 x 128 gemm_pearlc and gemm_pearlc_s, 16 in the 64 x 64 ones,
+#                        none elsewhere), no other MMA
 #                        form
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)

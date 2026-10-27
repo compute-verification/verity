@@ -1,0 +1,22 @@
+# The trusted-host rename: what `tools/move/rename.py --map tools/move/host_map.toml` renames (Daniel's ruling, 23 Oct 2026
+# 11:04 PM PDT: no hosting provider's name in any security assumption, claim, guarantee, property or protocol document).
+# The assumption is the auditor's trusted host, a role; which provider runs it is implementation, named only in infra and
+# run tooling. Its Lean definition keeps its namespace, so `rename.py --moves` prints the one declaration rename.
+
+[words]
+"trusted-nebius-host" = "trusted-host"
+"TrustedNebiusHost" = "TrustedHost"
+"Trusted Nebius host" = "Trusted host"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, and the test that refuses
+# a provider's name, whose toy files name them on purpose.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tests/test_provider_names.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

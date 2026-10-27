@@ -6,8 +6,9 @@ Writes `DIR/difftest/instances.jsonl`, one instance per line as `CertifierDevice
 configuration, a trace of events, the path that made it and, for an honest run, the Program's frames), and
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's real `active.Proxy` driven through the trace:
 every action it took, in order (each link write, server connection, server write with whether it waited for its drain,
-and published record with its grid's parameters), and at the end its declared syncs, its shaper's hand times, its log
-of egress frames read and its two counts. The Lean audit runs `CertifierDevice/DifftestMain.lean` on both files (`runs`
+salt connection and salt write, and published record with its grid's parameters), and at the end its declared syncs, its
+shaper's hand times, its log of egress frames read and its four counts (link frames read, requests released, salts
+released and delivered). The Lean audit runs `CertifierDevice/DifftestMain.lean` on both files (`runs`
 in `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
 test_network_certifier_device_lean_difftest.py` checks that this script still writes them.
 
@@ -15,8 +16,9 @@ test_network_certifier_device_lean_difftest.py` checks that this script still wr
 its `clock` reads the trace's clock, and its `sleep` parks the calling ticker (egress or ingress, told apart by the
 task's coroutine) until the trace's next tick of that grid releases it, whatever the delay; the link is an in-memory
 reader and writer whose backlog the tick event sets; `asyncio.open_connection` is replaced by one that records the
-connection and waits for the trace's `connected` or `refused`; a server connection's reader gives the trace's bytes, and
-its writer records each write and holds a drain until the trace's `delivered`; `asyncio.to_thread` (the proxy's
+connection and waits for the trace's `connected` or `refused` (`salt-connected` or `salt-refused` for the salt's, told
+apart by its task); a server connection's reader gives the trace's bytes, and its writer records each write and holds a
+drain until the trace's `delivered` (`salt-delivered`); `asyncio.to_thread` (the proxy's
 executor shutdown) runs its call inline. After each event the loop runs until no callback is ready (`loop._ready`
 empty, with no timer, socket or thread in play), so each event's effects, and the order of the
 actions its tasks take, are a function of the trace alone. An event the proxy isn't waiting for (bytes on a connection
@@ -44,6 +46,23 @@ chooses each window's sync `lag` buckets before the window (1, T − 1, or betwe
 choice is ready by its tick; each tick that starts a choice wakes late within the slack, after some of its bucket's
 response reads, which the choice has read but mustn't see. Every reading is integer nanoseconds at least `MARGIN` from every grid boundary and every
 boundary plus the slack, where Python's float seconds and Lean's integers could part.
+
+**The modes.** Each path runs under each of `MODES` in turn: plain; the salt (`Proxy(salt=…)`, at 1, 2 or 3 certifier
+windows per PoUW window, salts of 64 to 512 bits, ingress frames of 96 or 128 bytes), its connection opened a little
+after the tick that releases the first salt frame and each salt drained a little after its frame's release; a restart
+(`Proxy(start=…, position=…)`, at a window 1 … W − 1, its first egress frame at position 0, 1, 5 or 17); a served link
+(`Proxy(served=…)`: grids that share T and τ, each request F_in frames and each response F, every response frame ready
+by the smallest δ, under syncs whose start window the admission rule accepts); the salt with a restart or a served
+link; ordinals (`Proxy(ordinals=True)`: each server connection opens with its stream's `ORDINAL` header); and compact
+records (`Proxy(compact=True)`, alone, salted or restarted, egress frames of 8, 12 or 48 bytes: each server connection
+an HTTP response head, then a (position, record) unit per output, `active.compact_unit`, its record naming its stream,
+the last carrying `COMPACT_LAST`, and a stop's `COMPACT_STOP` too), where the malformed inputs are a record that isn't
+one (`no-id`, a stop's flag without the last's among them), one naming another request (`long`) and a unit cut short
+at a stream's end (`trailing`). The online prover's paths are neither restarted nor served. The salt's own paths: its
+connection refused, which faults the ingress window `delivery-refused`, and a salt drained a window late or never
+(`salt-stall`), which faults nothing; a restart's: an event at a position before the restart's (`stale`, malformed).
+Link garbage includes a salt frame read from the link, never the certifier's. The tick that releases each request
+frame and each salt frame is the real `active.Bucketer`'s on the trace's arrivals.
 """
 from __future__ import annotations
 
@@ -59,27 +78,45 @@ import verity.core.protocols.certifier
 from verity.core.protocols.certifier import online
 from verity.core.protocols.certifier.active import (
     CANONICAL_STREAM,
+    COMPACT_LAST,
+    COMPACT_RECORD,
+    COMPACT_STOP,
     DATA,
     PAD,
+    PLACEHOLDER,
+    SALT,
+    SALT_STREAM,
+    Bucketer,
     InlineExecutor,
     Proxy,
+    compact_cell,
+    compact_record,
+    compact_unit,
     encode_frame,
     event_body,
     request_frames,
+    salt_frame,
 )
-from verity.core.protocols.certifier.grid import GridParams, Reason, Record
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
+from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 
-COUNT = 1500
+COUNT = 2400
 MS = 1_000_000
 MARGIN = 10_000
 RHOS = [Fraction(1), Fraction(2), Fraction(1, 2), Fraction(1, 3), Fraction(3, 2)]
 PATHS = ["honest", "honest", "honest", "late-tick", "stall", "backlog", "overrun", "refused", "late-forward",
          "undelivered", "overflow-egress", "overflow-ingress", "advice", "no-id", "duplicate", "duplicate-at-capacity",
          "long", "no-request", "trailing", "slow-server", "link-garbage", "prover", "prover", "prover",
-         "early-tick", "chaos", "chaos"]
+         "early-tick", "chaos", "chaos", "salt-refused", "salt-stall", "stale"]
 PERTURBATIONS = [p for p in dict.fromkeys(PATHS)
-                 if p not in ("honest", "chaos", "prover", "early-tick", "duplicate-at-capacity")]
+                 if p not in ("honest", "chaos", "prover", "early-tick", "duplicate-at-capacity", "salt-refused",
+                              "salt-stall", "stale")]
+#: what the proxy is built with, beside its grids and syncs: the salt, a restart, a served link's admission rule,
+#: ordinals and compact records, each path run under each in turn (`mode`)
+MODES = ["plain", "salt", "restart", "served", "plain", "salt-served", "salt-restart", "served", "ordinals", "compact",
+         "salt-compact", "compact-restart"]
+NEVER = 1 << 20  # the release tick of a request the ingress side never releases
 
 
 # --- the world the proxy runs in ------------------------------------------------------------------------------------
@@ -96,6 +133,8 @@ class Harness:
         self.connecting: dict[int, asyncio.Future] = {}
         self.reads: dict[int, asyncio.Queue] = {}
         self.drains: dict[int, asyncio.Future] = {}
+        self.salt_connecting: asyncio.Future | None = None
+        self.salt_drain: asyncio.Future | None = None
         self.proxy: Proxy | None = None
 
     def clock(self) -> float:
@@ -109,10 +148,14 @@ class Harness:
 
     async def open_connection(self, host, port):
         task = asyncio.current_task()
-        s = next(s for s, st in self.proxy.streams.items() if st.task is task)
-        self.actions.append(["connect", s])
         future = asyncio.get_running_loop().create_future()
-        self.connecting[s] = future
+        if task is self.proxy._salt_task:  # noqa: SLF001 -- the salt connection's task, told apart from the streams'
+            self.actions.append(["connect-salt"])
+            self.salt_connecting = future
+        else:
+            s = next(s for s, st in self.proxy.streams.items() if st.task is task)
+            self.actions.append(["connect", s])
+            self.connecting[s] = future
         return await future
 
     def publish(self, record: Record, params: GridParams) -> None:
@@ -174,6 +217,25 @@ class UpstreamWriter:
         pass
 
 
+class SaltWriter:
+    """The salt connection's writer: each write waits for its drain, which the trace's `salt-delivered` gives."""
+
+    def __init__(self, h: Harness) -> None:
+        self.h, self.transport = h, self
+
+    def write(self, data: bytes) -> None:
+        self.h.actions.append(["salt", bytes(data).hex()])
+
+    async def drain(self) -> None:
+        assert self.h.actions[-1][0] == "salt", "a drain follows its write"
+        future = asyncio.get_running_loop().create_future()
+        self.h.salt_drain = future
+        await future
+
+    def close(self) -> None:
+        pass
+
+
 async def settle() -> None:
     """Run the loop until no callback is ready: every task waits on the trace again."""
     loop = asyncio.get_running_loop()
@@ -194,6 +256,18 @@ def apply(h: Harness, ev: list) -> None:
     if kind == "link":
         _, h.now, data = ev
         h.link.put_nowait(bytes.fromhex(data))
+        return
+    if kind in ("salt-connected", "salt-refused", "salt-delivered"):
+        _, h.now = ev
+        if kind == "salt-delivered":
+            f, h.salt_drain = h.salt_drain, None
+        else:
+            f, h.salt_connecting = h.salt_connecting, None
+        if f is not None and not f.done():
+            if kind == "salt-refused":
+                f.set_exception(ConnectionRefusedError("the salt connection refused"))
+            else:
+                f.set_result(None if kind == "salt-delivered" else (None, SaltWriter(h)))
         return
     _, s, h.now, *rest = ev
     if kind in ("connected", "refused"):
@@ -250,14 +324,24 @@ def prover_of(x: dict | None, sync_set: SyncSet, buckets: int) -> online.Prover 
                          lag=x["lag"])
 
 
+def served_of(x: dict | None) -> ServedProfile | None:
+    return None if x is None else ServedProfile(x["F"], x["FIN"], x["windows"], x["own"])
+
+
 async def drive(h: Harness, inst: dict) -> dict:
     c = inst["config"]
     egress, ingress, sync_set = grid_params(c["egress"]), grid_params(c["ingress"]), sync_set_of(c["sync_set"])
+    salt = c["salt"]
+    values = [] if salt is None else [bytes.fromhex(v) for v in salt["values"]]
     proxy = h.proxy = Proxy(("upstream", 0), egress, ingress, sync_set, [sync_of(s) for s in c["syncs"]],
                             origin=c["origin"] / 1e9, slack=c["slack"] / 1e9, clock=h.clock, sleep=h.sleep,
                             publish=h.publish, egress_link=c["egress_link"], ingress_link=c["ingress_link"],
                             prover=prover_of(c["prover"], sync_set, egress.buckets), windows=c["windows"],
-                            executor=InlineExecutor())
+                            executor=InlineExecutor(), salt=None if salt is None else lambda p, n: values[p],
+                            salt_bits=512 if salt is None else salt["bits"],
+                            pouw_window=1 if salt is None else salt["pouw_window"], start=c["start"],
+                            position=c["position"], served=served_of(c["served"]), ordinals=c["ordinals"],
+                            compact=c["compact"])
     running = asyncio.create_task(proxy.run(LinkReader(h), LinkWriter(h)))
     await settle()
     for ev in inst["events"]:
@@ -266,12 +350,13 @@ async def drive(h: Harness, inst: dict) -> dict:
     if not running.done():
         raise RuntimeError("the trace leaves ticks unrun")
     running.result()
-    for st in proxy.streams.values():
-        if st.task is not None and not st.task.cancelled() and st.task.exception() is not None:
-            raise st.task.exception()
+    for task in [st.task for st in proxy.streams.values()] + [proxy._salt_task]:  # noqa: SLF001
+        if task is not None and not task.cancelled() and task.exception() is not None:
+            raise task.exception()
     return {"actions": h.actions, "syncs": [sync_json(s) for s in proxy.shaper.syncs], "hands": proxy.shaper.hands,
             "frames": [list(f) for f in proxy.frames], "link_frames_read": proxy.link_frames_read,
-            "requests_released": proxy.requests_released}
+            "requests_released": proxy.requests_released, "salts_released": proxy.salts_released,
+            "salts_delivered": proxy.salts_delivered}
 
 
 async def inline_to_thread(fn, /, *args, **kwargs):
@@ -317,17 +402,21 @@ class Session:
 class Trace:
     """One run: the configuration, the sessions and the events, kept apart until `events` merges them by time."""
 
-    def __init__(self, rng: random.Random, path: str) -> None:
+    def __init__(self, rng: random.Random, path: str, mode: str = "plain") -> None:
         self.rng, self.path = rng, path
+        self.salted, self.restarted, self.served = "salt" in mode, "restart" in mode, "served" in mode
+        self.compact = "compact" in mode
+        self.ordinals = self.compact or "ordinals" in mode
         self.tau = 100
-        self.T = rng.choice([3, 4, 5])
+        self.T = rng.choice([6, 8]) if self.served else rng.choice([3, 4, 5])
         self.r = rng.choice([1, 2, 3])
-        self.B = rng.choice([48, 64, 96])
-        self.tau_in, self.T_in = (self.tau, self.T) if rng.random() < 0.6 else (self.tau // 2, 2 * self.T)
+        self.B = rng.choice([8, 12, 48]) if self.compact else rng.choice([48, 64, 96])
+        self.tau_in, self.T_in = (self.tau, self.T) if self.served or rng.random() < 0.6 else \
+            (self.tau // 2, 2 * self.T)
         self.r_in = rng.choice([1, 2])
-        self.B_in = rng.choice([32, 48])
+        self.B_in = rng.choice([96, 128]) if self.salted else rng.choice([32, 48])
         self.Q = self.Q_in = 1 << 16
-        self.W = rng.choice([2, 3, 4])
+        self.W = rng.choice([2, 3]) if self.served else rng.choice([2, 3, 4])
         self.origin = rng.choice([0, 0, 2_000_000_000, 123_456_789])
         self.slack = rng.choice([25 * MS, 10 * MS, 60 * MS])
         self.sessions: list[Session] = []
@@ -339,6 +428,50 @@ class Trace:
         self.rhos: list[Fraction] = []
         self.prover: dict | None = None
         self.windows = self.W
+        # a proxy back from maintenance at window `start`, its first egress frame at `position`
+        self.start = rng.randint(1, self.W - 1) if self.restarted else 0
+        self.position = rng.choice([1, 5, 17] if path == "stale" else [0, 1, 5, 17]) if self.restarted else 0
+        # the salt: one of `bits` bits per PoUW window of `k` certifier windows
+        self.k = (1 if self.served else rng.choice([1, 2, 3])) if self.salted else 1
+        self.bits = rng.choice([512, 512, 256, 64]) if self.salted else 512
+        self.salts = [rng.randbytes(self.bits // 8) for _ in range(-(-self.W // self.k))] if self.salted else []
+        self.salt_refused = path == "salt-refused"
+        self.salt_stall: tuple[int, int | None] | None = None  # (which salt write, its delay or never)
+        self.own_release: dict[int, int] = {}  # the ingress tick that releases each window's own frame
+        self.max_delay = 3
+        if self.served:
+            self.serve()
+
+    def serve(self) -> None:
+        """A served link's profile and syncs, before its requests: each response F frames, each request F_in, each
+        response frame ready no later than the smallest δ, so the declared syncs cover it, and the proxy's window at
+        `start` holding its own frame, one request and its response."""
+        rng = self.rng
+        for _ in range(100):
+            self.F, self.FIN = rng.choice([1, 2, 3]), rng.choice([1, 2])
+            self.deltas = sorted(rng.sample(range(1, 4), rng.randint(1, 2)))
+            self.rhos = rng.sample([Fraction(1), Fraction(2), Fraction(3, 2)], rng.randint(1, 2))
+            self.syncs = [ClockSync(rng.choice(self.deltas), rng.choice(self.rhos)) for _ in range(self.W)]
+            if self.admissible():
+                break
+        else:
+            raise RuntimeError("no served profile fits")
+        self.max_delay = min(self.deltas)
+
+    def profile(self) -> ServedProfile:
+        return ServedProfile(self.F, self.FIN, self.W, int(self.salted))
+
+    def admission(self) -> Admission | None:
+        if not self.served:
+            return None
+        slowest, syncs = ClockSync(max(self.deltas), min(self.rhos)), self.syncs
+        return Admission(self.profile(), self.r, lambda w: syncs[w] if w < len(syncs) else slowest)
+
+    def admissible(self) -> bool:
+        """The proxy's check of a served link: its window at `start` holds its own frame, one request and its
+        response under the sync."""
+        p = self.profile()
+        return admits([], p.own + p.request_frames, self.admission().sync(self.start), p, self.r, self.r_in, self.T)
 
     # times
 
@@ -368,7 +501,7 @@ class Trace:
         before it, since a ticker wakes in order."""
         tau, T = (self.tau, self.T) if grid == "egress" else (self.tau_in, self.T_in)
         out, prev = {}, 0
-        for t in range(self.W * T):
+        for t in range(self.start * T, self.W * T):
             late = self.tick_late.get((grid, t), self.rng.randrange(2 * MARGIN, 3 * MS))
             out[t] = prev = self.at(max(self.boundary(tau, t) + late, prev + 3 * MARGIN))
         return out
@@ -378,13 +511,15 @@ class Trace:
     def build(self) -> None:
         rng = self.rng
         horizon_in = self.W * self.T_in
+        lo = self.start * self.T_in
         for _ in range(rng.randint(1, 5)):
-            n = rng.randint(1, 4)
-            delays = sorted(rng.randint(1, 3) for _ in range(n))
-            send = rng.randrange(max(1, horizon_in - 2 * self.T_in // self.W - 1))
+            n = self.F if self.served else rng.randint(1, 4)
+            delays = sorted(rng.randint(1, self.max_delay) for _ in range(n))
+            send = lo + rng.randrange(max(1, horizon_in - lo - 2 * self.T_in // self.W - 1))
             ids = rng.choice([b"id: %d\n", b"id: %d\n", b"id:%d\n", b"id:\t%d \r\n", b"data: -\nid: %d\n",
                               b"id: %d\nid: 9\n"])
-            self.sessions.append(Session(0, send, rng.choice([1, 1, 2]), delays, head=rng.random() < 0.3, ids=ids))
+            parts = self.FIN if self.served else rng.choice([1, 1, 2])
+            self.sessions.append(Session(0, send, parts, delays, head=rng.random() < 0.3, ids=ids))
         self.sessions.sort(key=lambda x: x.send)
         for k, x in enumerate(self.sessions):  # the k-th request on the link is stream k
             x.stream = k + 1
@@ -409,25 +544,38 @@ class Trace:
         order = sorted(((x.ready[k] if by_ready else 0, x.anchor, x.stream, k, i) for i, x in enumerate(self.sessions)
                         for k in range(len(x.delays))))
         for pos, (_, _, _, k, i) in enumerate(order):
-            self.sessions[i].positions.append(pos)
+            self.sessions[i].positions.append(self.position + pos)
         self.sessions_order = order
-        self.choose_syncs()
+        if not self.served:
+            self.choose_syncs()
 
     def release(self) -> None:
-        """The ingress FIFO: each request frame arrives at the bucket after the one it is written in, and tick t releases
-        up to r_in of those arrived by t, in order."""
-        queue = [(x.send + 1, i, j) for i, x in enumerate(self.sessions) for j in range(x.parts)]
-        queue.sort()
-        t, k = 0, 0
+        """The ingress side, `active.Bucketer` itself: each request frame arrives at the bucket after the one it is
+        written in, and the tick that releases it is the one whose row holds it (FIFO at r_in, behind each window's own
+        salt frame, and, served, whole requests the admission rule admits); a request never released has `NEVER`. It
+        also gives the tick that releases each window's own frame."""
+        ingress = GridParams(self.T_in, self.r_in, self.B_in, self.tau_in, 1 << 16)
+        k, B_in = self.k, self.B_in
+        first = (lambda w: salt_frame(w // k, PLACEHOLDER, B_in) if w % k == 0 else None) if self.salted else None
+        b = Bucketer(Certifier("requests", ingress), first, self.start, served=self.admission())
+        tag = {}
+        arrivals = sorted((x.send + 1, i, j) for i, x in enumerate(self.sessions) for j in range(x.parts))
+        for n, (bucket, i, j) in enumerate(arrivals):
+            frame = bytes([DATA]) + n.to_bytes(4, "big") + bytes(B_in - 5)
+            tag[frame] = (i, j)
+            b.arrive(frame, bucket)
         out: dict[tuple[int, int], int] = {}
-        while k < len(queue):
-            n = 0
-            while k < len(queue) and queue[k][0] <= t and n < self.r_in:
-                out[queue[k][1:]] = t
-                k, n = k + 1, n + 1
+        t, horizon = self.start * self.T_in, self.W * self.T_in
+        while t < horizon or (len(out) < len(arrivals) and t < horizon + 20 * self.T_in):
+            row, _ = b.tick()
+            for slot, frame in enumerate(row[: row_count(row)]):
+                if slot in b.own:
+                    self.own_release[b.own[slot]] = t
+                else:
+                    out[tag[frame]] = t
             t += 1
         for i, x in enumerate(self.sessions):
-            x.release = [out[(i, j)] for j in range(x.parts)]
+            x.release = [out.get((i, j), NEVER) for j in range(x.parts)]
             x.anchor = x.release[-1] * self.tau_in // self.tau
 
     def choose_syncs(self) -> None:
@@ -451,9 +599,24 @@ class Trace:
         return [wire[j * self.B_in : (j + 1) * self.B_in] for j in range(x.parts)]
 
     def response(self, x: Session, k: int) -> bytes:
+        if self.compact:
+            return self.unit(x, k, x.positions[k], self.record(x, k))
         head = b"HTTP/1.1 200 OK\r\n\r\n" if x.head and k == 0 else b""
         event = head + x.ids % x.positions[k] + b"data: %d-%d\n\n" % (x.stream, k)
         return event if 9 + len(event_body(event)) <= self.B else b"id:%d\n\n" % x.positions[k]
+
+    def record(self, x: Session, k: int) -> bytes:
+        """Its k-th output's compact record: a token id, and the last a stop (odd streams) or the length's mark."""
+        token = (x.stream * 7919 + k * 104729) % COMPACT_STOP
+        if k < len(x.delays) - 1:
+            return compact_record(x.stream, token)
+        return compact_record(x.stream, token, "stop" if x.stream % 2 else "length")
+
+    def unit(self, x: Session, k: int, position: int, record: bytes) -> bytes:
+        """What a compact server writes for its k-th output: the response head first, then the unit."""
+        head = (b"HTTP/1.1 200 OK\r\ncontent-type: application/octet-stream\r\n\r\n" if x.head else
+                b"HTTP/1.1 200 OK\r\n\r\n") if k == 0 else b""
+        return head + compact_unit(position, record)
 
     def events(self) -> list[list]:
         ev: list[tuple[int, int, list]] = list(self.extra)
@@ -486,22 +649,52 @@ class Trace:
                 ev.append((x.end, next(seq), ["upstream", x.stream, x.end, x.trailing.hex()]))
             end = self.at(x.end + 2 * MARGIN)
             ev.append((end, next(seq), ["upstream", x.stream, end, ""]))
+        ev += self.salt_events(seq)
         ev.sort(key=lambda e: (e[0], e[1]))
         return [e for _, _, e in ev]
 
+    def salt_events(self, seq) -> list[tuple[int, int, list]]:
+        """The salt connection: opened (or refused) a little after the tick that releases the first own frame, and each
+        salt written once its frame is released, the connection open and the write before it drained, then drained a
+        little later (one delayed or never, under `salt_stall`)."""
+        releases = sorted(self.ticks_in[t] for t in self.own_release.values() if t in self.ticks_in)
+        if not releases:
+            return []
+        rng, ev = self.rng, []
+        opened = self.at(releases[0] + rng.randrange(2 * MARGIN, 2 * MS))
+        ev.append((opened, next(seq), ["salt-refused" if self.salt_refused else "salt-connected", opened]))
+        if self.salt_refused:
+            return ev
+        free = opened
+        for i, released in enumerate(releases):
+            delay = rng.randrange(2 * MARGIN, MS)
+            if self.salt_stall is not None and self.salt_stall[0] == i:
+                if self.salt_stall[1] is None:
+                    break
+                delay = self.salt_stall[1]
+            free = self.at(max(released, free) + delay)
+            ev.append((free, next(seq), ["salt-delivered", free]))
+        return ev
+
     def config(self) -> dict:
+        salt = None if not self.salted else {"values": [s.hex() for s in self.salts], "bits": self.bits,
+                                              "pouw_window": self.k}
+        served = None if not self.served else {"F": self.F, "FIN": self.FIN, "windows": self.W, "own": int(self.salted)}
         return {"egress": {"T": self.T, "r": self.r, "B": self.B, "tau": self.tau, "Q": self.Q},
                 "ingress": {"T": self.T_in, "r": self.r_in, "B": self.B_in, "tau": self.tau_in, "Q": self.Q_in},
                 "sync_set": {"deltas": self.deltas, "rhos": [[r.numerator, r.denominator] for r in self.rhos]},
                 "syncs": [sync_json(s) for s in self.syncs], "windows": self.windows, "origin": self.origin,
-                "slack": self.slack, "prover": self.prover, "egress_link": "responses", "ingress_link": "requests"}
+                "slack": self.slack, "prover": self.prover, "egress_link": "responses", "ingress_link": "requests",
+                "salt": salt, "served": served, "start": self.start, "position": self.position,
+                "ordinals": self.ordinals, "compact": self.compact}
 
     def program(self) -> list[list]:
         frames = []
         for _, _, _, k, i in self.sessions_order:
             x = self.sessions[i]
-            frames.append([encode_frame(DATA, CANONICAL_STREAM, event_body(self.response(x, k)), self.B).hex(), x.anchor,
-                           k])
+            frame = compact_cell(self.record(x, k), self.B) if self.compact else \
+                encode_frame(DATA, CANONICAL_STREAM, event_body(self.response(x, k)), self.B)
+            frames.append([frame.hex(), x.anchor, k])
         return frames
 
     # the paths
@@ -512,13 +705,13 @@ class Trace:
         if path == "late-tick":
             grid = rng.choice(["egress", "ingress"])
             T = self.T if grid == "egress" else self.T_in
-            self.tick_late[(grid, rng.randrange(self.W * T))] = self.slack + rng.randrange(MS, 20 * MS)
+            self.tick_late[(grid, rng.randrange(self.start * T, self.W * T))] = self.slack + rng.randrange(MS, 20 * MS)
             if grid == "ingress":
                 self.ticks_in = self.tick_times("ingress")
         elif path == "stall":
             grid = rng.choice(["egress", "ingress"])
             tau, T = (self.tau, self.T) if grid == "egress" else (self.tau_in, self.T_in)
-            t0 = rng.randrange(self.W * T - 2)
+            t0 = rng.randrange(self.start * T, self.W * T - 2)
             until = self.boundary(tau, t0) + int(rng.uniform(1.1, 2.6) * tau * MS)
             for t in range(t0, self.W * T):
                 if self.boundary(tau, t) < until:
@@ -529,7 +722,7 @@ class Trace:
             bucket = self.r * self.B
             for _ in range(rng.randint(1, 2)):
                 bound = bucket if path == "backlog" else 4 * bucket
-                self.backlog[rng.randrange(self.W * self.T)] = bound + rng.choice([0, 1, 1 + rng.randrange(bucket)])
+                self.backlog[rng.randrange(self.start * self.T, self.W * self.T)] = bound + rng.choice([0, 1, 1 + rng.randrange(bucket)])
         elif path == "refused":
             x.refused = True
         elif path == "late-forward":
@@ -553,7 +746,7 @@ class Trace:
             self.Q = rng.randint(1, 3)
         elif path == "overflow-ingress":  # a burst of frames inside one bucket, past Q and the allocation
             self.Q_in = rng.randint(1, 2)
-            b = rng.randrange(self.W * self.T_in - 1)
+            b = rng.randrange(self.start * self.T_in, self.W * self.T_in - 1)
             t = self.within(self.tau_in, b, 0.5, 0.9)
             burst = encode_frame(7, CANONICAL_STREAM, b"more", self.B_in) * (self.Q_in + self.r_in + 1)
             self.extra.append((t, 0, ["link", t, burst.hex()]))
@@ -565,7 +758,8 @@ class Trace:
             _, j, k = rng.choice(reads[:q])
             self.Q = q
             dup = self.at(t + MARGIN)
-            data = b"id: %d\ndata: dup\n\n" % xs[j].positions[k]
+            data = compact_unit(xs[j].positions[k], compact_record(xs[i].stream, 1)) if self.compact else \
+                b"id: %d\ndata: dup\n\n" % xs[j].positions[k]
             self.extra.append((dup, 0, ["upstream", xs[i].stream, dup, data.hex()]))
         elif path == "early-tick":  # the request's tick read early, and its first event read before its anchor's bucket
             x = min(xs, key=lambda y: y.positions[0] if y.positions else 1 << 60)
@@ -593,7 +787,18 @@ class Trace:
             if not x.times:
                 return
             k = rng.randrange(len(x.times))
-            if path == "no-id":
+            if self.compact:  # a record that isn't one, the same output's at another's position, one of another request
+                if path == "no-id":
+                    record = COMPACT_RECORD.pack(*rng.choice([(0, 5), (0, COMPACT_LAST | COMPACT_STOP | 5),
+                                                              (x.stream, COMPACT_STOP | 5),
+                                                              (x.stream, COMPACT_LAST - 1)]))
+                    data = self.unit(x, k, x.positions[k], record)
+                elif path == "duplicate":
+                    others = [p for y in xs for p in y.positions if p != x.positions[k]]
+                    data = self.unit(x, k, rng.choice(others) if others else x.positions[k], self.record(x, k))
+                else:
+                    data = self.unit(x, k, x.positions[k], compact_record(x.stream + 1 + rng.randrange(3), 5))
+            elif path == "no-id":
                 data = rng.choice([b"data: %d\n\n" % k, b"id:\ndata: %d\n\n" % k, b"id: x%d\n\n" % k, b"id: -%d\n\n" % k,
                                    b"ide: %d\n\n" % x.positions[k], b"data: 1\nid: \nid: %d\n\n" % x.positions[k]])
             elif path == "duplicate":
@@ -607,13 +812,16 @@ class Trace:
             x.parts = 1 if rng.random() < 0.5 else 2
             x.data_only = True
         elif path == "trailing":
-            x.trailing = rng.choice([b"id: 99\ndata: cut", b"\n", b"x"])
+            x.trailing = rng.choice([bytes(1), bytes(5), bytes(11)] if self.compact else
+                                    [b"id: 99\ndata: cut", b"\n", b"x"])
         elif path == "link-garbage":
             for _ in range(rng.randint(1, 3)):
-                kind = rng.randrange(5)
-                b = rng.randrange(self.W * self.T_in)
+                kind = rng.randrange(6)
+                b = rng.randrange(self.start * self.T_in, self.W * self.T_in)
                 t = self.within(self.tau_in, b, 0.5, 0.9)
-                if kind == 0:
+                if kind == 5:  # a salt frame from the link is never the certifier's
+                    data = encode_frame(SALT, SALT_STREAM, b"salt", self.B_in)
+                elif kind == 0:
                     data = encode_frame(PAD, 0, b"", self.B_in)
                 elif kind == 1:
                     data = encode_frame(7, rng.choice(xs).stream, b"junk", self.B_in)
@@ -626,6 +834,16 @@ class Trace:
                 else:
                     data = b""
                 self.extra.append((t, 0, ["link", t, data.hex()]))
+        elif path == "salt-refused":  # the salt connection refused: the ingress window faults delivery-refused
+            pass
+        elif path == "salt-stall":  # a salt drained a window late, or never, and the salts behind it wait
+            self.salt_stall = (rng.randrange(2), rng.choice([None, self.T_in * self.tau_in * MS]))
+        elif path == "stale":  # an event at a position before the restart's: malformed
+            if x.times:
+                k = rng.randrange(len(x.times))
+                stale = rng.randrange(self.position)
+                x.replace = {x.times[k]: self.unit(x, k, stale, self.record(x, k)) if self.compact else
+                             b"id: %d\ndata: stale\n\n" % stale}
         else:
             raise ValueError(path)
 
@@ -675,15 +893,29 @@ class Trace:
                             x.replace[new] = x.replace.pop(s)
 
 
+def mode_of(seed: int, path: str) -> str:
+    """The instance's mode: `MODES` in turn, each path under each; a salt path is salted, a stale one restarted, and
+    the online prover's paths neither restarted (its prover declares from window 0) nor served."""
+    mode = MODES[seed // len(PATHS) % len(MODES)]
+    if path in ("salt-refused", "salt-stall") and "salt" not in mode:
+        mode = "salt"
+    if path == "stale" and "restart" not in mode:
+        mode = "restart"
+    if path in ("prover", "early-tick"):
+        mode = "-".join(m for m in mode.split("-") if m not in ("restart", "served")) or "plain"
+    return mode
+
+
 def instance(seed: int) -> dict:
     rng = random.Random(seed)
     path = PATHS[seed % len(PATHS)]
-    t = Trace(rng, path)
+    mode = mode_of(seed, path)
+    t = Trace(rng, path, mode)
     t.build()
     if path == "chaos":
         for p in rng.sample(PERTURBATIONS, rng.randint(2, 3)):
             t.perturb(p)
-        if rng.random() < 0.3:
+        if rng.random() < 0.3 and not t.restarted and not t.served:
             t.configure_prover()
     elif path == "prover":
         t.configure_prover()
@@ -692,7 +924,9 @@ def instance(seed: int) -> dict:
         t.perturb(path)
     elif path != "honest":
         t.perturb(path)
-    return {"path": path, "config": t.config(), "events": t.events(),
+    if t.served and not t.admissible():  # advice outside Σ_sync at the start window: one the proxy takes instead
+        t.syncs[t.start] = ClockSync(min(t.deltas), max(t.rhos))
+    return {"path": path, "mode": mode, "config": t.config(), "events": t.events(),
             "program": t.program() if path == "honest" else None}
 
 
@@ -704,7 +938,7 @@ def check_honest(inst: dict, results: dict) -> None:
     if any(r["status"] is not None for r in records):
         raise AssertionError(f"an honest run faulted: {[(r['link'], r['window'], r['status']) for r in records]}")
     frames = [LogicalFrame(bytes.fromhex(p), a, i) for p, a, i in inst["program"]]
-    want = expected_grids(frames, [sync_of(s) for s in results["syncs"]], egress)
+    want = expected_grids(frames, [sync_of(s) for s in results["syncs"]], egress)[c["start"]:]
     got = [r["grid"] for r in records if r["link"] == c["egress_link"]]
     if got != [[[None if x is None else x.hex() for x in row] for row in g] for g in want]:
         raise AssertionError("an honest run's egress grids aren't the Program's")

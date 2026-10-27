@@ -1,19 +1,19 @@
 import NetworkCheck.RecordsGrid
 
 /-!
-# The records check's byte payloads are v3's bits
+# The records check's byte payloads are v4's bits
 
-`verity/network-records/v2` keeps each frame's payload as its bytes (`Records.ByteEvidence`), where
-`verity/network-certificate/v3` reads it as bits (`Check.evidenceOf`, `NetworkCertifier.LogicalFrame`). The two readings
+`verity/network-records/v3` keeps each frame's payload as its bytes (`Records.ByteEvidence`), where
+`verity/network-certificate/v4` reads it as bits (`Check.evidenceOf`, `NetworkCertifier.LogicalFrame`). The two readings
 of the evidence agree, and so do the grids, the clock and the frame-size check the verdicts read from them:
 
 - `bytesOfBits_bitsOfBytes`: a payload's bits, read back as bytes, are the payload;
 - `unhex_eq`: the records check's hex decoder, which reads a string's characters into an array with no list between, is
   C-Flock's `Flock.unhex`;
 - `evidenceOf_toEvidence`: `Check.evidenceOf` is `Records.evidenceOf` with each payload read as its bits;
-- `expectedGridsOfBytes_eq`: window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v3 reads it
+- `expectedGridsOfBytes_eq`: window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v4 reads it
   (through `expectedGrids` and `RecordsGrid.expectedGrids_eq`);
-- `unitSync_toEvidence` and `frameBytes_toEvidence`: the unit's clock and the frame-size refusal are v3's.
+- `unitSync_toEvidence` and `frameBytes_toEvidence`: the unit's clock and the frame-size refusal are v4's.
 -/
 
 namespace NetworkCheck.RecordsBytes
@@ -160,24 +160,24 @@ theorem payloads_bytes (fs : List ByteFrame) :
     ((fs.map ByteFrame.toLogical).toArray.map fun f => Check.bytesOfBits f.payload) = fs.toArray.map ByteFrame.payload := by
   simp [ByteFrame.toLogical, bytesOfBits_bitsOfBytes]
 
-/-- `expectedGridsOfBytes` is `expectedGrids` of the link as v3 reads it. -/
+/-- `expectedGridsOfBytes` is `expectedGrids` of the link as v4 reads it. -/
 theorem expectedGridsOfBytes_eq_expectedGrids (g : Check.Grid) (W : Nat) (l : ByteLink) :
     expectedGridsOfBytes g W l = expectedGrids g W l.toLink := by
   simp only [expectedGridsOfBytes, expectedGrids, ByteLink.toLink, handingRev_timing, payloads_bytes]
 
-/-- Window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v3 reads it, slot for slot:
+/-- Window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v4 reads it, slot for slot:
 `expectedGridsOfBytes_eq_expectedGrids` composed with `RecordsGrid.expectedGrids_eq`. -/
 theorem expectedGridsOfBytes_eq (g : Check.Grid) (W : Nat) (l : ByteLink) (w : Fin W) :
     (expectedGridsOfBytes g W l)[w.val]? = some (Check.expectedGrid g W l.toLink w.val) := by
   rw [expectedGridsOfBytes_eq_expectedGrids]
   exact RecordsGrid.expectedGrids_eq g W l.toLink w
 
-/-- The unit's clock is v3's. -/
+/-- The unit's clock is v4's. -/
 theorem unitSync_toEvidence (e : ByteEvidence) (w : Nat) : unitSync e w = Check.unitSync e.toEvidence w := by
   simp only [unitSync, Check.unitSync, ByteEvidence.toEvidence, Array.getElem?_map]
   cases e.links[0]? <;> rfl
 
-/-- The frame-size refusal is v3's: a payload of other than `B` bytes is one of other than `8 · B` bits. -/
+/-- The frame-size refusal is v4's: a payload of other than `B` bytes is one of other than `8 · B` bits. -/
 theorem frameBytes_toEvidence (e : ByteEvidence) (B : Nat) :
     (e.links.any fun l => l.frames.any (·.payload.size ≠ B)) =
       (e.toEvidence.links.any fun l => l.frames.any (·.payload.length ≠ 8 * B)) := by

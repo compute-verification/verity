@@ -45,11 +45,14 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 @pytest.fixture(scope="module")
-def store():
+def store(tmp_path_factory):
     assert (FIXTURE / "cases.json").is_file(), (
         f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/forged-proofs`")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    return FIXTURE
+    sys.path.insert(0, str(VERIFIER))
+    import ci
+
+    return ci.canonical_tree(FIXTURE, tmp_path_factory.mktemp("store") / "forged-proofs")
 
 
 def _verify(root: Path, case: str, session: Path | None = None) -> dict:

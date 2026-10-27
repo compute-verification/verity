@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "TemplatePopulations_v1{templates=('GemmAccumulatorS8_v2{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}','ScaledMmS8Coordinate_v2{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}'),counts=(1,2)}": {
+   "and": 35438,
+   "type": "ad1129390d3aa1aeb309e2cff5a8041a9c9047243f1b391d7e9bd1d71b7350db53f33d92cd926953ed62ecfda3bbb7c3e76b8f19e44c28779a2a619ec1588341"
+  }
+ }
+}

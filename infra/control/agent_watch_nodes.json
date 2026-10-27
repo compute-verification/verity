@@ -1,7 +1,7 @@
 {
  "every_s": 300,
  "quiet_handles": ["ci"],
- "nodes": ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"],
+ "nodes": ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"],
  "ssh": ["ssh", "-i", "/data/state/pod-ssh/id_ed25519", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
          "-o", "ConnectTimeout=15", "-o", "StrictHostKeyChecking=accept-new",
          "-o", "UserKnownHostsFile=/data/state/pod-ssh/known_hosts", "-o", "LogLevel=ERROR"]

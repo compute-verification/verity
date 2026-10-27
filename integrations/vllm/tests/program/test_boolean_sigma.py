@@ -1,4 +1,4 @@
-"""The Boolean-first fill (`verity_vllm.program.boolean`): the Boolean versions of the word Definitions the served rows reached
+"""The Boolean-first fill (`verity.ml.definitions.boolean`): the Boolean versions of the word Definitions the served rows reached
 with none.
 
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
@@ -24,9 +24,9 @@ from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.ops import scalar as S
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
-from verity_vllm.program.registry import prims as P, ref_prims as R, tp_allreduce as TA
+from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
+from verity.ml.definitions.registry import prims as P, ref_prims as R, tp_allreduce as TA
 
 F32 = Value(32)
 SPECIAL32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x00000001, 0x807FFFFF, 0x3F800000,
@@ -81,6 +81,7 @@ def test_each_new_boolean_leaf_computes_its_word_primitive(word):
     assert bits.name == word.name and bits.version > word.version
 
 
+@pytest.mark.slow
 def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
     c = BB.boolean_version(MP.const(32, 0x3727C5AC))
     assert c.id == "Const32[0x3727c5ac]_v2" and BL.is_boolean(c)
@@ -150,8 +151,7 @@ def test_the_fused_all_reduce_rms_norm_on_bits_computes_its_word_composite(word)
 #: the word Definitions GLM-5.3 TP8 B1's request Calls as root Calls with no Boolean version of their own, at their descriptors
 #: there, but the embedding shard (19360 x 6144, whose body views its table element by element), which is above at 16 x 2
 GLM53_TP8 = [MP.const(32, 1), MP.const(32, 0x11F), bind(b1.ResidualAdd, N=6144),
-             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True),
-                          marks=pytest.mark.slow)]
+             bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True)]
 
 
 @pytest.mark.parametrize("word", GLM53_TP8, ids=lambda d: d.id)

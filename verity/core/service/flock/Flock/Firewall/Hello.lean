@@ -109,11 +109,16 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let tables ← Witness.readTables args
   return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
 
-/-- The session's spec and its tables' statements at the verifier's draw `draw` (`Stmt.setupTables`; the public file the
-verifier's own, without rows). -/
+/-- The session's spec and its tables' statements at the verifier's draw `draw` (`Stmt.setupTables`, `setup_eq`; the public
+file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseFast`). -/
 def Setup.setup (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
-  Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw
-    S.I.partition S.I.program S.work S.stratified S.closure
+  Stmt.setupTablesOf (HmOut.parseFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables) (Witness.zkTags S.I) S.I.circuitFile
+    S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure
+
+theorem Setup.setup_eq (S : Setup) (draw : Option Json) :
+    S.setup draw = Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count
+      S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure := by
+  rw [Setup.setup, Stmt.setupTables_eq, HmOut.parse_eq_fast]
 
 /-- The session's spec at `draw`. -/
 def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)

@@ -1,4 +1,6 @@
-import Proofs.Accounting.Headline.Sm120Measured
+import Proofs.Accounting.Headline.Encoding
+import Proofs.Accounting.Headline.EpsJl
+import Proofs.Accounting.Headline.Luck
 import Definitions.Accounting.HeadlineDc.Encoding
 
 /-!
@@ -15,9 +17,9 @@ On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so 
   `w₀ ≤ w*` when every word route's price on three facets is (DC-90-ri's certificate);
 * `phiStar_ge_facet`, `phiStar_ge_pair`, `phiStar_ge_triple`: `φ₀ ≤ φ*` when every fold route's price on one facet,
   two (DS-100's certificate) or three is at least `φ₀`;
-* `folded_of_lower`: the folded branch's floor at `p = 7/8` is at least
-  `(N_w w (1 − 41·0.6931471808/6000) + N_w φ)/B_♭`, from `identity` at `d̄ = ā = 0`, `χ* ≥ 0` and
-  `Headline.epsJl_le`;
+* `folded_of_lower_at`, `folded_of_lower`: the folded branch's floor at `p = 7/8` is at least
+  `(N_w w (1 − t) + N_w φ)/B_♭` for any `t` from `41·0.6931471808/6400` (`ln(8/7) ≥ 2/15`) to 1, from `identity` at
+  `d̄ = ā = 0`, `χ* ≥ 0` and `Headline.epsJl_le`; `folded_of_lower` is `t = 41·0.6931471808/6000` (`ln(8/7) ≥ 1/8`);
 * `unfolded_of_lower`: the unfolded branch's floor is at least `(N_w w + N_w φ)/B_♭ · (1 − 41/48000)`.
 -/
 
@@ -124,13 +126,14 @@ theorem phiStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [Decida
   exact le_ciInf fun φ => (hφ φ).trans (price_ge_triple lam _ h.1 (hfold φ) a b c hab hac hbc)
 
 /-- The folded branch's floor at `p = 7/8`, `S = 48,000` and `δ′ ≥ 2^-41` from lower bounds `w ≤ w*`, `φ ≤ φ*` on
-a model with `μ_f = μ_x = 0`: `ε_jl ≤ κ·41·0.6931471808/6000` (`Headline.epsJl_le`), so the floor is at least
-`(N_w w (1 − 41·0.6931471808/6000) + N_w φ)/B_♭`. -/
-theorem folded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
+a model with `μ_f = μ_x = 0`, at any `t ≤ 1` at least `41·0.6931471808/6400`: `ε_jl ≤ κ·t` (`Headline.epsJl_le`),
+so the floor is at least `(N_w w (1 − t) + N_w φ)/B_♭`. -/
+theorem folded_of_lower_at {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (hμF : Z.muF = 0) (hμX : Z.muX = 0) (S : ℕ) (hS : (S : ℝ) = 48000)
-    (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') (w φ ε : ℝ) (hw : w ≤ Z.wStar lam) (hφ : φ ≤ Z.phiStar lam)
-    (hε : 1 - ε ≤ (Z.Nw * w * (1 - 41 * (6931471808 / 10000000000) / 6000) + Z.Nw * φ) / Z.bnd Fl) :
+    (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') (w φ ε : ℝ) (hw : w ≤ Z.wStar lam) (hφ : φ ≤ Z.phiStar lam) (t : ℝ)
+    (ht : 41 * (6931471808 / 10000000000) / 6400 ≤ t) (ht1 : t ≤ 1)
+    (hε : 1 - ε ≤ (Z.Nw * w * (1 - t) + Z.Nw * φ) / Z.bnd Fl) :
     1 - ε ≤ 1 - Z.epsSkip Fl lam - Z.epsCert Fl lam - Z.epsRoute Fl lam - Z.epsMand Fl lam -
       Z.epsJl Fl lam (7 / 8) δ' S := by
   have hid := identity Z Fl lam 0 0 hZ
@@ -138,27 +141,38 @@ theorem folded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype 
   obtain ⟨-, -, hNw, hB0, -⟩ := hZ'
   obtain ⟨-, -, -, hχ0⟩ := stars_nonneg Z Fl lam hZ h
   obtain ⟨hκ0, -⟩ := Whole.kappa_f_nonneg Z Fl lam h hZ
-  have hjl := epsJl_le Z Fl lam hκ0 S hS δ' hδ'
+  have hjl := (Headline.epsJl_le Z Fl lam hκ0 S hS δ' hδ').trans (mul_le_mul_of_nonneg_left ht hκ0)
   have hLuck : Z.epsLuck Fl lam 0 = 0 := zero_mul _
   have hAdapt : Z.epsAdapt Fl lam 0 = 0 := zero_mul _
-  have hκ : Z.kappa Fl lam * (41 * (6931471808 / 10000000000) / 6000) =
-      Z.Nw * Z.wStar lam * (41 * (6931471808 / 10000000000) / 6000) / Z.bnd Fl := by
+  have hκ : Z.kappa Fl lam * t = Z.Nw * Z.wStar lam * t / Z.bnd Fl := by
     unfold Model.kappa
     ring
   have h1 : Z.Nw * w ≤ Z.Nw * Z.wStar lam := mul_le_mul_of_nonneg_left hw hNw.le
   have h2 : Z.Nw * φ ≤ Z.Nw * Z.phiStar lam := mul_le_mul_of_nonneg_left hφ hNw.le
-  have hnum : Z.Nw * w * (1 - 41 * (6931471808 / 10000000000) / 6000) + Z.Nw * φ ≤
+  have h1t : Z.Nw * w * (1 - t) ≤ Z.Nw * Z.wStar lam * (1 - t) := mul_le_mul_of_nonneg_right h1 (by linarith)
+  have hnum : Z.Nw * w * (1 - t) + Z.Nw * φ ≤
       ((1 - 0 - 0) * Z.Nw * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam) -
-        Z.Nw * Z.wStar lam * (41 * (6931471808 / 10000000000) / 6000) := by
+        Z.Nw * Z.wStar lam * t := by
     rw [hμF, hμX]
-    nlinarith
-  have hkey : (Z.Nw * w * (1 - 41 * (6931471808 / 10000000000) / 6000) + Z.Nw * φ) / Z.bnd Fl ≤
+    linarith
+  have hkey : (Z.Nw * w * (1 - t) + Z.Nw * φ) / Z.bnd Fl ≤
       ((1 - 0 - 0) * Z.Nw * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam) /
           Z.bnd Fl -
-        Z.Nw * Z.wStar lam * (41 * (6931471808 / 10000000000) / 6000) / Z.bnd Fl := by
+        Z.Nw * Z.wStar lam * t / Z.bnd Fl := by
     rw [← sub_div]
     exact div_le_div_of_nonneg_right hnum hB0.le
   linarith
+
+/-- `folded_of_lower_at` at `t = 41·0.6931471808/6000`, `ln(8/7) ≥ 1/8`'s: the floor is at least
+`(N_w w (1 − 41·0.6931471808/6000) + N_w φ)/B_♭`. -/
+theorem folded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
+    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
+    (h : IsCert lam) (hZ : Z.Wf Fl) (hμF : Z.muF = 0) (hμX : Z.muX = 0) (S : ℕ) (hS : (S : ℝ) = 48000)
+    (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') (w φ ε : ℝ) (hw : w ≤ Z.wStar lam) (hφ : φ ≤ Z.phiStar lam)
+    (hε : 1 - ε ≤ (Z.Nw * w * (1 - 41 * (6931471808 / 10000000000) / 6000) + Z.Nw * φ) / Z.bnd Fl) :
+    1 - ε ≤ 1 - Z.epsSkip Fl lam - Z.epsCert Fl lam - Z.epsRoute Fl lam - Z.epsMand Fl lam -
+      Z.epsJl Fl lam (7 / 8) δ' S :=
+  folded_of_lower_at Z Fl lam h hZ hμF hμX S hS δ' hδ' w φ ε hw hφ _ (by norm_num) (by norm_num) hε
 
 /-- The unfolded branch's floor from lower bounds `w ≤ w*`, `φ ≤ φ*` on a model with `μ_f = 0`. -/
 theorem unfolded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]

@@ -195,7 +195,8 @@ theorem zk_deploy_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht 
 the sampled verifier's rounds. -/
 def Honest (H : Msg → Msg) (G : Proto Wit) (tapeOf : G.Nonce × G.Rand → Reference.Tape) : Prop :=
   ∀ w x (hist : List (Msg × Msg)) ω, hist.length < c.V.k x →
-    ((Reference.refP c.step c.parse c.reads (commit c) c.wit w).next x hist (tapeOf ω)).eval H =
+    ((Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w).next x hist
+        (tapeOf ω)).eval H =
       ((G.prover w).next x hist ω).eval H
 
 /-- **Sampling's zero knowledge at the deployed record masked at the protocol's tapes**: `Claims.Sampling.ZK` at

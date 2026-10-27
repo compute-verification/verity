@@ -13,8 +13,8 @@ Default-kind page still Waiting on Daniel past its Deadline.
 - Approve ticked on a Decided by lane page: Status Approved, and " Endorsed by Daniel." appended to its Decision.
 - A Default-kind page past its Deadline, still Waiting on Daniel: Status Default applied, Decision "Default applied <time PT>:
   <If no answer>".
-- New text under the bold first line of the yellow "Your reply" callout, or a new comment not starting with an @handle: quoted
-  (QUOTE_MAX characters).
+- New text under the bold first line of the yellow "Your reply" callout, or a new comment, not starting with an @handle or the
+  page's lane (or top) and a colon or a time (`proofs 03:20Z:`): quoted (QUOTE_MAX characters).
 Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and @top with one line, since top writes the
 decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id) and the comment ids
 seen.
@@ -147,14 +147,20 @@ def page_body(notion, pid: str) -> tuple[list[tuple[str, str]], dict[str, str]]:
     return reply, headings
 
 
-def daniels(reply: list[tuple[str, str]], seen: set[str]) -> list[str]:
-    """The pieces new since `seen` that are Daniel's: a lane answers in the callout starting with its @handle, and each new piece
+def lane_lead(lane: str) -> re.Pattern:
+    """How a lane's answer starts: an @handle, or the page's lane or top named with a colon or a time, as lanes sign
+    (`proofs:`, `proofs 03:20Z:`, `proofs, 26 Oct 03:20Z:`). `proofs, please …` is still Daniel's."""
+    return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*(?::|,?\s+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}})")
+
+
+def daniels(reply: list[tuple[str, str]], seen: set[str], lead: re.Pattern = HANDLE_LEAD) -> list[str]:
+    """The pieces new since `seen` that are Daniel's: a lane answers in the callout starting with `lead`, and each new piece
     after that one, up to the next piece already seen, is the lane's too."""
     out, lane = [], False
     for bid, text in reply:
         if bid in seen:
             lane = False
-        elif HANDLE_LEAD.match(text):
+        elif lead.match(text):
             lane = True
         elif not lane:
             out.append(text)
@@ -223,8 +229,8 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             tell(decision, choice)
             decided.add(pid)
         heads()
-        old = set(replies.get(pid) or [])
-        if new := daniels(body["reply"], old):
+        old, lead = set(replies.get(pid) or []), lane_lead(lane)
+        if new := daniels(body["reply"], old, lead):
             tell(f"Daniel replied: \u201c{' '.join(new)[:QUOTE_MAX]}\u201d", "<value>")
         replies[pid] = sorted(old | {bid for bid, _ in body["reply"]})
         try:
@@ -239,7 +245,7 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
                 continue
             seen.add(c["id"])
             text = plain(c.get("rich_text")).strip()
-            if text and not HANDLE_LEAD.match(text):
+            if text and not lead.match(text):
                 tell(f"Daniel commented: \u201c{text[:QUOTE_MAX]}\u201d", "<value>")
     state.update(since=now, decided=sorted(decided), comments=sorted(seen))
 

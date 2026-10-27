@@ -41,5 +41,7 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/control_disk_alert.py",
           # its watchers supervisor, VM stops and top's loops, with their configs, and the dead-man's switch that reads its heartbeat
           "infra/control/watchers.py", "infra/control/watchers.toml", "infra/control/vm_stop.py", "infra/control/vm_stop.toml",
-          "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json"]
+          "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
+          # drive's loop, whose checkout per verb is tested here
+          "infra/control/drive.sh"]
 parallel = true

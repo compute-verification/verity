@@ -17,7 +17,8 @@
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
 #      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
-#      REFUSED, and a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, ACCEPT
+#      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
+#      (no --program, NO_PROGRAM)
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -121,12 +122,14 @@ setup() {
 free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
 session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
-  local D=$1 O=$2 port pin srv rc try up=   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
+  local D=$1 O=$2 port pin srv rc try up= tu=   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
   pin=$(cat "$D/pin.txt")
+  # a templated statement's unit rows, placed by flock-tmpl-unit (h1_lanes/job.sh), which serve and prove read
+  [ -L "$D/unit.placed" ] || [ -e "$D/unit.placed" ] && tu="--tmpl-unit $D/unit.placed"
   for try in 1 2 3 4 5; do   # the ephemeral port free_port picked can be taken by another worker before serve binds it: retake one
     port=$(free_port)
     $TIME "$O/serve.time" bash -c "$(vlimit $SERVE_GB) exec $BIN serve --zk --listen 127.0.0.1:$port --out $D/sessions \
-      --instances $D/pub.bin --circuit $D/circuit.txt --pin $pin --operator loopback --draw subset:$N" > "$O/serve.log" 2>&1 &
+      --instances $D/pub.bin --circuit $D/circuit.txt $tu --pin $pin --operator loopback --draw subset:$N" > "$O/serve.log" 2>&1 &
     srv=$!
     until grep -q '^SERVING ' "$O/serve.log" 2>/dev/null; do
       kill -0 $srv 2>/dev/null || break
@@ -137,7 +140,7 @@ session() {   # session D O: one loopback --zk session with the proving build, t
   done
   [ -n "$up" ] || { log "  serve never came up after $try tries"; return 1; }
   $TIME "$O/prove.time" bash -c "$(vlimit $PROVE_GB) exec $BIN prove --zk --verifier 127.0.0.1:$port --instances $D/inst.bin \
-    --circuit $D/circuit.txt --runs $RUNS --warm $WARM" > "$O/prove.out" 2> "$O/prove.err"
+    --circuit $D/circuit.txt $tu --runs $RUNS --warm $WARM" > "$O/prove.out" 2> "$O/prove.err"
   rc=$?
   kill $srv 2>/dev/null; wait $srv 2>/dev/null
   du -sb "$D/sessions"/*/ > "$O/sessions.du" 2>/dev/null

@@ -1,13 +1,14 @@
-"""Ratchet machinery shared by the rule lints in this directory (rules P1-P12).
+"""Ratchet machinery shared by the rule lints in this directory (one rule per ``test_pNN_*.py``).
 
-Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``) with
-``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm and run in seconds.  What a
-scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the violations that existed when the
-rule was introduced.
+Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``), and the
+circuit Definitions that moved from it to ``verity/ml/definitions/`` (``LIBRARY``: circuits' since the move, held to the
+ratchets as they stood), with ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm
+and run in seconds.  What a scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the
+violations that existed when the rule was introduced.
 
-A violation is keyed by ``(file, kind, symbol, detail)``: the file relative to ``integrations/vllm``, the rule's kind of
-violation, the enclosing ``Class.function`` (``<module>`` at top level, ``<script>`` for shell) and a short detail (a
-name, an import edge, a token).  Line numbers are not part of the key, so edits elsewhere in a file do not churn the
+A violation is keyed by ``(file, kind, symbol, detail)``: the file relative to ``integrations/vllm`` (to the repository
+outside it), the rule's kind of violation, the enclosing ``Class.function`` (``<module>`` at top level, ``<script>`` for
+shell) and a short detail (a name, an import edge, a token).  Line numbers are not part of the key, so edits elsewhere in a file do not churn the
 list.  An entry allows ``count`` occurrences of its key (default 1).
 
 * A key found more often than its entry allows fails: fix the new code.  If an existing violation only moved (a rename
@@ -28,8 +29,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]                     # integrations/vllm
+REPO = ROOT.parents[1]
 PKG = ROOT / "verity_vllm"
-CORE_PKG = ROOT.parents[1] / "verity"
+CORE_PKG = REPO / "verity"
+DEFINITIONS = CORE_PKG / "ml" / "definitions"
+#: the scanned packages: the integration's, and the Definitions that moved out of it
+LIBRARY = (PKG, DEFINITIONS)
 ALLOWLISTS = HERE / "allowlists"
 SKIP_DIRS = frozenset({"__pycache__", "tests"})
 
@@ -50,24 +55,30 @@ class Violation:
 # --- the scanned tree -------------------------------------------------------------------------------------------------
 
 @lru_cache(maxsize=None)
-def library_files(suffix: str = ".py", root: Path = PKG) -> tuple[Path, ...]:
-    """Library files under ``root`` (default ``verity_vllm``), excluding ``tests`` directories and ``test_*`` files."""
+def library_files(suffix: str = ".py", root: Path | None = None) -> tuple[Path, ...]:
+    """Library files under ``root`` (default every ``LIBRARY`` package), excluding ``tests`` directories and ``test_*`` files;
+    a root outside ``LIBRARY`` (core's) without the ``LIBRARY`` packages inside it."""
+    if root is None:
+        return tuple(p for r in LIBRARY for p in library_files(suffix, r))
     out = []
     for p in sorted(root.rglob(f"*{suffix}")):
         parts = p.relative_to(root).parts
         if any(d in SKIP_DIRS for d in parts[:-1]) or parts[-1].startswith("test_"):
+            continue
+        if root not in LIBRARY and any(p.is_relative_to(r) for r in LIBRARY):
             continue
         out.append(p)
     return tuple(out)
 
 
 def rel(p: Path) -> str:
-    return p.relative_to(ROOT).as_posix()
+    return (p.relative_to(ROOT) if p.is_relative_to(ROOT) else p.relative_to(REPO)).as_posix()
 
 
-def module_name(p: Path, root: Path = PKG) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``; a package's ``__init__.py`` names the package."""
-    parts = list(p.relative_to(root.parent).with_suffix("").parts)
+def module_name(p: Path) -> str:
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/ml/definitions/a.py`` -> ``verity.ml.definitions.a``; a
+    package's ``__init__.py`` names the package."""
+    parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":
         parts.pop()
     return ".".join(parts)

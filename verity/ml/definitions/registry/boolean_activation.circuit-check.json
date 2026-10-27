@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "Bf16Tanh_v2{N=8}": {
+   "and": 3128,
+   "type": "3a6a17205a654d19ada3308299f3347662a2f457fd9bbbaf4ce110249ec219b0f9150b6a1c4722afd0f11d706c21f66c7ba4076d921cc69fb74571562e56eeae"
+  },
+  "TanhBf16_v2": {
+   "and": 391,
+   "type": "9efa1764d842384a201d9961564c12ceda909653d7bcbdd6b3eae99aa335f4b9f9748d77fc6ebb022793992076ff63c7a311cda6b8e52c56dc978c2f51fd404b"
+  }
+ }
+}

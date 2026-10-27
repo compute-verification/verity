@@ -11,12 +11,17 @@
   root (`tests.pipeline.served_tp`): each rank's registration passes, held to the verifier's own window of that rank from the
   Commit's record alone, and is refused for another rank, another TP run root, other served Programs, a stand-in, a record whose TP
   run root does not combine its ranks' roots (a 32-byte rank root by name), and a rank Program not of record; an old record's
-  vllm-v1 ranks under the SHA-256 v1 root are refused as served by name (``sha512``)."""
+  vllm-v1 ranks under the SHA-256 v1 root are refused as served by name (``sha512``).
+* A deferred TP Commit that wrote no window (`served_tp --deferred`): each rank's ``stand-in`` from its sealed bundle (`from_bundle`)
+  holds the values the in-Commit window of the same ranks holds, names the rank's rows-sha512 root under the TP run root and the
+  bundle's manifest, and passes `source`; a stand-in naming another bundle, another link or another rank, or of a rank whose bundle
+  the record does not name or whose replay failed, is refused, and so is a bundle that is not the record's."""
 from __future__ import annotations
 
 import dataclasses
 import json
 import multiprocessing
+import shutil
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -24,7 +29,7 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import run_root as RT
@@ -68,7 +73,7 @@ class _LLM:
 def _tp_commit(tmp_path: Path, monkeypatch, write) -> tuple[list[str], Path]:
     """`tp.commit.main` with ``--serving-rows`` over `_LLM`, each rank's window `write`'s; -> the events and the request's dir."""
     pytest.importorskip("torch")
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.commit import challenge, partition
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
@@ -359,3 +364,138 @@ def test_the_verifiers_window_is_refused_for_a_workload_the_record_did_not_serve
         SRT.window_of_record(served_tp["commit"], 0, served_tp["partition"], served_tp["build"], wl)
     with pytest.raises(ValueError, match="is not the record's None"):
         _mine(served_tp, 0, _copy_commit(served_tp, tmp_path, lambda rows: [{k: v for k, v in x.items() if k != "workload_sha256"} for x in rows]))
+
+
+@pytest.fixture(scope="module")
+def deferred_tp(tmp_path_factory):
+    """The TP Commit of `served_tp`'s ranks with no window and every rank's replay deferred to its sealed bundle, and each rank's
+    stand-in window from that bundle."""
+    pytest.importorskip("torch")
+    from tests.pipeline import served_tp as ST
+
+    root = tmp_path_factory.mktemp("deferred-tp")
+    c = ST.commit(root / "tp", world=2, I=256, law="subset:2", deferred=True)
+    c["windows"] = root / "stand-in"
+    c["made"] = {r: SRT.from_bundle(c["commit"], r, c["partition"], c["windows"] / f"rank{r}", workers=1) for r in range(2)}
+    return c
+
+
+def _values(window_dir: Path) -> bytes:
+    """Member 0's committed rows, its prover body less the salts."""
+    m = json.loads((window_dir / "window.json").read_text())["members"][0]
+    body = (window_dir / "m0-private.bin").read_bytes()
+    return body[:len(body) - m["n"] * len(m["ports"]) * CS.SALT_BYTES]
+
+
+def _bundle_sha(c, rank: int) -> str:
+    return next(b["manifest_sha256"] for b in json.loads((c["commit"] / "replay_deferred.json").read_text())["bundles"] if b["rank"] == rank)
+
+
+def test_a_deferred_ranks_stand_in_from_its_bundle_holds_the_served_values_and_passes(deferred_tp, served_tp):
+    c = deferred_tp
+    assert c["tp"] is None and not (c["commit"].parent / "serving-rows").exists()
+    for r in range(2):
+        mine, held = _mine(c, r)
+        rec = _registered(c, r)
+        w = rec["window"]
+        assert (w["kind"], w["run"], c["made"][r]["run"], w["commitment"], w["tp"]) == ("stand-in", mine.run, mine.run, "rows-sha512", held["tp"])
+        assert w["of"] == {"commitment": "rows-sha512", "tp_run_root": c["tp_run_root"], "rank": r, "run_root": held["tp"]["run_root"],
+                           "bundle_manifest_sha256": _bundle_sha(c, r), "rows": SRT.ROWS} and w["link"] == SRT.LINK
+        assert SRT.source(w, mine, held) == {"ok": True, "codes": [], "detail": {"kind": "stand-in", "run": mine.run, "tp": held["tp"], "of": w["of"]}}
+        assert {x["port"]: {"leaves": x["leaves"], "domain": x["domain"]} for x in rec["roots"]} == CS.expected_ports(mine)
+        assert c["made"][r]["population"] == 8 and _values(c["windows"] / f"rank{r}") == _values(served_tp["windows"] / f"rank{r}")
+    assert _values(c["windows"] / "rank0") != _values(c["windows"] / "rank1")
+
+
+def test_the_verifiers_window_and_a_stand_in_index_the_ranks_program_once(deferred_tp, tmp_path, monkeypatch):
+    """`window_of_record` and `from_bundle` each index the rank's Program once: their population takes the index `rank_replay.load`
+    built for every request served by that Program (here both requests, which share the rank's one Program dir), and gives the
+    window, its units and its members that indexing each request's Program again gives."""
+    from verity_vllm.check.replay import index as IX
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    c, built, init = deferred_tp, [], IX.ProgramIndex.__init__
+    requests = len(json.loads(c["workload"].read_text())["requests"])
+
+    def counted(self, inst, **kw):
+        built.append(kw)
+        init(self, inst, **kw)
+
+    def made(d):
+        (mine, held), res = _mine(c, 0), SRT.from_bundle(c["commit"], 0, c["partition"], d, workers=1)
+        return ((mine.run, mine.law, mine.query, mine.members, mine.row_tables, mine.partition_digest, held),
+                {k: res[k] for k in ("run", "population", "partition_digest")},
+                [(d / f).read_bytes() for f in ("partition.json", "index.json", "m0-units.json")], _values(d))
+
+    monkeypatch.setattr(IX.ProgramIndex, "__init__", counted)
+    once = made(tmp_path / "once")
+    assert len(built) == 2
+    monkeypatch.setattr(SRW, "index_of", lambda inst, reuse=(), **kw: IX.ProgramIndex(inst, **kw))
+    assert made(tmp_path / "again") == once and requests == 2 and len(built) == 2 + 2 * (1 + requests)
+    assert once[3] == _values(c["windows"] / "rank0")
+
+
+def _pending(rows, rank, commit_pass):
+    rows[1]["commit"]["per_rank"][str(rank)]["commit_pass"] = commit_pass
+    return rows
+
+
+def _copy_deferred(c, tmp_path: Path, runs=None) -> Path:
+    d = _copy_commit(c, tmp_path, runs)
+    (d / "replay_deferred.json").write_text((c["commit"] / "replay_deferred.json").read_text())
+    return d
+
+
+@pytest.mark.parametrize("alter, record, codes", [
+    (lambda w: {**w, "of": {**w["of"], "bundle_manifest_sha256": "00" * 32}}, None, ["of"]),
+    (lambda w: {**w, "link": "verity-vllm serving-rows"}, None, ["link"]),
+    (lambda w: {**w, "of": {**w["of"], "commitment": "vllm-v1"}}, None, ["of"]),
+    (lambda w: w, lambda c, t: _copy_commit(c, t), ["kind", "no_link"]),
+    (lambda w: w, lambda c, t: _copy_deferred(c, t, lambda rows: _pending(rows, 0, False)), ["kind", "no_link"]),
+    (lambda w: {k: v for k, v in w.items() if k not in ("of", "link")}, None, ["of", "link"]),
+], ids=["other-bundle", "other-link", "other-commitment", "record-names-no-bundle", "replay-failed", "stand-in-without-link"])
+def test_a_stand_in_that_is_not_the_ranks_bundle_of_record_is_refused(deferred_tp, tmp_path, alter, record, codes):
+    mine, held = _mine(deferred_tp, 0, record(deferred_tp, tmp_path) if record else None)
+    got = SRT.source(alter(_registered(deferred_tp, 0)["window"]), mine, held)
+    assert (got["ok"], got["codes"]) == (False, codes)
+
+
+def test_another_ranks_stand_in_and_a_decided_records_are_held_by_rank(deferred_tp, tmp_path):
+    mine1, held1 = _mine(deferred_tp, 1)
+    assert SRT.source(_registered(deferred_tp, 0)["window"], mine1, held1)["codes"] == ["run", "tp", "of"]
+    d = _copy_deferred(deferred_tp, tmp_path, lambda rows: _pending(_pending(rows, 0, True), 1, False))
+    assert SRT.record(d)["bundles"] == {"0": _bundle_sha(deferred_tp, 0)}
+    mine, held = _mine(deferred_tp, 0, d)
+    assert SRT.source(_registered(deferred_tp, 0)["window"], mine, held)["ok"], "a rank whose replay passed keeps its stand-in"
+
+
+@pytest.mark.parametrize("tamper, why", [
+    (lambda d: (d / "replay_deferred.json").unlink(), "not a deferred TP Commit"),
+    (lambda d: (d / "replay_bundle_p0_rank1" / "binding_map.json").write_text("{}"), "sha256 is not the manifest's"),
+    (lambda d: _tamper(d, lambda rows: _pending(rows, 1, False)), "no rank whose deferred replay is pending or passed"),
+    (lambda d: _tamper(d, lambda rows: _rank_root(rows, 1, "11" * 64)), "commitment vector|run root of record"),
+], ids=["not-deferred", "bundle-altered", "replay-failed", "other-rank-root"])
+def test_a_bundle_that_is_not_the_records_gives_no_stand_in(deferred_tp, tmp_path, tamper, why):
+    from verity_vllm.pipeline.tp import commit_replay as CR
+
+    d = tmp_path / "commit"
+    shutil.copytree(deferred_tp["commit"], d)
+    tamper(d)
+    with pytest.raises(CR.Refused, match=why):
+        SRT.from_bundle(d, 1, deferred_tp["partition"], tmp_path / "w", workers=1)
+    assert not (tmp_path / "w").exists()
+
+
+def _tamper(d: Path, fn) -> None:
+    rows = fn([json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines()])
+    (d / "runs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
+
+
+def test_the_command_writes_each_ranks_stand_in_and_refuses_a_commit_that_deferred_nothing(deferred_tp, served_tp, tmp_path, capsys):
+    o = cli.parse("tp-serving-rows", [str(deferred_tp["commit"]), "--partition", str(deferred_tp["partition"]), "--out", str(tmp_path / "w"),
+                                      "--ranks", "1", "--workers", "1"], environ={})
+    assert SRT.main(o) == 0 and sorted(p.name for p in (tmp_path / "w").iterdir()) == ["rank1"]
+    mine, held = _mine(deferred_tp, 1)
+    assert SRT.source(json.loads((tmp_path / "w" / "rank1" / "registration.json").read_text())["window"], mine, held)["ok"]
+    o = cli.parse("tp-serving-rows", [str(served_tp["commit"]), "--partition", str(served_tp["partition"]), "--out", str(tmp_path / "v")], environ={})
+    assert SRT.main(o) == 2 and "REFUSED" in capsys.readouterr().out and not (tmp_path / "v").exists()

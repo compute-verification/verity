@@ -8,7 +8,7 @@ With each level, that level's committed tops are staged too, every node held at 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
     inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
-        [--salts FILE]
+        [--salts FILE] [--part-jobs N]
 
 ``stage`` refuses an inner session whose record holds no draw (`rec_live.inner_draw`, exit 2): the verifier refuses every
 session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
@@ -67,6 +67,8 @@ refused before anything is staged (`rec_shape.check`, exit 2).
 from __future__ import annotations
 
 import dataclasses
+import functools
+import gc
 import json
 import os
 import shutil
@@ -88,6 +90,22 @@ from . import rec_vstar as V
 TABLE = "circuit"
 FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs", "filler")
 VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "registered.json")
+
+
+def _without_gc(f):
+    """``f`` with CPython's cyclic collector paused: staging holds tens of millions of acyclic forms (`forms.L`), and the
+    collector's passes over them were about a third of the algebra's and L0's staging at K = N = 64, at the same peak memory
+    (run r20261024-062524-9b83)."""
+    @functools.wraps(f)
+    def run(*args, **kwargs):
+        was = gc.isenabled()
+        gc.disable()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            if was:
+                gc.enable()
+    return run
 
 
 def meta(circuit: Path) -> dict:
@@ -337,6 +355,25 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
     return {"format": "verity/registered-reads/v0", "ports": ports}
 
 
+def staged_shared_rows(v: Path) -> dict:
+    """The one shared rows file (`--rec-rows`) that every V* part of the statements staged under ``v`` is verified against,
+    and whose SHA-512 `flock-verify rec-compose` holds every part's verdict to: `shared_rows` of the algebra's parts, R's
+    levels, and the levels and caps that read the tops; without the algebra, the first level's ``acc`` as ``acc0``, the one
+    `rec-acc` registration every part's chain must be (`RecVStar.checkAcc`)."""
+    v = Path(v)
+    rows = shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
+                       [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
+                        if (d / "registered.json").is_file()])
+    if "acc0" not in rows["ports"]:
+        for d in sorted(v.glob("L[0-9]*")):
+            ports = json.loads((d / "registered.json").read_text())["ports"] if (d / "registered.json").is_file() else {}
+            if "acc" in ports:
+                rows["ports"]["acc0"] = ports["acc"]
+                break
+    return rows
+
+
+@_without_gc
 def stage_cap(inner: Path, out: Path, evaluate: bool = True, levels: list[int] | None = None) -> dict:
     """RecCap alone at every level (or at ``levels``) over the inner session ``inner`` (`rec_cap.stage`: level 0 under
     ``out``, a later level ``l`` under ``out/L<l>``): each level's tops rebuilt from the recorded ``b || c`` and the salts
@@ -465,9 +502,10 @@ def _copy_verifier(src: Path, dst: Path) -> None:
         shutil.copyfile(src / f, dst / f)
 
 
+@_without_gc
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
           evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None,
-          version: int = 1) -> dict:
+          version: int = 1, part_jobs: int = 1) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
@@ -477,7 +515,8 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     R in the session, `stage_stacked` under ``out/stacked``. With no forgery, each staged level's committed tops held by its
     RecCap (`rec_cap.stage`): level 0's under ``out/cap`` (``cap``), a later level ``l``'s under ``out/cap/L<l>``
     (``caps``). ``version``: the levels' population programs'
-    (`rec_outer.stage`; 0 restages levels recorded before v1).
+    (`rec_outer.stage`; 0 restages levels recorded before v1). ``part_jobs``: the algebra's parts staged at once, each in a
+    forked process (each part's files are the same either way).
     Returns what each statement costs and holds, and the verifier's own seconds."""
     inner, out = Path(inner), Path(out)
     t = {}
@@ -573,18 +612,44 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
         vs = [list(r.v) for r in vf.reps]
         if forge == "comb":
             vs[0][-64] ^= 1
-        res["algebra"] = []
-        for j, p in enumerate(RR.parts(RR.spec(sh))):
-            st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2, holo=sh.holo)
-            names = [nm for nm, _ in p.S["ports"]]
-            d = out / "alg" / f"p{j}"
-            s = RR.write(st, {nm: reads[nm] for nm in names}, [[v[i] for i in p.v] for v in vs], d, evaluate=evaluate,
-                         own={nm: own[nm] for nm in names if nm in own})
-            if forge == "message" and "m0" in names:
-                forge_row(d / "inst.bin", st.text, "m0", 0, 0, mrs[0]["rows"][0][0])
-                res["forged_message"] = {"part": j, "port": "m0", "rep": 0, "word": 0, "bit": 0}
-            res["algebra"].append({**s, "part": j, "of_residuals": p.res, "regions": RR.regions(p.S["ports"])})
+        ps = RR.parts(RR.spec(sh))
+        _PART.update(sh=sh, parts=ps, reads=reads, vs=vs, out=out, evaluate=evaluate, own=own, forge=forge, mrs=mrs)
+        try:
+            if part_jobs > 1 and len(ps) > 1:
+                import multiprocessing as mp
+                from concurrent.futures import ProcessPoolExecutor
+
+                with ProcessPoolExecutor(min(part_jobs, len(ps)), mp_context=mp.get_context("fork")) as ex:
+                    done = list(ex.map(_stage_part, range(len(ps))))
+            else:
+                done = [_stage_part(j) for j in range(len(ps))]
+        finally:
+            _PART.clear()
+        res["algebra"] = [s for s, _ in done]
+        for _, forged in done:
+            if forged:
+                res["forged_message"] = forged
     return res
+
+
+#: what `_stage_part` reads, set by `stage` before it forks the parts' workers
+_PART: dict = {}
+
+
+def _stage_part(j: int) -> tuple[dict, dict | None]:
+    """The algebra's part ``j`` staged under ``out/alg/p<j>`` (`rec_residuals.write`), from what `stage` left in `_PART`; and,
+    under the ``message`` forgery, where its row was forged."""
+    c = _PART
+    sh, p, forged = c["sh"], c["parts"][j], None
+    st = RR.statement(p.S, f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", 2, holo=sh.holo)
+    names = [nm for nm, _ in p.S["ports"]]
+    d = c["out"] / "alg" / f"p{j}"
+    s = RR.write(st, {nm: c["reads"][nm] for nm in names}, [[v[i] for i in p.v] for v in c["vs"]], d, evaluate=c["evaluate"],
+                 own={nm: c["own"][nm] for nm in names if nm in c["own"]})
+    if c["forge"] == "message" and "m0" in names:
+        forge_row(d / "inst.bin", st.text, "m0", 0, 0, c["mrs"][0]["rows"][0][0])
+        forged = {"part": j, "port": "m0", "rep": 0, "word": 0, "bit": 0}
+    return {**s, "part": j, "of_residuals": p.res, "regions": RR.regions(p.S["ports"])}, forged
 
 
 def main(argv=None) -> int:
@@ -605,6 +670,9 @@ def main(argv=None) -> int:
     s.add_argument("--no-algebra", action="store_true")
     s.add_argument("--forge", default=None, choices=FORGERIES)
     s.add_argument("--no-evaluate", action="store_true", help="skip evaluating the algebra's unit against the reference")
+    s.add_argument("--part-jobs", type=int, default=int(os.environ.get("REC_PART_JOBS", "0")) or len(os.sched_getaffinity(0)),
+                   help="the algebra's parts staged at once, each in a forked process (default REC_PART_JOBS, else every CPU "
+                        "this process may run on)")
     s.add_argument("--salts", default=None, help="the running sums' salts, drawn and kept there if absent: every statement "
                    "staged with one FILE reads one chain")
     s.add_argument("--cap", default=os.environ.get("REC_CAP") or None, help="the deployment's cap, instances=N,claims=C,k_log=K,"
@@ -637,7 +705,7 @@ def main(argv=None) -> int:
 
     try:
         res = stage(Path(a.inner), fold, Path(a.out), levels, not a.no_algebra, a.forge, not a.no_evaluate, pts, a.salts,
-                    rec_shape.Cap.parse(a.cap) if a.cap else None, sparse)
+                    rec_shape.Cap.parse(a.cap) if a.cap else None, sparse, part_jobs=a.part_jobs)
     except rec_shape.Refused as e:
         print(json.dumps({"refused": str(e)}), flush=True)
         return 2

@@ -93,7 +93,7 @@ def _serve(conn: Connection, args: Any) -> None:
     reqs, sampling = wl["requests"], wl["sampling"]
     manifest = require_partition(json.loads(Path(args.required_manifest).read_text()), args.programs_root, args.program_dir) if args.required_manifest else None
     rl = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-    loaded, _digs = C2.programs_of_record(SimpleNamespace(args=args, manifest=manifest, reqs=reqs, sampling=sampling), rl)
+    loaded, _digs = C2.programs_of_record(SimpleNamespace(args=args, manifest=manifest, reqs=reqs, sampling=sampling), rl, definitions=False)
     progs = {k: v["instances"] for k, v in loaded.items()}
     dirs = {k: v["dir"] for k, v in loaded.items() if v.get("dir")}
     ring = int(args.window_slots) if args.window_slots and args.window_mb else None

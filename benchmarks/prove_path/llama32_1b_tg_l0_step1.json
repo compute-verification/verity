@@ -1,0 +1,1 @@
+{"templates": ["RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}"], "law": "work:2", "scope": {"op_path_prefix": "model.layers.0.", "steps": [1, 2]}}

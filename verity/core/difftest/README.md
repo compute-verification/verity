@@ -29,7 +29,7 @@ is checked against; after, the Python is held to the Lean.
 # PORT/lean/lakefile.toml: [[require]] name = "verity_difftest", path = "<relative path to this lean/>"
 # PORT/lean/DifftestMain.lean:  def main : IO Unit := Difftest.serve (Difftest.table [("encode", Port.encode)])
 # PORT/lean/lakefile.toml: [[lean_exe]] name = "port-difftest", root = "DifftestMain"
-# PORT/pyproject.toml: a suite in AFTER_LEAN (tools/verity/check/check.py); inputs list what lake reads outside PORT
+# PORT/pyproject.toml: a suite in AFTER_LEAN (tools/verity/check/suites.py); inputs list what lake reads outside PORT
 import shutil, pytest, verity_difftest as D
 from hypothesis import strategies as st
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

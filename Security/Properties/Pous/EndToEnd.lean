@@ -3,7 +3,7 @@ import Properties.Pous
 import Properties.Pous.TimedAudit
 import Properties.Pous.MemoryChallenger
 import Properties.Identity
-import Models.Pous.Assumptions.P2
+import Definitions.Pous.Assumptions.P2
 import Definitions.Pous.P2.Cost
 
 /-!
@@ -23,8 +23,8 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own data holds a SHA-512
   collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
-  every `C*` setup accepts is one `RunCheckAccepts` speaks of. `RunCheckAccepts` is proved; `RunCertifies` follows from
-  it and the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
+  every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
+  and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
 * `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
   model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
   per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
@@ -36,7 +36,7 @@ separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-nebius-host`
+   host never restores an earlier copy: `trusted-host`
    (pending network-accounting's widening, Daniel decision 2)) and the coins drawn online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
@@ -56,7 +56,7 @@ it hands the server the session commitment, and `P2RingAuditSecure`, the conject
 Two gaps stood between these statements and the deployed verifier:
 
 * **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-nebius-host` covers as network-accounting widens it
+  presumption, which `trusted-host` covers as network-accounting widens it
   (pending network-accounting's widening, Daniel decision 2). The check's half: a session's `binding` is required and is
   the setup's root (`Run.check` refuses any other), so a session names the setup it audits, and its id is the one the
   auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
@@ -204,8 +204,8 @@ so the session's `binding` is the root of the `C*` setup checked), the session a
 under the designated id and is signed under a key in `trusted`, and that key's holder ran a session with the accepted
 commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own
 data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dishonest commitment (`C*` decoding to a
-`W'` other than the `W` the server was handed) is `CommitBreak`'s. It rests on the setup check's `AcceptsDecodes` and
-`PublishesRoot`, which are open. -/
+`W'` other than the `W` the server was handed) is `CommitBreak`'s. It follows from `RunCheckAccepts` and the setup
+check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
@@ -314,7 +314,7 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
 derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
-challenger's `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
+challenger's `SessionLog` under its host presumption, which `trusted-host` covers as network-accounting widens it
 (pending network-accounting's widening, Daniel decision 2). G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=

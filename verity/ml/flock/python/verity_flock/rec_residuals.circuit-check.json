@@ -1,13 +1,16 @@
 {
  "definitions": {
   "InnerRepCheck_v2{S={012e7383a3c0}}": {
-   "and": 4374
+   "and": 4374,
+   "type": "2686860d90398c4e60de05ece3562ebfe92a05d4804d821991e42bb4a1e398175351bc4164296e340bc74b804ebfa5014781bba97d3e7cf906387609e87fdce0"
   },
   "InnerRepCheck_v2{S={189706fc48e6}}": {
-   "and": 2187
+   "and": 2187,
+   "type": "8eaf68c5393517c5b9e84d3735453a5b7b72d94ce9e17f21ebb65735b427674220e43358f539301c38f4df449fe3b97bd5362504abf4d003289f9cb973cf7221"
   },
   "InnerRepCheck_v2{S={73c417f9d407}}": {
-   "and": 4374
+   "and": 4374,
+   "type": "b65fa11f794a5245b818591c595d80412835c9ddf8b5af5f9b1cad57ef56680254a8a1db3803e41480fcd7de69831cac8a6c227f5924e39522d7a78d6ca1fb46"
   }
  }
 }

@@ -67,8 +67,8 @@ theorem LRet.sendMsg (msg : F256 × F256) (n : ℕ) : LRet (sendMsg msg : LP PS 
   LRet.silent (fun st t _ => ⟨(), { st with msgs := st.msgs.push msg }, ap (pK msg) t, rfl⟩) n
 
 theorem LRet.powB (nonce : ℕ → ℕ → UInt64) (n : ℕ) : LRet (powP nonce 2 : LP PS Unit) n fun _ m => m = n :=
-  LRet.silent (fun st t _ => ⟨(), { st with cbn := st.cbn.push (nonce 2 st.cbn.size) },
-    ap (pN (nonce 2 st.cbn.size)) t, rfl⟩) n
+  LRet.silent (fun st t _ => ⟨(), { st with cbn := st.cbn.push 0 },
+    ap (pN 0) t, rfl⟩) n
 
 theorem LRet.sampleKP (resp : ℕ → Claims.Msg) (n : ℕ) :
     LRet (liftT (sampleKP (asksS resp))) n fun a m => a = coinKOf (resp n) ∧ m = n + 1 := fun st t l hl =>

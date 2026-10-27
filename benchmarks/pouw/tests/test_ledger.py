@@ -280,10 +280,10 @@ end Pouw.Guarantees.PearlC
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
     lean = tmp_path / "Security"
-    (lean / "Models" / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Models" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    (lean / "Definitions" / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / "Definitions" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Models.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
     return audit, lean
 
 
@@ -440,7 +440,8 @@ def test_a_repository_only_refresh_keeps_the_store_s_rows_and_rereads_the_reposi
     gone = next(t["pin"] for t in doc["twins"] if t["source"] == P.REPO_SOURCE)
     del audit["guarantees"][gone]
     (tmp_path / "lean-audit.json").write_text(json.dumps(audit))
-    (tmp_path / "Models").symlink_to(P.REPO_AUDIT.parent / "Models")
+    for root in audit["roots"]:
+        (tmp_path / root).symlink_to(P.REPO_AUDIT.parent / root)
     assert gone not in {t["pin"] for t in P.refresh(doc, tmp_path / "lean-audit.json")["twins"]}
 
 

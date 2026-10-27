@@ -375,23 +375,11 @@ pub fn check(spec: &Spec, rules: &Rules, root: &[u8; 64], stream: usize, round: 
     Ok(coins)
 }
 
-/// The check of record on [`Checked`]'s openings: the Lean verifier's (`Flock.Firewall.Coins`, `flock-firewall coins`,
-/// [`crate::firewall::LeanCoins`]), which sees what `Checked` sees, as the wire frames it: the prover's `Hello`, `Hello`'s
-/// answer, then each opening (`Resp::Coins`' frame) of `n` coins of a stream's next round. `Ok(Err(why))` refuses
-/// (`PROVER-STOPPED: …`, `check`'s reasons word for word, `live/src/coin_open_vectors.json`) and ends the session; `Err` is
-/// the check failing to run.
-pub trait OpeningCheck: Send {
-    fn hello(&mut self, hello: &str) -> Result<Result<(), String>, String>;
-    fn answer(&mut self, frame: &[u8]) -> Result<Result<(), String>, String>;
-    fn open(&mut self, stream: &str, n: usize, frame: &[u8]) -> Result<Result<Vec<F128>, String>, String>;
-}
-
 /// The prover's transport under a committed coin schedule: takes its own nonce and the link points' count from the `Hello`
 /// it sends and the root and session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every
 /// coin the verifier sends (the link points, every round) against them before handing it on, stripped of its opening.
-/// Anything else stops the prover there (a refusal), before it answers anything that depends on it. With an
-/// [`OpeningCheck`] ([`Checked::with_lean`]), its verdict decides: its refusal is the prover's, its coins are the ones handed
-/// on, and this check can only refuse more.
+/// Anything else stops the prover there (a refusal), before it answers anything that depends on it. A firewalled session's
+/// coin check of record is the Lean session loop's instead (`Flock.Firewall.Session`), which owns its connection.
 pub struct Checked<T: Transport> {
     pub inner: T,
     pub spec: Spec,
@@ -400,30 +388,18 @@ pub struct Checked<T: Transport> {
     rules: Option<Rules>,
     root: Option<[u8; 64]>,
     rounds: std::collections::BTreeMap<String, usize>,
-    lean: Option<Box<dyn OpeningCheck>>,
     /// every coin handed on, by stream and round (the simulator's extraction)
     pub opened: std::collections::BTreeMap<(String, usize), Vec<F128>>,
 }
 
 impl<T: Transport> Checked<T> {
     pub fn new(inner: T, spec: Spec) -> Self {
-        Checked { inner, spec, nonce: None, links: 0, rules: None, root: None, rounds: Default::default(), lean: None, opened: Default::default() }
-    }
-    pub fn with_lean(mut self, lean: Box<dyn OpeningCheck>) -> Self {
-        self.lean = Some(lean);
-        self
+        Checked { inner, spec, nonce: None, links: 0, rules: None, root: None, rounds: Default::default(), opened: Default::default() }
     }
     pub fn root(&self) -> Option<[u8; 64]> {
         self.root
     }
     fn take(&mut self, stream: &str, n: usize, words: Vec<F128>) -> Result<Resp, String> {
-        let lean = match self.lean.as_mut() {
-            Some(l) => match l.open(stream, n, &Resp::Coins(words.clone()).encode())? {
-                Ok(c) => Some(c),
-                Err(why) => return Ok(Resp::Refused(why)),
-            },
-            None => None,
-        };
         let (Some(root), Some(rules)) = (self.root, self.rules.as_ref()) else {
             return Ok(Resp::Refused("PROVER-STOPPED: coins before the step-0 coin commitment".into()));
         };
@@ -431,9 +407,6 @@ impl<T: Transport> Checked<T> {
         let k = *self.rounds.get(stream).unwrap_or(&0);
         match check(&self.spec, rules, &root, si, k, n, &words) {
             Ok(c) => {
-                if lean.as_ref().is_some_and(|l| *l != c) {
-                    return Err(format!("the Lean check and coin_tree::check open different coins of {stream} round {k}"));
-                }
                 self.rounds.insert(stream.to_string(), k + 1);
                 self.opened.insert((stream.to_string(), k), c.clone());
                 Ok(Resp::Coins(c))
@@ -447,11 +420,6 @@ impl<T: Transport> Transport for Checked<T> {
     fn call(&mut self, req: Req) -> Result<Resp, String> {
         let what = match &req {
             Req::Hello(h) => {
-                if let Some(l) = self.lean.as_mut() {
-                    if let Err(why) = l.hello(h)? {
-                        return Ok(Resp::Refused(why));
-                    }
-                }
                 match hello_nonce(h) {
                     Ok(n) => self.nonce = Some(n),
                     Err(e) => return Ok(Resp::Refused(format!("PROVER-STOPPED: {e}"))),
@@ -467,11 +435,6 @@ impl<T: Transport> Transport for Checked<T> {
         let Some((stream, n, hello)) = what else { return Ok(r) };
         match r {
             Resp::Coins(w) if hello => {
-                if let Some(l) = self.lean.as_mut() {
-                    if let Err(why) = l.answer(&Resp::Coins(w.clone()).encode())? {
-                        return Ok(Resp::Refused(why));
-                    }
-                }
                 if w.len() != 4 + KEY_BYTES / 16 {
                     return Ok(Resp::Refused(format!("PROVER-STOPPED: Hello's answer has {} words, not the coin tree's root and session key (20)", w.len())));
                 }

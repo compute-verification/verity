@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "GumbelLaneHead_v1": {
+   "and": 1556,
+   "type": "9360668391f219b4e5d7a59311fb4c3506a15193a2039d97f363187060bb5a252ce6650c28d178cc095f08696b75ba2b163900c29c23979f67085f3f124ef951"
+  },
+  "GumbelLaneRounds_v1": {
+   "and": 5035,
+   "type": "f6632e1f62433d50866a0837fa65d5d6c485861992e0a338fc198c83d1436804336e9931a6d35bf901a570dc43eaacb518e6fb0630f3ff372febfb08914dd291"
+  },
+  "GumbelSetup_v1{N=2}": {
+   "and": 911,
+   "type": "913afa45829ae7616b3311927b385202c27094de7c60882e0251c39b0af334175e89f0677ba35ecaabf3a1e62dba64ee26a81b53486920f198ad61f09516b0f3"
+  },
+  "GumbelSetup_v1{N=64}": {
+   "and": 3859,
+   "type": "eb98dcac990a953a04c86cfe0c7bfebb83cf011ea669a851f2b951cde3107efa294284dc8dfdbf41bae7d51ead56a3f0bada86afef850187aac56cb44b144be8"
+  },
+  "GumbelStreamKeyHead_v1": {
+   "and": 4960,
+   "type": "0371fc98465182b4b84fd90cad6b36783f74c1603e9c25bddfb7edef29efecac38fabf34f26f88b9594ac1ae7acd3dc3510326339798581d55bf30fac227063e"
+  },
+  "GumbelStreamKeyTail_v1": {
+   "and": 4285,
+   "type": "9b435d9966c6cc33f015de511d170175a6b773a579b741b889b5d630935156e608f03185c40e87a139e973b2082142be303532f8c35785ee8a19c0b5d3f5fa58"
+  },
+  "GumbelStreamKey_v2": {
+   "and": 9245,
+   "type": "8a18be96ca64da44966e37645b8d7335ea5e2ddbf277e87e8600644d79ab3d728a7cd1436b00e481c8dedbdd426bc09be1a8995dd6edc507aa397336860bcd46"
+  },
+  "NvLogf_v3": {
+   "and": 43280,
+   "type": "04840a19a71d554b3956bb2bdc5072460d5fe2fcb007c7e00fb7692811a696171a24c7e4722802efe0ca04b9461f67deb4adbdd7a1622a9331196cc60d45176e"
+  }
+ }
+}

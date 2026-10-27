@@ -117,8 +117,7 @@ def test_verify_reads_candidate_3s_transcript(tmp_path):
     """`verify --rec-inner-transcript` reads the transcript among its inputs, before it sets anything up: on candidate 3's
     session it goes on to the statement (here none, so the session is refused for its files), and on the session with a
     stream missing it stops there (exit 2). The inner statement is its circuit's header (whose META binds R's registration)
-    beside stand-ins for its public input and partition, which nothing reads before the session; `--rec-inner-coins` holds
-    no META, so it binds no registration."""
+    beside stand-ins for its public input and partition, which nothing reads before the session."""
     (tmp_path / "partition.json").write_text("{}")
     (tmp_path / "empty").write_text("")
 
@@ -557,12 +556,12 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
     `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
-    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`, at public inner
-    circuits since a private session has no statements yet: `ownPorts` and RecSparse's other messages, `sparseMsgs`)."""
+    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`, at 2d61's private
+    inner circuits, the only ones a sparse phase runs over: `ownPorts` and RecSparse's other messages, `sparseMsgs`)."""
     unit = f"rec-sparse/n{SPARSE[0]}-e{SPARSE[1]}-s{SPARSE[2]}-t{SPARSE[3]}"
     ports = {k: x["value"] for k, x in json.loads((sparse / "registered.json").read_text())["ports"].items()}
     assert {"rec-sparse-u", "rec-sparse-v"} <= set(ports.values()), ports
-    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path, holo=False), "--unit", unit, "--instances", "2",
+    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path), "--unit", unit, "--instances", "2",
                         "--registered", str(sparse / "registered.json")], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     (port,) = [k for k, v in ports.items() if v == "rec-sparse-u"]
@@ -592,9 +591,19 @@ def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE, holo=True) -> list[st
     return ["--rec-inner", str(_write(tmp_path / "rec-inner.json", j))]
 
 
+def _own(tmp_path: Path, d: Path) -> Path:
+    """`d`'s coin server's record in its own format (`rec_live.record_bytes`), which the verifier reads at its inner
+    shape (`RecSetup.checkReads`): the fixtures' records predate it."""
+    from verity_flock import rec_live as RL
+
+    f = tmp_path / f"own-{d.name}.json"
+    f.write_text(RL.record_bytes(json.loads((d / "public.json").read_text())))
+    return f
+
+
 def _covers(tmp_path: Path, shape: list[str], transcript: Path | None = None) -> tuple[int, str]:
     d = _fixture(C3)
-    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
+    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or _own(tmp_path, d)),
                         "--rec-inner-session", str(d / "prover"), *_inner(), *shape], capture_output=True, text=True)
     return p.returncode, p.stderr.strip()
 
@@ -724,7 +733,7 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
     """The plain session (`rec-coins`' inner session, two reps and no other stream) passes under its own inner shape, and is
     refused under one naming the bucket's RecSparse shape: the shape names a phase the session does not have."""
     d = _fixture(PLAIN)
-    run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(d / "public.json"),
+    run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(_own(tmp_path, d)),
                                         "--rec-inner-session", str(d / "session"), *shape], capture_output=True, text=True)
     p = run(["--rec-inner", str(_write(tmp_path / "plain.json", {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22,
                                                                  "claims": 8, "regions": 3}))])
@@ -733,6 +742,126 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
     assert p.returncode == 1 and p.stderr.strip() == (
         "rec-inner: the verifier's inner shape names a RecSparse shape (--sparse), and the inner transcript holds no sparse "
         "phase"), p
+
+
+#: the verifier's inner shapes of the plain session (`rec-coins`' inner statement, public circuits) and of 2d61's
+PLAIN_SHAPE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3}
+C3_SHAPE = {**PLAIN_SHAPE, "m": 25, "holo": True, "sparse": list(SPARSE), "stacked": R_SHAPE}
+OFF = ("rec inner transcript: the coin server's record is off the schedule of the verifier's inner shape (m {m}, k_log "
+       "{k_log}, claims {claims}): ")
+
+
+def _python_off(t: dict, shape: dict) -> bool:
+    """Whether `rec_live.on_schedule`, `RecVStar.checkSchedule`'s mirror, refuses the record ``t`` at the verifier's
+    inner shape ``shape`` (its schedule `rec_live.schedule_for`'s, over the record's Hello)."""
+    from verity_flock import rec_live as RL
+    from verity_flock import rec_sparse as SP
+
+    st = {"dense_m": shape["m"], "k_log": shape["k_log"], "nbl": t["hello"]["link"]["m"] - RL.PT_LOCAL,
+          "regions": shape["regions"]}
+    sched = RL.schedule_for(st, shape.get("holo", False), (shape.get("stacked") or {}).get("m"),
+                            SP.Shape(*shape["sparse"]) if shape.get("sparse") else None)
+    try:
+        RL.on_schedule(t, sched)
+    except ValueError:
+        return True
+    return False
+
+
+def _bypassed(tmp_path: Path, change, declare: bool = True) -> tuple[Path, Path]:
+    """The plain session as one that bypassed the proxy leaves it: ``change`` on circuit/rep0's rounds in the coin
+    server's record (which still ends ``finish``, and declares the stream's new count when ``declare``), and the
+    prover's record holding the same coins at every round, so the reps' coins are the record's (`innerCommits`)."""
+    t = json.loads((_fixture(PLAIN) / "public.json").read_text())
+    r = json.loads((PLAIN / "session" / "session.json").read_text())
+    rs = [x for x in t["rounds"] if x["stream"] == "circuit/rep0"]
+    change(rs)
+    t["rounds"] = rs + [x for x in t["rounds"] if x["stream"] != "circuit/rep0"]
+    if declare:
+        t["streams"]["circuit/rep0"]["rounds"] = len(rs)
+    (s,) = [x for x in r["streams"] if x["stream"] == "circuit/rep0"]
+    s["rounds"] = [{**s["rounds"][min(k, len(s["rounds"]) - 1)], "k": k, "n": len(x["coins"]), "coins": x["coins"]}
+                   for k, x in enumerate(rs)]
+    (tmp_path / "rec").mkdir()
+    _write(tmp_path / "rec" / "session.json", r)
+    return _write(tmp_path / "transcript.json", t), tmp_path / "rec"
+
+
+def _transcript_of(transcript: Path, record: Path, shape: dict | None, tmp_path: Path) -> tuple[int, str]:
+    inner = [] if shape is None else ["--rec-inner", str(_write(tmp_path / "rec-inner.json", shape))]
+    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript), "--rec-inner-session",
+                        str(record), *inner], capture_output=True, text=True)
+    return p.returncode, p.stderr.strip()
+
+
+def test_the_honest_records_are_on_the_verifiers_schedule(tmp_path):
+    """`RecVStar.checkSchedule` and its mirror `rec_live.on_schedule` pass the plain session's record and 2d61's at
+    their inner shapes, round for round, and both read in the coin server's own format as their JSON readers read
+    them (`RecSetup.checkReads`)."""
+    t = json.loads((_fixture(PLAIN) / "public.json").read_text())
+    assert not _python_off(t, PLAIN_SHAPE)
+    assert not _python_off(json.loads((_fixture(C3) / "public.json").read_text()), C3_SHAPE)
+    assert _transcript_of(_own(tmp_path, _fixture(PLAIN)), PLAIN / "session", PLAIN_SHAPE, tmp_path) == (0, "")
+    assert _covers(tmp_path, _shape(tmp_path)) == (0, "")
+
+
+NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: "
+                  "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the "
+                  "link's roots and points, at json.dumps' indent=1)")
+
+
+@pytest.mark.parametrize("write", [
+    json.dumps,
+    lambda t: json.dumps({"rounds": t["rounds"], **t}, indent=2),
+    lambda t: json.dumps({"rounds": t["rounds"], **t, "hello": dict(reversed(t["hello"].items()))}, indent=1),
+], ids=["compact", "indent-2", "hello-reordered"])
+def test_a_record_not_in_the_coin_servers_format_is_refused(tmp_path, write):
+    """`RecSetup.checkReads`: the recursion's transcript model reads the coin server's record in its own format
+    (`RecRecord.readFull`), so the verifier reads it so too. The plain session's record with its values unchanged,
+    written compactly, at another indent or with Hello's keys in another order, passes every check of the transcript
+    read without the verifier's inner shape, and is refused at that shape."""
+    t = json.loads((_fixture(PLAIN) / "public.json").read_text())
+    f = tmp_path / "transcript.json"
+    f.write_text(write(t))
+    assert _transcript_of(f, PLAIN / "session", None, tmp_path)[0] == 0
+    assert _transcript_of(f, PLAIN / "session", PLAIN_SHAPE, tmp_path) == (1, NOT_OWN_FORMAT)
+
+
+def _extra(rs: list) -> None:
+    rs.append({**rs[-1], "k": len(rs)})
+
+
+def _coin_count(rs: list) -> None:
+    rs[3]["coins"], rs[3]["n"] = rs[3]["coins"] * 2, 2 * rs[3]["n"]
+
+
+@pytest.mark.parametrize("change,declare,why", [
+    (_extra, True, "circuit/rep0 is not declared at no parent with 96 rounds"),
+    (lambda rs: rs.pop(), False, "191 rounds, and the schedule's 192"),
+    (_coin_count, True, "round 3 is circuit/rep0 round 3 (n 2) (coins 2, tops [], level0 0, commits true), and the "
+     "schedule's circuit/rep0 round 3 (n 1) (coins 1, tops [], level0 0, commits true)"),
+], ids=["extra-round", "missing-round", "coin-count"])
+def test_a_finished_record_off_the_verifiers_schedule_is_refused(tmp_path, change, declare, why):
+    """`RecVStar.checkSchedule`, held to its mirror `rec_live.on_schedule`: the proxy that holds a session to its
+    schedule runs on the prover's side, so a session that bypassed it has a coin server's record that ends ``finish``
+    with any rounds, and the prover's record to match. The plain session with an extra round, a missing round or a
+    round of another coin count, in both records, passes every other check of the transcript (read without the
+    verifier's inner shape) and is refused at the verifier's inner shape, by both."""
+    transcript, record = _bypassed(tmp_path, change, declare)
+    t = json.loads(transcript.read_text())
+    assert t["end"] == "finish" and _python_off(t, PLAIN_SHAPE)
+    assert _transcript_of(transcript, record, None, tmp_path)[0] == 0
+    assert _transcript_of(transcript, record, PLAIN_SHAPE, tmp_path) == (1, OFF.format(**PLAIN_SHAPE) + why)
+
+
+def test_a_reps_round_of_another_level0_is_refused(tmp_path):
+    """2d61's rep 0 binding round with no copy of level 0's top: no other check of candidate 3's session reads a rep's
+    `level0`, and the verifier's schedule and its mirror refuse it."""
+    transcript = _changed(tmp_path, lambda t: _round(t, "circuit/rep0", k=0).__setitem__("level0", 0))
+    assert _python_off(json.loads(transcript.read_text()), C3_SHAPE)
+    assert _covers(tmp_path, _shape(tmp_path), transcript) == (1, OFF.format(**C3_SHAPE) + (
+        "round 0 is circuit/rep0 round 0 (n 6) (coins 6, tops [], level0 0, commits false), and the schedule's "
+        "circuit/rep0 round 0 (n 6) (coins 6, tops [], level0 1, commits false)"))
 
 
 #: `rec-coins`' inner statement, a whole inner circuit (plain, with no registration and no R in its META)
@@ -767,8 +896,11 @@ def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     (tmp_path / "empty").write_bytes(b"")
+    draw = _write(tmp_path / "draw.json", {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     files = ["--rec-inner-circuit", str(STAGE / "circuit.txt"), "--rec-inner-public", str(STAGE / "pub-64.bin"),
-             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-session", str(PLAIN / "session"),
+             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-statement",
+             "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(draw),
+             "--rec-inner-session", str(PLAIN / "session"),
              *(["--rec-inner-transcript", str(PLAIN / "public.json")] if transcript else [])]
     inner = ["--rec-inner", str(_write(tmp_path / "rec-inner.json", AT_STAGE)), *files]
     if cmd == "statement":
@@ -795,3 +927,38 @@ def test_rec_inner_refuses_r_without_the_sparse_shape():
         "(--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse"), p
     p = subprocess.run([*base, "--sparse", "18,13,6"], capture_output=True, text=True)
     assert p.returncode == 2 and p.stderr.strip() == "--sparse 18,13,6: NU,ELL,S_LOG,T_LOG, four natural numbers", p
+
+
+STOPPED = "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
+NO_END = "rec inner transcript: the coin server's record names no end; only a finished session is read"
+
+
+@pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
+def test_a_stopped_sessions_record_is_refused(tmp_path, d):
+    """`RecVStar.checkFinished`: the coin server's record of a session that ran every round and then stopped (a refusal, or
+    a connection that ended without `Finish`) is the finished one's but for `end`, and is refused as no inner proof; so is a
+    record that names no end."""
+    t = json.loads((_fixture(d) / "public.json").read_text())
+    assert t["end"] == "finish"
+    stopped, endless = copy.deepcopy(t), copy.deepcopy(t)
+    stopped["end"] = "stop"
+    del endless["end"]
+    assert _read(d, _write(tmp_path / "stopped.json", stopped)) == (1, None, STOPPED)
+    assert _read(d, _write(tmp_path / "endless.json", endless)) == (1, None, NO_END)
+
+
+def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
+    """A session `rec_live`'s firewall stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
+    server's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
+    proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
+    something else."""
+    import test_rec_live_firewall as F
+
+    stopped = F._proxy(F._schedule())
+    assert F._refusal(F._run(stopped, y=bytes(31))).startswith("rec proxy: FIREWALL-REFUSED: Link's y: ")
+    assert stopped.coins.record()["end"] == "stop"
+    assert _read(PLAIN, _write(tmp_path / "stopped.json", stopped.coins.record())) == (1, None, STOPPED)
+    finished = F._proxy(F._schedule())
+    assert F._held(F._run(finished)) and finished.coins.record()["end"] == "finish"
+    _, _, err = _read(PLAIN, _write(tmp_path / "finished.json", finished.coins.record()))
+    assert err not in (STOPPED, NO_END), err

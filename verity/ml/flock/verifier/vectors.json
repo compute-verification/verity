@@ -3991,16 +3991,27 @@
        "name": "lig-query-nonce",
        "rep": 0,
        "expect": {
-        "accepted": true,
-        "why": ""
+        "accepted": false,
+        "why": "grinding_nonce \u2260 0",
+        "upstream_accepted": true
        }
       },
       {
        "name": "lig-claim-nonce",
        "rep": 0,
        "expect": {
-        "accepted": true,
-        "why": ""
+        "accepted": false,
+        "why": "claim_batch_grinding_nonce \u2260 0",
+        "upstream_accepted": true
+       }
+      },
+      {
+       "name": "lig-consistency-nonce",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "consistency_batch_grinding_nonce \u2260 0",
+        "upstream_accepted": true
        }
       },
       {
@@ -4634,6 +4645,50 @@
     "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); the selftest's host_units_match_witness check fails here and on its base (a host-side unit evaluation, not a session), so all_pass is false; upstream's verdicts are its live ones in each case.json",
     "agreement": "local ci.py --live --sets 5 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted",
     "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
+   },
+   {
+    "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, PROTOCOL.md §16.15 rule 6)",
+    "pr83": "61e5c2617",
+    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-2 (r20261025-031112-428a, source 61e5c2617: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, registered with register_served), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
+    "statement": {
+     "circuit": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/circuit.txt",
+     "public": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/pub-32.bin",
+     "partition": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/partition.json",
+     "program": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/program.json",
+     "registered": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/registered.json",
+     "stratified": 16,
+     "coins": "os",
+     "circuit_sha512": "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0",
+     "detail": "RoPE d64, 32 RegisteredRoPE units reading cs_table rows (registered root 6dd69162, row/v1), Q_template_instance v0: a shared-row public file at hidden outputs and hm96-sha512/v1 leaves; registered.json is the verifier's own (register_served on its own program)"
+    },
+    "sessions": [
+     {
+      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/root",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: port cs: table row 0 does not open cs_table's registered root at position 3",
+       "upstream_accepted": true
+      }
+     },
+     {
+      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/none",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: the statement reads registered values, and the verifier holds no registered roots",
+       "upstream_accepted": true
+      }
+     }
+    ],
+    "lean_statement": "verity/flock-circuit",
+    "agreement": "ci.py --live --sets 6 on vy-nebius-cpu-2 (r20261025-033213-b071, Lean at 1cec4f455): 3/3, 1 accepted",
+    "sessions_note": "honest: the session with the verifier's own reads (accepted); root: its registered.json with the tree's root zeroed; none: registered.json null (no --registered). Upstream's verdicts are the live server's (each case.json, from serve's record), which reads no registered roots"
    }
   ]
  }

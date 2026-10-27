@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.KS.ForkSlack
 import Proofs.Flock.Claims.KS.FnFork
 import Proofs.Flock.Claims.KS.LiveMix
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The fork's coin coupling at a simulator of uniform functions
@@ -62,9 +63,21 @@ theorem live_fnAt_eq {K L M : ℕ} {A D : Type} (h : L = K) (n : Fin K → ℕ) 
     (f : Fin K → D → Fin M → A) (r : Fin L → Fin M → A) :
     Claims.Bridge.Live.fnAt h n key f r = Claims.Flock.FnFork.fnAt h n key f r := rfl
 
-/-- **The coupling at the deployed plain verifier**: at `V false`, with a tape of uniform functions of the live coins
+/-- **The coupling at the deployed plain verifier**: at `VK keep`, with a tape of uniform functions of the live coins
 `LCoin 65536` read through a prefix key (`Claims.Bridge.Live.fnAt`), `ForkCoinCoupling` holds at the chances
 `FnFork.δN GF128 65536 n`, `δ_t = 2^{-128·min (n t) 65536}` (`FnFork.δAt_eq`). -/
+theorem forkCoinCoupling_plainK (keep : Bool → Bool) {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) (ω : Ω) {L : ℕ} (h : L = (V false).k x) (n : Fin ((V false).k x) → ℕ)
+    {key : Fin ((V false).k x) → (Fin ((V false).k x) → Claims.Bridge.Live.LCoin 65536) → D}
+    (hk : Claims.Flock.FnFork.PrefixKey n key) :
+    Claims.Flock.ForkCoinCoupling sha512 (VK keep) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)
+      (Claims.Flock.simForkPr sha512 (VK keep) P x (τ := Fin ((V false).k x) → D → Claims.Bridge.Live.LCoin 65536)
+        (LC := Claims.Bridge.Live.LCoin 65536) (fun q => Claims.Bridge.Live.fnAt h n key q.1 q.2)
+        (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
+  Claims.Flock.forkCoinCoupling_fnAt (A := FlockLevel3.GF128) (M := 65536) (hI := instInhabitedCoin) sha512
+    (VK keep) P x ω h n hk
+
+/-- `forkCoinCoupling_plainK` at the deployed plain verifier (`keep := id`). -/
 theorem forkCoinCoupling_plain {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) (ω : Ω) {L : ℕ} (h : L = (V false).k x) (n : Fin ((V false).k x) → ℕ)
     {key : Fin ((V false).k x) → (Fin ((V false).k x) → Claims.Bridge.Live.LCoin 65536) → D}
@@ -73,7 +86,6 @@ theorem forkCoinCoupling_plain {D : Type} [Fintype D] [DecidableEq D] {Ω : Type
       (Claims.Flock.simForkPr sha512 (V false) P x (τ := Fin ((V false).k x) → D → Claims.Bridge.Live.LCoin 65536)
         (LC := Claims.Bridge.Live.LCoin 65536) (fun q => Claims.Bridge.Live.fnAt h n key q.1 q.2)
         (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
-  Claims.Flock.forkCoinCoupling_fnAt (A := FlockLevel3.GF128) (M := 65536) (hI := instInhabitedCoin) sha512
-    (V false) P x ω h n hk
+  forkCoinCoupling_plainK id (D := D) (Ω := Ω) (P := P) (x := x) (ω := ω) (L := L) (h := h) (n := n) (key := key) (hk := hk)
 
 end FlockDeploy.KS

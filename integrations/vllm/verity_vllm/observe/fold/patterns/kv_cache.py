@@ -14,7 +14,7 @@ from verity_vllm.observe.fold.tree import TreeNode
 
 
 def kv_group_of(ctx: StepContext, layer: str | None) -> dict | None:
-    """[r8 E-cleanup 2026-09-18, hybrid KV cache] The KV-cache group whose block tables / slot mapping address `layer`'s
+    """Hybrid KV cache: the KV-cache group whose block tables / slot mapping address `layer`'s
     KV rows, or None when the step has a single group (the legacy `StepStart.block_tables` / `slot_mapping` are complete).
 
     vLLM's hybrid KV-cache manager gives layers of different attention kinds separate groups -- Gemma-2: the sliding-window

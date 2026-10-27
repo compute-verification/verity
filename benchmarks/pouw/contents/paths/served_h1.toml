@@ -1,0 +1,4 @@
+order = 141
+path = "`served_h1/`"
+runs_on = "1 GPU (node 2)"
+what = "Receipts beside the GEMM, not useful-work credit: a padded static H1 + fx1 window, `eps1-sm120-h1fx1`'s receipts computed beside each int8-exact linear of a served Llama prefill, on the served A and B, and committed (`receipts.py`, `serve.py`)"

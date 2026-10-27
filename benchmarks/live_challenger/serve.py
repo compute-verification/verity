@@ -14,7 +14,8 @@ log signed when the session ends.
   `--out` is refused, since a run's `out/` is published.
 - **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
-  answer starts no session.
+  answer starts no session, and neither does one whose source no claim instance names (`challenger.served_claim`: A3's
+  is `uniform/io-getrandombytes`).
 - **The session.**  `--session` is the id the auditor launched it under, which the auditor's signed ledger opens for
   its window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
   `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
@@ -56,7 +57,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import ChallengerKey, CoinError, LiveChallenger  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+                                                             served_claim)
 from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
@@ -186,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         secret = read_secret(args.secret_file)
         params = lms.DEPLOYED if args.params is None else lms.Params(64, *map(int, args.params.split(",")))
+        served_claim(V.coins)
         challenger = LiveChallenger(args.scheme, args.epoch, args.families, V.coins)
         ssh = peer_ssh(args.peers, args.peer) if args.peer else None
         out.mkdir(parents=True, exist_ok=True)

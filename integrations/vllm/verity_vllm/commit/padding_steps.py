@@ -1,4 +1,4 @@
-"""Padding steps -- the INACTIVE rows of a padded Commit, synthesized by ENABLEMENT at finalize (R17-43 explicit enablement; LIFTING-SPEC
+"""Padding steps -- the INACTIVE rows of a padded Commit, synthesized by ENABLEMENT at finalize (explicit enablement; LIFTING-SPEC
 v0.7 A9.3 / B8 / B9; PADDED-TABLE candidates #3 / #4 `smollm2` earlystop / mixedstop).  One rule, two consumers:
 
   * the pod committer (`native_host.finalize`): after the run's executed steps are folded, the padding steps of every request are appended
@@ -13,7 +13,7 @@ v0.7 A9.3 / B8 / B9; PADDED-TABLE candidates #3 / #4 `smollm2` earlystop / mixed
 The rule (SPEC A9.1 N2, A9.3, B9 R4'): request r's Program owns steps [arrival, arrival + cap); its EXECUTED PREFIX of record is
 `executed_prefix_of_record` (moe's rule: declared LAG + served tokens + declared EOS, never inferred from the trace); every identity the
 manifest requires of r at a step >= arrival + executed_prefix_len is ⊥ BY ENABLEMENT (the step's call has `a_c = Active(0)`): its committed
-word is the canonical ⊥ of the lifted width, `1 || 0^w`, in the lifted representation (A11 / R17-6: the TRUE lifted width w+1, no split to
+word is the canonical ⊥ of the lifted width, `1 || 0^w`, in the lifted representation (A11: the TRUE lifted width w+1, no split to
 fit 32 bits) -- a bf16 element (w = 16) is the u32 word 0x0001_0000, a 32-bit element (u32 / i32 / f32) the u64 word 1 << 32, a 64-bit
 element (i64 token id) the 16-byte word 1 << 64.  The synthesized stream of a padding step is tensor-major in the manifest's identity
 order, chunked into `chunk`-byte `pos_leaf` leaves and folded with the production rule (`scheme.fold_levels`); the step root is
@@ -33,8 +33,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
-from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
+from verity_vllm.commit.executed_prefix import executed_prefix_of_record, request_steps_of_record
 from verity_vllm.commit import scheme
+from verity_vllm.commit.opened import ORDINAL_SEP
+from verity_vllm.records.declared_stop import DeclaredStop
+from verity_vllm.records.fields import RecordError
+from verity_vllm.records.served_tokens import ServedTokens
 
 PADDING_RULES_VERSION = "padded-v1"                 # LIFTING-SPEC v0.7 B8: the padded request Program's rules version
 PADDED_MAP_SCHEMA = "padded-binding-map/1"
@@ -107,7 +111,7 @@ PADDING_NAME_SUFFIX = "/bot"
 
 def padding_tensor_name(op_path: str, member: str, request_id: str) -> str:
     """The name of the PADDING tensor that materializes identity (request_id, op_path, member): the executed member's name + `/<rid>/bot`
-    (a shared plane's member already reads `<rid>/<g...>/bot`, kept).  A padding tensor is its OWN tensor (revb F-r17b-66): at a MIXED
+    (a shared plane's member already reads `<rid>/<g...>/bot`, kept).  A padding tensor is its OWN tensor: at a MIXED
     step it sits beside the executed member of the same identity name, and a committed reader asked for the executed member by its bare
     name must find ONE meta (S-r17b-19 n3: two metas under one name -> None) -- on the first #4 pod run the padding tensor carried the
     executed name and the C2 boundary linkage read `model.embed_tokens/in` at every mixed step as 'not retained' (24/44 linked)."""
@@ -118,11 +122,11 @@ def padding_tensor_name(op_path: str, member: str, request_id: str) -> str:
 
 
 def member_plane_identity(shared: dict[str, Any], rid: str, engine_step: int, arrival: int) -> dict[str, Any]:
-    """[B9.1 (1) rule (a); revb F-r17b-64] The ⊥ per-sequence plane of a listed member INACTIVE at a B>1 shared hidden launch row.
+    """[B9.1 (1) rule (a)] The ⊥ per-sequence plane of a listed member INACTIVE at a B>1 shared hidden launch row.
     The launch row (`request_id "*"`, `requests` listed, `engine_step` e) is the manifest's PACKING of the members' own attention rows at
     e; the tap commits per-sequence planes.  An executing member requires the launch's whole stream at e (binding.coverage_check,
     `LaunchIdentity`), an inactive one a plane of that op at e bound to it (op-level, this ⊥ plane).  A member
-    the executed prefix of record places OUTSIDE e has that call disabled for its sequence (R17-43): its plane is a required value, ⊥ of
+    the executed prefix of record places OUTSIDE e has that call disabled for its sequence: its plane is a required value, ⊥ of
     the plane's committed dtype, SIZED BY THE MEMBER'S OWN single-sequence geometry (the Program's Attention row for that request alone),
     never by the executed launch (whose shape is the other members' business):
       `members_geometry[rid]` on the row (the manifest declares it)        -> `geometry_source: declared`
@@ -403,7 +407,7 @@ def padded_binding_map_of_committer(com: Any, run: Any, program_digest_hex: str,
     (the refold, for a mixed step), `activity` on every entry, digest over the entries.  `build_kw` = build_binding_map's keyword arguments
     (request_rows, request_id, rank, layout_version, chunk, weight_registration, collector).  `program_rules_version`: the Program of
     record's (a Program whose digest carries the padding declaration is `padded-v1`; an ordinary Program's is None -- the padding rule is
-    named separately as `padding_rules_version`, never stamped on the Program: R17-42)."""
+    named separately as `padding_rules_version`, never stamped on the Program)."""
     from verity_vllm.commit.binding import build_binding_map
 
     pads: dict[int, PaddingStep] = dict(getattr(com, "_padding", {}) or {})
@@ -457,7 +461,8 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     rd = Path(record_dir)
     man = json.load(gzip.open(rd / "manifest.json.gz", "rt"))
     bmap = json.load(gzip.open(rd / "commit" / "binding_map_p0.json.gz", "rt"))
-    wp = json.loads((rd / "build_workload" / "workload_program.json").read_text())
+    wp_path = rd / "build_workload" / "workload_program.json"
+    wp = json.loads(wp_path.read_text())
     reqs = wp.get("requests") or []
     ids = man["identities"]
     pdg = bmap["program_digest"]
@@ -466,11 +471,14 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     geo = geo_digest or hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest()
 
     # the executed prefix of record: declared LAG + declared EOS + the served tokens the record carries (never inferred from the trace)
-    lag = (wp.get("lag") or {}).get("value")
+    try:
+        stop, served = DeclaredStop.of(wp, str(wp_path)), _served_tokens_of_record(rd, wp)
+    except RecordError as e:
+        return {"ok": False, "why": f"executed prefix of record not placeable: {e}", "executed_prefix": None}
+    lag = stop.declared_lag
     caps = {str(r.get("request_id", f"r{i}")): int(r.get("cap") or r.get("max_tokens") or 0) for i, r in enumerate(reqs)}
     arrivals = {str(r.get("request_id", f"r{i}")): int(r.get("arrive_step", 0) or 0) for i, r in enumerate(reqs)}
-    eos = (wp.get("stop_rule") or {}).get("eos_token_ids")
-    served = _served_tokens_of_record(rd, wp)
+    eos = stop.stop_rule.eos_token_ids if stop.stop_rule is not None else None
     epr = executed_prefix_of_record(list(caps), served, caps=caps, eos_of_record=eos, lag=lag)
     if not epr["ok"]:
         return {"ok": False, "why": "executed prefix of record not placeable: " + "; ".join(epr["problems"]), "executed_prefix": epr}
@@ -610,7 +618,7 @@ SIZING_RULE = ("S-r17b-67 C1 (revb M-1429): a bot plane's element count must equ
 
 
 def bot_plane_sizing(pads: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """[revb S-r17b-67 C1, M-1565 (4)] How the ⊥ planes of a shared-plane family were SIZED, counted on the record (the padded map is an
+    """[S-r17b-67 C1] How the ⊥ planes of a shared-plane family were SIZED, counted on the record (the padded map is an
     excluded artefact; `geometry_source` lives per entry and never reached runs.jsonl / the README before this): the histogram of
     `geometry_source` over the family's bot-by-enablement entries, the per-sequence geometry names (`g<HB>x<M>x<NB>[x<BN>x<D>]`, from the
     entry's `identity.output_member`) and the words per plane, plus `all_declared` -- the C1 label the PADDED-TABLE cell must carry."""
@@ -633,15 +641,13 @@ def bot_plane_sizing(pads: Iterable[dict[str, Any]]) -> dict[str, Any]:
 
 
 def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, epr: dict[str, Any], *, max_report: int = 8) -> dict[str, Any]:
-    """[revb M-1419 (1), sign-against for fix (a); reqval M-1318 third consumer] Rewrite a `sampled_replay` result of a PADDED Commit into the
+    """[sign-against for fix (a); the required values' third consumer] Rewrite a `sampled_replay` result of a PADDED Commit into the
     padded record's population: the identities the replay classified `not_executed_by_rule` (request-relative steps >= n_exec: they left the
     pool before any draw -- the same identities the padding materialised) become `population.inactive_by_enablement`, `not_executed_by_rule`
     reads n 0 with `renamed_to`; then (i) EVERY bot-by-enablement entry of the map is read back through `committed` (`<name>#ord<ordinal>`: a
     padding tensor beside an executed one of the same name at a mixed step) and checked word for word == bot_word(committed_dtype); (ii) the
     ONE-MECHANISM reconciliation, kept: the Commit's padding classification (entries by family) against the population's inactive bucket by
     family -- equal or a named problem.  Returns the record block (`ok`, the counts, the problems); mutates `sr` in place."""
-    from verity_vllm.check import oracle_compare as _OC
-    ordinal_sep = getattr(_OC, "ORDINAL_SEP", None)                 # moe F-moe-r17-06 (int-8): `<name>#ord<k>` names the k-th meta of a step exactly
     pop = sr.setdefault("population", {}) if isinstance(sr.get("population"), dict) else sr.setdefault("population", {})
     ne = dict(pop.get("not_executed_by_rule") or {})
     n_ne = int(ne.get("identities") or 0)
@@ -666,11 +672,6 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
         holder_f["inactive_by_family"], holder_f["not_executed_by_family"] = holder_f["not_executed_by_family"], {}
     # (i) the word check over every padding entry of the map
     pads = [e for e in bmap.get("entries", []) if e.get("activity") == "bot-by-enablement"]
-    names_at: Counter = Counter()                                         # same-name metas of a step (a mixed step's executed + padding tensor)
-    for e in bmap.get("entries", []):
-        st_e = (e.get("identity") or {}).get("step") if isinstance(e.get("identity"), dict) else None
-        if e.get("name") is not None and isinstance(st_e, int):          # a registered input / weights entry has no per-step name
-            names_at[(int(st_e), str(e["name"]))] += 1
     checked = words = 0
     mismatches: list[dict[str, Any]] = []
     unread: list[dict[str, Any]] = []
@@ -689,12 +690,7 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
         bd["padding_entries"] += 1
         bd["members"].add(str((e.get("identity") or {}).get("output_member") or "?"))
         st = int(e["identity"]["step"])
-        if ordinal_sep is not None:
-            got = committed(st, f"{e['name']}{ordinal_sep}{int(e['tensor_ordinal'])}", 0, int(e["width_bytes"]))
-        elif names_at[(st, str(e["name"]))] == 1:                    # an older reader: the bare name is exact only when it names ONE meta of the step
-            got = committed(st, str(e["name"]), 0, int(e["width_bytes"]))
-        else:
-            got = None                                               # two metas of the name (a mixed step) and no ordinal naming: unread, named
+        got = committed(st, f"{e['name']}{ORDINAL_SEP}{int(e['tensor_ordinal'])}", 0, int(e["width_bytes"]))
         if got is None:
             if len(unread) < max_report:
                 unread.append({"step": e["identity"]["step"], "name": e["name"], "ordinal": e["tensor_ordinal"]})
@@ -760,7 +756,7 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
 
 
 def padding_vs_oracle(pp: dict[str, Any], oc: dict[str, Any] | None, bmap: dict[str, Any]) -> dict[str, Any]:
-    """[revb S-r17b-70 C3, M-1495] the TWO documents of a padded record agree on ONE number: `oracle_compare.padding` (the entries the oracle
+    """[S-r17b-70 C3] the TWO documents of a padded record agree on ONE number: `oracle_compare.padding` (the entries the oracle
     stated apart as padding, per Q(P) family, with their (step, request) pairs) == `padded_population`'s inactive stratum (the Commit's
     padding entries per family, read back as bot words) == the padded map's own `bot-by-enablement` entries -- and the padding pairs are
     exactly the (step, request) pairs with NO executed entry (a request is active or inactive at a step, never both).  Agreement is what
@@ -869,15 +865,14 @@ def coverage_over_manifest(identities: list[dict[str, Any]], bmap: dict[str, Any
 def _served_tokens_of_record(rd: Path, wp: dict[str, Any]) -> dict[str, list[int]] | None:
     """The served tokens of record per request: the Match capture's `tokens.json` (`generated_token_ids` per request, the same source
     reqval's sampled replay names as `a_r_source`), mapped to `r<k>` by the workload Program's request-id convention.  The commit's
-    `runs.jsonl` generated_tokens is a length-only witness and is NOT accepted: the stop rule needs the last token id."""
+    `runs.jsonl` generated_tokens is a length-only witness and is NOT accepted: the stop rule needs the last token id.  A `tokens.json`
+    missing a field every writer writes is refused (`RecordError`, naming the file and the field)."""
     p = rd / "match" / "capture" / "tokens.json"
     if not p.exists():
         return None
-    d = json.loads(p.read_text())
     ids = ((wp.get("request_ids") or {}).get("workload_request_ids") or {})       # r<k> -> engine request id
     back = {v: k for k, v in ids.items()}
     out: dict[str, list[int]] = {}
-    for i, r in enumerate(d.get("requests") or []):
-        rid = back.get(r.get("request_id"), f"r{i}")
-        out[rid] = [int(x) for x in (r.get("generated_token_ids") or [])]
+    for i, r in enumerate(ServedTokens.load(p).requests):
+        out[back.get(r.request_id, f"r{i}")] = [int(x) for x in r.generated_token_ids]
     return out or None

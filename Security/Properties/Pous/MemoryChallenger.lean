@@ -16,7 +16,7 @@ published before it and the coin openings. No statement takes an assumption: the
 Neither says the signer signed: the conclusion is that the signature verifies, not that it was made by the key's holder.
 `VerdictSigned` and `JudgeSigned` say it: the accepted session is one the memory challenger holding its key ran,
 recorded and timed itself, or the run's own data carries a break (an LMS forgery, or a SHA-512 collision). All four are
-proved (`Properties.Proofs.Pous.MemoryChallenger`).
+proved (`Proofs.Properties.Pous.MemoryChallenger`).
 -/
 
 namespace MemoryChallenger.Properties

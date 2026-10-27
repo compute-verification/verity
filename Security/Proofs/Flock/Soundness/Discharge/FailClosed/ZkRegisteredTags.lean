@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a draw,
 each table's statement is drawn from the population the statement check loads (`pubZ I`), and drawing keeps its tables
 (`Layout.drawn_spec`), so `pubZ I` is a shared-row file (`tables_of_acceptsZKR`). The statement check passes a shared-row
-file only at `zk && hiddenOutputs && registered` (`Checks.tables`, `ProvedScope.sharedRowsOk`):
+file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.tables`, `ProvedScope.sharedRowsOk`):
 
 * `not_scopeZ_of_acceptsZKR`: no such outcome passes `ScopeZ`, the check without `--registered`;
 * `hidden_of_acceptsZKR`, `tagsOkZHJ_of_acceptsZKR`: at one that passes `ScopeZR`, the statement has hidden outputs, and
@@ -71,7 +71,7 @@ theorem not_scopeZ_of_acceptsZKR (hd : recordDraw t.record = some d) (h : Accept
 theorem hidden_of_acceptsZKR (hs : ScopeZR I) (hd : recordDraw t.record = some d) (h : AcceptsZKR I own t) :
     I.tags.hiddenOutputs = true := by
   obtain ⟨tb, htb⟩ := tables_of_acceptsZKR hs hd h
-  rcases Checks.tables hs with hn | ⟨-, hh, -⟩
+  rcases Checks.tables hs with hn | ⟨hh, -, -⟩
   · exact absurd (hn.symm.trans htb) (by simp)
   · exact (zkTags_hiddenOutputs I).symm.trans hh
 

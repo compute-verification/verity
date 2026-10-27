@@ -37,6 +37,31 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
     assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-3)
 
 
+def test_the_residual_charges_pouws_deficit_on_the_certified_work():
+    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds (#3646): a certificate
+    that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
+    the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
+    p = T.DEFAULTS | {"residual": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
+    C = p["nodes"] * p["node_flops"] * p["years"] * T.YEAR
+    W_cert = (1 - T.audited_residual(p)) * C
+    assert W_cert == pytest.approx(C / 2, rel=1e-12)
+    lean = (1 - W_cert / C) + p["eps_w"] * W_cert / C + p["eps_agg"]
+    assert lean == pytest.approx(0.511, rel=1e-12)
+    assert T.residual_share(p) == pytest.approx(lean, rel=1e-12)
+    assert T.residual_share(p) - T.residual_share(p | {"eps_w": 0.0}) == pytest.approx(0.01, rel=1e-9)
+    assert T.residual_share(p | {"residual": 0.8}) == 1.0
+    lagless = p | {"lag_s": 0.0}
+    assert T.evaluate(lagless, T.TIERS["T1"])["residual"] == pytest.approx(0.511, rel=1e-3)
+
+
+def test_the_gpus_residual_leaves_pouws_deficit_to_eps_w():
+    """The C7 dossier's GPU residual 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
+    takes PoUW's deficit off the credited time; `eps_w` charges it in `residual_share`, so the default is that form at
+    ε = 0 (0.323 at the locked clock, against C7's 0.326 at its ε = 0.54%), and the deficit is charged once."""
+    q_sched, q_clock, phi = 1.482, 1.162, 0.345
+    assert T.DEFAULTS["residual"] == pytest.approx(1 - ((1 - phi) / q_sched + phi) / q_clock, abs=5e-4)
+
+
 def test_unmonitored_compute_trains_at_full_efficiency():
     r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
     assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
@@ -51,8 +76,8 @@ def test_the_residual_voids_the_partial_sum_law():
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "unmonitored": 0.0,
-                      "lag_s": 0.0, "kappa_chain": 0.0695}
+    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0,
+                      "unmonitored": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
@@ -253,7 +278,7 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "Security" / "Models" / "Nci"
+    nci = ROOT / "Security" / "Definitions" / "Nci"
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated

@@ -16,8 +16,9 @@ real frames or another list (too many, a frame of another size), every k to open
 on each opening and on tampered ones (a byte of the frame, the root or a sibling flipped, another k, k past 2^D or
 negative, a path one short or one long, a frame of another size), heads as `record_head` gives them and with a field out
 of range (counts, the window, T, τ_b, a digest's length, a link past 2^16 bytes), links with non-ASCII and control
-characters, and certificate messages with every field valid and each made invalid (sessions of 31 and 33 bytes among
-them).
+characters, signed digests (`certificate_digest`) of the record's digest under drawn salts, and of other lengths, and
+certificate messages over the signed digest with every field valid and each made invalid (sessions of 31 and 33 bytes
+among them).
 """
 from __future__ import annotations
 
@@ -214,7 +215,7 @@ def _heads(rng: random.Random, base: dict) -> list[dict]:
 
 def _messages(rng: random.Random, key_id: bytes, session: bytes, link: str, direction: Direction, window: int,
               digest: bytes | None) -> list[list]:
-    """`certificate_message` on the record's digest, and with one field changed, in range or out of it: a session of 31
+    """`certificate_message` on the signed digest, and with one field changed, in range or out of it: a session of 31
     or 33 bytes among them, which Python and Lean must both refuse."""
     digest = digest if digest is not None else rng.randbytes(64)
     out = [[key_id, session, link, direction, window, digest]]
@@ -267,8 +268,12 @@ def instance(seed: int) -> tuple[dict, dict]:
             "parameters": parameters, "counts": list(head.counts) if head else [0] * p.buckets,
             "root": head.root if head else rng.randbytes(64)}
     heads = _heads(rng, base)
-    digest = None if head_result is None else bytes.fromhex(head_result[1])
-    messages = _messages(rng, key_id, session, link, direction, window, digest)
+    record = bytes.fromhex(head_result[1]) if head_result is not None else rng.randbytes(64)
+    digests = [[rng.randbytes(cert.SALT_BYTES), record]] + [
+        [rng.randbytes(rng.choice([0, 63, 64, 65])), rng.randbytes(rng.choice([0, 64, 65]))]
+        for _ in range(rng.randint(0, 2))]
+    signed = cert.certificate_digest(*digests[0]) if head_result is not None else None
+    messages = _messages(rng, key_id, session, link, direction, window, signed)
     nodes = [[rng.randbytes(rng.choice([0, 1, 63, 64, 65, 130])), rng.randbytes(rng.choice([0, 64, 200]))]
              for _ in range(rng.randint(0, 2))]
     manifest = {
@@ -282,6 +287,7 @@ def instance(seed: int) -> tuple[dict, dict]:
         "grid": [[_hex(x) for x in row] for row in grid], "frames": [f.hex() for f in frames],
         "link": link, "direction": direction.value, "window": window, "status": status, "deadline": deadline,
         "opens": ks, "verifies": verifies, "heads": [_head_json(h) for h in heads],
+        "digests": [[salt.hex(), r.hex()] for salt, r in digests],
         "messages": [[i.hex(), s.hex(), l, d.value, w, g.hex()] for i, s, l, d, w, g in messages],
         "nodes": [[a.hex(), b.hex()] for a, b in nodes]}
     d = cert.depth(p)
@@ -294,6 +300,7 @@ def instance(seed: int) -> tuple[dict, dict]:
                      for r, k, f, path in verifies],
         "manifest": canonical_json_bytes(manifest).decode(), "parameters": parameters.hex(),
         "record_head": head_result, "heads": [_head_result(h) for h in heads],
+        "digests": [cert.certificate_digest(salt, r).hex() for salt, r in digests],
         "messages": [_hex(_maybe(cert.certificate_message, i, s, l, d_, w, g)) for i, s, l, d_, w, g in messages],
         "nodes": [cert.node(a, b).hex() for a, b in nodes]}
     return inst, results

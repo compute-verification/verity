@@ -1,7 +1,8 @@
 {
  "definitions": {
   "MoeSelectBf16x3_v2": {
-   "and": 93
+   "and": 93,
+   "type": "51715ca44b1fffc2421182f74d2b6c9b8e435830982d68b576b85ca48a8fb2c595d8f1b0f2b2c27d607500709e24bed456cf1fa92505ae47151ac74d83021693"
   }
  }
 }

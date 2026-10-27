@@ -4,7 +4,7 @@ import Definitions.Accounting.TS.Sheet
 /-!
 # Exact data for a headline instance (trusted)
 
-A family's headline guarantee (`Models.Accounting.Guarantees.Headline`) is about one device's machine, one design's TS
+A family's headline guarantee (`Definitions.Accounting.Guarantees.Headline`) is about one device's machine, one design's TS
 model on it and its floor program ♭, each given as exact data the machine model's exporter writes
 (`benchmarks/pouw/lean_headline.py`): natural numbers and rationals, never a float.
 

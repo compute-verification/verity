@@ -240,7 +240,7 @@ def test_the_run_reserves_its_memory_and_sizes_its_workers_to_it(tmp_path, monke
 
 def test_a_landing_gets_its_label_and_a_dry_run_writes_none(tmp_path, monkeypatch):
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
-    assert PT.main(["--cores", "96-127"]) == 1
+    assert PT.main(["--cores", "0-31"]) == 1
     assert ("data", "label", "r20261003-145201-e806", "note", "regression fail:r39", "--by", "regression",
             "--ref", _launched(calls)) in calls
     calls, _ = _fake_landing(tmp_path / "dry", monkeypatch, None)

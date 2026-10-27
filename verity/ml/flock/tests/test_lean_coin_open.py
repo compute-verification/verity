@@ -1,6 +1,6 @@
 """The coin tree's opening checks in Lean (`Flock/Firewall/Coins.lean`, `flock-firewall coins`), the verdict a firewalled
-prover's checked transport takes for every coin it hands on (`coin_tree::Checked::with_lean`), on
-`live/src/coin_open_vectors.json`, which coin_tree.rs's test holds Rust's `Checked` to: docs/coin-tree-v2.md §9's tree, its
+session loop takes for every coin it hands on, on `live/src/coin_open_vectors.json`, which coin_tree.rs's test holds
+Rust's `Checked` (an unfirewalled `--zk` prover's) to: docs/coin-tree-v2.md §9's tree, its
 honest openings and altered ones (a bit of a coin, of `T_n`, of the salt or of a path node; a word short or long; another
 round's, stream's or count's opening; past the block or the schedule; another nonce, key or root; a malformed answer or
 `Hello`). Lean hands on the coins Rust does and refuses with Rust's reason, word for word. The session stream's count is

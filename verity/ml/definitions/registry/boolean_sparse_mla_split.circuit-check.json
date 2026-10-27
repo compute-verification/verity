@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "F32GtZeroFtz_v2": {
+   "and": 35,
+   "type": "9c8b4332f01e7850a92d5657987b273b55ad0f6f77191a693f811e7c2f458907f8180f8240034800acbd7d93b3dd35e6f684140313e2193e69e3b367b7a8fad8"
+  },
+  "F32NeZeroFtz_v2": {
+   "and": 34,
+   "type": "cce59eef31b5224c4efd9c08de79be61d4aa6d0a56b243e49333b922e33a867153de77701f5af4302bf9a10b963917b7492f05c686b76dde0637602d64718bb8"
+  },
+  "MufuLg2Ftz_v2": {
+   "and": 1171,
+   "type": "33e328179c1d7e3d6c23febc6e2d1bc0f0b30f674b30c67624b0d3aaed7bcdf383b97c279e4b1bc0120b4716f062adda97f2292e1c46cfa3e45d6d12103c7d57"
+  },
+  "SparseMlaSplitEnd_v2{DV=16,INV=Fa3InvSum_v2,SCALE=0.0625}": {
+   "and": 48677,
+   "type": "823878dfe6ca192e865843fcf3cc3453b1b9fd966fd36e2cda989a3e3007f16b8372da9fc250f309570470c2205c2577a92eb5f236861206cc1765aead7ed89a"
+  }
+ }
+}

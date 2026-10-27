@@ -8,7 +8,7 @@ and the draw's other bindings as context:
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
 * the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
-  proof-unit draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
+  proof-block draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
@@ -50,13 +50,13 @@ class NoRunRoot(ValueError):
 
 
 def run_root_of(run: Any) -> bytes:
-    """``run``'s root (a `committer_api.RunCommitment`), the one its challenge derives from.  A run with a step its committer
-    did not commit (a placeholder root, the step's error in ``run.extra["errors"]``) has none: `NoRunRoot`, naming those
-    steps and the first error."""
+    """``run``'s root (a `committer_api.RunCommitment`: rows-sha512's 64 bytes, or vllm-v1's 32), the one its challenge
+    derives from.  A run with a step its committer did not commit (a placeholder root, the step's error in
+    ``run.extra["errors"]``) has none: `NoRunRoot`, naming those steps and the first error."""
     root = bytes(run.run_root)
-    if len(root) == 32:
+    if len(root) in (32, 64):
         return root
-    bad = [s.step for s in run.steps if len(s.root) != 32]
+    bad = [s.step for s in run.steps if len(s.root) not in (32, 64)]
     errors = list((run.extra or {}).get("errors") or [])
     raise NoRunRoot(f"no run root: {len(bad)} of {len(run.steps)} steps not committed (steps {bad[:8]}"
                     f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")

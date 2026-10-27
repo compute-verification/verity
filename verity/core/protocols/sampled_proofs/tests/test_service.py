@@ -57,7 +57,7 @@ def _stream(spec=None, budget=2, clock=None, coins=b"\x07", sampler=None) -> S.S
 
 def _ports(n: int) -> dict:
     part = P.partition(P.population_program(PAIR, n), QUERY)
-    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
+    return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
@@ -197,6 +197,24 @@ def test_the_rule_refuses_an_unsalted_digest():
             S.Value("x", schema, "serve")
     with pytest.raises(ValueError, match="service's"):
         S.Value("W", SCHEMA, "epoch", registered=True)
+
+
+def test_a_tree_over_roots_names_its_hiding_leaves_and_the_digest_binds_them():
+    """A row-table window's `row-table` port is a tree over roots (`ROOTS`), hiding through its trees' leaves: its Value
+    names their schema (`over`), a hiding one, and the Spec's digest binds it. A `ROOTS` value without `over`, an `over`
+    that isn't hiding, and an `over` on any other value are refused."""
+    table = S.Value("row-table", S.ROOTS, "serve", over="hm96-sha512/row-seg/v1")
+    assert table.to_json()["over"] == "hm96-sha512/row-seg/v1" and "over" not in VALUES[0].to_json()
+    digests = {_spec(values=(*VALUES, S.Value("row-table", S.ROOTS, "serve", over=o))).digest()
+               for o in ("hm96-sha512/row-seg/v1", "hm96-sha512/row/v2")}
+    assert len(digests | {_spec().digest()}) == 3
+    for over in (None, "sha512/row/v2", "frame-v3-sha512/root/v1", ""):
+        with pytest.raises(ValueError, match="over"):
+            S.Value("row-table", S.ROOTS, "serve", over=over)
+    with pytest.raises(ValueError, match="only a tree over roots"):
+        S.Value("x", SCHEMA, "serve", over="hm96-sha512/row-seg/v1")
+    with pytest.raises(ValueError, match="only a tree over roots"):
+        S.Value("W", None, "epoch", registered=True, over="hm96-sha512/row-seg/v1")
 
 
 def test_the_rule_refuses_a_public_kind_outside_the_four():

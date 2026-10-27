@@ -1,5 +1,5 @@
-"""`requirement_units`: the plan unit and the memory-map unit on a toy decoder's requirement (eight weight blocks, the last read
-only through step 1, a gathered table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a
+"""`requirement_units`: the plan unit and the memory-map unit on a toy decoder's requirement (eight weight blocks, the last
+read only through step 1, a gathered table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a
 layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; the sharded plan
 unit on a store of weights, a gathered table and filler past one shard; each clause's negative refused; and a re-key at the
 lifetime cap, one pass a window, accepted, and one window early refused."""
@@ -28,7 +28,7 @@ VW = RU.value_bits(MAP.SLOTS)
 PASSES = [(s, s) for s in range(STEPS)]
 PI, LIFE = RU.pass_words(MAP, PASSES), 2
 WEIGHTS = list(range(8))
-#: a weight block only the first steps read (an expert's): its registered block is freed at its last read
+#: a weight block only the first steps read (an expert's): its registered block is freed at its last structural reader
 READ_UNTIL = {7: 1}
 TABLE = list(range(8, 24))
 #: request: (its steps, the table row it gathers at each); C is paused at step 2
@@ -65,7 +65,7 @@ def toy():
 
 
 def spread(req: R.Requirement, packed: R.Layout, positions):
-    """Each written value alone in a fresh block of its step, slot 0, freed at its last read."""
+    """Each written value alone in a fresh block of its step, slot 0, freed at its last structural reader."""
     block, offset = dict(packed.block), dict(packed.offset)
     written, freed, payload, j = {}, {}, {k: v for k, v in R.pack(req)[1].payload.items() if k < MAP.N}, MAP.N
     for v in positions:
@@ -138,7 +138,7 @@ def ref_map(a) -> int:
 def test_the_toy_is_what_the_units_cover(case) -> None:
     """Both layouts are honest (`store_matches` and `plan_matches` at every step), the spread one's blocks are half empty, and
     each step's plan is its weights, its gathered rows' blocks and its written values' blocks: C's block is resident at step
-    2, when C is paused, and no plan holds it. Weight block 7 is freed at step 1, its last read, in both stores and in the map
+    2, when C is paused, and no plan holds it. Weight block 7 is freed at step 1, its last structural reader, in both stores and in the map
     row, the only registered free before the last step."""
     req = case.req
     for layout, store in case.layouts.values():
@@ -171,7 +171,7 @@ def test_each_step_s_honest_memory_map_is_accepted(case) -> None:
 
 def test_a_plan_with_a_wrong_block_is_refused(case) -> None:
     """A plan holding a block the step doesn't read (a paused request's, a table block no gather selects, a registered block
-    past its last read), missing one it reads, out of order, or past its count returns 0, and so does a gather outside the
+    past its values' last structural reader), missing one it reads, out of order, or past its count returns 0, and so does a gather outside the
     table. The unit asks for exactly the blocks the step reads, which implies `plan_matches`: that one-sided link refuses
     the plans missing a block the step reads and allows the extra blocks as filler."""
     req, (layout, _store) = case.req, case.layouts["spread"]
@@ -206,11 +206,11 @@ def _phi(a, j, write=None, free=None):
 
 @pytest.mark.slow
 def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
-    """A payload that doesn't carry its value, a free after its values' last read (late) or before it (early), of a written
-    block or of a registered one (weight block 7, whose last read is step 1), a write at another step, a block written empty,
+    """A payload that doesn't carry its value, a free after its values' last structural reader (late) or before it (early), of a written
+    block or of a registered one (weight block 7, whose last structural reader is step 1), a write at another step, a block written empty,
     nonzero bits in an empty slot, two values in one slot, a value outside the step's blocks: each returns 0 as the reference
     does. The early frees and the mismatch each break `store_matches` at a step, and the late frees don't: the one-sided
-    link allows a block resident past its values' last read."""
+    link allows a block resident past its values' last structural reader."""
     req = case.req
     layout, store = case.layouts["spread"]
     t = 0
@@ -393,13 +393,13 @@ def test_the_shard_s_search_covers_its_band(shard_unit) -> None:
     assert got[:6] == [1, 0] * 3 and 0 < sum(got[6:]) < 64
 
 
-#: the re-key: written value 0 (A's step-0 value, block N since step 0, last read 3) moves at step 2
+#: the re-key: written value 0 (A's step-0 value, block N since step 0, last structural reader 3) moves at step 2
 MOVED, AT = 0, 2
 
 
 def rekeyed(case, life, moved=MOVED):
     """The spread layout with written value ``moved`` re-keyed at step 2 into a fresh block N + 5 of step 2 at its slot: its
-    epoch-1 layout entry, its old block freed at 2 and the new one at its last read. Each step's map arguments under the
+    epoch-1 layout entry, its old block freed at 2 and the new one at its last structural reader. Each step's map arguments under the
     lifetime cap ``life`` and the toy's pass row, the layout row and the new block."""
     req, (layout, store) = case.req, case.layouts["spread"]
     v = case.positions[moved]

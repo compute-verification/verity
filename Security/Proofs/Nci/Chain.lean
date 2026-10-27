@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees
+import Definitions.Nci.Guarantees
 import Proofs.Core
 
 /-!

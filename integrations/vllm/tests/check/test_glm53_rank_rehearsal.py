@@ -21,7 +21,7 @@ import pytest
 from tests.observe.test_fold_glm53_defaults import BMM_OUT_SCHEMA, CUDA, FAR_SCHEMA, H200, view
 from verity_vllm.check.match import global_match_fast as GF
 from verity_vllm.check.match import program_compare as CMP
-from verity_vllm.engine.profiles import generic as G
+from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, StorageAlloc, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA
@@ -182,6 +182,7 @@ def _root_names(profile) -> set[str]:
     return {e.name for e in _log(profile) if isinstance(e, Root) and e.role == "weight"}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("form", ["runs", "progressions"])
 def test_a_moduleless_rank_fold_maps_each_layers_weights_apart(rank, form):
     """[04f0af376] Without Root names the moduleless launches hinted every layer's q_a / kv_a / index-K norm and the CUDA norms alike:
@@ -204,6 +205,7 @@ def _verdict(res: dict) -> tuple:
             sorted(collections.Counter(k for s in res["steps"] for k in (s.get("wiring") or {}).get("different_by_spec_arg", {})).items()))
 
 
+@pytest.mark.slow
 def test_the_progressions_compare_reaches_the_runs_verdict(rank):
     """`--operands progressions` (both sides compact, stored as progressions) against the record form: the same verdict on the served
     fold against itself and against the fold whose layer 1 reads layer 0's W_UV (each of its token rows' W_UV operand, and only it,
@@ -252,6 +254,7 @@ def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     assert calls[0] <= first_reads, (calls[0], first_reads)
 
 
+@pytest.mark.slow
 def test_the_dag_hashes_take_one_trie_step_per_weight_progression(rank):
     """[8dec947cf] GM-01's fast DAG hashes walk a compact W_UV read in one trie step per progression (~2048), not per run (131,072 a
     read, ~5e9 steps a rank), and partition the instances as the runs-form load does."""

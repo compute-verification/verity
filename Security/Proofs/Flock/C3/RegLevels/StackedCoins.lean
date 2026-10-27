@@ -125,6 +125,7 @@ theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bou
   split at h
   · cases h
   simp (config := { zeta := false }) only [jpMain] at h
+  obtain ⟨_, -, h⟩ := eok_bind h
   obtain ⟨held, -, h⟩ := eok_bind h
   split at h
   rotate_left

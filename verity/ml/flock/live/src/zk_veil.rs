@@ -348,6 +348,11 @@ impl<C: Challenger> Masking<C> {
                 "masking: {} of {} values absorbed masked", self.at, self.order.len());
         (self.inner, self.coins, self.coins_l0)
     }
+    /// [`Masking::finish`] for a rep the firewall failed, whose rounds from its failure on are the Lean session loop's places
+    /// sent with no device round in them: this challenger absorbed none of their values.
+    pub fn finish_failed(self) -> (C, Vec<F128>, Vec<F128>) {
+        (self.inner, self.coins, self.coins_l0)
+    }
     fn pad(&mut self, v: F128) -> F128 {
         let i = *self.order.get(self.at).expect("masking: more absorbed values than the layout's");
         self.at += 1;

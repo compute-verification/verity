@@ -1,5 +1,5 @@
 """vLLM serving under the remote audit (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
-and `verity_vllm.store.remote.StoreBackend` proving its store to an in-process verifier while it serves a trace of
+and `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proving its store to an in-process verifier while it serves a trace of
 requests, one session a process.  Skipped without vLLM, a GPU, or a `StoreBackend` to import (the vLLM integration's
 remote session)."""
 from __future__ import annotations
@@ -23,9 +23,9 @@ def remote_or_skip():
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
         pytest.skip("no GPU")
-    remote = pytest.importorskip("verity_vllm.store.remote")
+    remote = pytest.importorskip("verity_vllm.protocols.remote_bandwidth.remote")
     if not hasattr(remote, "StoreBackend"):
-        pytest.skip("no StoreBackend in verity_vllm.store.remote")
+        pytest.skip("no StoreBackend in verity_vllm.protocols.remote_bandwidth.remote")
 
 
 def serve(out: Path, plan: str) -> dict:

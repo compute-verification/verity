@@ -430,7 +430,7 @@ def _record(rec: dict) -> None:
         f.write(json.dumps(rec, default=str) + "\n")
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c.id for c in CASES])
+@pytest.mark.parametrize("case", [pytest.param(c, marks=pytest.mark.slow) if c.id == "gpt2_greedy_f32" else c for c in CASES], ids=[c.id for c in CASES])
 def test_transfer_case(case: Case):
     torch.manual_seed(0)
     module = case.make().eval()
@@ -515,7 +515,7 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
         pytest.skip("derive() not available")
     from verity_vllm.program.frontend import derive_examples as dex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.registry.b1 import B0_CONFIG
+    from verity.ml.definitions.registry.b1 import B0_CONFIG
     from tests.program.test_derive_negative import check_cache_ownership, check_cache_ownership_by_kind
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)

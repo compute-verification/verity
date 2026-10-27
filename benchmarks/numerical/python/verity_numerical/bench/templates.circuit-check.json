@@ -1,74 +1,137 @@
 {
  "units": {
+  "attention-head-v18/d128-bn64/sm120-fa2-bf16-decode": {
+   "and": 8250,
+   "not": 1791,
+   "type": "3b77f5a97e231fe0e72ee4a99558feb5cece3c1109d8ec901207e56f514b2883dd3d6ae86c6877ac93a3fafd8445b5167d977d3c9bd21fe0221e797931b4deb1",
+   "xor": 55973
+  },
+  "attention-head-v18/d64-bn128/sm120-fa2-bf16-decode": {
+   "and": 8250,
+   "not": 1791,
+   "type": "3b77f5a97e231fe0e72ee4a99558feb5cece3c1109d8ec901207e56f514b2883dd3d6ae86c6877ac93a3fafd8445b5167d977d3c9bd21fe0221e797931b4deb1",
+   "xor": 55973
+  },
   "attention-head/d64-bn128/sm80-fa2-bf16": {
    "and": 8660,
    "not": 2041,
+   "type": "2d074a171ff3ad0690ac20308abdfc3b845c97ad11174d305e7c85a72bfa58b732a1d2851a87c40d0b56c2cbba70c72a1af1b11a265bec38fa9c96af01658e07",
    "xor": 55268
   },
   "gemm-coordinate/k64/sm80-mma-bf16": {
    "and": 8660,
    "not": 2041,
+   "type": "2d074a171ff3ad0690ac20308abdfc3b845c97ad11174d305e7c85a72bfa58b732a1d2851a87c40d0b56c2cbba70c72a1af1b11a265bec38fa9c96af01658e07",
    "xor": 55268
   },
   "gemm-coordinate/k64/sm90-wgmma-bf16": {
    "and": 8250,
    "not": 1791,
+   "type": "3b77f5a97e231fe0e72ee4a99558feb5cece3c1109d8ec901207e56f514b2883dd3d6ae86c6877ac93a3fafd8445b5167d977d3c9bd21fe0221e797931b4deb1",
    "xor": 55973
   },
   "gumbel-top-p-token-select/v64/fp32": {
    "and": 5043,
    "not": 1159,
+   "type": "c1533ec5356bfef1b4d47b558a47faa50a14cd520199b49593e31a28dd23a29fca3aa5076f7f9fda1fc40cd87e23e90cd51ea74821a9068e5f2110d24907e393",
    "xor": 44455
+  },
+  "ingress-prompt/m-lp3-v1000/v0": {
+   "and": 2033,
+   "not": 953,
+   "xor": 16200
+  },
+  "ingress-prompt/served-model-lp16-v128256/v0": {
+   "and": 11898,
+   "not": 3075,
+   "xor": 201824
   },
   "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": {
    "and": 3568261,
    "not": 541086,
+   "type": "a655e0fc7facc8221716f9374e7424e327bd8813898d4ba0e30de0c82a77fd0a1dfaf3ff76db793049dec73ef879e584e64a89b326f1055f51c943316485d457",
    "xor": 24958189
   },
   "rmsnorm-cuda-vec8/n6144-b768-eps1e-05/bf16": {
    "and": 3530127,
    "not": 544986,
+   "type": "cc17481e2aa77507b5f0539b079b0a7f5ba895b62de1fbee43d3e3b187238b6566228d93b9bd91e1488834973e55007febdb25fdb16a674c7fe5b05af75613a1",
    "xor": 24510663
   },
   "rmsnorm-fused-cuda-vec8/n6144-b1024-eps1e-05/bf16": {
    "and": 3730671,
    "not": 783258,
+   "type": "374db7c0f478002635dc930ef006f46bf460bc76361d586dadca2ea6c4602d039e57c5d3e8b14b6d2332c2a039acad5a412a56e75e681175fac89cc1d80a362d",
    "xor": 23435751
   },
   "rmsnorm-fused-cuda-vec8/n6144-b256-eps1e-05/bf16": {
    "and": 3732389,
    "not": 783838,
+   "type": "afcb277a1d48e2defea7ef2061e38134d58fc2f95235080f249425a3fe558f3606f3738b7890cace4e89fb9a5abf7d2fe1dffd8148622d270cc7f398945bdef2",
    "xor": 23448397
   },
   "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": {
    "and": 328453,
    "not": 62814,
+   "type": "84ffa578e0b2eb33565d843783f043567e7776fb68ef37a19e1821010ebda2bba7d5127e987ab8fd0beaf8dac77830a6b2aa88c27505443a6d0ff01fa0d8de5e",
    "xor": 2165677
+  },
+  "rmsnorm-triton-v5/n2048-eps1e-05/bf16": {
+   "and": 1176709,
+   "not": 181662,
+   "type": "8f4782f8e410cf8f88ccf161801021339503a8edc9a90b92b5a18687a9ca92e7994b9cb5d808da875d1499e9ccb4c8cd2b4395097daf0f00bf43db4b6351fd96",
+   "xor": 8174317
+  },
+  "rmsnorm-triton-v5/n4096-eps1e-05/bf16": {
+   "and": 1176709,
+   "not": 181662,
+   "type": "8f4782f8e410cf8f88ccf161801021339503a8edc9a90b92b5a18687a9ca92e7994b9cb5d808da875d1499e9ccb4c8cd2b4395097daf0f00bf43db4b6351fd96",
+   "xor": 8174317
   },
   "rmsnorm-triton/n128-eps1e-06/bf16": {
    "and": 148173,
    "not": 22942,
+   "type": "0e426647d7746df778fedf9363be7b2439010abcdb3020a2dee69d5de0b981c60ace5ecf25feeb3de15bf2643fe18dee755270c98a5b4f365f25244f47becc79",
    "xor": 1029829
   },
   "rope-head/d64/neox-bf16": {
    "and": 6036,
    "not": 1031,
+   "type": "8d5d375006b77efab16614c7189e1d8130eb3a4d2ef5e2484b9bc10a3ceffecfa20238ec1cd279c3b6cce6535df443cde65f3b596b042d146c52f00f6fe628f3",
    "xor": 42802
   },
   "silu-mul-v2/i1536/bf16": {
    "and": 1418,
    "not": 250,
+   "type": "565ef3bdfe3581a0b997f7e777ddc5ebb8ad14f3126b37617d41331f0e12b3c57b302e0c557241e80f90350b0ca5dac4a4abce402fa1719a70a885d60b5a798a",
    "xor": 20666
   },
   "silu-mul-v2/i256/bf16": {
    "and": 1418,
    "not": 250,
+   "type": "565ef3bdfe3581a0b997f7e777ddc5ebb8ad14f3126b37617d41331f0e12b3c57b302e0c557241e80f90350b0ca5dac4a4abce402fa1719a70a885d60b5a798a",
    "xor": 20666
   },
   "silu-mul/i8192/bf16": {
    "and": 2633,
    "not": 172,
+   "type": "048c70fee63cce665e48f25d777294126b9abba6a6bf7fc63d8cdc126721742a19cc2995ed272981a8a736f9f74b547e95ba1ee689b0330491edaf4569847a2e",
    "xor": 54087
+  },
+  "token-select-chunk/c64/bf16": {
+   "and": 7347,
+   "not": 8524,
+   "xor": 60581
+  },
+  "token-select-combine/v128256-c64/bf16": {
+   "and": 332633,
+   "not": 281304,
+   "xor": 3209215
+  },
+  "token-select-combine/v200-c64/bf16": {
+   "and": 627,
+   "not": 526,
+   "xor": 5788
   }
  }
 }

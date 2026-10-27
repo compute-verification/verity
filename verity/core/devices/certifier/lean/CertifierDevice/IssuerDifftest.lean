@@ -6,13 +6,18 @@ import CertifierDevice.Difftest
 
 `scripts/issuer_vectors.py` writes instances (an LMS key from a seed, a certifier session's id, 32 bytes or another
 length, and calls to one issuer in that session: a record, its direction, grid parameters, Σ_sync, parameters digest
-and deadline bit, the leaf the host reserves for it or a refusal, and a tamper) and what the checkout's real `certificate.Issuer` does with each, its signer signing at the call's leaf.
+and deadline bit, the salt the issuer's coins give it, the leaf the host reserves for it or a refusal, and a tamper) and what the checkout's real `certificate.Issuer` does with each, its signer signing at the call's leaf.
 `CertifierDevice/IssuerDifftestMain.lean` reads both files and fails unless `evaluate`, which makes the key with
 `Lms.keygen` and threads one `Issuer` through the calls, gives every result exactly: each call's parameters digest
 (`parameters`), and `null` where `Issuer.certify` refuses the record, or the certified record (`null` when the
-reservation is refused) with its head's encoding and digest, its certificate's fields, `CertifiedRecord.verify` under
-the key and after the tamper; and at the end the issuer's `refused`. The Lean audit runs it (`runs` in
-`lean-audit.json`): compiled evaluation, a test and not a proof.
+reservation is refused) with its head's encoding and digest, its salt, its certificate's fields,
+`CertifiedRecord.verify` under the key and after the tamper, and `ClockCertificate.verify` of its certificate passed as
+a clock under the record's salt (`as_clock`); and at the end the issuer's `refused`. A clock call (`clock`: a link, a
+window and a sync, with the salt the issuer's coins give it) is `Issuer.clock` on the same issuer, under the salts its
+earlier clock certificates took: `null` where it refuses the salt, the sync or the link-window, or the clock
+certificate (`null` when the reservation is refused) with its sync, salt and certificate's fields,
+`ClockCertificate.verify` under the key and after the tamper. The Lean audit runs it (`runs` in `lean-audit.json`):
+compiled evaluation, a test and not a proof.
 -/
 
 namespace CertifierDevice.IssuerDifftest
@@ -20,7 +25,7 @@ namespace CertifierDevice.IssuerDifftest
 open Lean Flock
 open NetworkCertifier (Reason Status)
 open NetworkCheck (Direction)
-open CertifierDevice.Difftest (hexJson bytesOf arrOf paramsOf syncSetOf)
+open CertifierDevice.Difftest (hexJson bytesOf arrOf paramsOf syncSetOf syncOf syncJson)
 
 def reasons : List Reason :=
   [.monitorUnavailable, .overflow, .malformed, .dropped, .deliveryRefused, .coverageNeverEstablished]
@@ -49,8 +54,8 @@ def flip (b : ByteArray) (pos : Nat) : ByteArray :=
     b.set! i (b.get! i ^^^ 1)
 
 /-- `verify` after the tamper: the certificate's signature (a byte, or its last byte dropped), link, direction, window or
-digest changed, the head's deadline bit flipped, the public key's identifier or root changed, or the certificate checked
-in another session; or the certificate's link, direction, window or key identifier changed and signed again by `k` at
+digest changed, the head's deadline bit flipped, the record's salt or the public key's identifier or root changed, or
+the certificate checked in another session; or the certificate's link, direction, window or key identifier changed and signed again by `k` at
 leaf `q`. -/
 def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session : ByteArray) :
     String × Nat → Except String Bool
@@ -72,6 +77,7 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session :
       | "window" => pure ({ c with certificate := { x with window := x.window ^^^ 1 } }, pub, session)
       | "digest" => pure ({ c with certificate := { x with digest := flip x.digest pos } }, pub, session)
       | "deadline" => pure ({ c with head := { h with deadline := !h.deadline } }, pub, session)
+      | "salt" => pure ({ c with salt := flip c.salt pos }, pub, session)
       | "public-id" => pure (c, flip id pos ++ root, session)
       | "public-root" => pure (c, id ++ flip root pos, session)
       | "session" => pure (c, pub, flip session pos)
@@ -82,13 +88,47 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session :
       | t => throw s!"no tamper {t}"
     pure (c.verify k.params pub session)
 
-def certifiedJson (c : CertifiedRecord) (verified : Bool) (tampered : Json) : Except String Json := do
-  let x := c.certificate
+/-- `ClockCertificate.verify` after the tamper: the sync's δ (one more), the salt, the certificate's signature, window,
+direction or digest changed, the public key's identifier or root changed, or the certificate checked in another
+session; or the certificate's window, direction or key identifier changed and signed again by `k` at leaf `q`. -/
+def clockTampered (c : ClockCertificate) (k : Lms.PrivateKey) (q : Nat) (pub session : ByteArray) :
+    String × Nat → Except String Bool
+  | (kind, pos) => do
+    let x := c.certificate
+    let id := pub.extract 0 16
+    let root := pub.extract 16 pub.size
+    let other := if x.direction == .egress then Direction.ingress else .egress
+    let resign (y : Certificate) : Except String ClockCertificate := do
+      let m ← NetworkCheck.certificateMessage y.keyId session y.link y.direction y.window y.digest
+      pure { c with certificate := { y with signature := (← Lms.signAt k q m).encode } }
+    let (c, pub, session) ← match kind with
+      | "sync" => pure ({ c with sync := { c.sync with delta := c.sync.delta + 1 } }, pub, session)
+      | "salt" => pure ({ c with salt := flip c.salt pos }, pub, session)
+      | "signature" => pure ({ c with certificate := { x with signature := flip x.signature pos } }, pub, session)
+      | "window" => pure ({ c with certificate := { x with window := x.window ^^^ 1 } }, pub, session)
+      | "direction" => pure ({ c with certificate := { x with direction := other } }, pub, session)
+      | "digest" => pure ({ c with certificate := { x with digest := flip x.digest pos } }, pub, session)
+      | "public-id" => pure (c, flip id pos ++ root, session)
+      | "public-root" => pure (c, id ++ flip root pos, session)
+      | "session" => pure (c, pub, flip session pos)
+      | "resign-window" => pure (← resign { x with window := x.window ^^^ 1 }, pub, session)
+      | "resign-direction" => pure (← resign { x with direction := other }, pub, session)
+      | "resign-key-id" => pure (← resign { x with keyId := flip x.keyId pos }, pub, session)
+      | t => throw s!"no clock tamper {t}"
+    pure (c.verify k.params pub session)
+
+def certificateJson (x : Certificate) : Json :=
+  .arr #[hexJson x.keyId, .str x.link, .str x.direction.value, toJson x.window, hexJson x.digest, hexJson x.signature]
+
+def certifiedJson (c : CertifiedRecord) (verified : Bool) (tampered asClock : Json) : Except String Json := do
   pure <| Json.mkObj [
-    ("head", .arr #[hexJson (← c.head.encode), hexJson (← c.head.digest)]),
-    ("certificate", .arr #[hexJson x.keyId, .str x.link, .str x.direction.value, toJson x.window, hexJson x.digest,
-                           hexJson x.signature]),
-    ("verify", toJson verified), ("tampered", tampered)]
+    ("head", .arr #[hexJson (← c.head.encode), hexJson (← c.head.digest)]), ("salt", hexJson c.salt),
+    ("certificate", certificateJson c.certificate), ("verify", toJson verified), ("tampered", tampered),
+    ("as_clock", asClock)]
+
+def clockJson (c : ClockCertificate) (verified : Bool) (tampered : Json) : Json :=
+  Json.mkObj [("sync", syncJson c.sync), ("salt", hexJson c.salt), ("certificate", certificateJson c.certificate),
+              ("verify", toJson verified), ("tampered", tampered)]
 
 /-- What `Issuer`'s definitions give on an instance, in the shape of the Python's results, with each call's outcome. -/
 def evaluate (j : Json) : Except String (Json × List String) := do
@@ -99,16 +139,10 @@ def evaluate (j : Json) : Except String (Json × List String) := do
   let pub := k.publicKey
   let session ← bytesOf (← j.getObjVal? "session")
   let mut issuer : Issuer := { key := k, session }
+  let mut clockSalts : Array ByteArray := #[]
   let mut calls := #[]
   let mut outcomes := []
   for c in ← j.getObjValAs? (Array Json) "calls" do
-    let params ← paramsOf (← c.getObjVal? "params")
-    let ss ← match c.getObjValD "sync_set" with
-      | .null => pure none
-      | s => some <$> syncSetOf s
-    let digest ← match c.getObjValD "parameters" with
-      | .null => parameters params ss
-      | b => bytesOf b
     let leaf : Except String Nat ← match c.getObjValD "leaf" with
       | .null => pure (.error "the leaf state refused the reservation")
       | q => .ok <$> q.getNat?
@@ -117,11 +151,44 @@ def evaluate (j : Json) : Except String (Json × List String) := do
       | t => do
         let #[kind, pos] ← arrOf t | throw s!"not [kind, at]: {t.compress}"
         pure (some ((← kind.getStr?), (← pos.getNat?)))
+    if let .ok call := c.getObjVal? "clock" then
+      let sync ← syncOf (← call.getObjVal? "sync")
+      let salt ← bytesOf (← c.getObjVal? "salt")
+      let mut clock := Json.null
+      match issuer.clock clockSalts salt leaf (← call.getObjValAs? String "link") (← call.getObjValAs? Nat "window")
+          sync with
+      | .error _ => outcomes := "refused clock" :: outcomes
+      | .ok (i, s, none) =>
+        issuer := i
+        clockSalts := s
+        clock := Json.mkObj [("certified", .null)]
+        outcomes := "refused clock leaf" :: outcomes
+      | .ok (i, s, some cc) =>
+        issuer := i
+        clockSalts := s
+        let verified := cc.verify p pub session
+        let t ← match tamper with
+          | none => pure Json.null
+          | some t => toJson <$> clockTampered cc k (← leaf) pub session t
+        clock := Json.mkObj [("certified", clockJson cc verified t)]
+        outcomes := s!"clocked, {if verified then "verified" else "NOT verified"}" :: outcomes
+        if let some (kind, _) := tamper then
+          outcomes := s!"clock tampered {kind}, {if t == toJson true then "verified" else "rejected"}" :: outcomes
+      calls := calls.push (Json.mkObj [("clock", clock)])
+      continue
+    let params ← paramsOf (← c.getObjVal? "params")
+    let ss ← match c.getObjValD "sync_set" with
+      | .null => pure none
+      | s => some <$> syncSetOf s
+    let digest ← match c.getObjValD "parameters" with
+      | .null => parameters params ss
+      | b => bytesOf b
     let record ← recordOf (← c.getObjVal? "record")
     let direction ← Direction.ofValue (← c.getObjValAs? String "direction")
     let deadline ← c.getObjValAs? Bool "deadline"
+    let salt ← bytesOf (← c.getObjVal? "salt")
     let mut certify := Json.null
-    match issuer.certify leaf record direction params digest deadline with
+    match issuer.certify salt leaf record direction params digest deadline with
     | .error _ => outcomes := "refused record" :: outcomes
     | .ok (i, none) =>
       issuer := i
@@ -133,10 +200,15 @@ def evaluate (j : Json) : Except String (Json × List String) := do
       let t ← match tamper with
         | none => pure Json.null
         | some t => toJson <$> tampered cr k (← leaf) pub session t
-      certify := Json.mkObj [("certified", ← certifiedJson cr verified t)]
+      let asClock ← match c.getObjValD "as_clock" with
+        | .null => pure Json.null
+        | s => do pure (toJson (ClockCertificate.verify ⟨← syncOf s, cr.salt, cr.certificate⟩ p pub session))
+      certify := Json.mkObj [("certified", ← certifiedJson cr verified t asClock)]
       outcomes := s!"certified, {if verified then "verified" else "NOT verified"}" :: outcomes
       if let some (kind, _) := tamper then
         outcomes := s!"tampered {kind}, {if t == toJson true then "verified" else "rejected"}" :: outcomes
+      if asClock != Json.null then
+        outcomes := s!"as a clock, {if asClock == toJson true then "verified" else "rejected"}" :: outcomes
     calls := calls.push (Json.mkObj [("parameters", hexJson digest), ("certify", certify)])
   let refused := issuer.refused.map fun (link, d, window) => Json.arr #[.str link, .str d.value, toJson window]
   pure (Json.mkObj [("public", hexJson pub), ("calls", .arr calls), ("refused", .arr refused)], outcomes)

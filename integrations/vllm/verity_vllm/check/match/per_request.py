@@ -8,12 +8,16 @@ import functools
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
+from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import prefix_reads as PX
-from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.match.attribution import Attribution
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.program.compact import n_max_producer as _n_max_producer, n_producers as _n_producers
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
+
+# A leg can run in a forked worker (`GMF.request_legs`), so each problem it returns names its check by role, never by the NamedCheck.
+SUBCIRCUITS, IDENTITY_MAP, SHARED_STATE = "subcircuits_x09", "identity_map", "shared_state"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -24,17 +28,17 @@ class RequestFacts:
     shared_loc: dict[int, dict[str, tuple[str, int, int]]]
     exec_pop: int
     unexercised: int
-    proj: dict[str, BD.Projection]
-    comps: dict[str, C.Prog]
+    proj: dict[str, PJ.Projection]
+    comps: dict[str, SEQ.Prog]
     engine_step_of: dict[int, int]
     dep_viol: list[dict]
     perm_facts: dict[str, dict]
 
 
-def perm_match(A: C.Prog, P: C.Prog, s: int, ha: dict, hb: dict) -> list:
+def perm_match(A: SEQ.Prog, P: SEQ.Prog, s: int, ha: dict, hb: dict) -> list:
     """G8's Merkle (order-insensitive) matching of one request step: fold instance -> component index with the same DAG hash, chosen
     in emission order inside a hash class; None where no component instance is left with that hash.  `ha` / `hb` must be
-    dag_hashes(A) / dag_hashes(P) of ONE process (the fast path's ids are per process, F-r17-07)."""
+    dag_hashes(A) / dag_hashes(P) of ONE process (the fast path's ids are per process)."""
     ma = collections.defaultdict(list)
     for j, i in enumerate(A.steps[s]):
         ma[ha[i]].append(j)
@@ -45,7 +49,7 @@ def perm_match(A: C.Prog, P: C.Prog, s: int, ha: dict, hb: dict) -> list:
     return pi
 
 
-def perm_eligible(A: C.Prog, P: C.Prog, s) -> bool:
+def perm_eligible(A: SEQ.Prog, P: SEQ.Prog, s) -> bool:
     return not (s is None or s >= len(P.steps) or s >= len(A.steps) or len(A.steps[s]) != len(P.steps[s]))
 
 
@@ -63,9 +67,9 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     loc_count = 0
     exec_pop = 0
     unexercised = 0
-    A_cache: dict[str, C.Prog] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
-    proj: dict[str, BD.Projection] = {}
-    comps: dict[str, C.Prog] = {}
+    A_cache: dict[str, SEQ.Prog] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
+    proj: dict[str, PJ.Projection] = {}
+    comps: dict[str, SEQ.Prog] = {}
     xstep_specs: collections.Counter = collections.Counter()
     weight_readers: set[str] = set()
     if getattr(B, "oracle_wmap_overlaps", None):
@@ -90,7 +94,7 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     pre = _prepare_requests(run, att, param_of, proj, comps, A_cache)
     leg = functools.partial(_request_leg, run.steps, B, fast, run.ops, within_step, weights_nodes, engine_step_of, pre)
 
-    checks_by_id = {"G3": c3, "G4": c4, "G5": c5}
+    checks_by_role = {SUBCIRCUITS: c3, IDENTITY_MAP: c4, SHARED_STATE: c5}
     dep_viol: list[dict] = []   # every request's dependency-order violations, in request order (G8 names the first)
     perm_facts: dict[str, dict] = {}   # [F-r17-07] rid -> {local step: G8's Merkle matching}, computed by the leg in ITS process
 
@@ -99,8 +103,8 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
         over all requests (an instance with two local identities is named), the population sums, the request entry on the record."""
         nonlocal loc_count, exec_pop, unexercised
         rid, ent = out["rid"], out["ent"]
-        for cid, msg in out["fails"]:
-            checks_by_id[cid].fail(msg)
+        for role, msg in out["fails"]:
+            checks_by_role[role].fail(msg)
         if out["weight_reader"]:
             weight_readers.add(rid)
         xstep_specs.update(out["xstep"])
@@ -208,7 +212,7 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
     return pre
 
 
-def _request_leg(steps: dict, B: C.Prog, fast: bool, ops: BD.Ops, within_step: str, weights_nodes: frozenset[int],
+def _request_leg(steps: dict, B: SEQ.Prog, fast: bool, ops: BD.Ops, within_step: str, weights_nodes: frozenset[int],
                  engine_step_of: dict[int, int], pre: list[tuple], k: int) -> dict:
     """The request's own facts: canonical operand sources (P.canon), chronology of its producers, comparison with its component
     (compare_steps; under `dag` the Merkle matching per executed step -> canonical addresses).  Reads shared objects, writes none."""
@@ -230,7 +234,7 @@ def _request_leg(steps: dict, B: C.Prog, fast: bool, ops: BD.Ops, within_step: s
     why, hit = PX.check_hits(g, P)
     if P.xreq:
         why.insert(0, f"{rid}: {sum(P.xreq.values())} cross-request operand reads {dict(P.xreq)}")
-    fails.extend(("G5", w) for w in why)
+    fails.extend((SHARED_STATE, w) for w in why)
     if hit:
         ent["prefix"] = hit
     # G8's dependency-order facts of THIS request (DECISION M-0021 (4): every producer emitted before its consumer inside a request
@@ -281,40 +285,40 @@ def _request_leg(steps: dict, B: C.Prog, fast: bool, ops: BD.Ops, within_step: s
                     if ps is not None and cs is not None and ps < cs:
                         out["xstep"][r["spec"].split("{")[0]] += w
     if late:
-        fails.append(("G5", f"{rid}: {late} operands produced in a LATER engine step than their consumer"))
+        fails.append((SHARED_STATE, f"{rid}: {late} operands produced in a LATER engine step than their consumer"))
     return _compare_component(ops, within_step, fast, g, ent, P, A, cd, LP, out)
 
 
-def addressed_instances(A: C.Prog) -> int:
+def addressed_instances(A: SEQ.Prog) -> int:
     """The component's instances as GP-01's address map counts them (`n_instances` = its root nodes): the compared sequence plus the
     single-request splits constants `Prog._bind_splits` removed from it (one `Const32[S]` per top-p select; a batched component reads S
     from an Input and has none)."""
     return len(A.inst) + int(getattr(A, "n_splits_consts_bound", 0))
 
 
-def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: BD.Projection, A: C.Prog | None,
+def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: PJ.Projection, A: SEQ.Prog | None,
                        cd: str | None, LP: int, out: dict) -> dict:
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
     every executed fold instance."""
     rid, fails = g["request_id"], out["fails"]
     if not cd:
-        fails.append(("G3", f"{rid}: no component Program in the global Program for shape (LP {LP}, T_bound {g.get('T_bound')})"))
+        fails.append((SUBCIRCUITS, f"{rid}: no component Program in the global Program for shape (LP {LP}, T_bound {g.get('T_bound')})"))
         return out
     ent["component"] = {"dir": cd, "digest": A.digest, "steps": len(A.steps), "instances": len(A.inst),
                         "LP": g["component"].get("LP"), "T": g["component"].get("T")}
     want_d = g["component"].get("program_digest")
     if want_d and want_d != A.digest:
-        fails.append(("G4", f"{rid}: the global Program's component digest {want_d[:16]} != the loaded component's {A.digest[:16]}"))
+        fails.append((IDENTITY_MAP, f"{rid}: the global Program's component digest {want_d[:16]} != the loaded component's {A.digest[:16]}"))
     ga = g.get("global_address")
     if ga:
         ent["global_address"] = ga
         n_addressed = addressed_instances(A)
         if ga.get("n_instances") is not None and int(ga["n_instances"]) != n_addressed:
-            fails.append(("G4", f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
+            fails.append((IDENTITY_MAP, f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
                                 f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)"))
     n_exec = len(P.steps)
     if n_exec > len(A.steps):
-        fails.append(("G3", f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
+        fails.append((SUBCIRCUITS, f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
     cmp = ops.compare_steps(A, P, unfold_a=False)
     exec_steps = cmp["steps"][:n_exec]
     bad_seq = [s for s in exec_steps if not s["spec_seq_equal"] or (s.get("wiring") or {}).get("operands_different")]
@@ -376,7 +380,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
                               "sequence_also_equal": not bad_seq}
         if bad:
             ent["first_divergence"] = bad[0]
-            fails.append(("G3", f"{rid}: {len(bad)} of {n_exec} executed steps not DAG-equal to the component (first: local step {bad[0]['step']}, "
+            fails.append((SUBCIRCUITS, f"{rid}: {len(bad)} of {n_exec} executed steps not DAG-equal to the component (first: local step {bad[0]['step']}, "
                                 f"{bad[0]['unmatched_fold']} fold / {bad[0]['unmatched_component']} component instances unmatched)"))
         if fast:
             # [F-r17-07] G8's per-step Merkle matching of every step G8 may name (its address differs from the emission position
@@ -393,7 +397,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         if bad:
             ent["first_divergence"] = {"step": bad[0]["step"], "n_a": bad[0]["n_a"], "n_b": bad[0]["n_b"], "spec_seq_equal": bad[0]["spec_seq_equal"],
                                        "wiring_examples": (bad[0].get("wiring") or {}).get("examples", [])[:3]}
-            fails.append(("G3", f"{rid}: {len(bad)} of {n_exec} executed steps not canonical-equal (first: local step {bad[0]['step']})"))
+            fails.append((SUBCIRCUITS, f"{rid}: {len(bad)} of {n_exec} executed steps not canonical-equal (first: local step {bad[0]['step']})"))
             if fast and perm_eligible(A, P, bad[0]["step"]):   # [F-r17-07] G8 names the first divergence: its matching, computed here
                 s0 = bad[0]["step"]
                 out["perm"][s0] = perm_match(A, P, s0, ops.dag_hashes(A), ops.dag_hashes(P))
@@ -405,7 +409,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         why.append(f"the component's constant S differs from the fold's at {len(sv['mismatches'])} event(s) "
                    f"(first [event, component S, fold S] = {sv['mismatches'][0]})")
     if why:
-        fails.append(("G3", f"{rid}: " + "; ".join(why)))
+        fails.append((SUBCIRCUITS, f"{rid}: " + "; ".join(why)))
     out.update({"P_steps": P.steps, "local_addr": local_addr, "A_steps_len": [len(s) for s in A.steps],
                 "exec_pop": sum(len(A.steps[s]) for s in range(min(n_exec, len(A.steps))))})
     return out

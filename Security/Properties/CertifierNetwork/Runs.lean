@@ -9,7 +9,7 @@ The network certificate check (`NetworkCheck.Check.protocol`) meets the unit's c
 returns: the records `CertifierDevice.step` publishes over the trace the world gives it, and the certificates the host's
 assembly has its issuer sign for them. Each property here is stated over those outputs, for every input of the device and
 every commitment and evidence the check accepts under the device's parameters (`unitParams`), given the one premise of
-the network lane, that the device runs as built (`NetTiming.DeviceIntact`, the listed `trusted-nebius-host`). Everything
+the network lane, that the device runs as built (`NetTiming.DeviceIntact`, the listed `trusted-host`). Everything
 else the old abstract device was assumed to do (each head its link-window's, each egress head `record_head` of its
 recorded grid) is now a fact about the device's code.
 
@@ -28,12 +28,12 @@ session id: it signs nothing when its signing state has already started its issu
 `deviceCode`); (c) no other run's message input has the SHA-512 digest of this run's. (c) is `cr/sha-512` over the
 key's whole signing history, the hash-then-sign composition behind `euf-cma/lms-sha512-n64`, not a break tied to the
 run: only a model of the key's runs would make it one. (b), and the one-time use of each leaf that the forgery reading
-already rests on (`DeviceInput.next` is the host's), rest on `trusted-nebius-host`, where the state the device keeps on
+already rests on (`DeviceInput.next` is the host's), rest on `trusted-host`, where the state the device keeps on
 its host is its next LMS leaf and the session ids it has started. That claim's part about one run is
 `NetTiming.DeviceIntact`; no statement here takes the rest as a premise, since a statement of one run can't name other
 runs.
 
-`Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
+`Proofs.Properties.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`.
 -/
@@ -49,12 +49,14 @@ namespace Properties.NetworkCertifier
 /-! ## The device -/
 
 /-- What the certifier device is given in one run: its configuration, its issuer (its key and certifier session), the
-signer's state (its next unused leaf and the session ids it has started) and the trace of events the world gives it. -/
+signer's state (its next unused leaf and the session ids it has started), its own coins (`salts n`, the salt it draws
+for the `n`-th record it certifies) and the trace of events the world gives it. -/
 structure DeviceInput where
   config : Config
   issuer : Issuer
   next : Nat
   sessions : List ByteArray
+  salts : Nat → ByteArray
   trace : List Event
 
 /-- What the device returns: the records it publishes and the certificates it signs. -/
@@ -63,14 +65,14 @@ structure DeviceOutput where
   certificates : List CertifiedRecord
 
 /-- The certificates the host's assembly (`Properties.CertifierNetwork.certifyAll`) has the issuer sign, in order: each
-record certified at the reserved leaf under its link's direction, grid and parameters digest; where the assembly stops
-on an error, the ones signed before it. -/
-def issued (c : Config) : Issuer → Nat → List Record → List CertifiedRecord
-  | _, _, [] => []
-  | i, next, r :: rs =>
+record certified under the next salt of the device's coins at the reserved leaf, under its link's direction, grid and
+parameters digest; where the assembly stops on an error, the ones signed before it. -/
+def issued (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record → List CertifiedRecord
+  | _, _, _, [] => []
+  | i, next, salts, r :: rs =>
     match parameters (gridOf c r) (syncSetOf c r) >>=
-        fun pd => i.certify (reserve i next) r (directionOf c r) (gridOf c r) pd with
-    | .ok (i', cr?) => cr?.toList ++ issued c i' (advance i next) rs
+        fun pd => i.certify (salts 0) (reserve i next) r (directionOf c r) (gridOf c r) pd with
+    | .ok (i', cr?) => cr?.toList ++ issued c i' (advance i next) (fun n => salts (n + 1)) rs
     | .error _ => []
 
 /-- **The device's code**: the records `step` publishes over the trace, and the certificates of them its issuer signs;
@@ -78,7 +80,7 @@ none where the signer's state has started the issuer's session already (it is in
 to start it again (`Core.World.start`). -/
 def deviceCode (x : DeviceInput) : DeviceOutput :=
   ⟨published x.config x.trace, if x.sessions.any (fun s => decide (s = x.issuer.session)) then []
-    else issued x.config x.issuer x.next (published x.config x.trace)⟩
+    else issued x.config x.issuer x.next x.salts (published x.config x.trace)⟩
 
 /-- The check's parameters of the device's unit: its configuration's links, windows, grids and Σ_sync, its key and its
 issuer's certifier session. -/
@@ -91,10 +93,10 @@ def egressDigest (p : NetworkCheck.Check.Params) : ByteArray :=
 
 /-! ## The breaks -/
 
-/-- What the device hashes: each certificate's head and its message's input in certifier session `session`, and the
-frame tree of each record it published, under its grid. -/
+/-- What the device hashes: each certificate's head, the head's digest under the certificate's salt and its message's
+input in certifier session `session`, and the frame tree of each record it published, under its grid. -/
 def deviceStrings (c : Config) (session : ByteArray) (out : DeviceOutput) : List ByteArray :=
-  out.certificates.flatMap (fun cr => headStrings cr.head ++
+  out.certificates.flatMap (fun cr => headStrings cr.head ++ saltedStrings cr.salt cr.head ++
     (messageInput cr.certificate.keyId session cr.certificate.link cr.certificate.direction cr.certificate.window
       cr.certificate.digest).toOption.toList) ++
   out.records.flatMap fun r => treeStrings (gridOf c r) r.grid

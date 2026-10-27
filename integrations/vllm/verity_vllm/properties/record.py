@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity_vllm.correspondence.runtime import canonical_json
+from verity.ml.circuits.codec import canonical_json
 
 DIR = "properties"
 

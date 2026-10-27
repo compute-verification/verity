@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "IoTieBucket_v1{B=256,R=8,P=4,S=4}": {
+   "and": 35663,
+   "type": "1008f482dfa53d2af1285b7a543cb85a4999989222676cf0f7be177b62c61b0e6728a70c1d965649936a2b4169e33e748080e72015614fd62519de3904e512d2"
+  },
+  "IoTieCell_v1{B=256}": {
+   "and": 4139
+  },
+  "IoTieCell_v1{B=4096}": {
+   "and": 50224
+  },
+  "IoTieContent_v1{B=256,R=8,P=4,S=4}": {
+   "and": 35663
+  },
+  "IoTieMatch_v1{N=8,D=4,E=16}": {
+   "and": 1047
+  },
+  "IoTieRoute_v1{W=36,D=4}": {
+   "and": 2016,
+   "type": "ff22aaef6bad6cef815ade229cfedbb0eb1819f567ce0fd123d5d898b2e7b2f40d3ca222945884f63200f2b6ece29272f6219bf9e57a460bde13ed7558e3d605"
+  },
+  "IoTieSwitch_v1{W=36}": {
+   "and": 36,
+   "type": "045340e2f9a9c321c1770eda927b99d7f706a29f66004c6a484184194567f4261fb877dfe5ce7642b1859cfba8e7cebb87c13afd9ecd3d6ae842bd7a9556b7d5"
+  }
+ }
+}

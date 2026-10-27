@@ -1,0 +1,4 @@
+order = 321
+path = "`pearlc_k256_gate.py`, `pearlc_k256_gate.sh`"
+runs_on = "CPU (with GLM-5.3's snapshot for the slices)"
+what = "TT_OUT's gate at k = 256 on `pearl-c-h100-v1-h3` (ASK-91): exhaustive cross-group cancellation and peel-shortcut searches on the served scheme, per word and per m16n8 fragment, as shares of credit; the job runs them with the census and `pearl_c_sm90/glm53_slices.py`, and `--verdict` is its status"

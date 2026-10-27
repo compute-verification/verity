@@ -39,7 +39,8 @@ if j.get('reason') == 'compiler-artifact' and j.get('executable') and j['target'
   cp "$exe" "$D.tmp/flock-live-tests" && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 
-lean_verify() {   # lean_verify D O TAG: the Lean verifier of record on D's --zk session
+lean_verify() {   # lean_verify D O TAG: the Lean verifier of record on D's --zk session (a shape is no Program's, so
+                  # it is refused for want of one, ProvedScope.NO_PROGRAM, once every check has passed)
   local D=$1 O=$2 tag=$3 s n=$4
   s=$(ls -d "$D"/sessions-zk/*/ 2>/dev/null | tail -1)
   [ -n "$s" ] || { log "  lean $tag: no --zk session"; return; }

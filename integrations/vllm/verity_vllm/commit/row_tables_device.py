@@ -7,7 +7,7 @@ stream's event, ``result()`` is the `row_tables.StepRoots` the CPU path gives.  
 a queue to the loop's recorder (``LiveRecord.record``), in step order.  The step's root is what the challenger's coin for that
 step waits on; the next step's compute does not wait on it.
 
-The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.step_salts`),
+The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
 roots (`row_table.step_tree`), with `ncp2.cuh`'s SHA-512.  The host computes the domain ids, the rows' rank order and the tables'
 layout (`plan`).  `host_step` runs the same functions on the CPU (`row_table_host.cpp`, built with the system C++ compiler), the
@@ -36,12 +36,11 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
 
 from . import row_tables as RTB
-from . import serving_rows as CS
 
 __all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
            "table_domain_id"]
 
-CUDA_DIR = Path(__file__).resolve().parents[1] / "protocol_options" / "pouw_cuda"
+CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
@@ -137,7 +136,7 @@ def _words(b: bytes) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Plan:
-    """A step's tables as the kernels take them: ``order`` (`serving_rows.table_key`), ``tabs`` (T, 14) u64 (`row_table.cuh`'s
+    """A step's tables as the kernels take them: ``order`` (`row_tables.table_key`), ``tabs`` (T, 14) u64 (`row_table.cuh`'s
     ``Tab``, the codes and scales addresses zero until bound), ``perm`` each rank's batch row (tables in order), ``S`` segments,
     ``N`` rows, ``tree`` the tables' padded widths summed, and ``args``."""
     engine_step: int
@@ -160,7 +159,7 @@ def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[t
     row)), under ``context`` and the row key ``key``, as `row_tables.step_roots` orders, ranks, salts and domains them."""
     if len(context) != 64 or len(key) != 32 or not shapes:
         raise ValueError("a 64-byte context, a 32-byte row key and at least one table")
-    order = tuple(sorted(shapes, key=CS.table_key))
+    order = tuple(sorted(shapes, key=RTB.table_key))
     layout: list[tuple[int, int, int, int, int, int]] = []
     dids: list[bytes] = []
     perms: list[list[int]] = []

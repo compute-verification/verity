@@ -1,0 +1,11 @@
+# A live H1 window's salt from the auditor's challenger (`window_salt.py`, CMP-90). Not a package: the tests run here as a
+# suite (`uv run tools/verity/check/suites.py benchmarks/pouw/window_salt`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: PoUW's check of record (`core_check.window_salt`) and the challenger's client. `a5_coins.py` and
+# `benchmarks/live_challenger`: the tests open the session on a local auditor host (auditor.py), whose serve.py runs under
+# its tests' stub of the Lean verifier's coins (stub_serve.py).
+inputs = ["verity", "benchmarks/one_stage/a5_coins.py", "benchmarks/live_challenger"]

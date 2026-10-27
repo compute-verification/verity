@@ -44,12 +44,20 @@ def saltBytes : Nat := 192
 def bcBytes : Nat := 128
 /-- `PUBLIC_ROW_BITS`: a salted unit's public row, the certified salt, the unit's position (a u64) and two roots. -/
 def PUBLIC_ROW_BITS : Nat := 8 * (SALT_BYTES + 8 + 2 * 64)
+/-- `PUBLIC_ROW_J10R_BITS`: a J10-R unit's public row, `PUBLIC_ROW_BITS` and then its call's first position and its
+two blocks, each a u64. -/
+def PUBLIC_ROW_J10R_BITS : Nat := PUBLIC_ROW_BITS + 8 * 3 * 8
 def PUBLIC_ROW_SALT_DOMAIN : ByteArray := "verity/pouw/public-row-salt/v1".toUTF8.push 0
 
-/-- `public_row`: the salt, the position as a u64 big-endian and the two roots, each 4 bytes reversed (a u32 low bit
-first, as `ml.circuits.seeds` lays the bits out). -/
-def publicRow (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray) : ByteArray :=
-  let x := salt ++ PouwCommit.be8 position ++ roots.1 ++ roots.2
+/-- `public_row`: the salt, the position as a u64 big-endian and the two roots (and, with `j10r` = (call, b₀, b₁), a
+J10-R unit's call and blocks, each a u64 big-endian), each 4 bytes reversed (a u32 low bit first, as
+`ml.circuits.seeds` lays the bits out). -/
+def publicRow (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray)
+    (j10r : Option (Nat × Nat × Nat) := none) : ByteArray :=
+  let tail := match j10r with
+    | some (c, b0, b1) => PouwCommit.be8 c ++ PouwCommit.be8 b0 ++ PouwCommit.be8 b1
+    | none => ByteArray.empty
+  let x := salt ++ PouwCommit.be8 position ++ roots.1 ++ roots.2 ++ tail
   ByteArray.mk ((Array.range x.size).map fun i => x.get! (4 * (i / 4) + 3 - i % 4))
 
 /-- `public_row_salt`: three SHA-512 blocks of the domain ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i). -/
@@ -78,7 +86,7 @@ def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option
   else if salted.isSome then some "the window's template's unit reads a salt, which only a certified window has"
   else none
 
-/-- `window_domain`: the window root's domain, one-stage's served domain (`registration.served_domain`) of the
+/-- `window_domain`: the window root's domain, one-stage's window domain (`registration.window_domain`) of the
 registered program and partition over the check's P entries in the window's context. -/
 def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
   let n := p.check.entries

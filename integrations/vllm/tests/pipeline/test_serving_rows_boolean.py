@@ -8,7 +8,7 @@ Definition as the row's ``bits`` and the header's ``ir``), with the word templat
 population program is over the templates as named, so the Boolean templates' partition is one under both IRs.  A deferred window
 under the Boolean template commits the word template's u16 rows, and its registration passes `registration.check` against the
 verifier's population program over the Boolean template.  Two templates that compute one word Definition, a template with no rows,
-and one whose word view is not 16-bit words are refused by name."""
+and one with a port that is not whole u16 words are refused by name; a row template of 32- and 16-bit ports is packed."""
 from __future__ import annotations
 
 import gzip
@@ -21,13 +21,13 @@ import pytest
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1)
-from verity_vllm.query.call_scope import specialization
+from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.ml.definitions.call_scope import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 
 from tests.pipeline import served_rope as SR
@@ -103,7 +103,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     defn = bind(REGISTRY["RoPEHead_v2"], D=D)
     program, query = P.population_program(defn, HEADS), P.template_instance_query(defn)
     part = P.digest(P.partition(program, query))
-    ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.served_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
+    ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}
              for p in ("x", "cs", "out")}
     v = R.check(rec, program, query, DR.parse_law(LAW), CS.SCHEME, ports,
@@ -129,7 +129,8 @@ def test_templates_that_compute_one_word_definition_have_no_rows_or_are_not_u16_
     with pytest.raises(LookupError, match=r"no rows of RoPEHead_v2\{D=128\}"):
         SRW.population(programs, {"templates": ["RoPEHead_v2{D=128}"], "law": LAW}, c["run_root"], r.program_dirs)
     for t in ("Embedding_v1{V=8,H=16}", "Embedding_v2{V=8,H=16}"):
-        with pytest.raises(ValueError, match=r"commit u16 words, and its ports' (words|elements) are \[16, 32\] bits"):
-            SRW.template(t)
+        assert (SRW.template(t).layout, SRW.template(t).packed) == ("row", (32, 16, 16))
+    with pytest.raises(ValueError, match=r"commit u16 words, and its ports' words are \[8, 16, 32\] bits \(a row template's port"):
+        SRW.template("Fp8GroupQuantUe8m0_v1{K=3,G=3}")
     with pytest.raises(LookupError, match="names no registered Definition"):
         SRW.template("NoSuchTemplate_v1")

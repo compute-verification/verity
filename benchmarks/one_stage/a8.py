@@ -26,8 +26,8 @@ deploys them), so that the verifier receives no block bytes; and the prover's co
   stager, so the circuit is lowered once.
 * **What the verifier received** (`received`): every file the verifier side holds (the registration, partition, program,
   circuit, public file, the session's record and proofs, the draw, the openings it was sent and v0's messages), scanned
-  for every 16-byte piece of every drawn block and payload at every offset, raw and as hex. The prover's instance file is
-  the positive control.
+  for every 16-byte piece of every drawn block and payload at every offset, raw and as hex, but the pieces the staged
+  public circuit holds (a run of zero bytes), which it lists. The prover's instance file is the positive control.
 * **Cost** (``--points``): sessions on the honest statement whose verifier draws its first k units, cold (one prover
   process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the firewall's send check, `FC_FIREWALL=1`, the design's
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
@@ -353,15 +353,28 @@ def find(data: bytes, table: dict[bytes, str]) -> dict[str, int]:
     return {x: len(v) for x, v in hits.items()}
 
 
-def received(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str]) -> dict:
+def public_pieces(blobs: dict[str, bytes], public: bytes) -> tuple[dict[str, bytes], list[str]]:
+    """``blobs``, each less the aligned pieces ``public`` holds raw or as hex (its other pieces joined, so `needles` cuts
+    them again), and the left-out pieces' hex. ``public`` is the staged circuit, which the stager writes from the Definition
+    before any instance, so what it holds the verifier has whatever the witness: a run of zero bytes in a block is a piece
+    the circuit holds too."""
+    cut = {name: [b[o:o + PIECE] for o in range(0, len(b) - PIECE + 1, PIECE)] for name, b in blobs.items()}
+    out = {bytes.fromhex(h) for h in find(public, needles({x.hex(): x for xs in cut.values() for x in xs}))}
+    return {name: b"".join(x for x in xs if x not in out) for name, xs in cut.items()}, sorted(x.hex() for x in out)
+
+
+def received(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes = b"") -> dict:
     """Every file under ``vdir`` (what the verifier received) and the prover's ``control`` file, scanned for ``blobs``'
-    pieces: each file's size and the blobs found in it; the control is to hold every blob in ``held``."""
+    pieces but those the public circuit ``public`` holds (`public_pieces`, listed as ``public_pieces``): each file's size
+    and the blobs found in it; the control is to hold every blob in ``held`` with a piece left to scan for."""
+    blobs, left_out = public_pieces(blobs, public)
+    held = {h for h in held if blobs[h]}
     table = needles(blobs)
     files = {}
     for f in sorted(vdir.iterdir()):
         files[f.name] = {"bytes": f.stat().st_size, "found": find(f.read_bytes(), table)}
     ctl = find(control.read_bytes(), table)
-    return {"needles": len(table), "blobs": len(blobs), "files": files,
+    return {"needles": len(table), "blobs": len(blobs), "public_pieces": left_out, "files": files,
             "verifier_bytes": sum(x["bytes"] for x in files.values()),
             "verifier_found": sorted({b for x in files.values() for b in x["found"]}),
             "control": {"file": control.name, "bytes": control.stat().st_size, "blobs_found": len(ctl), "of": len(blobs),
@@ -491,7 +504,8 @@ def main() -> int:
             held = set(blobs)
             if name == "tampered":
                 blobs[f"registered block {summary['tampered_block']}"] = store.blocks[summary["tampered_block"]]
-            res["received"] = received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held)
+            res["received"] = received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held,
+                                       (m["dir"] / "circuit.txt").read_bytes())
             summary[name].update(res)
             want = name == "honest"
             good = (res["accepted"] is want and res["audit"]["accepted"] is True and all(res["verdicts"].values())

@@ -40,7 +40,7 @@ class _LLM:
 
 def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], Path]:
     pytest.importorskip("torch")
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC
@@ -88,6 +88,7 @@ def test_the_commit_stops_after_its_first_failed_run_and_says_which_runs_it_did_
     assert not (out / "value_check.json").exists()
 
 
+@pytest.mark.slow
 def test_all_pairs_runs_every_pair_and_the_value_check_after_a_failed_run(tmp_path, monkeypatch):
     rc, events, out = _commit(tmp_path, monkeypatch, "--all-pairs")
     assert rc == 1 and not any(e.startswith("stop after") for e in events)

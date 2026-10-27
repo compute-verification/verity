@@ -1,10 +1,11 @@
 import Flock.RecVStar
 import Flock.RecCoins
 import Flock.Firewall
-import Proofs.Flock.Recursive.Holo
+import Definitions.Flock.Recursive.Holo
+import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Soundness.Model.HoloCompiled
+import Definitions.Flock.HoloCompiled
 
 /-!
 # Recursion: candidate 3's inner protocol as the executable runs it
@@ -142,7 +143,16 @@ def TopOf (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray) (bcs : 
 names `stacked` under its `program`, and the entry's five structural fields are exactly those computed from `bcs`.
 `TopOf` ties the same explicit strings to `cap` under `salt`, the salts the prover's workers committed R's level-0 top
 rows under (`registrant-holds-openings`: they hold them, and the guarantee is applied at the held salts); no choice is
-hidden in this relation. -/
+hidden in this relation.
+
+Assumption record. Claim: `registrant-holds-openings`. It assumes that the registrant holds the commit strings `bcs`
+it registered. The registered `stacked` entry is the one computed from `bcs` (the first two conjuncts), and `cap` and
+`salt` are a tree and salts whose commit strings are `bcs` (`TopOf`). Those are the prover's workers' own tree and
+salts, behind the firewall. That is reasonable because an honest registrant registers the entry of the rows it
+committed and holds them. A prover that registers strings it can't open is outside the guarantee. The first two
+conjuncts are the verifier's checks only at a transcript's own top (`FlockC3.RegLevels.stackedTop_of_innerCommits`).
+At the held `bcs` they are part of the premise: `TopColl.collision` reads them to turn a held top other than `bcs` into
+a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
   ∃ (prog : String) (e : Lean.Json),

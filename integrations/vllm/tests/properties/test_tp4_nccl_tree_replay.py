@@ -12,8 +12,8 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from tests.properties import tp4_nccl_tree_replay as X  # noqa: E402
-from verity_vllm.program.registry import tp_allreduce as T  # noqa: E402
-from verity_vllm.program.registry import tp_allreduce_check as K  # noqa: E402
+from verity.ml.definitions.registry import tp_allreduce as T  # noqa: E402
+from verity.ml.definitions.registry import tp_allreduce_check as K  # noqa: E402
 from verity_vllm.properties.record import DIR, PropertyRecord  # noqa: E402
 
 N = 8192
@@ -75,6 +75,7 @@ def _replay(tmp_path, *extra, **kw):
     return rc, json.loads((out / DIR / X.RECORD).read_text()), [json.loads(x) for x in (out / "calls.jsonl").read_text().splitlines()]
 
 
+@pytest.mark.slow
 def test_every_all_reduce_is_the_nccl_tree_on_bits_in_words_and_in_the_model(tmp_path, capsys) -> None:
     rc, doc, calls = _replay(tmp_path)
     assert rc == 0 and doc["ok"] is True and PropertyRecord(doc).problems() == [] and PropertyRecord(doc).name == "tp4_nccl_tree_capture"

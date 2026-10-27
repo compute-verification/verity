@@ -54,7 +54,7 @@ def absorbK (v : F256) : TM Unit := absorbSlice #[v.c0, v.c1]
 def absorbBytes (b : ByteArray) : TM Unit :=
   modify fun t => { t with pending := t.pending ++ header 5 0 b.size ++ padded b }
 
-/-- A proof-of-work nonce: a message, never checked (R4). -/
+/-- A proof-of-work nonce, absorbed as a message; the decoders refuse any but `0` (R4, `Reader.nonce0`). -/
 def pow (nonce : UInt64) : TM Unit := absorbBytes (le64 nonce)
 
 /-- The framed bytes a squeeze of `n` coins of `kind` answers: everything absorbed since the last coin, then its header. -/

@@ -129,6 +129,9 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): `research run`
+#: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
+_LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 _UNTRACED: list[str] = []
@@ -136,7 +139,8 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
+#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
+#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
 #: which, and a target whose process the OOM killer took is never stored
 HEAVY = _HERE / "heavy.json"
 #: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
@@ -196,6 +200,8 @@ class Frame:
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
 _FRAMES: list[Frame] = [Frame()]
+#: bumped each time a recording opens or closes: a specialization whose body was last read at another count is noted again
+_EPOCH = [0]
 #: what was read and run while each module was first imported (after `trace`), by module name
 _MODULES: dict[str, Frame] = {}
 #: what each binding unit read and ran while it made its roots
@@ -256,13 +262,36 @@ def _rel(path: Any) -> str | None:
         return None
     try:
         p = Path(os.fsdecode(path))
-        p = p if p.is_absolute() else Path.cwd() / p
-        rel = os.path.relpath(os.path.normpath(p), _ROOT[0])
+        p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
+        rel = os.path.relpath(p, _ROOT[0])
+        if rel.startswith("..") and _LINKS:            # a file through a link into the tree is the tree's (`_LINKS`)
+            rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
+                        if p == k or p.startswith(k + os.sep)), rel)
     except (TypeError, ValueError):
         return None
     if rel.startswith("..") or "__pycache__" in rel.split(os.sep) or rel.split(os.sep)[0] == ".venv":
         return None
     return rel
+
+
+def _links(root: Path) -> dict[str, str]:
+    """`_LINKS`: the links in the import path's directories outside ``root`` that lead into it, each with where it leads.  Read
+    once, when tracing starts: neither its listings nor its ``lstat``s are a check's reads, and `_rel`, which every ``stat``
+    calls, resolves no path itself."""
+    out: dict[str, str] = {}
+    for e in sys.path:
+        d = os.path.abspath(e or os.getcwd())
+        if not os.path.relpath(d, root).startswith(".."):
+            continue
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for n in names:
+            p = os.path.join(d, n)
+            if os.path.islink(p) and not os.path.relpath(t := os.path.realpath(p), root).startswith(".."):
+                out[p] = t
+    return out
 
 
 _TARGETS_REL: list[str | None] = [None]
@@ -331,7 +360,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity_vllm.program.registry.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity.ml.definitions.registry.catalog", "load"), ("verity.ml.definitions.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:
@@ -485,12 +514,14 @@ def recording(merge: bool = True) -> Iterator[Frame]:
         yield fr
         return
     _FRAMES.append(fr)
+    _EPOCH[0] += 1
     if _TOOL:
         sys.monitoring.restart_events()
     try:
         yield fr
     finally:
         _FRAMES.pop()
+        _EPOCH[0] += 1
         if merge and len(_FRAMES) > 1:
             _FRAMES[-1].merge(fr)
 
@@ -613,11 +644,17 @@ def _instrument() -> None:
     for cls in (D.PrimitiveDefinition, D.CompositeDefinition, D.SpecializedDefinition):
         marking(cls)
     get = D.SpecializedDefinition.body.fget
+    D.SpecializedDefinition._circuit_check_read = -1
 
     def body(self):
+        # the layout's walks read a body millions of times a check: noted once under each innermost recording
+        if self._circuit_check_read == _EPOCH[0] and (b := self._body) is not None:
+            return b
         if len(_FRAMES) > 1:
             _FRAMES[-1].defs.setdefault(id(self), self)
-        return get(self)
+        b = get(self)
+        self._circuit_check_read = _EPOCH[0]
+        return b
 
     D.SpecializedDefinition.body = property(body)
     sig = D.SpecializedDefinition.signature
@@ -636,6 +673,7 @@ def trace(root: Path) -> None:
     the code that runs through `sys.monitoring`, and the Definitions' builds and reads (`_instrument`)."""
     if not _ROOT:
         _ROOT.append(Path(root).resolve())
+        _LINKS.update(_links(_ROOT[0]))
         _TARGETS_REL[0] = _rel(TARGETS)
         unit_files(())
         sys.addaudithook(_hook)
@@ -1419,7 +1457,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             by_file.setdefault(os.path.abspath(f), name)
     acc = Frame()
     acc.merge(fr)
-    if not roots:                                      # a template, or a target named on the command line: its whole bindings
+    if not roots:                                      # a template, or a named target that doesn't resolve: its whole bindings
         for u in units:
             if u in _PRODUCED:
                 acc.merge(_PRODUCED[u], defs=False)
@@ -1983,6 +2021,28 @@ def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | Non
     return _digests(root, got, fresh=True)
 
 
+def seen_all(root: Path, gots: list[dict[str, list[str]]]) -> list[dict[str, dict[str, str | None]]]:
+    """`seen` of each read set in ``gots``, every read among them digested once, now: what each gives on its own while the tree
+    is unchanged (`circuit_check.units` stores hundreds of records whose reads are mostly the same modules)."""
+    if not gots:
+        return []
+    every = {k: sorted({r for g in gots for r in g.get(k, ())}) for k in {"files", "dirs", *(k for g in gots for k in g)}}
+    now = seen(root, every)
+    return [{k: {r: v[r] for r in g.get(k, ())} for k, v in now.items()} for g in gots]
+
+
+def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
+    """What a catalog binding's build read (`circuit_check.units`): what its ``units`` read and ran while they made their roots
+    (`producing`), and `attributed` over its ``roots``: the build of every Definition they reach, the bindings that made those,
+    those modules' import closures, its own units by digest, and what the process read outside every recording."""
+    units = tuple(units)
+    fr = Frame()
+    for u in units:
+        if u in _PRODUCED:
+            fr.merge(_PRODUCED[u], defs=False)
+    return attributed(fr, units, roots)
+
+
 def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
     every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
@@ -2027,5 +2087,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "untraced", "version"]
+           "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
+           "unit_files", "unit_reads", "untraced", "version"]

@@ -32,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -197,7 +198,7 @@ def main() -> int:
 
     # negatives
     neg: dict[str, dict] = {}
-    fewer = P.mixed_population_program([(m["defn"], m["n"] - (1 if i == 0 else 0)) for i, m in enumerate(members)])
+    fewer = R2.program([(m["defn"], m["n"]) for m in members], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)

@@ -1,0 +1,16 @@
+{
+ "pieces": {
+  "F32GtStrict_v1": {
+   "and": 191,
+   "type": "d6aa4eba3e002e9160c290d9557f4b744e3349584de716fafbd11c24f0dee2a285a362dc74a7ecd3ea4f5f61edf8a0d493443abb8af82d99eab43b99ca76a933"
+  },
+  "F32Sub_v1": {
+   "and": 823,
+   "type": "c765a3d490ab9bb2557a4372a22c6d103bac8fe65ef561b9e44a85915390749774cf21884f81d18c4261ad85269dc4004a1edb15bc0c0521393f90e9a6c8298f"
+  },
+  "GatherF32x16_v1": {
+   "and": 539,
+   "type": "cbbb64386bb1f0a33b81b7734c90c9ee7c009977ccfedd78f35544a78ae6bcb4e74c18a6f70e51bdc7789d3993634be4c88673fe3b9af8775e67a667ed8f155b"
+  }
+ }
+}

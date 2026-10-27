@@ -1,4 +1,4 @@
-"""The kernel pins of the admitted profile (`verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py`) and the GEMM pins of the
+"""The kernel pins of the admitted profile (`verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py`) and the GEMM pins of the
 active target."""
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ MEAN_PINS = {"kernel": "vllm.model_executor.determinism.batch_invariant.mean_ker
 
 
 def active_gemm_target():
-    """[R13 ampere] The registered GEMM specialization of the ACTIVE target (`TargetProfile.gemm_target()` of the profile the construction
+    """The registered GEMM specialization of the ACTIVE target (`TargetProfile.gemm_target()` of the profile the construction
     applied, else the default profile's): the one source of the launch geometry a GEMM node must show (`GemmTarget.launch_config`), of the
     Definition's k16 step and of the tuned-table identity the manifest records. Raises `gemm_targets.UnregisteredGemmTarget` for a target
     without one (Hopper/Blackwell/untested capabilities): the GEMM rule then refuses every launch (`numerics_unregistered`)."""

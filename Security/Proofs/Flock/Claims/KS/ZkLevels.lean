@@ -332,7 +332,6 @@ def zkRawLevelRowsJ (s : Claims.Seen) (j k ℓ : ℕ) : List (ℕ × List 𝔽) 
     | none => []
   | none => []
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -347,136 +346,6 @@ def zkRawLevelRowsJ (s : Claims.Seen) (j k ℓ : ℕ) : List (ℕ × List 𝔽) 
     | none => []
   | none => []
 
-end Gen
-
-/-- **Two rows one rep of an accepted masked run opens at one later-level position collide in its own log**: two of
-table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against the
-flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
-accepts with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
-positions (`zkLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
-theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a b : List 𝔽}
-    (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
-    (ha : (q, a) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)
-    (hb : (q, b) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ) (hab : a ≠ b) :
-    Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω r).vLog := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
-  generalize hL : (Claims.run sha512 P (V true) x ω r).vLog = L at hv ⊢
-  obtain ⟨hx, lv, hlv, -⟩ := Claims.Bridge.Custody.checks_ok hc
-  unfold zkRawLevelRowsJ at ha hb
-  split at ha
-  swap
-  · simp at ha
-  rename_i rr hrr
-  rw [hrr] at hb
-  obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eqJ hf hx hs hlv hrr
-  obtain ⟨hk, ha, hb⟩ : k < 2 ∧
-      (q, a) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
-        (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ ∧
-      (q, b) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-        (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
-        (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ := by
-    rcases k with _ | _ | k
-    · exact ⟨by omega, ha, hb⟩
-    · exact ⟨by omega, ha, hb⟩
-    · simp at ha
-  have hstsj : j < sts.size := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, -⟩
-    exact h0
-  have hstj : sts[j] = st := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, e⟩
-    exact e
-  have hj : j < (tabsOf sts).size := by simpa [tabsOf] using hstsj
-  have htj : (tabsOf sts)[j] = Setup.ofCircuit st := by rw [tabsOf_getElem hj]; simp only [hstj]
-  replace hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok () := hv
-  obtain ⟨sess, hdec, hsz, hreps⟩ :=
-    zkLevels_verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs hv
-  obtain ⟨sch, tPad, hsch, hrep⟩ := hreps j hj
-  obtain ⟨stream, extras', zp, hstream, hext', hzp, hlev⟩ := hrep k hk
-  simp only [htj] at hsch hext' hzp hlev
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes (L.map Prod.fst)) spec f.record) sess hdec
-  obtain ⟨-, hpts, -, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
-  rw [hpts, hext] at hext'
-  cases hext'
-  have htab : j < spec.tables.size := by rw [← hsz]; exact hj
-  obtain ⟨hk', hrs⟩ := Claims.Bridge.Custody.repStreams_getElem spec htab hk
-  obtain ⟨y, hy, hfa⟩ := hstreams (2 * j + k) hk'
-  rw [hrs] at hy
-  have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
-  subst hys
-  have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).m = (sch, tPad) := by
-    simp only [Claims.Flock.zkSched]
-    rw [hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-      (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)) =
-      FlockSoundness.Discharge.ZkExec.shapeZK (Setup.ofCircuit st) sch extras := by
-    simp only [Claims.Flock.zkProofShape, hzs, FlockSoundness.Discharge.ZkExec.shapeZK, saltLenOf, ite_true]
-  have hsched : (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-      (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st))).sched = sch := by
-    rw [hsh]
-    rfl
-  have hℓ : 1 ≤ ℓ ∧ ℓ < sch.levels.size := by
-    by_contra hn
-    rw [zkLevelRowsOf, ite_eq_right (by rw [hsched]; exact hn)] at ha
-    simp at ha
-  obtain ⟨hent, hmc⟩ := hlev ℓ hℓ.1 hℓ.2
-  have hrowsEq : zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
-      (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
-      (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ =
-      Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
-        (y.rounds[zkLevelRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size)
-          (sch.levels.size - 1) ℓ]!).coins (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).1 := by
-    rw [← hent, hsh]
-    have e1 : lv.streams.getD (2 * j + k) #[] = lv.streams[2 * j + k]! := by
-      rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]
-    have e2 : f.proofs.getD (2 * j + k) ByteArray.empty = f.proofs[2 * j + k]! := by
-      rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]
-    rw [e1, e2]
-    refine zkLevelRowsOf_congr _ _ _ fun i => ?_
-    rw [← Array.getElem?_toList, ← Array.getElem?_toList]
-    exact (hcoins i).symm
-  rw [hrowsEq] at ha hb
-  obtain ⟨i, hi, -, hiq, hia⟩ := mem_zkRepCols ha
-  obtain ⟨i', hi', -, hiq', hib⟩ := mem_zkRepCols hb
-  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 (setupOf_zk hs) j hstsj
-    rw [hstj] at this
-    exact this
-  rw [hms] at hmc
-  have hruns := With.merkleCheckWith_sim (back (L.map Prod.fst))
-    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) MerkleScheme.hm96Sha512)
-    MerkleScheme.hm96Sha512 _ _ _ _ _ _ _ _ () hmc
-  rw [opsWith_hm96] at hruns
-  obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
-  obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
-  have hop : ∀ i < (positions (sch.levels.getD ℓ default) (y.rounds[zkLevelRound (Setup.ofCircuit st).m
-      (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins).size,
-      Opening MerkleScheme.hm96Sha512 (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
-        (zp.proof.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) L
-        (positions (sch.levels.getD ℓ default) (y.rounds[zkLevelRound (Setup.ofCircuit st).m
-          (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins)[i]!
-        (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).1[i]! := fun i hi =>
-    ⟨Or.inl rfl, zp.proof.ligerito.recursiveCaps[ℓ - 1]!,
-      (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).2.2.getD i ByteArray.empty,
-      sibsOf (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).2.1
-        ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap) i,
-      hcs, hcw, rfl, merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i,
-      by rw [opensInsOf_hm96]; exact hlog i hi⟩
-  have ho₁ := hop i hi
-  have ho₂ := hop i' hi'
-  rw [hiq] at ho₁
-  rw [hiq'] at ho₂
-  exact tiedColl_of_append_self (tiedColl_of_openings ho₁ ho₂ fun e => hab (by rw [hia, hib, e]))
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 /-- **Two rows one rep of an accepted masked run opens at one later-level position collide in its own log**: two of
 table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against the
 flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
@@ -601,5 +470,19 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
   exact tiedColl_of_append_self (tiedColl_of_openings ho₁ ho₂ fun e => hab (by rw [hia, hib, e]))
 
 end Gen
+
+/-- **Two rows one rep of an accepted masked run opens at one later-level position collide in its own log**: two of
+table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against the
+flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
+accepts with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
+positions (`zkLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
+theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a b : List 𝔽}
+    (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
+    (ha : (q, a) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)
+    (hb : (q, b) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ) (hab : a ≠ b) :
+    Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω r).vLog :=
+  Gen.zk_levelClash_tiedJ (S := S₀) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (j := j) (k := k) (ℓ := ℓ) (q := q)
+    (a := a) (b := b) (h := h) (ha := ha) (hb := hb) (hab := hab)
 
 end FlockDeploy.KS

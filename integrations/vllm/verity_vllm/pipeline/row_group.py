@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.config import row_world
 from verity_vllm.pipeline import commit_group as CG
 from verity_vllm.pipeline import gpu_lease as GL

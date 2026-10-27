@@ -51,7 +51,14 @@ noncomputable def rowsOutZC (wo : vb.Pos → vb.Opening) (c : vb.Pos) (e : Trial
 
 /-- **`ecr/sha-512` (A2) for the rows finders**: at each registered read `c` that some draw reads, the finder that plays
 the trial at `c` (`trialGZC`) once and outputs `rowsOutZC`, at the trial's cost `cTZC` (`t'` per run it plays), satisfies
-`Assumptions.SHA512CRExpected`. -/
+`Assumptions.SHA512CRExpected`.
+
+Assumption record. Claim: `ecr/sha-512` (`Claims.ExpectedCR`). It assumes that a trial that reads a value other than
+the registrant's at a registered read finds a SHA-512 collision with probability at most its expected evaluations over
+`2^256`: the trial's opening and the registrant's open one commitment to two values, which is a collision
+(`ValueBindingZ.collide_spec`). That is the generic bound for a hash with 512-bit outputs. A hash premise, as
+`LinkCRZC`: `Assumptions.SHA512CRExpected` at each registered read's finder, so it reduces to `ExpectedCR` and asks
+nothing of the verifier. -/
 def RowsCRZC (isRead : vb.Pos → Prop) (wo : vb.Pos → vb.Opening) (k Rw : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), isRead c →
     Assumptions.SHA512CRExpected Hc (trialGZC A Hs P planZ tab vb R τ c k Rw)

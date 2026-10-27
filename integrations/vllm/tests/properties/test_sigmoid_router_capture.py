@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import moe
-from verity_vllm.program.kernels import moe_twins
+from verity.ml.definitions.registry import moe
+from verity.ml.definitions.numerics import moe_twins
 
 from tests.properties import sigmoid_router_capture_gpu as S
 
@@ -44,6 +44,7 @@ def test_sigmoid_words_is_the_sass_model():
     assert S.sigmoid_words(words).tolist() == [moe_twins.nv_sigmoid_bits(int(w)) for w in words]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("launch", S.LAUNCHES)
 def test_the_twin_is_the_program_at_16_experts(R, launch):
     """`twin` restates the Program at any width with 8 slots; at 16 experts the Program evaluates fast, on rows cut from every kind."""
@@ -126,7 +127,6 @@ def test_the_run_is_at_vllms_defaults(monkeypatch):
         assert not S._verdict(doc)
 
 
-@pytest.mark.slow
 def test_check_finds_a_changed_output(tmp_path):
     """`--check` on a capture written from the twin: the Program agrees, except on the one output changed."""
     R = S.rows(7, S.GROUP)

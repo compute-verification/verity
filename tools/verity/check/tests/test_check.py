@@ -138,6 +138,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[1].endswith("tools/verity/check/check.py") and lean_audit[2] == "--lean-slot"
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
+    assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -239,8 +240,10 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
-                                                       "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+                                                           "!PROTOCOL.md"]
+    assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
+    assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "verity" / "ml" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -490,6 +493,17 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
 
 
+def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncached_one_does_not(tmp_path):
+    """With the cache, a run whose task list misses builds only the catalog bindings whose record misses
+    (`circuit_check.units`); the uncached run builds the whole catalog, as the nightly check that must agree with it does."""
+    def cc(cache):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, cache=cache) for s in g if s[0] == "circuit-check"]
+        return s[1]
+
+    assert "--catalog-units" in cc(True) and "--cache" in cc(True)
+    assert "--catalog-units" not in cc(False) and "--cache" not in cc(False)
+
+
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
     """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
     while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at
@@ -586,6 +600,9 @@ def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     (scope.parent / "memory.max").write_text(str(560 << 30))
     (scope.parent / "memory.current").write_text(str(400 << 30))
     assert CHECK.memory_gb(tmp_path) == 160, "the slice leaves 160 of its 560 GB"
+    (scope.parent / "memory.current").write_text(str(555 << 30))
+    (scope.parent / "memory.stat").write_text(f"anon {255 << 30}\nactive_file {100 << 30}\ninactive_file {200 << 30}\n")
+    assert CHECK.memory_gb(tmp_path) == 230, "the slice's 300 GB of page cache is reclaimed at its limit, so it is left"
     (scope.parent / "memory.max").write_text("max")
     assert CHECK.memory_gb(tmp_path) == 230
     pod = tmp_path / "pod"
@@ -615,6 +632,8 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     argv = gs[5][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
+    assert "--timeouts" in pytest and " --timeouts " in argv[2], \
+        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h (CI-184)"
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):
@@ -725,7 +744,7 @@ def _fake_run(monkeypatch, groups, pre=()):
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
     monkeypatch.setattr(CHECK.Reused, "plan", lambda self: {"parts": []})
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None, **kw: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
 
 
@@ -779,6 +798,101 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
                             [("a", ok, tmp_path), ("b", ok, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
+
+
+def test_a_step_killed_by_a_sigterm_the_check_did_not_send_is_stopped_not_failed(tmp_path, monkeypatch):
+    """r20261026-062546-11fc: drive's `research cancel` signalled the run's whole process group, lean-agreement died of it before
+    check's own handler marked it stopped, and it was recorded failed with an empty log, a failure the agreement never found."""
+    ok = _py("pass")
+    _fake_run(monkeypatch, [[("cancelled", _py("import os, signal\nos.kill(os.getpid(), signal.SIGTERM)"), tmp_path)],
+                            [("a", ok, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["a"]["status"] == "passed"
+    assert by["cancelled"]["status"] == "stopped" and by["cancelled"]["rc"] == -15 and "did not send" in by["cancelled"]["detail"]
+
+
+def _gone(pid: int) -> None:
+    """Return once ``pid`` has exited (its pidfd is readable), or at once when it is gone already."""
+    import os
+    import select
+
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        return
+    select.select([fd], [], [])
+    os.close(fd)
+
+
+def test_a_step_that_hangs_writing_nothing_is_stopped_and_fails_as_hung(tmp_path, monkeypatch):
+    """r20261025-021824-ba9f and r20261025-023312-fa65 (CI-184): under --keep-going lean-suites failed, and pytest's suites.py
+    sat 23-24 h on a test that never returned, writing nothing, while circuit-check waited on the grant pytest's end writes and
+    the run held its slot.  Here pytest's process waits on a child that never exits; once the watch's clock (injected) has passed
+    `IDLE_S` with pytest's outputs unchanged, the child and pytest are stopped, pytest fails as hung, the grant is written and the
+    run ends."""
+    import json
+    import os
+
+    gate = tmp_path / "child.pid"
+    os.mkfifo(gate)
+    hang = _py("import subprocess, sys\nsubprocess.Popen([sys.executable, '-c', 'import os, signal, sys\\n"
+               "with open(sys.argv[1], \"w\") as f:\\n    f.write(str(os.getpid()))\\nsignal.pause()', sys.argv[1]]).wait()", gate)
+    clock, child = [0.0], []
+
+    def wait(p, seconds):
+        if p.args is not hang:
+            return p.wait()
+        if not child:
+            child.append(int(gate.read_text()))
+        clock[0] += seconds
+        return p.poll()
+
+    monkeypatch.setattr(CHECK, "CLOCK", lambda: clock[0])
+    monkeypatch.setattr(CHECK, "WAIT", wait)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+    _fake_run(monkeypatch, [[("pytest", hang, tmp_path)], [("circuit-check", _py("pass"), tmp_path)],
+                            [("lean-suites", _py("raise SystemExit(1)"), tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 3, keep_going=True)
+    _gone(child[0])
+    by = {s["step"]: s for s in done}
+    assert not passed and by["lean-suites"]["status"] == "failed" and by["circuit-check"]["status"] == "passed"
+    assert by["pytest"]["status"] == "failed" and by["pytest"]["detail"] == f"hung: no output for {CHECK.IDLE_S // 60} min"
+    assert by["pytest"]["rc"] == -15 and clock[0] == CHECK.IDLE_S
+    assert (tmp_path / CHECK.CC_GRANT).read_text() == "560\n"
+    lines = {r["step"]: r for r in map(json.loads, (tmp_path / CHECK.STEPS_LOG).read_text().splitlines())}
+    assert lines["pytest"]["detail"].startswith("hung: ")
+
+
+def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_over_budget_at_step_budget_s(tmp_path, monkeypatch):
+    """pytest writes its suites' logs (`WATCH`), circuit-check its progress (a file named after it): a step whose outputs grew at
+    each of its first 100 looks is hung `IDLE_S` after the last of them, and one that writes at every look is stopped at
+    `STEP_BUDGET_S`, whatever it writes."""
+    import subprocess
+
+    def stopped(name: str, wrote: str, writes: int) -> tuple[str | None, float]:
+        clock, f = [0.0], tmp_path / wrote
+
+        def wait(p, seconds):
+            clock[0] += seconds
+            if clock[0] <= writes * seconds:
+                with f.open("a") as w:
+                    w.write("x")
+            return p.poll()
+
+        monkeypatch.setattr(CHECK, "CLOCK", lambda: clock[0])
+        monkeypatch.setattr(CHECK, "WAIT", wait)
+        f.parent.mkdir(exist_ok=True)
+        p = subprocess.Popen(_py("import signal\nsignal.pause()"))
+        rc, why = CHECK.watch(name, p, tmp_path)
+        assert rc == -15
+        return why, clock[0]
+
+    every = CHECK.WATCH_EVERY_S
+    assert stopped("pytest", "suites/a_suite.log", 100) == (f"hung: no output for {CHECK.IDLE_S // 60} min", 100 * every + CHECK.IDLE_S)
+    assert stopped("circuit-check", "circuit-check.json.progress.jsonl", 100)[1] == 100 * every + CHECK.IDLE_S
+    assert stopped("pytest", "suites/a_suite.log", 10**6) == (f"over budget: still running after {CHECK.STEP_BUDGET_S / 3600:.1f} h",
+                                                            CHECK.STEP_BUDGET_S)
 
 
 def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
@@ -1271,10 +1385,19 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
     import subprocess
 
-    for flag in ("--no-cache", "--verdicts-in", "--cores"):
-        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
-                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+    def train(*flags: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", *flags],
+                              capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+
+    for flag in ("--no-cache", "--no-regenerate", "--verdicts-in", "--cores"):
+        p = train("--agreement", flag)
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+    # drive's after-landing run of a review landing: every job, the upstream build, no reuse, no regenerated lock records; past
+    # the flags, the store key
+    p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest", "--against", "main")
+    assert p.returncode == 2 and "--deferred takes no --against" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1390,33 +1513,6 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     assert not argv.exists() and not posted.exists()
 
 
-def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
-    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
-    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
-    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    assert not (tmp_path / "posted").exists()
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
-    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
-    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
-    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
-
-    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
-                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
-    p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
-
-
 def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):
     """drive's per-PR shadow (`TRAIN_ORDINARY=1 TRAIN_QUIET=1`) must never take a check slot ahead of a lane's or a train's, nor
     ring anyone when its launch registers nothing (ci, 21 Oct); a train keeps `--priority` and its post."""
@@ -1430,10 +1526,33 @@ def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_p
     assert p.returncode == 0 and "--priority" not in args and {"--record", "--keep-going", "--agreement"} <= set(args), args
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
     p = train("HEAD", "vy-x", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and not (tmp_path / "posted").exists(), p.stderr
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
+
+
+def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
+    """infra, 26 Oct 09:54Z (#4657): drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
+    fails one of them with `cannot lock ref`.  It tries twice more, 5 s and then 15 s later, and only then registers no run."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
+    origin.rename(gone)
+    # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
+    (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
+                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert sleeps.read_text().split()[0] == "5"
+    sleeps.unlink()
+    origin.rename(gone)
+    (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
+    p = train("HEAD", "vy-x", TRAIN_QUIET="1")
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

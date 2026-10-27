@@ -3,7 +3,8 @@ from the H200's PTX, lane by lane: each thread's vector loads unpacked as `mov.b
 once from the exact rational (`test_dsa`'s helpers), `shfl.sync.bfly` simulated over every lane; `rsqrt.approx.ftz` is core's
 `RsqrtApprox_v1`.  Its twin (`kernels.dsa_norm_rows`) against the reference evaluator on edge rows; the statics it refuses; and that
 its scale is not `RMSNormTriton_v1`'s on served-like rows.  `TritonBlockRMSNorm_v1` (`_fused_q_kv_rmsnorm_kernel`) against the same
-kind of model from its PTX, every masked lane's +0 summed, and `DsaRMSNorm_v1` as its 4-warp unmasked case.  The Boolean versions'
+kind of model from its PTX and SASS, every masked lane's +0 summed, and `DsaRMSNorm_v1`'s words as its 4-warp unmasked case's (the
+contracted eps is the same word at a power-of-two N).  The Boolean versions'
 agreement with these word views is circuit-check's (`boolean_dsa_norm.circuit-check.py`)."""
 from __future__ import annotations
 
@@ -15,13 +16,13 @@ import pytest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.boolean import trace as TR
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import dsa_norm_rows as NR
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import boolean_dsa_norm as BN
-from verity_vllm.program.registry import dsa_norm as DN
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import dsa_norm_rows as NR
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry import boolean_dsa_norm as BN
+from verity.ml.definitions.registry import dsa_norm as DN
+from verity.ml.definitions.registry import prims as P
 from tests.program.test_dsa import _butterfly, _fadd
 from tests.program.test_fp8_moe import _bf16, _ffma, _fmul
 
@@ -158,7 +159,8 @@ def ptx_block_model(xb: list[int], wb: list[int], eps: float, block: int, warps:
     """`_fused_q_kv_rmsnorm_kernel`'s program as its PTX runs it: thread t's runs of V = min(block / threads, 8) at `r * V * threads + Vt`
     (`ld.global.v4.b32`, `v2.b32`, `b32` at V = 8, 4, 2, each under `setp.lt.u32` against SIZE, a masked run +0), `mul.f32 x1*x1` then
     `fma.rn.f32 xk, xk, s` for k = 0, 2, 3, ..; each warp's butterfly 16..1 and lane 0 to shared memory; threads 0..warps-1 butterfly
-    warps/2..1; `div.full.f32` by `cvt.rn.f32.u32` of SIZE (core's DivFullScaleA times DivFullRcp); `add.f32 eps, mean`;
+    warps/2..1; `div.full.f32` by `cvt.rn.f32.u32` of SIZE (core's DivFullScaleA times DivFullRcp) with `add.f32 eps, mean`
+    contracted into its multiply, as the SASS has it (`FFMA rcp, scaled sum, eps`, the exact rational rounded once);
     `rsqrt.approx.ftz`; `mul.f32 r, x` then `mul.f32 (.), w`."""
     n, threads = len(xb), 32 * warps
     V = min(block // threads, 8)
@@ -173,8 +175,8 @@ def ptx_block_model(xb: list[int], wb: list[int], eps: float, block: int, warps:
     sums = [_butterfly(lanes[32 * g:32 * g + 32], _fadd, (16, 8, 4, 2, 1)) for g in range(warps)]
     total = _butterfly(sums, _fadd, tuple(warps >> k for k in range(1, warps.bit_length())))
     size = P.bits_of(np.float32(n))
-    mean = _fmul(evaluate(P.DivFullScaleA, total, size)[0], evaluate(P.DivFullRcp, size)[0])
-    r = evaluate(P.RsqrtApprox, _fadd(P.bits_of(np.float32(eps)), mean))[0]
+    rcp = evaluate(P.DivFullRcp, size)[0]
+    r = evaluate(P.RsqrtApprox, _ffma(rcp, evaluate(P.DivFullScaleA, total, size)[0], P.bits_of(np.float32(eps))))[0]
     return [_bf16(_fmul(_fmul(r, v), w << 16)) for v, w in zip(x[:n], wb)]
 
 

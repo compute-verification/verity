@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Sparse
+import Definitions.Flock.Sparse
 import Flock.RecAlgebra
 
 /-!

@@ -6,9 +6,11 @@ committed by the production CPU committer and sealed into a replay bundle with i
     python -m tests.pipeline.served_rope OUT [--served]        (from integrations/vllm)
 
 writes ``OUT/commit``, ``OUT/row`` and ``OUT/partition.json`` (every RoPE head, ``subset:1``) and prints them with the run root as
-one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`)."""
+one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`).  The members
+are committed under rows-sha512; `commit` takes ``commit_scheme="vllm-v1"`` by name only to stand in for an old record."""
 from __future__ import annotations
 
+import argparse
 import gzip
 import json
 import sys
@@ -17,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_vllm.check.replay.index import ProgramIndex
-from verity_vllm.commit import scheme
+from verity_vllm.commit import scheme, step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
@@ -28,10 +30,10 @@ CHUNK = 64
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
-def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None, commit_scheme: str | None = None) -> dict:
+def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None, commit_scheme: str = step_rows.NAME) -> dict:
     """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
     ``seed`` draws its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
-    of the toy's ``SiluMul_v1{I=T.I}``; ``commit_scheme`` the members' (unset = vllm-v1; rows-sha512: a TP rank's, `served_tp`)."""
+    of the toy's ``SiluMul_v1{I=T.I}``; ``commit_scheme`` the members': rows-sha512, or vllm-v1 by name standing in for an old record."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
@@ -110,12 +112,18 @@ def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
 
 
 def main(argv: list[str]) -> int:
-    root = Path(argv[0])
+    ap = argparse.ArgumentParser()
+    ap.add_argument("out")
+    ap.add_argument("--served", action="store_true")
+    ap.add_argument("--commit-scheme", default=step_rows.NAME, choices=(step_rows.NAME,),
+                    help="the members' scheme: rows-sha512 only (vllm-v1 is kept to read recorded runs, which this Commit isn't)")
+    a = ap.parse_args(argv)
+    root = Path(a.out)
     root.mkdir(parents=True, exist_ok=True)
-    c = commit(root)
+    c = commit(root, commit_scheme=a.commit_scheme)
     out = {"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
            "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}
-    if "--served" in argv[1:]:
+    if a.served:
         out["hook"] = str(hook(c, root / "hook"))
     print(json.dumps(out))
     return 0

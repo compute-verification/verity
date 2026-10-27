@@ -126,6 +126,8 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
             space, idx, leaf = fn.body.ret[j]
             continue
         # scan: output is (carry_n, Array<n, Y>)
+        if node.n == 0:
+            raise ValueError("a scan with no iterations has no output to read")
         c = node.out.fields[0].leaves
         if leaf < c:
             m, j = node.n - 1, leaf

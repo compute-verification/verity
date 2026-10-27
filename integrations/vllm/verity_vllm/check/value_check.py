@@ -23,19 +23,17 @@ from typing import Any, Callable
 
 import torch
 
-from verity_vllm.commit.committer.native_host import _mro_names
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
-
-REEXEC_CLASSES = ("Linear", "RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding")
+from verity_vllm.engine.profiles import layer_classes as LC
 
 
 def _cls(m: Any) -> str:
-    names = _mro_names(m)
-    for k in ("RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding", "Attention", "VocabParallelEmbedding", "LogitsProcessor"):
+    names = {c.__name__ for c in type(m).__mro__}
+    for k in LC.TAPPED:
         if k in names:
             return k
-    if names & {"LinearBase", "ColumnParallelLinear", "RowParallelLinear", "ReplicatedLinear", "QKVParallelLinear", "MergedColumnParallelLinear"}:
-        return "Linear"
+    if names & LC.LINEAR:
+        return LC.LINEAR_GROUP
     return type(m).__name__
 
 
@@ -139,7 +137,7 @@ class ValueChecker:
                 lst = metas_by.get(key) or []
                 return lst[call_idx] if call_idx < len(lst) else None
             for name, d in taps.items():
-                mc = "Sampler" if name == "runner.sampler" else _cls(self.modules[name])
+                mc = LC.SAMPLER if name == "runner.sampler" else _cls(self.modules[name])
                 bc = res["by_class"].setdefault(mc, {"tensors": 0, "tap_equal": 0, "reexec": 0, "reexec_equal": 0})
                 if d["calls"] > 1:
                     res["repeated_calls"] += 1
@@ -168,7 +166,7 @@ class ValueChecker:
                         else:
                             res["tap_mismatch"].append((step, key, m.nbytes))
                 # (R) re-execution on tapped inputs
-                if mc in REEXEC_CLASSES and d["in"] and name in self.modules:
+                if mc in LC.REEXEC and d["in"] and name in self.modules:
                     mod = self.modules[name]
                     for call_idx, args in enumerate(d["in"][: self.max_reexec]):
                         try:

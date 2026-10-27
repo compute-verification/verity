@@ -113,6 +113,7 @@ def test_a_worker_killed_mid_task_is_reported_by_name_not_waited_out(monkeypatch
     assert gc.get_freeze_count() == 0
 
 
+@pytest.mark.slow
 def test_replay_record_is_identical_serial_vs_forked_and_names_the_frozen_fork(world):
     bmap, committed = world.bmap_and_reader()
     kw = dict(per_stratum=2, seed=11, retention="host")

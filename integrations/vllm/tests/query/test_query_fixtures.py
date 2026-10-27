@@ -10,6 +10,8 @@ from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.parts import Part, n_members
 from tests.program import fixtures_query as FX
 
+SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1", "attention_head_v2")
+
 
 @pytest.mark.parametrize("name", FX.FIXTURE_NAMES)
 def test_fixture_builds_and_expands(name):
@@ -299,8 +301,7 @@ def _canonical_sets(P, sc) -> list[Part]:
     return sets
 
 
-@pytest.mark.parametrize("name", FX.VLLM_FAMILY_FIXTURES)
-@pytest.mark.slow
+@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.slow) if n in SLOW_FIXTURES else n for n in FX.VLLM_FAMILY_FIXTURES])
 def test_canonical_shapes_by_oracle(name):
     P = FX.fixture(name)
     sets = _canonical_sets(P, FX.root_scope(P))

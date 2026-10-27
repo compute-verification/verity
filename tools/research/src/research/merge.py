@@ -55,10 +55,11 @@ The remote's branch, fetched first, is the truth, never the checkout. With --pus
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
 `research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
-same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
+same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
-These after-landing steps (the spec DM, the mirror, `after_land`, and one line per landing in the merge thread: what it merged
+These after-landing steps (the spec DM, the mirror, `after_land`, the Lean cache publish when a Lean package changed,
+`lean_publish`, and one line per landing in the merge thread: what it merged
 and its `Checked:` run, `report_landings`; a `landed` label on each run a landing's trailer names, `label_landed`) follow the remote's main, not the push: AFTER_LAND_REF on the
 remote is the main they last ran for, and every `research merge` that can change something (all but --dry-run, --mirror,
 --canary and --guard-push) catches them up, once, for whatever landed past it since, however it was pushed (`caught_up`).
@@ -472,11 +473,13 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
     return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()}
 
 
-def fetch_run(rid: str, names: list[str], cwd: Path | None = None) -> tuple[Path, dict] | None:
+def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read."""
+    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
-    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=cwd, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
+                       cwd=cwd, capture_output=True, text=True)
     try:
         row = json.loads(r.stdout)["runs"][0]
         return Path(row["dir"]), row
@@ -521,7 +524,7 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
 
 
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited (CI-64).
@@ -529,11 +532,14 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     ``deferred`` is the check drive lands the parent on with `--defer` while its deferred steps still run (`Driver.verdict`),
     which has no passing attempt yet: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its
     records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
-    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do."""
+    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
+    With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
+    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
+    records, whatever the parent holds."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
-    parent = parents[0]
+    parent = ran if deferred is not None and ran else parents[0]
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
@@ -1511,7 +1517,7 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
-MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-1", "RESEARCH_MERGE_MIRROR", 120
+MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-cpu-4", "RESEARCH_MERGE_MIRROR", 120
 
 
 def mirror_name() -> str | None:
@@ -1549,6 +1555,50 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
         print(f"research merge: main ({sha[:12]}) not pushed to {name} ({why}); rerun: {rerun}", file=sys.stderr)
         return False
     print(f"research merge: pushed main ({sha[:12]}) to {name}:{bare}")
+    return True
+
+
+#: infra's Lean cache publisher on the control pod: `SCRIPT SHA` fast-forwards vy-nebius-cpu-4's bare main to SHA and starts
+#: vy-lean-cache-daily there (a no-op while one runs), exits 0 once started and logs to LEAN_PUBLISH_LOG; $RESEARCH_LEAN_PUBLISH
+#: names another script, and empty skips it
+LEAN_PUBLISH, LEAN_PUBLISH_ENV, LEAN_PUBLISH_LOG, LEAN_PUBLISH_TIMEOUT_S = (
+    "/data/infra/lean_publish.sh", "RESEARCH_LEAN_PUBLISH", "/data/drive/lean-publish.log", 120)
+
+
+def lean_publish(repo: Path, start: str, tip: str, log=print, run=subprocess.run, clock=time.monotonic) -> bool:
+    """Start the Lean cache's publish of ``tip`` when what landed since ``start`` touches a Lake package's lock or Lean sources
+    (`queue.lean_change`), with one line in ``log`` saying whether it started, why not, and the seconds the script took to start.
+    It waits only for the script's start, bounded by LEAN_PUBLISH_TIMEOUT_S, and nothing raises: the landing stands either way."""
+    from .queue import lean_change
+
+    script, what = os.environ.get(LEAN_PUBLISH_ENV, LEAN_PUBLISH).strip(), f"research merge: the Lean cache publish of {tip[:12]}"
+    if not script:
+        log(f"{what} is off (${LEAN_PUBLISH_ENV} is empty)")
+        return False
+    try:
+        touched = lean_change(repo, tip, base=start)
+    except Exception as e:                                      # noqa: BLE001: a diff that can't be read skips only the publish
+        log(f"{what} not started: {start[:12]}..{tip[:12]} can't be diffed ({type(e).__name__}: {e})")
+        return False
+    if not touched:
+        log(f"{what} not started: {start[:12]}..{tip[:12]} touches no Lean package")
+        return False
+    if not Path(script).is_file():
+        log(f"{what} not started: {script} is absent")
+        return False
+    t0 = clock()
+    try:
+        r = run([script, tip], cwd=repo, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=LEAN_PUBLISH_TIMEOUT_S)
+        why = None if r.returncode == 0 else f"exited {r.returncode}: {' '.join((r.stderr or r.stdout or '').split())[-300:]}"
+    except subprocess.TimeoutExpired:
+        why = f"no exit within {LEAN_PUBLISH_TIMEOUT_S} s"
+    except Exception as e:                                      # noqa: BLE001: a script that can't run fails only the publish
+        why = f"{type(e).__name__}: {e}"
+    took = clock() - t0
+    if why:
+        log(f"{what} not started: {script} {why} ({took:.1f} s); its log is {LEAN_PUBLISH_LOG}; rerun: {script} {tip}")
+        return False
+    log(f"{what} started by {script} in {took:.1f} s; its minutes and bytes are in {LEAN_PUBLISH_LOG}")
     return True
 
 
@@ -1625,8 +1675,8 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
               runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), post each
-    landing to the merge thread
+    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), start the
+    Lean cache publish when what landed touches a Lean package (`lean_publish`), post each landing to the merge thread
     (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM
     (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
     when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
@@ -1675,6 +1725,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log, attempt=(runs or {}).get(tip, ""))
         if remote == "origin":
+            lean_publish(repo, start, tip, log=log)
             report_landings(repo, start, tip, log=log, runs=runs)
             label_landed(repo, start, tip, log=log, runs=runs)
     if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
@@ -1791,6 +1842,45 @@ def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print, run
         return False
 
 
+#: a `git revert` commit's own line naming what it reverted
+REVERTS = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
+#: each `landed` label (`label_landed`) whose value is its check run's own source commit: the head that run checked
+CHECKED_HEADS_SQL = """SELECT DISTINCT lv.value, lt.value FROM records l
+JOIN fields lt ON lt.id = l.id AND lt.path = 'target'
+JOIN fields lv ON lv.id = l.id AND lv.path = 'value'
+JOIN fields rs ON rs.id = lt.value AND rs.path IN ('source.commit', 'execution.remote.source_sha')
+WHERE l.type = 'label' AND l.kind = 'landed' AND rs.value = lv.value"""
+
+
+def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
+    """(commit, run) for each commit on ``tip``'s first-parent line whose own `check` passed and landed it: a train's head.
+    `label_landed` labels every commit of a train on its one check run, but the run checked only its source commit, so a
+    label counts only when its value is that commit (the store index ``idx``, `bucket_index.reader`). Oldest first, less
+    each head whose train holds a commit a later `git revert` on the line names: it broke `main` after its check."""
+    line = _git(repo, "rev-list", "--first-parent", "--reverse", tip).stdout.split()
+    pos = {c: i for i, c in enumerate(line)}
+    found: dict[str, str] = {}
+    for commit, run in sorted(idx.query(CHECKED_HEADS_SQL)[1]):
+        if commit in pos:
+            found.setdefault(commit, run)
+    heads = sorted(found, key=pos.__getitem__)
+    bad = set()
+    for r in REVERTS.findall(_git(repo, "log", "--first-parent", "--format=%B", tip).stdout):
+        if r in pos and (h := next((h for h in heads if pos[h] >= pos[r]), None)):
+            bad.add(h)
+    return [(h, found[h]) for h in heads if h not in bad]
+
+
+def main_line(repo: Path, tip: str, idx) -> list[str]:
+    """The checked train heads newest first (`checked_heads` reversed): the commits on `tip`'s first-parent line whose own
+    `check` passed and landed them, less a reverted train's. `research queue checked-heads --out` writes these, one a
+    line, to the verifier's main-line file (`sampled_proofs.remote.main_lines`) for a deployment that wants
+    `pouw.credit`'s line to be the checked heads rather than the raw `git rev-list --first-parent origin/main` infra
+    writes by default; the two differ only by a reverted train's commits and the in-flight commits whose check hasn't
+    landed them."""
+    return [c for c, _ in reversed(checked_heads(repo, tip, idx))]
+
+
 def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
                     runs: dict[str, str] | None = None) -> bool:
     """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
@@ -1832,12 +1922,31 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
             "hasn't been sent")
 
 
+#: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
+#: and "only drive moves main and next" (23 Oct, Daniel) let only that App move `main` and `next`
+DRIVE_ENV = "RESEARCH_DRIVE"
+DRIVE_ONLY = ("main", "next")
+
+
+def on_drive() -> bool:
+    return os.environ.get(DRIVE_ENV) == "1"
+
+
+def off_drive(ref: str, verb: str) -> str:
+    """Why a push of ``ref`` from here is refused: only drive's App may move `main` and `next`."""
+    return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
+            f"on the control pod, `/data/infra/drive.sh {verb}`")
+
+
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
     says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main
     before the push), so they cover a landing pushed another way too; the mirror can fail without failing the merge."""
+    if push and into in DRIVE_ONLY and not on_drive():
+        print(f"research merge: not pushed: {off_drive(into, 'merge ...')}", file=sys.stderr)
+        return 1
     if push:
         from .spec_alert import remote_head
 

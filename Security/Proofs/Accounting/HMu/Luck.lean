@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.HMu
+import Definitions.Accounting.Guarantees.HMu
 import Proofs.Accounting.Tag.LittlewoodOfford
 
 /-!

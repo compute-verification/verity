@@ -1,13 +1,14 @@
 """Compute efficiency eta of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, monitored plus unmonitored. The developer must still compute the counted
 multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
-"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and DESIGN.md's Glossary.
+"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
 
 eta <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
 proved.
 
 * s, the unmonitored compute share, trains at full efficiency.
-* r, the monitored compute residual, is the share of monitored capacity outside the compute certificate (1 - W_cert/C):
+* r, the monitored compute residual: r-hat, the share of monitored capacity outside the compute certificate
+  (1 - W_cert/C), plus PoUW's deficit on the certified work, eps_W W_cert/C, plus the aggregation slack eps'. r-hat is
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
   peak. It trains at full efficiency unless the memory cap binds. A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
@@ -68,10 +69,12 @@ BLOCK_NAME_BITS = 25
 #: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
 REFERENCE_THREADED = (10.0, 37248.0)
 
-#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max, 1 - (1 - eps)
-#: ((1 - phi)/q_sched + phi)/q_clock = 0.326: honest kernels run 1.72x the floor at the nodes' locked clock (run
-#: r20261017-123922-e558), diluted by the training window's filler (the C7 dossier; 0.217 with an attested clock; 1%
-#: needs eight conditions; today nothing in a training window is credited); the GPU clock above what PoUW credits
+#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max,
+#: 1 - ((1 - phi)/q_sched + phi)/q_clock = 0.323: honest kernels run 1.72x the floor at the nodes' locked clock (run
+#: r20261017-123922-e558), diluted by the training window's filler (the C7 dossier, whose 0.326 also takes its
+#: eps = 0.54% off the credited time, which eps_w charges here instead; 0.213 with an attested clock; 1% needs eight
+#: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (CircuitCredit, draft
+#: #2638); the GPU clock above what PoUW credits
 #: (NVIDIA's dense headline implies 2,597 MHz against the credited 2,430: 6.4%, C4 dossier); the host CPUs at their INT8
 #: AMX datasheet peak (two Xeon 6776Ps, 128 cores x 2,048 ops per cycle x 3.6 GHz: 11.8% of the GPUs' FP8 rate);
 #: 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
@@ -85,7 +88,8 @@ REFERENCE_THREADED = (10.0, 37248.0)
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_agg": 1e-4,
+    "unmonitored": 0.0, "residual": 0.323, "host_share": 0.118, "clock_share": 0.064, "eps_w": 0.00744,
+    "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
@@ -103,7 +107,8 @@ DEFAULTS = {
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (6.4%: 2,597 MHz against 2,430; 0 once credit uses the true maximum or auditor hardware reads the clock offset)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (Xeon 6776P INT8 AMX 11.8%; hosts without matrix units, two EPYC 9015s, 0.21%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
@@ -172,16 +177,17 @@ STATUS = [
      "weight columns."),
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
-    ("Monitored compute residual", "r = r-hat + eps'. PoUW's deficit epsilon_W = 0.74% (CircuitCredit, draft #2638) is "
-     "a share of credited work, evaluated with its premises granted. Under the floor credit r-hat = 0.508: GPU floor "
-     "time 0.326 (honest kernels at 1.72 times the floor; run r20261017-123922-e558 has no published outputs), the "
-     "unchecked clock 0.064 and host CPUs at INT8 AMX peak 0.118. eps' = 1e-4 is what the theorem's delta of 2.7e-8 "
-     "costs (Markov over the windows)."),
+    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
+     "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
+     "with its premises granted. Under the floor credit r-hat = 0.505: GPU floor time 0.323 (honest kernels at 1.72 "
+     "times the floor; run r20261017-123922-e558 has no published outputs), the unchecked clock 0.064 and host CPUs at "
+     "INT8 AMX peak 0.118. eps' = 1e-4 is what the theorem's delta of 2.7e-8 costs (Markov over the windows)."),
     ("Memory cap", "ThreadedRuntime and ThreadedRate (draft #2343) give the closed form's shape; its value needs Threaded "
-     "at window scale, which fails. The fit bound (FitBound under Reach and Fits, on a branch) replaces it, conditional "
-     "on F1 per parameter slot (being restated), F3, F4, NET-35 (intake held to alpha F), WipeFullUse (not yet stated) "
-     "and an information form. For a token-routed MoE, Lean's per-token Reach gives 55 at 6 GB; 217 rests on the fit "
-     "page's MoE argument."),
+     "at window scale, which fails. The fit bound (FitBoundSlots under ReachSlots and FitsSlots, adopted for dense "
+     "recipes by ASK-68) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, NET-35 (intake "
+     "held to alpha F), WipeFullUse (not yet stated) and an information form; it charges each server's first window "
+     "(fitBoundSlots_init, fit.py's left_out). A token-routed MoE has no fit rung: ReachSlots at its active count (54 "
+     "at 6 GB for Kimi K2's 32B) needs a measured floor on the active count that reaches the target."),
     ("Wipe residual", "Streamed labels (MEM-51) replace the reference permutation, which is refuted (a developer passes "
      "from 1.53% of the store); the slack is proved only for an ideal permutation. Memory outside the fill is measured as "
      "gaps (on-chip 3.05 GB, the GPUs' own about 1.6 GB; GPU reserve 18.4 GB; host 29.5 GB). No theorem bounds help "
@@ -290,8 +296,13 @@ def audited_residual(p: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r = r-hat + eps': the audited residual plus the share whose certificates may be wrong."""
-    return min(1.0, audited_residual(p) + p["eps_agg"])
+    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds (#3646),
+    ``residualShare W C + εW * W / C + ε``: the audited residual r-hat = 1 - W_cert/C, PoUW's deficit on the certified
+    work (a certificate that isn't wrong may credit up to eps_W of its work without its running, so what was certified
+    and run is (1 - eps_W) W_cert), and the share whose certificates may be wrong."""
+    r_hat = audited_residual(p)
+    certified = 1 - r_hat
+    return min(1.0, r_hat + p["eps_w"] * certified + p["eps_agg"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:

@@ -1,11 +1,14 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
@@ -28,6 +31,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 * `Defs`: the hidden-output statement (`Spec`, `outPairs`, `outBytes`, `commitPair`) and the frozen statements;
 * `Spec`: `setupHidden_spec'`, the walk of `Stmt.setupHidden` to its `Spec`;
+* `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
+  `deltaEntry_inDelta`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
@@ -35,6 +40,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Rows`: an output row is a padded lone port or an exact run of ports (`checkRows_out`: `HmOut.checkRows`), and
   `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
+* `LayoutP`: its layout at public inputs (`hidden_layoutP`), Δ without the pairs into a public leaf's bits;
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
@@ -60,7 +66,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Wide.SegDelta`: Δ for rows of every kind (`delta_flat_any`), a segmented row's pairs compression by compression
   (`segPairsOf`), and the rows' wires (`rowWires_any`);
 * `Wide.SegCopies`: Δ's copies at a row's own columns for rows of every kind (`filter_rowsAny`), and `Wide.Copies`'
-  copies at an unsegmented row's columns whatever the other rows (`Any.cv0_filterAll` … `Any.msg_filterAll`);
+  copies at an unsegmented row's columns whatever the other rows (`Any.cv0_filterAll` … `Any.msgConst_filterAll`,
+  `Any.msgData_filterAll`);
 * `Wide.SegRowBc`: an unsegmented row's `b ‖ c` under its own prefix whatever the other rows (`Any.row_bc_tgt`);
 * `Wide.SegV2`: the V2 statements with only the output rows unsegmented, an input row of any kind
   (`Any.outputs_committed_seg'`, `Any.outputs_binding_seg_of`);
@@ -68,10 +75,10 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   slots' rows and the midstates, chain copies, constants and digest copies Δ writes (`Any.port_commit_seg`);
 * `Wide.SegTgt`: those copies from Δ at a segmented row's columns (`Any.seg_copies_tgt`), so a segmented row's `b ‖ c`
   in a satisfying witness of the untyped statement (`Any.seg_bc_tgt`);
-* `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented and fitting (`Any.OutRowsS`), an
+* `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented (`Any.PadRow`, `Any.OutRowsS`), an
   input row of any kind (`Any.msg_copyF`, `Any.sat_flatF`);
-* `Wide.FitS`: the rows the hidden-output headlines cover, each fit or a `sha512/row-seg/v1` row of any mix
-  (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
+* `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row
+  of any mix (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);

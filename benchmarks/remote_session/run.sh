@@ -31,6 +31,11 @@
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
+# Against the verifier host (vy-auditor-1, `benchmarks/live_verifier/host.py`), the lane starts the run there with its
+# gate key (`vy-verifier-gate run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
+# prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
+# that account says the run's verifier listens.
+#
 #   research run --on vy-nebius-1 ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7791 --env SESSIONS=2 \
 #     -- taskset -c 96-127 bash benchmarks/remote_session/run.sh
 #   research run --on vy-nebius-2 ... --env ROLE=prover --env PORT=7791 --env PLAN=honest,skip:0.0625 \
@@ -44,7 +49,8 @@
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-# --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
+# --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
+# from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
 # python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
@@ -53,7 +59,8 @@
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
-# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it.
+# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
+# windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
@@ -61,7 +68,7 @@
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
 # tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
-# run, a pass an engine step (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling declared in the
+# run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
 # row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
@@ -135,7 +142,20 @@ if [ "$ROLE" = verifier ]; then
   exit $W
 fi
 export VERIFY_ARGS="${VERIFY[*]}"
-if [ "$ROLE" = prover ]; then
+if [ "$ROLE" = prover ] && [ -n "${VERIFIER_SSH:-}" ]; then
+  # The verifier host's run at PORT: this ssh -L listens here at once, so the lease waits for the host's tunnel account
+  # to say the run's verifier listens (`listening PORT`).
+  read -ra TO <<< "$VERIFIER_SSH"
+  ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=15 -L "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
+  trap 'kill $T 2> /dev/null; rm -rf "$B"' EXIT
+  for ((k = 0; k < ${TUNNEL_WAIT_S:-7200} / 5; k++)); do
+    grep -q "^listening $PORT" "$O/tunnel.log" && break
+    kill -0 $T 2> /dev/null || break
+    sleep 5
+  done
+  grep -q "^listening $PORT" "$O/tunnel.log" || { echo "the verifier host's run never listened on $PORT"; cat "$O/tunnel.log"; exit 3; }
+elif [ "$ROLE" = prover ]; then
   # Into the lease's queue only once the verifier's tunnel listens here: a prover that takes the node before its verifier
   # is up stops retrying its connect a minute after building the store (`wire.connect`).
   for ((k = 0; k < ${TUNNEL_WAIT_S:-7200} / 5; k++)); do

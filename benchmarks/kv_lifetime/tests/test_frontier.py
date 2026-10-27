@@ -97,7 +97,7 @@ def test_a_run_too_light_to_batch_a_big_prefill_reads_its_block_clock_and_takes_
              "model_windows_1s": win, "model_totals": {k: 3.0 for k in win}, "prefill_rows_per_s": None}
     (tmp_path / "a.json").write_text(json.dumps({"serve": {"pool_bytes": 1e12, "kv_bytes_per_token": 131072},
                                                  "phases": [phase]}))
-    model = {"token": {"r": 1.0}, "sample": {}, "coefficients": {}, "calls": 0}
+    model = {"token": {"r": 1.0}, "sample": {}, "coefficients": {"products": {}}, "calls": 0}
     (tmp_path / "m.json").write_text(json.dumps({"models": {"m": {"l": model}}}))
     base = ["frontier.py", str(tmp_path / "a.json"), "--models", str(tmp_path / "m.json"), "--model-name", "m",
             "--lever", "l", "--engines", "1"]
@@ -109,6 +109,13 @@ def test_a_run_too_light_to_batch_a_big_prefill_reads_its_block_clock_and_takes_
         return json.loads(out.read_text())
 
     assert run()["recompute_Bps"] is None
+    # E is in nonlinear units: a step model without the attention's data products is refused, a node peak isn't read from it
+    (tmp_path / "m.json").write_text(json.dumps({"models": {"m": {"l": {**model, "coefficients": {}}}}}))
+    with pytest.raises(SystemExit, match="no data products"):
+        run()
+    assert run("--r-cap-node", "7")["r_cap"] == "node"
+    assert F.E_WORD == {"conjectured": 1_145_562.0, "best found": 50_674_272.0}
+    (tmp_path / "m.json").write_text(json.dumps({"models": {"m": {"l": model}}}))
     with pytest.raises(SystemExit, match="prefill-rows-per-s"):
         run("--clock", "origin")
     assert run("--clock", "origin", "--prefill-rows-per-s", "1e4")["recompute_Bps"] == pytest.approx(1e4 * 131072)
@@ -133,7 +140,7 @@ def test_main_reads_the_cap_from_the_worst_window_of_the_phase_or_the_run_and_re
     (tmp_path / "a.json").write_text(json.dumps({
         "serve": {"pool_bytes": 1e12, "kv_bytes_per_token": 131072, "args": {"prefix_caching": "off"}},
         "phases": [phase([100.0] + [10.0] * 59), phase([30.0] * 60)]}))
-    model = {"token": {"r": 1.0}, "sample": {}, "coefficients": {}, "calls": 0}
+    model = {"token": {"r": 1.0}, "sample": {}, "coefficients": {"products": {}}, "calls": 0}
     (tmp_path / "m.json").write_text(json.dumps({"models": {"m": {"l": model}}}))
     base = ["frontier.py", str(tmp_path / "a.json"), "--models", str(tmp_path / "m.json"), "--model-name", "m",
             "--lever", "l", "--engines", "1", "--phase", "0"]

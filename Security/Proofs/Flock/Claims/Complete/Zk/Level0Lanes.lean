@@ -188,10 +188,10 @@ theorem lsendMsg_bind (m : F256 × F256) {f : Unit → LP PS β} {st : LigState}
 theorem lpowB_bind (nonce : ℕ → ℕ → UInt64) {f : Unit → LP PS β} {st : LigState} {t : Transcript}
     {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
     (h : (((powP nonce 2 >>= f).run st).run t).go l = (.ok r, l'')) :
-    ∃ t₁, (((f ()).run { st with cbn := st.cbn.push (nonce 2 st.cbn.size) }).run t₁).go l = (.ok r, l'') := by
+    ∃ t₁, (((f ()).run { st with cbn := st.cbn.push 0 }).run t₁).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
-  obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push (nonce 2 st.cbn.size) }),
-    ap (pN (nonce 2 st.cbn.size)) t), l) = _ from h₁)
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push 0 }),
+    ap (pN 0) t), l) = _ from h₁)
   exact ⟨_, h₂⟩
 
 theorem lpure_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}

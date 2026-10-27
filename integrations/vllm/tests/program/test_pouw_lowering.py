@@ -32,13 +32,13 @@ from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, gemm_pins_for, observe_target_profile, vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1, pouw_rows
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.registry import b1, pouw_rows
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 BF = torch.bfloat16
 M, K, NQ, V = 3, 64, 64, 16
 PROF = dict(mode="profile", profile="b1-eager-v3")
-POUW = DEFAULT_TARGET.with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
+POUW = DEFAULT_TARGET.with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
 
 
 def _gemm_meta(m: int, n: int, k: int) -> str:
@@ -177,6 +177,7 @@ def test_the_module_class_decides_which_launches_are_lowered(monkeypatch):
     assert _hist(rep.program) == {"GemmBias_v1": M, "NcpLinearRow_v1": M, "Gemm_v1": M}, _hist(rep.program)
 
 
+@pytest.mark.slow
 def test_the_fused_row_is_bias_add_after_the_row_bit_for_bit_and_the_replays_native_row():
     rng = np.random.default_rng(4)
     fused, row, add = bind(pouw_rows.NcpLinearRowBias, K=K, N=NQ), bind(pouw_rows.NcpLinearRow, K=K, N=NQ), bind(b1.BiasAdd, N=NQ)

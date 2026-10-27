@@ -4,13 +4,14 @@ import Proofs.Flock.Claims.Sampling.Path
 /-!
 # The sampled reference prover
 
-The honest sampled prover the deployment runs (`refP`), on its tapes (`Tape`, one Flock tape per session statement),
-as a `Claims.Prover` against the sampled verifier.
+The honest sampled prover the deployment runs (`refP PF`), on its tapes (one Flock tape per session statement), as a
+`Claims.Prover` against the sampled verifier, at a Flock reference prover `PF`: the masked record's
+(`FlockComplete.ZkTables.honestPR`, on `Tape`) or the plain record's (`FlockComplete.honestP`).
 
 The trace is committed before the run: the statement's roots, hm96 leaves under the verifier's registered
 frame-v3-sha512 path check (`SamplingDeploy.commit`, `pathCommit` at `hm96Leaf`), and the witness holds the openings.
 The prover waits for the selection coin, saying what the run's framing fixes, and in each session runs
-Flock's masked reference prover (`FlockComplete.ZkTables.honestPR`) at the session's own history, on the Flock witness
+`PF` at the session's own history, on the Flock witness
 that encodes what it opens: at each position the session reads, the witness's first opening there that
 passes its own check under the roots (`revealOC`), with its own `H` calls. Its framing is the code's:
 
@@ -26,7 +27,7 @@ position with a committed value (`found_covers`).
 
 `sessErrAt`: the largest of Flock's errors, capped at `1`, over the statements of the reference prover's sessions at
 `x`, at an honest witness and coins that check the session's unit; the record's completeness error is the sessions'
-count times it at Flock's `ZkTables.δc`.
+count times it at the Flock record's `δc`.
 -/
 
 namespace Claims.Sampling.Reference
@@ -39,7 +40,7 @@ inductive Step where
   | session (xS : Msg) (hS : List (Msg × Msg))
   | say (m : Msg)
 
-/-- **The reference prover's tape**: a Flock tape per session statement. -/
+/-- **The masked reference prover's tape**: a masked Flock tape per session statement. -/
 abbrev Tape := Msg → FlockComplete.TapeZk
 
 /-- **The opening revealed at `g`**: the first of `os` at `g` whose check under `roots` passes, each check its own `H`
@@ -61,18 +62,17 @@ def found (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (w : Wit) 
   gs.flatMap fun g => (w.vals.find? fun o => o.pos == g && Cm.Opens H roots o).toList
 
 /-- **The sampled reference prover** at the witness `w`: what the framing fixes outside the sessions; in the session
-under `xS`, Flock's masked reference prover at the session's history, on the Flock witness of what it reveals and
+under `xS`, the Flock reference prover `PF` at the session's history, on the Flock witness of what it reveals and
 `xS`'s tape. -/
-def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ)
-    (Cm : Commitment Bool) (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) :
-    Prover Tape :=
+def refP {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF) (step : Msg → List (Msg × Msg) → Step)
+    (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ) (Cm : Commitment Bool)
+    (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) : Prover (Msg → ΩF) :=
   ⟨fun x hist ω =>
     match step x hist with
     | .say m => .ret m
     | .session xS hS =>
       match parse x with
-      | some s => ocBind (revealOC Cm s.roots w (reads s xS)) fun os =>
-          (FlockComplete.ZkTables.honestPR (wit s xS os)).next xS hS (ω xS)
+      | some s => ocBind (revealOC Cm s.roots w (reads s xS)) fun os => (PF (wit s xS os)).next xS hS (ω xS)
       | none => .ret []⟩
 
 /-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions of `P`'s runs
@@ -154,22 +154,21 @@ theorem found_covers {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wi
 
 /-- **In a session, its message is Flock's reference prover's** at the session's history, on the Flock witness of what
 it reveals. -/
-theorem refP_session (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt)
-    (reads : Stmt → Msg → List ℕ) (Cm : Commitment Bool)
-    (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
+theorem refP_session (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF)
+    (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ)
+    (Cm : Commitment Bool) (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
     (w : Wit) {x : Msg} {s : Stmt} {hist : List (Msg × Msg)} {xS : Msg} {hS : List (Msg × Msg)}
-    (hs : parse x = some s) (hstep : step x hist = .session xS hS) (ω : Tape) :
-    (((refP step parse reads Cm wit w).next x hist ω).eval H).1 =
-      (((FlockComplete.ZkTables.honestPR (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS
-        (ω xS)).eval H).1 := by
+    (hs : parse x = some s) (hstep : step x hist = .session xS hS) (ω : Msg → ΩF) :
+    (((refP PF step parse reads Cm wit w).next x hist ω).eval H).1 =
+      (((PF (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS (ω xS)).eval H).1 := by
   simp only [refP, hstep, hs, ocBind_eval, revealOC_eval]
 
 /-- **Outside the sessions, it says what the framing fixes.** -/
-theorem refP_say (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt)
-    (reads : Stmt → Msg → List ℕ) (Cm : Commitment Bool)
-    (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
-    (w : Wit) {x : Msg} {hist : List (Msg × Msg)} {m : Msg} (hstep : step x hist = .say m) (ω : Tape) :
-    (((refP step parse reads Cm wit w).next x hist ω).eval H).1 = m := by
+theorem refP_say (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF)
+    (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ)
+    (Cm : Commitment Bool) (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
+    (w : Wit) {x : Msg} {hist : List (Msg × Msg)} {m : Msg} (hstep : step x hist = .say m) (ω : Msg → ΩF) :
+    (((refP PF step parse reads Cm wit w).next x hist ω).eval H).1 = m := by
   simp only [refP, hstep, OC.eval]
 
 end Claims.Sampling.Reference

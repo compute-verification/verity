@@ -1,5 +1,5 @@
 import Proofs.Accounting.HeadlineDc.Branches
-import Models.Accounting.Guarantees.HeadlineDc
+import Definitions.Accounting.Guarantees.HeadlineDc
 
 /-!
 # The H200's headline at the data sheet
@@ -10,7 +10,7 @@ import Models.Accounting.Guarantees.HeadlineDc
 
 * the data, by `decide`: issue is ♭'s largest facet (`sm90_max`), so `B_♭` is its issue load (`sm90_bnd`); every
   writer kind's `ω ≤ 4096` (`sm90_omega`), so each word route costs at least `1/4096` on issue and `w* ≥ 1/4096`
-  (`sm90_wStar`); each of the 14 fold routes costs at least the cheapest one's load there (`sm90_fold`,
+  (`sm90_wStar`); each of the 56 fold routes costs at least the cheapest one's load there (`sm90_fold`,
   `sm90_phiStar`);
 * the folded branch from those bounds (`folded_of_lower`): below `944/100000` by `decide` (`sm90_folded_q`);
 * the unfolded branch (`unfolded_of_lower`): below `944/100000` by `decide` (`sm90_unfolded_q`), and it binds;
@@ -33,7 +33,7 @@ def B90 : ℚ := dot (sheetCoefQ Sm90.ds90 .issue) 50 flat90
 def load90 (i : ℕ) : ℚ := dot (sheetCoefQ Sm90.ds90 .issue) 50 (Sm90.d2s.folds.getD i [])
 
 /-- The cheapest fold route's load on issue. -/
-def phi90 : ℚ := ((List.range 14).map load90).foldr min (load90 0)
+def phi90 : ℚ := ((List.range 56).map load90).foldr min (load90 0)
 
 theorem sm90_max (r : SheetRow Sm90.Pipe) : dot (sheetCoefQ Sm90.ds90 r) 50 flat90 ≤ B90 := by
   cases r with
@@ -48,7 +48,7 @@ theorem sm90_omega :
     ∀ i < 34, 0 < (Sm90.d2s.writers.getD i (0, 0)).2 ∧ (Sm90.d2s.writers.getD i (0, 0)).2 ≤ 4096 := by
   decide +kernel
 
-theorem sm90_fold : ∀ i < 14, phi90 ≤ dot (sheetCoefQ Sm90.ds90 .issue) 50 (Sm90.d2s.folds.getD i []) := by
+theorem sm90_fold : ∀ i < 56, phi90 ≤ dot (sheetCoefQ Sm90.ds90 .issue) 50 (Sm90.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm90_folded_q :

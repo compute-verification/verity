@@ -1,7 +1,7 @@
-import Models.Accounting.Guarantees.Bridges
+import Definitions.Accounting.Guarantees.Bridges
 import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Localization
-import Models.Pouw.Assumptions.Deadline
+import Definitions.Pouw.Assumptions.Deadline
 import Proofs.Pouw.Deadline
 
 /-!

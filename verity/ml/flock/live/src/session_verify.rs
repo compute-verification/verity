@@ -117,7 +117,7 @@ fn pool() -> &'static ThreadPool {
     static POOL: OnceLock<ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
         let n = var("FLOCK_VERIFY_THREADS").ok().and_then(|v| v.parse::<usize>().ok()).filter(|&n| n > 0).unwrap_or(1);
-        ThreadPoolBuilder::new().num_threads(n).stack_size(64 * 1024 * 1024).thread_name(|_| "flock-verify".into()).build()
+        ThreadPoolBuilder::new().num_threads(n).stack_size(crate::THREAD_STACK).thread_name(|_| "flock-verify".into()).build()
             .expect("the session verifier's pool")
     })
 }

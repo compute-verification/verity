@@ -14,7 +14,7 @@ from verity.ml.circuits.codec import descriptor_size  # noqa: E402
 from tests.program import b1_authored as A  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
@@ -42,10 +42,11 @@ CORRESPOND = [  # the zero-row / initial-state broadcasts: TA1 writes `Concat`/`
     ("Attention{T=5,KVH=2}", A.Attention, b1.Attention, {"T": 5, "NH": 4, "KVH": 2, "D": 16}),
     ("Serve{TINY,LP=3,STEPS=2}", A.Serve, b1.Serve, {"C": TINY, "LP": 3, "STEPS": 2}),
 ]
+SLOW_EQUAL = ("RMSNormTriton{N=1088}", "RMSNormFusedCuda{N=1536}")
 
 
-@pytest.mark.parametrize("label,front,ta1,statics", EQUAL, ids=[e[0] for e in EQUAL])
-@pytest.mark.slow
+@pytest.mark.parametrize("label,front,ta1,statics",
+                         [pytest.param(*e, marks=pytest.mark.slow) if e[0] in SLOW_EQUAL else e for e in EQUAL], ids=[e[0] for e in EQUAL])
 def test_authored_digest_equals_ta1(label, front, ta1, statics):
     rep = export_report(front, static=statics, dead_gates="ignore")
     P_t = Program(bind(ta1, **statics))

@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_dense`: the Boolean versions of `registry.dense`'s Definitions agree with their word
+"""`verity.ml.definitions.registry.boolean_dense`: the Boolean versions of `registry.dense`'s Definitions agree with their word
 Definitions (`trace.word_of`): GeGLU on every activation word, every pair of special words and random and edge-product pairs;
 the element-wise rows whose element reads one bf16 word on every word at Gemma-2's constants, the others on every pair of
 special words, on random words and on products and sums at f32's subnormal and overflow ends. They carry exactly their
@@ -23,10 +23,10 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.silicon import fp
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_dense as BD
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_dense as BD
+from verity.ml.definitions.registry import dense as D
+from verity.ml.definitions.registry import prims as P
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -257,8 +257,8 @@ def test_the_one_word_rows_on_every_word(d) -> None:
     _agree(_row(d, 1), EVERY.reshape(-1, 1))
 
 
-@pytest.mark.parametrize("d", [BD.SquareF32, BD.AddScalarF32, BD.ScaleRowF32, BD.MulVecF32]
-                         + [pytest.param(d, marks=pytest.mark.slow) for d in (BD.AddWidenedBf16, BD.ScaleRowBf16, BD.Bf16MulScalarTensor)],
+@pytest.mark.parametrize("d", [BD.SquareF32, BD.AddScalarF32, BD.ScaleRowF32, BD.MulVecF32, BD.AddWidenedBf16]
+                         + [pytest.param(d, marks=pytest.mark.slow) for d in (BD.ScaleRowBf16, BD.Bf16MulScalarTensor)],
                          ids=lambda d: d.name)
 def test_the_two_word_rows_on_specials_random_and_edges(d) -> None:
     """`_operands` at N = 1 (a row with a bf16 operand reads every bf16 word against 8 specials: slow, about 15 s)."""

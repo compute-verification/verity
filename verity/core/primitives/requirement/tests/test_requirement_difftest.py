@@ -236,7 +236,7 @@ def paged(req: R.Requirement, B: int) -> tuple[R.Layout, R.Store]:
     """A KV pool's honest layout and store, one sequence's: the registered values as `pack` places them, then every
     other value that is ever live in order of birth, filling blocks of `B` bits in turn, so that a block later steps
     fill credits nothing until it is complete; each block written in the record of its last value's step, the one that
-    completes it, and freed in that of its values' last read."""
+    completes it, and freed in that of its values' last structural reader."""
     layout, store = R.pack(req, B)
     block = {v: j for v, j in layout.block.items() if v in req.registered}
     offset = {v: layout.offset[v] for v in block}
@@ -675,7 +675,7 @@ def _bf16_inputs(program: Program, seed: int, tokens: dict[int, int] | None = No
 def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.Serve` at TINY: a prompt of three tokens, prefilled at step 0 (the root's first 22 Calls: three embeddings, two
     layers and the final norm and pick), then two decode steps of 8 Calls each, the weights registered."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     program = Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2), registered=("weights",))
     return program, R.Schedule.by_calls(program, [0, 22, 30]), _bf16_inputs(program, 0, {0: 5, 1: 17, 2: 42})
@@ -683,7 +683,7 @@ def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
 
 def rmsnorm() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.RMSNormFusedCudaV1` at N = 64 with its weight registered, its 138 Calls in three steps."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     program = Program(bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5), registered=("w",))
     return program, R.Schedule.by_calls(program, [0, 46, 92]), _bf16_inputs(program, 1)

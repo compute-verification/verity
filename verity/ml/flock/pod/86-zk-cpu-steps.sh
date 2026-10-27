@@ -209,10 +209,10 @@ build)
   ) > $O/build-lean.log 2>&1 &
   LP=$!
   # each statement: one Call of Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape staged at N instances, and the verifier's copy
-  # of the partition object its circuit binds (q-word over the one-Call program)
+  # of the partition object its circuit binds (q-word over the one-Call program) and of that program (program.json)
   for kn in ${STATEMENTS:-4096:2048 14336:512}; do
     k=${kn%:*} n=${kn#*:}; dd=$FW/data/k$k; so=$O/stage-k$k; mkdir -p $so
-    [ -f $dd/stage/inst-$n.bin ] && [ -f $dd/stage/partition.json ] && { du -sb $dd/stage/* > $so/sizes.txt; continue; }
+    [ -f $dd/stage/inst-$n.bin ] && [ -f $dd/stage/partition.json ] && [ -f $dd/stage/program.json ] && { du -sb $dd/stage/* > $so/sizes.txt; continue; }
     python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=4096,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % sys.argv[1]: 1151}, open(sys.argv[2], 'w'))" $k $so/defs.json
     FLOCK_STAGE_CACHE=$dd/stage-cache FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $so/time-stage.txt \
       python3 -m verity_flock.class_statement --definitions $so/defs.json --partition q-word --out $so/out --stage-only --batch fixed \
@@ -221,9 +221,10 @@ build)
     C=$(ls -td $dd/stage-cache/*/ 2>/dev/null | head -1)
     [ -n "$C" ] && [ -f $C/inst-$n.bin ] || { echo "no staged statement under $dd/stage-cache"; exit 1; }
     mkdir -p $dd/stage && for f in circuit.txt inst-$n.bin pub-$n.bin; do ln -f $C/$f $dd/stage/$f || cp $C/$f $dd/stage/$f; done
-    python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt <<'EOF' || exit 1
+    python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt $dd/stage/program.json <<'EOF' || exit 1
 import json, sys
 from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.codec import canonical_json, encode_program
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
 program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
@@ -234,6 +235,7 @@ with open(sys.argv[3]) as f:
     meta = json.loads(f.readline()[5:])
 assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
 open(sys.argv[2], "w").write(json.dumps(obj, sort_keys=True))
+open(sys.argv[4], "wb").write(canonical_json(encode_program(units.program)))
 print("partition", PO.digest(obj), "program", obj["program"])
 EOF
     du -sb $dd/stage/* > $so/sizes.txt
@@ -287,7 +289,7 @@ lean)
   mkdir -p $O/lean
   for b in $BUILDS; do
     [ -f $DD/sess/$b-zk/session.json ] || { echo "build $b: no --zk session of k$K (run STEP=prove first)"; continue; }
-    echo "/usr/bin/time -v -o $O/lean/time-$b.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --session $DD/sess/$b-zk > $O/lean/$b.log 2> $O/lean/$b.err; echo $b lean exit \$?"
+    echo "/usr/bin/time -v -o $O/lean/time-$b.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --program $D/program.json --session $DD/sess/$b-zk > $O/lean/$b.log 2> $O/lean/$b.err; echo $b lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-2} -I{} sh -c "{}"
   python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $BUILDS; LEAN_RC=$?
   ;;

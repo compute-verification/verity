@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import bisect
 import re
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -16,7 +16,7 @@ from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 
 
 SAMPLER_OP = "runner.sampler"
@@ -95,6 +95,28 @@ V2_QUERY = "v2-query"
 DEFAULT_QUERY: str | None = None
 
 
+def _tp_of(tp: dict[str, Any] | None) -> dict[str, int] | None:
+    return dict(rank=int(tp.get("rank", 0)), world=int(tp.get("world", 1))) if tp and int(tp.get("world", 1) or 1) > 1 else None
+
+
+def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
+              program_dir: str | None = None, query: str | None = None, norm_scales: bool = False) -> tuple:
+    """`ProgramIndex`'s arguments as the index reads them: its TP context and the effective query."""
+    t = _tp_of(tp)
+    return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
+
+
+def index_of(inst: dict[str, Any], reuse: Iterable["ProgramIndex"] = (), **kw: Any) -> "ProgramIndex":
+    """``ProgramIndex(inst, **kw)``: the one of ``reuse`` built from this very document (no reader modifies one,
+    `instances_file.read_instances`) with these same arguments (`index_key`), else a new one -- one index of a GLM-5.3 TP8 rank
+    Program takes minutes."""
+    key = index_key(**kw)
+    for pi in reuse:
+        if pi.inst is inst and pi.key == key:
+            return pi
+    return ProgramIndex(inst, **kw)
+
+
 class ProgramIndex:
     """The Program's rows with their manifest addresses: (op_path, member, request-local step, request-local row) per output slice.
 
@@ -104,11 +126,13 @@ class ProgramIndex:
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
                  program_dir: str | None = None, query: str | None = None, norm_scales: bool = False):
+        self.inst = inst
+        self.key = index_key(prefix=prefix, attention_paths=attention_paths, tp=tp, program_dir=program_dir, query=query, norm_scales=norm_scales)
         self.rows: list[dict] = list(inst["rows"])
         # [tp TP-08d] a RANK Program (derive_step --tp W --rank r; result.json `tp` = {"world": W, "rank": r}): its population carries the
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
         # manifest was built with.  `tp` = {"rank": r, "world": W}.
-        self.tp: dict[str, Any] | None = (dict(rank=int(tp.get("rank", 0)), world=int(tp.get("world", 1))) if tp and int(tp.get("world", 1) or 1) > 1 else None)
+        self.tp: dict[str, Any] | None = _tp_of(tp)
         # [v2 flip, P2] Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
         # (`Population.program_path`: its owning module, a collective site's site path)
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
@@ -450,7 +474,7 @@ class ProgramIndex:
         return name, lo - base, hi - base, shape
 
     def weight_bits(self, field: str) -> int:
-        """[R16 fp8] the leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
+        """The leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
         for name, _count, _shape, bits in self.fields:
             if name == field:
                 return int(bits) or 16

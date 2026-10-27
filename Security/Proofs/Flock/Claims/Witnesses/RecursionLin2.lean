@@ -9,7 +9,8 @@ below `1/4` at `R = 16·(k + 1)` (`f0_tail_lt`), while `κ < 1/2`. `KSLin2` and 
 records (`ksRAt` with `ksB`), where the outer witnesses record no call, so `B_I`, `Fdev` and `F0I` find nothing, the
 inner statement has no cap position, and `Fdev`'s tail `β₂/(M+1)` is below `1/4` at `M = ⌈4β₂⌉` (`tail_lt_quarter`);
 there `κ < 1/6` (`ksD_κ_lt_sixth`), so `λ₂ > 0` (`ksB_lamLin2_pos`). Their `meets` witnesses are `Inner.KSAbort`'s and
-`KSBound`'s: the claims read the same decoders.
+`KSBound`'s: the claims read the same decoders. The toy records stage no V\* statement, so `B_I` and `Fdev` over the
+draws' evaluations (`BinnerV`, `FdevV`) find nothing either (`drawCalls_noCalls`).
 -/
 
 namespace Claims.Witness.Recursion
@@ -66,7 +67,7 @@ theorem prF0_vLog_nil {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [None
 
 /-- `F0I` finds nothing where the outer witnesses record no call. -/
 theorem f0I_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
-    (hc : ∀ x ws, D.calls x ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (R : ℕ) : (F0I H D I DO decO P x R).Pr H = 0 := by
   unfold Finder.Pr
@@ -76,17 +77,83 @@ theorem f0I_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deplo
     simp only [F0I, hc, getD_map_nil, flatMap_nil_fun, List.nil_append, findColl, ite_self, reduceCtorEq] at h
 
 theorem prF0I_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
-    (hc : ∀ x ws, D.calls x ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (R : ℕ) : PrF0I H D I DO decO P x R = 0 :=
   f0I_pr_noCalls H D hc I DO decO P x R
 
 theorem f0I_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
-    (hc : ∀ x ws, D.calls x ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (R : ℕ) : ExpectedCR H (F0I H D I DO decO P x R) := by
   unfold ExpectedCR
   rw [f0I_pr_noCalls H D hc I DO decO P x R]
+  exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
+
+/-- A draw's evaluations are none where the outer witnesses record no call and the compiled verifier stages no V\*
+statement. -/
+theorem drawCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : drawCalls H D I DO decO P x ω d = [] := by
+  unfold drawCalls runStmts
+  rw [hc, hs]
+  rfl
+
+/-- `B_I` over the draws' evaluations finds nothing where there are none. -/
+theorem binnerV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (hk : 0 < I.V.k (xI D x)) : (BinnerV H D I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [BinnerV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
+
+/-- `Fdev` over the draws' evaluations finds nothing where there are none. -/
+theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (M : ℕ) (hk : 0 < I.V.k (xI D x)) : (FdevV H D I DO decO P x M hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
+
+theorem prBinnerV_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) : PrBinnerV H D I DO decO P x = 0 := by
+  unfold PrBinnerV
+  split_ifs with hk
+  · exact binnerV_pr_noCalls H D hc hs I DO decO P x hk
+  · rfl
+
+theorem prFdevV_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (M : ℕ) : PrFdevV H D I DO decO P x M = 0 := by
+  unfold PrFdevV
+  split_ifs with hk
+  · exact fdevV_pr_noCalls H D hc hs I DO decO P x M hk
+  · rfl
+
+theorem binnerV_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (hk : 0 < I.V.k (xI D x)) : ExpectedCR H (BinnerV H D I DO decO P x hk) := by
+  unfold ExpectedCR
+  rw [binnerV_pr_noCalls H D hc hs I DO decO P x hk]
+  exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
+
+theorem fdevV_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+    (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (M : ℕ) (hk : 0 < I.V.k (xI D x)) : ExpectedCR H (FdevV H D I DO decO P x M hk) := by
+  unfold ExpectedCR
+  rw [fdevV_pr_noCalls H D hc hs I DO decO P x M hk]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -144,7 +211,7 @@ omit [Fintype Coin] [Nonempty Coin] in
 /-- `λ₂ > 0` at `ksRV` over `ksB` with no cap position: `κ < 1/6` binds, against `log₂ 6 < 3`; the rest are above
 `155` (`γ = 0`, `k_I = 1`, `c_Be = 4`, `k = 32`, `N_I = 129`, `β₂ = 261`). -/
 theorem ksB_lamLin2_pos (decI : List (ℕ × Unit) → List Unit) :
-    0 < lamLin2 (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy decI) noCaps [] := by
+    0 < lamLin2 (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy decI) noCaps [] 0 0 := by
   have hx : xI (ksRV Coin (ksB Coin).IVStar) [] = [] := rfl
   have hkV : (Inner.ofFlock (ksB Coin).deploy decI).V.k [] = 1 := rfl
   have hk : (Inner.ofFlock (ksB Coin).deploy decI).k [] = 32 := Flock.ksD_k (Coin := Coin) []
@@ -170,8 +237,12 @@ theorem ksB_lamLin2_pos (decI : List (ℕ × Unit) → List Unit) :
     rw [Real.logb_lt_iff_lt_rpow (by norm_num) (by norm_num), show (3 : ℝ) = ((3 : ℕ) : ℝ) by norm_num,
       Real.rpow_natCast]
     norm_num
+  have hs : (cBe (ksRV Coin (ksB Coin).IVStar) [] : ℝ) + setupLen (ksRV Coin (ksB Coin).IVStar) [] +
+      2 * ((0 + 0 : ℕ) : ℝ) = 4 := by
+    rw [hc, show setupLen (ksRV Coin (ksB Coin).IVStar) [] = 0 from rfl]
+    norm_num
   unfold lamLin2 βdev2 NI
-  rw [hx, hkV, hk, hw, hW, hc, hγ, hκ, Real.logb_zero, sub_pos]
+  rw [hx, hkV, hk, hw, hW, hs, hγ, hκ, Real.logb_zero, sub_pos]
   refine lt_min (lt_min (lt_min (lt_min (lt_min h1 ?_) ?_) ?_) ?_) ?_
   · linarith
   all_goals exact lt_sub_logb _ (by norm_num) (by norm_num) (by norm_num) h6
@@ -226,9 +297,9 @@ theorem KSLin2_fails (H : Msg → Msg) : ¬ KSLin2 H (ksRAt Coin) (ksB Coin) (Fl
   try beta_reduce at h1
   have hW : (noCaps (Coin := Coin)).width (xI (ksRV Coin (ksB Coin).IVStar) []) = 0 := rfl
   rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []), ksRV_prB, ksRV_κ,
-    prBinner_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ => rfl),
-    prFdev_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ => rfl),
-    prF0I_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ => rfl), hW] at h1
+    prBinnerV_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ _ => rfl) (fun _ _ => rfl),
+    prFdevV_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ _ => rfl) (fun _ _ => rfl),
+    prF0I_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ _ => rfl), hW] at h1
   have := tail_lt_quarter
     (βdev2 (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy fun _ => [()]) noCaps [])
   have := f0_tail_lt ((Inner.ofFlock (ksB Coin).deploy fun _ => [()]).k (xI (ksRV Coin (ksB Coin).IVStar) []))
@@ -236,16 +307,28 @@ theorem KSLin2_fails (H : Msg → Msg) : ¬ KSLin2 H (ksRAt Coin) (ksB Coin) (Fl
   simp only [Nat.cast_zero, mul_zero, zero_mul, Real.sqrt_zero, add_zero, zero_add] at h1
   linarith
 
+theorem expectedCR_charge_zero {H : Msg → Msg} {F : Finder} {n : ℕ} (h : ExpectedCR H F) (hn : n = 0) :
+    ExpectedCR H (F.charge n) := by
+  subst hn
+  have hF : F.charge 0 = F := by
+    cases F
+    rfl
+  rw [hF]
+  exact h
+
 /-- **The recursion's `BitsLin2` fails** at `ksRAt`, `ksB` inside, `Flock.ksD` outside and no cap position, where
 `λ₂ > 0`. -/
 theorem BitsLin2_fails (H : Msg → Msg) : ¬ BitsLin2 H (ksRAt Coin) (ksB Coin) (Flock.ksD Coin) noCaps := fun h =>
   bits_bound_fails H _ _ _ (ksRV_noR _ _ []) (ksB_lamLin2_pos _) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1
-      le_rfl (calls_silentP_accV H []) (strictBirthday_B_accV H silentP [])
-      (binner_expectedCR_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ => rfl) _ _ _ silentP [])
-      (fun M => fdev_expectedCR_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ => rfl) _ _ _ silentP [] M)
+      le_rfl (calls_silentP_accV H []) 0 (fun _ _ => le_rfl) 0 (fun _ => le_rfl) (strictBirthday_B_accV H silentP [])
+      (fun hk => expectedCR_charge_zero (binnerV_expectedCR_noCalls H (ksRV Coin (ksB Coin).IVStar)
+        (fun _ _ _ => rfl) (fun _ _ => rfl) _ _ _ silentP [] hk) rfl)
+      (fun M hk => expectedCR_charge_zero (fdevV_expectedCR_noCalls H (ksRV Coin (ksB Coin).IVStar)
+        (fun _ _ _ => rfl) (fun _ _ => rfl) _ _ _ silentP [] M hk) rfl)
       (fun _ hW => absurd hW (Nat.lt_irrefl 0))
-      (fun R => f0I_expectedCR_noCalls H (ksRV Coin (ksB Coin).IVStar) (fun _ _ => rfl) _ _ _ silentP [] R)
+      (fun R => expectedCR_charge_zero (f0I_expectedCR_noCalls H (ksRV Coin (ksB Coin).IVStar)
+        (fun _ _ _ => rfl) _ _ _ silentP [] R) rfl)
 
 end Claims
 

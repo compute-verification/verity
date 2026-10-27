@@ -11,12 +11,18 @@ results. The Lean audit runs `NciCheck/BaselineDifftestMain.lean` on the three (
 
 Case `seed`'s declaration, for the first `COUNT`, is one of `difftest_vectors`' shapes with each parameter bound at
 registration with probability 0.6, divided into one IU, with `Γ` and `α` large enough that the policy check gives a
-verdict. θ is a random set of its registered input nodes. Its trusted input is a log of one to three earlier records,
-the run's own and up to one later, in R6's chain; each parameter holding a θ node is registered in the run's record under
-the root its provenance cites: an earlier record's registered value of the same root and shape (`registered`), or an
-accepted earlier record's port of that root and leaf count (`output`). The records carry decoy values and ports. Just
-under half the cases are broken in one way, each refused with one of `CODES`. The data ends with `pinned()`: on a
-declaration worked by hand, one case the check accepts and one negative per code, `theta-not-registered` among them.
+verdict. θ is a random set of its registered input nodes. Its trusted input is a deployment's log in R6's chain: up to
+three records before the run's own, so the run is the deployment's first in a quarter of the cases, and up to one after.
+Each parameter holding a θ node is registered in the run's record under the root its provenance cites: the log's first
+record's registered value of the same root and shape (one entry, when the run's record is that first record and the
+value is the parameter's name). The records carry decoy values and ports. Just under half the cases are broken in one
+way, each refused with one of `CODES`; an entry of another kind (`output` among them) is `theta-provenance`, and one
+citing a later record that registers the same value under the same root is `theta-not-at-deployment-start`. The data
+ends with `pinned()`: on a declaration worked by hand, two cases the check accepts (the first record cited from the
+deployment's first run and from its third), one negative per code, an entry of the `output` kind θ no longer takes
+(`theta-provenance`), `theta-not-registered`, and two of a field of another JSON type than the string or null the check
+compares it with (`TYPED`): the cited entry's root a number (`theta-root`) and a record's `previous` neither its
+predecessor's digest nor null (`trusted`).
 """
 from __future__ import annotations
 
@@ -47,9 +53,11 @@ vectors = _load("difftest_vectors")
 reference = vectors.reference
 
 COUNT = 1200
-CODES = ["theta-provenance", "trusted", "theta-record-unknown", "theta-not-earlier", "theta-uncertified", "theta-root",
+CODES = ["theta-provenance", "trusted", "theta-record-unknown", "theta-not-at-deployment-start", "theta-root",
          "theta-unbound", "theta-width"]
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
+# pinned breaks of a field's JSON type, and the code each is refused with
+TYPED = [("root-type", "theta-root"), ("previous-type", "trusted")]
 
 
 def _hex(rng) -> str:
@@ -89,9 +97,11 @@ def _entry(value: str, root: str, rows: int, words: int, bits: int, domain: str)
             **({"word_bits": bits} if bits != 16 else {})}
 
 
-def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
+def build(rng, text: str, params: list, theta_pick, bad: str | None, run_at: int | None = None) -> dict:
     """A case on the declaration `text`: θ the registered input nodes `theta_pick` chooses, its provenance and the trusted
-    input, broken as `bad` names (None: not broken). Returns the case with what it was made from."""
+    input, the run's own record at position `run_at` of the log (0 to 3 at random when None), broken as `bad` names
+    (None: not broken; "output": one entry a port of the log's first record under the cited root and the run's rows, in
+    the `output` form the check took until 21 Oct). Returns the case with what it was made from."""
     desc = json.loads(text)
     program = codec.decode_program(desc, reference.declared(desc))
     typed = [(n, type_from_json(t)) for n, t in params]
@@ -108,10 +118,10 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
     inst = {"program": text, "theta": theta, "owner": owner, "gamma": program.root.gates,
             "alpha": [64 * program.root.gates + 1, 1]}
 
-    before, after = rng.randint(1, 3), rng.randint(0, 1)
-    run_at = before
+    run_at = rng.randint(0, 3) if run_at is None else run_at
+    after = rng.randint(0, 1)
     recs = [{"format": "verity/registration/v2", "protocol": PROTOCOL, "program": _hex(rng),
-             "window": {"kind": "served", "n": i}, "registered": [], "roots": []} for i in range(before + 1 + after)]
+             "window": {"kind": "served", "n": i}, "registered": [], "roots": []} for i in range(run_at + 1 + after)]
     recs[run_at]["program"] = codec.program_digest(desc)
     for r in recs:
         for _ in range(rng.randint(0, 2)):
@@ -124,19 +134,13 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
         name = params[i][0]
         k0 = next(k for k in theta if own[k] == i)
         bits = 16 * -(-nodes[k0].fn.ret.w // 16)
-        root, d = _hex(rng), rng.randrange(before)
-        if rng.random() < 0.5:
-            words = _divisor(rng, counts[i])
-            value = name if rng.random() < 0.7 else f"w{i}"
-            recs[d]["registered"].append(_entry(value, root, counts[i] // words, words, bits, _hex(rng)))
-            cited[i] = {"kind": "registered", "d": d, "value": value, "root": root}
-            recs[run_at]["registered"].append(_entry(name, root, counts[i] // words, words, bits, _hex(rng)))
-        else:
-            leaves = _divisor(rng, counts[i])
-            port = f"out{i}"
-            recs[d]["roots"].append({"port": port, "root": root, "leaves": leaves, "domain": _hex(rng)})
-            cited[i] = {"kind": "output", "d": d, "port": port, "root": root}
-            recs[run_at]["registered"].append(_entry(name, root, leaves, counts[i] // leaves, bits, _hex(rng)))
+        root, words = _hex(rng), _divisor(rng, counts[i])
+        value = name if rng.random() < 0.7 else f"w{i}"
+        rows = counts[i] // words
+        recs[0]["registered"].append(_entry(value, root, rows, words, bits, _hex(rng)))
+        cited[i] = {"value": value, "root": root, "rows": rows, "words": words, "bits": bits}
+        if run_at != 0 or value != name:
+            recs[run_at]["registered"].append(_entry(name, root, rows, words, bits, _hex(rng)))
     for i, (name, _) in enumerate(params):
         if i not in cited and any(own[k] == i and reg[k] for k in range(len(nodes))):
             recs[run_at]["registered"].append(_entry(name, _hex(rng), 1, max(counts[i], 1), 16, _hex(rng)))
@@ -147,22 +151,31 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
     entries = [cited[own[k]] for k in theta]
     target = rng.randrange(len(theta)) if theta else None
     i_t = own[theta[target]] if theta else None
+    later = None
     # breaks of a record's contents come before the chain, so the chain still holds
     if bad == "theta-width" and theta:
         c = cited[i_t]
-        if c["kind"] == "registered":
-            e = next(e for e in recs[c["d"]]["registered"] if e["value"] == c["value"] and e["root"] == c["root"])
-            if rng.random() < 0.5:
-                e["leaves"] += 1
-            elif "word_bits" in e:
-                del e["word_bits"]
-            else:
-                e["word_bits"] = 32
-        else:
-            e = next(e for e in recs[c["d"]]["roots"] if e["port"] == c["port"])
+        e = next(e for e in recs[0]["registered"] if e["value"] == c["value"] and e["root"] == c["root"])
+        if rng.random() < 0.5:
             e["leaves"] += 1
+        elif "word_bits" in e:
+            del e["word_bits"]
+        else:
+            e["word_bits"] = 32
+    elif bad == "output" and theta:
+        c = cited[i_t]
+        recs[0]["roots"].append({"port": f"out{i_t}", "root": c["root"], "leaves": c["rows"], "domain": _hex(rng)})
+    elif bad == "theta-not-at-deployment-start" and theta and len(recs) > 1:
+        # a record after the first registers the cited value as the first does: only the record's position is wrong
+        c = cited[i_t]
+        later = rng.randrange(1, run_at) if run_at > 1 else rng.randrange(1, len(recs))
+        if not any(e["value"] == c["value"] and e["root"] == c["root"] for e in recs[later]["registered"]):
+            recs[later]["registered"].append(_entry(c["value"], c["root"], c["rows"], c["words"], c["bits"], _hex(rng)))
     elif bad == "theta-unbound" and theta:
-        how = rng.choice(["root", "program", "missing"])
+        # when the run's record is the first and registers the cited value under the parameter's own name, the run's
+        # entry is the cited one, and only the program can be wrong without breaking theta-root first
+        shared = run_at == 0 and cited[i_t]["value"] == params[i_t][0]
+        how = "program" if shared else rng.choice(["root", "program", "missing"])
         mine = [e for e in recs[run_at]["registered"] if e["value"] == params[i_t][0]]
         if how == "root":
             mine[-1]["root"] = _hex(rng)
@@ -172,29 +185,24 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
             recs[run_at]["registered"] = [e for e in recs[run_at]["registered"] if e["value"] != params[i_t][0]]
     elif bad == "theta-root" and theta and rng.random() < 0.5:
         c = cited[i_t]
-        if c["kind"] == "registered":
-            recs[c["d"]]["registered"] = [e for e in recs[c["d"]]["registered"] if e["value"] != c["value"]]
-        else:
-            recs[c["d"]]["roots"] = [e for e in recs[c["d"]]["roots"] if e["port"] != c["port"]]
+        recs[0]["registered"] = [e for e in recs[0]["registered"] if e["value"] != c["value"]]
+    elif bad == "root-type" and theta:
+        # the cited entry's root a JSON number: the check compares it with the cited string as a string (`strOf?`)
+        c = cited[i_t]
+        e = next(e for e in recs[0]["registered"] if e["value"] == c["value"] and e["root"] == c["root"])
+        e["root"] = int(c["root"][:12], 16)
     prev = None
     digests = []
     for r in recs:
         r["previous"] = prev
         prev = reference.record_digest(r)
         digests.append(prev)
-    accepted = [digests[d] for d in range(len(recs)) if rng.random() < 0.3]
-    accepted += [digests[c["d"]] for c in cited.values() if c["kind"] == "output"]
-    accepted = sorted(set(accepted), key=accepted.index)
 
-    def prov(c: dict) -> dict:
-        if c["kind"] == "registered":
-            return {"kind": "registered", "registration": digests[c["d"]], "value": c["value"], "root": c["root"]}
-        return {"kind": "output", "record": digests[c["d"]], "port": c["port"], "root": c["root"]}
-    inst["provenance"] = [prov(c) for c in entries]
-    trusted = {"log": recs, "accepted": accepted, "run": digests[run_at], "params": copy.deepcopy(params)}
+    inst["provenance"] = [{"kind": "registered", "registration": digests[0], "value": c["value"], "root": c["root"]}
+                          for c in entries]
+    trusted = {"log": recs, "run": digests[run_at], "params": copy.deepcopy(params)}
 
     p = inst["provenance"][target] if theta else None
-    D = ("record" if p and p["kind"] == "output" else "registration") if p else None
     if bad == "theta-provenance":
         how = rng.choice(["missing", "short", "kind", "extra", "type"] if theta else ["missing", "long"])
         if how == "missing":
@@ -204,13 +212,16 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
         elif how == "long":
             inst["provenance"] = [{"kind": "registered", "registration": digests[0], "value": "x", "root": _hex(rng)}]
         elif how == "kind":
-            p["kind"] = rng.choice(["output" if p["kind"] == "registered" else "registered", "weights", 1])
+            p["kind"] = rng.choice(["output", "weights", 1])
         elif how == "extra":
             p["extra"] = 1
         else:
             p["root"] = 7
+    elif bad == "output" and theta:
+        c = cited[i_t]
+        inst["provenance"][target] = {"kind": "output", "record": digests[0], "port": f"out{i_t}", "root": c["root"]}
     elif bad == "trusted":
-        how = rng.choice(["chain", "run", "keys", "params", "accepted", "type"])
+        how = rng.choice(["chain", "run", "keys", "params", "type"])
         if how == "chain":
             trusted["log"][rng.randrange(len(recs))]["previous"] = _hex(rng)
         elif how == "run":
@@ -219,19 +230,16 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None) -> dict:
             trusted["extra"] = []
         elif how == "params" and len(params) > 0:
             trusted["params"] = trusted["params"] + [trusted["params"][0]]
-        elif how == "accepted":
-            trusted["accepted"] = trusted["accepted"] + [3]
         else:
             trusted["params"] = [[n, ["Value", 0]] for n, _ in params] or [["z", ["Value", 0]]]
+    elif bad == "previous-type":
+        # the first record's `previous` the empty string rather than null, or a later one's its digest in a list
+        n = rng.randrange(len(recs))
+        trusted["log"][n]["previous"] = "" if n == 0 else [trusted["log"][n]["previous"]]
     elif bad == "theta-record-unknown" and theta:
-        p[D] = _hex(rng)
-    elif bad == "theta-not-earlier" and theta:
-        p[D] = digests[rng.randrange(run_at, len(recs))]
-    elif bad == "theta-uncertified" and theta:
-        outs = [t for t, k in enumerate(theta) if entries[t]["kind"] == "output"]
-        if outs:
-            t = rng.choice(outs)
-            trusted["accepted"] = [a for a in trusted["accepted"] if a != inst["provenance"][t]["record"]]
+        p["registration"] = _hex(rng)
+    elif bad == "theta-not-at-deployment-start" and later is not None:
+        p["registration"] = digests[later]
     elif bad == "theta-root" and theta:
         p["root"] = _hex(rng)
     return {"case": {"instance": inst, "trusted": trusted}, "malformed": bad, "theta": len(theta)}
@@ -249,24 +257,38 @@ def case(seed: int) -> dict:
 
 
 def pinned() -> list[dict]:
-    """On `hand()`, θ = [a, c]: a's provenance chosen registered or output by the seed. One case accepted, then one per
-    code, each the first broken one of its kind the seeds give, and θ holding b, bound per run (`theta-not-registered`)."""
+    """On `hand()`, θ = [a, c]. Two cases accepted, each citing the log's first record: from the deployment's first run,
+    whose own record that is, and from its third. Then one per code, each the first broken one of its kind the seeds give,
+    `theta-not-at-deployment-start` from the third run citing the second record, which registers the same value under the
+    same root before the run's own (a registration mid-deployment); one entry of the `output` kind from the third run
+    (`theta-provenance`); θ holding b, bound per run (`theta-not-registered`); and `TYPED`'s, from the third run."""
     text, params = hand()
     out = []
-    for bad in [None, *CODES]:
+    plan = [(None, None, 0), (None, None, 2),
+            *((c, c, 2 if c == "theta-not-at-deployment-start" else None) for c in CODES),
+            ("output", "theta-provenance", 2)]
+    for bad, code, at in plan:
         for seed in range(1000):
             rng = random.Random(10_000 + seed)
-            made = build(rng, text, params, lambda c: c, bad)
-            if reference.check_baseline(made["case"]["instance"], made["case"]["trusted"]).get("error") == bad:
-                out.append(made | {"seed": seed})
+            made = build(rng, text, params, lambda c: c, bad, at)
+            if reference.check_baseline(made["case"]["instance"], made["case"]["trusted"]).get("error") == code:
+                out.append(made | {"malformed": code, "seed": seed})
                 break
         else:
-            raise AssertionError(f"no seed gives a pinned case refused {bad}")
+            raise AssertionError(f"no seed gives a pinned case refused {code}")
     reg = copy.deepcopy(out[0])
     inst = reg["case"]["instance"]
     inst["theta"] = [0, 1]
     inst["provenance"] = [inst["provenance"][0], inst["provenance"][0]]
     out.append(reg | {"malformed": "theta-not-registered"})
+    for bad, code in TYPED:
+        for seed in range(1000):
+            made = build(random.Random(20_000 + seed), text, params, lambda c: c, bad, 2)
+            if reference.check_baseline(made["case"]["instance"], made["case"]["trusted"]).get("error") == code:
+                out.append(made | {"malformed": code, "seed": seed})
+                break
+        else:
+            raise AssertionError(f"no seed gives a pinned {bad} case refused {code}")
     return out
 
 

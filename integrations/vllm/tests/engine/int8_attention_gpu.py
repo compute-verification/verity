@@ -6,7 +6,7 @@ rows of the step's buffers pg_window decoded it into), the K and V the layer was
 output rows, on the CPU.  `compare` judges one kept request, every check bit for bit (the LUT softmax has no device-dependent
 step):
 
-  rerun     `int8_attention.window_attention` (`window_rows` over `kv_quant`, as served) again on the GPU
+  rerun     `int8_attention.window_attention` (`window_rows` over `kv_quant`, the reference the served batch is held to) again on the GPU
   cpu       `window_attention` on the CPU
   kv        `kv_quant`'s K', V', s_v and f32(V'(0)) on the GPU against the CPU's
   oracle    `fattn_oracle.attention` (fattn_ref.py's softmax, apv_ref.py's served f) on the CPU
@@ -34,7 +34,7 @@ from tests.engine import fattn_oracle as O
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.engine import int8_attention as A
-from verity_vllm.program.registry import int8_exact as X
+from verity.ml.definitions.registry import int8_exact as X
 
 #: fattn_ref.py reads 128-wide rows (fattn.cu's head dimension); at any other the oracle and the Definitions are the checks
 FATTN_REF_HEAD_DIM = 128

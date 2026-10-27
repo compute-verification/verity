@@ -175,74 +175,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable)
 open FlockSoundness.Discharge.Composed (outJ repJ)
 open Claims.Bridge.Custody
 
-/-- **An accepting run's view logs its reps' `τ` openings**: at the view the deployed decoders are right at
-`OpensRows` (`decodesTableR_deploy`), so each rep's openings are its proof file's inner-proof openings (`PadsRep`), and
-the proof file is the run's, so the run's log holds their `τ` commitments' inputs (`zk_tauLogged`). -/
-theorem zkViewTauLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
-    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} {r : Fin ((V true).k x) → Coin}
-    (hacc : (Claims.run sha512 P (V true) x ω r).out = .acc) {s' spec' sts' link c₁ mids f}
-    (hact : act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
-        ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
-      .decide s' spec' sts' link c₁ mids f)
-    {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
-    (hret : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-      (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (viewOf (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts spec' link c₁ f) a) :
-    ∀ rr < 2, TauLogged (Claims.run sha512 P (V true) x ω r).vLog ((a.getD j dfltOutZC).opens.inner rr) := by
-  obtain ⟨hV, pend, hpl, ha⟩ := hret
-  subst a
-  have e := (act_decide hact).symm.trans hset
-  simp only [Option.some.injEq, Prod.mk.injEq] at e
-  obtain ⟨e₁, e₂, e₃⟩ := e
-  subst s' spec' sts'
-  have hrun : Runs sha512 (decision true ins x link c₁ mids f) ()
-      ((Claims.run sha512 P (V true) x ω r).vLog.map Prod.fst) := by
-    obtain ⟨s₂, spec₂, sts₂, link₂, c₂, mids₂, f₂, hact₂, hrun⟩ := acc_decide hacc
-    rw [hact] at hact₂
-    cases hact₂
-    exact hrun
-  have hjJ : j < (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
-    rw [tabsJ_length]
-    exact hj
-  obtain ⟨jj, rfl⟩ : ∃ jj : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length, jj.val = j :=
-    ⟨⟨j, hjJ⟩, rfl⟩
-  rw [getD_ofFnJ]
-  obtain ⟨-, spec₂, sts₂, sess, sch, tPad, _, _, hj₂, hsA₂, -, hsch, -, -, -, -, -, hp₀, hp₁, -⟩ :=
-    Tables.DecodesTable.ok_of_plays (decodesTableR_deploy hs hin hset h0 L hz hk hlay hd
-      (viewOf _ spec.mPts spec link c₁ f) jj) ⟨hV.1, rfl⟩ (pend jj) (hpl jj 0) (hpl jj 1)
-  have hacc' := run_acc_next sha512 P (V true) x ω r hacc
-  replace hacc' : ((next true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
-      ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map
-        (Claims.coinSeq r))).eval sha512).1 = .acc := hacc'
-  obtain ⟨-, hc⟩ := (next_decide_sha512 hact).1 hacc'
-  obtain ⟨hins, hsu⟩ := setupOf_some (act_decide hact)
-  obtain ⟨hvr, -⟩ := decision_runs hsu hrun
-  have hv' : Zk.verifyWithM (hashesIn ((Claims.run sha512 P (V true) x ω r).vLog.map Prod.fst)) spec
-      (tabsOf sts) f.record f.proofs = .ok () := verdict_within hvr
-  have hzk : ins.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  have hsA := setupAt_of_setup hsu hzk (publicInputs_none_of_checks hc)
-  rw [hd] at hsA
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hsA.symm.trans hsA₂))
-  obtain ⟨hpr, -⟩ := recordsLiveAtS_wrS ins.read.I d (viewOf _ spec.mPts spec link c₁ f) hV.1
-  obtain ⟨-, lv, hlv, -⟩ := checks_ok hc
-  have hpr' : (wrS ins.read.I d (viewOf _ spec.mPts spec link c₁ f)).proofs = f.proofs := hpr
-  have hp2 := (HiddenExec.setupTables_pointsAny hsA).1
-  rw [hpr'] at hp₀ hp₁
-  intro rr hrr
-  obtain rfl | rfl : rr = 0 ∨ rr = 1 := by omega
-  · exact zk_tauLogged (rr := 0) hv' hlv hj₂ hsch hp2 (by omega) (by rw [Nat.add_zero]; exact hp₀)
-  · exact zk_tauLogged (rr := 1) hv' hlv hj₂ hsch hp2 (by omega) hp₁
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -315,6 +247,34 @@ theorem zkViewTauLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tru
   · exact zk_tauLogged (rr := 1) hv' hlv hj₂ hsch hp2 (by omega) hp₁
 
 end Gen
+
+/-- **An accepting run's view logs its reps' `τ` openings**: at the view the deployed decoders are right at
+`OpensRows` (`decodesTableR_deploy`), so each rep's openings are its proof file's inner-proof openings (`PadsRep`), and
+the proof file is the run's, so the run's log holds their `τ` commitments' inputs (`zk_tauLogged`). -/
+theorem zkViewTauLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
+    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} {r : Fin ((V true).k x) → Coin}
+    (hacc : (Claims.run sha512 P (V true) x ω r).out = .acc) {s' spec' sts' link c₁ mids f}
+    (hact : act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
+        ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
+      .decide s' spec' sts' link c₁ mids f)
+    {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
+    (hret : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (viewOf (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts spec' link c₁ f) a) :
+    ∀ rr < 2, TauLogged (Claims.run sha512 P (V true) x ω r).vLog ((a.getD j dfltOutZC).opens.inner rr) :=
+  Gen.zkViewTauLogged (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (r := r) (hacc := hacc) (s' := s') (spec' := spec') (sts' := sts')
+    (link := link) (c₁ := c₁) (mids := mids) (f := f) (hact := hact) (a := a) (hret := hret)
 
 end View
 
@@ -345,38 +305,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ liveSession DecodesTable)
 open FlockSoundness.Discharge.Composed (outJ repJ)
 open Claims.Bridge.Live
 
-/-- **A decoded live outcome of the masked simulator logs an accepting run's `τ` openings**: where the live verdict
-holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
-(`zkSimRunAt`), and table `j`'s decoded output's `τ` openings are logged in the run (`zkViewTauLogged`). -/
-theorem zkAccTau {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
-    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
-    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
-    (ha : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-      (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
-        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
-        sha512 (zkSim P x spec sts) x (ω, u) r') a) :
-    (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc ∧ ∀ rr < 2,
-      TauLogged (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).vLog
-        ((a.getD j dfltOutZC).opens.inner rr) := by
-  have hacc : (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc := by
-    by_contra hn
-    exact zkSimAbortAt x s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r' hn ha.1
-  obtain ⟨s', spec', sts', link, c₁, mids, f, hact, -⟩ := acc_decide hacc
-  have hv := zkSimRunAt x s hs hin ins spec sts hset h0 L hz hk hlay Ω P ω u r' hacc s' spec' sts' link c₁ mids f hact
-  rw [hv] at ha
-  exact ⟨hacc, zkViewTauLogged hs hin hset h0 L hz hk hlay hd hj hacc hact ha⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -414,21 +342,32 @@ theorem zkAccTau {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Reada
 
 end Gen
 
-/-- **The live `τ` fork event's collision, with no hypothesis**: two live outcomes of the masked simulator at one
-tape whose table `j` outputs are accepted and open one cap's `τ` commitment at rep `r` to different values are two
-accepting runs of `P` at `zkΦ`'s coins (`zkAccTau`) whose openings there have one leaf, the cap's root
-(`opTauZ_some`), so they collide in the two runs' logs (`tiedColl_of_tauLogged`). -/
-theorem zkTauClash (x : Claims.Msg) : ZkTauClash x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r₁ r₂ r h _ _
-  obtain ⟨a, a', ha, ha', dc, hs₁, hs₂, hne⟩ := h
-  dsimp only at hs₁ hs₂ hne
-  obtain ⟨-, hl₁⟩ := zkAccTau hs hin hset h0 L hz hk hlay hd hj hC u r₁ ha
-  obtain ⟨-, hl₂⟩ := zkAccTau hs hin hset h0 L hz hk hlay hd hj hC u r₂ ha'
-  obtain ⟨-, hv₁, he₁⟩ := opTauZ_some hs₁
-  obtain ⟨-, hv₂, he₂⟩ := opTauZ_some hs₂
-  exact tiedColl_of_tauLogged (hl₁ r.val r.isLt) (hl₂ r.val r.isLt) (hv₁.trans hv₂.symm)
-    fun e => hne (by rw [he₁, he₂, e])
-
+/-- **A decoded live outcome of the masked simulator logs an accepting run's `τ` openings**: where the live verdict
+holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
+(`zkSimRunAt`), and table `j`'s decoded output's `τ` openings are logged in the run (`zkViewTauLogged`). -/
+theorem zkAccTau {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
+    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
+    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
+    (ha : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
+        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
+        sha512 (zkSim P x spec sts) x (ω, u) r') a) :
+    (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc ∧ ∀ rr < 2,
+      TauLogged (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).vLog
+        ((a.getD j dfltOutZC).opens.inner rr) :=
+  Gen.zkAccTau (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (u := u) (r' := r') (a := a) (ha := ha)
 
 namespace Gen
 
@@ -450,6 +389,13 @@ theorem zkTauClash (x : Claims.Msg) : ZkTauClash x := by
     fun e => hne (by rw [he₁, he₂, e])
 
 end Gen
+
+/-- **The live `τ` fork event's collision, with no hypothesis**: two live outcomes of the masked simulator at one
+tape whose table `j` outputs are accepted and open one cap's `τ` commitment at rep `r` to different values are two
+accepting runs of `P` at `zkΦ`'s coins (`zkAccTau`) whose openings there have one leaf, the cap's root
+(`opTauZ_some`), so they collide in the two runs' logs (`tiedColl_of_tauLogged`). -/
+theorem zkTauClash (x : Claims.Msg) : ZkTauClash x :=
+  Gen.zkTauClash (S := S₀) (x := x)
 
 namespace Gen
 

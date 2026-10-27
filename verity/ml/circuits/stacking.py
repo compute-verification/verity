@@ -84,8 +84,8 @@ audit certified as read in it and its duration):
 
 The sink, coin and limb-split types of the s8 family's companions (the receipt fold, the noise derivation, `LimbSplit`) are
 circuits' Build types; their primitives are budgeted gate by gate, never free (`LimbSplit`'s byte, carry and clamp, and the
-H1 + fx1 tile's noise, digit, one-stream and fold primitives and v4's dead-tile mask, each with its Definition on bits, are
-listed). Bits become bytes exactly (bits / 8), and every comparison is exact (`fractions.Fraction`): c, R_in and a window's
+H1 + fx1 tile's noise, digit, one-stream and fold primitives, v4's dead-tile mask and J10-R's call seeds and block counter,
+each with its Definition on bits, are listed). Bits become bytes exactly (bits / 8), and every comparison is exact (`fractions.Fraction`): c, R_in and a window's
 duration are given as an int, a Fraction or a str, and a float, which would be read at its binary value, is refused.
 """
 from __future__ import annotations
@@ -213,7 +213,8 @@ CLASSES: dict[str, str] = {
         "PouwI8Add_v2 PouwI8Neg_v1 PouwI8Neg_v2 PouwLow8_v1 PouwLow8_v2 PouwNoiseBlock_v1 PouwNoiseBlock_v2 "
         "PouwOneStream2_v1 PouwOneStream2_v2 PouwOneStream3_v1 PouwOneStream3_v2 PouwPeelSeg_v1 PouwPeelSeg_v2 "
         "PouwResAdd_v1 PouwResAdd_v2 PouwSx8_v1 PouwSx8_v2 PouwU129_v1 PouwU129_v2 PouwUnitSeeds_v1 PouwUnitSeeds_v2 "
-        "PouwWrapSeg_v1 PouwWrapSeg_v2 PouwXinFinal_v1 PouwXinFinal_v2 PouwXor32_v2"
+        "PouwWrapSeg_v1 PouwWrapSeg_v2 PouwXinFinal_v1 PouwXinFinal_v2 PouwXor32_v2 "
+        "PouwCallSeeds_v1 PouwCallSeeds_v2 PouwAdd64_v1 PouwAdd64_v2"
     ), "roundings"),
     **dict.fromkeys(_ids(
         "Bf16GtStrict_v1 F32Eq_v1 F32Fmaxf_v1 F32Fminf_v1 F32Geu_v1 F32GtStrict_v1 F32IsFinite_v1 F32MaxRef_v1 F32Max_v1 "

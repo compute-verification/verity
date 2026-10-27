@@ -23,7 +23,7 @@ from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_bindings.collectives import AllReduce2Rule
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 PROF = {"mode": "profile", "profile": "b1-eager-v3"}
 LP, T = 3, 2
@@ -95,6 +95,7 @@ def _base(n) -> str:
     return getattr(n.fn, "base_id", None) or n.fn.id.split("[")[0].split("{")[0]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kind,sampling,form", [("request", STOCH, vm.SplitsWithPeers), ("step", STOCH, vm.SplitsWithPeers),
                                                 ("request", SINGLE, vm.SeededWithPeers), ("step", SINGLE, vm.SeededWithPeers)],
                          ids=["request-derived-S", "step-derived-S", "request-single-S", "step-single-S"])

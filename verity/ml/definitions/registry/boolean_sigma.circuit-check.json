@@ -1,0 +1,60 @@
+{
+ "definitions": {
+  "AllGather_v2{WORLD=2,N=2}": {
+   "and": 0,
+   "type": "faf79c7020566fe2871194635a886663207f990f51c6f150ae79eb339018a115c0dc2251b61427e9841fa01c6c503df4f615cc2e9f6ee3174ead7ecbc4f06c3a"
+  },
+  "AllReduceResidualMnnvl_v2{WORLD=2,N=2,SHOT=1}": {
+   "and": 2966,
+   "type": "4f02775884eea008d5b4155163d8c0a41f2c3d6f415be28bf9d1151caa56fb81c795af0927f58b097841e42445c3debc7ad875d361e5286ac1562a1c12402a9d"
+  },
+  "EmbeddingShard_v2{VS=16,H=2,START=16}": {
+   "and": 1519,
+   "type": "fe3f564c0304139a697fe4e4c2b460667fb22b5306cb43e3da62c1326c35d742fdeaac43b9da3259d9666ab5060eb9199c677ea22069046ed847bd0be306bd1e"
+  },
+  "InductorRoPE_v2{NHEADS=1,D=4}": {
+   "and": 11864,
+   "type": "0d94546ef06ec918812afae23054a27d35af95b7f6e591472dfeaa4973f5352dd632d1a6c63701a856bb13008afcb88c1a9681f9da5f59e6d9b801bd4628f82d"
+  },
+  "InductorSiluMulElem_v2": {
+   "and": 20765,
+   "type": "2f896e7a565c8c1ef0a4e8e0c195a1935c08734d4094660ffb05b610120cd35be41d53c235e84f7ee9e95812997556429c1e962dae5affc731e90f43df04288a"
+  },
+  "InductorSiluMul_v2{I=1}": {
+   "and": 20765,
+   "type": "2f896e7a565c8c1ef0a4e8e0c195a1935c08734d4094660ffb05b610120cd35be41d53c235e84f7ee9e95812997556429c1e962dae5affc731e90f43df04288a"
+  },
+  "MoeAlignBefore_v2": {
+   "and": 129,
+   "type": "c2b00337dbcb6b889a0c60f997a50538dd319338e1075ead194b326df486ce3a2abefe8d0f677efbc0a3821fd09302342794293166edddd1d6b1aa8cf55bda9d"
+  },
+  "MoeAlignBelow_v2": {
+   "and": 64,
+   "type": "f0013ee6e68673c84d011c8fd4ecfcad59b32bd4ec5358476414dea328d730ed41715c320e0d6af0f558c231dadb901f1557872d3bcbe04b88800857d895ea39"
+  },
+  "MoeAlignBlocks_v2{P=4,BM=2}": {
+   "and": 1481,
+   "type": "c4d4c5980a81b2d8df0312891fdf8a0af7fea79df1fbe633ef3664575b92df478a3667769c2b398b6dbe289f9c7ae6b22e6f9fa8f724f5c20f4e21bd6775184f"
+  },
+  "MoeAlignRanks_v2{E=3,P=4,BM=2}": {
+   "and": 1692,
+   "type": "6ef16a7e8c8a0697d3321f20c95df5fa2f53798ff707800b26df13b36249ce330f605c2ff5104011dd4774123d462d8732ec3f43cfd69d45370f6ee61a4648b1"
+  },
+  "MoeExpertGemmW_v3{E=2,K=16,N=2,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 36522,
+   "type": "4773d42ea803e6179d4b7edfdbde27b37aa4fa4019d45ecec24e03b33b488624f5d20a1fba014a2fcbedcdff1932ee2e38f2a18f9a2fd08b9397f553f4699bf2"
+  },
+  "MoeExpertGemm_v3{E=2,K=16,N=2,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 31662,
+   "type": "0b2b20150f30c3001cf92d424c41af28ee283c8fab271725142a21bdcc01a928ce8d179c82c20dbde4bc5e3f8b71e44e0842edb735ee60e8baaf95995aa3e243"
+  },
+  "ResidualAdd_v2{N=4}": {
+   "and": 2868,
+   "type": "68d096322cb68beca8028e695b7e15e14d22e5a546c0f55637c0e82d058463c470c2c158f9af24fd87d39a0212918f98f87c1065740e84995265f209c5561749"
+  },
+  "RouterArgmaxStep_v2": {
+   "and": 247,
+   "type": "fb3ab78ab108e1dd515c6c5294f757f6447226dfcc96946b5a094637e2d6afa48ba6180876c58f9303a756efd8f65870b5cd971be6aefe7eb796f21975fe9766"
+  }
+ }
+}

@@ -66,7 +66,7 @@ def KSBoundRouteLin (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Re
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -77,7 +77,7 @@ def KSBoundRouteLin (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Re
 /-- **`KSBoundRouteLin` from the bridge**: `ksBoundRoute_of_bridge`'s facts at the normalized record, with
 `KSLin_of_flockKS_binds` for `KS_of_flockKS_binds`, carried back by `ksLin_of_nf`. -/
 theorem ksBoundRouteLin_of_bridge (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512)
     (hB : ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -95,7 +95,7 @@ theorem ksBoundRouteLin_of_bridge (rel relO : _root_.Flock.Readable.Parsed → _
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSh, hCk, hOp, hDc⟩ := hshapes shape hs
     exact vstarAccepts_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape decC chk shows cmt hplay
-      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRRP
+      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRows hRRP
   have hA := innerAcceptsColl_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hT
     (hacc _ (by simp)) (hacc _ (by simp)) (hacc _ (by simp))
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
@@ -122,8 +122,8 @@ theorem ksBoundRouteLin_of_bridge (rel relO : _root_.Flock.Readable.Parsed → _
 /-- **`KSBoundRouteLin`**: `ksBoundRouteLin_of_bridge` at the bridge, which holds at every choice the code side makes
 (`bridge_bdDeployed`). -/
 theorem ksBoundRouteLin (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) : KSBoundRouteLin rel relO b L :=
-  ksBoundRouteLin_of_bridge rel relO b L fun nextE colsE wE join rowIn final w =>
+    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRouteLin rel relO b L :=
+  ksBoundRouteLin_of_bridge rel relO b L hRows fun nextE colsE wE join rowIn final w =>
     bridge_bdDeployed rel nextE colsE wE join rowIn final w
 
 end RecDeploy

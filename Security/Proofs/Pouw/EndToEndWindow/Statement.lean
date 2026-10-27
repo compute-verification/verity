@@ -1,6 +1,6 @@
 import Definitions.Pouw.Game.Params
-import Models.Pouw.Assumptions.Game
-import Models.Pouw.Assumptions.NCP.Assumptions
+import Definitions.Pouw.Assumptions.Game
+import Definitions.Pouw.Assumptions.NCP.Assumptions
 import Proofs.Flock.Soundness.Audit.Extraction
 import Proofs.Flock.Soundness.Audit.RegDraw
 import Proofs.Flock.Soundness.Audit.Window
@@ -164,7 +164,7 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
-release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-nebius-host`'s): the registration's
+release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-host`'s): the registration's
 receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
 oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
@@ -279,8 +279,8 @@ It is stated for models whose registration is an oracle program's output with it
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
 shrink the provers it quantifies over. It is the shape of relative security's
 premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStaged`,
-`Extraction`), and it is carded on the random-oracle card with gap (7)'s grinding
-(`Accounting.Assumptions.Compose.SeedGrind`), so that Daniel rules on the random oracle once. -/
+`Extraction`), and it is carded on the random-oracle card with the seeded windows' premise
+(`Accounting.Assumptions.Compose.SeedExtractedAt`), so that Daniel rules on the random oracle once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : Layout → Prop)

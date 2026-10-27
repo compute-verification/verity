@@ -368,6 +368,32 @@ def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_
         assert "probe failed (exit 255)" in rep["error"] and rep.get("unreachable", False) is unreachable
 
 
+def test_an_admin_only_node_is_read_only_when_named(world, capsys):
+    """The auditor host's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
+    manifest = world["manifest"]
+    manifest.write_text(manifest.read_text().replace("[nodes.n]\n", f'[nodes.a]\nadmin = true\nrecord = "{world["node"]}/a.jsonl"\n\n'
+                                                                       "[nodes.n]\n", 1))
+    denied = lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", b"vy-admin@h: Permission denied (publickey).\n")
+    deploy.main(["drift", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"])
+    assert set(json.loads(capsys.readouterr().out)) == {"n"}
+    assert deploy.main(["drift", "--on", "a", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"]) == 1
+    assert "Permission denied" in json.loads(capsys.readouterr().out)["a"]["error"]
+    with pytest.raises(ValueError, match="`admin` is true or false"):
+        deploy.load(manifest, manifest.read_text().replace("admin = true", 'admin = "yes"'))
+
+
+def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
+    """A node added to deploy.toml before its VM is registered (vy-auditor-1, 21 Oct) failed every relay drift with Refused."""
+    from research import remote
+
+    def unknown(name, project):
+        raise remote.Refused(f"machine {name!r} is not in machines.toml")
+    monkeypatch.setattr(remote, "resolve_machine", unknown)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=deploy.ssh_runner(), manifest=world["manifest"],
+                       repo=world["repo"]) == 1
+    assert "is not in machines.toml" in json.loads(capsys.readouterr().out)["n"]["error"]
+
+
 def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):
     """The control pod's watchers run from a `git archive` tree; drift reads $RESEARCH_DEPLOY_REPO's clone, fetched each run."""
     repo, origin, clone = world["repo"], tmp_path / "origin.git", tmp_path / "clone"
@@ -384,6 +410,20 @@ def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch
     out = subprocess.run([sys.executable, "-c", "from verity_ops import deploy; print(deploy.REPO, deploy.SRC)"], env=env,
                          capture_output=True, text=True, check=True).stdout.split()
     assert out == [str(clone), str(deploy.SRC)]
+
+
+def test_a_staged_node_is_passed_by_unless_named_and_installs_as_any_other(world, capsys):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    manifest.write_text(manifest.read_text().replace('[nodes.n]\n', '[nodes.n]\nstaged = "created when the quota lands"\n', 1))
+    seen = []
+    run = lambda name, argv, stdin: seen.append(name) or local(name, argv, stdin)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 0
+    out = capsys.readouterr()
+    assert json.loads(out.out) == {} and not seen and "n is staged (created when the quota lands)" in out.err
+    assert deploy.main(["drift", "--on", "n", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 1
+    assert json.loads(capsys.readouterr().out)["n"]["entries"] and seen
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=local, manifest=manifest, repo=repo) == 0
+    assert "would install" in capsys.readouterr().out and not (node / "bin" / "a.py").exists()
 
 
 def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):

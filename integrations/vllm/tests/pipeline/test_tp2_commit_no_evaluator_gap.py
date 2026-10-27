@@ -36,7 +36,9 @@ COLLECTIVES = {"AllReduce_v2": 61440, "AllGather_v1": 256, "EmbeddingShard_v1": 
 
 
 def _sr(unreplayable: dict[str, int], why: str = "no registered evaluator") -> dict:
-    checks = {k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "identities_unreachable_by_alias", "rows_disagree")}
+    checks = {**{k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "rows_disagree")},
+              "identities_unreachable_by_alias": {"n": 0, "first": [], "alias_entries": 15},
+              "ranks": {"replay": [0], "manifest": [0], "equal": True}, "accounted": True, "unstated_families": []}
     pop = {"vus": sum(POPULATION.values()) // 8, "by_family": dict(POPULATION), "scope": "Q_module_v1(P)",
            "query_total": {"identities": 336601, "query_id": "Q_module_v1", "cross_check": {"agree": True}}, "query_checks": checks | {"ok": True}}
     return {"result": True, "grade": "complete", "population": pop, "sample": {"picked": 11600, "evaluated": 11600, "equal": 11600, "mismatch_n": 0},

@@ -75,7 +75,10 @@ SCALAR = {"ALU": ("A", {"s_lop3": "LOP3.LUT", "s_shf": "SHF.L.W.U32.HI", "s_lea"
           "UNLISTED": (None, {"s_lde": "LD.E*", "s_imadw": "IMAD.WIDE.U32"}),
           "ATOME32": (None, {"s_atome": "ATOM.E*"}), "REDG32": (None, {"s_redg": "REDG*"}),
           "ATOMS32": (None, {"s_atoms": "ATOMS*"}), "LDS128": (None, {"s_lds128": "LDS.128"}),
-          "REDUX": (None, {"s_redux": "REDUX*"})}
+          "REDUX": (None, {"s_redux": "REDUX*"}),
+          "STS32": (None, {"s_sts32": "STS"}), "STS128": (None, {"s_sts128": "STS.128"}),
+          "STG32": (None, {"s_stg32": "STG.E"}), "STG128": (None, {"s_stg128": "STG.E.128"}),
+          "ISETP": (None, {"s_isetp": "ISETP.GT.U32.XOR"})}
 #: lanes beside the tensor whose pipe row a joint can bind: lane -> (scalar kind, the lane's counted pattern)
 LANE_PIPE = {"imad": ("IMAD", "IMAD"), "lop3": ("ALU", "LOP3.LUT"), "shfl": ("SHFL", "SHFL.BFLY")}
 

@@ -22,8 +22,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles and the fixture map (`.gitattributes`), set in every run clone and
-#: for every git a gate runs (research.gates): a clone's config holds it only after `merge.py --install`, and without it git
+#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, the fixture map and the vLLM lints' allowlists
+#: (`.gitattributes`), set in every run clone and for every git a gate runs (research.gates): a clone's config holds it only
+#: after `merge.py --install`, and without it git
 #: merges a record line by line (the queue's own clone, a fresh VM's checkout); a tree from before the tools/verity move has it
 #: at tools/lean/merge.py.  Here, not in gates, because the suites that read clone.py (vllm's, evaluate's) don't read gates.py
 RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
@@ -33,7 +34,10 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
                  "merge.lakefile-lists.driver": "python3 tools/verity/lean/merge.py --lakefile %O %A %B %P",
                  "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
-                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P"}
+                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
+                 "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
+                                              "(integrations/vllm/tests/lint/merge_allowlist.py)",
+                 "merge.vllm-allowlist.driver": "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P"}
 
 
 CWD_CLONE = "clone"

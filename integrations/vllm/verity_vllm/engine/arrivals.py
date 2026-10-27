@@ -1,8 +1,8 @@
 """verity_vllm/engine/arrivals.py — step-indexed request arrivals (coverage campaign D87, serving profile B8-mixed).  Torch-free.
 
-`run_requests_arrivals(llm, requests, params_for, on_step=...)` is `verity_vllm.engine.engine_driver.run_requests` with one addition:
-request `r` is added to the engine right before engine step `r.arrive_step` (0 = before the first step, the historical
-behaviour).  Arrivals are keyed to the engine-step counter, never to wall time, so the observer run, the control run and the
+`run_requests_arrivals(llm, requests, params_for, on_step=...)` adds every request with *our* request id
+(`engine_driver.external_id`) and steps the engine until all finish, request `r` right before engine step `r.arrive_step`
+(0 = before the first step, the historical behaviour).  Arrivals are keyed to the engine-step counter, never to wall time, so the observer run, the control run and the
 non-interference variants schedule the same batch at every step -- dynamic batch membership becomes a declared, reproducible
 fact of the workload.  If every earlier request has finished before the next arrival's step, the next arrival is admitted at
 once (the engine would otherwise idle); the realized arrival step is what `timing["requests"]` records, and
@@ -11,7 +11,7 @@ forwards run so far (`ForwardCounter`), not `step()` iterations: under the outpu
 no forward, so an iteration clock would admit every later arrival one forward early per gap.
 
 `timing["requests"][rid]` = {arrive_step (planned), arrive_step_realized, first_step (the engine step that ran the request's
-prefill), finish_step, finish_reason, n_generated}.  With every request at step 0 the loop is the driver's loop.
+prefill), finish_step, finish_reason, n_generated}.  With every request at step 0 every request is added before the first step.
 
 Step indexing.  An "engine step" is a model forward pass -- the unit the observer, the census and the gates count.  vLLM V1's
 `engine.step()` returns the *previous* forward's sampled tokens (one-iteration output lag; the non-interference hooks variant
@@ -19,9 +19,8 @@ documents the same), so `step()` iterations are not forwards: the first iteratio
 last forward returns the finish.  `engine_steps` is the number of forwards; `first_step` / `finish_step` / `arrive_step_realized` are
 forward indices; the raw iteration numbers are kept as `*_iter` and `step_iterations` for the record.
 
-Which iterations ran a forward (2026-09-17, lead's request after the chunked owner's finding).  Until this window the loop MEASURED
-the lag as (first non-empty output iteration - first admission iteration) and inferred "forward at iteration j <=> iteration j + lag
-returned outputs".  Both break under chunked prefill: a partial-prefill step is a forward that returns NOTHING (the engine discards the
+Which iterations ran a forward.  The loop once MEASURED the lag as (first non-empty output iteration - first admission
+iteration) and inferred "forward at iteration j <=> iteration j + lag returned outputs".  Both break under chunked prefill: a partial-prefill step is a forward that returns NOTHING (the engine discards the
 sample of a chunk that leaves the prompt incomplete), so with a 3-chunk first prompt the measured lag was 3 instead of 1 and two
 forwards went uncounted (15 for 17).  The loop now derives forwards in this order and records the source in `timing`:
 
@@ -56,7 +55,7 @@ def scheduler_of(llm: Any) -> Any | None:
         inner = getattr(core, "engine_core", None) or core
         sched = getattr(inner, "scheduler", None)
         return sched if isinstance(getattr(sched, "requests", None), dict) else None
-    except Exception:  # noqa: BLE001
+    except AttributeError:
         return None
 
 
@@ -78,7 +77,7 @@ def _snapshot_computed(sched: Any) -> dict[str, int] | None:
             if nc is not None:
                 out[str(rid)] = int(nc)
         return out
-    except Exception:  # noqa: BLE001
+    except (AttributeError, TypeError, ValueError):
         return None
 
 

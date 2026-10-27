@@ -7,6 +7,7 @@ leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from 
 -/
 import Lean.Data.Json
 import Flock.Lookup
+import Flock.TmplAt
 import Flock.Tags
 import Flock.Typed
 
@@ -129,6 +130,9 @@ structure Circuit where
   typed : Option TypedBlock := none
   /-- a typed statement's unit class (item 1e): its derivation's inputs and `deriveChecked`'s run on them -/
   cls : Option Typed.Class := none
+  /-- a templated unit (PRF-133): its template, layouts and committed net (`Tmpl.unitNet`, its rows built only when read),
+  which `Stmt.partialRangesT` folds from the template at the net's range -/
+  tmpl : Option TmplUnit := none
   deriving Inhabited
 
 namespace Circuit

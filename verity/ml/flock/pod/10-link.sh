@@ -13,7 +13,7 @@ source $HOME/.cargo/env
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
 SRC=$(pwd)/verity/ml/flock
 cd $F
-git checkout -q -- crates/flock-core crates/flock-prover && git apply $SRC/flock-link-b684b12.patch && git apply $SRC/flock-gpu-link-b684b12.patch || exit 1
+git checkout -q -- crates/flock-core crates/flock-prover crates/flock-parallel && git apply $SRC/flock-link-b684b12.patch && git apply $SRC/flock-gpu-link-b684b12.patch || exit 1
 rm -rf crates/flock-live && cp -r $SRC/live crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
 cp $SRC/verity_unit.rs crates/flock-prover/src/r1cs_hashes/verity_unit.rs

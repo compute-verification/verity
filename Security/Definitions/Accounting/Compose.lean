@@ -6,7 +6,7 @@ import Definitions.Pouw.Window
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
 
-The vocabulary of `Models.Accounting.Guarantees.Compose`
+The vocabulary of `Definitions.Accounting.Guarantees.Compose`
 (note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5), restated after RT-COMPOSE r4
 (note:compute-accounting/20261018T1522Z-draft-rt-compose-r4) under decisions 107, 109–114, 117, 119 and 122. The
 compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn
@@ -137,7 +137,7 @@ open Accounting.TS Pouw.RelativeSecurity
 
 /-- **A round's coin mode**: `live`, a verifier's coin released after the round's served values are committed (decision
 122's per-round coin, decision 36's per-stage prefill coin), or `seeded`, derived from the window's salt and commitments
-by a hash (Fiat–Shamir, decision 112), as PoUW's code derives every noise today. -/
+by a hash (Fiat–Shamir, decision 112; `fiat-shamir`), as PoUW's code derives every noise today. -/
 inductive CoinMode
   | live
   | seeded
@@ -359,10 +359,17 @@ unit's gate reads, glue fed by one) before the next round's; and a receipt, whic
 later round's root up to the draw's. A run input committed after its reader's coin lets the prover choose tokens or
 decode feedback to match the reader's noise: that breaks (H-μ)'s salt-independence (E3) for the reader.
 
-Today's code doesn't meet it: PoUW's coins are one salt a window and the draw (`verity/core/protocols/pouw/coins.py`'s
-`LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt is opened before the activations are
-committed (RT-COMPOSE r3). The seeded statements don't read it: they read the circuit at the draw
-(`Declared.atDraw`) and at the IR (`Declared.atIR`, which meets it), and take its seeded mirror, `SeedNamed`. -/
+Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin, its
+draw coin and one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`). Round r's coin opens
+once, after the round root the challenger's signed log shows it received (`core_check.rounds`), and round r's noise key
+is that coin's and that root's (`window.round_key`). Each round's root commits that round's rows of every A value
+before its coin (`credit.a_link`, RT4-INT-34). A seeded window's coins are still one salt a window and the draw
+(`verity/core/protocols/pouw/coins.py`'s `LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt opens
+before the activations are committed (RT-COMPOSE r3). No code checks this order itself: that every value the served
+Program writes is committed under the root of the round its `commitRound` names. A served Program's commit coins reach
+`Declared` only through `Properties.Compose.UnitsOfLayout`, which is unproved. The seeded statements don't read it: they
+read the circuit at the draw (`Declared.atDraw`) and at the IR (`Declared.atIR`, which meets it), and take its seeded
+mirror, `SeedNamed`. -/
 def LayerCommitted {ι : Type} (Cd : Declared ι) : Prop :=
   ∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ ≤ Cd.cutOf ℓ ∨
     (Cd.binding ℓ = none ∧ Cd.commitRound ℓ ≤ Cd.rounds ∧ ∀ j, Cd.Reads j ℓ → Cd.unit j = Cd.unit ℓ)

@@ -5,7 +5,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.store import remote
+from verity_vllm.protocols.remote_bandwidth import remote
+
+
+def commit_session(opts: Any, out: Any, kv_pages: int | None) -> remote.CommitSession:
+    """The session of ``opts``' ``--remote-*`` options (`pipeline.commit.Options`'s, or serve-openai's
+    `serve_remote.RemoteOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``."""
+    backend_of = None
+    if opts.remote_session_lib:
+        from verity_vllm.protocols.remote_bandwidth.in_place import InPlaceBackend
+        backend_of = InPlaceBackend.for_commit(opts.remote_session_lib)
+    return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
+                                weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib, backend_of=backend_of,
+                                out=out, step_ms=opts.remote_step_ms, filler_gib=opts.remote_filler_gib,
+                                log=lambda m: print(m, flush=True))
 
 
 def session_of(args: Any) -> remote.CommitSession | None:
@@ -13,14 +26,7 @@ def session_of(args: Any) -> remote.CommitSession | None:
     before anything runs where the Commit has no instrumented run to audit."""
     if not args.remote_verifier:
         return None
-    backend_of = None
-    if args.remote_session_lib:
-        from verity_vllm.store.in_place import InPlaceBackend
-        backend_of = InPlaceBackend.for_commit(args.remote_session_lib)
-    rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages or None,
-                              weight_blocks=args.remote_weight_blocks, kv_lib=args.remote_kv_lib, backend_of=backend_of,
-                              out=args.out, step_ms=args.remote_step_ms, filler_gib=args.remote_filler_gib,
-                              log=lambda m: print(m, flush=True))
+    rs = commit_session(args, args.out, args.remote_kv_pages or None)
     if args.only_arm == "control" or args.pairs < 1:
         raise SystemExit("--remote-verifier audits the Commit's first instrumented run: not without one (--only-arm control, --pairs 0)")
     return rs

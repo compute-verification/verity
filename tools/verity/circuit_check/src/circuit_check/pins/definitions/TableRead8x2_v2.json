@@ -1,7 +1,8 @@
 {
  "definitions": {
   "TableRead8x2_v2": {
-   "and": 8160
+   "and": 8160,
+   "type": "b2a04252b07dfa9d05720ce3a750851f0e8965d30519ffb55743e59b2e24436b0f762a20421711e3a48cbbbfe62faa5d37a42ea2f2efa79186794f536b3467b1"
   }
  }
 }

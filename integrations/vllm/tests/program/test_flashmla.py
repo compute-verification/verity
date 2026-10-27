@@ -19,10 +19,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.kernels import tc as CK
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import flashmla_twin as T
-from verity_vllm.program.registry import boolean_flashmla as BF
-from verity_vllm.program.registry import flashmla as F
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import flashmla_twin as T
+from verity.ml.definitions.registry import boolean_flashmla as BF
+from verity.ml.definitions.registry import flashmla as F
 
 U = np.uint32
 DEFS = {d.id: d for d in F.FLASHMLA_COMPOSITES}
@@ -51,7 +51,7 @@ def test_the_twin_is_the_reference(target):
 
 def test_the_twin_claims_only_the_hopper_step():
     from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
-    from verity_vllm.program.kernels import kernel_registry as KR
+    from verity.ml.definitions.numerics import kernel_registry as KR
 
     hopper = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=F.HopperBF16WgmmaDot16, SCALE=0.25)
     ampere = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=AmpereBF16TcDot16, SCALE=0.25)
@@ -162,6 +162,7 @@ def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.nda
     return (w @ k) / (w.sum(axis=1) + np.exp(sk - m))[:, None]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("seed", range(3))
 def test_the_decode_is_softmax_with_the_sink(seed):
     """A token's 16 heads over the 128-row window and 512 compressed rows, in one split and in the 10 a lone request gets: each
@@ -253,7 +254,7 @@ SMALL = [BF.F32GeuV2, BF.U32GeV2, BF.E8m0ToBf16V2, BF.FlashMlaRowValidV2, bind(B
          bind(BF.NvFdividefRcpV2)]
 
 
-@pytest.mark.parametrize("target", SMALL, ids=[t.id for t in SMALL])
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == 'NvLog2f_v2' else t for t in SMALL], ids=[t.id for t in SMALL])
 def test_the_small_boolean_definitions_are_their_words(target):
     word = word_of(target)
     assert SW.boolean_version(word).id == target.id

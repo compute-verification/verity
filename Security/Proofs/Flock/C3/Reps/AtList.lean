@@ -78,6 +78,7 @@ theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.state
   obtain ⟨n, rfl⟩ := FlockC3.VStarList.capStatement_ok hK0
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨u'', -, h⟩ := FlockC3.VStarList.eok_bind h
   cases h
   obtain ⟨sp, hsp, hps⟩ := FlockC3.VStarList.eok_bind (ok_of_mapError hps)
   obtain ⟨GS, hGS, hgs⟩ := FlockC3.VStarList.eok_bind (ok_of_mapError hgs)

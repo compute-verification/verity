@@ -269,10 +269,12 @@ theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.
     exact port_commit_rows0 st.c _ g p (size_prefixOf _) hs hb (by rw [rowSlots_size hp, h0]) h2 R.rowNets hhm
       (row_copies_tgt0 L F hda hupv hu hz o hg hp h0) hconst
   · obtain ⟨hcv0, hchain, hcvh⟩ := row_copies_tgt L F hda hupv hu hz o hg hp h0
-    exact port_commit_rowsP st.c _ g p (size_prefixOf _) hs hb (rowSlots_size hp) h0 h1 h2 R.rowNets
+    exact port_commit_rowsP st.c _ g p (size_prefixOf _) hs hb (rowSlots_size hp) h0 (by omega) h2 R.rowNets
       (fun k hk => (rowSlot_lt hp hk).2)
       (fun k hk => shaSlot_flat L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)) hhm hcv0 hchain hcvh
-      hconst
+      hconst fun k hk t ht v hv => by
+        rw [constBit_row st.c.ports[p]! (HmRow.tailOf st.c.ports[p]!) ht (by omega)] at hv
+        cases hv
 
 end Bc
 

@@ -1,7 +1,8 @@
 """The templates of every served workload beyond #101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
 MoE router (with and without renormalisation), expert coordinates (plain and weighted), MoE sum, the FP8 block-scaled GEMM, bias-add,
-the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels).  Each evaluation path
-equals its subcircuit's own Definition, and every census-bound subcircuit id of every workload is the spine's."""
+the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels), and the registered compiler's
+dead-free RMSNormTriton_v5 and AttentionHead_v18.  Each evaluation path equals its subcircuit's own Definition, and every
+census-bound subcircuit id of every workload is the spine's."""
 from __future__ import annotations
 
 import json
@@ -106,6 +107,37 @@ def test_vec8_rmsnorm_equals_its_definition(template, family):
     got = _eval(sub, draws)
     assert np.array_equal(ref, np.concatenate([np.stack(got[p.name]) for p in sub.outputs], axis=1).astype(ref.dtype))
     assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
+
+
+def test_rmsnorm_triton_v5_equals_its_definition():
+    """The dead-free RMSNormTriton_v5's evaluation path (its registered row kernel) equals its Definition's gate reference."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit("rmsnorm-triton-v5", N=128, EPS=1e-6)
+    assert sub.relation["definition"] == "RMSNormTriton_v5" and sub.id == "rmsnorm-triton-v5/n128-eps1e-06/bf16"
+    assert sub.set_name.startswith("rmsnormtriton-v5-n128-")
+    draws = _draws(sub, 4)
+    ref = evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in draws]) for p in sub.inputs], kernel="reference")
+    assert np.array_equal(np.asarray(ref).reshape(4, 128), np.stack(_eval(sub, draws)["out.out"]).astype(np.asarray(ref).dtype))
+    assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
+
+
+def test_v18_head_equals_its_definition_at_the_decode_launch():
+    """AttentionHead_v18's evaluation path (Attention_v18{NH=1, KVH=1}'s row kernel) equals the head's gate reference, at the
+    MASKED_FROM FA2's decode-only launch guards (its last block of keys, 0-based: ceil(T/BN) - 1)."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit("attention-head-v18", D=16, BN=16, T="17:40")
+    assert sub.relation["definition"] == "Attention_v18" and sub.set_name == "attention-head-v18-decode-d16-bn16"
+    for d in _draws(sub, 4):
+        T = d.instance_statics["T"]
+        defn = sub.definition(**d.instance_statics)
+        assert 17 <= T <= 40 and defn.bindings["MASKED_FROM"] == -(-T // 16) - 1
+        ref = evaluate_batch(defn, *[d.inputs[p.name][None, :] for p in sub.inputs], kernel="reference")
+        assert np.array_equal(ref.reshape(-1), _eval(sub, [d])["out"][0].astype(ref.dtype))
+    assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
+    with pytest.raises(KeyError):
+        TM.identify(dict(sub.relation, masked_from="causal"))
 
 
 def test_greedy_token_select_is_the_first_argmax():

@@ -23,17 +23,19 @@ as its port `top`, through its hm96 slot. `layoutBCap` is `layoutBDeployed` with
 
 `heldB_layoutBCap` proves `HeldB` there from named facts. RecCap discharges round 0 outright: the list ends with it
 and the parts number as the list's statements (`capAt_readX`), so the one fact left at round 0 is that its part's
-circuit has its port `top` (`CapPorts`). The rest:
+circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `CapPorts.lean`, from `readX`'s
+`capPorted`). The rest:
 
 * `SchedMatches` (`DeployLayout.lean`): the shape's rep schedule is the inner verifier's.
 * `RowsCover`: each absorbing stream round with no tops is some part's, through a port under its `rec-c<k>`
-  (`heldRows`), as `PortsCover` is for `partHolds`.
+  (`heldRows`), as `PortsCover` is for `partHolds`. Proved at every shape (`rowsCover`, `RowsCover.lean`).
 * `TopsHeld topsAt`: each stream round that commits tops is held whole by some part. No part holds one whole: the
   round's message is its tops' strings and then one row, and the row is another part's. At `topsAt` none, `HeldB`
   fails at every statement of the shape with such a round (`not_heldB_layoutBCap_none`), and level 0's round of each
   rep commits `cap 1` nodes (`RecVStar.repRounds`). `LayoutBTops.lean` holds those rounds as pieces instead: each top
   by its level's RecCap (`rec-cap/n<N>-l<l>`), the row by its part.
-* `FinPieces fin`: the last round has pieces, each a part's. Open: the bound record's `final` is the code side's.
+* `FinPieces fin`: the last round has pieces, each a part's. It holds at `finOpen` (`finPieces_finOpen`,
+  `FinOpen.lean`): every earlier round's openings at the parts that commit them, then the element-level last message's.
 
 `ksLin2_deployed_cap` is `ksLin2_deployed_plain_closed` at `layoutBCap`, with `HeldB` replaced by those five facts.
 `TopsHeld` asks for a part that holds a tops round whole, which none does; `ksLin2_deployed_tops` (`LayoutBTops.lean`)
@@ -79,14 +81,15 @@ def capCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Li
 statements. -/
 theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, -, pa, -, dims, -, vs, hvs, h⟩ := h
   split_ifs at h with hl
   · simp at h
   have h' : (⟨w, ri, pa, sh, dims⟩ : XR) = r := by simpa using h
   subst h'
-  exact ⟨vs, toOption_eq_some hvs, by simpa using hl⟩
+  exact ⟨vs, toOption_eq_some hvs, not_not.1 (not_or.1 hl).1⟩
 
 /-- **RecCap is the last part** wherever `readX` reads the statement: V*'s list ends with RecCap
 (`FlockC3.Reps.list_ok`), and the parts number as the list's statements. -/
@@ -174,8 +177,9 @@ def TopsHeld (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.
   ∀ x st, parse x = some st → shape st.form → ∀ j sr, streamRound x j = some sr → sr.2.1.isEmpty = false →
     ∃ s < nS x, (topsAt x s (j + 1)).isSome
 
-/-- **The last round has pieces, each a part's**, at the compiled statements of the shape. Open: where they sit is the
-bound record's `final`, the code side's. -/
+/-- **The last round has pieces, each a part's**, at the compiled statements of the shape. It holds at `finOpen`
+(`finPieces_finOpen`): every earlier round's openings at the parts that commit them, then the element-level last
+message's at parts a parameter names. -/
 def FinPieces (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ x st, parse x = some st → shape st.form → fin x ≠ [] ∧ ∀ p ∈ fin x, p.1 < nS x
 
@@ -289,11 +293,12 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
 
 /-! ## `KSLin2` at `layoutBCap` -/
 
-/-- **`KSLin2` at the deployment, at `layoutBCap`, with `HeldB` restated**: `ksLin2_deployed_plain_closed` at the layout
-with round 0 at RecCap, where per form `HeldB` comes from `heldB_layoutBCap`. What stays per form is the schedule
-(`SchedMatches`), RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the tops (`TopsHeld`, false at every
-`topsAt` that holds no such round: `not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, open), and `VstarShowsB`,
-`PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBCap`, with `HeldB` restated**:
+`ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap, where at the dense form `HeldB` comes from
+`heldB_layoutBCap`. What stays at the dense form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the rows'
+ports (`RowsCover`), the tops (`TopsHeld`, false at every `topsAt` that holds no such round:
+`not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
+`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
 theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -305,24 +310,24 @@ theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Optio
     (∃ decC : Msg → Msg → Coin,
       (∀ decI, Claims.Recursion.VStar.RunPairs FlockDeploy.sha512 D
         (Claims.Recursion.Inner.ofFlock Bd.deploy decI) decC) ∧
-      ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
+      ∀ shape ∈ [Claims.Recursion.Form.Dense],
         SchedMatches shape ∧ CapPorts shape ∧ RowsCover shape ∧ TopsHeld topsAt shape ∧ FinPieces fin shape ∧
         ∃ (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    Claims.Recursion.KSLin2 FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
-      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep := by
-  intro L Bd D bL hP hRT hRL hRP
-  refine ksLin2_deployed_plain_closed b L wE join final w ?_ hRT hRL hRP
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro L Bd D bL hP hRT hRP
+  refine ksLin2_deployed_plain_closed b L (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl) wE join
+    final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain ⟨hM, hC, hRw, hTp, hF, chk, shows, cmt, hV, hPC, hPO, hD⟩ := hS shape hsh
