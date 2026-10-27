@@ -1,5 +1,5 @@
 """The arithmetic behind the fast-decode routes' ceilings and their effect on P2's timed audit, with the measured rates as
-parameters (the defaults are run r20261011-223010-39a4's, on one RTX PRO 6000 Blackwell Server Edition).
+parameters (the defaults are those measured on one RTX PRO 6000 Blackwell Server Edition).
 
 - `tc_ceiling_gbps`: the decode rate if the tensor cores did nothing but the two squarings' MMAs at a given int8 rate.
 - `full_pass_gbps`: a kernel and the key expansion run one after the other.

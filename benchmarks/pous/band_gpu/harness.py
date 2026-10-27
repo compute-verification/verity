@@ -74,7 +74,7 @@ PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
 (None: the whole segment; the rest of the segment is zeros)."""
 FROZEN_KERNELS = {"thread_rows": 500, "word_io": True, "fused": True, "pair": True, "pair_max_rows": 7500, "chunked": True,
                   "chunked_threads": 64, "split": True, "fused_x": True, "whole_chain": True, "chain_pairs": False}
-"""The kernel settings of the band's run of record (`r20260928-032701-b4a1`, `bench.FROZEN_FLAGS`)."""
+"""The kernel settings of the band's run of record (`bench.FROZEN_FLAGS`)."""
 KERNELS = {**FROZEN_KERNELS, "chain_pairs": True}
 """The kernel settings a run starts from (`--kernels` overrides them): the run of record's, the whole-chain decode on lane
 pairs (`dense.CHAIN_PAIRS`).  `--kernels '{"chain_pairs": false}'` runs the run of record's kernels."""
