@@ -1,6 +1,7 @@
 import CoreOnsite
 import Properties.Composition
 import Properties.Flock.Circuit.CircuitOf
+import Properties.Pous.MemoryChallenger
 import Definitions.Accounting.JointLive
 import Definitions.Core.Game
 import Definitions.Hash.RowLeaf
@@ -27,10 +28,11 @@ The sixth, the wipe (`MemoryChallenger.WipeProtocol.protocol`), has its target i
 The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's one adversary form (26 Oct):
 
 * **A causal game (R5, R6).** The prover sends the parameters `θ`, the committed files `F` (one blob) and the
-  commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays `play (rounds θ) θ F c`, a
-  `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root, a transcript digest) that the
-  round's release answers, and then the device draws and releases that round's coins (`releases`); the evidence comes
-  last. A strategy (`Verity.Game.Strategy`) is a function of the coins released so far and never of later ones.
+  commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays
+  `play (rounds θ) (sign θ) θ F c`, a `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root,
+  a transcript digest) that the round's release answers, and then the device draws and releases that round's coins and
+  signs them (`releases`), so the play's log is the device's signed record; the evidence comes last.
+  A strategy (`Verity.Game.Strategy`) is a function of the coins released so far and never of later ones.
 * **The claims read the committed files (R6).** The circuit, its units and its constants are what the verifier reads
   from the files (`Flock.Bridge.circuitOfFile`, `unitsOfFile`, `partsOfFile` at v2's reading of the blob, `read`), and
   the positions are the files' and the commitment's (`place`), never the prover's world. The params hold the circuit
@@ -45,10 +47,10 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's on
 * **One adversary form: every prover, and the breaks two fixed finders output.** There is no strategy class and no
   break in the event. The collision finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the
   strategy whose SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`); the LMS forger (`forger a`) is a fixed
-  function of the play's outcome, whose output is a forgery (`forgery`) when it verifies under the device's trusted
-  key and the device's log signs no such message. Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ`
-  outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls (`FinderCR`,
-  quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]` plus the probability that the forger
+  function of the play's outcome, whose output is a forgery (`forgery`, defined here and no field) when it verifies
+  under the device's registered LMS key (`key`) and the device's signed log (`Outcome.Signed`) holds no such message.
+  Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ` outputs a SHA-512 collision with probability at
+  most the published `ε_cr` at the strategy's calls (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]` plus the probability that the forger
   succeeds in the play (`forges`); elsewhere `⊤`. That admits C-Flock's conditional bound (`loss = 0`, F3) and the
   additive one (`crBound = 1`). Two openings of one position and a second file with the registered digest
   (`fileFinder`) enter at `B`, a forged device release at the forger, an event of the device's log. The named
@@ -74,10 +76,10 @@ reading at `D`, and the onsite name is it at `onsite` by definition. `Verity.Sou
 claims a deployment decides.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the blob, ONE-3b), `place`,
-`programDigest` and `registered` (ONE-7), `rounds`, `coinsRead` and `forgery` (ONE-4), `extract`, the finders and the
-forgers (ONE-8 and each target's), `computed` (ONE-16), `world` (the runs PoUS, the bandwidth audit and the network certifier realize: ONE-10,
-ONE-11 and ONE-12), and `certOf`, `delta` and `loss` (what the product publishes, functions of the parameters alone:
-ONE-19).
+`programDigest` and `registered` (ONE-7), `rounds`, the device's signer and registered key (`sign`, `key`) and
+`coinsRead` (ONE-4), `extract`, the finders and the forgers (ONE-8 and each target's), `computed` (ONE-16), `world` (the
+runs PoUS, the bandwidth audit and the network certifier realize: ONE-10, ONE-11 and ONE-12), and `certOf`, `delta` and
+`loss` (what the product publishes, functions of the parameters alone: ONE-19).
 -/
 
 namespace Verity
@@ -197,17 +199,22 @@ def RegistrationAcceptsAt (D : Deployment) (s : Sent) : Prop :=
 /-- `RegistrationAcceptsAt` at onsite. -/
 def RegistrationAccepts (s : Sent) : Prop := RegistrationAcceptsAt onsite s
 
-/-- One release of the challenger device: the bytes it answers, and the coins it released after them. -/
+/-- One release of the challenger device: the bytes it answers, the coins it released after them, and what it signed
+for them, the message and its LMS signature under the device's registered key. -/
 structure Release where
   answers : ByteArray
   coins : List Bool
+  message : ByteArray
+  signature : ByteArray
 
 /-- **The device's releases, in order**: for a round of `n` coin bits, the prover sends the bytes the release answers,
-then the device draws `n` uniform bits and releases them. The output is the device's log. -/
-def releases : List ℕ → Game (List Release)
+then the device draws `n` uniform bits, releases them, and signs them (`sign` maps the bytes answered and the coins to
+the message the device signs and its LMS signature). The output is the device's log, its signed record. -/
+def releases (sign : ByteArray → List Bool → ByteArray × ByteArray) : List ℕ → Game (List Release)
   | [] => .ret []
   | n :: ns => .send ByteArray fun b => .coin (Fin n → Bool) fun x =>
-      (releases ns).map fun log => ⟨b, List.ofFn x⟩ :: log
+      (releases sign ns).map fun log =>
+        ⟨b, List.ofFn x, (sign b (List.ofFn x)).1, (sign b (List.ofFn x)).2⟩ :: log
 
 /-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
 evidence sent last. -/
@@ -221,10 +228,14 @@ structure Outcome where
 /-- What the prover sent onsite in the play that ended with `o`; the blob its components read is the committed file. -/
 def Outcome.sent (o : Outcome) : Sent := ⟨o.params, o.commitment, o.evidence, #[o.file]⟩
 
+/-- The device signed `m` in the play that ended with `o`: some release of its log signs `m` (ONE-4's
+`Challenger.Signed`, #4985's `Challenger.Signed`, on the game's one device and key). -/
+def Outcome.Signed (o : Outcome) (m : ByteArray) : Prop := ∃ r ∈ o.log, r.message = m
+
 /-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device's rounds
-`ns`, each release after the bytes it answers, then the evidence. -/
-def play (ns : List ℕ) (θ F c : ByteArray) : Game Outcome :=
-  (releases ns).bind fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩
+`ns`, each release after the bytes it answers and signed by `sign`, then the evidence. -/
+def play (ns : List ℕ) (sign : ByteArray → List Bool → ByteArray × ByteArray) (θ F c : ByteArray) : Game Outcome :=
+  (releases sign ns).bind fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩
 
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
@@ -286,12 +297,12 @@ abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.
 
 /-- **The names the subprotocols define.** v2's reading of the committed blob (ONE-3b); the positions from the files and
 the commitment, the circuit file's digest in the parameters and the registered blob (ONE-7); the device's rounds, and
-the releases each component's check read, decoded from the device's signed log entries in what the prover sent
-(ONE-4); the extractor applied to a strategy, and each subprotocol's collision finder (ONE-8 and each target's), with
-the finder's SHA-512 calls bounded by the strategy's (`finder_calls`); each subprotocol's LMS forger on the play's
-outcome, and what a forgery is there (ONE-4); the committed circuit's gates a play computed
-after their window's coin (ONE-16); the world each play realizes (ONE-10, ONE-11, ONE-12); the deployment's honest
-prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters and the
+the device's signer and registered LMS key, and the releases each component's check read, decoded from the device's
+signed log entries in what the prover sent (ONE-4); the extractor applied to a strategy, and each subprotocol's
+collision finder (ONE-8 and each target's), with the finder's SHA-512 calls bounded by the strategy's
+(`finder_calls`); each subprotocol's LMS forger on the play's outcome (ONE-4); the committed circuit's gates a play
+computed after their window's coin (ONE-16); the world each play realizes (ONE-10, ONE-11, ONE-12); the deployment's
+honest prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters and the
 strategy's SHA-512 calls alone (ONE-19).
 
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (ONE8's `t' τ`): `Verity.Game` has no call model of
@@ -302,23 +313,27 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   programDigest : ByteArray → Option Hash.Digest
   registered : ByteArray → ByteArray
   rounds : ByteArray → List ℕ
+  /-- The device's signer at `θ`: the bytes a release answers and its coins to the message the device signs and its
+  LMS signature under `key θ`. -/
+  sign : ByteArray → ByteArray → List Bool → ByteArray × ByteArray
+  /-- The device's registered LMS key at `θ`: its parameters and its public key. -/
+  key : ByteArray → Lms.Params × ByteArray
   coinsRead : Audit → Sent → List Release
-  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
-  finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
-  /-- Subprotocol `a`'s LMS forger at `θ`, applied to the play's outcome (whose `log` is the device's releases). -/
+  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → (read F).circuit.Transcript
+  finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Claims.Finder
+  /-- Subprotocol `a`'s LMS forger at `θ`, a fixed function of the play's outcome (whose `log` is the device's signed
+  record). What it must output to succeed is defined, `Vocab.forgery`. -/
   forger : Audit → ByteArray → Outcome → Option (ByteArray × ByteArray)
-  /-- `sig` is a forgery on `m` at `θ` and `o`: it verifies under the device's trusted LMS key at `θ`, and `o.log`
-  signs no such message (ONE-4's `Witness.Valid` at `.forgery`; memory accounting's `wipeForger`). -/
-  forgery : ByteArray → Outcome → ByteArray → ByteArray → Prop
-  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
+  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → ℕ
   callsMul : ByteArray → Audit → ℕ
   callsAdd : ByteArray → Audit → ℕ
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
-  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → Finset (Fin (read F).circuit.N)
-  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → World d α
-  honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
+  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Outcome →
+    Finset (Fin (read F).circuit.N)
+  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c) → Outcome → World d α
+  honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) (sign θ) θ F c)
   certOf : ByteArray → Certificates
   crBound : ByteArray → Audit → ℕ → ℝ
   delta : ByteArray → Audit → ℕ → ℝ≥0∞
@@ -329,7 +344,7 @@ namespace Vocab
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- The game after `θ`, `F` and `c`. -/
-def game (θ F c : ByteArray) : Game Outcome := play (V.rounds θ) θ F c
+def game (θ F c : ByteArray) : Game Outcome := play (V.rounds θ) (V.sign θ) θ F c
 
 /-- The committed files' circuit. -/
 noncomputable def circuitOf (F : ByteArray) : Verity.Circuit := (V.read F).circuit
@@ -388,7 +403,7 @@ def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Audit → 
   (V.live θ F c).Holds (V.certOf θ) σ
 
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
-signature, which the forger outputs. -/
+signature (`forgery`), which the forger outputs. -/
 def Logged (a : Audit) (o : Outcome) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
 
 /-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
@@ -404,6 +419,14 @@ at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (
 strategy's `cost` as ONE8's `qF`/`qS` are of `t'`. -/
 def FinderCR (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
+
+/-- **`sig` is a forgery on `m` at `θ`** in the play that ended with `o`: it verifies under the device's registered
+LMS key at `θ` (the compiled `Lms.verify`, through `MemoryChallenger.Properties.LmsVerifies`), and the device never
+signed `m` in the play (`Outcome.Signed`: no release of its log signs it). ONE-4's `Witness.Valid` at `.forgery` and
+#4985's `WipeBreak` on the game's one device and key. It is defined, never a field, so no vocabulary can empty the
+forger's term. -/
+def forgery (θ : ByteArray) (o : Outcome) (m sig : ByteArray) : Prop :=
+  MemoryChallenger.Properties.LmsVerifies (V.key θ).1 (V.key θ).2 m sig ∧ ¬ o.Signed m
 
 /-- **Subprotocol `a`'s forger succeeds** on the outcome `o`: it outputs a message and a signature that are a forgery
 at `θ` and `o`. -/
