@@ -31,7 +31,9 @@ its whole inventory is those devices), the probability over the oracle and the v
 
 It is the remote form's conclusion, at one credit for the whole accepted period: at the served check (H1, J10-R,
 `PouwCheck.Credit.window`) WORK-H1's `ServedWork` gives `F = p · L − Λ`, `p` the public best's priced cost a credited
-word, `L` the accepted period's `(1 − ε(j))₊` share of its live words and `Λ` the windows' luck allowances, and
+word, `L` the least credit an accepted period carries (its `creditPrefix`, the `(1 − ε(j))₊` share of its prefix's
+live words, depends on the period; `F` here is one number, so `L` is that credit's least value over the periods the
+check accepts) and `Λ` the windows' luck allowances, and
 `κ = δ_s + n (δ_bind + δ_ks) + n κ_deg(B)` at the advice bound `B` that (G1)'s memory puts on every prover's state. It
 is taken here as a premise until that guarantee's paths and window programs are this vocabulary's oracle, coins and
 provers.

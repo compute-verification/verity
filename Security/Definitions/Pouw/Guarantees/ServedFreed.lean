@@ -43,7 +43,8 @@ then for every prover, the probability over the oracle and the verifier's coins 
 period (`onsiteVerdict vw vn`: both checks) and some other work `z` fits on the registered devices beside its sampling
 blocks' timed work with `rv + W_other(z) > OPT_honest + ε C` is at most `κ`, where `ε C = max(0, C − F + β K)`.
 
-At WORK-H1's served floor `F = p L − Λ` (`RemoteWorkFloor`'s docstring) the period frees at most
+At WORK-H1's served floor `F = p L − Λ`, `L` the least credit an accepted period carries (`RemoteWorkFloor`'s
+docstring), the period frees at most
 `(C − p L) + Λ + β K`: the honest cost the public best doesn't account for, the luck allowances, and the certifier's
 bits at `β` each.
 
@@ -54,7 +55,7 @@ This statement says something only on the model MODEL-MIN fixes (CMP-165).
 Open (stated so the red team can aim at them):
 * `RemoteWorkFloor` is the remote form's conclusion taken as a premise: WORK-H1's `ServedWork` proves it in the J10-R
   play's vocabulary, and the bridge to this one (its paths as the oracle and coins, its window programs as a prover's
-  sampling blocks, `PouwCheck.Credit.window` as `vw`) is not written;
+  sampling blocks, `PouwCheck.Credit.window` as `vw`, its period-dependent credit at its least value) is not written;
 * `ImportWithinCertifier` counts raw bits (`Prover.ext`), while the certifier's guarantee
   (`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out (at most `2^K`
   values): the step from one to the other is open (NET-84);
