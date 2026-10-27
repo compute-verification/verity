@@ -49,9 +49,10 @@ def test_one_mathlib():
     assert revs and len(set(revs.values())) == 1, revs
 
 
-#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means that had no `honest` and
-#: `nontrivial` witnesses when LEAN-66's rule came (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 42, "Security/Properties": 128, "verity/core/service/flock": 1}
+#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
+#: had no `honest` and `nontrivial` witnesses when LEAN-66's rule came (`check.py`'s `witness_failures`), with those the
+#: PRs on `next` then brought
+UNWITNESSED = {"Security": 257, "Security/Properties": 155, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():

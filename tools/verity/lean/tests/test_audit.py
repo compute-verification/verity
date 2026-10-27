@@ -1893,34 +1893,42 @@ def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
 
 
 def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beating_its_bound():
-    """LEAN-66 (top 21:52Z): a guarantee reading a partition's or a covering's bound and no acceptance (NCI's exclusion,
-    training's serving-block bound) is of the `exclusion` kind: its honest witnesses conclude its premises at the deployed
-    partition and parameters, and its nontrivial one is `¬ Bound c₀` at an explicit circuit, without the named premise."""
-    cover = {"name": "P.Covering.Bound", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    """LEAN-66 (top 21:52Z): a guarantee concluding a bound over a partition or a covering and reading no acceptance (NCI's
+    exclusion, training's serving-block bound) is of the `exclusion` kind: its honest witnesses conclude its premises at
+    the deployed partition and parameters, and its nontrivial one is `¬ (… ≤ …)` at an explicit circuit, without the named
+    premise. A statement that only reads a partition, or reads a verifier's acceptance as well, is no exclusion."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
     covers = {"binder": "hc", "type": "P.Covers", "closed": True, "named": "P.Covers", "module": "P.Assumptions"}
     g = {"reads": [cover], "premises": [COMPILED, {"binder": "hc", "head": "P.Covers", "module": "P.Assumptions"}],
-         "hypotheses": [covers], "body": wbody("P.Covering.Bound", binders=["∀", "→", "→"])}
-    beats = {"body": wbody("P.Covering.Bound", negated=True)}
+         "hypotheses": [covers],
+         "body": wbody("LE.le", binders=["∀", "→", "→"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    beats = {"body": wbody("LE.le", negated=True)}
     pol, f = witnessed(g, nontrivial=beats)
     pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
     assert A.witness_scope("P.sound", pol, f["pins"]["P.sound"]) == (
-        "exclusion", "it reads P.Covering.Bound, a partition's or covering's bound, and no acceptance")
+        "exclusion", "it concludes a bound and reads P.Covering.load of P.Covering, a partition or covering, and no acceptance")
     assert A.witness_failures(pol, f, WOWN) == []
     as_kind = {"P.sound": {**pol["witnesses"]["P.sound"], "kind": "exclusion"}}
     assert witness_codes({**pol, "witnesses": as_kind}, f) == []
     assert witness_codes({**pol, "witnesses": {"P.sound": {**as_kind["P.sound"], "kind": "acceptance"}}}, f) == \
         ["witnesses.witness-form"]
-    keeps = witnessed(g, nontrivial=beats | {"body": wbody("P.Covering.Bound", negated=True, binders=["→"]),
+    keeps = witnessed(g, nontrivial=beats | {"body": wbody("LE.le", negated=True, binders=["→"]),
                                              "hypotheses": [covers]})[1]
     assert A.witness_failures(pol, keeps, WOWN) == [
         "witnesses: P.sound_nontrivial, P.sound's `nontrivial` witness, takes P.Covers, which P.sound rests on: an "
         "exclusion's nontrivial lemma drops the named premise, and an explicit circuit then beats the bound: it assumes "
         "nothing beyond named assumptions the lock lists"]
     missing = A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0]
-    assert "`P.sound_nontrivial : ¬ P.Covering.Bound at c₀ …` (an explicit circuit c₀ beats the bound once P.Compiled, " \
+    assert "`P.sound_nontrivial : ¬ LE.le at c₀ …` (an explicit circuit c₀ beats the bound once P.Compiled, " \
            "P.Covers is dropped, taking none of it)" in missing and '"kind": "exclusion"' in missing
     both = witnessed(g | {"reads": [cover, HOLDS]})
     assert A.witness_scope("P.sound", both[0], both[1]["pins"]["P.sound"])[0] == "acceptance"
+    gate = witnessed(g | {"body": wbody("P.Covering.load", binders=["∀"])})
+    assert A.witness_scope("P.sound", gate[0], gate[1]["pins"]["P.sound"]) is None
+    run = {"name": "P.Run.accepts", "module": "P.Defs", "kind": "def", "hash": "7" * 32}
+    verified = witnessed(g | {"reads": [cover, run]})
+    assert A.witness_scope("P.sound", verified[0], verified[1]["pins"]["P.sound"]) == (
+        "acceptance", "it reads P.Run.accepts, a verifier's acceptance")
 
 
 def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():

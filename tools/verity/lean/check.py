@@ -56,14 +56,15 @@ environment extension loaded, so none of the package's code runs), and replays t
                  that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
                  (`@lane`) of the lane that answers for it
     witnesses    a guarantee that states what an acceptance means (a property of a function's acceptance, or a statement
-                 reading a claim or the one theorem's vocabulary) names no `honest` lemma (its hypotheses hold at the
-                 honest deployed instance) and `nontrivial` lemma (its conclusion fails at a verifier that accepts
-                 everything) under `witnesses`; or an exclusion theorem (one reading a partition's or covering's bound
-                 and no acceptance) names no `honest` lemma at the deployed partition and parameters and `nontrivial`
-                 one at an explicit circuit beating the bound without its named premise; or a witness doesn't have
-                 that form, ranges over its instance instead of building it, takes a hypothesis that is no named
-                 assumption the lock lists, or is an honest one at an accept-all verifier (`witness_failures`,
-                 LEAN-66), unless `unwitnessed`, which only shrinks, lists the guarantee with its statement's hash
+                 reading a claim, the one theorem's vocabulary or a verifier's acceptance) names no `honest` lemma (its
+                 hypotheses hold at the honest deployed instance) and `nontrivial` lemma (its conclusion fails at a
+                 verifier that accepts everything) under `witnesses`; or an exclusion theorem (a bound over a partition
+                 or covering, reading no acceptance) names no `honest` lemma at the deployed partition and parameters
+                 and `nontrivial` one at an explicit circuit beating the bound without its named premise; or a
+                 witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
+                 that is no named assumption the lock lists, or is an honest one at an accept-all verifier
+                 (`witness_failures`, LEAN-66), unless `unwitnessed`, which only shrinks, lists the guarantee with its
+                 statement's hash
     unread       in a package whose lock has `unread`, a definition of the spec that no listed statement reads,
                  neither its own nor one of a package requiring it by path (`unread_spec`), is not among those `unread`
                  lists, the ones that predate the rule; the list only shrinks (`unread_failures`, LEAN-67)
@@ -1573,13 +1574,17 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 
 
 #: what puts a guarantee under the witnesses rule (`witness_scope`) beside a property of a function's acceptance: a read of
-#: a definition of a module with a `SCOPE_COMPONENT` component (a claim: what an acceptance means) or under `SCOPE_MODULES`
-#: (the one theorem's vocabulary, `Verity.Soundness` and its subprotocols' targets), the `acceptance` kind; with neither,
-#: one of a module with an `EXCLUSION_COMPONENTS` component (a partition's or a covering's bound, which no verifier
-#: accepts), the `exclusion` kind (top, LEAN-66 21:52Z)
+#: a definition of a module with a `SCOPE_COMPONENT` component (a claim: what an acceptance means), under `SCOPE_MODULES`
+#: (the one theorem's vocabulary, `Verity.Soundness` and its subprotocols' targets), or whose name's last component
+#: starts with one of `VERIFIER_PREFIXES` (a verifier's acceptance: `PeriodRun.accepts`, `Flock.Zk.verify`), the
+#: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
+#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
+#: (top, LEAN-66 21:52Z)
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
-EXCLUSION_COMPONENTS = ("Partition", "Covering")
+VERIFIER_PREFIXES = ("accept", "verify")
+EXCLUSION_MODULES = ("Partition", "PrivatePartition", "Cover", "Covering")
+BOUND_HEADS = ("LE.le", "LT.lt", "GE.ge", "GT.gt")
 WITNESS_KINDS = ("acceptance", "exclusion")
 
 
@@ -1597,9 +1602,10 @@ def accepted(policy: dict, name: str) -> list[str]:
 def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     """(kind, why) when the guarantee ``name`` (its facts ``pin``) is held to witnesses (`witness_failures`), else None:
     `acceptance` when it states what an acceptance means (a property of a function's acceptance, `accepted`, or a
-    statement reading a claim, a `SCOPE_COMPONENT` module, or the one theorem's vocabulary, `SCOPE_MODULES`); `exclusion`
-    when it reads none of those but a partition's or a covering's bound (`EXCLUSION_COMPONENTS`). A guarantee with no such
-    read is about something else (a bound on a hash, a count, a device), where neither form means anything."""
+    statement reading a claim, a `SCOPE_COMPONENT` module, the one theorem's vocabulary, `SCOPE_MODULES`, or a verifier's
+    acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
+    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`). A guarantee with no such read is about something else
+    (a bound on a hash, a count, a device), where neither form means anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
     reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
@@ -1610,8 +1616,13 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
         if under(SCOPE_MODULES, m):
             return "acceptance", f"it reads {parent(r['name'])}, the one theorem's vocabulary"
     for r in reads:
-        if set(EXCLUSION_COMPONENTS) & set((r.get("module") or "").split(".")):
-            return "exclusion", f"it reads {parent(r['name'])}, a partition's or covering's bound, and no acceptance"
+        if r.get("name", "").split(".")[-1].startswith(VERIFIER_PREFIXES):
+            return "acceptance", f"it reads {r['name']}, a verifier's acceptance"
+    if set(concluded(pin)[0]) & set(BOUND_HEADS):
+        for r in reads:
+            if (r.get("module") or "").split(".")[-1] in EXCLUSION_MODULES:
+                return "exclusion", (f"it concludes a bound and reads {r['name']} of {r['module']}, a partition or "
+                                     f"covering, and no acceptance")
     return None
 
 
