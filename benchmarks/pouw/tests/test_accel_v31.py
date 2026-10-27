@@ -1,12 +1,14 @@
 """Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
 challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
 no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; and both shapes' bound
-on t = min(L, K) / L'."""
+on t = min(L, K) / L'. perm_kernel launches within its launch bounds, and with VERITY_POUW_V31_LIB naming a libv31.so built
+for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the permutation perm_kernel writes."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -355,6 +357,34 @@ def test_both_shapes_refuse_t_past_8():
         v31.Fill(*map(int, dims), kind == "served")
     for line in fill_dither.CASES.strip().splitlines():
         v31.Fill(*map(int, line.split()[1:7]), line.split()[7] == "served")
+
+
+def test_perm_kernel_launches_within_its_bounds():
+    """perm_kernel's SHA-512 takes 90 registers a thread, so a CTA of 1,024 never launches and pi stays unwritten: every
+    launch takes PERM_THREADS(L') threads, at most the kernel's __launch_bounds__ of 512."""
+    src = (Path(v31.__file__).parent / "v31.cu").read_text()
+    bound = int(re.search(r"__launch_bounds__\((\d+)\) perm_kernel\(", src).group(1))
+    cap = int(re.search(r"PERM_THREADS\(int lp\) \{ return lp < (\d+) \? lp : \1; \}", src).group(1))
+    assert cap <= bound <= 512
+    launches = re.findall(r"perm_kernel<<<[^,]+, ([^,]+),", src)
+    assert launches and set(launches) == {"PERM_THREADS(lp)"}
+
+
+V31_LIB = "VERITY_POUW_V31_LIB"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get(V31_LIB), reason=f"{V31_LIB} names a libv31.so (v31lib.build_lib) for the GPU in hand "
+                    "(about 20 s)")
+@pytest.mark.parametrize("name", ["f-lp1024", "c-skip-lp1024", "s-lp1024", "f-lp2048"])
+def test_gpu_forms_w_prime_under_the_written_permutation(name):
+    """At L' >= 1,024 the GPU forms W' under the pi_tau perm_kernel writes: its values and every tree level are the
+    reference's, an honest call is accepted and one that skips a noise tile refused. Had perm_kernel's CTA not launched,
+    v31_prove would refuse the call (a launch failed) rather than commit W' under an unwritten pi."""
+    _, kind, *dims, a_kind, cheat = next(g.split() for g in v31lib.GATES.strip().splitlines() if g.split()[0] == name)
+    rep = v31lib.gate_case(v31lib.Lib(os.environ[V31_LIB]), name, kind == "served", *map(int, dims), a_kind, cheat, 64,
+                           np.random.default_rng(7))
+    assert rep["exact"] and rep["good"], rep
 
 
 @pytest.mark.parametrize("served", [False, True])
