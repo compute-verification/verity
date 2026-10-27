@@ -574,12 +574,12 @@ def credit_args(d: dict) -> tuple:
 LINEARS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
-def layout(rng: random.Random, big: bool = False) -> dict:
-    """A served window's layout, `h1window.program`'s arguments: one to four linears at one or two K, each n whole blocks
-    of the tile's C, called once a step over one to three steps (A block s at step s) in a shuffled order; ``big``, a
-    population past `credit.RECORD_K`."""
+def layout(rng: random.Random, big: bool = False, nks: int | None = None) -> dict:
+    """A served window's layout, `h1window.program`'s arguments: one to four linears at one or two K (`nks` when given),
+    each n whole blocks of the tile's C, called once a step over one to three steps (A block s at step s) in a shuffled
+    order; ``big``, a population past `credit.RECORD_K`."""
     r, c = rng.choice([(1, 1), (2, 4), (4, 8), (8, 8), (16, 16)])
-    ks = rng.sample([32, 64, 4096, 6144, 14336], rng.randint(1, 2))
+    ks = rng.sample([32, 64, 4096, 6144, 14336], rng.randint(1, 2) if nks is None else nks)
     names = rng.sample(LINEARS, rng.randint(len(ks), 4))
     linears = [[name, ks[i] if i < len(ks) else rng.choice(ks), c * (rng.randint(1, 4) if not big else 64)]
                for i, name in enumerate(names)]
@@ -654,22 +654,25 @@ def _n(k: int) -> int:
         return 1
 
 
-def _unit_fn(k: int, r: int, c: int, j10r: bool = False) -> str:
-    """K's unit id in the descriptor: the tile's (J10-R's v5 when `j10r`), wrapped at a chunked K in
-    `h1zy.PouwH1TileZyChunks_v1`, or its v2 over J10-R (`h1zy.unit_chunks`)."""
-    tile, n = f"H1Tile_v{5 if j10r else 1}{{K={k},R={r},C={c}}}", _n(k)
+def _unit_fn(k: int, r: int, c: int, j10r: bool = False, tile: int | None = None) -> str:
+    """K's unit id in the descriptor: the tile's (J10-R's v5 when `j10r`; ``PouwH1Tile_v<tile>`` when `tile` is given),
+    wrapped at a chunked K in `h1zy.PouwH1TileZyChunks_v1`, or its v2 over J10-R (`h1zy.unit_chunks`)."""
+    name = f"PouwH1Tile_v{tile}" if tile is not None else f"H1Tile_v{5 if j10r else 1}"
+    tile, n = f"{name}{{K={k},R={r},C={c}}}", _n(k)
     return tile if n == 1 else f"PouwH1TileZyChunks_v{2 if j10r else 1}{{UNIT={tile},CHUNKS={n}}}"
 
 
-def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> dict:
+def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
+                tile: int | None = None) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
-    template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`.
+    template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`
+    (each unit's tile ``PouwH1Tile_v<tile>`` when `tile` is given, `_unit_fn`).
     At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile
     (v2 over a J10-R one), as `h1window.program` wraps it."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
-    units = {k: {"fn": _unit_fn(k, r, c, j10r)} for k in ks}
+    units = {k: {"fn": _unit_fn(k, r, c, j10r, tile)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
@@ -698,9 +701,10 @@ def desc_bytes(desc: dict) -> bytes:
     return _canon(desc).encode()
 
 
-def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False) -> str:
+def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
+               tile: int | None = None) -> str:
     """`window_desc`'s bytes in hex, as a window's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r)).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile)).hex()
 
 
 def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
@@ -744,9 +748,9 @@ def _alt_layout(rng: random.Random, lay: dict) -> dict:
         out = json.loads(json.dumps(lay))
 
 
-def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
+def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, tile: int | None = None) -> str:
     """A descriptor of `lay`'s window broken as `name` says, in hex."""
-    desc = window_desc(rng, lay)
+    desc = window_desc(rng, lay, j10r=j10r, tile=tile)
     defs, fn = desc["definitions"], desc["program_fn"]
     root = defs[desc["root"]]["body"]["nodes"]
     tiles = json.loads(dict(Cr._record(fn))["TILES"])
@@ -829,7 +833,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
         case "alt-layout":
             desc["program_fn"] = record(tiles, _alt_layout(rng, lay))
         case "tile-k":
-            desc = window_desc(rng, _off_k(lay, rng))
+            desc = window_desc(rng, _off_k(lay, rng), j10r=j10r, tile=tile)
         case _:
             raise ValueError(name)
     return desc_bytes(desc).hex()
@@ -1670,26 +1674,32 @@ def _evidence(d: dict) -> dict:
 
 def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None, *,
                     period_pin: str | None = None, pin_floor: int | None = None,
-                    stale_window: int | None = None) -> dict:
+                    stale_window: int | None = None, j10r: bool = False, nks: int | None = None,
+                    tile: int | None = None, program_fn: str | None = None) -> dict:
     """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
     whose SHA-512 the period's open committed (one window layout's descriptor, `descriptor`), presented in its close's
     order, and a window of no period opened after the close; then mutation `name`. The period's open commits
     `committed_too` too.  `period_pin`, `pin_floor` and `stale_window` override the period's open pin, its freshness floor
-    and which window runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor."""
+    and which window runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor. `j10r`, `nks`
+    and `tile` make its circuits J10-R's, at `nks` K, over ``PouwH1Tile_v<tile>`` (`layout`, `descriptor`), and
+    `program_fn` replaces its circuit's program function."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3)
     pname = rng.choice(rc.PERIODS)
-    lay = layout(rng)
+    lay = layout(rng, nks=nks)
     t = table_rows(rng, lay)
     prefix = f"h1/w-{rng.randrange(100)}/"
-    desc = (_break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES)) if name == "bad-circuit" else
-            _break_desc(rng, lay, "tile-k") if name == "tile-k" else descriptor(rng, lay, prefix))
+    desc = (_break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES), j10r, tile) if name == "bad-circuit" else
+            _break_desc(rng, lay, "tile-k", j10r, tile) if name == "tile-k" else
+            descriptor(rng, lay, prefix, j10r=j10r, tile=tile))
+    if program_fn is not None:
+        desc = desc_bytes({**json.loads(bytes.fromhex(desc)), "program_fn": program_fn}).hex()
     program = hashlib.sha512(bytes.fromhex(desc)).hexdigest()
     weights = weights_of(rng, lay, program, prefix)
     bad = rng.randrange(n) if name in ("never-received", "other-circuit", "other-sw", "zero-codes") else None
     odd, odd_prefix, odd_weights = desc, prefix, weights
     if name == "other-circuit":
         odd_prefix = f"other-{rng.randrange(1 << 20)}/"
-        odd = descriptor(rng, lay, prefix=odd_prefix)
+        odd = descriptor(rng, lay, prefix=odd_prefix, j10r=j10r, tile=tile)
         odd_weights = _rehome(weights, hashlib.sha512(bytes.fromhex(odd)).hexdigest(), odd_prefix)
     elif name in ("other-sw", "zero-codes"):
         k, rows = rng.choice(sorted(b_counts(lay).items()))
@@ -1815,7 +1825,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         case "foreign":
             windows.insert(rng.randrange(n), _evidence(fd))
         case "alt-layout":
-            windows[i]["descriptor"] = descriptor(rng, _alt_layout(rng, lay))
+            windows[i]["descriptor"] = descriptor(rng, _alt_layout(rng, lay), j10r=j10r, tile=tile)
         case "descriptor-form":
             h = windows[i]["descriptor"]
             windows[i]["descriptor"] = rng.choice([h.upper(), h[:-1], "", "zz", 5, None, list(descriptor_)])
