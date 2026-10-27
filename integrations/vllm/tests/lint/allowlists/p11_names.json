@@ -110,7 +110,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_probe"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_start"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_stop"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"},
-    {"file": "verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2}
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"}
   ]
 }
