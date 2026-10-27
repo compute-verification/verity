@@ -224,7 +224,8 @@ theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables :
   refine ⟨?_, hleaf⟩
   unfold ProvedScope.circuitOf at hc
   split at hc
-  · exact parse_metaLeaf (Hidden.parse_untyped htyped hc).1
+  · obtain ⟨pre, c₀, hp, -⟩ := Hidden.parseCommit_untyped htyped hc
+    exact parse_metaLeaf hp
   · exact parse_metaLeaf hc
 
 /-- **Flock's statement check reads `hm96-sha512/v1` leaves, or plain SHA-512 leaves at hidden outputs without `--zk`**

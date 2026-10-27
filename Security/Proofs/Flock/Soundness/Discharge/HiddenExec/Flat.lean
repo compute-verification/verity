@@ -215,7 +215,7 @@ theorem rowsFit_of_committed {tags : Tags} {cf : ByteArray} {tables : List (Stri
   · obtain ⟨hp, hc⟩ := Hidden.parse_untyped hty h
     exact rowsFit_of_rows hp hc hr
   · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
-    exact rowsFit_of_rowsPre hp hck hr
+    exact rowsFit_of_rowsPre (c := c₀) hp hck hr
 
 /-- **The statement circuit's rows are covered** where `Layout.scopeOkH` passes: `HmOut.parseStmt`'s circuit, a flat
 file's `HmOut.parse`'s or a templated file's committed circuit unrolled, whose rows are the committed circuit's
