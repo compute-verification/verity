@@ -149,9 +149,6 @@ class Phi:
     frame_bytes: int
     messages: tuple[Message, ...]
 
-    def by_stream(self) -> dict[int, Message]:
-        return {m.stream: m for m in self.messages}
-
     def send_order(self) -> list[Message]:
         return sorted(self.messages, key=lambda m: (m.ready_tick, m.stream))
 
