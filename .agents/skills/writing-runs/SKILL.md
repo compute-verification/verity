@@ -72,4 +72,4 @@ research run --on M --cwd source -- \
 ~~~
 
 Before a long run on a machine, try the same command there for a minute (`--timeout 2m --wait`), never on an agent VM
-(AGENTS.md "Lanes"). Check that `ls` of the run dir shows only your output directory beside the harness's files.
+(AGENTS.md "Tests"). Check that `ls` of the run dir shows only your output directory beside the harness's files.
