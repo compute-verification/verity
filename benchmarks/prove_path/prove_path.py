@@ -41,6 +41,8 @@ Two kinds of committed run:
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] [--challenger local|gate:USER@HOST --main FILE]
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR] [--vllm-python PY]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
+    prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
+        [--hf-config F] [--target F]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...] [--vllm-python PY]
@@ -73,6 +75,11 @@ Two kinds of committed run:
   compiler of record lists transfer gates (`GATES_OF_RECORD`), the inner compiler is the server's listing them
   (`I2Compiler.digest`), the name and digest ``verity-vllm advice --compiler-name N --compiler-digest D`` then registers the
   window's advice under.
+* **weights-registration** (the committer): a served run's weights registration (`weights_registration_of_serve`), each
+  weight committed under the committer's secret salts once its shards check against the checkpoint's manifest, the
+  document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
+  ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
+  coins and never recomputes one from the checkpoint.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
@@ -127,6 +134,7 @@ import hashlib
 import json
 import multiprocessing
 import os
+import secrets
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -1175,6 +1183,40 @@ def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
+def committer_key(path: Path) -> bytes:
+    """The committer's 32-byte salt key at ``path``, which never leaves the committer: drawn fresh (mode 0600) the first
+    time, read thereafter. Refused (ValueError) unless 32 bytes."""
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+            f.write(secrets.token_bytes(32))
+    key = path.read_bytes()
+    if len(key) != 32:
+        raise ValueError(f"{path}: a committer's salt key is 32 bytes, not {len(key)}")
+    return key
+
+
+def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
+    """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
+    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, drawn under ``--key``
+    (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
+    (default the tree's ``manifests/checkpoints.json``). Written to ``--out``: what the server's ``verity-vllm advice
+    --weights-of-record`` records in each window's registration, and the roots the verifier pins before the first window's
+    coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never recomputes one. Refused
+    (ValueError) for a checkpoint not of record or one the manifest pins as another model than ``serve.json``'s, and as
+    `advice.registered_weights` refuses it. -> how many roots it registers, and the weight parameters it leaves free
+    (``unrooted``)."""
+    from verity_vllm.pipeline.advice import registered_weights
+    from verity_vllm.program.predict.window_weights import weights_registration
+
+    serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
+    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
+                               a.checkpoint_dir, checkpoints_manifest=a.checkpoints)
+    roots = registered_weights(doc, serve)
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out}
+
+
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     """A served window's registered compiler as the command `records_audit.compile_check` runs: the advice ``--advice``
     compiled (`compile_advice`, every refusal a `ValueError`), the window over the compiler's Programs for it
@@ -1358,6 +1400,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--serve-run", required=True)
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
                    "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
+    p = sub.add_parser("weights-registration", help="a served run's weights registration, the committer's: what verity-vllm "
+                       "advice --weights-of-record takes, and the roots the verifier pins (window-circuit --pins)")
+    for flag in ("--serve-run", "--checkpoint-dir", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--key", required=True, help="the committer's 32-byte salt key file, drawn there the first time (0600); "
+                   "it never leaves the committer")
+    p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
+    p.add_argument("--hf-config")
+    p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
         p.add_argument(flag, required=True)
@@ -1402,8 +1453,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
         return 0
-    if a.cmd in ("circuit", "window-circuit", "class-size"):
-        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice}
+    if a.cmd in ("circuit", "window-circuit", "class-size", "weights-registration"):
+        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice,
+                    "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

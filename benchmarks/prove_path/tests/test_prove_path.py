@@ -935,6 +935,159 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     assert json.loads(capsys.readouterr().out)["digest"] == doc["digest"]
 
 
+#: `engine.int8_checkpoint`'s v1 recipe's quantization config, the one Llama-3.2-1B-INT8's config.json carries
+INT8_V1 = {"modules_to_not_convert": ["lm_head"], "quant_method": "verity_int8", "weight_max": 127}
+
+
+def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> Path:
+    """TINY's checkpoint under ``d`` (random bf16 weights by their HF names, one safetensors shard, and its config.json) and a
+    manifest pinning the shard at ``model`` and ``revision``: the manifest. ``int8``: as `engine.int8_checkpoint`'s v1 recipe
+    makes one, each decoder linear an I8 weight under its row rule and its F32 ``weight_scale`` [N, 1], under ``INT8_V1``."""
+    import struct
+
+    import numpy as np
+
+    rng, H, I, D = np.random.default_rng(3), TINY["hidden_size"], TINY["intermediate_size"], 16
+
+    def bf16(*shape):
+        return (rng.random(shape, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    def linear(name, n, k):
+        if not int8:
+            return {name + ".weight": bf16(n, k)}
+        w = rng.random((n, k), dtype=np.float32) - np.float32(0.5)
+        s = np.maximum(np.abs(w).max(axis=1, keepdims=True), np.float32(1e-30)) / np.float32(127)
+        return {name + ".weight": np.clip(np.rint(w / s), -127, 127).astype(np.int8), name + ".weight_scale": s}
+    t = {"model.embed_tokens.weight": bf16(TINY["vocab_size"], H), "model.norm.weight": bf16(H)}
+    for i in range(TINY["num_hidden_layers"]):
+        p = f"model.layers.{i}."
+        for name, n, k in (("self_attn.q_proj", 4 * D, H), ("self_attn.k_proj", 2 * D, H), ("self_attn.v_proj", 2 * D, H),
+                           ("self_attn.o_proj", H, 4 * D), ("mlp.gate_proj", I, H), ("mlp.up_proj", I, H), ("mlp.down_proj", H, I)):
+            t |= linear(p + name, n, k)
+        t |= {p + "input_layernorm.weight": bf16(H), p + "post_attention_layernorm.weight": bf16(H)}
+    hdr, off = {"__metadata__": {"format": "pt"}}, 0
+    for name, a in t.items():
+        hdr[name] = {"dtype": {"uint16": "BF16", "int8": "I8", "float32": "F32"}[a.dtype.name], "shape": list(a.shape),
+                     "data_offsets": [off, off + a.nbytes]}
+        off += a.nbytes
+    head = json.dumps(hdr).encode()
+    d.mkdir(parents=True)
+    (d / "model.safetensors").write_bytes(struct.pack("<Q", len(head)) + head + b"".join(a.tobytes() for a in t.values()))
+    (d / "config.json").write_text(json.dumps({**TINY, "rope_theta": 10000.0, **({"quantization_config": INT8_V1} if int8 else {})}))
+    sha = hashlib.sha256((d / "model.safetensors").read_bytes()).hexdigest()
+    man = d.parent / "checkpoints.json"
+    man.write_text(json.dumps({"checkpoints": [{"repo": model, "revision": revision, "local_path": str(d),
+                                                "files": {"model.safetensors": {"sha256": sha}}}]}))
+    return man
+
+
+def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
+    """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
+    file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
+    against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
+    advice --weights-of-record` records and ``window-circuit --pins`` takes, and what the verifier holds to its own weights
+    record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
+    file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
+    one the manifest pins, is refused by name, nothing registered."""
+    import functools
+
+    from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
+    run.mkdir()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": 7,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    out, key = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key"
+
+    def register(key_file: Path) -> int:
+        return PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints",
+                        str(man), "--hf-config", str(hf), "--key", str(key_file), "--out", str(out)])
+
+    capsys.readouterr()
+    assert register(key) == 0
+    reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
+    assert key.read_bytes().hex() not in out.read_text()
+    pins = ADV.registered_weights(reg, serve)
+    assert said["roots"] == len(pins) == 15 and PP.pins_of((), [str(out)]) == pins
+    assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
+    registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
+    assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
+    assert register(key) == 0 and json.loads(out.read_text()) == reg
+    capsys.readouterr()
+    assert register(tmp_path / "other.key") == 0
+    other = ADV.registered_weights(json.loads(out.read_text()), serve)
+    assert sorted(other) == sorted(pins) and all(other[p] != pins[p] for p in pins)
+    (tmp_path / "short.key").write_bytes(bytes(16))
+    capsys.readouterr()
+    assert register(tmp_path / "short.key") == PP.REFUSED
+    assert "a committer's salt key is 32 bytes, not 16" in capsys.readouterr().err
+    out.unlink()
+    (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
+    assert register(key) == PP.REFUSED
+    assert f"manifest entry is {serve['model']}@{serve['revision']}, not the registered model org/other@" in capsys.readouterr().err
+    assert not out.exists()
+    (run / "serve.json").write_text(json.dumps(serve))
+    shard = ck / "model.safetensors"
+    body = bytearray(shard.read_bytes())
+    body[-1] ^= 1
+    shard.write_bytes(bytes(body))
+    assert register(key) == PP.REFUSED
+    assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
+
+
+def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
+    """Wed 28's model is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
+    row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
+    ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
+    q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM
+    head's row widths, each the checkpoint's words; only the rotary table is unrooted. The verifier holds it to its own weights
+    record's shapes (`registration_pins`)."""
+    import functools
+
+    from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny-int8.json", tmp_path / "ck" / "snap"
+    run.mkdir()
+    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800", "default_seed": 7,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188, "int8_exact": "linears"}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps({**TINY, "quantization_config": INT8_V1}))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"], int8=True)
+    out = tmp_path / "weights_registration.json"
+    capsys.readouterr()
+    assert PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
+                    "--hf-config", str(hf), "--key", str(tmp_path / "private" / "weights.key"), "--out", str(out)]) == 0
+    reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    pins = ADV.registered_weights(reg, serve)
+    assert said["roots"] == len(pins) == 23 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
+    words = {p.removeprefix("weights/"): e["words"] * e["leaves"] for p, e in reg["values"].items()}
+    H, I, QKV = TINY["hidden_size"], TINY["intermediate_size"], 8 * 16
+    for i in range(TINY["num_hidden_layers"]):
+        p = f"model.layers.{i}."
+        assert {k: v for k, v in words.items() if k.startswith(p) and "_proj" in k} == {
+            p + "self_attn.qkv_proj.weight@512": QKV * H // 2, p + "self_attn.qkv_proj.weight_scale@32": 2 * QKV,
+            p + "self_attn.o_proj.weight@512": H * H // 2, p + "self_attn.o_proj.weight_scale@32": 2 * H,
+            p + "mlp.gate_up_proj.weight@512": 2 * I * H // 2, p + "mlp.gate_up_proj.weight_scale@32": 2 * 2 * I,
+            p + "mlp.down_proj.weight@512": H * I // 2, p + "mlp.down_proj.weight_scale@16": 2 * H}
+    assert words["model.embed_tokens.weight@64"] == words["model.embed_tokens.weight@512"] == TINY["vocab_size"] * H
+    assert not any("lm_head" in p for p in words)
+    registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
+    assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
+
+
 def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():
     """`served_gates`: Llama-3.2-1B's compiler of record lists its RoPE heads (the TP1 stand-in), ``--transfer-gate`` may restate
     the list and nothing else (another template, or the record's with one more), and a model with no line lists none."""
