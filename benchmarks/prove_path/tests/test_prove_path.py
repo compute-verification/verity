@@ -494,13 +494,15 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
 
 
-def _request_build(sampling: dict | None = None, **shape):
+def _request_build(sampling: dict | None = None, named: bool = False, **shape):
     from verity_vllm.program.predict.build import build_program
+    from verity_vllm.program.predict.naming import named_program
     from verity_vllm.program.predict.phi import Phi
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, workload={"requests": []},
               target={"compute_capability": [12, 0], "num_sms": 188})
-    return build_program(Phi.from_json({**phi.to_json(), "sampling": sampling or {"kind": "greedy"}}), "request", **shape)
+    phi = Phi.from_json({**phi.to_json(), "sampling": sampling or {"kind": "greedy"}})
+    return named_program(phi, **shape) if named else build_program(phi, "request", **shape)
 
 
 def _request_program(sampling: dict | None = None, **shape):

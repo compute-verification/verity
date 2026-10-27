@@ -392,9 +392,13 @@ class Plan:
 
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows,
-    at φ's rank, in the registered compiler's form (`dead_free`) at any world; `named`: with its trace's names (`naming`)."""
-    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T, C=unit.C,
-                         dead_free=True, named=named)
+    at φ's rank, in the registered compiler's form (`dead_free`) at any world; `named`: with its trace's names
+    (`naming.named_program`)."""
+    phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
+    if named:
+        from .naming import named_program
+        return named_program(phi, unit.LP, unit.T, unit.C)
+    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True)
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:

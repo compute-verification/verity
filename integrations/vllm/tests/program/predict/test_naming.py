@@ -29,8 +29,8 @@ from verity_vllm.correspondence.runtime import validate_document
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.model import INT8_EXACT_QUANT
-from verity_vllm.program.predict.build import Unexpressible, build_program
-from verity_vllm.program.predict.naming import WRAPPER, write_build
+from verity_vllm.program.predict.build import Unexpressible
+from verity_vllm.program.predict.naming import WRAPPER, named_program, write_build
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import compile_steps
 
@@ -96,7 +96,7 @@ def _case(case: dict) -> Any:
 def test_a_request_program_is_named_as_its_trace_names_it(case):
     """The stochastic case (slow: about a minute and 4 GB, the select over Llama's 128k vocabulary) is the one that holds the
     select's names and its constants' Calls to a trace; TINY's stochastic Programs have no trace."""
-    b = build_program(phi_of(case), "request", LP=case["LP"], T=case["T"], C=case["C"], dead_free=True, named=True)
+    b = named_program(phi_of(case), case["LP"], case["T"], case["C"])
     n = b.named
     assert b.digest == case["digest"]
     assert {k: n.names[int(k)] for k in case["names"]} == case["names"]
@@ -140,10 +140,10 @@ def test_compile_steps_names_each_program_the_same_on_every_compile_with_no_vllm
 def test_what_the_naming_does_not_reach_is_refused_by_name(config, fact):
     phi = Phi.from_json({**_registered(json.loads((FIX / f"{config}.config.json").read_text())).phi.to_json(), "sampling": {"kind": "greedy"}})
     with pytest.raises(Unexpressible, match=f"^naming: {fact} "):
-        build_program(phi, "request", LP=4, T=1, dead_free=True, named=True)
-    tiny = Phi.from_json({**_registered().phi.to_json(), "sampling": {"kind": "greedy"}})
-    with pytest.raises(Unexpressible, match="^naming: the step wrapper of the .* decoder at TP1"):
-        build_program(tiny, "step", M=1, pos0=8, named=True)
+        named_program(phi, 4, 1)
+    tiny = Phi.from_json({**_registered().phi.to_json(), "sampling": {"kind": "greedy"}, "tp": {"world": 2, "rank": 0}})
+    with pytest.raises(Unexpressible, match="^naming: the .* decoder at TP2 "):
+        named_program(tiny, 4, 1)
 
 
 if __name__ == "__main__":

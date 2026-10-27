@@ -4,7 +4,7 @@ A Build dir (`pipeline.build`) holds, beside the Program, what no Program digest
 (`check.replay.index.ProgramIndex`, `correspondence.reader_for_query`): each Call's name (`<module>/<fx node>[/<member>][<row>]`,
 the instances' rows and the descriptor's `node_hints`), the parameters' names and types (the weights record's fields under the
 request wrapper's `model.`), the runtime correspondence (`correspondence.runtime`) and the cached prefix's layout
-(`prefix_cache.json`). `name_request` writes them for the request Program `build.build_program` emits (`named=True`), as vLLM's
+(`prefix_cache.json`). `named_program` builds a request Program (`build.build_program`) with them (`name_request`), as vLLM's
 trace of that Program names them, and `write_build` writes the Build dir, so a verifier's own Build of a Program needs neither
 the trace nor vLLM.
 
@@ -39,7 +39,9 @@ from typing import Any, Callable
 
 from verity.ml.circuits.types import Record
 
+from .build import BuildResult, _Decoder, build_program, decoder
 from .common import Unexpressible
+from .phi import Phi
 
 #: the request wrapper's attribute holding the model (`vllm_meta.GreedyRequest.model`): the root of every module path and weight name
 WRAPPER = "model."
@@ -127,18 +129,17 @@ def _family(fn: Any) -> str:
     return str(getattr(fn, "base_id", fn.id)).split("{")[0].split("[")[0].rsplit("_v", 1)[0]
 
 
-def refuse(net: Any, wrapper: str) -> None:
-    """`Unexpressible` unless `name_request` names `net`'s `wrapper`: the dense Llama-family request on one rank."""
-    from .build import _Decoder
-    if wrapper != "request" or type(net) is not _Decoder or net.world != 1:
-        raise Unexpressible(f"naming: the {wrapper} wrapper of the {net.model_class} decoder at TP{getattr(net, 'world', '?')} (the "
-                            f"dense decoder's request on one rank only)")
+def refuse(net: Any) -> None:
+    """`Unexpressible` unless `name_request` names `net`'s request: the dense Llama-family decoder on one rank."""
+    if type(net) is not _Decoder or net.world != 1:
+        raise Unexpressible(f"naming: the {net.model_class} decoder at TP{getattr(net, 'world', '?')} (the dense decoder on one "
+                            f"rank only)")
     C = net.C
     facts = [f for f, on in (("the fused MoE", C.E), ("q/k norms", C.qk_norm), ("a q/k/v bias", C.qkv_bias), ("the unfused norm chain", C.norm_chain),
                              ("the extra MLP norms", C.extra_norms), ("the embedding scale", C.embed_scale), ("soft-caps", C.attn_cap or C.final_cap),
                              (f"the activation {C.act!r}", C.act != "silu"), ("a sliding window", C.window is not None)) if on]
     if facts:
-        raise Unexpressible(f"naming: {', '.join(facts)} (vLLM's dense Llama-family decoder only)")
+        raise Unexpressible(f"naming: {', '.join(facts)} (vLLM's dense decoder with SiLU and fused norms only)")
 
 
 def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
@@ -155,10 +156,10 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
         w.rows(mm, "scaled int8 GEMM", "scaled_mm", module, M, [_view((M, N), bf)])
 
     def fused(module: str) -> None:
-        w.rows(S.fused, "fused add-RMSNorm", "fused_add_rms_norm", module, M, [_view((M, H), bf)] * 2, ((0, "call"), (1, "call")))
+        w.rows(S.fused, "fused add-norm", "fused_add_rms_norm", module, M, [_view((M, H), bf)] * 2, ((0, "call"), (1, "call")))
 
     w.rows(S.embedding, "embedding", "embedding", f"{WRAPPER}model.embed_tokens", M, [_view((M, H), bf)])
-    w.rows(S.norm0, "RMSNorm", "triton_launch", f"{WRAPPER}model.layers.0.input_layernorm", M, [_view((M, H), bf)], lin_in_place)
+    w.rows(S.norm0, "input norm", "triton_launch", f"{WRAPPER}model.layers.0.input_layernorm", M, [_view((M, H), bf)], lin_in_place)
     attn = {id(f) for f in S._attn.values()}
     qw, kw = C.NH * C.D, C.KVH * C.D
     for L in range(C.NL):
@@ -233,6 +234,15 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
     return body, Named(names, [[n, str(t)] for n, t in user] + [[wname, str(weights)]], doc, prefix, shape)
 
 
+def named_program(phi: Phi, LP: int, T: int, C: int = 0) -> BuildResult:
+    """φ's request Program at (LP, T) after a cached prefix of C rows, in the registered compiler's form (`build.build_program`,
+    ``dead_free``), with its names (`BuildResult.named`), or `Unexpressible` where `refuse` refuses its decoder, before any build."""
+    refuse(decoder(phi, 1, int(LP) + int(T)))
+    sampling = dict(phi.sampling or {"kind": "greedy"})
+    return build_program(phi, "request", LP=LP, T=T, C=C, dead_free=True, finish=lambda raw, net, params: name_request(
+        raw, net, params, LP=int(LP), T=int(T), C=int(C), sampling=sampling))
+
+
 def write_build(out: str, program: Any, named: Named) -> str:
     """`program`'s Build dir at `out`, as a trace's reads to the audit (`prove_path.build_of`, `ProgramIndex`): its descriptor
     under `named`'s `node_hints` and correspondence, its instances under `named`'s Call and parameter names, its `result.json`
@@ -260,4 +270,4 @@ def write_build(out: str, program: Any, named: Named) -> str:
     return digest
 
 
-__all__ = ["Named", "write_build"]
+__all__ = ["Named", "named_program", "write_build"]
