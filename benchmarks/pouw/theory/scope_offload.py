@@ -235,7 +235,7 @@ def main() -> int:
                      "Ingress docstring")
         checks.check("Device.lean models no NVLink/NVSwitch ingress channel",
                      "NVLink" not in lean and "NVSwitch" not in lean, "so intra-node peer ingress is unmodeled")
-        checks.check("Device.lean states there is no host-RAM channel (Daniel 3 Oct)", "no host RAM" in lean,
+        checks.check("Device.lean states there is no host-RAM channel", "no host RAM" in lean,
                      "host offload rides the PCIe channel, which the docstring frames as 'from NVMe'")
 
     # 3. The per-device, per-channel ceiling, and the counted eps each bound gives, against 1%.
