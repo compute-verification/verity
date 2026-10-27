@@ -24,7 +24,7 @@ verdict at the code `Vocab.Coupling.verdict` among them):
 | S6 | the realization is the compiled run's (`NetworkCouples`) | lean, ONE-12's bridge |
 | S7 | a uniform coin map's event is below the run's (`pr_le_of_coins`) | proved |
 | S8 | `WindowGood` past the leak relation, on acceptance (`windowGood_of_accepts`) | proved, from premises |
-| ρ | the trace holds the registered values (`WindowValuesRegistered`) | open: lean or network-accounting |
+| ρ | the trace holds the registered values (`WindowValuesRegistered`) | proved where no window registers values (`windowValuesRegistered_of_empty`); else open, network-accounting |
 
 S8 rests on S1, S2, S6 and `trusted-host` (`R.trusted`: the record is the device's code's, `obs_eq_record`), the ρ gap,
 and two premises: the window's statement registered as `sw i` (`WindowRegistersAs`, proofs: one-stage's registration
@@ -124,6 +124,18 @@ def WindowValuesRegistered (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ 
     (s : ((i : I) → Ω i) → Sent) : Prop :=
   ∀ ξ i st, ComponentAccepts .network (s ξ) → D.parse (R.stmt ξ i) = some st → Rlt R (R.stmt ξ i) (R.wit ξ i) →
     ∀ g ∈ reg st, traceVal st.prog ((R.wit ξ i).val H D.commit st) g = R.ρ i g
+
+/-- **The ρ gap where the windows register no values.** Where every statement of a window that onsite's network
+component accepts has no registered inputs, the trace holds `ρ i` at each of them vacuously. A clock-form link-window is
+such a window: N2's one-stage parameters name no registered values (`registered` and `proofs.registered` null,
+`n2_zk`'s), and one-stage v2 refuses a Program with a `RegisteredInput` under them (`OneStageZk.run`). A window whose
+Program registers values (weights pinned before the period) needs the registration's openings instead, at the cost of
+`B_reg` (`regColl_of_disagree`). -/
+theorem windowValuesRegistered_of_empty {s : ((i : I) → Ω i) → Sent}
+    (h : ∀ ξ i st, ComponentAccepts .network (s ξ) → D.parse (R.stmt ξ i) = some st → reg st = ∅) :
+    WindowValuesRegistered R s := by
+  intro ξ i st hca hst _ g hg
+  simp [h ξ i st hca hst] at hg
 
 /-- **S8's registration premise (proofs: one-stage's registration checks, R1–R6, at the window's case).** Where v2
 accepted window `i`'s case at `ξ` and the period onsite's network case decodes to registers window `i` under a
