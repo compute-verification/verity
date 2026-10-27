@@ -648,6 +648,9 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
     raster((int)blockIdx.x + i * (int)gridDim.x, tiles_m, tiles_n, p.group, tm, tn);
     int s = (int)(g0 % STAGES), pend = -1;
     uint32_t ph = (g0 / STAGES) & 1;
+    // imma's operands are "+r", so without this the last tile's accumulators would be live through pp_hash
+#pragma unroll
+    for (int j = 0; j < 128; j++) d[j] = 0;
     for (int k = 0; k < KT; k++) {
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE, b0 = a0 + T::A_BYTES;
