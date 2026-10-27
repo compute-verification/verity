@@ -11,8 +11,9 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.circuits.types import Array
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_embedding as TE
 
@@ -96,6 +97,41 @@ def test_the_feature_kernel_is_its_chunks() -> None:
           _at(TK.embedding_dense_backward(t, g, ENTRIES), pairs))
 
 
+# --- the step's blocks ---------------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("M", [70, pytest.param(TE.FEATURE_MAX + 1, marks=pytest.mark.slow)])
+def test_an_entrys_row_is_its_kernel_on_each_feature(M) -> None:
+    """The feature kernel, and the sort path at the least M it runs at (about 10 s)."""
+    t, g = case(np.random.default_rng(5), M)
+    vs = np.array(list(ENTRIES), np.uint32)
+    got = evaluate_words(bind(TE.EmbeddingBackwardEntry, M=M, H=H), vs, np.broadcast_to(t, (len(vs), M)),
+                         np.broadcast_to(g.T, (len(vs), H, M)))
+    _same(got, TK.embedding_dense_backward(t, g, ENTRIES))
+
+
+@pytest.mark.parametrize("M,F", [(5, 3), (130, 130)])
+def test_the_transpose_is_its_tiles(M, F) -> None:
+    """One tile, and a tile of each shape (128 and 2 rows, 128 and 2 columns)."""
+    sig = ((("x", Array(M, Array(F, TE.BF16))),), Array(F, Array(M, TE.BF16)))
+    d = CompositeDefinition("TransposeProbe", 1, (), lambda S: sig, lambda B, S, x: TE.transpose(B, x, M, F), register=False)
+    x = np.random.default_rng(M).integers(0, 1 << 16, (2, M, F), dtype=np.uint64).astype(np.uint16)
+    _same(evaluate_words(bind(d), x), x.transpose(0, 2, 1))
+
+
+def test_the_tied_gradient_is_the_lm_heads_plus_each_entrys_row() -> None:
+    """130 tokens and 130 features, so the transpose has a tile of each shape; the LM head's dW with specials."""
+    rng = np.random.default_rng(6)
+    M, F, V = 130, 130, 8
+    t = rng.integers(0, 7, M).astype(np.uint32)
+    t[:25] = 2
+    g = TK.bf16(np.asarray(rng.normal(0, 2, (M, F)), np.float32).view(np.uint32))
+    g[3, 0], g[5, 129], g[7, 64] = 0x7FC1, 0x8000, 0x7F80
+    w = TK.bf16(np.asarray(rng.normal(0, 1, (V, F)), np.float32).view(np.uint32))
+    w[2, 0], w[7, 1], w[0, 2] = 0xFF80, 0x8000, 0x7FC0
+    got = evaluate_words(bind(TE.EmbeddingBackwardTied, M=M, V=V, H=F), t[None], g[None], w[None])
+    _same(got, TK.bf16_add(w, TK.embedding_dense_backward(t, g, range(V))))
+
+
 @pytest.mark.parametrize("M", [200, 3100])
 def test_the_models_match_torch_to_rounding(M) -> None:
     """torch's CPU backward of an f32 embedding on the same gradients sums each entry's tokens in position order. Each bf16
@@ -121,7 +157,8 @@ def test_the_models_match_torch_to_rounding(M) -> None:
     (TE.EmbeddingBackwardTorch, {"M": TE.FEATURE_MAX}), (TE.EmbeddingBackwardTorch, {"M": True}),
     (TE.EmbeddingBackwardFeature, {"M": TE.FEATURE_MAX + 1}), (TE.EmbeddingBackwardFeature, {"M": 0}),
     (TE.EmbeddingBackwardFeatureChunk, {"N": 33}), (TE.EmbeddingBackwardFeatureChunk, {"N": 0}),
-    (TE.EmbeddingBackwardSortRun, {"N": 0}),
+    (TE.EmbeddingBackwardSortRun, {"N": 0}), (TE.EmbeddingBackwardEntry, {"M": 70, "H": 0}),
+    (TE.EmbeddingBackwardTied, {"M": 0, "V": 8, "H": 4}), (TE.EmbeddingBackwardTied, {"M": 70, "V": True, "H": 4}),
 ], ids=lambda a: getattr(a, "name", repr(a)))
 def test_bind_refuses_statics_outside_the_kernels_range(d, statics) -> None:
     with pytest.raises(ValueError, match="refuses this binding"):

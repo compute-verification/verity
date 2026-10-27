@@ -109,6 +109,15 @@ def test_the_embedding_backward_is_the_gpus(step) -> None:
     _same(np.asarray(got).reshape(n, F), rows)
 
 
+def test_the_entry_rows_are_the_gpus(step) -> None:
+    """`EmbeddingBackwardEntry_v1{M=256, H=13}`, the step's block, on the same 13 features of the same 253 entries."""
+    t, g, rows = step["emb_t"], step["emb_g"], step["emb_rows"]
+    vocab = np.unique(t)
+    got = evaluate_words(bind(TE.EmbeddingBackwardEntry, M=len(t), H=g.shape[1]), vocab, np.broadcast_to(t, (len(vocab), len(t))),
+                         np.broadcast_to(g.T, (len(vocab), *g.T.shape)))
+    _same(np.asarray(got).reshape(rows.shape), rows)
+
+
 def test_the_rows_of_512_and_1024_keys_are_the_gpus(shapes) -> None:
     """Four causal rows each at N = 512 and N = 1,024 keys, the backward's last persistent size: the saved f32 softmax, its
     bf16 copy and the score's gradient."""
@@ -136,10 +145,14 @@ def test_the_sort_path_is_the_gpus(shapes) -> None:
 
 @pytest.mark.slow
 def test_the_sort_path_definition_is_the_gpus(shapes) -> None:
-    """`EmbeddingBackwardTorch_v1{M=4096}` on entries 3, 5, 7 and 49,151 (1, 37, 10 and 11 tokens)."""
+    """`EmbeddingBackwardTorch_v1{M=4096}` on entries 3, 5, 7 and 49,151 (1, 37, 10 and 11 tokens), and the step's block,
+    `EmbeddingBackwardEntry_v1{M=4096, H=8}`, on the same entries."""
     t, g, vocab, rows = shapes["emb_t"], shapes["emb_g"], shapes["emb_vocab"], shapes["emb_rows"]
     pick = np.flatnonzero(np.isin(vocab, [3, 5, 7, V - 1]))
     vs, F = vocab[pick], g.shape[1]
     got = evaluate_words(bind(TE.EmbeddingBackwardTorch, M=len(t)), np.repeat(vs, F), np.broadcast_to(t, (len(vs) * F, len(t))),
                          np.tile(g.T, (len(vs), 1)))
+    _same(np.asarray(got).reshape(len(vs), F), rows[pick])
+    got = evaluate_words(bind(TE.EmbeddingBackwardEntry, M=len(t), H=F), vs, np.broadcast_to(t, (len(vs), len(t))),
+                         np.broadcast_to(g.T, (len(vs), *g.T.shape)))
     _same(np.asarray(got).reshape(len(vs), F), rows[pick])

@@ -10,6 +10,9 @@ the int64 id's low 32 bits; the forward's gather asserts every id is below V, so
     EmbeddingBackwardTorch_v1{M}           (v: U32, t: Array<M, U32>, g: Array<M, BF16>) -> BF16           M > 3072
     EmbeddingBackwardFeatureChunk_v1{N}    (acc: BF16, v: U32, t: Array<N, U32>, g: Array<N, BF16>) -> BF16  N <= 32
     EmbeddingBackwardFeature_v1{M}         (v: U32, t: Array<M, U32>, g: Array<M, BF16>) -> BF16           M <= 3072
+    EmbeddingBackwardEntry_v1{M, H}        (v: U32, t: Array<M, U32>, g: Array<H, Array<M, BF16>>) -> Array<H, BF16>
+    EmbeddingBackwardTied_v1{M, V, H}      (t: Array<M, U32>, g: Array<M, Array<H, BF16>>, w: Array<V, Array<H, BF16>>)
+                                           -> Array<V, Array<H, BF16>>
 
 **Above 3072 indices** (training's B·S = 4096), ``embedding_dense_backward_cuda`` stable-sorts the ids (``radix_sort_pairs`` of
 (id, position)), so each entry's segment lists its tokens in position order. Under ``use_deterministic_algorithms(True)`` the
@@ -29,6 +32,12 @@ tokens of v from its own f32 gradient (not from +0) in position order, rounds th
 weight, ``grad_weight += bf16(sum)``: c10's BFloat16 ``+`` is an FADD of the two widened words and an F2FP. A chunk without v
 leaves it alone. `EmbeddingBackwardFeatureChunk{N}` is one chunk; `EmbeddingBackwardFeature{M}` starts at +0 and chains the
 M / 32 chunks, the last of M mod 32 tokens.
+
+**The step's blocks** wire these with no gate of their own. `EmbeddingBackwardEntry{M, H}` is entry v's row, its kernel
+(`kernel(M)`) on each of the H features' columns. `EmbeddingBackwardTied{M, V, H}` is the tied weight's gradient: the
+embedding's output gradient g, committed token-major, transposed by `Transpose_v1` tiles of at most 128 x 128 (`transpose`),
+each entry's row with its id a constant of the circuit, then c10's bf16 ``+`` of the LM head's dW w and that row,
+`Bf16AddF2fp_v2` on each word (autograd adds the two uses' gradients, the LM head's first).
 """
 from __future__ import annotations
 
@@ -39,15 +48,18 @@ from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, con
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import fp32 as W
+from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean.elementwise import specialized
-from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.refs import Coll, Explicit, concat, strided_view
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 
 from .torch_attention import SM120, SM120_SHAPES, SM120_STEP
+from .torch_train import Transpose
 
-__all__ = ["EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardSortEnd", "EmbeddingBackwardSortRun",
-           "EmbeddingBackwardSortStep", "EmbeddingBackwardTorch", "plus_zero_bf16"]
+__all__ = ["EmbeddingBackwardEntry", "EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardSortEnd",
+           "EmbeddingBackwardSortRun", "EmbeddingBackwardSortStep", "EmbeddingBackwardTied", "EmbeddingBackwardTorch", "kernel",
+           "plus_zero_bf16", "transpose"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -63,6 +75,8 @@ FEATURE_MAX, CHUNK = 3072, 32
 #: the tokens of one `EmbeddingBackwardSortRun` in `EmbeddingBackwardTorch`, a proof block
 RUN = 8192
 M_MAX = 1 << 24
+#: a `Transpose_v1` tile's most rows and columns: a row of 128 bf16 words is one 256 B commitment row
+TILE = 128
 _SORT = f"at M = 4,096 in {SM120_SHAPES}, all 576 features of 65 entries (the model: of all 3,859 the tokens hold)"
 _IN_SORT = f"exact-model-tested; inside EmbeddingBackwardTorch_v1, {_SORT}: {SM120}"
 _FEATURE = f"at M = 256 in {SM120_STEP}, all 576 features of the 253 entries its tokens hold and of 32 they don't"
@@ -202,3 +216,70 @@ EmbeddingBackwardFeature = CompositeDefinition(
     doc="embedding_dense_backward_cuda's feature kernel (M <= 3072) for entry v and one feature over M tokens: "
         "EmbeddingBackwardFeatureChunk on each 32 consecutive tokens, from +0",
     conformance=f"exact-model-tested; {_FEATURE}: {SM120}", refuse=_refuse("M", 1, FEATURE_MAX))
+
+# --- the step's blocks ------------------------------------------------------------------------------------------------------
+
+
+def kernel(M: int) -> Any:
+    """embedding_dense_backward_cuda's kernel at M ids, bound: the feature kernel up to 3072, else the sort path."""
+    return bind(EmbeddingBackwardFeature if M <= FEATURE_MAX else EmbeddingBackwardTorch, M=M)
+
+
+def _refuse_all(*keys: str):
+    def refuse(b: dict) -> str | None:
+        return next((r for k in keys if (r := _refuse(k, 1, M_MAX)(b))), None)
+    return refuse
+
+
+def _entry(B, S, v, t, g):
+    return B.batch(kernel(S.M), v, t, g, axes=(None, None, 0))
+
+
+EmbeddingBackwardEntry = CompositeDefinition(
+    "EmbeddingBackwardEntry", 1, ("M", "H"),
+    lambda S: ((("v", U32), ("t", Array(_statics(S, "M", 1, M_MAX).M, U32)),
+                ("g", Array(_statics(S, "H", 1, M_MAX).H, Array(S.M, BF16)))), Array(S.H, BF16)), _entry,
+    doc="entry v's row of embedding_dense_backward_cuda over M tokens: kernel(M) on each of the H features' gradient columns",
+    conformance=f"exact-model-tested; at M = 256, 13 features of the 253 entries the tokens of {SM120_STEP} hold, and at "
+                f"M = 4,096, 8 features of 4 entries in {SM120_SHAPES}: {SM120}", refuse=_refuse_all("M", "H"))
+
+
+def transpose(B, x: Coll, R: int, C: int) -> Coll:
+    """A token-major R x C matrix of bf16 words as its C x R transpose, by `Transpose_v1` tiles of at most TILE x TILE, one
+    batch a tile shape."""
+    L = BF16.leaves
+    rows = [(r, min(TILE, R - r)) for r in range(0, R, TILE)]
+    cols = [(c, min(TILE, C - c)) for c in range(0, C, TILE)]
+    out = {}
+    for rn, cn in sorted({(rn, cn) for _, rn in rows for _, cn in cols}):
+        at = [(r, c) for r, n in rows for c, k in cols if (n, k) == (rn, cn)]
+        tiles = Coll(Array(len(at), Array(rn, Array(cn, BF16))),
+                     concat([strided_view(x, L * (r * C + c), L * cn, L * C, 1, L * rn * cn) for r, c in at]))
+        y = B.batch(bind(Transpose, R=rn, C=cn), tiles, axes=(0,))
+        out.update({rc: y[i] for i, rc in enumerate(at)})
+    return Coll(Array(C, Array(R, BF16)), concat([out[(r, j - j % TILE)][j % TILE].refs for j in range(C) for r, _ in rows]))
+
+
+def _ids(B, n: int) -> Coll:
+    """The entries' ids 0 .. n - 1 as U32 words of the circuit's constant bits."""
+    bit = (B.call(BL.constant(0)).refs[0], B.call(BL.constant(1)).refs[0])
+    return Coll(Array(n, U32), Explicit(tuple(bit[(v >> i) & 1] for v in range(n) for i in range(32))))
+
+
+def _tied(B, S, t, g, w):
+    e = B.batch(bind(EmbeddingBackwardEntry, M=S.M, H=S.H), _ids(B, S.V), t, transpose(B, g, S.M, S.H),
+                axes=(0, None, None))
+    n = S.V * S.H
+    return B.batch(EW.Bf16AddF2fp, w.reshape(Array(n, BF16)), e.reshape(Array(n, BF16)), axes=(0, 0)).reshape(
+        Array(S.V, Array(S.H, BF16)))
+
+
+EmbeddingBackwardTied = CompositeDefinition(
+    "EmbeddingBackwardTied", 1, ("M", "V", "H"),
+    lambda S: ((("t", Array(_statics(S, "M", 1, M_MAX).M, U32)), ("g", Array(S.M, Array(_statics(S, "H", 1, M_MAX).H, BF16))),
+                ("w", Array(_statics(S, "V", 1, M_MAX).V, Array(S.H, BF16)))), Array(S.V, Array(S.H, BF16))), _tied,
+    doc="the tied embedding's gradient over M tokens: g (M x H, token-major) through transpose, EmbeddingBackwardEntry_v1 on "
+        "each of the V entries, then Bf16AddF2fp_v2 of the LM head's dW w and each entry's row",
+    conformance="exact-model-tested; against the model (tests/test_torch_embedding.py), whose tied add is the GPU's on every "
+                f"word of {SM120_STEP}: {SM120}",
+    refuse=_refuse_all("M", "V", "H"))
