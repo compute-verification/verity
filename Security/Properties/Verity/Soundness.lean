@@ -14,12 +14,10 @@ published `δ` plus its collision term at the probability that its fixed finder 
 proved by `Properties.Composition` (onsite's acceptance is NCI's on the registration and every component's) and the union
 bound over one strategy in one game.
 
-Each target is a hypothesis until its subprotocol's piece proves it at its component (the one-theorem plan's ONE-8,
-ONE-10, ONE-11, ONE-12 and ONE-16, in `note:proofs/20261026T0332Z-report-onethm`), and `Vocab`'s fields are given
-until each piece defines its own: v2's reading of the blob (ONE-3b), the positions (ONE-7), the rounds and the releases
-each component read (ONE-4), the extractor and the finders (ONE-8 and each target's), the gates computed (ONE-16), the
-world (ONE-10, ONE-11, ONE-12) and the published certificates, errors and collision terms (ONE-19). The wipe, the sixth
-subprotocol, joins in `Properties.Verity.Wipe`.
+Each target is a hypothesis until its subprotocol's piece proves it at its component, and `Vocab`'s fields are given
+until each piece defines its own: v2's reading of the blob, the positions, the rounds and the releases each component
+read, the extractor and the finders, the gates computed, the world and the published certificates, errors and collision
+terms. The wipe, the sixth subprotocol, joins in `Properties.Verity.Wipe`.
 -/
 
 namespace Verity
