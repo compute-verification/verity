@@ -821,7 +821,7 @@ def callers_lint_at(rev: str) -> types.ModuleType:
         except Exception as e:
             raise GitError(f"{CALLERS_MODULE} at {rev[:12]} doesn't load ({type(e).__name__}: {e}), {cannot}") from e
     if not callable(getattr(lint, "runs", None)):
-        raise GitError(f"{CALLERS_MODULE} at {rev[:12]} has no runs, {cannot}: merge the base into the branch")
+        raise GitError(f"{CALLERS_MODULE} at {rev[:12]} has no runs (it predates P16's public table), {cannot}")
     return lint
 
 
