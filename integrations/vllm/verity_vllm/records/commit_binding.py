@@ -1,7 +1,7 @@
 """The Commit block's `binding`: one run's binding map checked against its population, as the Commit's rules read it
 (`check.commit_rules`, `check.c2_rules`) and as the not-executed class's facts read it (`commit.executed_prefix.executed_prefix_facts`).
 
-Its writers are `pipeline.commit.binding_record` (or, when that raised, only its error), a TP rank's `engine.rank_worker` and
+Its writers are `pipeline.commit.binding_record` (or, when that raised, only its error), a TP rank's `pipeline.tp.rank_worker` and
 `pipeline.serve_seal` (a sealed window's map digests alone).  The sub-records are the ones those readers read: the identity coverage of
 the population (`coverage`), on it the executed prefix of record (`commit.executed_prefix`), the prefix's link to the Match account
 (`check.executed_prefix`) and to the Commit's token record (`check.commit_tokens`), the rows past the stop, and the population's

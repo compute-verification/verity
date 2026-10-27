@@ -59,6 +59,7 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_torch_loop import checkpoint as CK
 from verity_torch_loop import loop as L
 from verity_vllm import protocols as PO
+from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
@@ -153,7 +154,7 @@ def serve(m: L.Model, requests: list[int], steps: int, rows: int, served: SV.Ser
     ctx = PO.Context(stage="serve", enabled=(ENTRY,),
                      settings={"pouw": {**settings, "rows": rows, "steps": steps, "retain_steps": steps, "runner": runner,
                                         "served": served}})
-    served.tap = CT.CommitTap("embed")
+    served.tap = CT.CommitTap(port=PORT_NAMES[0])
     comp = PO.install(model, ctx)
     box["run"] = pouw.h1_run(ENTRY)
     same, x = [], m.embed[torch.tensor(requests)].clone()
@@ -164,7 +165,7 @@ def serve(m: L.Model, requests: list[int], steps: int, rows: int, served: SV.Ser
                     for i, t in enumerate(requests)] if s == 0 else []
             runner.execute_model(SimpleNamespace(scheduled_new_reqs=reqs, num_scheduled_tokens={f"r{i}": 1 for i in range(len(requests))},
                                                  total_num_scheduled_tokens=len(requests)))
-            served.tap.take("embed/in", torch.tensor(ids), s)
+            served.tap.take(PORT_NAMES[0], torch.tensor(ids), s, len(ids))
             for w, (name, layer, lin) in enumerate(zip(model.names, model.layers, m.layers)):
                 xq, s_a = int8_ops.row_quant(x)
                 served.tap.take(f"{CT.site(name)}/0", xq, s)
