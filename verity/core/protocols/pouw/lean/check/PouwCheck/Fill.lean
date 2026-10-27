@@ -7,7 +7,7 @@ The verifier of record of `verity/core/protocols/pouw/fill.py`, which `tests/tes
 through `pouw-period` (`PouwCheck.Period`), string for string. `periodFill` is the one entry.
 
 A filler window is Dither calls (`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its
-per-call pad and its B a published checkpoint's s8 weights, committing its T_1 .. T_S; its proof units are
+per-call pad and its B a published checkpoint's s8 weights, committing its T_1 .. T_S; its proof blocks are
 `PouwDitherBlock_v1` blocks, one cell and one segment each. It counts toward the companion period `<name>:fill`
 (`periodName`), whose open commits the circuit and the draw K. `Credit.periodCredit` is unchanged.
 

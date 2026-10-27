@@ -7,9 +7,9 @@ evidence's keys other or the evidence a bare list; one period in each form the g
 Pearl-C pass among its windows, a circuit that is not an H1 window (a per-tile protocol's H1 tile), today's per-unit
 noise, J10-R's v6 and units at two K; and an honest period with its filler windows (``fill``, ``{fills, pins,
 windows}``), honest or with one of `pouw_fill_cases`' mutations (`FILLS`), which the period reports and no verdict
-reads; and a period, with or without filler windows (honest or not), whose verifier reads its coverage (`COVERAGE`): a
-capacity, with a floor its served work meets (``covered``) or misses (``idle``), or a capacity or floor malformed
-(``params-floor``)."""
+reads; and a period, with or without filler windows (honest or not), whose verifier reads its utilization against a
+capacity (`UTILIZATION`): a capacity (``utilization``), or a capacity malformed or a parameter beside it that the
+protocol doesn't take, such as a floor (``params-capacity``)."""
 from __future__ import annotations
 
 import random
@@ -22,8 +22,8 @@ from verity.core.protocols.pouw import period_check as PC
 FRAMING = ["params-missing", "params-extra", "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
 FORMS = ["form-pass", "form-not-h1", "form-per-unit", "form-v6", "form-strata"]
 FILLS = ["fill"] + fill_cases.NAMES
-COVERAGE = ["covered", "idle", "params-floor"]
-NAMES = credit_cases.PERIOD_NAMES + FRAMING + FORMS + FILLS + COVERAGE
+UTILIZATION = ["utilization", "params-capacity"]
+NAMES = credit_cases.PERIOD_NAMES + FRAMING + FORMS + FILLS + UTILIZATION
 COVERED = {"j10r": True, "nks": 1, "tile": 5}
 #: a per-tile protocol's H1 tile (`core_check`'s ``PouwH1Tile_v1`` at K = 64, 4 × 8) as a window's program function
 CORE_TILE = "PouwH1Tile_v1{EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2},R=4,C=8}"
@@ -45,9 +45,9 @@ def serve(d: dict) -> dict:
 def instance(rng: random.Random, name: str = "honest") -> dict:
     """One case: a period of `period_instance` in the covered form (`COVERED`, or `FORM_OF`'s), with its filler windows
     (`pouw_fill_cases.with_fills`) for `FILLS`, then mutation `name`."""
-    plain = name in FRAMING or name in FORMS or name in FILLS or name in COVERAGE
+    plain = name in FRAMING or name in FORMS or name in FILLS or name in UTILIZATION
     d = credit_cases.period_instance(rng, "honest" if plain else name, **FORM_OF.get(name, COVERED))
-    if name in FILLS or name in COVERAGE and rng.random() < 0.5:
+    if name in FILLS or name in UTILIZATION and rng.random() < 0.5:
         d = fill_cases.with_fills(rng, d, name if name in FILLS else rng.choice(FILLS))
     if name == "form-pass":
         i = rng.randrange(len(d["windows"]))
@@ -67,23 +67,10 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
             case["evidence"] = _hex({"ledger": d["ledger"], "pins": d["pins"], "windows": d["windows"]})
         case "evidence-list":
             case["evidence"] = _hex(d["windows"])
-        case "covered" | "idle":
-            case["params"].update(coverage(rng, PC.case(case)["public"], name == "idle"))
-        case "params-floor":
-            case["params"].update(rng.choice([{"capacity": 0}, {"capacity": True}, {"capacity": 7, "floor": "2/1"},
-                                              {"capacity": 7, "floor": "01/2"}, {"capacity": 7, "floor": "1/0"},
-                                              {"capacity": 7, "floor": 5}, {"floor": "1/2"}]))
+        case "utilization":
+            served = sum(PC.case(case)["public"]["work"])
+            case["params"]["capacity"] = rng.randint(1, 2 * served + 1)
+        case "params-capacity":
+            case["params"].update(rng.choice([{"capacity": 0}, {"capacity": True}, {"capacity": -1},
+                                              {"capacity": "7"}, {"capacity": 7, "floor": "1/2"}, {"floor": "1/2"}]))
     return case
-
-
-def coverage(rng: random.Random, public: dict, idle: bool) -> dict:
-    """A capacity and floor for the credited period `public`: a floor its served work's share meets, or (`idle`) one it
-    misses, below a capacity past what it served (the floor reads no fill)."""
-    served = sum(public["work"])
-    d = rng.randint(1, 100)
-    if idle:
-        cap = served + rng.randint(1, served + 1)
-        return {"capacity": cap, "floor": f"{min(d, served * d // cap + 1)}/{d}"}
-    cap = rng.randint(max(1, served), 2 * served + 1)
-    out = {"capacity": cap}
-    return out if rng.random() < 0.3 else {**out, "floor": f"{served * d // cap}/{d}"}

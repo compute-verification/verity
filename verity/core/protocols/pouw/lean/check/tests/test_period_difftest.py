@@ -4,9 +4,9 @@
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
 framing broken, a period in each form the period's guarantee doesn't cover, a period with its filler windows, honest
 or with one mutation aimed at every refusal of `fill.period_fill`, which the period reports and no verdict reads, and a
-period read against a capacity and floor), compared outcome for outcome, its reason and its public output (a refused
-fill's refusal) included: the reason is the refusal `credit.period_credit` or the floor (``idle``, on served work)
-names, so agreeing on it holds which rule refused the period."""
+period read against a capacity), compared outcome for outcome, its reason and its public output (a refused fill's
+refusal, ``gaps`` and ``utilization``) included: the reason is the refusal `credit.period_credit` names, so agreeing on
+it holds which rule refused the period."""
 from __future__ import annotations
 
 import json
@@ -66,7 +66,7 @@ def test_pouw_period(server):
     assert set(swept) == {"accept", "reject"}, dict(swept)
     assert {"accept", "reject params", "reject commitment", "reject evidence", "reject form", "reject period",
             "reject window", "reject circuit", "reject missing", "reject order", "reject coin",
-            "reject budget", "reject idle"} <= set(RULES), RULES
+            "reject budget"} <= set(RULES), RULES
 
 
 def test_an_honest_period_is_its_credit():
@@ -107,10 +107,12 @@ def test_a_filler_shape_spans_at_most_t_max_noise_tiles():
 
 def test_a_fill_is_credited_beside_work():
     """A period with honest filler windows is accepted with its fill (``{work, k, delta, eps}``) beside the served credit,
-    which is the same period's credit without them: the fill changes nothing `work`'s rule reads."""
+    which is the same period's credit without them, and with ``gaps`` saying no guarantee covers the fill: the fill
+    changes nothing `work`'s rule reads."""
     for seed in range(3):
         a = PC.case(cases.instance(random.Random(f"fill/{seed}"), "fill"))
         assert a["verdict"] == "accept", a["reason"]
+        assert a["public"].pop("gaps") == PC.GAPS
         fill = a["public"].pop("fill")
         assert sorted(fill) == ["delta", "eps", "k", "work"] and a["profile"]["fills"] == len(fill["work"]) > 0
         assert all(w > 0 for w in fill["work"]) and fill["delta"] == a["public"]["delta"]
@@ -126,6 +128,7 @@ def test_a_fill_mutation_is_reported_not_decided_on(name):
     for seed in range(2):
         got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
         assert got["verdict"] == "accept" and "fills" not in got["profile"], (name, got)
+        assert got["public"]["gaps"] == PC.GAPS, (name, got["public"])
         code, _, why = got["public"]["fill"]["refused"].partition(": ")
         assert code == fill_cases.AIMS[name], (name, got["public"]["fill"])
         if name in fill_cases.INNER:
@@ -139,53 +142,40 @@ def _without_fills(case: dict) -> dict:
 
 def test_fill_never_changes_the_verdict():
     """A period's verdict and reason, and its served credit, are the same with its filler windows (honest or with any of
-    `pouw_fill_cases`' mutations) as without them, under no capacity, a capacity, or a floor met or missed: no guarantee
-    covers the fill yet, so no decision reads it."""
+    `pouw_fill_cases`' mutations) as without them, under no capacity or a capacity, and so is its utilization: no
+    guarantee covers the fill yet, so no decision and nothing certified reads it."""
     rng = random.Random("fill-verdict")
     for name in ["fill", *fill_cases.NAMES]:
         d = fill_cases.with_fills(rng, cases.credit_cases.period_instance(rng, "honest", **cases.COVERED), name)
         case = cases.serve(d)
         served = sum(PC.case(_without_fills(case))["public"]["work"])
-        cap = rng.randint(1, 2 * served)
-        for params in ({}, {"capacity": cap}, {"capacity": cap, "floor": f"{served * 4 // cap}/4"},
-                       {"capacity": cap, "floor": "1/1"} if served < cap else {"capacity": served + 1, "floor": "1/1"}):
+        for params in ({}, {"capacity": rng.randint(1, 2 * served)}):
             with_, without = (PC.case({**c, "params": {**c["params"], **params}}) for c in (case, _without_fills(case)))
             assert (with_["verdict"], with_["reason"]) == (without["verdict"], without["reason"]), (name, params, with_)
             if with_["verdict"] == "accept":
-                assert {k: v for k, v in with_["public"].items() if k not in ("fill", "covered")} == \
-                    {k: v for k, v in without["public"].items() if k != "covered"}, (name, params)
+                assert {k: v for k, v in with_["public"].items() if k not in ("fill", "gaps")} == without["public"], \
+                    (name, params)
 
 
-def test_the_floor_reads_served_work_alone():
-    """A period whose served work is below the floor is refused (``idle``) however much certified fill it presents:
-    zero served work under a fill of the whole capacity is refused by any floor above 0, and an honest period whose
-    fill would lift it past the floor is refused while its served share is below it."""
-    assert all(PC.idle_refused(0, cap, f) for cap in (1, 7, 1 << 40) for f in ("1/1", "1/2", "1/1000"))
-    assert not PC.idle_refused(0, 7, "0/1")
+def test_utilization_certifies_served_work_alone():
+    """With a capacity the credit gains ``utilization``: C, the certified work, the served work alone however much fill
+    the period presents (under a capacity of its served work and its fill together, it certifies the served work and
+    its share is below 1), and its share of C; no parameter decides idle, so a floor beside the capacity, or a
+    malformed capacity, is refused as a parameter."""
     for seed in range(4):
-        rng = random.Random(f"floor/{seed}")
-        d = fill_cases.with_fills(rng, cases.credit_cases.period_instance(rng, "honest", **cases.COVERED), "fill")
-        a = PC.case(cases.serve(d))
-        served, fill = sum(a["public"]["work"]), sum(a["public"]["fill"]["work"])
-        cap = served + fill
-        got = PC.case({**cases.serve(d), "params": {**cases.serve(d)["params"], "capacity": cap, "floor": "1/1"}})
-        assert got["verdict"] == "reject" and got["reason"].startswith("idle: the period served "), got["reason"]
-        assert f"served {served} of its capacity's {cap} MACs" in got["reason"], got["reason"]
-
-
-def test_coverage_is_served_plus_fill_against_capacity():
-    """With a capacity the credit gains ``covered``: W_cert, the served work and a credited fill's together, and
-    W_cert/C; a floor the period's served work meets leaves it accepted, one it misses rejects it (``idle``), and a
-    malformed capacity or floor is refused as a parameter."""
-    for seed in range(4):
-        a = PC.case(cases.instance(random.Random(f"covered/{seed}"), "covered"))
+        a = PC.case(cases.instance(random.Random(f"utilization/{seed}"), "utilization"))
         assert a["verdict"] == "accept", a["reason"]
-        pub, cov = a["public"], a["public"]["covered"]
-        assert cov["certified"] == sum(pub["work"]) + sum(pub.get("fill", {}).get("work", []))
-        assert Fraction(cov["share"]) == Fraction(cov["certified"], cov["capacity"])
-        got = PC.case(cases.instance(random.Random(f"idle/{seed}"), "idle"))
-        assert got["verdict"] == "reject" and got["reason"].startswith("idle: the period served "), got["reason"]
-        got = PC.case(cases.instance(random.Random(f"params-floor/{seed}"), "params-floor"))
+        pub, u = a["public"], a["public"]["utilization"]
+        assert u["certified"] == sum(pub["work"]) and Fraction(u["share"]) == Fraction(u["certified"], u["capacity"])
+        rng = random.Random(f"fill-utilization/{seed}")
+        d = fill_cases.with_fills(rng, cases.credit_cases.period_instance(rng, "honest", **cases.COVERED), "fill")
+        b = PC.case(cases.serve(d))
+        served, fill = sum(b["public"]["work"]), sum(b["public"]["fill"]["work"])
+        got = PC.case({**cases.serve(d), "params": {**cases.serve(d)["params"], "capacity": served + fill}})
+        assert got["verdict"] == "accept" and fill > 0, got["reason"]
+        assert got["public"]["utilization"] == {"capacity": served + fill, "certified": served,
+                                                "share": str(Fraction(served, served + fill))}
+        got = PC.case(cases.instance(random.Random(f"params-capacity/{seed}"), "params-capacity"))
         assert got["verdict"] == "reject" and got["reason"].startswith("params: "), got["reason"]
 
 
