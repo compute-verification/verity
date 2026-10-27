@@ -6,9 +6,10 @@ their ported components' packages, with no Mathlib:
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
   stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
-- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, the remote bandwidth
-  audit and the network certifier.
-- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW.
+- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, the inference-only
+  policy, PoUS, the remote bandwidth audit and the network certifier.
+- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs, PoUW and the inference-only
+  policy.
 
 The rule and the formats are written once, over any list of components, and the two products are values
 of it that differ in their id and components. Each product's executable is the core CLI (`onsite id | check | serve`,
@@ -41,13 +42,14 @@ states the accept row against this code. `answerAccepts` covers every `Core.Prot
 and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
 component accepts its own case, and the commitment is `bind` of the components' digests.
 
-## Components
+## Subprotocols
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | the network certifier (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| the inference-only policy (its check of record: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | the remote bandwidth audit (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 
@@ -56,8 +58,15 @@ replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with 
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
-own difftest or its period hook. Every component of both products is ported; NCI and the trial's reconciling are not
-components yet.
+own difftest or its period hook. Every subprotocol of both products is ported; the trial's reconciling is not a
+subprotocol yet.
+
+The inference-only policy has no rounds and reads no coins: its case is the declared circuit, the policy's budgets and
+the registration log before the run (params), the run's own registration record (commitment: its digest is the one
+sampled proofs' audit commits to) and the declared division with θ and θ's provenance (evidence), and it accepts
+exactly when the check of record (`NciCheck.Baseline.evaluate`) finds that the division complies. The product checks
+that every subprotocol accepts and that the commitment binds their digests; it doesn't check that the policy's record
+is the one sampled proofs audited, or that its declared circuit is the registered one.
 
 ## The difftest
 
@@ -67,13 +76,16 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
 the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
-certificates and one-stage's answers, on small signed periods from its `build`), which that component's own difftest
-holds its Lean to; for PoUS and the remote bandwidth audit, their Python verifiers' answers on small periods of their hooks
+certificates and one-stage's answers, on small signed periods from its `build`; the inference-only policy's difftest's
+`reference`, the check of record's Python, `check_baseline`, behind the protocol's decoders, on θ's provenance
+difftest's declarations with at most one change, from its `drawn`), which that subprotocol's own difftest holds its
+Lean to; for PoUS and the remote bandwidth audit, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
-Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
+Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
+policy is never undecided), and the
 composition's inputs or the case itself are often broken. The port follows the rule above where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 

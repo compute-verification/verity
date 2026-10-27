@@ -22,19 +22,20 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | The remote bandwidth audit | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
 | The network certifier | An auditor-trusted device on each node's uplink certifies that the traffic carried only committed values, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
 | The wipe | A server's life is cut into server-time blocks, each opened by a certified wipe of its memory, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
-| Novel communication intensity (NCI) | Inference rather than training: the committed circuit divides into blocks of bounded size, each reading a bounded amount of novel information. | `verity/core/protocols/network/nci/lean` |
+| The inference-only policy | Inference rather than training: the declared circuit divides into inference blocks of bounded size, each reading a bounded amount of fresh input, input that isn't registered information. | `verity/core/protocols/network/nci/lean` |
 
 ## The two composite protocols
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every component accepts its own case, and the commitment binds all of theirs.
+every subprotocol accepts its own case, and the commitment binds all of theirs.
 
-- **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, the remote bandwidth audit and the network certifier.
-- **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
+- **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW, the
+  inference-only policy, PoUS, the remote bandwidth audit and the network certifier.
+- **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs, PoUW and the
+  inference-only policy.
 
-The wipe, the bandwidth audit over PoUS's store and NCI are not components of either yet.
+The wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet.
 
 ## The vLLM integration
 
