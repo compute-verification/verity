@@ -376,6 +376,59 @@ theorem hlev_honest {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {last
   exact D.hlev_honest_of cls acc h64 hx hcs hresp hlen htab hS (by rw [hDd]; exact hdsp) (by rw [hDd]; exact hdsts)
     (by rw [hDd]; exact hdc) (by rw [hDd]; exact hdps) hG hti r hnd hops
 
+theorem sha512_out64 : Claims.Out64 FlockDeploy.sha512 := fun m => by
+  rw [FlockDeploy.sha512, Claims.toMsg, Array.length_toList, ByteArray.size_data]
+  exact Sha512.hash_size _
+
+theorem sha512_ops : plain.opsWith (Hashes.ofSha512 (Claims.hOf FlockDeploy.sha512) : Hashes Flock.V) =
+    MerkleOps.ofScheme plain := by
+  rw [FlockDeploy.hOf_sha512]
+  exact plain_ops_std
+
+/-- **Row D's `hlev` at the honest recursive prover, at the deployed hashes**: `hlev_honest_of` at `FlockDeploy.sha512`,
+whose Merkle closures are the plain scheme's (`plain_ops_std`), so no `hops` remains. -/
+theorem hlev_honest_of_deployed {s : FlockDeploy.Ins} {spec : SessionSpec}
+    {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : FlockComplete.Tape}
+    (hx : FlockDeploy.setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
+    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
+    (htab : ∀ (i : ℕ) (hi : i < sts.size), FlockComplete.JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
+    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    (hS : FlockComplete.sessionS FlockDeploy.sha512 resp spec sts w ω = (.ok (rec, pfs), bs))
+    (hdsp : D.d.spec = spec) (hdsts : D.d.sts = sts) (hdc : D.d.c₁ = c₁) (hdps : D.d.f.ps = filePs spec sts c₁ pfs)
+    {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
+    (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) :
+    ∀ v info kappa,
+      verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
+        .ok (v, info, kappa) →
+      ∀ ℓ < (D.files cls i).sch.levels.size, ((D.files cls i).sch.levels[ℓ]!).q ≤ (info.lg.conss[ℓ]!).pos.size ∧
+        levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
+          (info.lg.conss[ℓ]!).pos = .ok () :=
+  D.hlev_honest_of cls acc sha512_out64 hx hcs hresp hlen htab hS hdsp hdsts hdc hdps hG hti r hnd sha512_ops
+
+/-- **Row D's `hlev` at the honest recursive prover's messages, at the deployed hashes**: `hlev_honest` at
+`FlockDeploy.sha512`, with no `hops`. -/
+theorem hlev_honest_deployed {last : Claims.Msg} {s : FlockDeploy.Ins}
+    {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit}
+    {ω : FlockComplete.Tape} {Ts : ℕ → F128} {fl : FinalP}
+    (hx : FlockDeploy.setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
+    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
+    (htab : ∀ (i : ℕ) (hi : i < sts.size), FlockComplete.JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
+    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    (hS : FlockComplete.sessionS FlockDeploy.sha512 resp spec sts w ω = (.ok (rec, pfs), bs))
+    (hrd : rd last = some fl) (hps : fl.ps = (filePs spec sts c₁ pfs).map RecDeploy.DeployedR.opensOf)
+    (hst : fl.stmt = x) (D : DecAt rd x (honestFileMsgs spec sts c₁ pfs cs Ts last) cs) {i : ℕ}
+    (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
+    (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) :
+    ∀ v info kappa,
+      verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
+        .ok (v, info, kappa) →
+      ∀ ℓ < (D.files cls i).sch.levels.size, ((D.files cls i).sch.levels[ℓ]!).q ≤ (info.lg.conss[ℓ]!).pos.size ∧
+        levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
+          (info.lg.conss[ℓ]!).pos = .ok () :=
+  hlev_honest cls acc sha512_out64 hx hcs hresp hlen htab hS hrd hps hst D hG hti r hnd sha512_ops
+
 end DecAt
 
 end RecDeploy.Rows

@@ -10,7 +10,7 @@ import time
 from verity_vllm import settings
 from verity_vllm.check.match import program_compare as C
 
-# [R18 x09, F-r18-x09-1] PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
+# PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
 # (never into it: the X-09 document's bytes are the record's) with, per request, wall seconds and counters for every phase of the leg --
 # projection build, shape, component load, compare_steps (sequence criterion), and the DAG diagnostic (live_cone A / P, dag_hashes A / P,
 # multiset diff) -- plus the sizes that drive them (instances, live-cone sizes, operand runs expanded, per-run fallbacks).  Inert unset.

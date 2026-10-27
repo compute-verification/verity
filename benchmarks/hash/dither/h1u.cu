@@ -17,8 +17,8 @@
 //              packed from the accumulator layout in registers, no shuffle), folded as sets KS .. KS + m - 1.
 // The K order inside a segment is a bijection both operands share (lane q's 8 bytes 8q..8q+7 are its A/B fragment's
 // k = 4q..4q+3 and 16+4q..16+4q+3), so every product is the segment's; the tail's order is the accumulator columns'.
-// A dead row block (live[ri] == 0, PouwH1Tile_v4's dead tile) writes the zero receipt and derives no noise.
-// Requires K % 512 == 0 (KS % 16: each noise block is 16 segments' bits) and m = n_digits(KS) in {2, 3}: m is 2 up to
+// A dead row tile (live[ri] == 0, PouwH1Tile_v4's dead tile) writes the zero receipt and derives no noise.
+// Requires K % 512 == 0 (KS % 16: each noise chunk is 16 segments' bits) and m = n_digits(KS) in {2, 3}: m is 2 up to
 // K = 4096 and 3 from K = 4128 to K = 524288 (KS <= 16384); the entries refuse any other m.
 //
 // kh_unit_ws is the same receipts in two launches, for calls too small to fill the GPU one warp a unit:
@@ -62,16 +62,16 @@
 //   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
-//              kh_units_multi's receipts under J10-R's call-scale noise (#3574's form; at the end of this file), with
+//              kh_units_multi's receipts under J10-R's call-scale noise (the verifier's form; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r; a call's
-//              workspace is kh_j10r_jw_bytes(M, N, K): kh_j10r_rows_bytes(M, K) but with H1U_JW (its column blocks and
+//              workspace is kh_j10r_jw_bytes(M, N, K): kh_j10r_rows_bytes(M, K) but with H1U_JW (its column tiles and
 //              W' once a call, after JX's rows); kh_j10r_workspace_bytes(M, N, K, rc) is the size a caller allocates
 //              for either form (rc: kh_units_multi_j10rc's), from the build's own flags, kh_j10r_flags() (1 H1U_JW,
 //              2 H1U_JRC)
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
-//              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
-//              H1U_JSWZ row blocks at a time (H1U_JSWZQ: a block's warps a patch of them); built with H1U_JRY = 1 too,
-//              each row block's tail digits computed once a call (h1jr_ady) and read by its units;
+//              each call's column tiles hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
+//              H1U_JSWZ row tiles at a time (H1U_JSWZQ: a block's warps a patch of them); built with H1U_JRY = 1 too,
+//              each row tile's tail digits computed once a call (h1jr_ady) and read by its units;
 //              kh_units_multi_j10rc_sm(calls, ncalls, units, M, live, q, den, next, stream) its blocks, then its units
 //              on q / den of the SMs (as kh_units_multi_j10r_sm); with H1U_JAP either form's workspace holds the
 //              call's A' too (kh_j10r_rows_bytes and kh_j10r_ws_bytes count it), and kh_j10r_row_fault_word(M, N, K,
@@ -129,10 +129,10 @@ constexpr int WARPS = H1U_WARPS;
 #endif
 // H1K_PD = D >= 1: h1k's producers load their A and B words D rounds ahead in a ring of D + 1 register sets, round r's
 // load going to the set round r - 1 read; 0 keeps one set, copied out and reloaded a round ahead (h1k<4> runs one CTA an
-// SM and h1k<2> two, whatever their registers). H1K_NXD = 1: a chunk's noise blocks, loaded at its first round, are stored
+// SM and h1k<2> two, whatever their registers). H1K_NXD = 1: a chunk's noise chunks, loaded at its first round, are stored
 // at its second round's end rather than its first's, so a round hides their load. H1K_L2PF = S: the producer whose
 // segment is S segments before a 128-byte line's first prefetches that line of the unit's 32 B rows into L2 (A's rows,
-// every unit's of the row block, stay in L2)
+// every unit's of the row tile, stay in L2)
 #ifndef H1K_PD
 #define H1K_PD 0
 #endif
@@ -513,8 +513,8 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
   }
 }
 
-// J10 banded (kh_one_band; measured only): h1s_noise's blocks with each band's row blocks hashed by its leader alone, unit
-// u = ri ncb + cj a leader where cj % band == 0 (rows_nb = 32 RB: a unit's row blocks come first)
+// J10 banded (kh_one_band; measured only): h1s_noise's blocks with each band's row tiles hashed by its leader alone, unit
+// u = ri ncb + cj a leader where cj % band == 0 (rows_nb = 32 RB: a unit's row tiles come first)
 __global__ void __launch_bounds__(256) h1j_noise(const u64* __restrict__ seeds, u32 units, u32 ncb, u32 nb, u32 rows_nb,
                                                  u32 J, u32 band, const uint8_t* __restrict__ live, u32* __restrict__ ws) {
   const u32 lane = threadIdx.x & 31;
@@ -544,7 +544,7 @@ __global__ void __launch_bounds__(256) h1j_noise(const u64* __restrict__ seeds, 
   }
 }
 
-// The one-stream form (kh_one; CA's PouwH1Tile_v3): the same walk and receipts, plus each cell's served z =
+// The one-stream form (kh_one; PouwH1Tile_v3): the same walk and receipts, plus each cell's served z =
 // O' - sum_d 128^d D_d + 256 X WB^T mod 2^32, WB = wb+ - wb- (wrapw) from B and the noise, carried by a third MMA set a
 // segment into its own accumulator; then y = RN_bf16(RN32(RN32(z) s_a[row]) s_w[col]) (int8_exact.dequantize), s_a = 0
 // for rows >= m. The step (m, flags) is read from the device, as dither_one's H1OStep {parity, m, pad, flags}.
@@ -569,7 +569,7 @@ struct OneOut {
   u32* lr = nullptr;    // DG (kh_lanes): unit u's record of its 32 lanes' words at lr + 32 u W (W = kh_words(K))
 };
 
-// PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
+// PL (kh_one_peel; the peel): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
 // z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T): two more MMAs a fragment (X by the coins c, the
 // dither bits b by B) into a fourth accumulator, and xa by B into the wrap term's, in a segment where a lane has an xa.
@@ -596,21 +596,21 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #ifndef H1U_JPI
 #define H1U_JPI 0
 #endif
-// RC (with RW; kh_units_multi_j10rc, built with H1U_JRC = 1): the column blocks come from the call's workspace too, at
+// RC (with RW; kh_units_multi_j10rc, built with H1U_JRC = 1): the column tiles come from the call's workspace too, at
 // their stream positions M RB + (32 cj + lane) CB + c (h1jr_cols hashes each once a call), so the unit hashes no block
-// and reads no seed_c. At prefill's m a column block is every row tile's (64 at M = 2048), and RW hashes it in each of
-// them; at decode's one live row block it is hashed once either way
+// and reads no seed_c. At prefill's m a column tile is every row tile's (64 at M = 2048), and RW hashes it in each of
+// them; at decode's one live row tile it is hashed once either way
 #ifndef H1U_JRC
 #define H1U_JRC 0
 #endif
-// H1U_JRCPF = 1 (with RC): each iteration's L2 prefetch of the next one's row and column blocks, which RC's unit reads
+// H1U_JRCPF = 1 (with RC): each iteration's L2 prefetch of the next one's row and column tiles, which RC's unit reads
 // with no hash to wait behind
 #ifndef H1U_JRCPF
 #define H1U_JRCPF 0
 #endif
-// H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column blocks are the row block's words, not
-// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe).
-// With JX, which reads no row block, they are a multiply of their stream position into the midstate's words. Bits 2
+// H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column tiles are the row tile's words, not
+// hashed, so a unit's time less its column hash bounds what sharing the column tiles can save (unitsbench --probe).
+// With JX, which reads no row tile, they are a multiply of their stream position into the midstate's words. Bits 2
 // and 4 (any RW unit) hold B's and A's (X's) segment loads at their first segments, which stay in L1, so the probe's
 // time against the unit's bounds what those loads' L2 latency costs
 #ifndef H1U_JPROBE
@@ -618,7 +618,7 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #endif
 // H1U_JAP = 1 (RW, with or without RC): h1jr_rows also writes each live row's A' = A + its dither bits (bytewise mod
 // 2^8, the add01 the unit does a segment) into the call's workspace after its blocks (jap_words), and the units read A'
-// for A, so a segment adds no dither and an iteration reads no row block but the coin block (it 0)
+// for A, so a segment adds no dither and an iteration reads no row tile but the coin block (it 0)
 #ifndef H1U_JAP
 #define H1U_JAP 0
 #endif
@@ -630,25 +630,25 @@ static_assert(!(H1U_JAP && H1U_JPROBE), "the probe's column blocks are its row b
 #define H1U_JAY 0
 #endif
 static_assert(!H1U_JAY || H1U_JAP, "H1U_JAY sums A', which H1U_JAP writes");
-// H1U_JM2 = 1 (with H1U_JRC and H1U_JAY): h1umjc's and h1umjc_sm's warps take a column block's row blocks two at a time
-// (units u and u + N / 32, u's row block even) at an M of whole pairs, sharing their column side: B's loads, its
-// fragments (B + c + U) and the column blocks; each row block keeps its own receipt state, accumulators, ring and coins
+// H1U_JM2 = 1 (with H1U_JRC and H1U_JAY): h1umjc's and h1umjc_sm's warps take a column tile's row tiles two at a time
+// (units u and u + N / 32, u's row tile even) at an M of whole pairs, sharing their column side: B's loads, its
+// fragments (B + c + U) and the column tiles; each row tile keeps its own receipt state, accumulators, ring and coins
 // (h1u_pair, two WarpSmem a warp)
 #ifndef H1U_JM2
 #define H1U_JM2 0
 #endif
 static_assert(!H1U_JM2 || (H1U_JRC && H1U_JAY), "H1U_JM2 pairs RC's H1U_JAY units");
-// a call's A' (H1U_JAP: M rows of K bytes) in its workspace, in words: after its row blocks (h1umj's) or its row and
-// column blocks (rc, h1umjc's); then its Y (H1U_JAY: M rows of 32 int32)
+// a call's A' (H1U_JAP: M rows of K bytes) in its workspace, in words: after its row tiles (h1umj's) or its row and
+// column tiles (rc, h1umjc's); then its Y (H1U_JAY: M rows of 32 int32)
 __host__ __device__ __forceinline__ u64 jap_words(u32 M, u32 N, u32 K, bool rc) {
   return 16 * ((u64)M + (rc ? N : 0)) * (K / 512 + 1);
 }
 __host__ __device__ __forceinline__ u64 jay_words(u32 M, u32 N, u32 K, bool rc) {
   return jap_words(M, N, K, rc) + (u64)M * K / 4;
 }
-// RY (with RC; kh_units_multi_j10rc built with H1U_JRY = 1 too): Y and the coins are the row block's alone, so its tail
-// digits ad are computed once a call (h1jr_ady, h1u_unit's YO: the row block's segments with no B, no T and no receipt)
-// into the call's workspace after its column blocks, and its units read them: no Y mma in their segments
+// RY (with RC; kh_units_multi_j10rc built with H1U_JRY = 1 too): Y and the coins are the row tile's alone, so its tail
+// digits ad are computed once a call (h1jr_ady, h1u_unit's YO: the row tile's segments with no B, no T and no receipt)
+// into the call's workspace after its column tiles, and its units read them: no Y mma in their segments
 #ifndef H1U_JRY
 #define H1U_JRY 0
 #endif
@@ -656,9 +656,9 @@ __host__ __device__ __forceinline__ u64 jay_words(u32 M, u32 N, u32 K, bool rc) 
 #error "H1U_JRY is H1U_JRC's units with their row blocks' digits read: build it with H1U_JRC = 1"
 #endif
 static_assert(!(H1U_JAP && H1U_JRY), "H1U_JAP's A' and H1U_JRY's digits both sit after the column blocks");
-// JX (with RW, not RC; kh_units_multi_j10r and _sm built with H1U_JX = 1): a row block's X = A + b, its Y = X P and its
-// digits A_d are the same in every unit of the row block, so h1jr_x computes them once a call, in the units' launch after
-// h1jr_rows, into the call's row workspace after its blocks (X [M, K] s8 at jx_x_off, each live row block's A_d fragments
+// JX (with RW, not RC; kh_units_multi_j10r and _sm built with H1U_JX = 1): a row tile's X = A + b, its Y = X P and its
+// digits A_d are the same in every unit of the row tile, so h1jr_x computes them once a call, in the units' launch after
+// h1jr_rows, into the call's row workspace after its blocks (X [M, K] s8 at jx_x_off, each live row tile's A_d fragments
 // at jx_ad_off: JX_AD_WORDS words [d][4 mt + r][lane]); the unit loads X in A's place, runs no Y MMAs and reads no row
 // block, and its tail loads A_d
 #ifndef H1U_JX
@@ -669,13 +669,13 @@ static_assert(!(H1U_JAP && H1U_JRY), "H1U_JAP's A' and H1U_JRY's digits both sit
 #ifndef H1U_JBW
 #define H1U_JBW 0
 #endif
-// H1U_JN2 = 1 (with JX, which leaves rowbits free): two column blocks a pass (noise_block2, two independent SHA-512 chains
+// H1U_JN2 = 1 (with JX, which leaves rowbits free): two column tiles a pass (noise_block2, two independent SHA-512 chains
 // for a scheduler with two warps), the coins' block with block 0 and odd block b with b + 1, b + 1 into rowbits for the
 // next pass's segments; the same blocks
 #ifndef H1U_JN2
 #define H1U_JN2 0
 #endif
-// H1U_JXS = 1 (with JX): h1jr_x stores a row block's X in A-fragment order, segment sg's row tile mt at byte
+// H1U_JXS = 1 (with JX): h1jr_x stores a row tile's X in A-fragment order, segment sg's row tile mt at byte
 // 1024 sg + 512 mt of the block, lane (g, q)'s 16 bytes {rows g, g + 8} x {k 8 q .., 8 q + 4 ..} in mma_s8's register
 // order, so the unit loads each fragment as one 16-byte load into the registers the MMA reads; the same bytes
 #ifndef H1U_JXS
@@ -684,10 +684,10 @@ static_assert(!(H1U_JAP && H1U_JRY), "H1U_JAP's A' and H1U_JRY's digits both sit
 #if H1U_JXS && !H1U_JX
 #error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
 #endif
-// H1U_JCS = G (2 or 4; with JX and H1U_JCTA, not JN2 or H1U_JPROBE & 1): a column block's blocks are its seed_c
-// stream's, the same in every row block's unit, so h1umj_sm's CTA takes its WARPS units as a tile of r live row blocks
-// by WARPS / r column blocks (r = G, else 2, else 1: the most that divides the live row blocks), the live tiles first,
-// and a column block's r warps share its blocks: each hashes 32 / r of its columns for r blocks a pass (sets of r
+// H1U_JCS = G (2 or 4; with JX and H1U_JCTA, not JN2 or H1U_JPROBE & 1): a column tile's blocks are its seed_c
+// stream's, the same in every row tile's unit, so h1umj_sm's CTA takes its WARPS units as a tile of r live row tiles
+// by WARPS / r column tiles (r = G, else 2, else 1: the most that divides the live row tiles), the live tiles first,
+// and a column tile's r warps share its blocks: each hashes 32 / r of its columns for r blocks a pass (sets of r
 // blocks, one set ahead, double-buffered in the CTA's shared memory) and they meet once a set. r = 1 is the units in
 // their own order, each warp hashing its own blocks; the same blocks and receipts
 #ifndef H1U_JCS
@@ -733,12 +733,12 @@ static_assert(!(H1U_JAP && H1U_JX), "H1U_JX's X is H1U_JAP's A' and its A_d cove
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
-// H1U_JW = 1 (with JX, not JCS, JN2, H1U_JPROBE or H1U_JRC): W' = B + c + U is a column block's alone, as X is a row
-// block's, so h1jr_wcols hashes each call's column blocks once a call into its workspace after JX's (jw_cb_off: column
+// H1U_JW = 1 (with JX, not JCS, JN2, H1U_JPROBE or H1U_JRC): W' = B + c + U is a column tile's alone, as X is a row
+// block's, so h1jr_wcols hashes each call's column tiles once a call into its workspace after JX's (jw_cb_off: column
 // j's block b at 64 (j CB + b) bytes) and h1jr_w writes W' [N, K] s8 after them (jw_w_off), in the units' launch after
 // h1jr_x; the unit loads W' in B's place, hashes no block, builds no W' and reads its columns' coins blocks for U (its
-// tail's), and h1umj's and h1umj_sm's units go H1U_JWSWZ row blocks at a time, column block by column block, so a CTA's
-// warps share a column block's W' and a band's X and W' stay in L2; the same receipts. The workspace is
+// tail's), and h1umj's and h1umj_sm's units go H1U_JWSWZ row tiles at a time, column tile by column tile, so a CTA's
+// warps share a column tile's W' and a band's X and W' stay in L2; the same receipts. The workspace is
 // kh_j10r_jw_bytes(M, N, K), not kh_j10r_rows_bytes (kh_j10r_workspace_bytes gives it from kh_j10r_flags)
 #ifndef H1U_JW
 #define H1U_JW 0
@@ -749,7 +749,7 @@ __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_of
 #ifndef H1U_JWSWZ
 #define H1U_JWSWZ 32
 #endif
-// H1U_JWS = 1 (with JW): h1jr_w stores a column block's W' in B-fragment order, as JXS stores X in A's: segment sg's
+// H1U_JWS = 1 (with JW): h1jr_w stores a column tile's W' in B-fragment order, as JXS stores X in A's: segment sg's
 // column tiles 2 p and 2 p + 1 at byte 1024 sg + 512 p of the block, lane (g, q)'s 16 bytes the 8 at k = 8 q of
 // column 16 p + g, then of column 16 p + 8 + g, so the unit loads two tiles' fragments as one 16-byte load
 #ifndef H1U_JWS
@@ -1010,7 +1010,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
   }
   // CS: set st's blocks i = r st + e (pass i's, i = 0 the coins' block), lane's e and column (32 / r of them a warp);
-  // its body under CS, since #3889's Sm (WarpSmemX, JcSmem) have no nm
+  // its body under CS, since the Sm variants (WarpSmemX, JcSmem) have no nm
   const auto cs_hash = [&](u32 st) {
     if constexpr (CS) {
       const u32 cl = 5 - js.lr, e = lane >> cl, col = (js.rank << cl) + (lane & ((1u << cl) - 1)), i = (st << js.lr) + e;
@@ -1399,7 +1399,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   // the tail: A_d packed as A fragments in the accumulators' column order (fragment k 4 q' .. of rows g / g + 8 is
   // columns 2 q', 2 q' + 1, 8 + 2 q', 9 + 2 q' of n-tiles 0, 1; k 16 + 4 q' .. those of n-tiles 2, 3)
   u32 ad[MD][2][4];
-  // RY: row block ri's digits in its call's workspace after the column blocks, word (8 d + 4 mt + r) 32 + lane of its MD 256
+  // RY: row tile ri's digits in its call's workspace after the column tiles, word (8 d + 4 mt + r) 32 + lane of its MD 256
   const u32* const adr = RY ? ws + 16ull * ((u64)M + N) * rb + (u64)ri * MD * 256 + lane : nullptr;
   if constexpr (JX) {
     const u32* src = ws + jx_ad_off(M, K) / 4 + (u64)ri * JX_AD_WORDS;
@@ -1539,8 +1539,8 @@ struct UCall {
   u32 N, K, u0, md;  // md = n_digits(K / 32), 2 or 3
 };
 
-// H1U_SWZ = G (h1um): a call's warps take its units G row blocks at a time, column block by column block, so the G row
-// blocks of one column block read its B lines from L2 together, where row-block-major order (0) reads all of B once a row
+// H1U_SWZ = G (h1um): a call's warps take its units G row tiles at a time, column tile by column tile, so the G row
+// blocks of one column tile read its B lines from L2 together, where row-block-major order (0) reads all of B once a row
 // block (prefill's M = 2048: 64 times a step, and gate_up's B is about L2's size). Each unit is still written at its own
 // position: only which warp computes it moves.
 #ifndef H1U_SWZ
@@ -2604,7 +2604,7 @@ extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, uns
 }
 
 // kh_unit's receipts of ncalls calls in one launch: calls a device array of ncalls + 1 UCall (kh_ucall_bytes() each, the
-// last's u0 the units in all, `units`), every call M rows with the same live row blocks
+// last's u0 the units in all, `units`), every call M rows with the same live row tiles
 extern "C" unsigned kh_ucall_bytes() { return sizeof(UCall); }
 
 extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
@@ -2751,7 +2751,7 @@ extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
-// J10 banded (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): kh_one and
+// J10 banded (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): kh_one and
 // kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
 extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
@@ -2767,7 +2767,7 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
-// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, #3574, whose credit derives a unit's call and
+// J10-R (J10R's Definition, `h1tile.j10r_reference`, in the verifier's form, whose credit derives a unit's call and
 // blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
 // scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
 // columns 32 cj .. of it.
@@ -2833,10 +2833,10 @@ extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, co
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// J10-R's receipts-only units (h1tile.PouwH1Tile_v5 / v6's receipt, J10R's Definition on cursor/h1-j10r-1de3; measured
+// J10-R's receipts-only units (h1tile.PouwH1Tile_v5 / v6's receipt, J10R's Definition; measured
 // only until the verifier takes the form): a call of M rows (its A slot) has one noise stream, seed_c's at call scale,
 // row i's blocks at i RB and column j's at M RB + j CB; unit (ri, cj) at position base + u reads call rows 32 ri .. and
-// columns 32 cj .., and folds under its own sigma_R. A call's row blocks are hashed once (h1jr_rows) and its units' column
+// columns 32 cj .., and folds under its own sigma_R. A call's row tiles are hashed once (h1jr_rows) and its units' column
 // blocks by their own lanes (h1umj).
 //   kh_seeds_j10r(data, call, base, U, seeds, stream)   unit u's 16 words [seed_c, sigma_R] (seeds.PouwCallSeeds):
 //              seeds.call_seed at the call's first position `call`, receipt_seed at base + u; data is kh_seeds' with
@@ -2845,7 +2845,7 @@ extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, co
 //              ncalls + 1 UCallR (kh_ucallr_bytes() each), each with its workspace rws of
 //              kh_j10r_workspace_bytes(M, N, K, 0) bytes (kh_j10r_rows_bytes(M, K) but under H1U_JW); mode 0 both
 //              launches, 1 the rows alone, 2 the units alone (on rows a mode 0 or 1 call wrote; with H1U_JX, h1jr_x's
-//              row blocks' X and A_d first, from those rows)
+//              row tiles' X and A_d first, from those rows)
 //   kh_units_multi_j10r_sm(calls, ncalls, units, M, live, q, den, next, stream)   both launches, the units' on the SMs
 //              whose id % den < q alone (h1umj_sm, as kh_units_multi_sm's h1um_sm); kh_units_multi_j10r_smc(.., q, den,
 //              cap, next, stream) with at most cap CTAs an SM besides (as kh_units_multi_smc)
@@ -2888,7 +2888,7 @@ __device__ __forceinline__ const int8_t* jap_a(const UCallR& c, u32 M, bool rc) 
   return H1U_JAP ? reinterpret_cast<const int8_t*>(c.rws + jap_words(M, c.N, c.K, rc)) : c.A;
 }
 
-// call blockIdx.y's row blocks t < M RB of its seed_c stream, the grid's x threads striding over t, the rows of dead row
+// call blockIdx.y's row tiles t < M RB of its seed_c stream, the grid's x threads striding over t, the rows of dead row
 // blocks skipped.  H1U_JAP: then each warp writes its threads' blocks' A' (every block t but a row's last, the coin
 // block) at jap_words(rc): A's 512 bytes from k = 512 (t % RB) of row t / RB plus the block's bits, 16 bytes a lane
 __global__ void __launch_bounds__(256) h1jr_rows(const UCallR* __restrict__ calls, u32 M, const uint8_t* __restrict__ live,
@@ -2989,9 +2989,9 @@ static void jr_rows(const void* calls, unsigned ncalls, unsigned M, const void* 
 }
 
 #if H1U_JX
-// JX: call blockIdx.y's live row block blockIdx.x: X = A + b over its rows (16 threads a row, each 16 bytes at a time:
+// JX: call blockIdx.y's live row tile blockIdx.x: X = A + b over its rows (16 threads a row, each 16 bytes at a time:
 // byte k's dither bit is bit k % 32 of word (k / 32) % 16 of the row's block k / 512, as h1u_unit's rowbits give it), then
-// warp 0 packs the row block's A_d from Y (X's residue sums, rho = k % 32) and the rows' coins (words 0 .. of block K / 512)
+// warp 0 packs the row tile's A_d from Y (X's residue sums, rho = k % 32) and the rows' coins (words 0 .. of block K / 512)
 template <int MD>
 __device__ __forceinline__ void jx_digits(const UCallR& c, u32 M, u32 ri, const int (&Ys)[32][33]) {
   const u32 lane = threadIdx.x, g = lane >> 2, q = lane & 3, rb = c.K / 512 + 1;
@@ -3108,7 +3108,7 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
 #endif
 
 #if H1U_JW
-// JW: call blockIdx.y's column blocks t < N CB (column j's block b at t = j CB + b, stream position M RB + t) into its
+// JW: call blockIdx.y's column tiles t < N CB (column j's block b at t = j CB + b, stream position M RB + t) into its
 // workspace at jw_cb_off, the grid's x threads striding over t; the stream's midstate made once a CTA
 __global__ void __launch_bounds__(256) h1jr_wcols(const UCallR* __restrict__ calls, u32 M) {
   const UCallR c = calls[blockIdx.y];
@@ -3154,7 +3154,7 @@ __global__ void __launch_bounds__(256) h1jr_w(const UCallR* __restrict__ calls, 
   const u32* const blk = reinterpret_cast<const u32*>(reinterpret_cast<const uint8_t*>(c.rws) + jw_cb_off(M, K));
   int8_t* const w = reinterpret_cast<int8_t*>(c.rws) + jw_w_off(M, c.N, K);
   if constexpr (H1U_JWS && H1U_JPC) {
-    // slot p (16 bytes at 16 p): lane p % 32 = 4 g + q of tile pair tp = p / 32 % 2 of segment sg of column block jb,
+    // slot p (16 bytes at 16 p): lane p % 32 = 4 g + q of tile pair tp = p / 32 % 2 of segment sg of column tile jb,
     // the 8 bytes at k = 32 sg + 8 q of column 32 jb + 16 tp + g, then of column 32 jb + 16 tp + 8 + g
     const u32 ns = K / 32;
 #pragma unroll 1
@@ -3200,7 +3200,7 @@ __global__ void __launch_bounds__(256) h1jr_w(const UCallR* __restrict__ calls, 
 }
 #endif
 
-// JW: unit gu - u0 of its call in H1U_JWSWZ-row-block bands, column block by column block (h1umjc's jswz_unit order)
+// JW: unit gu - u0 of its call in H1U_JWSWZ-row-block bands, column tile by column tile (h1umjc's jswz_unit order)
 __device__ __forceinline__ u32 jw_unit(const UCallR& c, u32 w, u32 M) {
   if (!H1U_JW) return w;
   const u32 ncb = c.N / 32, band = (u32)H1U_JWSWZ * ncb, r0 = w / band * (u32)H1U_JWSWZ, r = w % band;
@@ -3257,7 +3257,7 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
 #error "H1U_JCS tiles the WARPS units a CTA takes together, so it needs H1U_JCTA = 1"
 #endif
 #if H1U_JCS
-// the k-th live (want) or dead row block of the M / 32, the warp's lanes taking 32 at a time
+// the k-th live (want) or dead row tile of the M / 32, the warp's lanes taking 32 at a time
 __device__ __forceinline__ u32 nth_rb(const uint8_t* __restrict__ live, u32 nrb, u32 k, bool want) {
   const u32 lane = threadIdx.x & 31;
   for (u32 b0 = 0; b0 < nrb; b0 += 32) {
@@ -3273,7 +3273,7 @@ __device__ __forceinline__ u32 nth_rb(const uint8_t* __restrict__ live, u32 nrb,
   return 0;
 }
 
-// h1umj_one under H1U_JCS: slot gu of its call's tiles (nl live row blocks, r = 1 << lr of them a tile; r = 1 is the
+// h1umj_one under H1U_JCS: slot gu of its call's tiles (nl live row tiles, r = 1 << lr of them a tile; r = 1 is the
 // unit gu itself), its group's buffers in jcb
 __device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                          const uint8_t* __restrict__ live, u32 gu, u32 nl, u32 lr, WarpSmemJC& S,
@@ -3319,8 +3319,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   __shared__ u32 jcb[2 * WARPS][32][17];
   __shared__ u32 claim;
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0, nrb = M / 32;
-  // r: H1U_JCS live row blocks a tile, else 2, else 1, the most that divides them; more than 1 only where every call's
-  // units are its nrb ncb, from a multiple of WARPS, and its column blocks a multiple of WARPS / r
+  // r: H1U_JCS live row tiles a tile, else 2, else 1, the most that divides them; more than 1 only where every call's
+  // units are its nrb ncb, from a multiple of WARPS, and its column tiles a multiple of WARPS / r
   u32 nl = 0;
   for (u32 b = lane; b < nrb; b += 32) nl += !live || live[b] ? 1u : 0u;
   nl = __reduce_add_sync(0xFFFFFFFFu, nl);
@@ -3465,7 +3465,7 @@ extern "C" unsigned long long kh_j10r_row_fault_word(unsigned M, unsigned N, uns
   return H1U_JAP ? jap_words(M, N, K, rc != 0) : 0;
 }
 
-// JX: the call's row blocks' X and A_d, from its rows, before its units
+// JX: the call's row tiles' X and A_d, from its rows, before its units
 static void jx_launch(const void* calls, unsigned ncalls, unsigned M, const void* live, cudaStream_t s) {
 #if H1U_JX
   h1jr_x<<<dim3(M / 32, ncalls), 512, 0, s>>>((const UCallR*)calls, M, (const uint8_t*)live);
@@ -3476,7 +3476,7 @@ static void jx_launch(const void* calls, unsigned ncalls, unsigned M, const void
 #endif
 }
 
-// a call's workspace for its rows and, under H1U_JW, its column blocks and W' (kh_j10r_rows_bytes otherwise)
+// a call's workspace for its rows and, under H1U_JW, its column tiles and W' (kh_j10r_rows_bytes otherwise)
 extern "C" unsigned long long kh_j10r_jw_bytes(unsigned M, unsigned N, unsigned K) {
   return H1U_JW ? jw_w_off(M, N, K) + (unsigned long long)N * K : kh_j10r_rows_bytes(M, K);
 }
@@ -3537,7 +3537,7 @@ extern "C" int kh_units_multi_j10r_smc(const void* calls, unsigned ncalls, unsig
 }
 
 #if H1U_JRC
-// call blockIdx.y's column blocks M RB + t (t < N CB: column j's block c at t = j CB + c) of its seed_c stream, into its
+// call blockIdx.y's column tiles M RB + t (t < N CB: column j's block c at t = j CB + c) of its seed_c stream, into its
 // workspace at those stream positions, the grid's x threads striding over t; the stream's midstate made once a CTA, in
 // shared memory.  H1U_JCOLX is the grid's x a call: a call's blocks are 1.1 (o) to 8 (gate_up) a thread at 128 and
 // T = 64, where the calls' CTAs run beside each other, so a larger x evens their work out
@@ -3570,8 +3570,8 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
   }
 }
 
-// H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row blocks at a time column block by
-// column block, so B's lines and the column blocks are read from DRAM once for G row blocks (unitsbench --j10r at
+// H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row tiles at a time column tile by
+// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles (unitsbench --j10r at
 // T = M = 2048, step_multi_j10rc: G 0 256.8, 8 240.6, 16 236.0, 32 233.1, 64 237.3 ms)
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 32
@@ -3581,9 +3581,9 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 #define H1U_JWARPS WARPS
 #endif
 constexpr int JWARPS = H1U_JWARPS;
-// H1U_JSWZQ = PR (with H1U_JSWZ): a block's JWARPS units a patch of PR row blocks by JWARPS / PR column blocks, the
+// H1U_JSWZQ = PR (with H1U_JSWZ): a block's JWARPS units a patch of PR row tiles by JWARPS / PR column tiles, the
 // band's patches row by row down it, then across, so the block's warps share A's lines and B's through L1; a band whose
-// row blocks or a call whose column blocks the patch doesn't divide keeps H1U_JSWZ's order
+// row tiles or a call whose column tiles the patch doesn't divide keeps H1U_JSWZ's order
 #ifndef H1U_JSWZQ
 #define H1U_JSWZQ 0
 #endif
@@ -3636,8 +3636,8 @@ __device__ __forceinline__ void h1umjc_one(const UCallR* __restrict__ calls, u32
 
 #if H1U_JM2
 static_assert(!H1U_JCTA, "H1U_JM2's warps take their own pairs");
-// h1u_unit's RC units u and u + N / 32 (u's row block even; A is A', Y the workspace's) in one warp: one load of B's
-// segment, one set of its fragments and the column blocks in S0, each row block's coins and ring in its own S
+// h1u_unit's RC units u and u + N / 32 (u's row tile even; A is A', Y the workspace's) in one warp: one load of B's
+// segment, one set of its fragments and the column tiles in S0, each row tile's coins and ring in its own S
 template <int MD>
 __device__ __forceinline__ void h1u_pair(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, u32* __restrict__ out, const u32* __restrict__ ws,
@@ -3881,7 +3881,7 @@ __device__ __forceinline__ void h1u_pair(const int8_t* __restrict__ A, const int
 }
 
 // h1umjc's pair gp (H1U_JM2, M of whole pairs): units 2 gp, 2 gp + 1 of the calls' order are those of a row-block pair
-// and a column block, h1u_pair's; a pair with a row block not live runs as its two units
+// and a column tile, h1u_pair's; a pair with a row tile not live runs as its two units
 __device__ __forceinline__ void h1umjc_pair_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                 const uint8_t* __restrict__ live, u32 gp, WarpSmem& S0, WarpSmem& S1) {
   const u32 gu = 2 * gp;
@@ -3919,7 +3919,7 @@ static_assert(!(H1U_JM2 && (H1U_JRX || H1U_JSWZQ)), "H1U_JM2's pairs take WarpSm
 
 // h1umjc on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1umj_sm's partition, its
 // last CTA's fallback, its CAP and its H1U_JCTA: a CTA's warps take neighbouring units of jswz_unit's order, the row
-// blocks of one column block at decode, so they read its column blocks and B's lines through one SM's L1)
+// blocks of one column tile at decode, so they read its column tiles and B's lines through one SM's L1)
 template <bool CAP>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                         const uint8_t* __restrict__ live, u32 q, u32 den,
@@ -3957,7 +3957,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc_sm(const UCallR* 
   }
 }
 
-// h1umj with its units' column blocks read (RC)
+// h1umj with its units' column tiles read (RC)
 __global__ void __launch_bounds__(32 * JWARPS, H1U_MINB) h1umjc(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                       const uint8_t* __restrict__ live) {
   __shared__ JcSmem smem[JM2_SM * JWARPS];
@@ -3987,7 +3987,7 @@ __global__ void __launch_bounds__(32 * JWARPS, H1U_MINB) h1umjc(const UCallR* __
 }
 
 #if H1U_JRY
-// RY's digits: call blockIdx.y's row block blockIdx.x JWARPS + warp, by its column block 0's unit under YO
+// RY's digits: call blockIdx.y's row tile blockIdx.x JWARPS + warp, by its column tile 0's unit under YO
 __global__ void __launch_bounds__(32 * JWARPS) h1jr_ady(const UCallR* __restrict__ calls, u32 M,
                                                       const uint8_t* __restrict__ live) {
   __shared__ JcSmem smem[JWARPS];
@@ -4004,8 +4004,8 @@ __global__ void __launch_bounds__(32 * JWARPS) h1jr_ady(const UCallR* __restrict
 }
 #endif
 
-// a call's workspace under kh_units_multi_j10rc: its M RB row blocks, then its N CB column blocks, 16 words each, then
-// under H1U_JRY its M / 32 row blocks' digits (h1jr_ady), MD KiB each; and never less than kh_j10r_rows_bytes (H1U_JX's
+// a call's workspace under kh_units_multi_j10rc: its M RB row tiles, then its N CB column tiles, 16 words each, then
+// under H1U_JRY its M / 32 row tiles' digits (h1jr_ady), MD KiB each; and never less than kh_j10r_rows_bytes (H1U_JX's
 // X and A_d), since dither_so runs kh_units_multi_j10r on the same workspace below its J10-RC t
 extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned K) {
   const unsigned long long rc = 64ull * ((unsigned long long)M + N) * (K / 512 + 1) +
@@ -4015,9 +4015,9 @@ extern "C" unsigned long long kh_j10r_ws_bytes(unsigned M, unsigned N, unsigned 
   return rows > rc ? rows : rc;
 }
 
-// kh_units_multi_j10r with each call's column blocks hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
+// kh_units_multi_j10r with each call's column tiles hashed once a call (h1jr_cols) beside its rows (h1jr_rows), and the
 // units reading both (h1umjc): calls' rws of kh_j10r_ws_bytes(M, N, K) bytes; mode 0 the blocks and the units, 1 the
-// blocks alone, 2 the units alone (on blocks a mode 0 or 1 call wrote; under H1U_JRY the row blocks' digits first)
+// blocks alone, 2 the units alone (on blocks a mode 0 or 1 call wrote; under H1U_JRY the row tiles' digits first)
 extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                     int mode, void* stream) {
   if (!ncalls || ncalls > 65535 || M % 32 || mode < 0 || mode > 2) return 2;
@@ -4066,7 +4066,7 @@ extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsig
 
 // a call's workspace in this build at M rows, the size its caller allocates: with rc, kh_units_multi_j10rc's
 // (kh_j10r_ws_bytes, which kh_units_multi_j10r may run on too; 0 without H1U_JRC), else kh_units_multi_j10r's and its
-// _sm and _smc forms' (kh_j10r_jw_bytes: H1U_JW's column blocks and W' after the rows). Monotone in M, so a workspace
+// _sm and _smc forms' (kh_j10r_jw_bytes: H1U_JW's column tiles and W' after the rows). Monotone in M, so a workspace
 // of T rows serves any M <= T
 extern "C" unsigned long long kh_j10r_workspace_bytes(unsigned M, unsigned N, unsigned K, int rc) {
 #if H1U_JRC

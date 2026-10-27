@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-# E a word in nonlinear units (#4622's gate model, note:20261026T0110Z-report-s5-lowerbounds), at p1024, k = 3: conjectured,
+# E a word in nonlinear units, at p1024, k = 3: conjectured,
 # SquaringFloor and ChainSum at 2^-40; best found, the seam square's 16,544 nonlinear units a squaring times 3 x 1,021
 E_WORD = {"conjectured": 1_145_562.0, "best found": 16_544.0 * 3 * 1021}
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start")
@@ -45,7 +45,7 @@ DEFERRED_MIN_L = 2
 # kv.cu at p1024, k = 3, masked: the bound encode (an append under b_j(c_a)), 1.609e5 blocks of 4 KiB a second on an
 # RTX PRO 6000 (encode_rate.py)
 ENCODE_BPS = 1.609e5 * 4096
-# paged.cu's pg_rekey at k = 3 (#2488): listed slots decoded (96 squarings a block) and encoded (98,016) in place, one
+# paged.cu's pg_rekey at k = 3: listed slots decoded (96 squarings a block) and encoded (98,016) in place, one
 # launch over every SM's resident CTAs, 1.922e5 blocks a second (rekey_gate.py)
 REKEY_BPS = 1.922e5 * 4096
 # kv.cu's in-place re-key of scattered 16-block pages, one call a page over 64 CUDA streams: 8.478e4 blocks a second (a
@@ -170,7 +170,7 @@ def main() -> int:
     models = json.loads(a.models.read_text())["models"][a.model_name]
     if not a.r_cap_node and "products" not in models[a.lever]["coefficients"]:
         raise SystemExit(f"{a.models}: step model {a.model_name} {a.lever!r} has no data products (class `products`), and "
-                         "E_WORD is in nonlinear units (#4622): give its attention coefficients the row's data products (2 D a "
+                         "E_WORD is in nonlinear units: give its attention coefficients the row's data products (2 D a "
                          "head-key, b_q), or a node peak in nonlinear units (--r-cap-node)")
     rc = r_cap(models[a.lever], ph)
     rc["window_run"] = {T: max(r_cap(models[a.lever], p)["window"][T] for p in an["phases"]) for T in rc["window"]}

@@ -1,37 +1,39 @@
-"""A scenario: one choice from every layer, and what ρ it gives.
+"""A scenario: one choice from every layer, and what overhead it gives.
 
 A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
-lists some). With `pofc = "<rules>"` its declared work also runs under the proof of forward computation's rules
-(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the serving block. Every choice is a registry
-key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
+lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
-`evaluate` gives, for each family, ρ under each bound alone, under every bound it meets at once (`lo`: each block gets
-the least of their caps, under the union of their premises) and under each attack (`hi`: the best construction). The
-adversary picks its family, so the scenario's ρ lies in `[min_A lo_A, min_A hi_A]`. A bound above an attack
-(`lo > hi`) is a contradiction: one of the bound's premises is false for that algorithm, and `contradictions` names it.
+`evaluate` gives, for each family, the overhead under each bound alone and under every bound it meets at once (`lo`,
+the lower bound: each block gets the least of the caps whose premises aren't refuted at its bits, under the union of
+those bounds' premises), and under each attack (`best_attack`: the best known construction, reported beside the bound,
+not as an end of it). The adversary picks its family, so the scenario's overhead is at least `min_A lo_A`. A bound
+above an attack is a contradiction: one of the bound's premises is false for that algorithm, and `contradictions` names
+it.
 
-ρ is the circuit's size over the reference's, `|A| / T_0`, each serving block padded to its capacity; the time to the
-target is reported beside it, `T ≥ ρ T_0 / Φ_total` (`Scenario.seconds`): the idealized normalization, the reference at
-the inventory's full capacity. A construction's circuit is padded too, so its ρ carries the share of capacity it leaves
-idle (its MFU) and its time is exactly `ρ T_0 / Φ_total`; the reference itself runs in `T_0 / (MFU₀ Φ_total)`. So an
-adversary no protocol encumbers sits at `μ / MFU` (`Result.unmonitored`), and a lower end below it is vacuous: it
-doesn't exclude even that adversary.
+The overhead is the circuit's size over the reference's, `|A| / T_0`, each serving block padded to its capacity; the
+time to the target, wall-clock, is reported beside it, at least the overhead times `T_0 / Φ_total` (`Scenario.seconds`):
+the idealized normalization, the reference at the inventory's full capacity. A construction's circuit is padded too, so
+its overhead carries the share of capacity it leaves idle (its MFU) and its time is exactly its overhead times
+`T_0 / Φ_total`; the reference itself runs in `T_0 / (MFU₀ Φ_total)`. So an adversary no protocol encumbers sits at
+`μ / MFU` (`Result.unmonitored`), and a lower bound below it is vacuous: it doesn't exclude even that adversary.
 
-A scenario's `structure` (default `reference`, `data/exclusion.toml`) is the elementary uncertified cap's `s_×`; a bound
-that counts uncertified or dark gates at more than one gate an operation cites its straddling premise.
+A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
+cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or dark
+gates at more than one gate an operation cites its straddling premise, and the runs that measured `s_×`.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from rho import envelopes, hardware, instances, lean
 from rho.attacks import ATTACKS
 from rho.classes import (
     CLASSES,
+    STANDINGS,
     Argument,
     Outside,
     Structure,
@@ -46,7 +48,7 @@ from rho.families import Family, family
 from rho.instances import Model, Run
 from rho.params import Registry
 from rho.profile import Profile
-from rho.theorem import Budget, Cap, Partition, Slowdown, least, slowdown
+from rho.theorem import Budget, Cap, Overhead, Partition, least, overhead
 
 YEAR = 365 * 86400.0
 
@@ -66,6 +68,9 @@ class Scenario:
     #: `data/premises.toml` by cited name (`classes.premises`), read from the scenario's registry
     premises: Mapping[str, Mapping] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        self.structure.check(self.context.units)
+
     @property
     def mfu(self) -> float:
         """The inventory's share of capacity a construction trains with: the monitored fleet's and the dark leaves'."""
@@ -84,7 +89,7 @@ class Scenario:
         return self.context.units.gates(self.run.target(self.model))
 
     def seconds(self, rho: float) -> float:
-        """`ρ T_0 / Φ_total`: the time to the run's target at size slowdown `rho`."""
+        """`rho T_0 / Φ_total`: the time to the run's target at overhead `rho`."""
         return rho * self.reference / self.total_phi
 
     def years(self, rho: float) -> float:
@@ -97,18 +102,12 @@ def build(registry: Registry, name: str) -> Scenario:
     ctx = Context(fl, hardware.location(registry, fl.location), envelopes.policy(registry, registry[f"{t}.policy"]),
                   hardware.horizon(registry, registry[f"{t}.horizon"]), hardware.units(registry))
     run = instances.run(registry, registry[f"{t}.run"])
-    s = Scenario(
+    return Scenario(
         name, envelopes.regime(registry, registry[f"{t}.regime"]), ctx, instances.model(registry, run.model), run,
         tuple(family(registry, n) for n in registry[f"{t}.families"]),
         tuple(CLASSES[n] for n in registry.get(f"{t}.bounds", list(CLASSES))),
         tuple(ATTACKS[n] for n in registry.get(f"{t}.attacks", list(ATTACKS))),
-        structure(registry, registry.get(f"{t}.structure", "reference")), premises(registry))
-    if f"{t}.pofc" in registry:
-        from rho import pofc  # pofc builds on this module's Scenario
-
-        link = pofc.link(registry, fl.location) if registry.get(f"{t}.pofc_physical", False) else None
-        s = pofc.apply(s, pofc.rules(registry, registry[f"{t}.pofc"]), link=link)
-    return s
+        structure(registry, registry.get(f"{t}.structure", registry["structure.default"])), premises(registry))
 
 
 @dataclass(frozen=True)
@@ -117,19 +116,21 @@ class Estimate:
     side: str
     #: the weakest status (`lean.weakest`) among `cites`, or `outside`
     status: str
-    slowdown: Slowdown | None
+    overhead: Overhead | None
     outside: str = ""
     #: what it rests on: the argument's citations and those of the cuts that bound it
     cites: tuple[str, ...] = ()
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: ρ inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's slowdown
+    #: the overhead inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's overhead
     declared: float = math.nan
+    #: every bound at once only: the bounds left out at a block that binds, their premises refuted there
+    excluded: tuple[str, ...] = ()
 
     @property
     def rho(self) -> float:
-        return self.slowdown.rho if self.slowdown else math.nan
+        return self.overhead.rho if self.overhead else math.nan
 
 
 @dataclass(frozen=True)
@@ -142,15 +143,24 @@ class FamilyResult:
 
     @property
     def lo(self) -> float:
+        """The overhead's lower bound: every bound met at once."""
         return self.combined.rho
 
     @property
-    def hi(self) -> float:
-        return min((a.rho for a in self.attacks if a.slowdown), default=math.inf)
+    def best_attack(self) -> Estimate | None:
+        """The best known attack: the construction with the least overhead (None: none applies)."""
+        return min((a for a in self.attacks if a.overhead), key=lambda a: a.rho, default=None)
+
+    @property
+    def attack(self) -> float:
+        """The best known attack's overhead (∞: none applies), beside the lower bound and not an end of it."""
+        best = self.best_attack
+        return best.rho if best else math.inf
 
     @property
     def contradictions(self) -> tuple[str, ...]:
-        return tuple(b.argument for b in self.bounds if b.slowdown and b.rho > self.hi * (1 + 1e-9))
+        """The bounds above the best known attack: one of each one's premises is false for this family."""
+        return tuple(b.argument for b in self.bounds if b.overhead and b.rho > self.attack * (1 + 1e-9))
 
 
 @dataclass(frozen=True)
@@ -160,19 +170,21 @@ class Result:
 
     @property
     def lo(self) -> float:
+        """The overhead's lower bound, at the family the adversary picks."""
         return min((f.lo for f in self.families), default=math.inf)
 
     @property
-    def hi(self) -> float:
-        return min((f.hi for f in self.families), default=math.inf)
+    def attack(self) -> float:
+        """The best known attack's overhead over every family."""
+        return min((f.attack for f in self.families), default=math.inf)
 
     @property
     def unmonitored(self) -> float:
-        """`μ / MFU`: ρ of the adversary no protocol encumbers, at its best family's `μ`."""
+        """`μ / MFU`: the overhead of the adversary no protocol encumbers, at its best family's `μ`."""
         return min((f.profile.efficiency for f in self.families), default=1.0) / self.scenario.mfu
 
     def vacuous(self, rho: float) -> bool:
-        """A lower end below `unmonitored`, which excludes no adversary the protocols exist for."""
+        """A lower bound below `unmonitored`, which excludes no adversary the protocols exist for."""
         return rho < self.unmonitored * (1 - 1e-9)
 
 
@@ -180,26 +192,32 @@ def _cuts(partition: Partition) -> dict:
     return {(b.name, c.name): c for b in partition.serving for c in (*b.cuts, *((b.layout,) if b.layout else ()))}
 
 
-def _cut_cites(partition: Partition, s: Slowdown) -> tuple[str, ...]:
+def _cut_cites(partition: Partition, s: Overhead) -> tuple[str, ...]:
     """The citations of the cut that set each serving block's share (none where its capacity did)."""
     cuts = _cuts(partition)
     return tuple(dict.fromkeys(c for name, share in s.serving.items() if (name, share.cut) in cuts
                                for c in cuts[name, share.cut].cites))
 
 
-def _binding_k(partition: Partition, s: Slowdown) -> float:
-    """The most novel bits of any block in the cuts that set the serving blocks' shares: where premises must hold."""
+def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
+    """The novel bits of each block in the cuts that set the serving blocks' shares, least first: where premises must
+    hold."""
     cuts = _cuts(partition)
-    return max((b.budget.inputs for name, share in s.serving.items() if (name, share.cut) in cuts
-                for b in cuts[name, share.cut].blocks), default=0.0)
+    return tuple(sorted({b.budget.inputs for name, share in s.serving.items() if (name, share.cut) in cuts
+                         for b in cuts[name, share.cut].blocks}))
 
 
-def _uncertified(s: Slowdown) -> bool:
+def _binding_k(partition: Partition, s: Overhead) -> float:
+    """The most novel bits of any block in the cuts that set the serving blocks' shares."""
+    return max(_binding_ks(partition, s), default=0.0)
+
+
+def _uncertified(s: Overhead) -> bool:
     """Whether the bound counts any gate at `q_U`: the dark leaves, or a cut's uncertified routes."""
     return s.dark > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
 
 
-def _rated(name: str, side: str, cites: tuple[str, ...], s: Slowdown, partition: Partition, declared: float,
+def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition: Partition, declared: float,
            table: Mapping[str, Mapping], st: Structure) -> Estimate:
     cites = tuple(dict.fromkeys(cites + _cut_cites(partition, s)
                                 + (st.cites() if side == "bound" and _uncertified(s) else ())))
@@ -214,7 +232,7 @@ def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, blo
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
     w = weight_per_gate(p, ctx.units)
-    s = slowdown(partition, cap, w, p.efficiency, arg.side, u=st.weight(w))
+    s = overhead(partition, cap, w, p.efficiency, arg.side, u=st.weight(w))
     return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(cap, w, block), table, st), cap
 
 
@@ -223,15 +241,30 @@ def _declared(cap: Cap, w: float, block: Budget) -> float:
     return max(1.0, w * block.gates / n) if n > 0 else math.inf
 
 
+def _refuted(cites: tuple[str, ...], k: float, table: Mapping[str, Mapping]) -> bool:
+    return premise_status(cites, k, table=table) == STANDINGS[-1]
+
+
+def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) -> Cap:
+    """`cap` at a block where the premises among `cites` aren't refuted at its bits, and no cap where they are."""
+    return lambda b: math.inf if _refuted(cites, b.inputs, table) else cap(b)
+
+
 def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
              partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure) -> Estimate:
-    """Every bound met at once: each block gets the least of their caps, under the union of their citations."""
-    met = [a for _, a in bounds if a is not None]
-    cites = tuple(c for b, (_, a) in zip(args, bounds, strict=True) if a is not None for c in b.cites)
+    """Every bound met at once, the lower bound: each block gets the least of the caps whose premises aren't refuted at
+    its bits (a bound refuted there doesn't bound it, and is still reported alone, tagged refuted), under the union of
+    the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one."""
+    met = [(a, cap) for a, (_, cap) in zip(args, bounds, strict=True) if cap is not None]
+    cap = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
-    return _rated("+".join(e.argument for e, a in bounds if a is not None) or "none", "bound", cites,
-                  slowdown(partition, least(*met), w, p.efficiency, u=st.weight(w)), partition,
-                  _declared(least(*met), w, block), table, st)
+    s = overhead(partition, cap, w, p.efficiency, u=st.weight(w))
+    ks = _binding_ks(partition, s) or (0.0,)
+    refuted = {a.name: [_refuted(a.cites, k, table) for k in ks] for a, _ in met}
+    used = [a for a, _ in met if not all(refuted[a.name])]
+    e = _rated("+".join(a.name for a in used) or "none", "bound", tuple(c for a in used for c in a.cites), s,
+               partition, _declared(cap, w, block), table, st)
+    return replace(e, excluded=tuple(n for n, r in refuted.items() if any(r)))
 
 
 def evaluate(s: Scenario) -> Result:
@@ -249,7 +282,7 @@ def evaluate(s: Scenario) -> Result:
 
 
 def reads(registry: Registry, name: str) -> frozenset[str]:
-    """The registry keys scenario `name` reads: the parameters its ρ can depend on."""
+    """The registry keys scenario `name` reads: the parameters its overhead can depend on."""
     tracked = registry.tracked()
     build(tracked, name)
     return frozenset(tracked.seen or ())

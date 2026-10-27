@@ -296,7 +296,10 @@ def test_j_and_port_j_are_position_kind_ports_and_fns_ports_carry_over() -> None
     assert [facts.node(i).one.kind == "position" for i in range(len(names))] == [False, False, True, True, False, True]
 
 
-def _clash(name: str, t=Array(16, BL.BIT)) -> CompositeDefinition:
+_BITS16 = Array(16, BL.BIT)
+
+
+def _clash(name: str, t=_BITS16) -> CompositeDefinition:
     return CompositeDefinition(f"SharedRowTestClash{name}", 1, (), lambda S: (((name, t), ("a", U16)), U16),
                                lambda B, S, x, a: a, register=False)
 

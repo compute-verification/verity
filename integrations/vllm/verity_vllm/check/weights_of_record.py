@@ -1,7 +1,7 @@
 """The WEIGHTS OF RECORD (MAN-09).
 
 A Commit's `weights` registration hashes whatever model the committer served; comparing it with the live parameters re-registered at
-replay (O5) is self-consistency, not authentication: a served model that differs from the checkpoint in one element (rev-cb `flipweight`)
+replay (O5) is self-consistency, not authentication: a served model that differs from the checkpoint in one element (a flipped weight)
 replays bit-exactly against itself.  DECISIONS-2 §4 requires the registered inputs to be authenticated by their CANONICAL reference; for the
 weights that reference is the CHECKPOINT OF RECORD -- the safetensors shards whose sha256 `manifests/checkpoints.json` pins --
 not the live engine.
@@ -57,6 +57,7 @@ from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, row
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
+PARAM = "weights"                                   # the Program parameter (a struct) the record is of, and the window circuit's registered value
 
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
@@ -73,7 +74,7 @@ FUSED_W13 = {"shared_experts.gate_up_proj": ("shared_experts.w1", "shared_expert
 #: whichever the checkpoint carries for expert 0 is the composition's source set; neither -> refused by name.
 EXPERTS = {"w13": ("gate_proj", "up_proj"), "w2": ("down_proj",)}
 EXPERTS_MIXTRAL = {"w13": ("w1", "w3"), "w2": ("w2",)}
-#: [F-r16-15, rev M-0131 / coord M-0130 (c)] the served stacks live on the FusedMoE layer (`<container>.experts.w13_weight`, vLLM <= 0.11) or
+#: the served stacks live on the FusedMoE layer (`<container>.experts.w13_weight`, vLLM <= 0.11) or
 #: on its RoutedExperts submodule (`<container>.experts.routed_experts.w13_weight`, vLLM 0.28 on the pods): the OPTIONAL `routed_experts`
 #: segment is the only extra segment accepted; the container (`mlp.experts`, Mixtral's `block_sparse_moe.experts`) is where the
 #: checkpoint's `<container>.<e>.<part>.<suffix>` tensors live.  Any other segment: no composition rule (refused by name, never guessed).
@@ -81,7 +82,7 @@ EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$
 #: Program weight fields that are engine constants, not checkpoint tensors (listed by name; not pinned by this module): the attention
 #: kv-cache scales (f32 1.0 without kv quantization) and the rotary cos/sin table (a function of config.json: rope_theta, rope_scaling,
 #: head_dim, max_position_embeddings -- derivable, v2).  Their effect on the served values is under the Match oracle (form B).
-#: [R16 fp8, F-fp8-PIN1] a QUANTIZED checkpoint's attention layers also carry vLLM's loader placeholders `attn.q_scale / k_scale /
+#: a QUANTIZED checkpoint's attention layers also carry vLLM's loader placeholders `attn.q_scale / k_scale /
 #: v_scale / prob_scale` (no underscore): `Fp8KVCacheMethod.create_weights` -> `KVCacheScaleParameter()` = the f32 sentinel -1.0,
 #: "overwritten when loading weights" IF the checkpoint ships kv scales (then `compose` finds them 1:1: the `not ck.has(live)` guard),
 #: created by `torch.tensor(-1.0)` at the MODEL dtype (bf16 -> `Value<16>` in the Program; F-fp8-PIN2: the measured Qwen3-4B-FP8 B1/B8
@@ -90,7 +91,7 @@ EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$
 #: `_k_scale = _v_scale = 1.0` and never touches the placeholders, which no kernel reads (Qwen3-4B-FP8 B1: 144 such fields, 723 - 435
 #: checkpoint - 144 `_x_scale`).  Pinned EXACTLY as the sentinel under kv_cache_dtype auto (a served value other than -1.0 means the
 #: loader wrote it from somewhere that is not the pinned checkpoint); any other kv_cache_dtype: unpinned by name (the scale is then live).
-#: [R19, F-r19-int-11] vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends every branch with `del layer.k_scale /
+#: vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends every branch with `del layer.k_scale /
 #: v_scale / q_scale / prob_scale` (kv_cache.py:106-109, 209-212; the early-return branch asserts they are already gone): the placeholders
 #: exist only between `create_weights` and the end of weight loading, so the served model has NO parameter to compare the record's
 #: pinned sentinel against.  #74 (Qwen3-4B-FP8 B8, H100): 579/579 compared equal, 144 placeholders "not found among the served
@@ -234,7 +235,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
         note["rule"] = "tied lm_head <- model.embed_tokens.weight"
         whole = ["model.embed_tokens.weight"]
     elif name == "normalizer" or name.endswith(".normalizer"):
-        # Gemma-2's embedding normalizer (dense M-0619 preflight on the real Gemma-2-2B Program: the ONE unresolved field of 316): a
+        # Gemma-2's embedding normalizer (on the real Gemma-2-2B Program, the ONE unresolved field of 316): a
         # non-persistent 0-d buffer `torch.tensor(hidden_size ** 0.5)` created at the served dtype in vLLM's Gemma2Model.__init__ -- no
         # checkpoint tensor, a function of config.json's hidden_size alone.  It is an analytic table like the rotary table
         # (`acquire.plan.analytic_table_of_buffer`), and its value is pinned EXACTLY: the Python float sqrt(H) rounded once
@@ -310,7 +311,7 @@ def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = Non
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
     from verity_vllm.check.replay.index import parse_struct
-    wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
+    wparam = next((t for n, t in inst.get("params", []) if n == PARAM), None)
     if not wparam or not str(wparam).startswith("{"):
         return []
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
@@ -359,12 +360,12 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
         return base | {"digest": hashlib.sha256(arr.tobytes()).hexdigest(), "pinned": True, "sources": ["engine:kv_cache_dtype=auto"],
                        "rule": "engine constant: kv-cache scale == f32 1.0 (kv_cache_dtype auto -- no kv quantization; vLLM Attention.__init__)"}
     if ENGINE_KV_PLACEHOLDER_RE.search(field):
-        # [rev M-0489 (2) / M-0516 F-r16-21 residual: the remap-aware compose] BEFORE the placeholder rule, look the checkpoint up under
+        # The remap-aware compose: BEFORE the placeholder rule, look the checkpoint up under
         # vLLM's REMAP SOURCES for this layer's scale (weight_utils.maybe_remap_kv_scale_name renames them to attn.<x>_scale at load): a
         # shipped scale is a checkpoint tensor, written by the loader and read by the kernel -- pinned 1:1 from its source as one f32 word
         # under ANY kv_cache_dtype; two sources for one scale, or a source that is not one word, -> unresolved (fail closed).  Only a
         # checkpoint with NO source for this scale reaches the placeholder rule below (the sentinel, which such a checkpoint would fail by
-        # name anyway: rev M-0516).  The exact-name `ck.has(served)` case never arrives here (compose pins it first).
+        # name anyway).  The exact-name `ck.has(served)` case never arrives here (compose pins it first).
         srcs = kv_scale_remap_sources(live)
         found = [n for n in srcs if ck.has(n)]
         if found:
@@ -383,7 +384,7 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
             return base | {"digest": hashlib.sha256(np.ascontiguousarray(words).tobytes()).hexdigest(), "pinned": True, "sources": [src],
                            "rule": f"kv scale (remapped from checkpoint {src} -> {live}; vLLM maybe_remap_kv_scale_name; one word in the declared Value<{bits}>)",
                            **({"cast": cast} if cast else {})}
-        # [R16 fp8 F-fp8-PIN1 / F-fp8-PIN2] vLLM Fp8KVCacheMethod.create_weights: `KVCacheScaleParameter()` = `torch.tensor(-1.0)` with NO
+        # vLLM Fp8KVCacheMethod.create_weights: `KVCacheScaleParameter()` = `torch.tensor(-1.0)` with NO
         # dtype -> the sentinel is created at the model's default dtype (bf16 under `set_default_torch_dtype(model dtype)`: the served
         # Qwen3-4B-FP8 word is bf16 0xBF80, and the Program declares the field `Value<16>`; `_k_scale` is an explicit f32 1.0, `Value<32>`).
         # Pinned as -1.0 IN THE DECLARED WIDTH (one word, shape [] or [1]); a declared width other than 16/32 has no rule -> unpinned by name.
@@ -454,7 +455,7 @@ def reroot(record: dict[str, Any]) -> str:
 
 
 def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Compare two records FIELD BY FIELD (the comparison report uses for same-model rows across pods under schema v1, COORD ruling 25):
+    """Compare two records FIELD BY FIELD (the comparison report uses for same-model workloads across pods under schema v1):
     fields only on one side; fields whose digest / shape / bits / analytic KEY differ (the weights of record differ); fields that differ
     only in host-side information (analytic.inv_freq_sha256, the host note, sources/rule text) -- named separately, they do not make
     the weights differ.  `same_weights_of_record` = no one-sided field, no differing digest/shape/bits/analytic key; then reroot(a) ==
@@ -485,9 +486,11 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto",
-                      fields: list[tuple[str, list[int], int]] | None = None) -> dict[str, Any]:
+                      fields: list[tuple[str, list[int], int]] | None = None,
+                      on_field: Callable[[str, np.ndarray], None] | None = None) -> dict[str, Any]:
     """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list.
-    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`)."""
+    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`); `on_field(field, words)`
+    is given each field it digests, its raw words row-major as digested."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
     tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
@@ -537,6 +540,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
             continue
         b = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)      # arr.tobytes()'s bytes, not copied again
         n_bytes += b.nbytes
+        if on_field is not None:
+            on_field(field, arr)
         out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": hashlib.sha256(b).hexdigest(),
                            "pinned": True, **note})
     root = root_of_fields(out_fields)
@@ -618,7 +623,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         if short := sorted(x[:16] for x in ofr | st | ({pd} if pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
             prog_why = f"Program digests not full sha512 (128 hex), compared only whole: {short}"
         elif stamped is not None:
-            # [rev-cb M-0733] a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
+            # a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
             # row -- more, fewer or other components -- is refused by name; the stamp itself must be sound (every component's struct equal)
             if stamped.get("why"):
                 prog_why = f"record's of-record stamp is not sound: {str(record.get('of_record_why') or stamped.get('why'))[:200]}"
@@ -668,7 +673,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         if str(got.get("digest")) != str(f["digest"]):
             mismatched.append({"field": f["field"], "served_name": f["served_name"], "of_record": f["digest"][:16], "served": str(got.get("digest"))[:16],
                                "shape": f.get("shape"), "served_dtype": got.get("dtype")})
-    # [F-r19-int-11] a loader placeholder (`attn.k_scale`, no underscore) the engine deleted after loading is absent by construction, not
+    # a loader placeholder (`attn.k_scale`, no underscore) the engine deleted after loading is absent by construction, not
     # missing: moved out of `missing` by name iff the record assumes kv_cache_dtype auto AND the `attn._k_scale` the kernels read was
     # itself found and compared (so the scale that reaches the served values IS pinned).
     placeholders_deleted: list[str] = []

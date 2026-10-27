@@ -248,13 +248,16 @@ def refusal(pack: Path) -> str | None:
     return None
 
 
-def import_(pack: Path) -> tuple[int, int]:
-    """Add the pack's entries that don't exist here; (added, already here).  Nothing is written when the pack is refused."""
+def import_(pack: Path, only: str | None = None) -> tuple[int, int]:
+    """Add the pack's entries that don't exist here, with ``only`` just those whose pack path starts with it; (added, already
+    here).  Nothing is written when the pack is refused."""
     base = roots()
     added = kept = 0
     with tarfile.open(pack, "r:*") as tar:
         members = _members(tar)
         for m in members:
+            if only is not None and not m.name.startswith(only):
+                continue
             prefix, rel = m.name.split("/", 1)
             dst = base[prefix] / rel
             if dst.exists():

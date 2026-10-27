@@ -9,7 +9,7 @@ verifier, the Lean verifier's draw checks, and the audit record with its integri
   OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the registration says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
-* **Verifier of record.** Lean's `flock-verify verify` (PR #118) replays the session offline with the circuit and the public
+* **Verifier of record.** Lean's `flock-verify verify` replays the session offline with the circuit and the public
   file held by content; Lean also checks U1-U3 on the draw, and M0's own verifier (`flock-circuit serve`) checks it live.
 """
 from __future__ import annotations
