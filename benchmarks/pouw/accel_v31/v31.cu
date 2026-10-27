@@ -1609,11 +1609,31 @@ DEV int log2_cnt(u32 cnt) {
   while ((1u << L) < cnt) ++L;
   return L;
 }
-// salt_one<true, false, true> at the call's salt offset: S[pos] from prf_salt(Ks, off + pos) (dither.salts(Ks, off))
-DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S) {
+// Ks as a launch's argument (C.ks and C.ks_m8's values), for a salt phase on its own stream: no copy into C races it
+struct KsArg {
+  u64 ks[8], ks_m8[8];
+};
+// commit_gpu's salt_prf on k rather than C
+DEV void salt_prf_k(const KsArg& k, u64 pos, u64* Y) {
+#pragma unroll
+  for (int r = 0; r < 3; ++r) {
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] = k.ks[i];
+    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
+    w[11] = w[12] = w[13] = w[14] = 0;
+    w[15] = 80 * 8;
+    sha::iv(Y + 8 * r);
+    sha::compress_from<8>(Y + 8 * r, k.ks_m8, w);
+  }
+}
+// salt_one<true, false, true> at the call's salt offset: S[pos] from prf_salt(Ks, off + pos) (dither.salts(Ks, off)); Ks
+// from k when given, else from C
+DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, const KsArg* k = nullptr) {
   u64 Y[24], c[8], my[8];
   u32 m[16];
-  salt_prf(off + pos, Y);
+  if (k) salt_prf_k(*k, off + pos, Y);
+  else salt_prf(off + pos, Y);
   hm96_mask<false, true>(T, Y, m);
   salt_digest(Y, c);
 #pragma unroll
@@ -1622,16 +1642,17 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S) {
   st8(S + 16 * pos + 8, c);
 }
 // salt_small<true> (slot 0) a block at a time: S and F for positions below n (salted at off + pos), the pads up to width,
-// and the subtrees of blocks that hold only pads (nvb = ceil(width / 128))
+// and the subtrees of blocks that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
+template <bool KP = false>
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
-                 u64* levels, u64 off) {
+                 u64* levels, u64 off, const __grid_constant__ KsArg ka) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   if (persist_claim(p))
     for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
       const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
       if (pos < n) {
-        salt_one_at(pos, off, reinterpret_cast<const uint8_t*>(Tg), S);
+        salt_one_at(pos, off, reinterpret_cast<const uint8_t*>(Tg), S, KP ? &ka : nullptr);
         u64 f[8];
         frame_first(dom, pos, f);
         st8(F + 8 * pos, f);
@@ -1644,9 +1665,10 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     }
   persist_done(p);
 }
-// leaf_small (g = 1, no bc, no fused top) a block at a time (nvb = ceil(n / 128))
-template <class Row>
-__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
+// leaf_small (g = 1, no bc, no fused top) a block at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by registers (4:
+// 128 a thread, no spills, for a leaf phase that has the SMs to itself)
+template <class Row, int MINB = SMALL_MINB>
+__global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
                  u64* levels) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
@@ -1910,11 +1932,14 @@ static std::string env_str(const char* name, const char* dflt) {
 // (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
 // V31_WGW 0: the words segments on gemm_kernel<true> rather than the wg protocol GEMM).
+// A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
+// but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
+// with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
-      rp = env_int("V31_RP", 0),
+      rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
       ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
@@ -1928,7 +1953,8 @@ static void set_carveout(int pct) {
                       (const void*)form_b_kernel<0>,   (const void*)form_b_kernel<1>,    (const void*)form_b_kernel<2>,
                       (const void*)bits_kernel,        (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
-                      (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
+                      (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist<false>,
+                      (const void*)salt_persist<true>, (const void*)leaf_persist<FusedRow, 4>, (const void*)leaf_persist<ServedRow, 4>,
                       (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>,
                       (const void*)leaf_small<LtRow, 0>, (const void*)leaf_persist<LtRow>,  (const void*)fill_a_kernel,
                       (const void*)fill_b_kernel,      (const void*)leaf_small<ServedRow, 0>, (const void*)leaf_persist<ServedRow>,
@@ -1940,7 +1966,7 @@ static void set_carveout(int pct) {
 // path), then its levels above the leaves' CTAs. Launches that share ctl run in one stream's order.
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1;
+  int nsm = 1, lminb = SMALL_MINB;
   void init(int nsm_) {
     nsm = nsm_;
     ctl = dalloc<u32>(2 + 2 * 8 * (size_t)nsm);
@@ -1954,13 +1980,18 @@ struct Lanes {
     return Persist{ctl, claim, epoch, (u32)ccta, (u32)nvb};
   }
   unsigned grid(u64 nvb, int ccta) const { return (unsigned)std::min<u64>(nvb, 2ull * ccta * nsm); }
-  // leaf pos salted prf_salt(Ks, off + pos); commit_gpu's small path (ccta 0) salts at offset 0 only
-  void salts(Committer& cm, int ccta, cudaStream_t st, u64 off = 0) {
-    if (!ccta && !off) { cm.salts<true>(nullptr, st); return; }
+  // leaf pos salted prf_salt(Ks, off + pos), Ks from ka when given, else from C; commit_gpu's small path (ccta 0) salts at
+  // offset 0 from C only
+  void salts(Committer& cm, int ccta, cudaStream_t st, u64 off = 0, const KsArg* ka = nullptr) {
+    if (!ccta && !off && !ka) { cm.salts<true>(nullptr, st); return; }
     if (!ccta) ccta = 8;
     const u64 nvb = (cm.width + SMALL_THREADS - 1) / SMALL_THREADS;
-    salt_persist<<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F,
-                                                             cm.levels, off);
+    if (ka)
+      salt_persist<true><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.Tn, cm.n, cm.width, cm.S,
+                                                                     cm.F, cm.levels, off, *ka);
+    else
+      salt_persist<false><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.Tn, cm.n, cm.width, cm.S,
+                                                                      cm.F, cm.levels, off, KsArg{});
   }
   template <class Row>
   void leaves_nodes(Committer& cm, const Row& rows, int ccta, cudaStream_t st) {
@@ -1968,8 +1999,12 @@ struct Lanes {
       cm.leaves(rows, st);
     } else {
       const u64 nvb = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
-      leaf_persist<Row><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, cm.S, cm.F, cm.n,
-                                                                   cm.width, cm.levels);
+      if (lminb == 4)
+        leaf_persist<Row, 4><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, cm.S, cm.F, cm.n,
+                                                                        cm.width, cm.levels);
+      else
+        leaf_persist<Row><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, cm.S, cm.F, cm.n,
+                                                                     cm.width, cm.levels);
     }
     cm.nodes(st);
   }
@@ -2330,6 +2365,9 @@ struct Fill {
   u32* gctr = nullptr;
   u32 gbase = 0;
   Lanes pl;
+  cudaStream_t s2 = nullptr;        // V31_SAHEAD: the salt phases, pls's launches, ev_salt[copy] at each one's end
+  cudaEvent_t ev_salt[2] = {};
+  Lanes pls;
   Knobs kn;
   u64 calls = 0;         // calls issued; call c's values are in copy c & 1
   int pend = -1;         // V31_SCHED 1: the copy whose commit waits for the next call's form; 2: a call's GEMM waits for
@@ -2381,6 +2419,7 @@ struct Fill {
     grid = std::min(items, nsm);
     ltw = kn.ltw && S == 1 && !o;
     if (kn.ccta < 0 || kn.ccta > 8) { fprintf(stderr, "V31_CCTA: 0 to 8\n"); exit(2); }
+    if (kn.lminb != 4 && kn.lminb != SMALL_MINB) { fprintf(stderr, "V31_LMINB: 4 or %d\n", SMALL_MINB); exit(2); }
     own = !c0;
     if (own) {
       int lo, hi;
@@ -2394,6 +2433,14 @@ struct Fill {
     gctr = dalloc<u32>(1);
     CK(cudaMemset(gctr, 0, 4));
     pl.init(nsm);
+    pl.lminb = kn.lminb;
+    if (kn.sahead) {
+      int pr;
+      CK(cudaStreamGetPriority(s1, &pr));
+      CK(cudaStreamCreateWithPriority(&s2, cudaStreamNonBlocking, pr));
+      pls.init(nsm);
+      for (int b = 0; b < 2; b++) CK(cudaEventCreateWithFlags(&ev_salt[b], cudaEventDisableTiming));
+    }
     const size_t mk = (size_t)m * k, nk = (size_t)n * k;
     A = dalloc<int8_t>(mk); B = dalloc<int8_t>(nk); X = dalloc<int8_t>(mk); W = dalloc<int8_t>(nk);
     U = dalloc<int8_t>((size_t)n * lp); V = dalloc<int8_t>((size_t)m * lp);
@@ -2432,7 +2479,7 @@ struct Fill {
                     (void*)words[1], (void*)D[0], (void*)D[1], (void*)vbuf, (void*)maps, (void*)gctr, (void*)pl.ctl,
                     (void*)pl.claim, (void*)opos, (void*)obuf, (void*)Ap, (void*)Bp, (void*)ra[0], (void*)sa[0], (void*)rb[0],
                     (void*)sb[0], (void*)ra[1], (void*)sa[1], (void*)rb[1], (void*)sb[1], (void*)bad, (void*)xd[0],
-                    (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw})
+                    (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim})
       cudaFree(p);
     if (ltw || o) lt_free(lt);
     for (int b = 0; b < 2; b++) {
@@ -2440,9 +2487,11 @@ struct Fill {
       cudaFreeHost(ksw[b]);
       cudaEventDestroy(ev_comp[b]);
       cudaEventDestroy(ev_done[b]);
+      if (ev_salt[b]) cudaEventDestroy(ev_salt[b]);
     }
     cudaEventDestroy(ev_formed);
     cudaStreamDestroy(so);
+    if (s2) cudaStreamDestroy(s2);
     if (own) { cudaStreamDestroy(s0); cudaStreamDestroy(s1); }
   }
   // seeds in dither.STREAMS' order: pad, dA, dB, U, V, P (64 bytes each)
@@ -2622,10 +2671,15 @@ struct Fill {
   void set_ks(int b, cudaStream_t st) {
     CK(cudaMemcpyToSymbolAsync(C, ksw[b], 128, offsetof(Consts, ks), cudaMemcpyHostToDevice, st));
   }
-  // copy b's commit on s1: Ks and its call's salts, then (after its compute) its leaves and levels
+  // copy b's commit on s1: Ks and its call's salts (V31_SAHEAD: issue's, on s2), then (after its compute) its leaves and
+  // levels
   void commit_ovl(int b) {
-    set_ks(b, s1);
-    pl.salts(cm[b], kn.ccta, s1, off[b]);
+    if (kn.sahead) {
+      CK(cudaStreamWaitEvent(s1, ev_salt[b]));
+    } else {
+      set_ks(b, s1);
+      pl.salts(cm[b], kn.ccta, s1, off[b]);
+    }
     CK(cudaStreamWaitEvent(s1, ev_comp[b]));
     leaves_nodes(b, s1);
     CK(cudaEventRecord(ev_done[b], s1));
@@ -2646,6 +2700,13 @@ struct Fill {
     if (pend == b) flush();
     CK(cudaEventSynchronize(ev_done[b]));
     off[b] = off_;
+    if (kn.sahead) {
+      KsArg ka;
+      static_assert(sizeof ka == 128, "KsArg: C.ks then C.ks_m8, as ksw holds them");
+      memcpy(&ka, ksw[b], sizeof ka);
+      pls.salts(cm[b], kn.ccta, s2, off[b], &ka);
+      CK(cudaEventRecord(ev_salt[b], s2));
+    }
     const bool ws = wside || weights_stale();
     coins(s0, !a, ws);
     if (ch.kind == 4) {   // nodither: d_A and d_B zero
@@ -2785,7 +2846,8 @@ static void kernel_attrs(FILE* f) {
                       {"wrap4_256", (const void*)wrap4_kernel<256>}, {"wrap_a", (const void*)wrap_a_kernel<false>},
                       {"bits", (const void*)bits_kernel},
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
-                      {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist},
+                      {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist<false>},
+                      {"salt_persist_ks", (const void*)salt_persist<true>},
                       {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>}};
   fprintf(f, "{");
   for (size_t i = 0; i < sizeof ks / sizeof ks[0]; i++) {
@@ -2800,7 +2862,9 @@ static void kernel_attrs(FILE* f) {
                       {"wg_256_r3", (const void*)wgp::gemm_r3<256>}, {"wg_128_r3", (const void*)wgp::gemm_r3<128>},
                       {"wg_256_r4", (const void*)wgp::gemm_r4<256, FusedLeaves>},
                       {"wg_128_r4", (const void*)wgp::gemm_r4<128, FusedLeaves>},
-                      {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>}};
+                      {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>},
+                      {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>},
+                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));
@@ -3339,13 +3403,13 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, "
-           "\"arms\": {",
+           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, "
+           "\"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
-           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0, fused,
-           f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
+           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0,
+           f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");
