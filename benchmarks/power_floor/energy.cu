@@ -590,8 +590,8 @@ struct Gemm {
         fprintf(stderr, "no cuBLASLt algo for %s\n", s.name);
         exit(3);
       }
-      // the fastest of the heuristic's candidates, timed in a second pass: in the first the clock is still ramping up
-      // from idle (unlocked, it starts at 180 MHz), which made a slower candidate win at default clocks
+      // the fastest of the heuristic's candidates, timed in a second pass (in the first an unlocked clock is still
+      // ramping up from idle)
       int best = 0;
       float bt = 1e30f;
       cudaEvent_t e0, e1;

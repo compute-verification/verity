@@ -33,6 +33,7 @@ CARDS = {
                  stage=(128 + 256) / (4 * 128 * 256), mma_issue=0.0),
 }
 M_PREFILL = 8192
+MARGIN = 0.9  # a floor is the least measured energy times this
 RES = ["tensor", "alu", "imad", "issue", "smem"]
 
 
@@ -220,9 +221,11 @@ def routes(card: str, lookups: bool = True) -> list[tuple[str, dict]]:
     return rs
 
 
-def capacity(card: str, e: dict | None = None, p0: float = 0.0, fixed: dict | None = None, fmax: float | None = None) -> dict:
+def capacity(card: str, e: dict | None = None, p0: float = 0.0, fixed: dict | None = None, fmax: float | None = None,
+             e_fixed: dict | None = None) -> dict:
     """Max MAC/s on 𝓜 at f_max over the routes, with the power row Σ e_r·use_r ≤ P_max − p0 if e is given (pJ a unit;
-    `issue` in lanes). `fixed`: resource uses a second the honest prover holds already (rates and, with e, energy)."""
+    `issue` in lanes). `fixed`: resource uses a second the honest prover holds already (rates and, with e, energy, priced
+    at `e_fixed` where given)."""
     # x in TMAC/s, so a pJ a MAC is a W per TMAC/s (HiGHS drops coefficients under 1e-9: J a MAC would vanish)
     c = CARDS[card]
     rs = routes(card)
@@ -235,7 +238,8 @@ def capacity(card: str, e: dict | None = None, p0: float = 0.0, fixed: dict | No
     if e is not None:
         er = {**{r: 0.0 for r in RES}, **e}
         A.append([sum(er.get(r, 0.0) * u.get(r, 0.0) for r in RES) for _, u in rs])
-        held = sum(er.get(r, 0.0) * v for r, v in (fixed or {}).items()) * 1e-12
+        ef = e_fixed if e_fixed is not None else er
+        held = sum(ef.get(r, 0.0) * v for r, v in (fixed or {}).items()) * 1e-12
         b.append(c["pmax"] - p0 - held)
     if min(b) < 0:
         return dict(mac_per_s=0.0, by_route={}, infeasible=True)
@@ -292,6 +296,36 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
         best = max(per_f.values(), key=lambda v: v["capacity"])
         out["per_clock_random"] = dict(points=per_f, capacity=best["capacity"], eps=1 - honest_mac_s / best["capacity"],
                                        falsified_by="zero-operand configs (as the run-clock random floors)")
+    # two classes, per clock: the certified work (its operands dithered, so random-looking) at the random-operand floors
+    # measured at f, everything else at the all-data floors at f (the zero-operand sweep point), P0 the resident-idle
+    # board at f, all times MARGIN. C(f) = R_h + the hidden work the LP fits beside it at f; C = max over f.
+    # A card whose tensor pipe never reaches f_max (the H200 holds about 1825 MHz under it) is also priced at f_max with
+    # its top point's energies, which understates them there.
+    rnd_zero = floors(en, (0, 1, 2))
+    two = {}
+    pts = [(k, r) for k, r in en["lgc"].items() if k.endswith(f"-{mma}-1") and "e" in r]
+    if pts:
+        k, r = max(pts, key=lambda kr: kr[1]["mhz"])
+        if r["mhz"] * 1e6 < 0.99 * c["fmax"]:
+            pts.append((k, {**r, "mhz": c["fmax"] / 1e6}))
+    for k, r in pts:
+        z = en["lgc"].get(k[:-1] + "0")
+        if not z or "e" not in z:
+            continue
+        f = r["mhz"] * 1e6
+        e1 = {kk: MARGIN * v * r["e"] / rnd_run["tensor"] for kk, v in rnd_run.items()}
+        e0 = {kk: MARGIN * v * min(z["e"], r["e"]) / rnd_zero["tensor"] for kk, v in rnd_zero.items()}
+        if honest_mac_s > c["rho"]["tensor"] * c["sms"] * f:
+            continue
+        hid = capacity(card, e0, MARGIN * r["p_sleep_here"], fixed=honest_use, fmax=f, e_fixed=e1)
+        two[round(r["mhz"])] = dict(hidden=hid["mac_per_s"], capacity=honest_mac_s + hid["mac_per_s"],
+                                    hidden_rates_only=capacity(card, None, 0.0, fixed=honest_use, fmax=f)["mac_per_s"],
+                                    certified_w=MARGIN * r["p_sleep_here"] + sum(
+                                        e1.get(kk, 0.0) * v for kk, v in honest_use.items()) * 1e-12)
+    if two:
+        best = max(two.values(), key=lambda v: v["capacity"])
+        out["two_class"] = dict(margin=MARGIN, points=two, capacity=best["capacity"],
+                                eps=1 - honest_mac_s / best["capacity"])
     # where the premise starts to pay: floors at s times the random-operand energies, P0 the idle board
     rnd = floors(en, (1,))
     out["by_scale"] = {}
@@ -328,7 +362,8 @@ def main() -> None:
             en = energies(rows + lgc, every)
             name = f"{run} ({'default clocks' if st == 'cap' else 'its clocks'})"
             res = dict(run=name, card=card, energies=en)
-            # the honest prover's best setting: any clock lock (an operator may lock lower), any of the repeats
+            # the honest prover's best setting, any of the repeats: unlocked, or a lock within the card's range (on the
+            # RTX a 2430 MHz lock, min = max, runs cuBLASLt's GEMM 21% faster than the default clocks at the same cap)
             gs = {k: g for k, g in {**en["gemm"], **en["lgc"]}.items() if "mac_per_s" in g and "gemm-1" in k}
             if gs:
                 k, g = max(gs.items(), key=lambda kg: kg[1]["mac_per_s"])
@@ -398,6 +433,12 @@ def print_run(res: dict) -> None:
             pc = ep["per_clock_random"]
             print(f"   per clock, random operands: C {pc['capacity']:.3e} ε {pc['eps']:.3f}; " + ", ".join(
                 f"{f} MHz {v['capacity']:.3e}" for f, v in sorted(pc["points"].items())))
+        if "two_class" in ep:
+            tc = ep["two_class"]
+            print(f"   two classes per clock (certified at random-operand floors, the rest at all-data floors, × "
+                  f"{tc['margin']}): C {tc['capacity']:.3e} ε {tc['eps']:.3f}; " + ", ".join(
+                      f"{f} MHz hidden {v['hidden']:.3e} of {v['hidden_rates_only']:.3e} (certified {v['certified_w']:.0f} W)"
+                      for f, v in sorted(tc["points"].items())))
         print("   floors at s × random-operand energy, P0 idle: " + "; ".join(
             f"s {s}: ε {v['eps']:.3f} (pub {v['pub_vs_tensor']:.3f})" for s, v in ep["by_scale"].items()))
 
