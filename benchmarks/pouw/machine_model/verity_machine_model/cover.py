@@ -1,6 +1,6 @@
 """The coverage table (data/cover/): the evidence for MODEL-MIN's coverage premise (CMP-165), that every instruction a card
-executes is dominated by an envelope op (envelope.toml: MODEL-MIN's `Accel.Op`, its pipes, formats and card numbers, and
-the entries MODEL-COVER proposes) at no fewer units of the same resource, one row per opcode (rows.toml) on the H200
+executes is dominated by an envelope op (envelope.toml: MODEL-MIN's `Accel.Op`, its pipes and formats, each device's
+card file, whose numbers `from_card` reads, and the entries MODEL-COVER proposes) at no fewer units of the same resource, one row per opcode (rows.toml) on the H200
 (sm_90) and the RTX PRO 6000 (sm_120).
 
 An opcode a card lists is in NVIDIA's family table (CUDA Binary Utilities 12.9 §4.3/§4.4 and CUDA 13's, in
@@ -19,6 +19,8 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from verity.hardware import load as load_card
 
 from verity_machine_model import theta as T
 from verity_machine_model.model import DATA, device, kind_lists
@@ -108,8 +110,22 @@ def fetched(p: Path) -> dict:
     return json.loads(p.read_text())
 
 
+def from_card(d: dict) -> dict:
+    """A device's envelope entry with its card file's numbers (`card = "SKU"`): its SMs, SM clock, `rho` (the card's
+    `rate` table), `dram` in words a second and its formats' weights, each at its value whatever its mark, as the Lean
+    card table states it. The entry's own `weight`s are the formats the card doesn't list, and may not restate one."""
+    c = load_card(d["card"])
+    weight = {k: v["value"] for k, v in c["weight"].items()}
+    if both := sorted(weight.keys() & d.get("weight", {}).keys()):
+        raise SystemExit(f"envelope.toml: {d['card']}'s weights {', '.join(both)} are its card's; drop them there")
+    return {**d, "sms": c["sm"]["count"]["value"], "clock_mhz": c["clock"]["sm"]["value"],
+            "rho": {k: v["value"] for k, v in c["rate"].items()},
+            "dram": c["memory"]["bandwidth"]["value"] / WORD, "weight": {**weight, **d.get("weight", {})}}
+
+
 def load(cover: Path = COVER, tables: Path = TABLES) -> Cover:
     env = tomllib.loads((cover / "envelope.toml").read_text())
+    env["device"] = {dev: from_card(d) for dev, d in env["device"].items()}
     data = tomllib.loads((cover / "rows.toml").read_text())
     rows = [Row(i, tuple(r["ops"]), tuple(r.get("devices", DEVICES)), tuple(r.get("forms", ())), r["mark"],
                 r["envelope"], r) for i, r in enumerate(data["row"])]

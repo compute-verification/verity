@@ -96,7 +96,7 @@ The data, each kind of thing a file or a line of its own:
   (`[sha512_mix]`), which SHA-512's ceiling on the card's pipes reads; and the host the card sits in on the node we
   run (`host.*`: cores a GPU, SHA-512 and AMX INT8 a core, DRAM a socket).
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
-- `data/cover/`: the coverage table ("Coverage" below): the envelope (`envelope.toml`: MODEL-MIN's `Accel.Op` and the
+- `data/cover/`: the coverage table ("Coverage" below): the envelope (`envelope.toml`: MODEL-MIN's `Accel.Op`, each device's card and the
   proposed entries), a row per opcode and a
   verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`, a fetched
   fixture: "Coverage" below).
@@ -518,7 +518,8 @@ dominated by an envelope op at no fewer units of the same resource. `data/cover/
 `machine-model cover` prints it as Markdown, a table a card, with the counts by mark and every hole.
 
 - **The envelope** (`envelope.toml`) is MODEL-MIN's `Accel.Op` at the commit its `source` names, with its pipes, formats
-  and each card's numbers (ρ a SM-clock, format weights): `mma`, `mmaSp`, `lane` (a lane opcode on a pipe: at most the
+  and each device's card file, whose numbers (ρ a SM-clock, DRAM, format weights) `cover.load` reads from
+  `verity/hardware/cards/`: `mma`, `mmaSp`, `lane` (a lane opcode on a pipe: at most the
   pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. What the table needs that `Accel` lacks is
   marked `proposed` with the CMP-165 item asking for it: the `collective` op and resource, `tex`, and the formats
   `e3m2`, `e2m3`, `mxf8` and `mxf6`.

@@ -4,6 +4,7 @@ or a proposed one), pipe, format and θ key; every lane and collective reads and
 and every dominated row's rate, in its op's units, is at most its resource's ρ."""
 from __future__ import annotations
 
+import copy
 import re
 import shutil
 import tomllib
@@ -61,18 +62,42 @@ def test_an_opcode_without_a_row_fails(tmp_path):
     assert any(p.startswith("sm_120 FCHK ") for p in ps)
 
 
-def test_a_tensor_row_over_the_tensor_rate_fails(tmp_path):
-    d = _copy(tmp_path)
-    _edit(d, "envelope.toml", "f16 = 2, bf16 = 2, tf32 = 4", "f16 = 3, bf16 = 2, tf32 = 4")
-    ps = C.problems(C.load(d))
+def _card(monkeypatch, sku: str, table: str, key: str, value) -> None:
+    """The cover reads card ``sku`` with ``table.key`` at ``value``."""
+    real = C.load_card
+
+    def load(s: str) -> dict:
+        c = copy.deepcopy(real(s))
+        if s == sku:
+            c[table][key]["value"] = value
+        return c
+    monkeypatch.setattr(C, "load_card", load)
+
+
+def test_a_tensor_row_over_the_tensor_rate_fails(monkeypatch):
+    _card(monkeypatch, "rtx-pro-6000-server", "weight", "f16", 3)
+    ps = C.problems(C.load())
     assert any("HMMA" in p and "on sm_120" in p and "over ρ tensor = 1024" in p for p in ps)
 
 
-def test_a_pipe_rate_over_its_rho_fails(tmp_path):
-    d = _copy(tmp_path)
-    _edit(d, "envelope.toml", "alu = 64, imad = 64", "alu = 32, imad = 64")
-    ps = C.problems(C.load(d))
+def test_a_pipe_rate_over_its_rho_fails(monkeypatch):
+    _card(monkeypatch, "rtx-pro-6000-server", "rate", "alu", 32)
+    ps = C.problems(C.load())
     assert any("LOP3" in p and "on sm_120 θ alu.lop3 is 64" in p and "over ρ alu = 32" in p for p in ps)
+
+
+def test_the_devices_numbers_are_their_cards(cover, tmp_path):
+    for dev, sku in (("sm_90", "h200-sxm-141gb"), ("sm_120", "rtx-pro-6000-server")):
+        c = C.load_card(sku)
+        d = cover.envelope["device"][dev]
+        assert (d["sms"], d["clock_mhz"]) == (c["sm"]["count"]["value"], c["clock"]["sm"]["value"])
+        assert d["rho"] == {k: v["value"] for k, v in c["rate"].items()}
+        assert C.rho(cover, dev, "dram") == pytest.approx(c["memory"]["bandwidth"]["value"] / C.WORD
+                                                          / (d["sms"] * d["clock_mhz"] * 1e6))
+    d = _copy(tmp_path)
+    _edit(d, "envelope.toml", "weight = { e3m2 = 1,", "weight = { f16 = 2, e3m2 = 1,")
+    with pytest.raises(SystemExit, match="weights f16 are its card's"):
+        C.load(d)
 
 
 def test_the_l2_atomics_at_the_l1_ports_sheet_fail_on_sm_120(tmp_path):
@@ -130,9 +155,6 @@ def test_the_envelope_is_accel_op_and_the_proposed_entries_say_why(cover):
         assert "proposed" not in e or "CMP-165" in e["proposed"] or e["key"] == "collective", e["key"]
     for dev in C.DEVICES:
         assert C.rho(cover, dev, "fma") == 128
-        assert C.rho(cover, dev, "dram") == pytest.approx(env["device"][dev]["dram"] /
-                                                          (env["device"][dev]["sms"] * env["device"][dev]["clock_mhz"]
-                                                           * 1e6))
 
 
 def test_the_command_checks_and_renders(capsys):

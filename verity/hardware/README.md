@@ -29,5 +29,6 @@ load("rtx-pro-6000-server")["host"]["ops"]      # {'value': 1045299200000000.0, 
 `Security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.
 
 Readers, which move with a changed ceiling: the machine model's θ, data sheets and table route
-(`benchmarks/pouw/machine_model/verity_machine_model/card.py`, each device's `model.toml` naming its SKU) and H1's device
+(`benchmarks/pouw/machine_model/verity_machine_model/card.py`, each device's `model.toml` naming its SKU), the coverage
+table's ρ (`verity_machine_model/cover.py`, each device in `data/cover/envelope.toml` naming its SKU) and H1's device
 records (`verity/core/protocols/pouw/circuit/h1device.py`).
