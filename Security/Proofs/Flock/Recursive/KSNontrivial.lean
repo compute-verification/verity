@@ -424,7 +424,9 @@ theorem notR_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i�
     | some f =>
       rw [hf] at hfix
       have hf2 : f.2 0 = true := Option.some.inj hfix
-      have hf1 : f.1 = i₀ := beq_iff_eq.1 (List.find?_some hf)
+      have hf1 : f.1 = i₀ := by
+        have h := List.find?_some hf
+        first | exact beq_iff_eq.1 h | simpa using h
       have hfx : _root_.Flock.Readable.fixedOf st.m st.c.kLog (_root_.Flock.Readable.Tab.ofStmt st) =
           (_root_.Flock.Readable.Tab.ofStmt st).fixed :=
         if_pos (show (_root_.Flock.Readable.Tab.ofStmt st).m = st.m ∧ (_root_.Flock.Readable.Tab.ofStmt st).kLog = st.c.kLog ∧
