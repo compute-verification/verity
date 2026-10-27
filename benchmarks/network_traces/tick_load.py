@@ -15,7 +15,7 @@ completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes
 was refused on). The rehearsal's own outputs are under `--out`/rehearsal.
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
-(`NetTiming.JitterBounded`, NET-7): does an offset within a bucket that the prover chooses reach a receiver outside?
+(`NetTiming.JitterBounded`): does an offset within a bucket that the prover chooses reach a receiver outside?
 The stub draws a secret of its own, never written, and bucket t's bit and lead (0 … `LEAD_MS` ms) are SHA-512's of it
 and t (`SecretBits`). Once `serve` has written the honest run's `deployment.json` (the plan's probes before it are paced
 as without), each token waits from its pacing to the first slot after it: bucket t's is its lead before t's boundary
