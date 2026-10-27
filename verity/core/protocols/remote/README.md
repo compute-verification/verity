@@ -26,7 +26,7 @@ some older names until they are renamed: `Dampener*` means overhead, `*Horizon` 
   proof blocks behind the firewall. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
 - **The auditor** has two parts, both on its own hosts: its **live coins** (the challenger, which draws what must be
-  proved) and its **verifier** (the Lean verifier of record: `flock-verify` for each drawn proof block, and `remote
+  proved) and its **verifier** (the Lean verifier: `flock-verify` for each drawn proof block, and `remote
   check` for the verdict).
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   memory wipes, PoUS and PoUB are onsite's, not remote's. For network certification, see
@@ -53,7 +53,8 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 ## Lifecycle
 
 1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the declared
-   circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`). It also registers
+   circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`; read by the
+   inference-only policy once it joins). It also registers
    each subprotocol's public Program and parameters, by digest.
 2. **Declarations**, one or more per declaration period. Each declaration's declared advice (a bit string that a
    registered compiler compiles, its length charged) appends a declaration block to the declared circuit. Its values are
@@ -95,7 +96,7 @@ each piece is proved.
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
 | A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The verifier of record's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
+| The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, `Properties.Pouw.Period.CheckedCreditPeriod` (`Security/Properties/Pouw/`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod`) | **proved** | — |
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
@@ -111,14 +112,17 @@ Each is a named `Prop` in `Security/lean-audit.json`'s `assumptions`, one line i
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
-- `FlockSoundness.Assumptions.UniformRandomBytes` (A3): the verifier's coins are uniform random bytes.
+- `FlockSoundness.Assumptions.UniformRandomBytes`: the verifier's coins are uniform random bytes.
 - `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ` (`live-verifier`): the record the verifier reads is the one the
   challenger wrote for the live run, and its draw file is the verifier's own draw.
 - `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
   (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger and
   the verifier run on auditor hosts the developer doesn't control, and the custody above rests on them. In Lean, only
-  onsite's guarantees (network certification's) read `TrustedHost` itself.
+  onsite's guarantees (network certification's) read `TrustedHost` itself. Two premises about where the challenger runs
+  have no Lean statement on `main` yet; the sampled proofs README states them: `CoinsConfidential` (its coins reach the
+  developer's site only over auditor-host paths) and `OneClock` (its release times and the network certifier's ingress
+  times share one clock).
 
 PoUW:
 
@@ -167,21 +171,21 @@ sampled-proofs half:
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
   are drawn by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
-  refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It is level 1: its Lean
-  verifier ran beside the prover. On a CPU at a small shape, run `uv run python examples/h200/run.py --out /tmp/e2e`
+  refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
+  none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run `uv run python examples/h200/run.py --out /tmp/e2e`
   (`--tamper l1.wup` must exit 3).
 - `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B served by vLLM on one RTX PRO 6000, its values
   committed while serving, and a sampling period's proof blocks drawn by live coins, proved by C-Flock `--zk` and
   checked by the Lean verifier. It runs, at proof level none: no theorem yet ties those verdicts to a guarantee.
 
-PoUW's half has no runner. `examples/dither_full_util/README.md` is level 0 with no run of record. What of PoUW runs
+PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).
 
 ## Read next
 
-- `Security/`: the definitions, properties and proofs trees, and the locks.
+- `Security/README.md`: the definitions, properties and proofs trees, the locks, and the remote protocol in Lean.
 - `benchmarks/prove_path/README.md` and `benchmarks/prove_path/e2e_chains/README.md`: what an accepted audit means, and
   each protocol's end-to-end chain.
 - `ARCHITECTURE.md` and `GLOSSARY.md`: the architecture, the notation and the older names.
