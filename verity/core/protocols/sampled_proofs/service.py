@@ -2,13 +2,12 @@
 registrations, draws and outcomes over the one-stage audit (`one_stage`).
 
 A protocol states what it commits (`Spec.values`), which proof blocks need proofs (`Spec.selection`, its selection rule),
-the check each drawn unit passes, as a public Program (`Spec.check`), and what it makes public, each item with its reason
+the check each drawn proof block passes, as a public Program (`Spec.check`), and what it makes public, each item with its reason
 (`Spec.public`). What it does with each `Outcome` is its own code; the service does the rest. The parties: the workers
 compute and prove with zero knowledge off, trusted by neither party; the firewall, trusted by the developer, is their only
 path to the auditor, and commits, registers and releases the proofs; the challenger, trusted by the auditor, receives
 registrations, draws from its own randomness and keeps the record (this module); the verifier, the auditor's Lean
-verifier, verifies offline. The design and each protocol's call sequence are in
-`note:proofs/20261006T0307Z-draft-proof-service-architecture`.
+verifier, verifies offline.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A registration is
 one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the
@@ -20,7 +19,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   A tree over roots (`ROOTS`, a row-table window's `row-table` port) is salted through its trees' hiding leaves, the
   schema its Value names (`over`).
 * Declared, or refused: `population` (the record's `population`, `program` and `partition`, which are functions of the
-  check and N); `population:<template>` (a stratified or work law's strata, one per template); `window` (its provenance);
+  check and N); `population:<template>` (a stratified or work sampling design's strata, one per template); `window` (its provenance);
   `leaf_layer` and `anchors` when not empty; and a value's layout, `leaves:<value>` and `domain:<value>`, with
   `words:<value>` and `word_bits:<value>` for a registered value.
 
@@ -32,7 +31,7 @@ order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 **A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's served window, every
 provable family of its step): the check's program is each template's digest and its query `Q_template_instances`, in
 the window's order, and each registration's population program is the templates' mixed population at the challenger's
-own counts (`register(counts=)`), drawn once by the Spec's law, `stratified:K` with one stratum per template. The
+own counts (`register(counts=)`), drawn once by the Spec's sampling design, `stratified:K` with one stratum per template. The
 verifier of record reads one program and one query either way, so a window's registration, draw and run are its
 `check`, `Select.select` and `Run.run` as they are for one template's.
 
@@ -42,8 +41,8 @@ The challenger then draws once (`select`) from its coins as the Lean verifier's 
 either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier of record
 reads them (`verifier.coins`: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`); the Python never reads
 them from the OS itself. A work draw carries the challenger's closure map's closure (`select(closure=)`, a map over
-`[0, N)`, refused under another law or out of range before any coin is read; `coins.closure_of`), which the proof
-proves with the drawn units.
+`[0, N)`, refused under another sampling design or out of range before any coin is read; `coins.closure_of`), which the proof
+proves with the drawn proof blocks.
 From the selection rule to the draw object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
@@ -80,7 +79,7 @@ registration its own tables of the session's statement. `Stream.session` opens i
 (no covered round is undrawn), over draws no other session covers and none delivered or final. Each round is committed
 before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
 session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
-draw's `outcome` runs its own audit record, on its own units and its own table's roots, and its record names the
+draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
 session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier of record refuses
 such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
 
@@ -112,7 +111,7 @@ one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds
 its `draw` is null when the registration was not drawn. `Outcome.record` is its SHA-512.
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline. After R1 to R7, `register` refuses a law whose drawn count varies (`shapes`: `bernoulli`
+check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
 at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
 """
 from __future__ import annotations
@@ -234,10 +233,10 @@ class All:
 
 @dataclass(frozen=True)
 class Law:
-    """A one-stage law: the rate law `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
+    """A one-stage sampling design: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
     one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
     draws `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
-    units each registration brings, so every unit is drawn with probability at least NUM/DEN however large the prover
+    proof blocks each registration brings, so every proof block is drawn with probability at least NUM/DEN however large the prover
     makes N; a fixed `subset:K` draws each with K/N."""
 
     text: str
@@ -281,7 +280,7 @@ RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is commi
 
 @dataclass(frozen=True)
 class Check:
-    """The check each drawn unit passes. `program`: the per-unit check Program's digest (`partition.program_digest`), or,
+    """The check each drawn proof block passes. `program`: the proof-block check Program's digest (`partition.program_digest`), or,
     for a window of templates (`Stream`'s), the tuple of each template's in the window's order. `query`: its proof blocks,
     one-stage's template query over that Program's Definition (`Q_template_instance`), or over the window's templates in
     its order (`Q_template_instances`). `window`: the window statement's
@@ -432,7 +431,7 @@ class Registration:
 
 @dataclass(frozen=True)
 class Draw:
-    """The challenger's one draw for a registration: `law` (its law, expanded over the challenger's own program) and
+    """The challenger's one draw for a registration: `law` (its sampling design, expanded over the challenger's own program) and
     `draw`, one-stage's draw object (with a work draw's `closure`), which goes to the firewall."""
 
     registration: Registration
@@ -445,7 +444,7 @@ class Draw:
 
     @property
     def proved(self) -> list[int]:
-        """The units the proof proves: the drawn ones and their closure, ascending (`draw.proved`)."""
+        """The proof blocks the proof proves: the drawn ones and their closure, ascending (`draw.proved`)."""
         return D.proved(self.draw)
 
 
@@ -593,8 +592,8 @@ def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
 
 
 def selection_law(rule: Selection, n: int) -> dict[str, Any]:
-    """The law a selection rule names over `n` proof blocks, before `draw.derive` expands it over the check's program and
-    query: `subset:n` for `All` and a `Law`'s own. A rate law is `subset:K` at K = `draw.rate_count` over `n`, and raises
+    """The sampling design a selection rule names over `n` proof blocks, before `draw.derive` expands it over the check's program and
+    query: `subset:n` for `All` and a `Law`'s own. A rate sampling design is `subset:K` at K = `draw.rate_count` over `n`, and raises
     `Refused` (`rate`) unless 1 <= K <= n. The Lean verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
@@ -610,9 +609,9 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
 
 def count_varies(law: Mapping[str, Any]) -> bool:
     """Whether `law` (a `selection_law`) draws a count that varies from draw to draw, so the sessions of one registration
-    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work law's closure varies too, but the work draw with
+    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sampling design's closure varies too, but the work draw with
     a producer closure is a planned design, so it is not refused. The Lean verifier's `Run.countVaries` is this. A Spec
-    that wants Bernoulli's public rate at a fixed count states the rate law, `rate:NUM/DEN[:T]`."""
+    that wants Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
     if law.get("law") != "bernoulli":
         return False
     num, _, den = str(law.get("p")).partition("/")
@@ -621,10 +620,10 @@ def count_varies(law: Mapping[str, Any]) -> bool:
 
 def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
                 closure: Mapping[int, Sequence[int]] | None = None, sampler: Sampler | None = None) -> dict[str, Any]:
-    """The challenger's draw object over [0, n) under its expanded `law`: every unit for `All`, reading no coins;
+    """The challenger's draw object over [0, n) under its expanded `law`: every proof block for `All`, reading no coins;
     otherwise `sampler`'s draw, or `coins.draw_first` on `coins` read in order. With `closure`, the challenger's
-    closure map, a work draw carries the drawn units' closure (`coins.closure_of`) when it is not empty. Raises
-    `Refused` (`closure`) for a closure map on another law or outside [0, n), before any coin is read, and `ValueError`
+    closure map, a work draw carries the drawn proof blocks' closure (`coins.closure_of`) when it is not empty. Raises
+    `Refused` (`closure`) for a closure map on another sampling design or outside [0, n), before any coin is read, and `ValueError`
     where `draw_first` does. The Lean verifier's `Select.select` is this, from the rule on."""
     if closure is not None and not (law["law"] == "work" and isinstance(closure, Mapping) and all(
             type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
@@ -1106,12 +1105,12 @@ class Fleet:
 class Stream:
     """One protocol's stream for one `Spec`, held by the challenger.
 
-    `unit` is the challenger's own copy of the per-unit check's Definition: its Program's digest is the check's, and the
+    `unit` is the challenger's own copy of the proof-block check's Definition: its Program's digest is the check's, and the
     challenger builds each registration's population program from it and the registration's N. Or `unit` is a window's
     templates, a sequence of Definitions (a TP rank's served window: each provable family of the step): the check's
     `program` is their digests and its query `Q_template_instances` over them, both in the window's order, and each
     registration's population program is their mixed population (`partition.mixed_population_program`) at the counts
-    `register` is given, under one draw by the Spec's law (`stratified:K`: a stratum per template, each drawn at least
+    `register` is given, under one draw by the Spec's sampling design (`stratified:K`: a stratum per template, each drawn at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier of record's draw and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
@@ -1123,7 +1122,7 @@ class Stream:
     coins or a test's stand-in for them), its digest names it, and every outcome's run by the verifier of record needs
     the coins' evidence (`outcome`'s `coins`), refusing a draw without it. `sampler`, when given, draws instead of the
     coins (`flock-verify draw` in a process of its own, say), never beside the challenger's: it takes the challenger's
-    law and N, and its draw is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
+    sampling design and N, and its draw is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
     (`binding`, `registration.check`'s): its window names both, and a window salt is bound to them, so a tile seeded for
     one prover's stream is refused in any other.
@@ -1359,7 +1358,7 @@ class Stream:
         each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
-        every template's at least one), the check's query, the selection rule's law,
+        every template's at least one), the check's query, the selection rule's sampling design,
         `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration copies given
         here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`, `schemas`,
         `window_root` and `held`, as `registration.check` takes them). Then the receipt. Under
@@ -1369,11 +1368,11 @@ class Stream:
         (`Registration.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or halted (`halted`) or its epoch ended (`epoch-ended`), while it holds as
         many registrations without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
-        aren't at least one instance for each of its templates and N in all, or a single unit's stream is given any
-        (`population`), when the rule's rate law
-        draws none or more than N units (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
-        when the law draws a count that varies (`shapes`, `count_varies`), when the program's units read stratum by stratum
-        are not its N units in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
+        aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
+        (`population`), when the rule's rate sampling design
+        draws none or more than N proof blocks (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
+        when the sampling design draws a count that varies (`shapes`, `count_varies`), when the program's proof blocks read stratum by stratum
+        are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1486,13 +1485,13 @@ class Stream:
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's law (`select_draw`; `All` draws every unit and reads no coins). `closure` is the challenger's closure map
-        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work law only: the draw carries the
-        drawn units' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
+        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
+        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
+        drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
         record is the verifier of record's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
         draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
-        closure map on another law or outside [0, N) (before any coin is read), the two verifiers drawing differently
-        (`disagree`), and a draw that isn't well formed under the law (`draw.check_draw`, by `verifier.check_draw`)."""
+        closure map on another sampling design or outside [0, N) (before any coin is read), the two verifiers drawing differently
+        (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
                               "registration": _registration_token(registration)}
         got: dict[str, Any] = {}

@@ -36,8 +36,6 @@ SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
     "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
-    "integrations/vllm/tests/check/adversarial.py::run_checkers": "the mutation harness reports each run's seconds; no test reads them",
-    "integrations/vllm/tests/check/adversarial.py::run_one": "the mutation harness reports each fold's seconds; no test reads them",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
     "integrations/vllm/tests/engine/int8_decode_split_gpu.py":
@@ -51,6 +49,8 @@ ALLOWED: dict[str, str] = {
         "the by-hand local gate (not collected) gives infra's auditor.py the times its signed entries record, as on vy-challenger-1",
     "integrations/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
         "the by-hand live rehearsal (not collected) polls the live gate's status for a session's end entry: it has no wait verb",
+    "integrations/vllm/tests/protocols/pous_gpu.py":
+        "the PoUS option's GPU smoke (not collected) records its load, install, decode and step seconds; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
