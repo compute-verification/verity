@@ -100,8 +100,8 @@ hypothesis of `Guarantees.EncardDecodableLeBlocks` and of `Guarantees.EncardIngr
 Every guarantee below is listed in `Security/lean-audit.json` as `NetTiming.SecurityProofs.G` and is under
 `shape.frozen` as `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract
 `Program`'s `AccSeqs`, `expectedRow`, or the grids; advice v1's over its charge as `Definitions` states it; the
-channel bound's over the certifier's code as `Definitions` states it), not over the network check's code. An accepted run of the network check
-reaches them through `AcceptedRunsAreProgramRuns` (`Accepted.lean`). The calibration
+channel bound's over the certifier's code as `Definitions` states it), not over the network check's code. An
+accepted run of the network check reaches them through `AcceptedRunsAreProgramRuns` (`Accepted.lean`). The calibration
 (`verity.core.protocols.certifier.calibration`) reports the bounds of `EncardDecodableLeConstantRate`,
 `EncardDecodableLeConstantRatePerWindow`, `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
