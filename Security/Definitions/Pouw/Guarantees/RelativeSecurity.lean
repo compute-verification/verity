@@ -23,7 +23,8 @@ adversary that hard-codes a collision breaks binding in every round). Each has a
 proved (`StagedFloorKPerProver`, `StagedFloorKOneSidedPerProver`, `OverlapFloorKPerProver`,
 `OverlapFloorKOneSidedPerProver`): the same floor and the same luck, on the premises per prover, with each adversary's
 error its own (`breakBound`), `ecr/sha-512` at that adversary's collision finders within budgets computed from its
-time, `⊤` where they fail it, and each value of its coins capped at 1.
+time, `⊤` where they fail it, and each value of its coins capped at 1
+(note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover; CMP-33).
 -/
 
 namespace Pouw.Guarantees.RelativeSecurity
