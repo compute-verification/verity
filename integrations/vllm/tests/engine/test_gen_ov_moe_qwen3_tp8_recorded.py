@@ -32,7 +32,7 @@ import pytest
 from tests.engine.moe_scope_cut import cut, write
 from verity.ml.circuits.refs import Affine, runs
 from verity_vllm.check.match import program_compare as PC
-from verity_vllm.engine.profiles import generic
+from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.events import Note
 from verity_vllm.observe.fold import fold as FD
 from verity_vllm.observe.fold.memory import Unresolved

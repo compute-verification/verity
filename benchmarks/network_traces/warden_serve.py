@@ -53,9 +53,10 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
-  outcome, the tick lateness, the refusals). Each window's records go to `requests.records`, `responses.records`
-  and `fails.records` (each failed connection's reason, witness), and each is certified (`certificate.Issuer`, with
-  the warden's parameters digest) into `certified.jsonl`. Each window of the wire's two records is also committed as
+  outcome, the tick lateness, the refusals and their windows). Each window's records go to `requests.records`,
+  `responses.records` and `fails.records` (each failed connection's reason, witness), and each is certified
+  (`certificate.Issuer`, with the warden's parameters digest) into `certified.jsonl`, except a window in which the
+  warden refused a connection, whose records and rows it certifies and signs none of (`warden`'s "Admission"). Each window of the wire's two records is also committed as
   rows, a row a bucket, with its wiring (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the
   cost (rows, row bytes, commit and sign ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's,
   who holds the records the rows and the wiring are read off). All of that is done by a spawned process
@@ -456,29 +457,36 @@ class Publisher:
     def __call__(self, record: Record, grid: GridParams) -> None:
         self.keep(record, grid)
 
-    def keep(self, record: Record, grid: GridParams) -> None:
+    def withhold(self, record: Record, grid: GridParams) -> None:
+        """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
+        `keep` does but neither certified nor signed, its link-window under `refused` with ``"withheld": true``."""
+        self.keep(record, grid, withheld=True)
+
+    def keep(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
         ar.write_blobs(self.out / f"{record.link}.records", ar.pack_record(record))
         link, direction = CERTIFIED[record.link]
-        certified = self.issuer.certify(replace(record, link=link), direction, grid, self.params.digest)
-        line = ({"refused": [link, direction.value, record.window]} if certified is None
+        certified = None if withheld else \
+            self.issuer.certify(replace(record, link=link), direction, grid, self.params.digest)
+        line = (_refused(link, direction, record.window, withheld) if certified is None
                 else cs.certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
         if record.link != FAILS:
-            self.attest(record, link, direction)
+            self.attest(record, link, direction, withheld)
 
-    def attest(self, record: Record, link: str, direction: Direction) -> None:
-        """The link-window's cells as rows and its wiring (`warden_rows`), their head signed: one line of `cells.jsonl`
-        (the registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
+    def attest(self, record: Record, link: str, direction: Direction, withheld: bool = False) -> None:
+        """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
+        line of `cells.jsonl` (the registration, or the link-window under `refused`, and the cost), the salts to
+        `cells.salts` (witness)."""
         t0 = time.perf_counter()
         cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
         head = cells_.head
         t1 = time.perf_counter()
-        cert = self.issuer.sign(link, direction, record.window, head.digest())
+        cert = None if withheld else self.issuer.sign(link, direction, record.window, head.digest())
         t2 = time.perf_counter()
         cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0]), "commit_ms": round((t1 - t0) * 1000, 3),
                 "sign_ms": round((t2 - t1) * 1000, 3)}
-        line = ({"refused": [link, direction.value, record.window]} if cert is None
+        line = (_refused(link, direction, record.window, withheld) if cert is None
                 else {"registration": WR.registration(head, cert, self.params)})
         ar.write_blobs(self.out / "cells.salts", cells_.witness)
         with open(self.out / "cells.jsonl", "a") as fh:
@@ -486,6 +494,10 @@ class Publisher:
 
     def close(self) -> list:
         return list(self.issuer.refused)
+
+
+def _refused(link: str, direction: Direction, window: int, withheld: bool) -> dict:
+    return {"refused": [link, direction.value, window]} | ({"withheld": True} if withheld else {})
 
 
 def _hash_row(h, row) -> None:
@@ -537,12 +549,12 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             if n is not None:
                 filling[link].append(tuple(data[i * B:(i + 1) * B] for i in range(n)) + (None,) * (grid.allocation - n))
                 continue
-            (window, reason, digest), got = data, tuple(filling[link])
+            (window, reason, digest, withheld), got = data, tuple(filling[link])
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
                 raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
-            publisher.keep(Record(link, window, got, Status(reason)), grid)
+            publisher.keep(Record(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
         own.close()
@@ -612,13 +624,17 @@ class PublisherProcess:
         _hash_row(self._digests.setdefault(link, hashlib.sha512()), row)
         self.rows.put((link, n, b"".join(row[:n])))
 
-    def __call__(self, record: Record, grid: GridParams) -> None:
+    def __call__(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
         if not self.process.is_alive():
             self._end()
         released, digest = self._released.pop(record.link, []), self._digests.pop(record.link, hashlib.sha512())
         if record.grid != tuple(released):
             raise RuntimeError(f"{record.link} window {record.window}: the record's grid isn't the rows released")
-        self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest())))
+        self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
+
+    def withhold(self, record: Record, grid: GridParams) -> None:
+        """The warden's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
+        self(record, grid, withheld=True)
 
     def close(self) -> list:
         self.rows.put(None)
@@ -733,7 +749,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
-                    publish=publish, release=publish.release, slack=slack)
+                    publish=publish, withhold=publish.withhold, release=publish.release, slack=slack)
     server = await asyncio.start_server(warden.handle, *listen)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
@@ -749,7 +765,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
         refused = await loop.run_in_executor(None, publish.close)
         stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
-    log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused, "ticks": warden.ticks,
+    log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
+           "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors}
@@ -815,12 +832,13 @@ def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
 
 def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
     """`certified.jsonl`: the certified records by (link, direction, window), and the link-windows the signer
-    refused."""
+    refused (not those the warden withheld, `Publisher.withhold`)."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
         doc = json.loads(line)
         if "refused" in doc:
-            refused.append(doc["refused"])
+            if not doc.get("withheld"):
+                refused.append(doc["refused"])
         else:
             record = cs.certified_from_json(doc)
             got[(record.link, record.direction, record.window)] = record
@@ -972,7 +990,8 @@ def check(run: Path) -> dict:
         "refused": sum(r["outcome"] == "refused" for r in rows),
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
         "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
-        "certificates": len(certified), "signer_refused": refused, "cell_rows": cells_summary,
+        "certificates": len(certified), "signer_refused": refused,
+        "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
