@@ -1,5 +1,6 @@
 import Proofs.Properties.Verity.SampledSim
 import Std.Data.String.ToNat
+import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
 # The device's refusals, read in the play
@@ -13,7 +14,8 @@ A group's releases, where the log releases its uses one run each and each family
 uses' runs in turn, each release its family and root (`Challenger.runs_blocks`). What v2's acceptance runs of the
 challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's (`OneStageZk.Session0`), the
 order and groups it asks of them, every coin a record holds the challenger's, and every later use a later session's
-family (`OneStageZk.sessionUses_label`), which no family of session 0's is (`Hello.slotStream_inj`).
+family (`OneStageZk.sessionUses_label`), which no family of session 0's is (`Hello.slotStream_inj`). Each F128 a
+record holds reads as its coin's 16 bytes, two big-endian words (`OneStageZk.f128_of_record`).
 -/
 
 open Lean (Json)
@@ -430,6 +432,36 @@ theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs
       · cases hr
     · cases h
   · cases h
+
+/-- Eight bytes of `b` from `o`, most significant first: the word `Flock.f128OfHex` reads there. -/
+def beWord (b : ByteArray) (o : Nat) : UInt64 :=
+  (List.range' 0 8).foldl (fun s i => s <<< 8 ||| (b.get! (o + i)).toUInt64) 0
+
+/-- **Sixteen bytes' hex reads back as an F128**: `hi` the first eight bytes, `lo` the next eight, each big-endian. -/
+theorem f128OfHex_hexOf (b : ByteArray) (h : b.size = 16) :
+    Flock.f128OfHex (Flock.hexOf b) = .ok ⟨beWord b 8, beWord b 0⟩ := by
+  unfold Flock.f128OfHex
+  rw [FlockComplete.JsonRT.unhex_hexOf]
+  simp only [bind, Except.bind, h, bne_self_eq_false, Bool.false_eq_true, ite_false,
+    Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl]
+  rfl
+
+/-- Where `coinsMismatch` finds no reason, each F128 the record wants is the hex of its 16 bytes of the coins. -/
+theorem coinsMismatch_none {hs : Array String} {ξ : ByteArray} (h : coinsMismatch hs ξ = none) (i : Nat)
+    (hi : i < hs.size) : Flock.hexOf (ξ.extract (16 * i) (16 * i + 16)) = hs[i] := by
+  unfold coinsMismatch at h
+  rw [Option.map_eq_none_iff, List.find?_eq_none] at h
+  have := h (hs[i], i) (List.mem_zipIdx_iff_getElem?.2 (by simp [hi]))
+  simpa using this
+
+/-- **A record's coin is the challenger's F128**: where `coinsMismatch` finds no reason, the record's `i`th F128 reads
+as the coins' bytes `16 i` to `16 i + 15`. -/
+theorem f128_of_record {hs : Array String} {ξ : ByteArray} (h : coinsMismatch hs ξ = none) (i : Nat)
+    (hi : i < hs.size) (hξ : 16 * i + 16 ≤ ξ.size) :
+    Flock.f128OfHex hs[i] =
+      .ok ⟨beWord (ξ.extract (16 * i) (16 * i + 16)) 8, beWord (ξ.extract (16 * i) (16 * i + 16)) 0⟩ := by
+  rw [← coinsMismatch_none h i hi]
+  exact f128OfHex_hexOf _ (by simp only [ByteArray.size_extract]; omega)
 
 end SampledProofs.OneStageZk
 
