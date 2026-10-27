@@ -120,6 +120,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   samplers and `draw_first` under each sampling design against the Lean verifier's (`drawOn`) on raw bytes, and
   `tests/test_one_stage.py` the work sizes against the ones C-Flock's
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's draw against `one_stage.draw`.
+- **The parties.** `parties` holds the challenger, the firewall, the workers and the verifier as parties of the
+  deployment layer (`verity.core.deploy`), with their manifest and table (`PROTOCOL`), each machine's work a
+  capability it is given. `verity run CONFIG --party ROLE` runs them; on the toy the capabilities are
+  `benchmarks/all_protocols/verity_all_protocols/parties.py`'s (`examples/toy_network`).
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn units. The vLLM integration
@@ -184,6 +188,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the units it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
+- `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
+  `params_of`, and `IDS`, the configuration's component names and their protocol ids.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's

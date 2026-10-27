@@ -25,7 +25,7 @@ holds (`ports`), so windows audit at once.
 A period whose ``period.json`` names ``challenger`` (``{"mode": "local" | "loopback:HOST:PORT" | "gate:USER@HOST",
 "main": FILE, ...}``) is drawn on that challenger's coins (``records_audit --challenger``, `a5_coins`), not the verifier's
 own: ``local`` is a development session the audit opens itself under an LMS key made for it, ``loopback:HOST:PORT`` that
-session in the challenger party's own process (`challenger_party.py`), and ``gate:USER@HOST`` vy-challenger-1's (with
+session on the challenger party's host (`challenger_party.py`), and ``gate:USER@HOST`` vy-challenger-1's (with
 ``peer``, ``challenger_key`` and ``gate_key``). Without it the draw is on the verifier's in-process coins.
 """
 from __future__ import annotations

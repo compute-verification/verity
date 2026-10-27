@@ -19,13 +19,18 @@ at most 8 units a member, a period at a time. It provides the two hooks the conf
 Every party is on `local`, so the challenger, which sends the coins, shares a machine with the developer's workers and
 firewall. Its `Faithful` and `Secret` premises are unmet there, and every verdict line says `"coins": "simulated"`.
 
+The network certifier's party runs first, in a process of its own. The other four are sampled proofs' parties
+(`verity/core/protocols/sampled_proofs/parties.py`): next-message machines on the deployment layer (`verity.core.deploy`),
+their messages the wire's, run together in one live run. What the machine does for them is a capability it gives them,
+and on the toy those are `deployment.py`'s `Machine`, on `benchmarks/all_protocols/verity_all_protocols/parties.py`'s.
+
 | Party | Principal | What it does |
 | --- | --- | --- |
-| `challenger` | auditor | a development challenger host (`benchmarks/one_stage/challenger_party.py`), listening on loopback; it opens and finishes each period's draw for the verifier, with its own coins |
-| `firewall` | developer | builds the tools on first use (`benchmarks/all_protocols/build.sh`: C-Flock's prover, the Lean verifier, firewall and product) and pins the Lean `flock-firewall` every outer proof goes through |
 | `network-certifier` | auditor | relays each period's requests to the model, commits the outputs at the reading circuit's out shape and signs the record |
-| `workers` | developer | the toy serving each period, tied to the relayed outputs |
-| `verifier` | auditor | each period's sampled-proofs audit on the challenger's coins, then the network certifier's period check, then the verdict: onsite's `product` over exactly the two listed components |
+| `challenger` | auditor | starts a development challenger host (`benchmarks/one_stage/challenger_party.py`, with its own key, ledger and pins log) on loopback and tells the verifier where it is (`Challenger`); stops it on the verifier's `Done` |
+| `firewall` | developer | tells the verifier the SHA-512 of the Lean `flock-firewall` that every outer proof goes through, one at a time (`Firewall`) |
+| `workers` | developer | the toy serving each period, tied to the relayed outputs, and the period's registration sent to the verifier (`Registration`) |
+| `verifier` | auditor | each period, once its registration is in: the sampled-proofs audit on the challenger's coins, then the network certifier's period check, then the verdict: onsite's `product` over exactly the two listed components |
 
 ## Commands
 
@@ -40,68 +45,51 @@ uv run verity run config.toml --state /tmp/toy-network
 ~~~
 
 `verity run examples/toy_network/config.toml` and `verity example toy_network` run this file instead. `config check`
-prints `ok` and the configuration's hash. `verity run` prints a `RUN` line, a `PARTY` line as each party exits (the
-challenger's twice: ready, first, and stopped, last), and one `VERDICT` line a period, also written to
-`STATE/record/verdicts.jsonl`. It exits 0 when every period accepts, 1 when one rejects, and 2 otherwise. Run
-`r20261027-023857-d6ef` (`--periods 2`, on a 192-core CPU node) printed:
+prints `ok` and the configuration's hash. The first party that needs the tools builds them into `STATE/build`
+(`benchmarks/all_protocols/build.sh`: C-Flock's prover, the Lean verifier, firewall and product). `verity run` prints a
+`RUN` line, a `PARTY` line as each party finishes (the network certifier's exit code, then each live party's refusal,
+`null` when it had none), and one `VERDICT` line a period, also written to `STATE/record/verdicts.jsonl`. It exits 0
+when every period accepts, 1 when one rejects, and 2 otherwise.
 
-~~~text
-PARTY {"party": "challenger", "ready": true}
-PARTY {"exit": 0, "party": "firewall"}
-PARTY {"exit": 0, "party": "network-certifier"}
-PARTY {"exit": 0, "party": "workers"}
-PARTY {"exit": 0, "party": "verifier"}
-PARTY {"exit": 0, "party": "challenger"}
-VERDICT {"block": 0, "coins": "simulated", "components": {"certifier": "accept", "sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "run": "r20261027-023857-d6ef", "simulated": ["challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"], "verdict": "accept"}
-VERDICT {"block": 1, "coins": "simulated", "components": {"certifier": "accept", "sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "run": "r20261027-023857-d6ef", "simulated": ["challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"], "verdict": "accept"}
-~~~
+## Parties on different machines
 
-It took 82 minutes: the build 2, each period's sampled-proofs audit about 34 (64 units drawn under `work:64`, each
-drawn unit's proof through the firewall one at a time), and the network certifier's checks of both periods 11.
-
-The parties can also run one command at a time on the same state, in the order above. The challenger runs beside the
-verifier, which is the one party that talks to it:
-
-~~~sh
-uv run verity run config.toml --state /tmp/toy-network --party firewall
-uv run verity run config.toml --state /tmp/toy-network --party network-certifier
-uv run verity run config.toml --state /tmp/toy-network --party workers
-uv run verity run config.toml --state /tmp/toy-network --party challenger --party verifier
-~~~
-
-`--replay /tmp/toy-network --party challenger --party verifier --state DIR` reruns the challenger and the verifier over
-that run's served periods in a new state, without what they wrote: the same records, on new coins.
+`--machine NAME`, or `--party ROLE`, runs only the parties placed there. The challenger, the firewall and the workers
+then listen for the verifier at their `listen` port (on their `address`, loopback by default), and the verifier dials
+the ones that run elsewhere. A party that has to listen or be dialed and has no `listen` is refused by name
+(`listen`). Each channel's handshake is signed with a party key made for the run, and the configuration's hash leaves
+`address` and `listen` out, so moving a listener changes no hash. Until the audit's draw, witnesses and proofs are
+messages of their own, the verifier's audit runs the prover's sessions itself, so the verifier and the workers share
+the machine the rows are on.
 
 ## The sampled-proofs parties alone
 
-The challenger, firewall and verifier above are sampled proofs' parties
-(`benchmarks/all_protocols/verity_all_protocols/parties.py`, compute-accounting's), which `verity run` calls. Their own
-entry point runs them, with the toy's own workers and no network certifier, on
+Their own entry point runs them on the toy, with no network certifier, on
 `benchmarks/all_protocols/tests/fixtures/sampled-proofs.toml` (a uniform 8 of each block's members):
 
 ~~~sh
-PYTHONPATH=benchmarks/all_protocols uv run python -m verity_all_protocols.parties \
+PYTHONPATH=benchmarks/all_protocols:integrations/torch_loop uv run python -m verity_all_protocols.parties \
     benchmarks/all_protocols/tests/fixtures/sampled-proofs.toml --state STATE --local
 ~~~
 
-`--tamper 0` makes block 0's workers record outputs that are not the model's, and the verifier rejects it
-(`benchmarks/all_protocols/parties.sh` runs honest, tampered and an absent certifier; run `r20261027-013034-fbf3`). The
-parties live in `benchmarks/` because they run the toy loop, the one-stage audit driver and the development challenger
-host, none of which `verity.core` may import. They move into `verity/core/protocols/sampled_proofs/` as deploy-core
-`Party`s, which also puts their channels on the wire between machines.
+`--tamper 0` makes block 0's workers record outputs that are not the model's, and the verifier rejects it. `--party
+ROLE` with `--at ROLE=HOST:PORT` runs a party in a process of its own over TCP. `benchmarks/all_protocols/parties.sh`
+runs honest, tampered, an absent certifier and the four parties apart (runs `r20261027-013034-fbf3` and
+`r20261027-053345-b27b`).
 
 ## The state
 
-Each party's output is in `STATE/logs/<party>.log`. What each party wrote is its transcript, `STATE/transcripts/<party>.jsonl`:
-one line a file, with its bytes, SHA-512 and kind, `public` under `record/` and `public/`, else `private`. The record,
-`STATE/record/`, keeps the public lines (`record/transcripts/`), each period's `w<I>/<component>/answer.json` and
-`case.json`, and the network certifier's public session files. The workers' rows and salts stay in `STATE/blocks/`.
+Each entry's output is in `STATE/logs/<party>.log`, and what it wrote is its transcript,
+`STATE/transcripts/<party>.jsonl`: one line a file, with its bytes, SHA-512 and kind, `public` under `record/` and
+`public/`, else `private`. The live parties' transcripts and their run's record are the deployment layer's, under
+`STATE/runs/local/runs/1/`. The record, `STATE/record/`, keeps the entries' public lines (`record/transcripts/`), each
+period's `w<I>/<component>/answer.json` and `case.json`, and the network certifier's public session files. The workers'
+rows and salts stay in `STATE/blocks/`.
 
 ## What is simulated
 
-- The coins: the challenger is a process on the developer's machine, with a key made for the run.
-- The network certifier also runs on the developer's machine, beside the model it relays for.
-- The messages: at step 0 the parties exchange them as files in the shared state, one party after another, not on the
-  wire. The transcripts are what each party wrote.
+- The coins: the challenger's host is a process on the developer's machine, with a key made for the run.
+- The network certifier also runs on the developer's machine, beside the model it relays for. Its relay reaches the
+  workers as files in the shared state before the live run, not as messages on the wire.
+- The witnesses and proofs: the verifier's audit runs the prover's sessions itself, on the rows in the shared state.
 - The program: `[program] commit` is the commit `config new` ran at. A run on another tree names the difference in each
   verdict line's `simulated`.
