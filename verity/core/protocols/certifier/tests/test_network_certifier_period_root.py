@@ -138,7 +138,8 @@ def test_a_period_whose_root_or_signature_is_not_its_own_is_refused(tmp_path, de
     assert check(device, closed, lives, deployment=OTHER_DEPLOYMENT) == unsigned
     other = lms.Identity.init(tmp_path / "another device", SMALL)
     assert check(other, closed, lives) == unsigned
-    assert check(device, dataclasses.replace(closed, signature=closed.signature[:-1]), lives) == unsigned
+    truncated = dataclasses.replace(closed, signature=closed.signature[:-1])
+    assert check(device, truncated, lives).startswith(f"{unsigned}: ")
     assert check(device, dataclasses.replace(closed, signature=issuer.closed[1].signature), lives) == unsigned
 
 
