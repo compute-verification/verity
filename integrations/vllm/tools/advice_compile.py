@@ -119,10 +119,10 @@ def main() -> int:
     from verity_vllm.engine import step_trace as ST
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.pipeline.advice_windows import CAP_BITS
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import (
-        CAP_BITS,
         Registered,
         compare,
         compile_steps,

@@ -201,7 +201,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 
 ## The pieces
 
-- **The compiler**, with ℓ = `CAP_BITS` (1 MiB) unless `--cap-bits` gives another:
+- **The compiler**, with ℓ = `advice_windows.CAP_BITS` (1 MiB) unless `--cap-bits` gives another:
   - on a TP Commit, `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record.
     On a declared run it emits exactly what a correct compiler emits. I2 doesn't compile a TP rank's Programs yet.
   - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
