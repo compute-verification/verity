@@ -5,7 +5,7 @@ with the challenger's key. Honest traffic is accepted on every link-window (N2 o
 the salt), a shim that holds one session past every sync or writes one event more than the endpoint sent is refused,
 and each window's salt is revealed once. The same holds four in flight against an endpoint that sends some responses'
 last two tokens in one event, as vLLM does: the plan's F is the body's tokens, and the shim pads a short response. On
-N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by NET-54's rule,
+N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by the served profile's rule,
 a group sent in a window's first bucket goes behind the salt frame, and N2's served counts accept honest traffic on
 every window and refuse the extra event. Against an endpoint that streams GLM-5.3's tokens (multi-byte, and tokens
 that split a character's UTF-8, which vLLM sends as chunks of no text) both profiles accept honest traffic with F the
@@ -419,7 +419,7 @@ def test_honest_served_traffic_is_accepted_on_every_link_window(served):
 
 
 def test_the_endpoint_gets_each_request_with_the_release_order_the_certifier_signed(served):
-    """Every request reaches the endpoint with `x-verity-release: N` and the proxy's run id (VLLM-89), N its place in
+    """Every request reaches the endpoint with `x-verity-release: N` and the proxy's run id, N its place in
     the release order the signed ingress records hold, while the records hold the client's request without them, and
     honest traffic is accepted with them present (`test_honest_served_traffic_is_accepted_on_every_link_window`). One
     request in flight, the endpoint gets them in that order."""
@@ -682,7 +682,7 @@ def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served
 def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_longer():
     """F is the body's token count, so probed responses of F − 1 and F events plan F frames each; a response of more
     than F events, or of none, or a body that doesn't ask for exactly its tokens (`ignore_eos`, a `max_tokens` of at
-    least 1) or asks for `min_tokens`, which vllm's advice refuses, has no plan."""
+    least 1) or asks for `min_tokens`, which the vLLM integration's advice refuses, has no plan."""
     body = cs.request_body("stub", TOKENS)
 
     def probed(*lengths):

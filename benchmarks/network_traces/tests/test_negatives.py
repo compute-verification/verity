@@ -449,7 +449,7 @@ def test_advice_chunk_serves_the_same_positions_in_other_step_shapes():
 
 
 def test_advice_prompt_split_swaps_two_prompts_and_keeps_every_row_and_output_where_it_was():
-    """REDTEAM phase 6's split on the stand-in: r0's prompt of 5 advised as 2, cut from the front of its two chunks
+    """The prompt split on the stand-in: r0's prompt of 5 advised as 2, cut from the front of its two chunks
     (each keeping a token), r1's of 2 as 5, its one chunk longer, each decode moved with its prompt; every row stays in
     its step, so each output is kept where it was and released in its bucket. Under the tests' framing r0's end moves a
     frame earlier and the frames' total stays. Without a pair whose first prompt is the longer, the first whose
@@ -504,7 +504,7 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
     stand-in): the honest advice is accepted; length and release are refused by the advised counts, each well formed,
     and missing and extra by the view (the verdict refuses them), and by the counts too under a verdict on an ingress
     of their own requests; prompt-split by the view alone: under a verdict on its own requests the counts accept it,
-    its frames honest's and r0's end a frame earlier (REDTEAM phase 7), so only the tie refuses it; start and chunk are
+    its frames honest's and r0's end a frame earlier, so only the tie refuses it; start and chunk are
     accepted, their frames honest's, so only the step unit can refuse them; a link without the verdict, a `received`
     that isn't the requests' frames, and an extra request whose frames pass the egress allocation R in a bucket, are
     refused by the view."""
@@ -606,7 +606,7 @@ def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
     """IoTieRequest's reference (`io_request`, skipped until it's importable) on the certified ingress of the advice's
     id requests at 404-byte frames, whose framing is the tests': the honest advice's requests are the cells', so every
     window is accepted; prompt-split, its frames honest's, is refused by IoTieRequest's verdict alone (N2's advised
-    view needs it; under a tie the prover states, N2's counts accept it, REDTEAM phase 7); missing and extra by it
+    view needs it; under a tie the prover states, N2's counts accept it); missing and extra by it
     too, their requests not the cells'; length and release, their requests honest's, by the advised counts, and
     start and chunk by neither."""
     pytest.importorskip(NG.IO_REQUEST_MODULE)
@@ -628,8 +628,8 @@ def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
 
 
 def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
-    """REDTEAM phase 6's split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
-    then one; phase 6's 338 is one cell at the warden's cut), advised as 16 and 339. The cells' total is honest's and
+    """The prompt split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
+    then one; 338 is one cell at the relay's cut), advised as 16 and 339. The cells' total is honest's and
     the first request's end a cell earlier, so N2's advised counts accept it under a tie the prover states (the acausal
     release); IoTieRequest's reference on the warden's ingress refuses it, and with it N2's advised view."""
     pytest.importorskip(NG.IO_REQUEST_MODULE)
@@ -866,7 +866,7 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
 
 
 def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
-    """On the warden's bucket rows (#3698): connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
+    """On the relay's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
