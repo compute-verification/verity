@@ -3,7 +3,7 @@
 With `tensor_parallel_size > 1` the pinned vLLM (V1 engine, `d9105ea80`) runs one worker process per rank under the
 multiprocess executor; `VLLM_ENABLE_V1_MULTIPROCESSING=0` keeps the *engine core* in the driver process but the model,
 its parameters, the KV caches and every dispatcher call live in the rank processes.  `vllm_adapter.build_engine` +
-`Capture` (installed in-process on `get_model_runner(llm)`) therefore observe nothing: `get_model_runner` finds no
+`Capture` (installed in-process on `handle.model_runner(llm)`) therefore observe nothing: `handle.model_runner` finds no
 `driver_worker` (the executor is `MultiprocExecutor`), and a `TorchDispatchMode` entered in the driver would not see
 the workers' dispatcher calls.
 
