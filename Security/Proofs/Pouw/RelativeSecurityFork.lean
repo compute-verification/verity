@@ -108,20 +108,6 @@ theorem honestService_accepts (Ω : Type) [Fintype Ω] (lam : ℕ) (h : Fintype.
     (∀ σ, (honestService Ω lam h).verify () σ true = true) ∧ ∃ σ, (honestService Ω lam h).verify () σ false = false :=
   ⟨fun _ => rfl, ⟨Classical.arbitrary _, rfl⟩⟩
 
-/-- The honest service's verifier with its hash as a parameter reads no hash, as it hashes nothing. -/
-theorem honestService_hashes (Ω : Type) [Fintype Ω] (lam : ℕ) (h : Fintype.card Ω = 2 ^ lam)
-    (sha : Claims.Msg → Claims.Msg) :
-    Pouw.Assumptions.VerifierHashes (honestService Ω lam h) sha fun _ _ _ a => a :=
-  ⟨fun _ _ _ => rfl, fun _ _ _ _ _ => rfl⟩
-
-/-- `VerifierHashes` is no tautology: a verifier that reads a hash its list omits fails it. -/
-theorem verifierHashes_fails (Ω : Type) [Fintype Ω] (lam : ℕ) (h : Fintype.card Ω = 2 ^ lam) [Nonempty Ω] :
-    ¬ Pouw.Assumptions.VerifierHashes (honestService Ω lam h) (fun _ => [])
-      fun h' _ _ a => a && decide (h' [] = []) := by
-  rintro ⟨-, hV⟩
-  have := hV (fun _ => [0]) () (Classical.arbitrary Ω) true fun u hu => by simp [honestService] at hu
-  simp at this
-
 theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
   simp [prob]
 
@@ -364,8 +350,8 @@ end Honest
 theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorPerProverHonest := by
   intro sha kz
   let S := honestService (Paths (DStage 1 1 1 7 1 1) 1) 8 card_dStage
-  refine ⟨S, Equiv.refl _, fun _ _ _ _ => dStagedRun, (), true, false, fun _ _ _ a => a,
-    honestService_hashes _ _ _ sha, ?_, ?_, ?_, ?_, honestService_accepts _ _ _⟩
+  refine ⟨S, Equiv.refl _, fun _ _ _ _ => dStagedRun, (), true, false,
+    ?_, ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
     refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl (dStagedRun_accepts x)⟩ <;>
       simp only [dStagedRun, prob_false, zero_mul, add_zero, le_refl]
@@ -385,8 +371,8 @@ theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloo
 theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorPerProverHonest := by
   intro sha kz
   let S := honestService (Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1) 8 card_oSpot
-  refine ⟨S, Equiv.refl _, fun _ _ _ _ => oRun, (), true, false, fun _ _ _ a => a,
-    honestService_hashes _ _ _ sha, ?_, ?_, ?_, ?_, honestService_accepts _ _ _⟩
+  refine ⟨S, Equiv.refl _, fun _ _ _ _ => oRun, (), true, false,
+    ?_, ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
     refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl (oRun_accepts x)⟩ <;>
       simp only [oRun, prob_false, zero_mul, add_zero, le_refl]
@@ -413,8 +399,8 @@ theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFl
 theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorJ10RPerProverHonest := by
   intro sha kz
   let S := honestService (Paths (JStage 1 1 1 1 1) 1) 10 card_jStage
-  refine ⟨S, Equiv.refl _, fun _ _ _ _ => jStagedRun, (), true, false, fun _ _ _ a => a,
-    honestService_hashes _ _ _ sha, ?_, ?_, ?_, honestService_accepts _ _ _⟩
+  refine ⟨S, Equiv.refl _, fun _ _ _ _ => jStagedRun, (), true, false,
+    ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
     refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl (jStagedRun_accepts x)⟩ <;>
       simp only [jStagedRun, prob_false, zero_mul, add_zero, le_refl]
@@ -430,8 +416,8 @@ theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.Staged
 theorem OverlapFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorJ10RPerProverHonest := by
   intro sha kz
   let S := honestService (Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1) 10 card_ojSpot
-  refine ⟨S, Equiv.refl _, fun _ _ _ _ => ojRun, (), true, false, fun _ _ _ a => a,
-    honestService_hashes _ _ _ sha, ?_, ?_, ?_, honestService_accepts _ _ _⟩
+  refine ⟨S, Equiv.refl _, fun _ _ _ _ => ojRun, (), true, false,
+    ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
     refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl (ojRun_accepts x)⟩ <;>
       simp only [ojRun, prob_false, zero_mul, add_zero, le_refl]

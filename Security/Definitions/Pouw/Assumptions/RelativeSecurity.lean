@@ -1,6 +1,5 @@
 import Definitions.Claims
 import Definitions.Pouw.RelativeSecurity
-import Definitions.Pouw.RelativeSecurityFork
 import Definitions.Pouw.RelativeSecurityJ10R
 
 /-!
@@ -15,9 +14,8 @@ through the adversary's finders, split so that each is judged on its own: what t
 charge-pure), and what the machine charges for it (`ChargeVF3j16`). `OverlapFloorKOneSidedPerProver`'s three are the
 same split of `RoundsHypKOvP` (`ServiceSoundOverlapPerProver`, `KScopeOverlapOneSided`, `ChargeVF3j16Overlap`).
 `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sibling floors `StagedFloorKPerProver`
-and `OverlapFloorKPerProver`, proved on their own scope, take for the luck ¾ (`RoundsHypKSt`, `RoundsHypKOv`). Every
-floor per prover also takes `VerifierHashes`: the service's SHA-512 inputs, which its fork finders read, are its
-verifier's. The ledger ids are the premise ledger's.
+and `OverlapFloorKPerProver`, proved on their own scope, take for the luck ¾ (`RoundsHypKSt`, `RoundsHypKOv`). The
+ledger ids are the premise ledger's.
 
 These are K's two proved scopes, and the floors' constant is `c = 1` in them. The one-sided scope is a sibling of the
 ledger's K1, not a narrowing of it. **K1 is not claimed outside the two proved scopes.** There the ledger's K1 at
@@ -436,30 +434,5 @@ def ChargeVF3j16OverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R 
         Mc.charge M (e.symm x, r)
 
 end J10ROverlap
-
-section Hashes
-
-/-- `pouw-rs-verifier-hashes` (proposed). **The service's SHA-512 inputs are its verifier's.** `V` is the service's
-verifier with its SHA-512 taken as a parameter: `V h c σ a` is the verdict on commitment `c`, seed `σ` and answer `a`
-when every SHA-512 call the check makes, its own and those inside the proofs it verifies, returns `h` of its input.
-The service's verifier is `V` at `sha`, and `V` reads `h` only at the strings `S.hashes c σ a` lists: every `h` that
-agrees with `sha` there gives the same verdict. So every string the verifier hashes on `(c, σ, a)` is in
-`S.hashes c σ a`, the strings the fork finder (`forkFinder`) searches for a collision. A string listed that the
-verifier doesn't hash does no harm: any collision the finder outputs is a collision of `sha`, at a cost that counts
-every string listed.
-
-It ties the model to the code, so it says something only with `V` the deployed check: the compiled verifier of record
-(`PouwCheck.protocol.check`, over `PouwCommit`'s trees and C-Flock's verifier) with its SHA-512 calls read through `h`.
-At a `V` that ignores its `h` it holds of any service. It isn't proved against the code: the check calls
-`Flock.Sha512.hash` directly rather than through a parameter (`PouwCheck`'s `Pass`, `Inputs` and `Credit`,
-`PouwCommit`'s frames and coins, C-Flock's `FV3` roots), so the code has no `V` to state it of, and no map yet takes
-the check's inputs (`Registration`, `Evidence`) to a `Service`. Both are the gap, named here so that every floor that
-reads the fork finders shows it (CMP-33). -/
-def VerifierHashes (S : HashedService) (sha : Claims.Msg → Claims.Msg)
-    (V : (Claims.Msg → Claims.Msg) → S.Com → S.Seed → S.Ans → Bool) : Prop :=
-  (∀ c σ a, S.verify c σ a = V sha c σ a) ∧
-  ∀ (h : Claims.Msg → Claims.Msg) c σ a, (∀ u ∈ S.hashes c σ a, h u = sha u) → V h c σ a = V sha c σ a
-
-end Hashes
 
 end Pouw.Assumptions

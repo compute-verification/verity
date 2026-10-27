@@ -413,7 +413,7 @@ open Pouw.RelativeSecurity Pouw.Assumptions
 
 theorem StagedFloorKOneSidedJ10RPerProver :
     Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver := by
-  intro Mc S R St n L B n' e run sha kz _ δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ _ hS hK hP
+  intro Mc S R St n L B n' e run sha kz δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
     rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
   have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
@@ -429,7 +429,7 @@ theorem StagedFloorKOneSidedJ10RPerProver :
 
 theorem OverlapFloorKOneSidedJ10RPerProver :
     Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver := by
-  intro Mc S R St L n B n' e run sha kz _ δb βb δz βz κ Vmax hκ hC _ _ _ _ _ hS hK hP
+  intro Mc S R St L n B n' e run sha kz δb βb δz βz κ Vmax hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
     rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
   have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha

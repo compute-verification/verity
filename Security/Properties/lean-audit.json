@@ -1627,11 +1627,17 @@
    "assumptions": [],
    "type_hash": "ac05a786e1a5c2a3c155575f091a80cf244aa534361f3b3133e47b7808a17090"
   },
+  "Properties.Pouw.Check.deployedHash": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Check.digestIsOneStage's": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"],
    "assumptions": [],
    "type_hash": "7f35fb22b84c04ee517a37f3a246486f5a3fc4dc0736958050ae088fdc45acd7"
+  },
+  "Properties.Pouw.Check.hashesRead": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.Check.neverNull": {
    "owner": "@compute-accounting",
@@ -2924,8 +2930,24 @@
     "function": "PouwCheck.protocol.commitment",
     "outcome": "accept"
    },
+   "Properties.Pouw.Check.deployedHash": {
+    "conjuncts": [
+     {
+      "function": "PouwCheck.protocol.check",
+      "outcome": "none"
+     },
+     {
+      "function": "PouwCheck.protocol.digest",
+      "outcome": "none"
+     }
+    ]
+   },
    "Properties.Pouw.Check.digestIsOneStage's": {
     "function": "PouwCheck.protocol.digest",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Check.hashesRead": {
+    "function": "PouwCheck.checkWith",
     "outcome": "none"
    },
    "Properties.Pouw.Check.neverNull": {

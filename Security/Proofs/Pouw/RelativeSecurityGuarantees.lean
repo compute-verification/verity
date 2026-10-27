@@ -15,8 +15,7 @@ prover one adversary and one value of its coins at a time: for affine operands b
 `D = 160 ln 2`; for one-sided operands of any form by `roundsSlice_of_stagedP` and `roundsSlice_of_overlapP` (the
 parity luck 427/500 in the product deficit, charging purity) at `toF2_wRe_zero` and `D = 274 ln 2`
 (`ModelB.exp_parity_274`). Each slice's breaks are read at the adversary's fork finders and the slices averaged with
-each capped at 1 (`serviceFloorPerProver_breakPr_of_slices`). The floors don't use `VerifierHashes`: it says what the
-fork finders search is the verifier's, which their statements read and their proofs don't need.
+each capped at 1 (`serviceFloorPerProver_breakPr_of_slices`).
 -/
 
 namespace Pouw.SecurityProofs.RelativeSecurity
@@ -38,7 +37,7 @@ theorem TheoremSOverlap : Pouw.Guarantees.RelativeSecurity.TheoremSOverlap := by
   ring
 
 theorem StagedFloorKPerProver : Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver := by
-  intro Mc S R St n L B n' e run sha kz _ δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ _ hS hK hP
+  intro Mc S R St n L B n' e run sha kz δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
     rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
   have h40 : Real.exp (-((1 - 3 / 4) * (160 * Real.log 2))) = ((2 : ℝ) ^ 40)⁻¹ := by
@@ -57,7 +56,7 @@ theorem StagedFloorKPerProver : Pouw.Guarantees.RelativeSecurity.StagedFloorKPer
   rwa [mul_zero, sub_zero] at h
 
 theorem OverlapFloorKPerProver : Pouw.Guarantees.RelativeSecurity.OverlapFloorKPerProver := by
-  intro Mc S R St L n B n' e run sha kz _ δb βb δz βz κ Vmax hκ hC _ _ _ _ _ hS hK hP
+  intro Mc S R St L n B n' e run sha kz δb βb δz βz κ Vmax hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
     rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
   have h40 : Real.exp (-((1 - 3 / 4) * (160 * Real.log 2))) = ((2 : ℝ) ^ 40)⁻¹ := by
@@ -76,7 +75,7 @@ theorem OverlapFloorKPerProver : Pouw.Guarantees.RelativeSecurity.OverlapFloorKP
   rwa [mul_zero, sub_zero, card_oCells] at h
 
 theorem StagedFloorKOneSidedPerProver : Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver := by
-  intro Mc S R St n L B n' e run sha kz _ δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ _ hS hK hP
+  intro Mc S R St n L B n' e run sha kz δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
     rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
   have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
@@ -91,7 +90,7 @@ theorem StagedFloorKOneSidedPerProver : Pouw.Guarantees.RelativeSecurity.StagedF
   rwa [mul_zero, sub_zero] at h
 
 theorem OverlapFloorKOneSidedPerProver : Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedPerProver := by
-  intro Mc S R St L n B n' e run sha kz _ δb βb δz βz κ Vmax hκ hC _ _ _ _ _ hS hK hP
+  intro Mc S R St L n B n' e run sha kz δb βb δz βz κ Vmax hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
     rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
   have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
