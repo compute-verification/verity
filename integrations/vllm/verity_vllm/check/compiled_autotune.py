@@ -155,7 +155,7 @@ def replay_under_candidates(kernel: str, ins: list, outs: dict[str, Any], roles:
         return rec
     cands, why = candidates(kernel)
     rec["heuristic"] = str(getattr(aut, "heuristic_type", None))
-    # [rev F-r16-22] config independence is STRUCTURAL only for a pointwise kernel (one thread per element: XBLOCK/num_warps set scheduling
+    # config independence is STRUCTURAL only for a pointwise kernel (one thread per element: XBLOCK/num_warps set scheduling
     # and masking, not the arithmetic); for a reduction the config sets the summation/fma order, so bit-equality on sampled launches is a
     # property of the data, not of the kernel -- recorded, but the merge lifts a cross-arm config difference only when `structural`
     rec["structural"] = rec["heuristic"].endswith("POINTWISE")
