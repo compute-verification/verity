@@ -14,7 +14,6 @@ import re
 import socket
 import struct
 import subprocess
-import sys
 import threading
 
 import pytest
@@ -23,7 +22,6 @@ from test_lean_hello import (  # noqa: F401
     FIXTURE,
     NONCE,
     STATEMENT,
-    VERIFIER,
     _args,
     _record,
     built,
@@ -327,14 +325,10 @@ def test_each_reps_frame_draws_its_own(zk):
 
 
 @pytest.fixture(scope="module")
-def zk(tmp_path_factory):
-    sys.path.insert(0, str(VERIFIER))
-    import ci
-
-    try:
-        return ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
+def zk():
+    assert (FIXTURE / "stage" / "circuit.txt").is_file(), (
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/zk-sessions`")
+    return FIXTURE
 
 
 def _answer(key_top: int = 0, root: int = 0x11) -> bytes:

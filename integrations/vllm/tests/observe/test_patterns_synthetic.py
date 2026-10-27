@@ -10,7 +10,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
                                    TritonLaunch, ViewDesc)
 from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
 from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
 from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)

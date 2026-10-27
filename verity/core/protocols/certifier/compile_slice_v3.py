@@ -9,9 +9,9 @@ circuit's input gates that are neither ingress nor registered, and `Accepted` co
 check's verdict pins nothing: every witness input of a check-form unit counts toward c. CompileSlice_v2 takes its state
 rows, each step's arrivals, bits, hits, counts, returns and stamps, its pool rows and the map as witness, so its free
 inputs are thousands of bits. Here each of them is a wire the unit computes, and the free inputs are the advice's
-ℓ_w = DA + PW bits. A unit's outputs, committed ones included, are at most 16 bits, and state crosses units by
-registered reads, so the served rows and the state the window leaves are registered rows the unit reads and holds equal
-to the ones it computes.
+ℓ_w = DA + PW bits. A unit's public output is at most 16 bits, and here state crosses units by registered reads, so
+the served rows and the state the window leaves are registered rows the unit reads and holds equal to the ones it
+computes.
 
 **The inputs**, each a field list (elements least significant bit first):
 - ``adv`` (*advice*, the only free input, unpadded since a padding gate would be a free input too): the window's DA

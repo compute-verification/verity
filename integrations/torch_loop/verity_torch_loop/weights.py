@@ -397,23 +397,33 @@ def _row_digests(t: Tensor, data: bytes) -> bytes:
     return bytes(out)
 
 
+def chunk_levels(t: Tensor, dom: Any, data: bytes, row_salts: bytes, j0: int, bits: int) -> list[list[bytes]]:
+    """The levels of `t`'s subtree over rows ``[j0, j0 + 2^bits)`` under domain `dom`, leaves first, from those rows'
+    bytes `data` and salts `row_salts` (rows past the tensor's are pads); its root is the last level's one node."""
+    rb = 2 * t.words
+    n = len(data) // rb
+    if len(data) != n * rb or len(row_salts) != n * _INST.salt_bytes or n > 1 << bits:
+        raise ValueError(f"{t.name}: {len(data)} bytes and {len(row_salts)} of salts are not as many rows of {rb} bytes")
+    level = []
+    if n:
+        tl = hm96_batch.tree_leaves(_INST, _INST.default_key, _row_digests(t, data), row_salts)
+        level = [dom.leaf(j0 + k, j0 + k, t.schema, tl[k]) for k in range(n)]
+    level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
+    levels, g = [level], j0
+    for d in range(bits):
+        level = [dom.node(d, (g >> 1) + k // 2, level[k], level[k + 1]) for k in range(0, len(level), 2)]
+        levels.append(level)
+        g >>= 1
+    return levels
+
+
 def subtree(shape: Shape, seed: bytes, salt_key: bytes, r: Reader, index: int, chunk: int, bits: int) -> bytes:
     """The subtree root over rows ``[chunk << bits, (chunk + 1) << bits)`` of the tensor at `index`, pads included."""
     t = tensors(shape)[index]
-    dom, rb = domain(t, r), 2 * t.words
-    j0 = chunk << bits
+    rb, j0 = 2 * t.words, chunk << bits
     n = max(0, min(1 << bits, t.leaves - j0))
-    level = []
-    if n:
-        data = tensor_bytes(shape, seed, t.name, j0 * rb, (j0 + n) * rb)
-        tl = hm96_batch.tree_leaves(_INST, _INST.default_key, _row_digests(t, data), salts(salt_key, index, j0, n))
-        level = [dom.leaf(j0 + k, j0 + k, t.schema, tl[k]) for k in range(n)]
-    level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
-    g = j0
-    for d in range(bits):
-        level = [dom.node(d, (g >> 1) + k // 2, level[k], level[k + 1]) for k in range(0, len(level), 2)]
-        g >>= 1
-    return level[0]
+    data = tensor_bytes(shape, seed, t.name, j0 * rb, (j0 + n) * rb) if n else b""
+    return chunk_levels(t, domain(t, r), data, salts(salt_key, index, j0, n) if n else b"", j0, bits)[-1][0]
 
 
 def _task(args: tuple) -> tuple[int, int, bytes]:

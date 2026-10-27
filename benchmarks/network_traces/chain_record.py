@@ -120,7 +120,7 @@ WARDEN_STUBBED = (
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights (NET-72a)")
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
-#: a proof unit's outputs, at most 16 bits: a faulty unit's leak
+#: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -674,8 +674,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                              "pooled_share": {d: k / weights_bits for d, k in pooled.items()},
                              "per_period": per, "per_period_share": per / weights_bits,
                              "per_link_window": count(1, None, reading)})
-    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"], "class": {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY",
-                                                                             "WITHIN", "D", "KO")},
+    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
+            "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": {"NS": NS, "NP": NP, "NV": NV, "egress_row": 8 * cls.egress.R * cls.B},
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
