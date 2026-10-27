@@ -28,6 +28,9 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
+from verity_config.settings import SHARED
+
 HERE = Path(__file__).resolve().parent
 
 MMA_SYNC_PTX = """\
@@ -174,7 +177,7 @@ def main() -> int:
     (out / "stage0.json").write_text(json.dumps(rec, indent=1))
     tile_kernels = {fn: v for fn, v in rec.get("tcgen05_kernel_sass", {}).items() if "tiles_kernel" in fn}
     ok = bool(findings["tcgen05_kernel_builds"]) and bool(tile_kernels) and all(v["mma_count"] == 1 for v in tile_kernels.values())
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         smi = (rec["nvidia_smi"].get("stdout") or "").strip().split(",")
         result = {
