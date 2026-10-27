@@ -1326,11 +1326,13 @@ static std::string env_str(const char* name, const char* dflt) {
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
 // V31_GEMM 1, the protocol's and the plain GEMM on warpgroup MMAs (wg_proto.cuh, the bench's wgl arm wgmma.linear itself),
 // V31_WGBN its tiles' columns (256 where N allows, or 128), V31_CM where it keeps the tail's low halves (0 registers, 1 an
-// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group.
+// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 1 the register plan that leaves room for a
+// commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_rp; CM 1; the wgl arm keeps RP 0).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
-      gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16);
+      gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
+      rp = env_int("V31_RP", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1507,6 +1509,8 @@ struct Ctx {
 #ifdef V31_WG
     wbn = kn.wgbn == 256 && n % 256 == 0 ? 256 : 128;
     wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
+    if (kn.rp && !kn.cm) { fprintf(stderr, "V31_RP 1 needs V31_CM 1\n"); exit(2); }
+    if (TT > wgp::MAX_TT) { fprintf(stderr, "the tail's %d k-tiles exceed wg_proto.cuh's MAX_TT %d\n", TT, wgp::MAX_TT); exit(2); }
     float* sa = dalloc<float>(m);
     float* sw = dalloc<float>(n);
     const std::vector<float> ha(m, 1.f / 127), hw(n, 1.f / 127);
@@ -1522,9 +1526,10 @@ struct Ctx {
     };
     wa_proto = mk(X, W, 1); wa_plain = mk(X, W, 0); wa_wgl = mk(A, B, 2);
     const void* ks[] = {(const void*)wgp::gemm<256, 0>, (const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 0>,
-                        (const void*)wgp::gemm<128, 1>};
-    const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM};
-    for (int i = 0; i < 4; i++) {
+                        (const void*)wgp::gemm<128, 1>, (const void*)wgp::gemm_rp<256>, (const void*)wgp::gemm_rp<128>};
+    const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM,
+                      wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM};
+    for (int i = 0; i < 6; i++) {
       CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, sm[i]));
       if (kn.carve >= 0) CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributePreferredSharedMemoryCarveout, kn.carve));
     }
@@ -1534,17 +1539,20 @@ struct Ctx {
 #endif
   }
 #ifdef V31_WG
-  void wg_launch(cudaStream_t st, const wgp::Args& g) {
-    if (wbn == 256 && kn.cm) wgp::gemm<256, 1><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
+  void wg_launch(cudaStream_t st, const wgp::Args& g, int cm, int rp) {
+    if (wbn == 256 && rp) wgp::gemm_rp<256><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
+    else if (rp) wgp::gemm_rp<128><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
+    else if (wbn == 256 && cm) wgp::gemm<256, 1><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
     else if (wbn == 256) wgp::gemm<256, 0><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
-    else if (kn.cm) wgp::gemm<128, 1><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
+    else if (cm) wgp::gemm<128, 1><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
     else wgp::gemm<128, 0><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
   }
-  // wgmma.linear on A and B (bf16 words into O[b]): the plain GEMM a served call runs, gamma's denominator
+  // wgmma.linear on A and B (bf16 words into O[b]): the plain GEMM a served call runs, gamma's denominator, always on
+  // RP 0's registers (wgmma.linear's own)
   void wgl(cudaStream_t st, int b) {
     wgp::Args g = wa_wgl;
     g.O = O[b];
-    wg_launch(st, g);
+    wg_launch(st, g, 0, 0);
   }
 #endif
   // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
@@ -1554,7 +1562,7 @@ struct Ctx {
       wgp::Args g = proto ? wa_proto : wa_plain;
       g.words = words[b]; g.O = O[b]; g.diag = diag;
       if (diag & 2) g.TT = 0;
-      wg_launch(st, g);
+      wg_launch(st, g, kn.cm, kn.rp);
       return;
     }
 #endif
@@ -1676,7 +1684,8 @@ static void kernel_attrs(FILE* f) {
   }
 #ifdef V31_WG
   const KAttr wk[] = {{"wg_256_c0", (const void*)wgp::gemm<256, 0>}, {"wg_256_c1", (const void*)wgp::gemm<256, 1>},
-                      {"wg_128_c0", (const void*)wgp::gemm<128, 0>}, {"wg_128_c1", (const void*)wgp::gemm<128, 1>}};
+                      {"wg_128_c0", (const void*)wgp::gemm<128, 0>}, {"wg_128_c1", (const void*)wgp::gemm<128, 1>},
+                      {"wg_256_rp", (const void*)wgp::gemm_rp<256>}, {"wg_128_rp", (const void*)wgp::gemm_rp<128>}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));
@@ -1904,14 +1913,14 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
              med[7] / med[12], med[8] / med[12], med[5] / med[12], med[12] / med[0]);
     for (size_t a = 0; a < arms.size(); a++)   // V31_GEMM 1: over wgmma.linear, the served GEMM
       if (arms[a].name == "wgl")
-        printf("\"gemm_kind\": \"wgmma\", \"wgbn\": %d, \"cm\": %d, \"wgg\": %d, \"gamma_call_wgl\": %.4f, \"gamma_ovl_wgl\": %.4f, "
+        printf("\"gemm_kind\": \"wgmma\", \"wgbn\": %d, \"cm\": %d, \"rp\": %d, \"wgg\": %d, \"gamma_call_wgl\": %.4f, \"gamma_ovl_wgl\": %.4f, "
                "\"gamma_gemm_wgl\": %.4f, \"plain_over_wgl\": %.4f, \"wgl_over_lt\": %.4f, ",
 #ifdef V31_WG
                c.wbn,
 #else
                0,
 #endif
-               c.kn.cm, c.kn.wgg, med[7] / med[a], med[8] / med[a], med[5] / med[a], med[1] / med[a], med[a] / med[0]);
+               c.kn.cm, c.kn.rp, c.kn.wgg, med[7] / med[a], med[8] / med[a], med[5] / med[a], med[1] / med[a], med[a] / med[0]);
     printf("\"kernels\": ");
     kernel_attrs(stdout);
     printf("}\n");

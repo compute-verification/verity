@@ -10,7 +10,9 @@
 // tau = -Z_X U^T - V Y_W^T when the main k-tiles start and tau + T_S after them. Each segment's word is the low half of
 // acc - tau: tau's low halves are kept (CM 0: packed in 64 registers a thread at BN 256; CM 1: in an L2-resident scratch
 // slot of the CTA's, read back at each segment end), so a tail costs (dz + dy) L' inner indices on the tensor cores and
-// no second accumulator.
+// no second accumulator. The tail's step order and events are a table in shared memory, built once a CTA.
+//   RP 0    wgmma.linear's registers (168 at launch: producer 40, consumers 232), so nothing else fits on the SM
+//   RP 1    136 at launch (producer 24, consumers 192; CM 1), so one of the commit's CTAs runs beside each GEMM CTA
 //   mode 0  the plain product X W'^T to O (the bench's `plain` arm)
 //   mode 1  the protocol's GEMM (diag 1: no segment stores, 2: no tail, 4: no dO read; timing only)
 //   mode 2  wgmma.linear itself on A, B: bf16(RN(RN(f32(acc) s_a) s_w)) words, the `wgl` arm, gamma's baseline
@@ -27,15 +29,20 @@ namespace wgp {
 
 #define WGD __device__ __forceinline__
 
-constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW = 128;   // TW: v31's word tile
+// TW: v31's word tile; MAX_TT: the tail's k-tiles a table holds ((dz + dy) L' / BK, 48 at L' 1024 and dz = dy = 3)
+constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW = 128, MAX_TT = 128;
+// RP 1's registers: 136 a thread at launch (the producer drops to 24, the consumers rise to 192), so a CTA leaves 13,312
+// of the SM's 65,536 for one of the commit's 128-thread CTAs (SMALL_MINB 5: <= 104 a thread) beside it
+constexpr int RP1_LAUNCH = 136, RP1_PRODUCER = 24, RP1_CONSUMER = 192;
 
 template <int BN> struct Tile {
   static_assert(BN == 128 || BN == 256, "128 x 128 or 128 x 256 tiles");
   static constexpr int NWG = 2, NT = 128 * (NWG + 1), NA = BN / 2;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int STAGES = SMEM_BUDGET / STAGE < MAX_STAGES ? SMEM_BUDGET / STAGE : MAX_STAGES;
-  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;
+  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 4 * MAX_TT;
 };
+static_assert(128 * RP1_PRODUCER + 256 * RP1_CONSUMER == 384 * RP1_LAUNCH, "RP 1 moves registers, it adds none");
 
 struct alignas(128) Args {
   CUtensorMap a, b, pa, pb;   // X or A (boxes of 128 rows), W' or B (BN rows), P_A (128 rows), P_B (BN rows)
@@ -94,6 +101,8 @@ template <int NA> WGD void acc_fence(int32_t* d) {
 #pragma unroll
   for (int i = 0; i < NA; i++) asm volatile("" : "+r"(d[i])::"memory");
 }
+// bounds the loads an unrolled epilogue hoists (all 64 of a 128 x 256 tile's dO pairs would spill beside 128 accumulators)
+WGD void ld_fence() { asm volatile("" ::: "memory"); }
 
 // the tail's k-tiles in Horner order: digit e of block b (0 for blocks 0 and 1, then Z's digits, then Y's), the top digit
 // D = max(dz, dy) - 1 first; step i < TT is k-tile kt of P's columns, and `end` says the step closes its digit's group
@@ -129,11 +138,15 @@ WGD void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
   tn = r / size;
 }
 
-template <int BN, int CM> __device__ void body(const Args& p) {
+// the tail table's entries: k-tile kt | event << 16, the event at the step's end (TAIL_* below)
+enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3 };
+
+template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   using T = Tile<BN>;
   constexpr int NWG = T::NWG, STAGES = T::STAGES, NA = T::NA;
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
+  int* tab = reinterpret_cast<int*>(smem + (base - smem_at(smem)) + STAGES * T::STAGE + 16 * STAGES);
   const int M = p.M, N = p.N, KT = p.K / BK, tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n;
   const bool proto = p.mode == 1;
   const int TT = proto ? p.TT : 0, steps = TT + KT;
@@ -142,10 +155,15 @@ template <int BN, int CM> __device__ void body(const Args& p) {
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
+  for (int i = tid; i < TT; i += T::NT) {
+    const TailStep ts = tail_step(i, p.lp, p.dz, p.dy);
+    const int ev = !ts.end ? TAIL_NONE : ts.e > 1 ? TAIL_X128 : ts.e == 1 ? TAIL_XM128 : TAIL_CAPTURE;
+    tab[i] = ts.kt | ev << 16;
+  }
   __syncthreads();
 
   if (wg == NWG) {
-    regs_dec<40>();
+    regs_dec<RP ? RP1_PRODUCER : 40>();
     if (tid == NWG * 128) {
       wgp::tma_prefetch(&p.a);
       wgp::tma_prefetch(&p.b);
@@ -160,7 +178,7 @@ template <int BN, int CM> __device__ void body(const Args& p) {
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
           if (i < TT) {
-            const int kt = tail_step(i, p.lp, p.dz, p.dy).kt;
+            const int kt = tab[i] & 0xFFFF;
             wgp::tma_load(st, &p.pa, full, kt * BK, tm * TM);
             wgp::tma_load(st + T::A_BYTES, &p.pb, full, kt * BK, tn * BN);
           } else {
@@ -173,7 +191,7 @@ template <int BN, int CM> __device__ void body(const Args& p) {
     }
     asm volatile("exit;");
   }
-  regs_inc<232>();
+  regs_inc<RP ? RP1_CONSUMER : 232>();
 
   const int x = tid % 128, lane = tid % 32;
   const int rloc = wg * 64 + 16 * (x / 32) + (x % 32) / 4, cq = 2 * (x % 4);   // the thread's first row and column in the tile
@@ -204,12 +222,10 @@ template <int BN, int CM> __device__ void body(const Args& p) {
       bool capture = false;
       int seg = 0;
       if (i < TT) {
-        const TailStep ts = tail_step(i, p.lp, p.dz, p.dy);
-        if (ts.end) {
-          if (ts.e > 1) scale = 128;
-          else if (ts.e == 1) scale = -128;
-          else capture = true;
-        }
+        const int ev = tab[i] >> 16;
+        if (ev == TAIL_X128) scale = 128;
+        else if (ev == TAIL_XM128) scale = -128;
+        else capture = ev == TAIL_CAPTURE;
       } else if (proto && !(p.diag & 1)) {
         const int kt = i - TT;
         if (((kt + 1) * BK) % p.L == 0 || kt + 1 == KT) seg = ((kt + 1) * BK + p.L - 1) / p.L;
@@ -247,14 +263,14 @@ template <int BN, int CM> __device__ void body(const Args& p) {
             const uint32_t lo = (uint32_t)d[4 * j + 2 * h] - c2, hi = (uint32_t)d[4 * j + 2 * h + 1] - (c2 >> 16);
             w[((rloc + 8 * h) * TW + cc) >> 1] = __byte_perm(lo, hi, 0x5410);
           }
+          if (j % 8 == 7) ld_fence();
         }
       }
     }
-    if (pend >= 0) {
-      WGP_WAIT(0);
-      acc_fence<NA>(d);
-      if (lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
-    }
+    // unconditional: ptxas injects its own waits wherever a path could read the accumulators with a group in flight
+    WGP_WAIT(0);
+    acc_fence<NA>(d);
+    if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
 
     const int row = tm * TM + rloc, col0 = tn * BN + cq;
     if (p.mode == 2) {
@@ -282,6 +298,7 @@ template <int BN, int CM> __device__ void body(const Args& p) {
       }
       *reinterpret_cast<int2*>(p.O + q0) = lo;
       *reinterpret_cast<int2*>(p.O + q1) = hi;
+      if (j % 8 == 7) ld_fence();
     }
   }
 }
@@ -289,7 +306,14 @@ template <int BN, int CM> __device__ void body(const Args& p) {
 template <int BN, int CM>
 __global__ void __launch_bounds__(Tile<BN>::NT, 1) gemm(const __grid_constant__ Args p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
-  body<BN, CM>(p);
+  body<BN, CM, 0>(p);
+#endif
+}
+// RP 1 (CM 1 only: CM 0's 64 registers of tau don't fit in 192)
+template <int BN>
+__global__ void __maxnreg__(RP1_LAUNCH) gemm_rp(const __grid_constant__ Args p) {
+#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
+  body<BN, 1, 1>(p);
 #endif
 }
 
