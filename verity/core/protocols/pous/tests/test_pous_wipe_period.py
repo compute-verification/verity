@@ -3,11 +3,10 @@ the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is
 difftested in `verity/core/devices/memory_challenger/lean/tests/test_wipe_protocol.py`): an honest segment certified at
 `StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`), its bound
 vacuous when the egress is uncounted, a prover keeping one label past it and a late read rejected, a session the prover
-left undecided; the challenger chooses `k` (`wipe_party --reads`), never 0, and refuses a request that names it. The
-certificate is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound.
-The leg runs whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound
-doesn't cover (the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's
-window."""
+left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
+is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
+whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
+(the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's window."""
 
 from __future__ import annotations
 
