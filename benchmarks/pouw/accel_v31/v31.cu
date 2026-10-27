@@ -3024,6 +3024,8 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB) filler_kernel(u64 i
 // GEMM's beside a filler that outlasts it; f1: the filler's beside GEMMs that outlast it (the filler on the commit's
 // high-priority stream, launched second). s_g = g1 / g0, s_f = f1 / f0, share = 1 / s_g + 1 / s_f: 1 when the two
 // time-share the SM, 2 when each runs as if alone. Medians over REPS; valid is false when a run's outlasting failed.
+// V31_CARVE (default 100, as Knobs) is the fillers' preferred shared-memory carveout, < 0 the driver's choice: an SM
+// runs one carveout at a time, so a filler under a smaller one than the GEMM's 100 KiB keeps the GEMM's CTAs off it.
 static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
   cudaDeviceProp prop;
   CK(cudaGetDeviceProperties(&prop, 0));
@@ -3046,6 +3048,9 @@ static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
   const FK fk[4] = {filler_kernel<0>, filler_kernel<1>, filler_kernel<2>, filler_kernel<3>};
   const char* fname[4] = {"sha", "alu", "fma", "sleep"};
   const u64 it0[4] = {16, 64, 64, 64};
+  const int carve = env_int("V31_CARVE", 100);
+  if (carve >= 0)
+    for (FK k : fk) CK(cudaFuncSetAttribute((const void*)k, cudaFuncAttributePreferredSharedMemoryCarveout, carve));
   for (const std::string& sh : shapes) {
     char name[64];
     int m, n, k;
@@ -3107,9 +3112,9 @@ static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
         const double f0 = gk::median(f0v), g1 = gk::median(g1v), f1 = gk::median(f1v), sg_ = g1 / g0, sf_ = f1 / f0;
         printf("{\"contend\": true, \"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"gpu\": \"%s\", \"sms\": %d, "
                "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d}, \"mode\": \"%s\", \"cpb\": %d, \"regs\": %d, "
-               "\"iters\": %llu, \"R\": %d, \"g0\": %.6f, \"g1\": %.6f, \"f0\": %.6f, \"f1\": %.6f, \"s_g\": %.4f, "
-               "\"s_f\": %.4f, \"share\": %.4f, \"valid\": %s}\n",
-               name, m, n, k, prop.name, nsm, lt.algo_id, lt.tile, lt.stages, fname[f], cpb, fa.numRegs,
+               "\"carve\": %d, \"iters\": %llu, \"R\": %d, \"g0\": %.6f, \"g1\": %.6f, \"f0\": %.6f, \"f1\": %.6f, "
+               "\"s_g\": %.4f, \"s_f\": %.4f, \"share\": %.4f, \"valid\": %s}\n",
+               name, m, n, k, prop.name, nsm, lt.algo_id, lt.tile, lt.stages, fname[f], cpb, fa.numRegs, carve,
                (unsigned long long)iters, R, g0, g1, f0, f1, sg_, sf_, 1 / sg_ + 1 / sf_, valid ? "true" : "false");
         fflush(stdout);
       }
