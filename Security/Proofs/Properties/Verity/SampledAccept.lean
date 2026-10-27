@@ -21,8 +21,16 @@ probability that flock-verify `--zk` accepts the live audit's transcript at the 
   in the break.
 
 `accept_le_of_coupling` is `accept_le` in the field's shape from a `PlayCoupling` at the session's setting `A`
-(`I = A.I`, `G = A.G`). In a play the blobs are the committed file alone (`Outcome.sent`), so the circuit and public
-files a session reads are the file (`get_single`), and `SessionInputs` at `A.I` is a fact about `θ` and `F`.
+(`I = A.I`, `G = A.G`); `accept_le_of_couplings` takes the coupling's break to be the collision or the forger's
+success. In a play the blobs are the committed file alone (`Outcome.sent`), so the circuit and public files a session
+reads are the file (`get_single`), and `SessionInputs` at `A.I` is a fact about `θ` and `F`. v2 accepts only evidence
+with a session (`session_of_accept`), so `covers` has a session to name.
+
+`prob_le` holds only where the session's coins are the device's: flock-verify `--zk` takes every coin of a session from
+its record (`Flock.Transcript`: the record's rounds and points), and v2 reads the record from a blob the prover sends
+and checks no device signature over it (`Flock.CoinTree.checkRecord` checks its form, `checkFresh` that no key
+repeats). A strategy that writes a record whose coins it chose accepts a false statement with probability one, while
+the live audit's coins are the verifier's.
 -/
 
 open Lean (Json)
@@ -129,6 +137,47 @@ theorem get_single {F b : ByteArray} {d w : String} (h : (Core.Blobs.ofArray #[F
       exact (Except.ok.inj h).symm.trans hm
     · cases h
 
+/-- **v2 accepts only evidence with a session**: with none, `run` pushes no verdict, and v1's check on no verdicts is
+undecided (`OneStage.verdictOf`: no verifier of record), never an acceptance. -/
+theorem session_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
+    {pub : OneStage.Public} {prof : Core.Integrity} (hacc : checkBlobs p c e bs = .accept pub prof) :
+    ∃ s, s ∈ e.sessions := by
+  unfold checkBlobs at hacc
+  split at hacc
+  · cases hacc
+  · next r hrun =>
+    split at hacc
+    · next pub' prof' hchk =>
+      obtain ⟨_, _, _, _, _, _, hva, _⟩ := (Properties.SampledProofs.acceptMeans_iff _ _ _ _ _).1 hchk
+      obtain ⟨x, hx, -⟩ := hva.2.1
+      rcases hl : e.sessions.toList with _ | ⟨s, l⟩
+      · exfalso
+        unfold run at hrun
+        cases ht : Flock.Tags.find? STATEMENT with
+        | none => simp only [ht] at hrun <;> cases hrun
+        | some tags0 =>
+          simp only [ht] at hrun
+          obtain ⟨_, _, hrun⟩ := Run.bind_ok hrun
+          obtain ⟨_, _, hrun⟩ := Run.bind_ok hrun
+          obtain ⟨_, _, hrun⟩ := Run.bind_ok hrun
+          obtain ⟨_, _, hrun⟩ := Run.bind_ok hrun
+          obtain ⟨_, _, hrun⟩ := Run.bind_ok hrun
+          obtain ⟨r1, hf, hrun⟩ := Run.bind_ok hrun
+          rw [← Array.foldlM_toList, hl, List.foldlM_nil] at hf
+          first | cases hf | obtain rfl := Except.ok.inj hf
+          try dsimp only at hrun
+          split at hrun
+          · cases hrun
+          · cases hrun
+            simp at hx
+      · exact ⟨s, Array.mem_toList_iff.1 (by rw [hl]; simp)⟩
+    · next o hne hchk =>
+      first
+      | exact (hchk _ _ hacc).elim
+      | exact (hchk _ _ (hne ▸ hacc)).elim
+      | exact (hchk _ _ (hne.symm ▸ hacc)).elim
+      | (subst hne; exact (hchk _ _ hacc).elim)
+
 end Properties.SampledProofs.OneStageZk
 
 namespace Verity
@@ -191,20 +240,23 @@ theorem accept_le_of_coupling {V : Vocab d α} {θ F c : ByteArray} {σ : Game.S
   exact ⟨acceptsZK_of_transcript hacc hs ht hI, hb⟩
 
 /-- **`SampledDeploy.accept_le` from a coupling** at the session `A θ F c σ r hr` and its strategy `τOf`, for each
-registered file that parses. -/
-theorem accept_le_of_couplings {V : Vocab d α} (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
+registered file that parses, off the collision `Brk` and the forger `Fg`'s success (the coupling's break is either). -/
+theorem accept_le_of_couplings {V : Vocab d α} (Fg : LmsForger) (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
     (Brk : ByteArray → ByteArray → ByteArray → Outcome → Prop)
     (Cp : ∀ θ F c σ r (hr : V.parsed F = some r), V.Registered θ F →
-      PlayCoupling V θ F c σ (Brk θ F c) (A θ F c σ r hr).I (A θ F c σ r hr).G (τOf θ F c σ r hr)) :
+      PlayCoupling V θ F c σ (fun o => Brk θ F c o ∨ Fg.Forges θ o) (A θ F c σ r hr).I (A θ F c σ r hr).G
+        (τOf θ F c σ r hr)) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), V.Registered θ F →
-      Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk θ F c o) (V.game θ F c) σ ≤
+      Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk θ F c o ∧ ¬ Fg.Forges θ o) (V.game θ F c) σ ≤
         FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
           (A θ F c σ r hr).G (τOf θ F c σ r hr) :=
-  fun θ F c σ r hr hreg => accept_le_of_coupling (Cp θ F c σ r hr hreg)
+  fun θ F c σ r hr hreg =>
+    (Game.prob_mono (fun o ho => ⟨ho.1, fun h => h.elim ho.2.1 ho.2.2⟩) _ σ).trans
+      (accept_le_of_coupling (Cp θ F c σ r hr hreg))
 
 end Verity
