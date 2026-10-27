@@ -25,10 +25,10 @@ record, a function of all the run's coins.
 is any program, with no bound on the strategy's state or its time. Its type reads the memory challenger's coins only as
 the challenger releases them (each index as the previous answer returns; the coin commitment after the last answer, so
 no round sees it), which is the challenger being `Faithful` and `Secret` (the per-party names), covered today by
-`trusted-host`. The ring
-game's server is read from `τ` by one fixed extractor (`extract`): it packs `τ`'s state into `S₀` bits and cuts each
-round's program to `(D, Q, L)`, so it is a `Server` by construction, whatever `τ` does. Two named premises about the
-period's strategy take the place of the earlier per-run premise, which handed the proof a server the prover picked:
+`trusted-host`. The ring game's server is read from `τ` by one fixed extractor (`extract`): it packs `τ`'s state into
+`S₀` bits and cuts each round's program to `(D, Q, L)`, so it is a `Server` by construction, whatever `τ` does. Two
+named premises about the period's strategy take the place of the earlier per-run premise, which handed the proof a
+server the prover picked:
 
 * `DeviceModel`, the device model (`pous-ring-device`, `pous-ring-speed`), falsifiable by measurement: on the period's
   coins, `τ`'s state at each round boundary is within the capacity account's memory, the chip and every side channel's
@@ -45,9 +45,9 @@ holds at most `B` bits at every tick, `B + S_chip + c < S₀` (`Pous.Period.Secu
 
 Both rest on the conjecture `P2RingAuditSecure` at a budget `(D, Q, L)`, which `Pous.EndToEnd.EndToEndRing` takes,
 and which is false at some budgets; `Pous.Period.PeriodHeldDeployed` (`Properties.Pous.PeriodDeployed`) takes it only
-at the budget the deadline and the round floor give. The setup
-check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`) are proved against `SetupProtocol.protocol.check`
-(`Proofs.Properties.Pous.Setup`), so neither is a premise.
+at the budget the deadline and the round floor give. The setup check's `AcceptsDecodes` and `PublishesRoot`
+(`Properties.Pous`) are proved against `SetupProtocol.protocol.check` (`Proofs.Properties.Pous.Setup`), so neither is a
+premise.
 
 The certificate is graded by the peak (`Accounting.Guarantees.CapacityOfStateBound`'s reading): the bit-ticks below
 `S · len` bound the capacity account's memory at every tick of the window by `S · len`, so `S · len + S_chip + c` must
