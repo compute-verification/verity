@@ -1,0 +1,13 @@
+# One filler period end to end on a development gate (`fill_period.py`, CMP-172). Not a package: the tests run here as a
+# suite (`uv run tools/verity/check/suites.py benchmarks/pouw/fill_period`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: PoUW's fill rule (`fill._period_outcomes`), its circuits and the challenger's client. `window_salt.py` and
+# `a5_coins.py` make the local gate; `benchmarks/live_challenger` is its auditor host (auditor.py, models.py), whose
+# serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). The torch loop's committed checkpoint
+# and manifest are what the gate registers.
+inputs = ["verity", "benchmarks/pouw/window_salt/window_salt.py", "benchmarks/one_stage/a5_coins.py",
+          "benchmarks/live_challenger", "integrations/torch_loop/checkpoint", "integrations/torch_loop/manifests"]
