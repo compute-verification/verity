@@ -79,6 +79,7 @@
     {"file": "benchmarks/network_traces/active_replay.py", "count": 2},
     {"file": "benchmarks/network_traces/certifier_serve.py", "count": 6},
     {"file": "benchmarks/network_traces/chain_record.py", "count": 1},
+    {"file": "benchmarks/network_traces/lean_replay.py", "count": 1},
     {"file": "benchmarks/network_traces/n2_zk.py", "count": 1},
     {"file": "benchmarks/network_traces/record.py", "count": 3},
     {"file": "benchmarks/network_traces/tests/test_chain_record.py", "count": 1},
