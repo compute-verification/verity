@@ -17,6 +17,9 @@ from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads
 * `LiveAt.wr`, the live audit's record writer, is `canonWr`: a record of the live outcome (`RecordOfZKJ`) flock-verify
   accepts, where there is one. flock-verify reads a transcript only through its draw, its decoded session and its proof
   files (`acceptsZK_congr`), and wherever a record of the outcome is accepted, the writer's is (`accepts_canonWr`).
+  Since flock-verify refuses some transcript (`exists_refused`), whatever of the writer's it accepts is a record of the
+  live outcome (`recordsLive_canonWr`), so record custody holds at the writer (`LiveAt.hCust`) and `LiveAt` takes only
+  the draw file (`hDraw`).
 * `LiveAt.wrongE q τ`: the units wrong in the extractor's transcript at `τ`; `LiveAt.Holds q ε τ`, the claim;
   `LiveAt.bound τ`, `deltaPub` where `CR τ` holds and `⊤` elsewhere.
 * `LiveAt.sound`: at every `τ`, `Pr[flock-verify accepts ∧ ¬ Holds] ≤ bound τ`, where `K₀ − 1 ≤ ε n`.
@@ -109,6 +112,41 @@ theorem accepts_canonWr {n : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n)
   next h => exact (Classical.choose_spec h).2
   next h => exact (h ⟨t, hr, ha⟩).elim
 
+/-- **flock-verify `--zk` refuses some transcript**: the empty record where it sets up nothing, else the empty record
+with one proof file more than its session has rep streams (`zk_verify_ok`). -/
+theorem exists_refused (I : Inputs) : ∃ t : Discharge.Exec.Transcript, ¬ AcceptsZK I t := by
+  cases hs : setupOf (zkInputs I) "" with
+  | error e =>
+    refine ⟨⟨"", #[]⟩, fun ⟨spec, sts, h, _⟩ => ?_⟩
+    change setupOf (zkInputs I) "" = _ at h
+    rw [hs] at h
+    cases h
+  | ok p =>
+    refine ⟨⟨"", Array.replicate (p.1.repStreams.size + 1) ByteArray.empty⟩, fun ⟨spec, sts, h, _, hv⟩ => ?_⟩
+    change setupOf (zkInputs I) "" = _ at h
+    rw [hs] at h
+    cases h
+    obtain ⟨_, _, _, _, _, _, hp, _⟩ := zk_verify_ok _ _ _ _ hv
+    simp at hp
+
+/-- **The writer's records are the live session's** (`RecordsLiveZKJ`): where flock-verify accepts what `canonWr`
+writes, it wrote an accepted record of the outcome, since otherwise it wrote a refused transcript
+(`exists_refused`). -/
+theorem recordsLive_canonWr {n : ℕ} {Reg : Type} (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
+    (Jf : Finset (Fin n) → Reg → ℕ) (mPts : ℕ) : RecordsLiveZKJ I dj Jf (canonWr I dj Jf mPts) := by
+  intro S R o ha
+  show RecordOfZKJ I dj (Jf S R) S o (canonWr I dj Jf mPts S R o)
+  by_cases h : ∃ t, RecordOfZKJ I dj (Jf S R) S o t ∧ AcceptsZK I t
+  · have hw : canonWr I dj Jf mPts S R o = Classical.choose h := by
+      rw [canonWr, dite_eq_left_of_eq_true (eq_true h)]
+    rw [hw]
+    exact (Classical.choose_spec h).1
+  · have hr := exists_refused I
+    have hw : canonWr I dj Jf mPts S R o = Classical.choose hr := by
+      rw [canonWr, dite_eq_right_of_eq_false (eq_false h), dite_eq_left_of_eq_true (eq_true hr)]
+    rw [hw] at ha
+    exact absurd ha (Classical.choose_spec hr)
+
 /-- **`SampledKSLivePub`'s setting at one session**: at the parsed circuit file `D` (its unit built, `hU`) with `n`
 units, the draw size `kd`, `K₀` and the descriptor `desc`, everything else `SampledKSLivePub` quantifies before its
 collision-resistance premises, named assumption A3 included. `t' τ` bounds the SHA-512 evaluations of one run of the
@@ -143,8 +181,7 @@ structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ 
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : Assumptions.UniformRandomBytes Lb src
   hTags : TagsOkZHJ I
-  hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length)
-    (canonWr I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) (mPtsOf D.unroll.g (kd / nTab I))) kd
+  hDraw : Discharge.ZkLink.DrawFileZK dj (.subset kd) n
   k : ℕ
   Rw : ℕ
   M : ℕ
@@ -173,6 +210,12 @@ noncomputable abbrev wr : (S : Finset (Fin n)) → (R : A.Reg) →
     LiveOutJ (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length (mPtsOf D.unroll.g (kd / nTab A.I)) →
       Discharge.Exec.Transcript :=
   canonWr A.I A.dj (fun S R => (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length) (mPtsOf D.unroll.g (kd / nTab A.I))
+
+/-- **Record custody at the writer** (`RecordCustodyZKJ`): its records are the live session's (`recordsLive_canonWr`),
+and the draw file is `hDraw`. -/
+theorem hCust : Assumptions.Zk.RecordCustodyZKJ A.I A.dj (fun S R => (planZHJ (Reg := A.Reg) A.dj A.y₀ S R).length)
+    A.wr kd :=
+  ⟨recordsLive_canonWr A.I A.dj _ _, A.hDraw⟩
 
 /-- The draw's law: `kd` of the `n` units, from the verifier's bytes. -/
 noncomputable abbrev L : Law n := Law.execOS (n := n) A.src (.subset kd) n
