@@ -297,7 +297,7 @@ _BLOCK_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED} (vLLM d9105ea80,
 _QUANT_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED}: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
                "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
                "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, run "
-               f"{_BLACKWELL['run']}, record {_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases "
+               f"{_BLACKWELL['run']}, record {_BLACKWELL['record']} (harness {_BLACKWELL['commit']}), cases "
                "quant/K4096/G64 and quant/K192/G64 (the fused-MoE experts' inputs, 300 rows each) and quant/K4096/G128 and quant/K1024/G128, "
                "with every quant call its dense and MoE GEMM cases received, 7,941 rows, 0 mismatches")
 
@@ -454,7 +454,7 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 _BLOCK_DOT_CONF = ("exact-model-tested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
                    "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1, "
                    f"G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run {_BLACKWELL['run']}, record "
-                   f"{_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
+                   f"{_BLACKWELL['record']} (harness {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
                    "and cutlass/o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300}: CutlassFp8BlockScaledMMKernel's blockwise "
                    "_C.cutlass_scaled_mm in all three cc 12.0 dispatch variants, 5,080,320 words, 0 mismatches; Hopper's step, both Triton "
                    "scale orders and an unfused mul + add each refuted (30,354, 13,159, 13,278 and 13,222 words)")

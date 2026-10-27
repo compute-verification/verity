@@ -24,7 +24,6 @@ from verity.ml.circuits.types import Array, Record, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BitNot
-from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import A16, BF16, BIT, F32, I32
 
@@ -47,7 +46,7 @@ B1_CONFIG = {
 
 # B0 (expansion oracle): HuggingFaceTB/SmolLM2-135M, LlamaForCausalLM — same registered functions, different
 # static configuration (no QKV bias, head dim 64, 9/3 heads, 30 layers). The FA2 kernel trait for head dim 64
-# is not established from a profiler record, so `Attention` for B0 is `model-untested` (see typed-b1.md).
+# is not established from a profiler record, so `Attention` for B0 is `model-untested`.
 B0_CONFIG = {
     "model": "HuggingFaceTB/SmolLM2-135M",
     "revision": None,
@@ -157,7 +156,7 @@ ResidualAdd = CompositeDefinition("ResidualAdd", 1, ("N",),
 
 @composite("Bf16MulScalarTensor", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, BF16))), Array(S.N, BF16)),
            conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S "
-                       f"({EVIDENCE['bf16_mul_scalar_tensor_difftest']['by']}) and the wave-1 exhaustive probe: bf16(f32(x) * 48) "
+                       "and the wave-1 exhaustive probe: bf16(f32(x) * 48) "
                        "on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
 def Bf16MulScalarTensor(B, S, x, s):
     """`aten.mul.Tensor(x bf16 [.., N], s bf16 0-d TENSOR)`: ATen's CUDA
@@ -171,7 +170,7 @@ def Bf16MulScalarTensor(B, S, x, s):
     return B.batch(P.F2fpBf16, B.batch(P.F32Mul, xf, sf, axes=(0, None)), axes=(0,))
 
 # ---------------------------------------------------------------------------------------------------------
-# RMSNorm — vLLM batch-invariant Triton `_rms_norm_kernel` (rmsnorm-model.md §3.1)
+# RMSNorm — vLLM batch-invariant Triton `_rms_norm_kernel`
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -264,9 +263,9 @@ def _fused_rms_epilogue(B, S, r, rf, var, w, eps=None):
                        "launch under VLLM_BATCH_INVARIANT=1 (layernorm_kernels.cu: `!batch_invariant_launch` guards the width-8 "
                        "path); its variance tree differs from production's in 1218 of the 2340 fused-norm rows of the B0 store and "
                        "the bf16 output in 13 of them (B0 store sweep, `verity.ml.definitions.registry.rmsnorm_fused_sweep`); the B1 divergence "
-                       "(layer 27, t=1, word 629; typed-b1.md §5.1) is the same class")
+                       "(layer 27, t=1, word 629) is the same class")
 def RMSNormFusedCudaV1(B, S, x, res, w):
-    """Superseded (kept registered so that TA1's B0/B1 records `Serve_v1{...}` with this body remain decodable):
+    """Superseded (kept registered so that the B0/B1 records `Serve_v1{...}` with this body remain decodable):
     vLLM CUDA `fused_add_rms_norm_kernel<bf16, 8>`: `res' = bf16(x + res)`; N/8 threads x one 8-vector of res':
     `p = (((z0^2 + z1^2) + (z2^2 + z3^2)) + ...)` accumulated sequentially over the 4 bf16x2 pairs from +0; cub
     BlockReduce<1024> over the N/8 threads; `mean = var / N` (IEEE), `+ eps`, `s = rsqrtf(.)`,
@@ -296,7 +295,7 @@ FUSED_RMS_BLOCK = 1024  # `max_block_size = batch_invariant_launch ? 1024 : ...`
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
            conformance="exact-model-tested; evidence: reproduces production on 2,340/2,340 fused-norm rows (1,347,840 words) of "
                        "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity.ml.definitions.registry.rmsnorm_fused_sweep`) "
-                       f"and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed {EVIDENCE['rmsnorm_fused_cuda_b1_row']['closed']}: "
+                       "and on the B1 (N=1536) L27/t=1 row that v1 missed ("
                        "`results/TA1-typed-b1-20260907/corr-B1-L27t1-rmsv2.json`, 14/14 exact)")
 def RMSNormFusedCuda(B, S, x, res, w, eps=None):
     """vLLM `d9105ea80` `csrc/layernorm_kernels.cu` **generic** `fused_add_rms_norm_kernel<c10::BFloat16, 0, true>` —
@@ -329,7 +328,7 @@ def RMSNormFusedCuda(B, S, x, res, w, eps=None):
 
 
 COS_SIN_QUALIFICATION = ("the cos/sin row is an Input of a derived table rebuilt from vllm._compute_cos_sin_cache (CUDA cosf/sinf), "
-                         "GPU only: the CPU rebuild differs in 17,261 of 16,777,216 words (B1) and 6 of 524,288 (B0); typed-b1.md §5.2")
+                         "GPU only: the CPU rebuild differs in 17,261 of 16,777,216 words (B1) and 6 of 524,288 (B0)")
 
 
 @composite("RoPEHead", 1, ["D"], lambda S: ((("x", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
@@ -741,7 +740,7 @@ def Serve(B, S, prompt, weights):
 # Why NEW versions and not a body edit: every pinned record (n4/sc1/s4/q3, E8's 32×16, ...) was produced under `Serve_v1`
 # and is re-verified against ITS pinned program (the user: "retain their original pinned programs"); the verifier builds
 # the program from `program.identity`, so `Serve_v1` must keep building the v1 body word for word.  The corrected program
-# is `Serve_v4{C, LP, STEPS}`: TA1's Serve body over TA1's layer functions, with the attention chain `Attention_v3` ->
+# is `Serve_v4{C, LP, STEPS}`: `Serve_v1`'s body over its layer functions, with the attention chain `Attention_v3` ->
 # `AttentionHead_v3` -> `AttnBlock_v3{D, NVIS, FIRST}`, whose block size is the DERIVED static `fa2_kblock_n(D)` (the
 # same `DotBf16_v1{K=D}` QK dot, the same primitives: the population's kind ids are unchanged, only the per-kind counts
 # and the program digest move).  (v2 of the chain is CF1's statics-lifted `AttnBlock_v2{..., BN, DOT}`; `Serve_v3` is
@@ -864,7 +863,7 @@ def AttentionV3(B, S, q, kc, vc, *extra, head=AttentionHeadV3):
 
 
 def _forward_positions_v4(B, C: dict, BN: int, toks: Coll, weights: Coll, T0: int, n_pos: int, caches: list[tuple[Coll, Coll]] | None):
-    """`_forward_positions` with `Attention_v3{..., BN}` at the attention call; everything else TA1's (same names, same order)."""
+    """`_forward_positions` with `Attention_v3{..., BN}` at the attention call; everything else `_forward_positions`'s (same names, same order)."""
     NL, H = C["NL"], C["H"]
     hs = [B.call(bind(Embedding, V=C["V"], H=H), toks[i], weights["embed"], name=f"t={T0 + i}/embed") for i in range(n_pos)]
     res = [None] * n_pos
@@ -930,7 +929,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 # `AttnBlock`/`AttentionHead` read the module constant `BN` (kBlockN = 64). Lane HP obtained the H100 program by
 # re-instantiating the same code over a substituted module environment (`hopper.py`): correct, but the selection
 # lived in the Python environment, not in the program. Below the selections are static parameters, so the two
-# serving programs are two binding records of ONE definition. The bodies are TA1's line for line (the correspondence
+# serving programs are two binding records of ONE definition. The bodies are `Serve_v1`'s line for line (the correspondence
 # `verity_vllm.program.frontend.correspond.correspond_rebound` shows node-for-node identity against `Serve_v1` and against
 # `hopper.ServeHopper_v1`); only the callee/constant names are read from `S`. New *versions* because the identity
 # (the statics) changed; every v1 definition stays registered and untouched (registry version discipline).
@@ -1175,7 +1174,7 @@ def ServeV2(B, S, prompt, weights):
     return _Coll(Array(STEPS + 1, I32), concat([t.refs for t in toks]))
 
 
-#: The Ampere (sm_80/sm_89 eager, TA1's profile) implementation records.
+#: The Ampere (sm_80/sm_89 eager profile) implementation records.
 GEMM_AMPERE: dict = {"DOT": P.AmpereBF16TcDot16}
 ATTENTION_FA2: dict = {"BN": BN, "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}  # the HEAD DIM 128 record (W11); see attention_fa2
 
@@ -1187,7 +1186,7 @@ def attention_fa2(D: int) -> dict:
 
 
 def serve_v2(C: dict, LP: int, STEPS: int, gemm: dict = GEMM_AMPERE, attention: dict = ATTENTION_FA2, norm: dict | None = None):
-    """`Serve_v2` bound for one profile; by default the Ampere eager profile (TA1's program as a binding record: corresponds to
+    """`Serve_v2` bound for one profile; by default the Ampere eager profile (the hand-typed B1 program as a binding record: corresponds to
     `Serve_v1`).  With `attention=attention_fa2(C["D"])` it is the D54-corrected program's binding record (corresponds to `Serve_v4`)."""
     return bind(ServeV2, C=C, LP=LP, STEPS=STEPS, GEMM=gemm, ATTENTION=attention, NORM=norm if norm is not None else norm_bundle(C))
 

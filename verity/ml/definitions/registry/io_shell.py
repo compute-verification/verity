@@ -77,7 +77,6 @@ from verity.ml.circuits.ops.scalar import (
 )
 from verity.ml.circuits.refs import Coll, broadcast, concat
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry.prims import BIT, I32
 from verity.ml.definitions.registry.sampling import bit_at
@@ -296,7 +295,7 @@ def mask_reference(occ: int, tok: int) -> int:
 
 
 @composite("SlotRow", 1, ["NP"], row_sig, refuse=row_refuse,
-           conformance=f"a window slot's ingress row as {EVIDENCE['window_fixed_slots']['ask']}'s fixed slots carry it: occupancy, "
+           conformance="a window slot's ingress row as the window's fixed slots carry it: occupancy, "
                        "prompt length, ids")
 def SlotRow(B, S, row):
     """A slot's ingress row opened into its occupancy word and its first position's slot (the module docstring)."""

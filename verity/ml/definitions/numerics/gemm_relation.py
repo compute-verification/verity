@@ -4,7 +4,7 @@
 ``independent_gemm(node, opened_inputs) -> bytes`` predicts the committed bytes of one GEMM
 output row (the default proof block: one node instance at one position) from the description node and
 the authenticated openings of its inputs, using nothing but the explicit numerical model
-measured in this lane:
+measured on the A100:
 
 * per instruction: Ampere ``mma.sync.m16n8k16`` BF16 x BF16 -> FP32 semantics
   (``veritor.core.silicon.AMPERE_BF16_M16N8K16`` == ``verity.ml.definitions.numerics.mma.AMPERE_BF16``;
@@ -35,7 +35,7 @@ How the epilogue is chosen (the model must be told, it must not guess by trying 
    as a separate ``aten.add`` node) so ``epilogue = none``; ``aten.addmm`` -> ``bias_fp32_in_kernel``;
    ``aten.linear`` -> ``bias_bf16_after``; else the same by the ``runtime_impl`` string;
 3. else ``bias_bf16_after`` (what ``torch.nn.functional.linear(x, w, b)`` does under
-   ``enable_batch_invariant_mode()`` in eager mode -- the path this lane measured).
+   ``enable_batch_invariant_mode()`` in eager mode -- the path measured).
 
 W1's GEMM node (``verity.bi_mm``) opens ``x`` = the producer's row (with ``extra["arg_cols"]["x"]``
 = the column slice when the producer is wider) and ``w`` = the *parameter* leaf in its own
@@ -47,8 +47,8 @@ A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``
 e.g. the ``sliced1x2`` 64x64 kernel = ``verity.ml.definitions.numerics.kernel_zoo.sliced_k_spec(K, 2, 2, ...)``.
 A node whose kernel is unresolved must not carry this relation (checker ``none``).
 
-Coverage (what the checker claims).  ``independent_gemm`` predicts only on the families this
-lane measured bit-exact on the A100 -- :func:`coverage` decides from the node alone:
+Coverage (what the checker claims).  ``independent_gemm`` predicts only on the families
+measured bit-exact on the A100 -- :func:`coverage` decides from the node alone:
 
 * batch-invariant ``matmul_kernel_persistent`` (W1's ``verity.bi_mm`` / ``runtime_impl``
   naming ``matmul_persistent``): (K, N) in :data:`VALIDATED_BI_FAMILIES` (the five Qwen2.5-1.5B
@@ -316,7 +316,7 @@ VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
 BI_KERNEL_MARKERS = ("matmul_kernel_persistent", "matmul_persistent", "batch_invariant", "verity.bi_mm")
 BI_RUNTIME_OPS = ("verity.bi_mm", "aten.mm", "aten.addmm", "aten.linear", "aten.matmul")
 VALIDATED_ARCHS = ("sm_80",)  # where the production GEMM itself was measured
-ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured by this lane
+ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured there
 
 
 def _runtime_impl_of(node: Any) -> str:
@@ -357,7 +357,7 @@ def coverage(node: Any, opened_inputs: Mapping[str, Any]) -> dict[str, Any]:
     impl = _runtime_impl_of(n)
     rop = runtime_op_of(n)
     arch = str(_const(n, opened_inputs, "arch") or "sm_80")
-    arch_note = "" if arch in VALIDATED_ARCHS else (f"; arch {arch} assumed parameter-identical to sm_80 (production GEMM not measured there by this lane)" if arch in ASSUMED_ARCHS else None)
+    arch_note = "" if arch in VALIDATED_ARCHS else (f"; arch {arch} assumed parameter-identical to sm_80 (production GEMM not measured there)" if arch in ASSUMED_ARCHS else None)
     if arch_note is None:
         return {"covered": False, "family": None, "kernel_path": impl, "spec": None, "reason": f"unresolved: no validated per-instruction model for arch {arch!r}"}
     explicit_split = _const(n, opened_inputs, "split_k")

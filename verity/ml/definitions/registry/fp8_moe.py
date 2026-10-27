@@ -188,7 +188,7 @@ def MoeExpertFp8BlockGemmW(B, S, xq, sx, g, w, ws):
 
 DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), BlackwellE4m3QmmaDot32_v1 at G = 64, "
              f"KB = 32, SWAP = False (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run {_BLACKWELL['run']}, record "
-             f"{_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases moe/decode, moe/small, moe/block and "
+             f"{_BLACKWELL['record']} (harness {_BLACKWELL['commit']}), cases moe/decode, moe/small, moe/block and "
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "

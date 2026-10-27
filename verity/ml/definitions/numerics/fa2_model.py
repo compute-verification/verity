@@ -234,7 +234,7 @@ def attention_call(
 
 
 MEASURED = {
-    # what the model was measured bit-exact against (natural capture + §11 stress, this lane, RTX 4090):
+    # what the model was measured bit-exact against (natural capture + §11 stress, RTX 4090):
     "arch": ("sm_89",),                       # the sm_80 cubin executed on an RTX 4090; MUFU tables measured there
     "head_dim": (128,),
     "heads_kv_heads": ((12, 2),),             # Qwen2.5-1.5B (GQA 6:1); the KV-head index map is h // (H // KVH)
