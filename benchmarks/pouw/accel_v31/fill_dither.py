@@ -1,12 +1,13 @@
 """The GPU's no-fold call (v31lib's Prover over libv31.so) checked against DITHER-FILL's reference itself,
-`verity/core/protocols/pouw/circuit/dither.py` (#4974), rather than v31.py's mirror of it. The device commits the filler's
-layout (`dither.Shape` with `o` False: T_1 .. T_S a tile, no O). On each case: the seeds the prover hands the device
-(v31's `fill_seeds` for a pad call, `served_seeds` for a call on an operand A) against `dither.fill_seeds` and
-`dither.seeds` byte for byte, the device's pad (`dither.pad_rows`), every word of sampled cells (`dither.cell_values`),
-sampled leaves rebuilt from only the cells they hold (`dither.leaf_row`) and opened against the GPU's root on the GPU's
-own paths (`dither.opens`, salted `dither.prf_salt` under the call's key), and, on the small cases, the whole call
-(`dither.values`, `dither.values_buffer`, `dither.commit`) against the GPU's words and root. The device runs on v31's
-seeds and the reference on dither's. A cheating call must fail them.
+`verity/core/protocols/pouw/circuit/dither.py` (#4974), rather than v31.py's mirror of it, on filler calls (the pad,
+`dither.Shape` with `o` False: T_1 .. T_S a tile) and served calls (an operand A, `o` True: T_1 .. T_{S-1} and then O a
+tile). On each case: the seeds the prover hands the device (v31's `fill_seeds` for a filler, `served_seeds` for a served
+call) against `dither.fill_seeds` and `dither.seeds` byte for byte, the device's pad (`dither.pad_rows`), every committed
+value of sampled cells (`dither.cell_values`: the T_s the layout commits, and O), sampled leaves rebuilt from only the
+cells they hold (`dither.leaf_row`) and opened against the GPU's root on the GPU's own paths (`dither.opens`, salted
+`dither.salts(Ks, off)` at the call's offset), and, on the small cases, the whole call (`dither.values`,
+`dither.values_buffer`, `dither.commit`) against the GPU's values and root. The device runs on v31's seeds and the
+reference on dither's. A cheating call must fail them.
 
     PYTHONPATH=. python3 benchmarks/pouw/accel_v31/fill_dither.py --lib LIB [--cells 64] [--leaves 8] [--out DIR]
 
@@ -28,76 +29,93 @@ import v31lib  # noqa: E402
 
 from verity.core.protocols.pouw.circuit import dither  # noqa: E402
 
-# NAME M N K LP L ROW A CHEAT FULL: A pad (the filler's, from fill seeds) or llm (an operand A, from served seeds);
-# FULL 1: the whole call through dither.py
+# NAME M N K LP L ROW KIND CHEAT FULL: KIND fill (the pad, from fill seeds) or served (an operand A, from served seeds;
+# operands in -127 .. 126, as a served root refuses a row of A + d_A or B + d_B spanning -128 .. 128); FULL 1: the whole
+# call through dither.py
 CASES = """
-d-small-pad 128 256 768 256 512 1024 pad none 1
-d-small-llm 256 128 1024 128 512 2048 llm none 1
-d-qkv-L4096 256 6144 4096 256 4096 1024 pad none 0
-d-o-L1024-row16k 256 4096 4096 128 1024 16384 pad none 0
-d-down-L4096 128 384 14336 256 4096 1024 llm none 0
-d-up-L8192 128 28672 8192 256 8192 1024 pad none 0
-c-skip 128 256 2048 256 512 1024 pad skip:3 1
-c-forge 256 256 4096 256 1024 1024 llm forge:2:0.5 0
+f-small 128 256 768 256 512 1024 fill none 1
+f-qkv-L4096 256 6144 4096 256 4096 1024 fill none 0
+f-o-L1024-row16k 256 4096 4096 128 1024 16384 fill none 0
+f-up-L8192 128 28672 8192 256 8192 1024 fill none 0
+s-small 256 128 1024 128 512 2048 served none 1
+s-small-S1 128 256 768 256 768 1024 served none 1
+s-qkv-L4096-row16k 256 6144 4096 256 4096 16384 served none 0
+s-o-L1024-row16k 256 4096 4096 128 1024 16384 served none 0
+s-down-L4096 128 384 14336 256 4096 1024 served none 0
+s-up-L8192 128 28672 4096 256 8192 1024 served none 0
+c-skip 128 256 2048 256 512 1024 fill skip:3 1
+c-forge 256 256 4096 256 1024 1024 served forge:2:0.5 0
+c-forgeO 256 256 4096 256 1024 1024 served forgeO:0.5 0
 """
 
 
-def case_seeds(a_kind: str, rng: np.random.Generator) -> tuple[dict[str, bytes], dict[str, bytes]]:
+def case_seeds(served: bool, rng: np.random.Generator) -> tuple[dict[str, bytes], dict[str, bytes]]:
     """(the prover's seeds, the reference's) for one call."""
-    if a_kind == "pad":
+    if not served:
         salt, coin = os.urandom(64), os.urandom(64)
         return v31.fill_seeds(salt, coin), dither.fill_seeds(salt, coin)
     coin, receipt, call = os.urandom(64), os.urandom(64), int(rng.integers(1 << 62))
     return v31.served_seeds(coin, receipt, call), dither.seeds(coin, receipt, call)
 
 
+def committed(sh: dither.Shape, buf: bytes, i: int, j: int) -> list[int]:
+    """Cell (i, j)'s committed values in `buf`: its T_s (s <= W), then O when the call commits it."""
+    out = []
+    for s in range(1, sh.W + 1):
+        pos, off = sh.word_leaf(i, j, s)
+        out.append(int.from_bytes(buf[pos * sh.row + off:pos * sh.row + off + 2], "little"))
+    if sh.o:
+        pos, off = sh.o_leaf(i, j)
+        out.append(int.from_bytes(buf[pos * sh.row + off:pos * sh.row + off + 4], "little"))
+    return out
+
+
 def run_case(lib: v31lib.Lib, line: str, cells: int, leaves: int, rng: np.random.Generator) -> dict:
-    name, m, n, k, lp, L, row, a_kind, cheat, full = line.split()
+    name, m, n, k, lp, L, row, kind, cheat, full = line.split()
     m, n, k, lp, L, row = map(int, (m, n, k, lp, L, row))
-    sh = dither.Shape(m, n, k, lp, L, row, o=False)
-    B = rng.integers(-128, 128, size=(n, k), dtype=np.int8)
-    A = None if a_kind == "pad" else rng.integers(-128, 128, size=(m, k), dtype=np.int8)
-    seeds, ref = case_seeds(a_kind, rng)
-    rep: dict = {"name": name, "shape": sh.label(), "L": L, "S": sh.S, "A": a_kind, "cheat": cheat,
+    served = kind == "served"
+    sh = dither.Shape(m, n, k, lp, L, row, o=served)
+    lo, hi = (-127, 127) if served else (-128, 128)
+    B = rng.integers(lo, hi, size=(n, k), dtype=np.int8)
+    A = rng.integers(lo, hi, size=(m, k), dtype=np.int8) if served else None
+    seeds, ref = case_seeds(served, rng)
+    rep: dict = {"name": name, "shape": sh.label(), "L": L, "S": sh.S, "W": sh.W, "kind": kind, "cheat": cheat,
                  "seeds_equal": seeds == ref}
-    Aref = A if A is not None else np.array(dither.pad_rows(ref, k, range(m)), dtype=np.int8)
-    with v31lib.Prover(m, n, k, lp, L, row, lib=lib) as p:
+    Aref = A if served else np.array(dither.pad_rows(ref, k, range(m)), dtype=np.int8)
+    with v31lib.Prover(m, n, k, lp, L, row, served=served, lib=lib) as p:
         p.set_weights(B)
-        c = p.prove(seeds, None if A is None else p.load_a(A), cheat)
-        root, key = p.root(c), p.calls[c]["key"]
-        words = p.words(c)
-        if A is None:
+        c = p.prove(seeds, p.load_a(A) if served else None, cheat)
+        root, off = p.root(c), p.calls[c]["off"]
+        buf = p.values(c)
+        if not served:
             rep["pad_equal"] = p.pad() == Aref.tobytes()
         bad_cells = []
         for _ in range(cells):
             i, j = int(rng.integers(m)), int(rng.integers(n))
-            want, _ = dither.cell_values(sh, ref, Aref[i], B[j], i, j)
-            got = []
-            for s in range(1, sh.S + 1):
-                pos, off = sh.word_leaf(i, j, s)
-                got.append(int.from_bytes(words[pos * row + off:pos * row + off + 2], "little"))
+            T, O = dither.cell_values(sh, ref, Aref[i], B[j], i, j)
+            want = T[:sh.W] + ([O] if served else [])
+            got = committed(sh, buf, i, j)
             if got != want:
-                bad_cells.append((i, j, next(s + 1 for s in range(sh.S) if got[s] != want[s])))
+                bad_cells.append((i, j, next(x for x in range(len(want)) if got[x] != want[x])))
         rep["cells"], rep["cells_bad"] = cells, bad_cells[:8]
         rep["cells_equal"] = cells - len(bad_cells)
         picks = [int(x) for x in rng.choice(sh.leaves, size=min(leaves, sh.leaves), replace=False)]
-        opened = p.open(c, picks)
         rows_equal = opens = 0
-        dom = sh.domain()
-        for pos, (g_row, _, g_path) in zip(picks, opened):
+        dom, salt = sh.domain(), dither.salts(p.ks, off)
+        for pos, (g_row, _, g_path) in zip(picks, p.open(c, picks)):
             ref_row = dither.leaf_row(sh, ref, Aref, B, pos)
             rows_equal += g_row == ref_row
-            opens += dither.opens(dom, root, sh.leaves, pos, ref_row, dither.prf_salt(key, pos), g_path)
+            opens += dither.opens(dom, root, sh.leaves, pos, ref_row, salt(pos), g_path)
         rep["leaves"], rep["rows_equal"], rep["leaves_open"] = len(picks), rows_equal, opens
         if full == "1":
-            T, _ = dither.values(sh, ref, Aref, B)
-            buf = dither.values_buffer(sh, T)
-            rep["words_equal"] = buf == words
-            rep["root_equal"] = dither.commit(sh, buf, dither.salts(key)).root == root
+            T, O = dither.values(sh, ref, Aref, B)
+            want = dither.values_buffer(sh, T, O)
+            rep["values_equal"] = want == buf
+            rep["root_equal"] = dither.commit(sh, want, salt).root == root
         rep["root"] = root.hex()[:16]
     honest = (rep["seeds_equal"] and rep.get("pad_equal", True) and rep["cells_equal"] == cells
               and rep["rows_equal"] == rep["leaves"] and rep["leaves_open"] == rep["leaves"]
-              and rep.get("words_equal", True) and rep.get("root_equal", True))
+              and rep.get("values_equal", True) and rep.get("root_equal", True))
     rep["accept"] = bool(honest)
     rep["good"] = rep["accept"] == (cheat == "none")
     return rep
@@ -105,15 +123,15 @@ def run_case(lib: v31lib.Lib, line: str, cells: int, leaves: int, rng: np.random
 
 def describe(r: dict) -> str:
     sh = r["shape"]
-    parts = [f"{sh['m']}x{sh['n']}x{sh['k']} L' {sh['lp']} L {r['L']} row {sh['row']} S {r['S']} A {r['A']}",
+    parts = [f"{r['kind']} {sh['m']}x{sh['n']}x{sh['k']} L' {sh['lp']} L {r['L']} row {sh['row']} S {r['S']} W {r['W']}",
              f"seeds {'equal' if r['seeds_equal'] else 'DIFFER'}"]
     if "pad_equal" in r:
         parts.append(f"pad {'equal' if r['pad_equal'] else 'DIFFERS'}")
     parts.append(f"cells {r['cells_equal']}/{r['cells']} equal"
-                 + (f" (first off: (i, j, s) {tuple(r['cells_bad'][0])})" if r["cells_bad"] else ""))
+                 + (f" (first off: (i, j, value) {tuple(r['cells_bad'][0])})" if r["cells_bad"] else ""))
     parts.append(f"leaves {r['rows_equal']}/{r['leaves']} rows equal, {r['leaves_open']}/{r['leaves']} open the GPU's root")
-    if "words_equal" in r:
-        parts.append(f"whole call: words {'equal' if r['words_equal'] else 'DIFFER'}, root "
+    if "values_equal" in r:
+        parts.append(f"whole call: values {'equal' if r['values_equal'] else 'DIFFER'}, root "
                      f"{'equal' if r['root_equal'] else 'DIFFERS'}")
     return (f"{r['name']}: {'ACCEPT' if r['accept'] else 'REFUSE'} ({r['cheat']}) " + "; ".join(parts)
             + f"; root {r['root']}")
@@ -140,8 +158,8 @@ def main(argv: list[str]) -> int:
     cheats = [r for r in reps if r["cheat"] != "none"]
     good = all(r["good"] for r in reps)
     print(f"dither.py recheck: {'ACCEPT' if good else 'REFUSE'}: {sum(r['accept'] for r in honest)}/{len(honest)} honest "
-          f"calls exact against dither.py, {sum(not r['accept'] for r in cheats)}/{len(cheats)} cheating calls refused",
-          flush=True)
+          f"calls exact against dither.py ({sum(r['kind'] == 'served' for r in honest)} served), "
+          f"{sum(not r['accept'] for r in cheats)}/{len(cheats)} cheating calls refused", flush=True)
     return 0 if good else 1
 
 

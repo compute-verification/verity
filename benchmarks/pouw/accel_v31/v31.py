@@ -933,28 +933,36 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
 
 
 def cmd_fill_table(a: argparse.Namespace) -> int:
-    """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped as served, over cuBLASLt and CUTLASS, with the
-    weight side a period's (v3.2: ovl), a call's (dither.call_seeds: ovl_w) and the filler's pad (ovl_pad), ovl with the
-    commit's loads left out (ovl_nomem: its compressions on bytes made in registers; wrong roots, timing only), the GEMM's
-    tensor duty (cuBLASLt's time over the call's period) and where the call's time goes."""
+    """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped (a served call's, or a filler's), over
+    cuBLASLt and CUTLASS, with the weight side a period's (v3.2: ovl), a call's (the run of record's per-call weight coins:
+    ovl_w) and the filler's pad (ovl_pad), ovl with the commit's loads left out (ovl_nomem: its compressions on bytes made in
+    registers; wrong roots, timing only), the GEMM's tensor duty (cuBLASLt's time over the call's period, per-call weight
+    coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-"."""
     rows = []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if line.startswith("{") and '"fill": true' in line:
                 rows.append(json.loads(line))
-    print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | gamma ovl_pad "
-          "| gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, commit ms |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+
+    def g(x) -> str:
+        return "-" if x is None else f"{x:.3f}"
+
+    print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
+          "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
+          "commit ms |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
-        variant = (f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}" + (f" p{r['pf']}" if r.get("pf") else "")
-                   + (" ltw" if r.get("ltw") else ""))
-        cut, gcut = ((f"{ms['cutlass']['ms']:.3f}", f"{r['gamma_ovl_cutlass']:.3f}") if "cutlass" in ms else ("-", "-"))
-        parts = ", ".join(f"{ms[x]['ms']:.3f}" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
-        nomem = f"{r['gamma_ovl_nomem']:.3f}" if "gamma_ovl_nomem" in r else "-"
-        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {ms['lt']['ms']:.3f} | {cut} | "
-              f"{ms['ovl']['ms']:.3f} | {r['gamma_ovl']:.3f} | {gcut} | {r['gamma_ovl_w']:.3f} | {r['gamma_ovl_pad']:.3f} | "
-              f"{nomem} | {r['gamma_call']:.3f} | {r['gamma_gemm']:.3f} | {100 / r['gamma_ovl']:.1f}% | {parts} |")
+        variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
+                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else ""))
+        cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
+        gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
+        parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
+        duty = r.get("gamma_ovl_w") if r.get("o") else r["gamma_ovl"]
+        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
+              f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
+              f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
+              f"{100 / duty:.1f}% | {parts} |")
     return 0
 
 
