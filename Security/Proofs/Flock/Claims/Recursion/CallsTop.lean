@@ -6,7 +6,10 @@ import Proofs.Flock.Claims.Recursion.CallsRep
 A rep's verification calls SHA-512 for its Ligerito queries (`ligC`) and for at most each recorded round of its stream,
 the transcript's potential at the start (`cl_verifyRep`). The verdict at a parsed record adds the decoder's calls, S17's
 proof digests and two reps per table (`cl_verifyJ`); a bind may assume what its first run returned (`cl_bind_q`), here
-the decoded session's round counts and the fast100 schedules (`mapM_ok`).
+the decoded session's round counts and the fast100 schedules (`mapM_ok`). The decoder calls SHA-512 a fixed number of
+times per table and per rep stream and at most twice per round of each of the record's streams (`cl_decodeJ`). Its walk
+picks each step by the head of the program it bounds (`cl_bind_of`, `cl_head`): a failed `refine` against the wrong
+program unfolds both and costs more than the step.
 -/
 
 namespace FlockDeploy.KS
@@ -168,5 +171,151 @@ theorem cl_verifyJ (h : ByteArray → ByteArray) (keep : Bool → Bool) (spec : 
       omega
   · simp only [Array.size_zip, Nat.mul_one]
     omega
+
+/-! ## The decoder -/
+
+theorem Calc.list_mapM_mem {m : Type → Type} [Monad m] [LawfulMonad m] {P : ∀ {α : Type}, m α → ℕ → Prop}
+    (C : Calc m P) {α β : Type} {g : α → m β} {c : ℕ} :
+    ∀ xs : List α, (∀ a ∈ xs, P (g a) c) → P (xs.mapM g) (xs.length * c)
+  | [], _ => by rw [List.mapM_nil]; exact C.pure' _ _
+  | a :: xs, hg => by
+    rw [List.mapM_cons]
+    exact C.mono (C.bind (hg a (List.mem_cons_self ..)) fun b =>
+      C.bind (Calc.list_mapM_mem C xs fun y hy => hg y (List.mem_cons_of_mem _ hy)) fun bs => C.pure (b :: bs))
+      (by rw [List.length_cons, Nat.succ_mul]; omega)
+
+/-- `mapM` at one bound per element, each element's run bounded where it is an element. -/
+theorem Calc.mapM_mem {m : Type → Type} [Monad m] [LawfulMonad m] {P : ∀ {α : Type}, m α → ℕ → Prop}
+    (C : Calc m P) {α β : Type} {g : α → m β} {c : ℕ} {xs : Array α} (hg : ∀ a ∈ xs, P (g a) c) :
+    P (xs.mapM g) (xs.size * c) := by
+  rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind]
+  exact C.mono (C.bind (C.list_mapM_mem xs.toList fun a ha => hg a (by simpa using ha)) fun _ => C.pure _)
+    (by rw [Array.length_toList]; omega)
+
+theorem cl_of_map {α β : Type} (f : α → β) {x : LogV α} {n : ℕ} (h : CL (f <$> x) n) : CL x n := fun l => by
+  have := h l
+  rw [map_eq_pure_bind, go_bind] at this
+  rcases e : x.go l with ⟨r, l₁⟩
+  rw [e] at this
+  cases r <;> exact this
+
+theorem cl_mapIdxM {α β : Type} {g : ℕ → α → LogV β} {c : ℕ} (hg : ∀ i a, CL (g i a) c) (xs : Array α) :
+    CL (xs.mapIdxM g) (xs.size * c) := by
+  apply cl_of_map Array.toList
+  rw [Array.toList_mapIdxM]
+  have := calcCL.mapIdxM_go hg xs.toList #[]
+  rw [Array.length_toList] at this
+  exact this
+
+/-- A bind of a lifted step may assume what the step returned. -/
+theorem cl_liftM_bind_q {α β : Type} {v : Flock.V α} {f : α → LogV β} {k : ℕ} (Q : α → Prop)
+    (hq : ∀ a, v = .ok a → Q a) (hf : ∀ a, Q a → CL (f a) k) : CL (liftM v >>= f) k := fun l => by
+  rw [go_bind, go_liftM]
+  cases e : v with
+  | error _ => exact Nat.le_add_right _ _
+  | ok a => exact hf a (hq a e) l
+
+theorem cl_liftM_ok_bind {α β : Type} {a : α} {f : α → LogV β} {k : ℕ} (hf : CL (f a) k) :
+    CL (liftM (Except.ok a : Flock.V α) >>= f) k :=
+  cl_liftM_bind_q (fun b => b = a) (fun _ e => (Except.ok.inj e).symm) fun _ e => e ▸ hf
+
+theorem cl_rounds {β : Type} {s : Lean.Json} {R k : ℕ} {f : Array Lean.Json → LogV β}
+    (hR : ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R) (hf : ∀ rj, rj.size ≤ R → CL (f rj) k) :
+    CL (liftM (Record.arr s "rounds") >>= f) k :=
+  cl_liftM_bind_q _ hR hf
+
+theorem cl_ite_bind {α β : Type} {c : Prop} [Decidable c] {t e : LogV α} {f : α → LogV β} {k : ℕ}
+    (ht : CL (t >>= f) k) (he : CL (e >>= f) k) : CL ((if c then t else e) >>= f) k := by
+  by_cases hc : c
+  · rw [if_pos hc]; exact ht
+  · rw [if_neg hc]; exact he
+
+theorem cl_bind_lift0 {α β : Type} {v : Flock.V α} {f : α → LogV β} {k : ℕ} (hf : ∀ a, CL (f a) k) :
+    CL (liftM v >>= f) k :=
+  calcCL.bind0 (calcCL.mono (cl_liftM v) (Nat.zero_le _)) hf
+
+theorem cl_bind_dg {β : Type} {h : ByteArray → ByteArray} {spec : SessionSpec} {b : ByteArray}
+    {f : ByteArray → LogV β} {k : ℕ} (hf : ∀ d, CL (f d) (k - 1)) (hk : 1 ≤ k) :
+    CL (spec.dgWith (Hashes.logged h) b >>= f) k :=
+  calcCL.bind_le (cl_dg h spec b) hf hk
+
+theorem cl_bind_mapM {α β γ : Type} {g : α → LogV β} {xs : Array α} {f : Array β → LogV γ} {c k : ℕ}
+    (hg : ∀ a ∈ xs, CL (g a) c) (hf : ∀ bs, CL (f bs) (k - xs.size * c)) (hk : xs.size * c ≤ k) :
+    CL (xs.mapM g >>= f) k :=
+  calcCL.bind_le (calcCL.mapM_mem hg) hf hk
+
+theorem cl_bind_mapM0 {α β γ : Type} {g : α → LogV β} {xs : Array α} {f : Array β → LogV γ} {k : ℕ}
+    (hg : ∀ a, CL (g a) 0) (hf : ∀ bs, CL (f bs) k) : CL (xs.mapM g >>= f) k :=
+  calcCL.bind0 (calcCL.mono (calcCL.mapM_const hg xs) (Nat.le_of_eq (Nat.mul_zero _))) hf
+
+theorem cl_bind_mapIdxM {α β γ : Type} {g : ℕ → α → LogV β} {xs : Array α} {f : Array β → LogV γ} {c k : ℕ}
+    (hg : ∀ i a, CL (g i a) c) (hf : ∀ bs, CL (f bs) (k - xs.size * c)) (hk : xs.size * c ≤ k) :
+    CL (xs.mapIdxM g >>= f) k :=
+  calcCL.bind_le (cl_mapIdxM hg xs) hf hk
+
+theorem cl_bind_forIn {α β γ : Type} {xs : Array α} {b : β} {body : α → β → LogV (ForInStep β)}
+    {f : β → LogV γ} {c k : ℕ} (hb : ∀ a b, CL (body a b) c) (hf : ∀ b', CL (f b') (k - xs.size * c))
+    (hk : xs.size * c ≤ k) : CL (forIn xs b body >>= f) k :=
+  calcCL.bind_le (calcCL.forIn hb xs b) hf hk
+
+theorem cl_bind_forIn0 {α β γ : Type} {xs : Array α} {b : β} {body : α → β → LogV (ForInStep β)}
+    {f : β → LogV γ} {k : ℕ} (hb : ∀ a b, CL (body a b) 0) (hf : ∀ b', CL (f b') k) :
+    CL (forIn xs b body >>= f) k :=
+  calcCL.bind0 (calcCL.mono (calcCL.forIn hb xs b) (Nat.le_of_eq (Nat.mul_zero _))) hf
+
+open Lean Elab Tactic Meta in
+/-- Fails unless the goal bounds a bind whose first program's head is the constant `c`: a failed `refine` against
+the wrong bind unfolds both programs and costs more than the step. -/
+elab "cl_bind_of " c:ident : tactic => do
+  let n ← realizeGlobalConstNoOverload c
+  let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
+  unless tgt.isAppOfArity ``CL 3 do throwError "cl_bind_of: not a CL goal"
+  let x := (tgt.getArg! 1).headBeta
+  unless x.isAppOfArity ``Bind.bind 6 && (x.getArg! 4).getAppFn.isConstOf n do
+    throwError "cl_bind_of: not a bind of {n}"
+
+open Lean Elab Tactic Meta in
+/-- Fails unless the goal bounds a program whose head is the constant `c`. -/
+elab "cl_head " c:ident : tactic => do
+  let n ← realizeGlobalConstNoOverload c
+  let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
+  unless tgt.isAppOfArity ``CL 3 && (tgt.getArg! 1).headBeta.getAppFn.isConstOf n do
+    throwError "cl_head: not a program headed by {n}"
+
+/-- One step of the decoder's walk. -/
+macro "dec_step" : tactic => `(tactic| first
+  | (cl_bind_of MonadExcept.throw; with_reducible exact cl_throw_bind _ _ _)
+  | (cl_bind_of SessionSpec.dgWith; with_reducible refine cl_bind_dg (fun _ => ?_) ?_)
+  | (cl_bind_of ite; with_reducible refine cl_ite_bind ?_ ?_)
+  | (cl_bind_of liftM; with_reducible refine cl_bind_lift0 fun _ => ?_)
+  | (cl_bind_of Array.mapM; with_reducible refine cl_bind_mapM0 (fun _ => ?_) fun _ => ?_)
+  | (cl_bind_of ForIn.forIn; with_reducible refine cl_bind_forIn0 (fun _ _ => ?_) fun _ => ?_)
+  | (cl_head Bind.bind; with_reducible refine calcCL.bind0 ?_ fun _ => ?_)
+  | (cl_head Pure.pure; with_reducible exact calcCL.pure' _ _)
+  | (cl_head MonadExcept.throw; with_reducible exact calcCL.mono (cl_throw _) (Nat.zero_le _))
+  | (cl_head liftM; with_reducible exact calcCL.mono (cl_liftM _) (Nat.zero_le _))
+  | (cl_head ite; with_reducible refine calcCL.ite_k ?_ ?_)
+  | split
+  | dsimp only)
+
+/-- **The decoder's SHA-512 calls on every run**: per table one for `root_B` and at most one for its publics, one for
+`root_F`, at most two per round of each of the record's streams, one per rep stream for S13 and one for the link, `R`
+bounding the record's streams' rounds. -/
+theorem cl_decodeJ (h : ByteArray → ByteArray) (keep : Bool → Bool) (spec : SessionSpec) (j : Lean.Json)
+    (sj : Array Lean.Json) (R : ℕ) (hsj : Record.arr j "streams" = .ok sj)
+    (hR : ∀ s ∈ sj, ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R) :
+    CL (Record.decodeJWithK keep (Hashes.logged h) spec j)
+      (2 * spec.tables.size + 2 + sj.size * (2 * R) + spec.repStreams.size) := by
+  unfold Record.decodeJWithK
+  rw [hsj]
+  repeat' (first
+    | (cl_bind_of liftM; with_reducible refine cl_liftM_ok_bind ?_)
+    | (cl_bind_of liftM; with_reducible refine cl_rounds (hR _ (by assumption)) fun _ _ => ?_)
+    | (cl_bind_of Array.mapM; with_reducible refine cl_bind_mapM (xs := sj) (c := 2 * R) (fun _ _ => ?_) (fun _ => ?_) ?_)
+    | (cl_bind_of Array.mapM; with_reducible refine cl_bind_mapM (xs := spec.tables) (c := 1) (fun _ _ => ?_) (fun _ => ?_) ?_)
+    | (cl_bind_of Array.mapIdxM; with_reducible refine cl_bind_mapIdxM (c := 2) (fun _ _ => ?_) (fun _ => ?_) ?_)
+    | (cl_bind_of ForIn.forIn; with_reducible refine cl_bind_forIn (xs := spec.repStreams) (c := 1) (fun _ _ => ?_) (fun _ => ?_) ?_)
+    | dec_step)
+  all_goals omega
 
 end FlockDeploy.KS
