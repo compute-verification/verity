@@ -15,7 +15,7 @@ the gate's open answer, and opens its salt after the weights' root. Round s's co
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. An H1 window's draw coin is not S's: it comes
 from a draw session of its own (`DrawSession`, the pouw setting ``draw_session``, reserved with `window.DRAW_FAMILIES`),
-which the gate opens withheld on the window's draw root once the prover's commitment is in (CMP-177), so its challenger
+which the gate opens withheld on the window's draw root once the prover's commitment is in, so its challenger
 releases its coin commitment only after that commitment. The challenger is auditor-trusted
 (`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
 127.0.0.1, through its certifier coin link.
@@ -305,7 +305,7 @@ def at_port(at: str, port: Any) -> str:
 Gate = Callable[..., Mapping[str, Any]]
 #: why an H1 window's draw coin has no session to come from (`DrawSession`)
 NO_DRAW_SESSION = ("the window's draw coin comes from a draw session of its own, opened withheld on its draw root once "
-                   "the prover's commitment is in (CMP-177), and the pouw setting 'draw_session' reserves none")
+                   "the prover's commitment is in, and the pouw setting 'draw_session' reserves none")
 
 
 def in_process_draw(rounds: Any, coins: Any) -> LiveRecord | None:

@@ -360,7 +360,7 @@ decode feedback to match the reader's noise: that breaks (H-μ)'s salt-independe
 Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin and
 one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`), and its draw coin is a session of its
 own (`DRAW_FAMILIES`), opened withheld on the draw root so its coin root is released only after the prover's
-commitment (CMP-177). Round r's coin opens
+commitment. Round r's coin opens
 once, after the round root the challenger's signed log shows it received (`core_check.rounds`), and round r's noise key
 is that coin's and that root's (`window.round_key`). Each round's root commits that round's rows of every A value
 before its coin (`credit.a_link`, RT4-INT-34). A seeded window's coins are still one salt a window and the draw

@@ -25,7 +25,7 @@
   not that session's: once the prover's draw root is in, `gate_draw` reserves a draw session (`window.DRAW_FAMILIES`)
   and the gate opens it withheld on that root (``open --withhold``, `remote.open_session(..., withhold=True)`), so its
   challenger answers the hello with the layout alone and the draw coin raw, and releases its commitment and the coin's
-  full opening only at its close, after the prover's commitment (CMP-177). The prover's record says only
+  full opening only at its close, after the prover's commitment. The prover's record says only
   ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its coins is the prover's.
 * **In-process** (no address): `window.live_challenger` and `window.draw_challenger` in the serving process, on the
   prover's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
@@ -86,7 +86,7 @@ from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 NO_DRAW_GATE = (f"an off-node window's draw coin comes from its own draw session, which infra's gate reserves and opens "
-                f"withheld on the draw root once the prover's commitment is in (CMP-177); this run names no gate to "
+                f"withheld on the draw root once the prover's commitment is in; this run names no gate to "
                 f"open it at: set ${GATE_ENV} and ${PEER_ENV} (and ${SSH_KEY_ENV} for the lane's gate key)")
 IN_PROCESS = "in-process (not certified)"
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"

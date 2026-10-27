@@ -736,7 +736,7 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
 
 def test_a_windows_own_session_holds_no_draw_coin_and_its_draw_session_is_the_ledgers_withheld_one_on_its_root(
         tmp_path, monkeypatch):
-    """RT4-INT-19, CMP-177: a window's own session holds no draw coin (its challenger refuses one), so no draw coin
+    """RT4-INT-19: a window's own session holds no draw coin (its challenger refuses one), so no draw coin
     opens from it early, after a root of the prover's; the window's draw coin is its draw session's, the one the
     auditor's ledger opens withheld on the window's draw root. A draw session the ledger opened on another root (a probe
     of the prover's) is refused, and so is one it opened without withholding its coin root (`challenger.WITHHELD`)."""

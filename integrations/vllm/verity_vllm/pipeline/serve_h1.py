@@ -21,7 +21,7 @@ own Commit.
   auditor host's ``ssh -R`` listens there, and the window's close waits for its end entry, so the next window's
   session takes that port only after this one's tunnel has gone. Its draw coin is a draw session's of its own, reserved
   with it (`pouw_h1_challenger.draw_families`) and opened withheld on the window's draw root once the prover's
-  commitment is in (``open --withhold``, `pouw_h1_window.DrawSession`, CMP-177), whose end entry the close waits for
+  commitment is in (``open --withhold``, `pouw_h1_window.DrawSession`), whose end entry the close waits for
   too. A reserve joins its lane's open period, if one is
   open. Without a gate, the epoch's in-process coins, one epoch a window (`pouw_h1_settings.from_engine`): such a
   window credits nothing (`pouw_h1.IN_PROCESS`). ``--protocols-config`` sets no session (``SESSIONED``).

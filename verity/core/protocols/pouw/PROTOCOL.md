@@ -255,7 +255,7 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 R the most rounds a window of the epoch takes, fixed when the challenger commits. Its draw coin (`"pouw/draw"`) is a
 session of its own (`DRAW_FAMILIES`, `draw_epoch_reason`), reserved beside the window's and opened withheld on the
 draw root (`withheld: true` in the ledger's open), so its challenger releases its coin root only after the prover's
-commitment (CMP-177; `credit._credited` refuses a draw session the ledger doesn't open withheld, `challenger.WITHHELD`,
+commitment (`credit._credited` refuses a draw session the ledger doesn't open withheld, `challenger.WITHHELD`,
 Lean `Properties.Pouw.DrawWithheld`). The salt and the round coins are the standing exception: each opens after its
 own root, the salt's the window's open root, so a coin root released before them hides no choice the prover makes. The
 salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean

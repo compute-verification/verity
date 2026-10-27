@@ -21,7 +21,7 @@ verifier's check that a served window's coins are that challenger's.
   draw session of its own (`window.DRAW_FAMILIES`, `pouw_h1_draw.draw_session_reason`), the one the ledger opens on
   `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin, opened withheld
   (`challenger.withheld_on`): its challenger released its coin root only after that root, the prover's commitment
-  (CMP-177). Its coin must have been opened once, after that root: a draw opened early, from another session or family,
+ . Its coin must have been opened once, after that root: a draw opened early, from another session or family,
   from a session the ledger didn't open withheld, or never, is refused.
 * **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under

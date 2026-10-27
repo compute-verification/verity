@@ -15,7 +15,7 @@
 #             m3-step-registration/v1 --file REG_OUT/step-registration.json --preserve`         art:f6ca8891
 #   coin      one live coin from vy-challenger-1's gate, its session opened withheld at the registration's digest (the
 #             challenger's root released only at its close), no redraw; the receipt and draw.json out (m3coin.py). REG:
-#             step-registration.json. Until the gate opens a session withheld (INF-280) the client refuses its plain
+#             step-registration.json. Until the gate opens a session withheld the client refuses its plain
 #             session before any coin                                                          r20261027-001440-06e6
 #   withheld  the coin's withheld session on CPU against a loopback gate, on the step registration: the honest session
 #             accepted, a plain one and a prover that registers after seeing the root refused (m3withheld.py). REG

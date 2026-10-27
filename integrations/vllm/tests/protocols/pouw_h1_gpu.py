@@ -1618,7 +1618,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--peer is the fill workload's, with --challenger and --gate, without --session or --handoff (each window "
                  "reserves its own session)")
     if (a.session is None) != (a.draw_session is None):
-        ap.error("--session and --draw-session go together: a window's draw coin is its own draw session's (CMP-177)")
+        ap.error("--session and --draw-session go together: a window's draw coin is its own draw session's")
     if a.period and not a.check_challenger and not (a.commit and a.peer):
         ap.error("--period is --check-challenger's, or --commit's with --peer (the period its Commit window opens)")
     if a.period and a.commit and not a.circuits:
