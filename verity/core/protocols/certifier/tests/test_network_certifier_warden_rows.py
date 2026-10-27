@@ -189,6 +189,29 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
         W.check_registration(forged, key, signers.SESSION, *args)
 
 
+def test_on_device_attest_a_registration_reads_only_through_the_periods_check(traffic, tmp_path):
+    """On device-attest (no key) the registration holds no certificate and reads back as the keyed one, its head
+    handed to the period's check (`certified`) and refused with that check's reason; read under neither a key nor a
+    check, or both, it isn't read at all, and a certificate on it is refused."""
+    warden, _ = traffic
+    issuer, cells_, cert = _attest(tmp_path, records(warden)[1][1])
+    key, args = issuer.signer.public_key(), (PARAMS, "responses", Direction.EGRESS, 1)
+    doc, seen = json.loads(json.dumps(W.registration(cells_.head, None, PARAMS))), []
+    assert "certificate" not in doc
+    head, dom = W.check_registration(doc, None, signers.SESSION, *args, certified=lambda h: seen.append(h))
+    assert head == cells_.head == seen[0] and dom.domain_id == cells_.domain.domain_id
+    with pytest.raises(ValueError, match="head isn't certified: no record of it"):
+        W.check_registration(doc, None, signers.SESSION, *args, certified=lambda h: "no record of it")
+    for k, certified in [(None, None), (key, lambda h: None)]:
+        with pytest.raises(TypeError, match="one of the two"):
+            W.check_registration(doc, k, signers.SESSION, *args, certified=certified)
+    with pytest.raises(ValueError, match="no other"):
+        W.check_registration(W.registration(cells_.head, cert, PARAMS), None, signers.SESSION, *args,
+                             certified=lambda h: None)
+    with pytest.raises(ValueError, match="no other"):
+        W.check_registration(doc, key, signers.SESSION, *args)
+
+
 def test_a_refused_signer_gives_no_certificate(traffic, tmp_path):
     warden, _ = traffic
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)

@@ -142,6 +142,27 @@ def test_check_registration_refuses_another_key_session_root_or_signed_digest(tm
         TR.check_registration(doc | {"root": "zz"}, public(), signers.SESSION, **expect(t))
 
 
+def test_on_device_attest_a_registration_reads_only_through_the_periods_check(tmp_path):
+    """On device-attest (no key) the registration holds no certificate and reads back as the keyed one, its head
+    handed to the period's check (`certified`) and refused with that check's reason; read under neither a key nor a
+    check, or both, it isn't read at all, and a certificate on it is refused."""
+    t, cert, _issuer = attested(tmp_path)
+    doc, seen = TR.registration(t.head, None), []
+    assert "certificate" not in doc
+    head, dom = TR.check_registration(doc, None, signers.SESSION, **expect(t), certified=lambda h: seen.append(h))
+    assert head == t.head == seen[0] and dom.domain_id == t.head.domain
+    with pytest.raises(ValueError, match="head isn't certified: no record of it"):
+        TR.check_registration(doc, None, signers.SESSION, **expect(t), certified=lambda h: "no record of it")
+    for key, certified in [(None, None), (public(), lambda h: None)]:
+        with pytest.raises(TypeError, match="one of the two"):
+            TR.check_registration(doc, key, signers.SESSION, **expect(t), certified=certified)
+    with pytest.raises(ValueError, match="holds the keys"):
+        TR.check_registration(TR.registration(t.head, cert), None, signers.SESSION, **expect(t),
+                              certified=lambda h: None)
+    with pytest.raises(ValueError, match="holds the keys"):
+        TR.check_registration(doc, public(), signers.SESSION, **expect(t))
+
+
 def test_a_kind_is_in_its_direction():
     with pytest.raises(ValueError, match="a transfer is a"):
         TR.Transfer.commit(LINK, Direction.EGRESS, 0, "load", PROGRAM, "w", rows(1, 2))

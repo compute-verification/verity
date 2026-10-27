@@ -934,10 +934,12 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
             ok = False
             if doc is not None and w in by_window:
                 costs.append(doc["cost"])
+                certified = None if attested is None else \
+                    (lambda h, link=link, direction=direction, w=w: attested.problem(LINK, link, direction, w,
+                                                                                      h.digest()))
                 try:
-                    head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
-                    if attested is not None and (why := attested.problem(LINK, link, direction, w, head.digest())):
-                        raise ValueError(why)
+                    head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w,
+                                                    certified=certified)
                     ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
                 except ValueError as e:
                     problems.append(f"{name} window {w}'s cells: {e}")

@@ -56,7 +56,7 @@ for the link-window it expects. `port` is the verifier's own `--registered` port
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
@@ -259,12 +259,16 @@ def registration(head: TransferHead, certificate: Certificate | None) -> dict[st
 
 def check_registration(doc: Any, key: PublicKey | None, session: bytes, *, link: str, direction: Direction, window: int,
                        kind: str, value: str, program: str, words: int, rows: int, word_bits: int = WORD_BITS,
-                       schema: str = SCHEMA) -> tuple[TransferHead, CommitmentDomain]:
+                       schema: str = SCHEMA, certified: Callable[[TransferHead], str | None] | None = None
+                       ) -> tuple[TransferHead, CommitmentDomain]:
     """The verifier's read of a transfer registration for the transfer it expects (its link-window, kind, value, the
     circuit's program digest and the value's shape and row format, all from its own record), under the network
-    certifier's key and session: the head and the domain the verifier derived, or ValueError naming what fails. With
-    ``key`` None (device-attest) the registration holds no certificate, and the caller checks the head's digest against
-    the certifier's period (`period_root.refusal`)."""
+    certifier's key and session: the head and the domain the verifier derived, or ValueError naming what fails. On
+    device-attest ``key`` is None, the registration holds no certificate, and ``certified`` says why the head's digest
+    isn't a record of the certifier's period (`period_root.refusal`), or None."""
+    if (key is None) == (certified is None):
+        raise TypeError("a transfer registration is read under the network certifier's key or, on device-attest, its "
+                        "period: one of the two")
     _kind(kind, direction)
     _format(word_bits, schema)
     dom = domain(program, value, words, rows, word_bits)
@@ -284,15 +288,18 @@ def check_registration(doc: Any, key: PublicKey | None, session: bytes, *, link:
             raise ValueError(f"its root is lowercase hex of 64 bytes, not {doc['root']!r}")
         head = TransferHead(link, direction, window, kind, value, bytes.fromhex(program), words, rows, dom.domain_id,
                             bytes.fromhex(doc["root"]), word_bits, schema)
-        if key is None:
-            return head, dom
-        c = doc["certificate"]
-        if not isinstance(c, Mapping) or set(c) != {"key", "digest", "signature"}:
-            raise ValueError("its certificate is {key, digest, signature}")
-        cert = Certificate(bytes.fromhex(c["key"]), link, direction, window, bytes.fromhex(c["digest"]),
-                           bytes.fromhex(c["signature"]))
+        if key is not None:
+            c = doc["certificate"]
+            if not isinstance(c, Mapping) or set(c) != {"key", "digest", "signature"}:
+                raise ValueError("its certificate is {key, digest, signature}")
+            cert = Certificate(bytes.fromhex(c["key"]), link, direction, window, bytes.fromhex(c["digest"]),
+                               bytes.fromhex(c["signature"]))
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the transfer registration's root or certificate doesn't read: {e}") from None
+    if key is None:
+        if (why := certified(head)) is not None:
+            raise ValueError(f"the transfer registration's head isn't certified: {why}")
+        return head, dom
     if cert.digest != head.digest():
         raise ValueError("the transfer registration's certificate doesn't sign its head")
     if not cert.verify(key, session):

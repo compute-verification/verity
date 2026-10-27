@@ -1130,11 +1130,9 @@ def check_load(doc: Mapping[str, Any], key: Any, session: bytes, *,
     problems, ok = [], 0
     for v, reg in zip(values, regs):
         try:
-            head, _ = TR.check_registration(reg, key, session, link=doc["link"], direction=Direction.INGRESS,
-                                            window=WINDOW, kind=KIND, value=v.name, program=doc.get("program"),
-                                            words=v.reg_words, rows=v.leaves, word_bits=v.word_bits, schema=v.schema)
-            if certified is not None and (why := certified(head)) is not None:
-                raise ValueError(why)
+            TR.check_registration(reg, key, session, link=doc["link"], direction=Direction.INGRESS, window=WINDOW,
+                                  kind=KIND, value=v.name, program=doc.get("program"), words=v.reg_words,
+                                  rows=v.leaves, word_bits=v.word_bits, schema=v.schema, certified=certified)
             ok += 1
         except ValueError as e:
             problems.append(f"load {v.name}: {e}")

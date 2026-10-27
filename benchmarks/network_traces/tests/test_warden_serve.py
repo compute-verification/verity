@@ -654,8 +654,10 @@ def test_on_device_attest_a_window_goes_live_once_its_records_are_kept_and_a_wit
     assert [c.head.window for c in certified] == [1] * 3 and all("certificate" not in r for r in registrations)
     params = ws.lms.Params(*dep["attest"]["params"])
     key_id = ws.lms.HssSignature.decode(params, period.signature).lower[:16]
-    heads = [WR.check_registration(r, None, SESSION, PARAMS, r["link"], ws.Direction(r["direction"]), r["window"])[0]
-             for r in registrations]
+    attested = ws.cs.Attested(out, dep["attest"], SESSION)
+    in_period = lambda h: attested.problem(ws.LINK, h.link, h.direction, h.window, h.digest())  # noqa: E731
+    heads = [WR.check_registration(r, None, SESSION, PARAMS, r["link"], ws.Direction(r["direction"]), r["window"],
+                                   certified=in_period)[0] for r in registrations]
     entries = [c.entry for c in certified] + \
         [ws.PR.Entry.of(key_id, SESSION, h.link, h.direction, h.window, h.digest()) for h in heads]
     assert sorted(e.record for e in entries) == sorted(period.records) and len(period.records) == 5

@@ -85,7 +85,7 @@ from 0, is q = k + 1, as the active certifier's `Requests` streams it and IO-TIE
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
@@ -443,11 +443,15 @@ def registration(head: CellsHead, certificate: Certificate | None, params: Warde
 
 
 def check_registration(doc: Mapping[str, Any], key: PublicKey | None, session: bytes, params: WardenParams, link: str,
-                       direction: Direction, window: int) -> tuple[CellsHead, CommitmentDomain]:
+                       direction: Direction, window: int, *, certified: Callable[[CellsHead], str | None] | None = None
+                       ) -> tuple[CellsHead, CommitmentDomain]:
     """The verifier's read of a registration for the link-window it expects, under the warden's key and session and the
-    schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails. With ``key``
-    None (device-attest) the registration holds no certificate, and the caller checks the head's digest against the
-    certifier's period (`period_root.refusal`)."""
+    schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails. On
+    device-attest ``key`` is None, the registration holds no certificate, and ``certified`` says why the head's digest
+    isn't a record of the certifier's period (`period_root.refusal`), or None."""
+    if (key is None) == (certified is None):
+        raise TypeError("a registration is read under the warden's key or, on device-attest, its period: one of the "
+                        "two")
     B, S, T = params.cell_bytes, params.grid.allocation, rows_of(params)
     dom = domain(params, session, link, direction, window)
     want = {"format": REGISTRATION, "value": value_name(link, direction, window), "link": link,
@@ -463,13 +467,16 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey | None, session: b
     try:
         head = CellsHead(link, direction, window, params.digest, B, S, T, bytes.fromhex(doc["wiring"]), dom.domain_id,
                          bytes.fromhex(doc["root"]))
-        if key is None:
-            return head, dom
-        c = doc["certificate"]
-        cert = Certificate(bytes.fromhex(c["key"]), link, direction, window, bytes.fromhex(c["digest"]),
-                           bytes.fromhex(c["signature"]))
+        if key is not None:
+            c = doc["certificate"]
+            cert = Certificate(bytes.fromhex(c["key"]), link, direction, window, bytes.fromhex(c["digest"]),
+                               bytes.fromhex(c["signature"]))
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the registration's wiring, root or certificate doesn't read: {e}") from None
+    if key is None:
+        if (why := certified(head)) is not None:
+            raise ValueError(f"the registration's head isn't certified: {why}")
+        return head, dom
     if cert.digest != head.digest():
         raise ValueError("the registration's certificate doesn't sign its head")
     if not cert.verify(key, session):
