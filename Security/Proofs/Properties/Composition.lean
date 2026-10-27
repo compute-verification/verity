@@ -182,4 +182,19 @@ theorem acceptRegistration : AcceptRegistration := by
       rw [hf] at hs'
       exact ⟨x, List.mem_of_find?_eq_some hf, by simpa using List.find?_some hf, hs'⟩
 
+/-- **`AcceptRegistration`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): a registration entry
+named for another protocol than the registration check is not `RegisteredAccepted`, though a registered check that
+accepted everything would accept it. The registration check is built by hand, a protocol that refuses everything. -/
+theorem acceptRegistration_nontrivial :
+    ∃ (id : String) (R : Protocol) (s : String) (cs : List Protocol) (n : Named) (ps : List Named) (b d : ByteArray)
+      (k : Case) (ev : List Case) (pub prof : Keyed), ¬ RegisteredAccepted id R s cs n ps b d k ev pub prof := by
+  let R : Protocol :=
+    { id := "a", Params := Unit, Commitment := Unit, Evidence := Unit, Public := Unit, Profile := Unit
+      params := fun _ => pure (), commitment := fun _ => pure (), evidence := fun _ => pure ()
+      digest := fun _ => ByteArray.empty, check := fun _ _ _ => .reject "", publicJson := fun _ => .null
+      profileJson := fun _ => .null }
+  refine ⟨"", R, "", [], ⟨"b", ""⟩, [], .empty, .empty, ⟨"", "", .empty, .empty⟩, [], [], [], fun h => ?_⟩
+  have h1 : ("b" : String) = "a" := h.1
+  exact absurd h1 (by first | decide | simp)
+
 end Properties.Composition
