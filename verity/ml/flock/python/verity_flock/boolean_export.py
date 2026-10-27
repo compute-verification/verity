@@ -1532,7 +1532,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
     return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
             "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
                            "activations exact from edges' ports; which parameter reads each of `inputs` is not in this program graph "
-                           "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
+                           "(param_inputs), so input roles are not assigned to parameters"}
 
 
 def _library_digest() -> str:

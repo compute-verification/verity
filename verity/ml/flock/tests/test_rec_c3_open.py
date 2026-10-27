@@ -1,6 +1,6 @@
-"""``flock-circuit stacked``, candidate 3's opening-only prover (`note:proofs/20261011T0133Z-finding-c3-session-builder-size`,
-P5): R, the stacked table, committed under plain SHA-512 leaves at fast100(m_R) and opened at two registered claims' points on
-the live stream ``stacked/rep0``, against a coin server written here. The opening-only model (`rec_algebra.Shape(...,
+"""``flock-circuit stacked``, candidate 3's opening-only prover
+(P5): R, the stacked table, committed under plain SHA-512 leaves at fast100(m_R) and opened at two registered claims' points on
+the live stream ``stacked/rep0``, against a challenger written here. The opening-only model (`rec_algebra.Shape(...,
 opening_only=True)`) accepts its proof at the values R takes at those points, at fast100's least m and at m_R 23 (candidate 3's
 first session), and its rounds are the stacked stream's schedule; R with one cell flipped, or a claim value one bit off, is
 refused at the claims' ring switches. Skips unless ``FLOCK_CIRCUIT`` names a build of ``flock-circuit`` (feature ``sha512``)."""

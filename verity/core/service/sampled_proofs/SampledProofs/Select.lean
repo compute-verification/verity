@@ -65,11 +65,11 @@ inductive Rule where
 
 /-- The refusal of a two-stage selection rule (`service.RETIRED_TWO_STAGE`). -/
 def retiredTwoStage : String :=
-  "two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is all or a law"
+  "two-stage sampling is retired (everything is committed at serve time); a selection rule is all or a law"
 
 /-- A rule as `to_json` writes it, exactly its keys: `{rule: all}` or `{rule: law, law}`, its law text a rate law or one
 `parseLaw` reads, as `service.Law` refuses any other when it is made. A stream refuses a sequential rule, and a two-stage
-rule with `retiredTwoStage`: two-stage sampling is retired (ASK-25). -/
+rule with `retiredTwoStage`: two-stage sampling is retired. -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all

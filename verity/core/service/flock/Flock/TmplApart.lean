@@ -1,5 +1,5 @@
 /-
-A templated unit unrolls without a collision, checked on its description (PRF-133). `Tmpl.rows` refuses a column written
+A templated unit unrolls without a collision, checked on its description. `Tmpl.rows` refuses a column written
 twice or past the unit, so a reader that does not unroll must know that no two writes meet. `Tmpl.apart` checks it once
 per Definition: its rows and its calls' runs of copies take column ranges that, in order of their first column, each end
 before the next begins, inside its columns; a call's copies sit side by side (or there is one); and the root writes
