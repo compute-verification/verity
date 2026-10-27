@@ -105,15 +105,15 @@ theorem runIn_const {C : Prog} {ref : ℕ → Option Bool} {u : List ℕ} {g : �
   rw [Prog.runIn]
   simp only [h, Option.bind_some, BGate.val]
 
-theorem slot_of_mem {P : Partition} {r : RU} (h : r ∈ P.rus) : ∃ v, P.rus[v]? = some r := by
+theorem slot_of_mem {P : Partition} {r : RU} (h : r ∈ P.rus) : ∃ v : ℕ, P.rus[v]? = some r := by
   obtain ⟨v, hv, rfl⟩ := List.getElem_of_mem h
   exact ⟨v, List.getElem?_eq_getElem hv⟩
 
 theorem fill_of_agree {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ} (hag : ∀ b, ref g = some b → b = tv g) :
-    fill ref tv g = some (tv g) := by
+    TapProof.fill ref tv g = some (tv g) := by
   rcases h : ref g with _ | b
-  · simp [fill, h]
-  · simp [fill, h, hag b h]
+  · simp [TapProof.fill, h]
+  · simp [TapProof.fill, h, hag b h]
 
 /-- **A window whose committed values the openings hold is one the scan accepts**: at a topological program the
 partition partitions, every unit outside `F` correct at the committed values `ref`, `F` faulty at `δ`, the checked
@@ -237,7 +237,7 @@ theorem ingressDeclared_of_r (H : Msg → Msg) (D : Deploy Coin Col T) (s : Sche
   have hF := faulty_mem_faultySets hM (disjoint_allSlots hδ hM)
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit st P w
   have hext : ∀ g b, w.val H D.commit st g = some b →
-      fill (w.val H D.commit st) (tapVal (ops st)) g = some b := fill_ext
+      TapProof.fill (w.val H D.commit st) (tapVal (ops st)) g = some b := fill_ext
   refine ⟨st, P, hs, hP, fun ins hio => ?_⟩
   obtain ⟨hpass, ⟨hlen, hrows⟩, hok, hchain⟩ := hio
   obtain ⟨hcc, hown⟩ := hcomm st hs
@@ -291,6 +291,7 @@ theorem stepWith_comap_tape {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f
       · rfl
       · rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- The run reads a prover on other tapes at the tape it reads. -/
 theorem run_comap_tape {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω' → Ω) (V : Claims.Verifier Coin) (x : Msg)
     (ω : Ω') (r : Fin (V.k x) → Coin) : run H (P.comap f) V x ω r = run H P V x (f ω) r :=
