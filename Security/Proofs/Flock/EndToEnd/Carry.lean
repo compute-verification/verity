@@ -3,19 +3,19 @@ import Proofs.Flock.EndToEnd.Blocks
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 
 /-!
-# Proof of the integrity audit over a horizon of blocks, with carried state
+# Proof of the integrity audit over a monitoring period of blocks, with carried state
 
 * `SamplingBlock.accepted_drawnWrong_le_at`: one session's bound at the value layer of any values `Xv`
   (`zk_session_soundHJ_custody_drawn_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
 * `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `δ_link`'s at every commit string no carried
   leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
   (`CarriedBlocks.carriedE`).
-* `CarriedBlocks.periodE_errX_le`: that trial's binding error, averaged over the horizon up to the session, is the
-  binding error of the leaf's trial in that session played after the horizon before it (`expect_compTo`), at most `m`
+* `CarriedBlocks.periodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
+  binding error of the leaf's trial in that session played after the monitoring period before it (`expect_compTo`), at most `m`
   times the mixture's (`errAt_le_mix`), which `ecr/sha-512` at the leaf's finder bounds (`link_mass_le`), with the
   finder's cost at most `Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/m`.
 * `Flock.SecurityProofs.IntegrityHorizonCarried`: `IntegrityHorizon`'s proof, `period_unionE` in place of
-  `period_union` for the sessions accepted with a drawn unit wrong, each carried leaf's term summed over the horizon.
+  `period_union` for the sessions accepted with a drawn unit wrong, each carried leaf's term summed over the monitoring period.
 -/
 
 namespace FlockSoundness.Game
@@ -356,7 +356,7 @@ theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
   rw [add_assoc]
   exact add_le_add le_rfl (S.errBound_le s t τ hcr.2)
 
-/-- **A carried leaf's binding error in one of its sessions, over the horizon before it**, is at most `m` times its
+/-- **A carried leaf's binding error in one of its sessions, over the monitoring period before it**, is at most `m` times its
 finder's bound under A2. -/
 theorem periodE_errX_le (x : Fin S.nL)
     (hA2 : Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
@@ -428,7 +428,7 @@ theorem periodE_errX_le (x : Fin S.nL)
         rw [hcard] at hE ⊢
         gcongr
 
-/-- **A carried leaf's term over the horizon**: its weighted binding errors, summed over the horizon's sessions, are at
+/-- **A carried leaf's term over the monitoring period**: its weighted binding errors, summed over the monitoring period's sessions, are at
 most `δ_carry`. -/
 theorem sum_periodE_le (x : Fin S.nL)
     (hA2 : Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
@@ -446,7 +446,7 @@ theorem sum_periodE_le (x : Fin S.nL)
   exact mul_le_mul_of_nonneg_left (S.periodE_errX_le s x hA2 hd)
     (div_nonneg ((S.W d).readP_nonneg _) (by linarith [(S.W d).hρ]))
 
-/-- **The carried terms over the horizon**: at most `Σ_ℓ δ_carry,ℓ`. -/
+/-- **The carried terms over the monitoring period**: at most `Σ_ℓ δ_carry,ℓ`. -/
 theorem carry_le
     (hA2 : ∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
@@ -478,7 +478,7 @@ namespace Flock.SecurityProofs
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
-/-- **The integrity audit over a horizon of server-time blocks, with carried state.** -/
+/-- **The integrity audit over a monitoring period of server-time blocks, with carried state.** -/
 theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
   intro S q δ hq hδ hqt hA3 s hT hL hA2
   classical

@@ -2,7 +2,7 @@ import Proofs.Flock.EndToEnd.Blocks.Statement
 import Proofs.Flock.Soundness.LinkCarry
 
 /-!
-# The integrity audit over a horizon of blocks, with carried state (trusted)
+# The integrity audit over a monitoring period of blocks, with carried state (trusted)
 
 A block's carried state (the KV cache) crosses a wipe as committed values: each value is one hiding leaf, registered in
 the public file of every session that reads it, on both sides of every wipe it crosses (`CarriedLeaf`). `ServerBlocks`'
@@ -12,14 +12,14 @@ leaf: the plurality of its finder over all of them (`CarriedBlocks.Xm`), each se
 there (`CarriedBlocks.wrongSet`).
 
 * `IntegrityHorizonCarried`: `IntegrityHorizonBlocks` with carried leaves. The probability that every session is
-  accepted and the wrong units over the horizon, each carried leaf read at its one value, total at least `ln(1/δ)/q` is
+  accepted and the wrong units over the monitoring period, each carried leaf read at its one value, total at least `ln(1/δ)/q` is
   at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ`, with each carried leaf's term
   $$\delta_{carry,\ell} = \Big(\sum_{t \in \ell} \frac{\pi_{\ell,t}}{1 - \rho_t}\Big)
     \Big(\frac{2 \sum_{t \in \ell} (\sum_{j < t} t'_j + t'_t (1 + k_t))}{2^{256}} + \frac{m_\ell}{e M_\ell}\Big),$$
   `π_{ℓ,t}` the probability that session `t`'s draw reads the leaf and `m_ℓ` the number of sessions that share it: `m_ℓ`
   times the binding error of the leaf's finder (`LinkCarry`).
 
-The leaf's finder (`CarriedBlocks.mix`) picks one of the leaf's sessions uniformly, plays the horizon up to it with the
+The leaf's finder (`CarriedBlocks.mix`) picks one of the leaf's sessions uniformly, plays the monitoring period up to it with the
 prover's strategy, then that session's trial at the leaf, and so on `M` more times; each session's values embed in one
 type through their bytes (`CarriedLeaf.e`), and two readings of different bytes, from any two sessions, give a SHA-512
 collision (`hm96`). Its cost is the SHA-512 evaluations of the runs it plays: `t'_j` for each session `j` before the
@@ -174,8 +174,8 @@ noncomputable def carry : ℝ≥0∞ :=
 
 end CarriedLeaf
 
-/-- **A horizon of server-time blocks with carried leaves**: `ServerBlocks` and `nL` leaves, each read in sessions of
-the horizon. -/
+/-- **A monitoring period of server-time blocks with carried leaves**: `ServerBlocks` and `nL` leaves, each read in sessions of
+the monitoring period. -/
 structure CarriedBlocks extends ServerBlocks where
   nL : ℕ
   leaf : Fin nL → CarriedLeaf W
@@ -185,7 +185,7 @@ namespace CarriedBlocks
 
 variable (S : CarriedBlocks) (s : Strategy S.game)
 
-/-- **The leaf's trial in session `i`, in the horizon**: the horizon's sessions before `i` played by `s`, then the leaf's
+/-- **The leaf's trial in session `i`, in the monitoring period**: the monitoring period's sessions before `i` played by `s`, then the leaf's
 trial in session `i` at the strategy `s` leaves for it. -/
 noncomputable def comp (x : Fin S.nL) (i : (S.leaf x).Ses) : Game (TrialAt S.W) :=
   compTo (fun t => (S.W t).game) (S.leaf x).trial i.1 0 S.T (S.hin x i.1 i.2) s
@@ -227,14 +227,14 @@ noncomputable def record (t : ℕ) (τ : Strategy (S.W t).game) (o : (S.W t).Reg
     WindowRec :=
   ⟨t, LiveAcceptsZK (S.W t).I o, (S.wrongSet s t τ).card, ∃ u ∈ o.2.1, u ∈ S.wrongSet s t τ⟩
 
-/-- The horizon's run at `s`, with these records. -/
+/-- The monitoring period's run at `s`, with these records. -/
 noncomputable def run : Game (List WindowRec) := periodRun (fun t => (S.W t).game) (fun t => S.record s t) 0 S.T s
 
 end CarriedBlocks
 
-/-- **The integrity audit over a horizon of server-time blocks, with carried state.** In a horizon as in
+/-- **The integrity audit over a monitoring period of server-time blocks, with carried state.** In a monitoring period as in
 `IntegrityHorizonBlocks` with carried leaves (`CarriedBlocks`), whose draws each cover at least a fraction `q > 0` of
-their session's units, the probability that every session is accepted and the wrong units over the horizon, each
+their session's units, the probability that every session is accepted and the wrong units over the monitoring period, each
 carried leaf read at its one value in every session that shares it, total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell}.$$
 Its named assumptions are `IntegrityHorizonBlocks`', and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried
