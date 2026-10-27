@@ -1,8 +1,8 @@
-# POUS benchmark
+# PoUS benchmark
 
-One harness and one dataset for every POUS implementation. The metric is the frozen effective weight bandwidth (EWB):
-the plaintext weight bytes that one pass decodes from `C`, per second. Every weight is decoded on every pass, at the
-scheme's certified parameters.
+One harness and one dataset for every implementation of proof of useful space (PoUS). The metric is the frozen effective
+weight bandwidth (EWB): the plaintext weight bytes that one pass decodes from `C`, per second. Every weight is decoded
+on every pass, at the scheme's certified parameters.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
@@ -25,10 +25,6 @@ scheme's certified parameters.
   reference math, the honest-latency presets as survival curves, the schemes' serving overhead, ε_proof by in-degree, and
   test vectors the console page reproduces. `--histograms` pools the vLLM e2e series' `verify-honest.json` histograms
   into the `measured` preset. Publish with `research data put --kind pous-explorer/v1 --file F --preserve`.
-- `served_piece.sh` runs `served_piece.py`, PoUS's piece of the composed served run (`benchmarks/one_stage/served_verdicts.sh`,
-  `POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'`). It holds one period over the served checkpoint's linears, as
-  P2's `C*` on the card the window served on, with the memory challenger on the auditor's host. It writes a core answer
-  under a hiding commitment, and keeps the run's witness on the node.
 
 Implementations:
 
@@ -46,7 +42,7 @@ Implementations:
     on plaintext, both forwards from a CUDA graph where the path is capturable, the plain arm's bandwidth against a measured
     device copy, and every T where it is launch-bound flagged; every rep is recorded;
   - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote memory challenger's round trip
-    adds to it), then timed audits against the native responder under POUS forwards, and three controls against that one
+    adds to it), then timed audits against the native responder under PoUS forwards, and three controls against that one
     limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
     reject on time alone; the only answers held), and a recompute control (a fraction of `C` dropped, each challenged dropped
     block recomputed on the device from its kept parents, `W`'s block XORed in on the device, as an adversary would: the limit
@@ -82,7 +78,7 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
-  - `serve.py`: `store.py`'s toy store (below) served under the remote bandwidth audit (`remote_bandwidth.p2`), the CPU
+  - `serve.py`: `store.py`'s toy store (below) served under proof of useful bandwidth (PoUB, `remote_bandwidth.p2`), the CPU
     reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
