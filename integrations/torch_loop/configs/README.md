@@ -24,9 +24,9 @@ PYTHONPATH=benchmarks/all_protocols uv run python -m verity_all_protocols.partie
 ~~~
 
 The first run builds what the roles run into `STATE/build` (`benchmarks/all_protocols/build.sh`: C-Flock's
-`flock-circuit`, the Lean `flock-verify`, `flock-firewall`, `sampled-proofs-verifier` and `product`), about half an hour
-on a 16-core CPU. `--tools FILE` reuses a build. The roles run in this order, and each can run alone with `--party ROLE`
-on the same `STATE`:
+`flock-circuit`, the Lean `flock-verify`, `flock-firewall`, `sampled-proofs-verifier` and `product`). On a 192-core node
+the build took 82 s and a block about 3 minutes (r20261027-003126-da4c). `--tools FILE` reuses a build. The roles run in
+this order, and each can run alone with `--party ROLE` on the same `STATE`:
 
 1. **challenger** (the auditor's). A process of its own, `benchmarks/one_stage/challenger_party.py`: a development
    challenger host under `STATE/challenger/host`, with its own LMS key, signed ledger and pins log, pinned on main's
@@ -45,7 +45,7 @@ on the same `STATE`:
    block's line (also in `STATE/record/verdicts.jsonl`):
 
    ~~~text
-   VERDICT {"block": 0, "coins": "simulated", "components": {"sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "run": "…", "verdict": "accept"}
+   VERDICT {"block": 0, "coins": "simulated", "components": {"sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "run": "r20261027-003126-da4c", "verdict": "accept"}
    ~~~
 
    A listed component whose role wrote no answer for the block is `absent`, and the product rejects. For example, a
