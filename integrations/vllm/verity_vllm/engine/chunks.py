@@ -238,7 +238,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
                                     "requests": {rid: {k: rec.get(k) for k in ("arrive_step_realized", "first_step", "finish_step")} for rid, rec in recs.items()}},
                            "corrected": {"engine_steps": n_fwd, "output_lag_steps": lag_s, "requests": exact}, "applied": False}
             if resolved_lag is not None and lag_s != int(resolved_lag):
-                # [rev F-r17-16 (a) / R17-1] the derived lag contradicts the RESOLVED profile: the snapshots missed a forward (sync frees the
+                # the derived lag contradicts the RESOLVED profile: the snapshots missed a forward (sync frees the
                 # finishing request inside step()); the loop's fields stand, the outputs inference is the forward map, the contradiction is named
                 problems.append(f"scheduler-state inference: derived output lag {lag_s} contradicts the resolved async_scheduling LAG "
                                 f"{int(resolved_lag)} (R17-1: the record's lag is the resolved profile, never a schedule-delta inference) -- "
@@ -325,7 +325,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
             problems.append(f"{rid}: {len(ts)} token-producing forwards for {n_gen} generated tokens")
         if ts and rec.get("finish_step") is not None and ts[-1] != int(rec["finish_step"]):
             problems.append(f"{rid}: finish_step {rec['finish_step']} != the forward of the last served token {ts[-1]}")
-    # [rev F-r17-16 (b)] a correction that fails THIS function's own consistency check is not applied: the loop's step fields are restored
+    # a correction that fails THIS function's own consistency check is not applied: the loop's step fields are restored
     # (timing.engine_steps / output_lag_steps, each request's arrive_step_realized / first_step / finish_step), `corrections.applied` is False
     # and the revert is a named problem -- the derived chunk keys above stay as the diagnostic they are, under consistent: False
     if corrections is not None and corrections.get("applied") and problems:
