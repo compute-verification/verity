@@ -55,7 +55,7 @@ theorem readX_of_lt_nS {x : Msg} {s : ℕ} (hs : s < nS x) : ∃ xr, readX x = s
 
 /-- **Part `s`'s circuit accepts on the honest run, at the deployed builder**: `honest_partAccepts_layR` at
 `layR elemR` and `bringsAt mask Ir b0 x`, with `hr` and the last round's `hp` proved. It takes, beside
-`honest_partAccepts_layR`'s premises about the builder, the statement and the run (`hN` … `hI`, `hTm`, `hnc`):
+`honest_partAccepts_layR`'s premises about the builder, the statement and the run (`hN` … `hacc`, `hW`, `hTm`, `hnc`):
 
 * `hA`, the run lemma: each inner round's message is the inner prover's at the run's earlier inner rounds;
 * `hpE`, `hp` at the rounds before the last;
@@ -70,14 +70,12 @@ theorem honest_partAccepts_deployed (mask : ℕ → ℕ → Bool) (Ir : InnerRec
     let bL : Brings := { bR with rd := L.readers }
     let I := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
     let D := recBound _root_.Flock.Readable.relation bR L DeployedR.bdR.IVStar
-    NumsFixed bL.st → StagedSetsUp FlockDeploy.sha512 I.V bL → WitSatisfies FlockDeploy.sha512 I.V bL →
+    NumsFixed bL.st →
     ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}, Claims.Recursion.R D I x w →
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →
-      InnerAccepts FlockDeploy.sha512 I.V x (runCs (I.V.k (xIOf x) + kS x) r)
-        (((Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.take (I.V.k (xIOf x) + kS x)).map
-          histOf) →
+      HonestWitSatisfies FlockDeploy.sha512 I.V bL x w ω r →
     ∀ s < nS x,
       let hist := ((Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.take (I.V.k (xIOf x))).map histOf
       let wO := bL.ref.wit w ω.1 hist s
@@ -92,8 +90,8 @@ theorem honest_partAccepts_deployed (mask : ℕ → ℕ → Bool) (Ir : InnerRec
       (∀ i < L.rounds x, ∀ m, L.held x s wO i = some m → ms.getD i [] = m) →
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro b bR L bL I D hN hS hW w st hR hx hf ω r hacc hI s hs hist wO ms hTm hnc hA hpE hh
-  refine honest_partAccepts_layR OpenRows.elemR b aux nOf hd recRest decI hN hS hW hR hx hf ω r hacc hI s hs
+  intro b bR L bL I D hN w st hR hx hf ω r hacc hW s hs hist wO ms hTm hnc hA hpE hh
+  refine honest_partAccepts_layR OpenRows.elemR b aux nOf hd recRest decI hN hR hx hf ω r hacc hW s hs
     hTm hnc hh ?_ (rowsRead_layR _ _ _ _ _)
   intro i hi
   have hiK : i < RestRead.kI x := hi

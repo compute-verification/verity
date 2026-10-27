@@ -367,6 +367,19 @@ algorithm: `remote-replicas/README.md`.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
   A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
+### 7.4 Retention on the remote — `research data gc` (`gc.py`)
+
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote (Daniel, 26 Oct: the store grew ~840 GiB a day).
+TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1 and vllm-replay-bundle/v1 7 days, vllm-rowdir-tar/v1 3,
+run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
+(target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
+(`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
+untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent.
+A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
+after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
+keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
+label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
+
 ## 8. Labels
 
 `labels/<target>/<ts>-<by>.json` locally; on the remote `labels/<target>/<sha256 of the canonical assertion>.json` (content key,
@@ -543,7 +556,8 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 ## 12. Design rules
 
 1. **A derivation key is a claim of dependency completeness.** Bias to false misses. Exact reuse includes the source tree.
-2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once; the index is disposable.
+2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once, never rewritten; the index is disposable. The
+   one deletion is §7.4's: blobs of uncited artifacts past their kind's TTL.
 3. **Labels are assertions, not fields.** Keep every assertion; policy chooses.
 4. **Verify uploads.** Size + a content check before anything is called PRESERVED, and the record says which check: a single-part
    ETag is the object's MD5 and is accepted as the transport check (`etag-md5`); a multipart ETag is not a hash and never is; the
