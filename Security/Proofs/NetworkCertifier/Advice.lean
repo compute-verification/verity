@@ -114,7 +114,7 @@ theorem encard_accSeqs_le_sync {Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W :
 
 /-- **A fixed clock.** With the clock-sync value fixed (`Sync = Unit`), the accepted sequences number at most
 `#Ac · D^n`. Instantiated for constant-rate release under a fixed logical schedule, timing carries nothing beyond the
-jitter, and nothing at all under J (`D = 1`): the Notion zero-capacity theorem, with content advice. -/
+jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice. -/
 theorem encard_accSeqs_le_fixedClock {Ac : Type} [Fintype Ac] (W : ℕ)
     (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞) := by
