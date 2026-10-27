@@ -1,4 +1,4 @@
-"""PoUW's per-call-noise units over every served linear call of the step (H200-PERCALL, CMP-126), coverage f = 1: a
+"""PoUW's per-call-noise units over every served linear call of the step, coverage f = 1: a
 `units.Subcircuit` whose ``call`` the driver runs on each linear's served call (`driver.Driver._linear`), with that call's
 A codes, weight and s32 sums.
 

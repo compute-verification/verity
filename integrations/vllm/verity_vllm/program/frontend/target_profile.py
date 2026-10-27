@@ -532,7 +532,7 @@ class TargetProfile:
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # noqa: PLC0415  (lazy: keeps this module light)
+        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -540,7 +540,7 @@ class TargetProfile:
         step, the correspondence evidence) — what Bet A pins, the eager resolver pins and the applicability manifest requires.  `arch_family`
         = the family the host actually reported (construction read-back / capture header), when known: it must be the record's.  Raises
         `gemm_targets.UnregisteredGemmTarget` (fail closed) for a target without a registered specialization."""
-        from verity_vllm.program.frontend.gemm_targets import gemm_target_for  # noqa: PLC0415
+        from verity_vllm.program.frontend.gemm_targets import gemm_target_for
         return gemm_target_for(self.compute_capability, arch_family)
 
     @classmethod
@@ -554,7 +554,7 @@ class TargetProfile:
         is `num_sms` (vLLM's `num_compute_units()`, the persistent-GEMM grid) and `(major, minor)` the compute capability.  The one
         source of the SM count for a construction on a GPU host: the builder applies it (shim), pins it (GEMM rule), and the artifact
         identity carries it (`ArtifactIdentity.target_profile.num_sms`).  Torch is imported lazily: this module stays torch-free."""
-        import torch  # noqa: PLC0415  (lazy: the module is torch-free on CPU hosts)
+        import torch  # lazy: the module is torch-free on CPU hosts
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
 

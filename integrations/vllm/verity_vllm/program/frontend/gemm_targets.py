@@ -282,8 +282,8 @@ def vllm_tuned_gemm_arch_family(compute_capability: tuple[int, int]) -> str | No
     for torch-free hosts (the fold).  `tests/program/test_gemm_targets.py` checks the two agree wherever vLLM is importable."""
     major, minor = int(compute_capability[0]), int(compute_capability[1])
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family  # noqa: PLC0415
-        from vllm.platforms.interface import DeviceCapability  # noqa: PLC0415
+        from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family
+        from vllm.platforms.interface import DeviceCapability
         return _get_tuned_matmul_arch_family(DeviceCapability(major, minor))
     except Exception:  # noqa: BLE001  (vLLM absent or another revision's module layout: the pinned rule)
         pass

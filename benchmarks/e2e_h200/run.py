@@ -1,6 +1,6 @@
-"""The H200 walking skeleton (CMP-96): steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
-into the device's memory (Demo A; ``--weights staged`` is M4's decode-to-staging path), every op's output committed per step,
-drawn units replayed bit for bit, each leg run or named, and the replay bundle and block record written to ``--out``.
+"""The H200 walking skeleton: steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
+into the device's memory (``--weights staged`` decodes them from the store into staging), every op's output committed per step,
+drawn units replayed bit for bit, each subprotocol run or named, and the replay bundle and block record written to ``--out``.
 
     python benchmarks/e2e_h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
         [--steps T] [--prompt-bytes P] [--requests N --generate G --admit A] [--device cpu|cuda] [--weights resident|staged] [--micro-batch M]
@@ -48,7 +48,7 @@ from e2e_h200.slots import Request, SlotKV, SlotShape  # noqa: E402
 from e2e_h200.store import FileStore, GeneratorStore, Mismatch, P2Store  # noqa: E402
 from e2e_h200.units import Replayer, load_subcircuit  # noqa: E402
 from e2e_h200.weights import Weights  # noqa: E402
-from verity_torch_loop import weights as SW  # noqa: E402
+from e2e_h200 import served_weights as SW  # noqa: E402
 
 #: the weights' registration digest under the test salt key is computed for streams up to this size (about 1 s a MiB)
 DIGEST_BYTES = 1 << 26
