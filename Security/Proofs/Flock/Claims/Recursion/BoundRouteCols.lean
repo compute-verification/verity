@@ -21,8 +21,7 @@ and is retired. This file proves the route through REC1's chain as it stands (`K
   collision among `IVStar`'s calls, which the witnesses record (`RecDeploy.forksBind_C`).
 
 The reading takes the calls as a set because `LastBindsEC` compares them so (ASK-76): the record's stream order and
-its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set
-(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
+its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set.
 
 `RecDeploy.KSBoundRouteCols` is `KSBoundDeployed`'s ∀-form; `RecDeploy.ksBoundRoute_of_bridge_cols` proves it from the
 bridge. At the deployed plain verifier's own steps `LastCoinFree` holds (`RecDeploy.lastCoinFree_deployed`).
@@ -567,13 +566,13 @@ and V*'s bound layout `L`, at every choice the code side makes (the element-leve
 
 `VstarShowsB` with `RunPairs` ties `shows` to the run: without them a `shows` that holds nowhere makes `PartChecksB` and
 `DecompB` hold at a `chk` that holds nowhere, at every inner verifier, even one that rejects everything, where `E*` never
-extracts (note:proofs/20261019T0540Z-report-rec1-ksboundroute-counterexample). `PartOpensB` makes every holder of a
+extracts. `PartOpensB` makes every holder of a
 round hold the run's commit string there, which the readers read, so each part's check reaches the readers' messages.
 
 `Bridge` is a lemma on the way, not a premise. At the deployed bound record (`bdCover`, `γ`'s weight `wCover` at
-`IVStar`, ASK-72) (P3) holds and the route is `ksBoundRouteCols_cover`. Its level (`Claims.Recursion.lam`) is about 65
+`IVStar`) (P3) holds and the route is `ksBoundRouteCols_cover`. Its level (`Claims.Recursion.lam`) is about 65
 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below
-the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
 least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
 statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`),
 Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
