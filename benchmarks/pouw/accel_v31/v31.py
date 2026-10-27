@@ -889,14 +889,15 @@ def params_ks(p: bytes) -> bytes:
 
 
 def cmd_fill_params(a: argparse.Namespace) -> int:
-    """CGP1 params (a fresh Ks each) for `v31 fill-bench`'s shapes at L (0: L = K), named as it looks them up."""
+    """CGP1 params (a fresh Ks each) for `v31 fill-bench`'s shapes (NAME:M:N:K, or NAME:M:N:K:LP[:L] at an L' and L of its
+    own) at L (0: L = K), named as it looks them up."""
     d = Path(a.dir)
     d.mkdir(parents=True, exist_ok=True)
     for s in a.shapes:
-        m, n, k = (int(x) for x in s.split(":")[-3:])
-        L = a.L or k
-        f = Fill(m, n, k, a.lp, L, a.row, a.served)
-        (d / fill_params_name(m, n, k, a.lp, L, a.row, a.served)).write_bytes(fill_params(f, os.urandom(64)))
+        m, n, k, *own = (int(x) for x in s.split(":")[1:])
+        lp, L = own[0] if own else a.lp, (own[1] if len(own) > 1 else a.L) or k
+        f = Fill(m, n, k, lp, L, a.row, a.served)
+        (d / fill_params_name(m, n, k, lp, L, a.row, a.served)).write_bytes(fill_params(f, os.urandom(64)))
     return 0
 
 
@@ -948,21 +949,22 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     def g(x) -> str:
         return "-" if x is None else f"{x:.3f}"
 
-    print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
+    print("| shape | m x N x K | L' | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
           "commit ms |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
         variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
                    + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
                    + (f" c{r['copies']}" if r.get("copies", 2) != 2 else "") + (" lstr" if r.get("lstr") else "")
+                   + (f" fstr {r.get('fprio', 'hi')}" if r.get("fstr") else "")
                    + (f" rot{r['sha_rot']}" if r.get("sha_rot") else ""))
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
         duty = r.get("gamma_ovl_w") if r.get("o") else r["gamma_ovl"]
-        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
+        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['lp']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
               f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
               f"{100 / duty:.1f}% | {parts} |")
@@ -1240,7 +1242,8 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     """`v31 once` under V31_ONCE_OVL in Nsight Systems (its `nsys stats -r cuda_gpu_trace` CSV): each kernel's time in the
     second serial call and its median over the steady overlapped calls (each one's compute beside the previous call's
     commit, the first overlapped call's left out), with the share of it that ran beside the other stream; the steady
-    period (GEMM end to GEMM end); and the steady window's time with compute alone, the commit alone, both, and neither.
+    period (GEMM end to GEMM end); the steady window's time with compute alone, the commit alone, both, and neither; and
+    the GEMM's share of the window (its duty) and the coins' and form's, all of it and with no GEMM running.
     The GEMM is the kernel whose name --gemm matches (cuBLASLt's under V31_LTW), and it counts the calls. A kernel's k-th
     launch belongs to call k // (its launches / the calls); a compute kernel launched in some calls only (`v31 fill-once`'s
     weight side, formed once a period) to the call whose GEMM comes next. --from NAME drops what ran before NAME's first
@@ -1315,6 +1318,13 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     win = w1 - w0
     print(f"steady window {win / 1e6:.3f} ms: compute alone {(comp - both) / win:.1%}, commit alone {(comm - both) / win:.1%}, "
           f"both {both / win:.1%}, neither {(win - comp - comm + both) / win:.1%}")
+    in_win = [(max(s, w0), min(e, w1), n) for c in calls for s, e, n in c if e > w0 and s < w1]
+    gs = spans_union([(s, e) for s, e, n in in_win if gemm.search(n)])
+    fs = spans_union([(s, e) for s, e, n in in_win if is_compute[n] and not gemm.search(n)])
+    gb, fb = sum(e - s for s, e in gs), sum(e - s for s, e in fs)
+    fg = sum(covered(gs, s, e) for s, e in fs)
+    print(f"GEMM {gb / win:.1%} of the window (its duty); coins and form {fb / win:.1%}, {(fb - fg) / win:.1%} with no GEMM "
+          f"running")
     return 0
 
 

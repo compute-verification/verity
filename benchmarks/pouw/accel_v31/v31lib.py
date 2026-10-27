@@ -5,6 +5,7 @@ ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's 
     p = Prover(m, n, k, lp=128, L=k, row=16384, served=True, lib=PATH, device=0)   # its CGP1 params (dither's domain, a
                                                                                     # fresh Ks unless ks= is given)
     p.set_weights(B)                     # n x k int8: a numpy array, or a device pointer (int) with on_device=True
+    p.point_weights(ptr)                 # or the weights where they are on the device, no copy (None: set_weights')
     seeds = served_seeds(coin, receipt, call)   # dither.seeds: the raw coin, the operand-root receipt, the call's index
     a_ptr = p.load_a(A)                  # optional: A (m x k int8, host or on_device) into the Prover's buffer
     c = p.prove(seeds, a_ptr)            # the call's index, at once; a_ptr: A (m x k int8) on the device (None: the
@@ -12,6 +13,8 @@ ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's 
     root = p.root(c)                     # 64 bytes, once the call's commit is done
     ans = p.answer(c, i, j, s)           # proof block (i, j, s)'s opened rows: {"rows": {pos: (row, salt, path)}, "B": B[j]}
     rows = p.open(c, positions)          # [(row, salt, path)] for any leaves
+    p.levels_async(c, dst)               # or every tree level copied behind the commit to page-locked dst (whole after
+                                         # p.sync())
 
 A served call (served=True, dither.Shape(o=True)) commits per tile T_1 .. T_{S-1} (u16) and then O = (A + d_A)(B +
 d_B)^T mod 2^32 (u32; T_S is implied by O); a filler's commits T_1 .. T_S of its pad. Calls run in issue order on the
@@ -24,7 +27,9 @@ Prover's own. A served call whose A + d_A (or B + d_B) has a row holding both -1
 decomposition (a' = A + d_A - sigma) can't carry it, and `root` raises. v31.cu's knobs come from the environment when a
 Prover is made: V31_LTW=1 has a filler call at S = 1 (L >= K) take cuBLASLt's int32 X W'^T in place of the protocol GEMM,
 its leaves the same bytes (the low halves); V31_PF, V31_CCTA, V31_SCHED and V31_CPRIO tune the commit beside the next
-call's compute.
+call's compute; V31_FSTR=1 runs each call's coins and form on a stream of their own (V31_FPRIO hi or lo) into the other of
+two operand buffers, beside the call before's GEMM. One thread drives every Prover of a process (the thread that made the
+first live one): the library refuses any other.
 
     python3 v31lib.py gate --lib LIB [--q 64]   the GPU's values, pad and every tree level against the reference and the
                                                 verifier's verdicts on the GPU's own openings, honest and cheating calls,
@@ -41,6 +46,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Self
@@ -74,12 +80,14 @@ class Lib:
             "v31_info": ([vp, u64p], i),
             "v31_copies": ([vp], i),
             "v31_set_b": ([vp, vp, i], i),
+            "v31_point_b": ([vp, vp], i),
             "v31_load_a": ([vp, vp, i, ctypes.POINTER(vp)], i),
             "v31_prove": ([vp, u8p, u64, vp, ctypes.c_char_p, u64p], i),
             "v31_root": ([vp, u64, vp], i),
             "v31_open": ([vp, u64, u64p, i, vp, vp], i),
             "v31_values": ([vp, u64, vp], i),
             "v31_levels": ([vp, u64, vp], i),
+            "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
             "v31_destroy": ([vp], None),
@@ -143,6 +151,13 @@ class Prover:
         if B.shape != (self.f.n, self.f.k):
             raise ValueError(f"B is n x k = {self.f.n} x {self.f.k}, not {B.shape}")
         self.lib.check(self.lib.set_b(self.h, B.ctypes.data_as(ctypes.c_void_p), 0))
+        self.B = B
+
+    def point_weights(self, ptr: int | None, B: np.ndarray | None = None) -> None:
+        """The weights where they are: n x k int8 at device pointer ptr, no copy and no wait (unchanged until the calls
+        issued after have formed: `sync`), or None for the Prover's own buffer (`set_weights`'s). B: the same weights on the
+        host, kept for the answers' B rows."""
+        self.lib.check(self.lib.point_b(self.h, None if ptr is None else ctypes.c_void_p(int(ptr))))
         self.B = B
 
     def load_a(self, A, on_device: bool = False) -> int:
@@ -218,6 +233,11 @@ class Prover:
         self.lib.check(self.lib.levels(self.h, c, buf))
         return buf.raw
 
+    def levels_async(self, c: int, dst: int) -> None:
+        """Call c's tree levels (`levels`' order, each node 8 native u64 words) copied behind its commit to dst, a host
+        pointer to (2 width - 1) x 64 bytes (page-locked, or the copy waits for the commit); whole after `sync`."""
+        self.lib.check(self.lib.levels_async(self.h, c, ctypes.c_void_p(int(dst))))
+
     def pad(self) -> bytes:
         buf = ctypes.create_string_buffer(self.f.m * self.f.k)
         self.lib.check(self.lib.pad(self.h, buf))
@@ -241,6 +261,8 @@ f-pad-768 fill 256 384 3072 256 768 1024 pad none
 f-llm-4096 fill 256 256 8192 256 4096 1024 llm none
 f-uniform-1280 fill 256 512 2560 256 1280 1024 uniform none
 f-lp512 fill 256 256 4096 512 1024 2048 llm none
+f-lp2048 fill 256 256 6144 2048 8192 8192 llm none
+c-skip-lp2048 fill 256 256 4096 2048 4096 1024 pad skip:1
 f-row8k fill 128 256 8192 256 8192 8192 pad none
 f-big fill 512 1024 8192 256 4096 1024 llm none
 c-skip fill 256 256 4096 256 1024 1024 pad skip:5
@@ -390,6 +412,47 @@ def gate_pipeline(lib: Lib, q: int, rng: np.random.Generator) -> dict:
     return out
 
 
+def gate_point_levels(lib: Lib, rng: np.random.Generator) -> dict:
+    """`point_weights` and `levels_async`, and the one-thread rule: a filler's three calls back to back, the first two on
+    weights another Prover's buffer holds (a served Prover's A, loaded with them), the third on its own after
+    `set_weights`, each call's levels copied behind its commit against the reference's; the holder's buffer untouched by
+    that `set_weights`; and a call from a second thread refused."""
+    m, n, k, lp, L, row = 256, 256, 2048, 256, 2048, 1024
+    out: dict = {"name": "point-levels", "calls": []}
+    holder = Prover(n, 128, k, 128, L, row, served=True, lib=lib)
+    p = Prover(m, n, k, lp, L, row, lib=lib)
+    try:
+        f = p.f
+        B, B2 = v31.operands(f, rng, "llm")[1], v31.operands(f, rng, "llm")[1]
+        p.point_weights(holder.load_a(B), B)
+        width = 1 << p.info()["depth"]
+        bufs = [np.zeros(8 * (2 * width - 1), dtype=np.uint64) for _ in range(3)]
+        issued = []
+        for x, buf in enumerate(bufs):
+            if x == 2:
+                p.set_weights(B2)
+            seeds = call_seeds(os.urandom(64), os.urandom(64))
+            c = p.prove(seeds)
+            p.levels_async(c, buf.ctypes.data)
+            issued.append((c, seeds, B2 if x == 2 else B))
+        p.sync()
+        for (c, seeds, Bx), buf in zip(issued, bufs):
+            values = v31.fill_buffer(f, *v31.fill_values(f, v31.pad_rows(seeds, range(m), k), Bx, v31.Coins.expand(f, seeds)))
+            ref = v31.fill_commit(f, values, p.ks, c * f.leaves)
+            out["calls"].append({"call": c, "levels_equal": buf.byteswap().tobytes() == v31.levels_bytes(ref.levels)})
+        out["holder_kept"] = holder.pad() == B.tobytes()
+        rc: list[int] = []
+        t = threading.Thread(target=lambda: rc.append(lib.info(p.h, (ctypes.c_uint64 * 14)())))
+        t.start()
+        t.join()
+        out["thread_refused"] = rc == [-1]
+    finally:
+        p.close()
+        holder.close()
+    out["good"] = all(r["levels_equal"] for r in out["calls"]) and out["holder_kept"] and out["thread_refused"]
+    return out
+
+
 def _pipeline_check(p: Prover, ops: tuple, c: int, seeds: dict[str, bytes]) -> dict:
     f, (A, B, _) = p.f, ops
     if A is None:
@@ -421,6 +484,12 @@ def cmd_gate(a: argparse.Namespace) -> int:
     (out / "fill-pipeline.json").write_text(json.dumps(rep, indent=1))
     print(f"pipeline: {'good' if rep['good'] else 'BAD'} roots {sum(r['root_equal'] for r in rep['calls'])}/"
           f"{len(rep['calls'])} equal, stale call refused {rep['stale_refused']}; {rep['verdict']}", flush=True)
+    good &= rep["good"]
+    rep = gate_point_levels(lib, rng)
+    (out / "fill-point-levels.json").write_text(json.dumps(rep, indent=1))
+    print(f"point-levels: {'good' if rep['good'] else 'BAD'} levels {sum(r['levels_equal'] for r in rep['calls'])}/"
+          f"{len(rep['calls'])} equal, holder kept {rep['holder_kept']}, second thread refused {rep['thread_refused']}",
+          flush=True)
     good &= rep["good"]
     return 0 if good else 1
 

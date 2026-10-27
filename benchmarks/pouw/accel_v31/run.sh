@@ -25,8 +25,10 @@
 # on the GPU's own openings, honest and cheating, filler and served, a filler's and a served Prover interleaved;
 # verdicts.txt), once with the protocol GEMM (ltw0), once (the filler's gates) with V31_LTW=1 (cuBLASLt's GEMM at S = 1;
 # variants take it as ltw=1) and once (the served gates and the pipeline, c3) at three copies with the leaf phases on
-# their own streams (V31_COPIES=3 V31_LSTR=1, sched 1, pf 2, ccta 3); then, a lease each variant and L of FILL_LS (default "768 4096 8192 0", 0: L = K),
-# `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384) beside cuBLASLt and
+# their own streams (V31_COPIES=3 V31_LSTR=1, sched 1, pf 2, ccta 3), each with FILL_GATE_ENV's KEY=VALUE pairs too (e.g.
+# V31_FSTR=1); then, a lease each variant and L of FILL_LS (default "768 4096 8192 0", 0: L = K),
+# `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384; NAME:M:N:K, or
+# NAME:M:N:K:LP[:L] at an L' and L of its own) beside cuBLASLt and
 # CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
 # implied: dither.Shape(o=True); its params named served-*).
@@ -43,8 +45,8 @@
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill|contend (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
-# cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0), sched (0), copies (2), lstr (0)
-# (v31.cu's Knobs), nreg (the GEMM's register cap) and rot (sha512.cuh's SHA_ROT, the sigmas rotating on the FMA pipe),
+# cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0), sched (0), copies (2), lstr (0),
+# fstr (0), fprio (hi) (v31.cu's Knobs), nreg (the GEMM's register cap) and rot (sha512.cuh's SHA_ROT, the sigmas rotating on the FMA pipe),
 # each a build of its own (default v31.cu's, 0), default row=8192; REPS (default
 # 7); Q, the proof blocks a verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -74,7 +76,7 @@ knob_env() {
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
-    "V31_COPIES=$(knob "$1" copies 2) V31_LSTR=$(knob "$1" lstr 0)"
+    "V31_COPIES=$(knob "$1" copies 2) V31_LSTR=$(knob "$1" lstr 0) V31_FSTR=$(knob "$1" fstr 0) V31_FPRIO=$(knob "$1" fprio hi)"
 }
 # bin VARIANT: the v31 build it runs
 bin() { local n r; n=$(knob "$1" nreg ""); r=$(knob "$1" rot ""); echo "$W/v31${n:+-n$n}${r:+-r$r}"; }
@@ -126,7 +128,7 @@ if [ "$MODE" = fill ]; then
   [ "$VARIANTS" = row=8192 ] && VARIANTS="row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1"
   FILL_LS=${FILL_LS:-"768 4096 8192 0"}
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
-  export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
+  export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY FILL_GATE_ENV=${FILL_GATE_ENV:-}
   nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -DV31_LIB -DCOMMIT_GPU_DOMS=8 \
     -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
   echo "build lib rc $?" >> "$O/rc.txt"
@@ -149,7 +151,8 @@ if [ "$MODE" = fill ]; then
         ltw1) only=(--only fill); ev=(V31_LTW=1) ;;
         c3) only=(--only served); ev=(V31_COPIES=3 V31_LSTR=1 V31_SCHED=1 V31_PF=2 V31_CCTA=3) ;;
       esac
-      env "${ev[@]}" $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates-$x" --q "$Q" "${only[@]}" \
+      # shellcheck disable=SC2086
+      env $FILL_GATE_ENV "${ev[@]}" $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates-$x" --q "$Q" "${only[@]}" \
         > "$O/fill-gates-$x.log" 2> "$O/fill-gates-$x.err"
       echo "fill gate $x rc $?" >> "$O/rc.txt"
     done'
