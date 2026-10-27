@@ -1021,6 +1021,9 @@ STEP_FORMAT = "verity/commit-slots-step-registration/v1"
 STEP_KEYS = {"format", "run", "program", "block", "step", "step_root", "slot_roots", "slots", "layout_digest", "context",
              "units_per_slot", "population", "law", "weights"}
 STEPS_KEY = "steps"
+#: optional: a slot's layout units that are proof blocks, ascending, when not every unit of the layout is one
+PROOF_UNITS_KEY = "proof_units"
+STEP_OPTIONAL = {STEPS_KEY, PROOF_UNITS_KEY}
 
 
 def step_digest(reg: Mapping[str, Any]) -> str:
@@ -1029,24 +1032,35 @@ def step_digest(reg: Mapping[str, Any]) -> str:
 
 
 def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
-                      program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
+                      program: str, block: int, step: int, read_steps: bool = False,
+                      proof_units: Sequence[int] | None = None) -> dict[str, Any]:
     """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),
-    which ``com`` must hold."""
+    which ``com`` must hold; ``proof_units``: a slot's layout units that are proof blocks (`PROOF_UNITS_KEY`; default every
+    one)."""
     steps = _Steps(com)
+    per = len(proof_units) if proof_units is not None else com.layout.unit_count
     reg = {"format": STEP_FORMAT, "run": run, "program": program, "block": block, "step": step,
            "step_root": steps.step(block, step).root.hex(), "slot_roots": [r.hex() for r in steps.roots(block, step)],
            "slots": com.slots, "layout_digest": S.layout_digest(com.layout).hex(), "context": com.context.hex(),
-           "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(law),
+           "units_per_slot": com.layout.unit_count, "population": com.slots * per, "law": dict(law),
            "weights": [{"value": v, "root": w.root.hex()} for v, w in sorted(weights.items())]}
+    if proof_units is not None:
+        reg[PROOF_UNITS_KEY] = sorted(int(u) for u in proof_units)
     if read_steps:
         reg[STEPS_KEY] = [{"step": s, "root": steps.step(block, s).root.hex()} for s in range(step + 1)]
     return reg
 
 
+def _blocks_a_slot(reg: Mapping[str, Any]) -> int:
+    return len(reg[PROOF_UNITS_KEY]) if PROOF_UNITS_KEY in reg else int(reg["units_per_slot"])
+
+
 def block_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
-    """A drawn proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
-    return divmod(int(index), int(reg["units_per_slot"]))
+    """A drawn proof block's ``(slot, layout unit)``: index ``slot * B + b`` for the slot's b-th proof block, B a slot's
+    proof blocks; without `PROOF_UNITS_KEY` every layout unit is one, so ``slot * units_per_slot + unit``."""
+    slot, b = divmod(int(index), _blocks_a_slot(reg))
+    return slot, (reg[PROOF_UNITS_KEY][b] if PROOF_UNITS_KEY in reg else b)
 
 
 def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
@@ -1059,11 +1073,15 @@ def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], i
     ``reg``'s `STEPS_KEY` names it: a read at a step ``reg`` doesn't name is refused. The paths themselves are `check`'s,
     which runs first, so a row whose paths don't reach the registered step root is refused."""
     bad = check(doc, payload, registration=registration)
-    if set(reg) - {STEPS_KEY} != STEP_KEYS or reg["format"] != STEP_FORMAT:
-        return {**bad, "step": f"not a {STEP_FORMAT} with exactly {sorted(STEP_KEYS)} and optionally {STEPS_KEY}"}
-    if (reg["population"] != reg["slots"] * reg["units_per_slot"] or len(reg["slot_roots"]) != reg["slots"]
+    if not STEP_KEYS <= set(reg) <= STEP_KEYS | STEP_OPTIONAL or reg["format"] != STEP_FORMAT:
+        return {**bad, "step": f"not a {STEP_FORMAT} with exactly {sorted(STEP_KEYS)} and optionally {sorted(STEP_OPTIONAL)}"}
+    pu = reg.get(PROOF_UNITS_KEY)
+    if pu is not None and not (isinstance(pu, list) and pu and all(isinstance(u, int) for u in pu)
+                               and pu == sorted(set(pu)) and 0 <= pu[0] and pu[-1] < reg["units_per_slot"]):
+        return {**bad, "step": f"its {PROOF_UNITS_KEY} are not ascending distinct layout units"}
+    if (reg["population"] != reg["slots"] * _blocks_a_slot(reg) or len(reg["slot_roots"]) != reg["slots"]
             or not 0 <= int(index) < reg["population"]):
-        return {**bad, "step": "its population is not slots x units_per_slot over its slot roots, or the index is outside it"}
+        return {**bad, "step": "its population is not slots x a slot's proof blocks over its slot roots, or the index is outside it"}
     named = {s["step"]: s["root"] for s in reg.get(STEPS_KEY) or ()}
     if STEPS_KEY in reg and (len(named) != len(reg[STEPS_KEY]) or named.get(reg["step"]) != reg["step_root"]
                              or any(not 0 <= s <= reg["step"] for s in named)):
@@ -1197,12 +1215,14 @@ def _step_key(salt_key: bytes, block: int, step: int) -> bytes:
 
 
 def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: int = 1, cap: int = 8, tamper: bool = False,
-                      salt_key: bytes = FIXTURE_SALT_KEY, law: str | None = None
+                      salt_key: bytes = FIXTURE_SALT_KEY, law: str | None = None,
+                      restate: Callable[[Commitment], Commitment] | None = None
                       ) -> tuple[Any, dict[str, REG.Registered], Commitment]:
     """The torch loop's window written to ``out`` with its step commitments (a test salt key a step, from ``salt_key``): every
     row a unit commits or reads in the step commitment carries that commitment's salt, and every weight row its registered
     value's, so each window string is the one its opening reaches: -> (the loop, its registered weights, its commitment).
-    ``law``: the law it registers (`draw.parse_law`; default the fixture's, ``subset:len(FIXTURE_DRAW)``). Needs torch and
+    ``law``: the law it registers (`draw.parse_law`; default the fixture's, ``subset:len(FIXTURE_DRAW)``). ``restate``: the
+    step commitments the window registers and returns, from the loop's (`torch_loop_kv`). Needs torch and
     `integrations/torch_loop` on the path."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     from verity_torch_loop import loop as L
@@ -1262,8 +1282,39 @@ def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: 
                     ys += weights[value].salts[pos]
             salts_of[m.port(p)] = ys
     committed = CS.commit(win.window, data, salt_key=salt_key, salts_of=salts_of)
+    com = restate(com) if restate else com
     win.write(committed, out, {"loop": "torch-loop", **steps_provenance(com)}, registrar=R)
     return loop, weights, com
+
+
+def torch_loop_kv(com: Commitment) -> Commitment:
+    """The loop's commitment over two steps restated so that step 0 holds, in each slot's layer-l quantizer codes row, the
+    codes step 1's layer l reads (as a K row written at step 0 is read at step 1): with `torch_loop_kv_locate`, step 1's
+    units read their ``x`` half from step 0 and half from step 1."""
+    lay, h = com.layout, (com.layout.unit_count // len(com.layout.groups)) - 1
+    rows0 = [list(r) for r in com.steps[0, 0].rows]
+    for j, rows1 in enumerate(com.steps[0, 1].rows):
+        for layer in range(len(lay.groups)):
+            g = lay.row_base[layer * (h + 1)]
+            rows0[j][g] = rows1[g]
+    return Commitment(com.context, lay, com.slots,
+                      {(0, 0): StepRecord(com.steps[0, 0].salt_key, tuple(map(tuple, rows0))), (0, 1): com.steps[0, 1]})
+
+
+def torch_loop_kv_locate(h: int, at_step0: int = 32, slot_of: Callable[[dict], int] = lambda c: c["slot"],
+                         step_of: Callable[[dict], int] = lambda c: c["step"] - 1) -> Locate:
+    """`torch_loop_locate` with a step-s unit's ``x`` (s > 0) read in two pieces: its first ``at_step0`` words from step
+    ``step_of(c)``'s quantizer codes row, the rest from its own step's (`torch_loop_kv`)."""
+    base_locate = torch_loop_locate(h)
+
+    def locate(c, template, port):
+        if port != "x" or c["step"] == 0:
+            return base_locate(c, template, port)
+        base = c["layer"] * (h + 1)
+        producer = {"layer": c["layer"], "op": f"{c['op']}.input_quant", "unit": base}
+        return [Read(step_of(c), slot_of(c), base, 0, at=0, nbytes=2 * at_step0, producer=producer),
+                Read(c["step"], c["slot"], base, 0, at=at_step0, start=2 * at_step0, producer=producer)]
+    return locate
 
 
 FIXTURE_DRAW = (5, 200, 300, 511)

@@ -239,7 +239,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
-            "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
+            "digest": hashlib.sha512(line.encode()).hexdigest() if line else None, "line": line}
 
 
 def lean_refused(v: dict, names: str | None = None) -> bool:

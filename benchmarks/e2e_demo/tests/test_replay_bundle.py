@@ -287,28 +287,11 @@ def two_steps(tmp_path_factory) -> tuple[Path, dict, B.Commitment, B.Commitment]
     half from step 0 and half from step 1."""
     d = tmp_path_factory.mktemp("two-steps")
     _, weights, com = B.torch_loop_window(d, steps=2)
-    lay = com.layout
-    rows0 = [list(r) for r in com.steps[0, 0].rows]
-    for j, rows1 in enumerate(com.steps[0, 1].rows):
-        for layer in range(len(lay.groups)):
-            g = lay.row_base[layer * (H + 1)]
-            rows0[j][g] = rows1[g]
-    kv = B.Commitment(com.context, lay, com.slots,
-                      {(0, 0): B.StepRecord(com.steps[0, 0].salt_key, tuple(map(tuple, rows0))), (0, 1): com.steps[0, 1]})
-    return d, weights, com, kv
+    return d, weights, com, B.torch_loop_kv(com)
 
 
 def _kv_locate(at_step0: int = 32, slot_of=lambda c: c["slot"], step_of=lambda c: c["step"] - 1):
-    base_locate = B.torch_loop_locate(H)
-
-    def locate(c, template, port):
-        if port != "x" or c["step"] == 0:
-            return base_locate(c, template, port)
-        base = c["layer"] * (H + 1)
-        producer = {"layer": c["layer"], "op": f"{c['op']}.input_quant", "unit": base}
-        return [B.Read(step_of(c), slot_of(c), base, 0, at=0, nbytes=2 * at_step0, producer=producer),
-                B.Read(c["step"], c["slot"], base, 0, at=at_step0, start=2 * at_step0, producer=producer)]
-    return locate
+    return B.torch_loop_kv_locate(H, at_step0, slot_of, step_of)
 
 
 def _kv_build(two_steps, drawn=STEP1_DRAW, locate=None, commitment=None) -> tuple[dict, bytes]:
@@ -580,3 +563,33 @@ def test_a_drawn_block_reading_earlier_steps_holds_to_every_registered_step_root
     assert set(B.check_step(doc, payload, {**reg, B.STEPS_KEY: reg[B.STEPS_KEY][:1]}, index)) == {"step"}
     assert set(B.check_step(doc, payload, {**reg, B.STEPS_KEY: [*reg[B.STEPS_KEY], {"step": 2, "root": "00" * 64}]},
                             index)) == {"step"}
+
+
+def test_a_window_registering_the_restated_commitment_holds_its_reads(tmp_path) -> None:
+    """`torch_loop_window(restate=torch_loop_kv)`: the window's own registration names the step roots step 1's reads open
+    against, so a drawn step-1 block reading step 0 checks clean against it and against the step registration."""
+    _, weights, kv = B.torch_loop_window(tmp_path, steps=2, law="subset:1", restate=B.torch_loop_kv)
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    pu = [u for u in range(kv.layout.unit_count) if u % (H + 1) != 0]
+    reg = B.step_registration(kv, weights, {"law": "subset", "k": 8}, run=B.RUN_ID, program="torch-loop/mlp-w8a8-h128/seed0",
+                              block=0, step=1, read_steps=True, proof_units=pu)
+    doc, payload = B.build(tmp_path, [260], commitment=kv, locate=_kv_locate(), binding="GEMM_SM120_S8",
+                           reads=B.torch_loop_reads, weights=weights, draw={"source": "fixture", "law": {"law": "subset", "k": 1}})
+    assert B.check(doc, payload, registration=rec) == {}
+    assert B.check_step(doc, payload, reg, pu.index(1 + 4), registration=rec) == {}
+
+
+def test_a_step_whose_proof_blocks_are_some_of_its_units(fresh, step) -> None:
+    """With `proof_units` (the coordinate units; each layer's quantizer unit is committed, not proved) the population is
+    the slots' proof blocks only, and index b of a slot names its b-th proof unit."""
+    _, weights, com = fresh
+    (b, s), = com.steps
+    pu = [u for u in range(com.layout.unit_count) if u % 129 != 0]
+    reg = B.step_registration(com, weights, {"law": "subset", "k": 8}, run=B.RUN_ID, program="torch-loop/mlp-w8a8-h128/seed0",
+                              block=b, step=s, proof_units=pu)
+    _, doc, payload = step
+    assert reg["population"] == 2 * 256 and B.block_of(reg, 5) == (0, 6) and B.block_of(reg, 256) == (1, 1)
+    assert B.check_step(doc, payload, reg, 5) == {}
+    assert set(B.check_step(doc, payload, reg, STEP_INDEX)) == {"step:index"}
+    assert set(B.check_step(doc, payload, {**reg, "proof_units": pu[::-1]}, 5)) == {"step"}
+    assert set(B.check_step(doc, payload, {**reg, "population": 2 * 258}, 5)) == {"step"}
