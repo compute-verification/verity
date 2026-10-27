@@ -1,4 +1,4 @@
-"""The decoder shapes the skeleton runs: ALLP-IFACE's `verity_torch_loop.weights.Shape` (CMP-95 item 1), whose tensors and
+"""The decoder shapes the skeleton runs: ALLP-IFACE's `served_weights.Shape` (CMP-95 item 1), whose tensors and
 weights stream the store holds. `FROZEN` is the H200 demo's frozen shape (the toy); the others are small instances of the same
 MQA architecture (one KV head, query heads covering the width) for CPU runs and tests.
 
@@ -8,12 +8,9 @@ that exercise every level of the map (several chunk rows, RMSNorm groups, quanti
 """
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "integrations" / "torch_loop"))
-from verity_torch_loop.weights import H200, TINY as IFACE_TINY, Shape  # noqa: E402
+from e2e_h200.served_weights import H200, TINY as IFACE_TINY, Shape
 
 #: RMSNorm's epsilon, 1e-5 as the nearest f32 (circuits' plan, `EPS_1E5`)
 EPS = 0x3727C5AC

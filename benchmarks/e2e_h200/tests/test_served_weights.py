@@ -1,4 +1,4 @@
-"""The seeded weights and their registration root (`verity_torch_loop.weights`, CMP-95 interface 1)."""
+"""The seeded weights and their registration root (`e2e_h200.served_weights`, CMP-95 interface 1)."""
 from __future__ import annotations
 
 import dataclasses
@@ -16,7 +16,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates import embedding
-from verity_torch_loop import weights as W
+from e2e_h200 import served_weights as W
 
 FIXTURE = Path(__file__).parent / "fixtures" / "weights-v1.json"
 SEED, KEY, PROG = W.TEST_SEED, W.TEST_SALT_KEY, W.TEST_PROGRAM
