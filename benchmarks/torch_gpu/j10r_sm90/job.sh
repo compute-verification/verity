@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HASH-22's jobs (cwd = the source tree's root):
+# The jobs (cwd = the source tree's root):
 #   build  (a CPU node) the fallback, j10r_ref.cu, at sm_90a: $OUT/lib/sm_90a/j10r_ref.so, ptxas's report, BUILD.txt
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
 #   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
@@ -10,11 +10,11 @@
 #          h1u_build makes the arms H1U_ARMS names from this tree (BUILD_H1U=0: not), all before the lease, as are the
 #          operands, in a scratch directory removed at exit.
 #
-#   research run --on vy-nebius-cpu-4 --as kernels-kp2dec --project verity --source . --cwd source -- \
+#   research run --on vy-nebius-cpu-4 --as LANE --project verity --source . --cwd source -- \
 #     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by kernels -- \
 #     bash benchmarks/torch_gpu/j10r_sm90/job.sh cpu
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=kernels-kp2dec --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
+#     --env GPU_LEASE_WHO=LANE --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
 #     --send CPU_RUN/out/lib/sm_90a/j10r_ref.so [--send .../h1u_kr.so ...] -- bash benchmarks/torch_gpu/j10r_sm90/job.sh gpu
 # gpu's steps (STEPS, default "check bench") run in that order under one lease; "prof" is prof.py's one call a linear of
 # the h1u build PROF_ARM (default kraq) under ncu (NCU, default the ncu beside NVCC; NCU_SET, default --set full; NCU_K,
@@ -44,10 +44,10 @@ build() {
   cat "$lib/BUILD.txt"; grep -E 'registers|spill' "$lib/ptxas.txt"
 }
 
-# sm_90a arms of benchmarks/hash/dither/h1u.cu (HASH-21's and HASH-22's), compiled from this tree with
+# sm_90a arms of benchmarks/hash/dither/h1u.cu, compiled from this tree with
 # benchmarks/hash/dither/j10r90.sh's defines and dither/job.sh's flags plus --no-compress: $OUT/lib/sm_90a/h1u_ARM.so,
 # their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as sass_pins.json stands
-# (sass-gate.json, a diagnostic: the gate's verdict is HASH-21's)
+# (sass-gate.json, a diagnostic only)
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
 H1U_Q=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1
@@ -85,7 +85,7 @@ h1u_build() {
   return $rc
 }
 
-# KP2-S8's exact plain linear (benchmarks/torch_gpu/s8_linear, #4463 and #4520), sent as files: its build.sh run unchanged
+# s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), sent as files: its build.sh run unchanged
 # from a scratch copy, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
   local w=$S/s8/benchmarks/torch_gpu/s8_linear nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}

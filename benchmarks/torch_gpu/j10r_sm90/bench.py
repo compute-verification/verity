@@ -1,4 +1,4 @@
-"""J10-R's units against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU (HASH-22):
+"""J10-R's proof blocks against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU:
 
     python bench.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm]
                     [--wgmma DIR] [--check check.json] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--reps 7]
@@ -11,13 +11,13 @@ rotates each rep:
 * `plain`: s8_linear's `int_mm.linear(x, sx, w, sw)` (#4472, the exact W8A8 linear's int_mm backend: `torch._int_mm` and
   the fused epilogue, the eager one where there is no Triton);
 * `int_mm`: `torch._int_mm` alone, the s32 GEMM;
-* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py, #4520): KP2-S8's exact linear, wgmma.scaled_mm at its tuned
+* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py): s8_linear's exact linear, wgmma.scaled_mm at its tuned
   config for the linear and M, into an output allocated once, held to plain's output on every cell;
 * each h1u build NAME: the call's J10-R receipts, kh_seeds_j10r then kh_units_multi_j10r (with --sm
   kh_units_multi_j10r_sm on every SM, the served launch);
-* `plain+NAME`, `wgmma+NAME`: that plain arm, then NAME's units, in one timed region (what serving them one after the
+* `plain+NAME`, `wgmma+NAME`: that plain arm, then NAME's proof blocks, in one timed region (what serving them one after the
   other costs);
-* `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every unit of the call (jr_seeds, jr_units).
+* `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every proof block of the call (jr_seeds, jr_units).
 
 After the reps, every units arm runs once more under each poison (`units.twice`: no word unwritten or unstable) and is
 held to the fixtures: its sampled receipts and seed words, and plain's s32 sums at the sampled tiles, so every number
@@ -60,7 +60,7 @@ def plain_of():
 
 
 def wgmma_of(path: str | None) -> dict | None:
-    """KP2-S8's exact linear (s8_linear's wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
+    """s8_linear's exact linear (its wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
     its identity, `cfg(m, n, k)` (configs.CONFIGS' tuned pick for (N, K) at M, as its run.py's table_cfg, else wgmma's
     default) and `fn(x, sx, w, sw, y, cfg)`, wgmma.scaled_mm into y."""
     if not path:

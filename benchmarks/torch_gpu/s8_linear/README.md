@@ -27,7 +27,7 @@ order but needs M a multiple of 16 and writes y^T), a baseline in `bench.py`.
 
 The shapes are `fixture.MODELS`: `mqa16k52` (the H200's: width 16384, 52 layers, MQA, MLP 65536,
 context 32, ~20,480 sequences), `mqa16k` and `mha8k` (the RTX's), plus `d<width>` for any fused-QKV 4x layer. `realw.py`
-gates the kernel on the demo's seeded weights at the H200 shape (`verity_torch_loop.weights`).
+gates the kernel on the demo's seeded weights at the H200 shape (`e2e_h200.served_weights`).
 
 | file | what |
 |---|---|

@@ -15,7 +15,7 @@
 // All keep x lazily below 2^768; the host reduces below p.
 //
 //   sqfloor gate FORM K N          N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
-//   sqfloor time FORM K TPB WAVES REPS   timed launches at the occupancy's blocks a SM times WAVES
+//   sqfloor time FORM K TPB WAVES REPS   timed launches at the occupancy's CTAs a SM times WAVES
 //   sqfloor clock                  the SM clock off a timed clock64 spin
 #include <cuda_runtime.h>
 
