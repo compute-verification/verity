@@ -66,6 +66,7 @@ theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundn
     (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (hCm : ∀ o, Cm.Opens H roots o = false)
     (w : Claims.Sampling.Wit) {g : Fin C.N} {u : Fin n} (hg : g ∈ C.outputs) (hu : P.unit g = some u) :
     u.val ∈ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w := by
+  classical
   have hr0 := partOf_rus P u
   have hlen : u.val < (partOf P).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
   have hpos : 0 < gateSize (C.op g) := by cases C.op g <;> simp [gateSize]
@@ -139,7 +140,7 @@ theorem deltaPub_lt_one {n kd K₀ W : ℕ} {t' v : ℝ} (h0 : 0 < n) (hK : K₀
   unfold Flock.Guarantees.DeltaPubDeployed at h
   exact h.2.2 n kd K₀ W t' v h0 hK hn hW ht0 ht hv0 hv
 
-open FlockSoundness.Game in
+open FlockSoundness FlockSoundness.Game in
 /-- **An event that never holds fails with probability 1**, under every strategy of every game: so it exceeds any
 `x < 1`. -/
 theorem exceeds_of_not {α : Type} {G : Game α} (s : Strategy G) {R : Prop} (hR : ¬ R) {x : ℝ} (hx : x < 1) :
@@ -181,7 +182,7 @@ theorem toy_not_relS (κ : Fin toyCircuit.N → Option Bool) (desc : Claims.Msg)
     (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) hδ (g := ⟨1, by decide⟩)
     (by decide) rfl
 
-open FlockSoundness.Game in
+open FlockSoundness FlockSoundness.Game in
 /-- **The constructed failing instance**: at the toy, a draw of size 1 (`n = k_d = K₀ = 1`) and the deployed
 parameters, for every game and every strategy, the verifier that accepts everything accepts a failing claim with
 probability 1, above `deltaPub`: at any `δ ≥ 0` (the guarantee's is `0` there), per-run time `t'` and opening cost `v`
@@ -321,7 +322,7 @@ theorem sampledKSLivePub_nontrivial :
       Bridge.kDep (2 ^ 192) (2 ^ 192) t' →
     ¬ SampledKSLivePubAll := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
-    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 ht hv0 hv hCR hLink hAll
+    src hA3 hTags hCust K₀ hK₀ τ t' v q L P vb σ Cc hkdn hK1 hports hout hW ht0 htv hv0 hv hCR hLink hAll
   obtain ⟨g, hg, hgi⟩ := hout
   obtain ⟨hk, hRw, hM, hρ, hρk, -⟩ := sampledKSLivePub_honest
   have h := hAll n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N
@@ -333,12 +334,14 @@ theorem sampledKSLivePub_nontrivial :
     intro g
     cases hrow : FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g with
     | none => rfl
-    | some r => exact absurd r.2.1.isLt (by omega)
+    | some r =>
+      have := r.2.1.isLt
+      omega
   obtain ⟨u, -⟩ := Bridge.unit_some P hgi
   have hn : n ≤ K₀ * kd := by
     rw [hkdn]
     exact Nat.le_mul_of_pos_left n hK1
-  have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW ht0 ht hv0 hv
+  have hlt := Bridge.deltaPub_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW ht0 htv hv0 hv
   exact not_le.2 (Bridge.exceeds_of_not τ (Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
     (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _ (by positivity) hg hgi) hlt) h
 
