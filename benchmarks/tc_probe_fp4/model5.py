@@ -1,11 +1,11 @@
-"""HYPOTHESIS: a minimal Python reference of autoproof's *model5* for one Blackwell block-scaled FP4 MMA
-(``mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3``).
+"""A minimal Python reference of autoproof's *model5* for one Blackwell block-scaled FP4 MMA
+(``mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3``), kept as ``probe.py``'s
+control.  The probe refuted it on sm_120 (discrepancy-log entries D16 and D17: a -0 accumulator over all-zero products, and an
+opposite-sign accumulator at the alignment window's edge); the pinned model is ``BLACKWELL_SM120_NVF4``.
 
-Provenance: written for lane fp4-5090 from the read-only autoproof sources ``fp4-ref/src/native.rs`` (the model),
-``fp4-ref/src/bitref.rs`` (the independent bit-level datapath) and ``spec/SEMANTICS.lock.v1.json`` (the adopted parameters:
-W1=42, W2=36, RZ, hot-group clip at 2^-19), measured there on an RTX 5090 (1,574,998 / 1,574,998 dots).  No code is shared
-with ``verity.ml.circuits.silicon`` or with autoproof; everything below is re-derived from the description.  It stays a HYPOTHESIS until the
-probe in this directory reproduces it on our own silicon under our own harness.
+Written from the read-only autoproof sources ``fp4-ref/src/native.rs`` (the model), ``fp4-ref/src/bitref.rs`` (the independent
+bit-level datapath) and ``spec/SEMANTICS.lock.v1.json`` (the adopted parameters: W1=42, W2=36, RZ, hot-group clip at 2^-19).
+No code is shared with ``verity.ml.circuits.silicon`` or with autoproof; everything below is re-derived from the description.
 
 The model, per instruction (K = 64, four groups of 16):
   1. four EXACT integer group dots  gd_g = sum_{k in group g} num(a_k) * num(b_k)   (E2M1 numerators in units of 2^-1)
@@ -18,8 +18,7 @@ The model, per instruction (K = 64, four groups of 16):
   the whole firing lose its 2^-20 bit.  UE8M0 scales never fire it (the trigger reads the UE4M3 exponent field).
 
 ``check_autoproof`` replays autoproof's recorded ``sample_cases`` (probe3: K in {64,128,256}, chained ascending-K with a zero
-accumulator; probe2: unscaled ``kind::f8f6f4`` m16n8k32, exact regime) through the model and counts agreements -- the offline
-gate this lane runs before any pod time is spent.
+accumulator; probe2: unscaled ``kind::f8f6f4`` m16n8k32, exact regime) through the model and counts agreements, offline.
 """
 from __future__ import annotations
 
