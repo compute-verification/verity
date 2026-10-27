@@ -23,7 +23,7 @@ at the inputs `⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no ses
 which the tags don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in the hidden-output headlines' scope
 (`ProvedScope.scopeOkH`), and the public file loads at `D` (`HmOut.loadPublic`) with no shared-row tables.
 
-Assumption record. It assumes a computation's result: run `r20261026-231806-1121` evaluated each conjunct with these
+Assumption record. It assumes a computation's result: run `r20261027-013348-1edf` evaluated each conjunct with these
 functions, built from the verifier's source, on that fixture's two files, beside `flock-verify verify --zk` on its
 session. It asks nothing of a hash or of the prover; a change to any of these functions or to the files makes it a new
 premise, to be checked by a new run. -/
