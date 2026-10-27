@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
@@ -194,6 +193,13 @@ theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
   · cases h
     exact ⟨hw, hri, toOption_ok hshape, toOption_ok hpart⟩
 
+/-- **The form compiled part `s` sets up**: the statement `verity/flock-circuit` (`VStar.Recursive.STATEMENT`) under
+`--zk`, its coins the keyed coin tree, one table and no lookup tables, and no `--work`, `--work-table`, `--stratified`,
+`--closure` or `--public-inputs`. `Names`' `Verity.Recursive.PartForm` is the same body. -/
+def PartForm (b : Raw) : Prop :=
+  b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
+    b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
+
 theorem len_encBytes (b : ByteArray) : (encBytes b).length = 8 + b.size := by
   show (encNat b.size ++ b.data.toList).length = _
   rw [List.length_append, FlockComplete.encNat_length, Array.length_toList]
@@ -242,12 +248,12 @@ theorem raw_pub (w : Raw) (P : ByteArray) :
   omega
 
 theorem recx_len (w : RecX) :
-    w.inner.length + w.recInner.size + w.bindings.size + (encOpt encBytes w.registration).length +
+    w.inner.length + w.recInner.size + (encOpt encBytes w.registration).length +
       (w.parts.flatMap PartX.encode).length ≤ w.encode.length := by
   simp only [RecX.encode, encList, List.length_append, len_encStr, len_encBytes]
   omega
 
-theorem partx_len (p : PartX) : p.base.encode.length + (encOpt encBytes p.rows).length ≤ p.encode.length := by
+theorem partx_len (p : PartX) : p.base.encode.length + p.bindings.size ≤ p.encode.length := by
   have hs : (⟨p.base.encode.toArray⟩ : ByteArray).size = p.base.encode.length := by
     show p.base.encode.toArray.size = _
     simp
@@ -259,7 +265,8 @@ theorem partx_len (p : PartX) : p.base.encode.length + (encOpt encBytes p.rows).
 theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
     {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hP : PartForm q.base)
     (hpub : x.length + (st.pub x ms s).size < 2 ^ 64)
-    (hrec : (st.record x ms).size < 2 ^ 64) (htr : (st.transcript x ms).size < 2 ^ 64) :
+    (hrec : (st.record x ms).size < 2 ^ 64) (htr : (st.transcript x ms).size < 2 ^ 64)
+    (hrows : (st.rows x ms).size < 2 ^ 64) :
     RecRawFits (partRaw r st x ms s q) := by
   obtain ⟨hw, hri, -, -⟩ := readXPre_spec (readXPre_of_readX hr)
   have hx := decodeX_encode hw
@@ -304,7 +311,7 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
   · intro b hb; cases hb; omega
   · intro n hn; cases hn; omega
   · intro b hb; cases hb; omega
-  · intro b hb; have := encOpt_le (o := q.rows) b hb; omega
+  · intro b hb; cases hb; exact hrows
   · intro b hb; cases hb; omega
   · intro b hb; cases hb; omega
   · intro b hb; have := encOpt_le (o := r.innerRaw.partition) b hb; omega
@@ -772,12 +779,12 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
     (hPprog : q.base.program = some pj.program)
     (hPreg : q.base.registered.map (jsonOf "registered") = pj.registered.map Except.ok)
-    (hProws : q.rows.map (jsonOf "rec-rows") = pj.rows.map Except.ok)
-    (hPbind : jsonOf "rec-bindings" r.w.bindings = .ok pj.bindings)
+    (hPbind : jsonOf "rec-bindings" q.bindings = .ok pj.bindings)
     (hPdraw : (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) = .ok draw)
     (hSp : st.pub x ms s = pubB)
     (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
-    (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms)) :
+    (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
+    (hSrows : pj.rows.map Except.ok = some (jsonOf "rec-rows" (st.rows x ms))) :
     (partRaw r st x ms s q).ins = .ok (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
   obtain ⟨cI, pI, recB, drawB, trB, record, t, reg, hc, hp, hs, hrB, hu, hd, hsrc, hbound, htB, ht, hreg, hcm, hl⟩ :=
     innerHeld_ok hh
@@ -880,15 +887,14 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     | error e => intro hl; cases hl
   have h7 : (partRaw r st x ms s q).recRows.mapM (fun b => do
       (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok rows := by
-    show q.rows.mapM _ = _
-    revert hProws
+    show (some (st.rows x ms)).mapM _ = _
+    revert hSrows
     revert hrowsC
-    cases q.rows <;> cases pj.rows <;> intro hC hP
-    · rw [← hC]; rfl
-    · cases hP
-    · cases hP
-    · rename_i b j
-      have hj := jsonOf_what (a' := "rec rows") (Option.some.inj hP)
+    cases pj.rows with
+    | none => intro _ hS; cases hS
+    | some j =>
+      intro hC hS
+      have hj := jsonOf_what (a' := "rec rows") (Option.some.inj hS).symm
       have hro : ∀ t, VStar.Recursive.registeredOf j = .ok t → Registered.ofJson j = .ok t.1 :=
         fun _ h' => registeredOf_own h'
       simp only [Option.mapM] at hC ⊢
@@ -911,15 +917,15 @@ the compiled `partVerdict` reads of them (`registered`, `rows`, `bindings`, the 
 circuit and public file). Suppose:
 * `Names`' clauses: the inner statement's circuit, public file, partition and draw are the blobs' and `p.own`'s, its
   statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the coin server's coins, no tables), its own inner
-  shape `innerHeld`'s, the registration the blobs'; part `s`'s circuit, partition, program, registered reads and rows
-  `pj`'s, the bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
+  shape `innerHeld`'s, the registration the blobs'; part `s`'s circuit, partition, program and registered reads
+  `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
 * `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the coin server's
-  transcript the blobs';
+  transcript the blobs', and V*'s staged shared rows `pj`'s (`hSrows`, ONE9P's `RowsShow` at part `s`);
 * `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean
   can't evaluate it (`Tags.plainLeaves` compares `Json`, whose `==` is a `partial def`), and compiled `partVerdict`
   doesn't check it (PRF-201);
-* and the staged files fit their length words: `x` with part `s`'s public file, the inner session's record and the
-  transcript are each under `2^64` bytes (PRF-201: the compiled check is to refuse larger ones).
+* and the staged files fit their length words: `x` with part `s`'s public file, the inner session's record, the
+  transcript and the staged rows are each under `2^64` bytes (PRF-201: the compiled check is to refuse larger ones).
 
 Then the outer verifier reads part `s`'s staged statement (`insO`) as `partIns`: compiled part `s`'s inputs. -/
 theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
@@ -946,19 +952,19 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
     (hPprog : q.base.program = some pj.program)
     (hPreg : q.base.registered.map (jsonOf "registered") = pj.registered.map Except.ok)
-    (hProws : q.rows.map (jsonOf "rec-rows") = pj.rows.map Except.ok)
-    (hPbind : jsonOf "rec-bindings" r.w.bindings = .ok pj.bindings)
+    (hPbind : jsonOf "rec-bindings" q.bindings = .ok pj.bindings)
     (hPdraw : (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) = .ok draw)
     (hSp : st.pub x ms s = pubB)
     (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
     (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
+    (hSrows : pj.rows.map Except.ok = some (jsonOf "rec-rows" (st.rows x ms)))
     (hpub : x.length + pubB.size < 2 ^ 64) (hrec : (st.record x ms).size < 2 ^ 64)
-    (htr : (st.transcript x ms).size < 2 ^ 64) :
+    (htr : (st.transcript x ms).size < 2 ^ 64) (hrows : (st.rows x ms).size < 2 ^ 64) :
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
-  have hfit := partRaw_fits hr hq hPform (by rw [hSp]; exact hpub) hrec htr
+  have hfit := partRaw_fits hr hq hPform (by rw [hSp]; exact hpub) hrec htr hrows
   rw [insO_staged hr hq hfit hPform.2.1,
     ins_partRaw hh htags hplain hregC hrowsC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hPform hPc
-      hPpart hPprog hPreg hProws hPbind hPdraw hSp hSr hSt]
+      hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
   rfl
 
 end Verity.Recursive.Part
