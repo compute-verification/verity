@@ -147,14 +147,12 @@ Landing:
 - (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
-- (26-27 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask for vLLM's practices repo-wide) Outside the
-  integration's own lints and `archive/`, the tree is held to no-growth lists in `tests/lint/` by the same gate, which
-  checks each PR's changed Python too, since drive lands before the suites run (22:45Z): the fix is the code, never the
-  list, and a rename moves a file's entries (`--move OLD NEW`). Ruff: one rule set, the root `ruff.toml`, counted per
-  (file, rule) (23:47Z); `noqa` lines aren't counted. Configuration in one place (01:30Z): no file adds a direct
-  environment read; read it through the area's settings registry, a `settings.py` or a file the list marks `"registry":
-  true` (counted from the PR's base). Recorded outcomes (02:05Z): no file adds an except handler that swallows, typed or
-  broad; re-raise, record the outcome, or test for the expected case.
+- (26-27 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask repo-wide) Outside `integrations/vllm/` and
+  `archive/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python, as drive lands
+  before the suites run (22:45Z): fix the code, never the list; a rename moves its entries (`--move OLD NEW`). Ruff: the
+  root `ruff.toml`, per (file, rule), `noqa` uncounted (23:47Z). No new direct environment read: use the area's settings
+  registry, a `settings.py` or a file the list marks `"registry": true` at the PR's base (01:30Z). No new swallowing
+  except handler, typed or broad: re-raise, record, or test first (02:05Z).
 
 Protocols and claims:
 
