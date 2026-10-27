@@ -11,7 +11,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     every other's; `OutCollect_v1` at KO 2 and 64, the first position's and every other's; and
     `SlotEntry_v1` at the small class (KO 2, 4 prompt ids) with no stop id (TINY's) and at the class of record's (KO 64,
     1,024) with Llama-3.2-1B's (128001); `SelectCollect_v1` and `SelectEntry_v1` at TINY's select (V 256, groups of 16) and
-    small class, and at Llama-3.2-1B's (V 128,256) at 4 outputs and 32 prompt ids with its stop id."""
+    small class, and at Llama-3.2-1B's (V 128,256) at 4 outputs and 32 prompt ids with its stop id, `SelectEntry_v1` also
+    at the class of record's (64 outputs, 1,024 prompt ids)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import io_shell as X
 
@@ -30,4 +31,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
             ("SelectCollect_v1:4:0", lambda: bind(X.SelectCollect, V=128256, C=16, KO=4, FIRST=False)),
             ("SelectEntry_v1:2", lambda: bind(X.SelectEntry, V=256, C=16, KO=2, FIRST=False, IDB=17, NP=4, STOP=())),
             ("SelectEntry_v1:4", lambda: bind(X.SelectEntry, V=128256, C=16, KO=4, FIRST=False, IDB=17, NP=32,
-                                              STOP=(128001,)))]
+                                              STOP=(128001,))),
+            ("SelectEntry_v1:64", lambda: bind(X.SelectEntry, V=128256, C=16, KO=64, FIRST=False, IDB=17, NP=1024,
+                                               STOP=(128001,)))]
