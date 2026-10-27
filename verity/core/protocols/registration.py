@@ -7,9 +7,10 @@ the digest of the log's last entry, or its composite's genesis when the log is e
 An entry is one of two formats:
 
 * `verity/registration/hardware/v1`: the cards, locations and links it adds to the site (`Site`);
-* `verity/registration/information/v1`: its items, each registered once in the log (`item_key`): θ's hiding roots, the
-  builder B (its digest and its public cap on one declaration's advice, in bits), each subprotocol's public Program and
-  parameters by digest, and the proof system. Registration registers B, not the circuit it builds.
+* `verity/registration/information/v1`: its items, each registered once in the log (`item_key`): θ, each registered
+  value by its committed root, and the builder B (its digest, its advice's format and its public cap ℓ on one
+  declaration's advice, in bits). Registration registers the site, θ and B, not the circuit B builds; a subprotocol's
+  Program and parameters, and the proof system, are that protocol's public verifier parameters.
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
@@ -19,16 +20,17 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
-fails (`REFUSALS`, in order). A component reads its view of an accepted log (`View`): the site, θ, the builder, the
-proof system and its own Program and parameters (`View.program`). Decoding takes exactly what the encoders write and
-raises `Malformed` otherwise.
+fails (`REFUSALS`, in order). A component reads its view of an accepted log (`View`): the site, θ's values
+(`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+otherwise; registration is ASCII-only, and a log or parameters holding any other character is `Malformed` as `ascii`
+before any digest is taken.
 """
 
 from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.core.wire import canonical
@@ -131,15 +133,16 @@ class Hardware:
 
 @dataclass(frozen=True)
 class Information:
-    """The items an information entry registers, each canonical JSON with its `kind`: `theta` (`weights`, `state`),
-    `builder` (`digest`, `cap`), `program` (`protocol`, `program`, `params`) or `proof-system` (`id`, `digest`)."""
+    """The items an information entry registers, each canonical JSON with its `kind`: `theta` (`value`, `root`,
+    `leaves`, `words`, `domain`, `word_bits` when it is 32, `checkpoint_sha512` for public weights) or `builder`
+    (`digest`, `advice`, `cap`)."""
 
     items: tuple[Mapping[str, Any], ...] = ()
 
 
 def item_key(item: Mapping[str, Any]) -> str:
-    """What an item registers, which the log registers once."""
-    return "program " + item["protocol"] if item["kind"] == "program" else item["kind"]
+    """What an item registers, which the log registers once: each θ value by its name, and one builder."""
+    return "theta " + item["value"] if item["kind"] == "theta" else item["kind"]
 
 
 @dataclass(frozen=True)
@@ -254,25 +257,38 @@ def link_of(j: Any) -> Link:
                 _nat(j["latency"], "latency"))
 
 
-ITEM_KEYS = {"theta": ["kind", "state", "weights"], "builder": ["cap", "digest", "kind"],
-             "program": ["kind", "params", "program", "protocol"], "proof-system": ["digest", "id", "kind"]}
+THETA_KEYS = ["domain", "kind", "leaves", "root", "value", "words"]
+"""A θ item's keys, besides `word_bits` (present only as 32) and `checkpoint_sha512` (a public checkpoint's pin)."""
+BUILDER_KEYS = ["advice", "cap", "digest", "kind"]
 
 
 def item_of(j: Any) -> dict[str, Any]:
     if not isinstance(j, dict) or "kind" not in j:
         raise Malformed("an item: kind missing")
     kind = _str(j["kind"], "an item's kind")
-    if kind not in ITEM_KEYS:
-        raise Malformed(f"an item: kind {kind} is not one of {list(ITEM_KEYS)}")
-    _exactly(j, ITEM_KEYS[kind], f"a {kind} item")
     if kind == "theta":
-        return {"kind": kind, "state": _hex64(j["state"], "state"), "weights": _hex64(j["weights"], "weights")}
+        _exactly(j, sorted(THETA_KEYS + [k for k in ("checkpoint_sha512", "word_bits") if k in j]), "a theta item")
+        if "word_bits" in j and _nat(j["word_bits"], "word_bits") != 32:
+            raise Malformed("a theta item: word_bits is 32 when present (16 is left out)")
+        out = {"domain": _hex64(j["domain"], "domain"), "kind": kind, "leaves": _nat(j["leaves"], "leaves"),
+               "root": _hex64(j["root"], "root"), "value": _str(j["value"], "value"), "words": _nat(j["words"], "words")}
+        if "word_bits" in j:
+            out["word_bits"] = 32
+        if "checkpoint_sha512" in j:
+            out["checkpoint_sha512"] = _hex64(j["checkpoint_sha512"], "checkpoint_sha512")
+        return out
     if kind == "builder":
-        return {"cap": _nat(j["cap"], "cap"), "digest": _hex64(j["digest"], "digest"), "kind": kind}
-    if kind == "program":
-        return {"kind": kind, "params": _hex64(j["params"], "params"), "program": _hex64(j["program"], "program"),
-                "protocol": _str(j["protocol"], "protocol")}
-    return {"digest": _hex64(j["digest"], "digest"), "id": _str(j["id"], "id"), "kind": kind}
+        _exactly(j, BUILDER_KEYS, "a builder item")
+        return {"advice": _str(j["advice"], "advice"), "cap": _nat(j["cap"], "cap"), "digest": _hex64(j["digest"], "digest"),
+                "kind": kind}
+    raise Malformed(f"an item: kind {kind} is not one of [theta, builder]")
+
+
+def ascii(j: Any, what: str) -> None:
+    """Registration is ASCII-only: `j`'s canonical JSON holds no other character, so its digest is the same however a
+    canonical JSON escapes the rest."""
+    if not canonical(j).isascii():
+        raise Malformed(f"ascii: {what} holds a character outside ASCII")
 
 
 def entry_of(j: Any) -> Entry:
@@ -294,6 +310,7 @@ def entry_of(j: Any) -> Entry:
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
     """The committed log's composite and entries."""
+    ascii(j, "the log")
     _exactly(j, ["composite", "entries"], "the log")
     return _one_of(j["composite"], COMPOSITES, "the log's composite"), [entry_of(e) for e in _list(j["entries"], "entries")]
 
@@ -435,9 +452,8 @@ class State:
         return replace(self, items=self.items + e.body.items, head=e.digest(), entries=self.entries + 1)
 
     def view(self) -> View:
-        first = lambda kind: next((dict(i) for i in self.items if i["kind"] == kind), None)  # noqa: E731
-        return View(self.site, first("theta"), first("builder"), first("proof-system"),
-                    tuple(dict(i) for i in self.items if i["kind"] == "program"), self.head)
+        return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head)
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
@@ -452,28 +468,26 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 
 @dataclass(frozen=True)
 class View:
-    """What a component reads of an accepted log."""
+    """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder."""
 
     site: Site
-    theta: dict[str, Any] | None
+    theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
-    proof_system: dict[str, Any] | None
-    programs: tuple[dict[str, Any], ...] = field(default=())
-    head: str = ""
+    head: str
 
-    def program(self, protocol: str) -> dict[str, Any] | None:
-        """The subprotocol `protocol`'s registered Program and parameters."""
-        return next((p for p in self.programs if p["protocol"] == protocol), None)
+    def value(self, name: str) -> dict[str, Any] | None:
+        """θ's registered value `name`."""
+        return next((t for t in self.theta if t["value"] == name), None)
 
     def to_json(self) -> dict[str, Any]:
-        return {"builder": self.builder, "programs": list(self.programs), "proof_system": self.proof_system,
-                "site": self.site.to_json(), "theta": self.theta}
+        return {"builder": self.builder, "head": self.head, "site": self.site.to_json(), "theta": list(self.theta)}
 
 
 # --- the core protocol ------------------------------------------------------------------------------------------------
 
 def params_of(j: Any) -> tuple[str, Auditor]:
     """The auditor's parameters: `{"composite", "keys": [{"id", "key"}], "sheets": [CARD]}`."""
+    ascii(j, "the params")
     _exactly(j, ["composite", "keys", "sheets"], "the params")
     sheets = tuple(card_of(k) for k in _list(j["sheets"], "sheets"))
     keys = []

@@ -14,13 +14,15 @@ names the whole log. An entry is one of two formats, each under its own versione
   network certifiers and memory challengers, with their keys), and the links between locations and the rest of the
   world (`outside`), each with its capacity `β` in bits a tick each way and its latency in ticks.
 * **information** (`verity/registration/information/v1`): the items it registers, each once in the log (`Item.key`):
-  θ's hiding roots (the weights' and the initial state's), the builder `B` that compiles advice into the circuit (its
-  digest and its public cap on one declaration's advice, in bits), each subprotocol's public Program and parameters by
-  digest, and the proof system by id and digest. Registration registers `B`, not the circuit it builds.
+  θ, each registered value (weights, initial state, tables) by its committed root, and the builder `B` that compiles
+  advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
+  bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
+  parameters, and the proof system, are that protocol's public verifier parameters, not registration.
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))` over the entry's canonical JSON, its format and `previous`
 among its keys; a card's is the same under `verity/registration/card/v1`, and the genesis of a composite's log is the
-same under `verity/registration/genesis/v1` over `{"composite": NAME}`.
+same under `verity/registration/genesis/v1` over `{"composite": NAME}`. Registration is ASCII-only: a log or
+parameters holding any other character is refused as `ascii` before any digest is taken.
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
 fails, in this order:
@@ -41,8 +43,8 @@ fails, in this order:
 The hardware checks are an information entry's too, and hold of it whenever they held of the log before it, which adds
 no hardware; so an information entry is held to `previous` and `duplicate-information` alone.
 
-A component reads its view of the log by projection (`View`): the site, θ, the builder, the proof system and its own
-Program and parameters. As a core protocol (`protocol`, `verity/registration/v1`) the log is the commitment, its head the
+A component reads its view of the log by projection (`View`): the site, θ's values and the builder, at the head. As a
+core protocol (`protocol`, `verity/registration/v1`) the log is the commitment, its head the
 digest, and the parameters the auditor's own: the composite and, for the hardware checks, its data sheets and its
 devices' keys.
 -/
@@ -167,43 +169,36 @@ structure Site where
   links : List Link := []
   deriving DecidableEq, Repr, Inhabited
 
-/-- θ's hiding roots: the weights' and the initial state's, as hex. -/
+/-- One of θ's registered values (weights, initial state, tables) by its committed root: its name, the root as hex, its
+rows (`leaves`) of `words` words of `wordBits` bits (16 or 32), the hex id of the domain its leaves are hashed under,
+which binds no window, and for public weights their checkpoint's SHA-512. -/
 structure Theta where
-  weights : String
-  state : String
+  value : String
+  root : String
+  leaves : Nat
+  words : Nat
+  wordBits : Nat := 16
+  domain : String
+  checkpoint : Option String := none
   deriving DecidableEq, Repr
 
-/-- The builder `B`: its digest, and its public cap on one declaration's advice, in bits. -/
+/-- The builder `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
+advice, in bits. -/
 structure Builder where
   digest : String
+  advice : String
   cap : Nat
-  deriving DecidableEq, Repr
-
-/-- A subprotocol's public Program and parameters, by digest, under the subprotocol's id. -/
-structure Program where
-  protocol : String
-  program : String
-  params : String
-  deriving DecidableEq, Repr
-
-structure ProofSystem where
-  id : String
-  digest : String
   deriving DecidableEq, Repr
 
 inductive Item
   | theta (t : Theta)
   | builder (b : Builder)
-  | program (p : Program)
-  | proofSystem (p : ProofSystem)
   deriving DecidableEq, Repr
 
-/-- What an item registers, which the log registers once. -/
+/-- What an item registers, which the log registers once: each θ value by its name, and one builder. -/
 def Item.key : Item → String
-  | .theta _ => "theta"
+  | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
-  | .program p => "program " ++ p.protocol
-  | .proofSystem _ => "proof-system"
 
 inductive Body
   | hardware (cards : List Card) (locs : List Loc) (links : List Link)
@@ -252,11 +247,12 @@ def Link.toJson (k : Link) : Json :=
     ("latency", Lean.toJson k.latency)]
 
 def Item.toJson : Item → Json
-  | .theta t => Json.mkObj [("kind", .str "theta"), ("state", .str t.state), ("weights", .str t.weights)]
-  | .builder b => Json.mkObj [("cap", Lean.toJson b.cap), ("digest", .str b.digest), ("kind", .str "builder")]
-  | .program p => Json.mkObj [("kind", .str "program"), ("params", .str p.params), ("program", .str p.program),
-      ("protocol", .str p.protocol)]
-  | .proofSystem p => Json.mkObj [("digest", .str p.digest), ("id", .str p.id), ("kind", .str "proof-system")]
+  | .theta t => Json.mkObj ((t.checkpoint.map fun c => [("checkpoint_sha512", Json.str c)]).getD [] ++
+      [("domain", .str t.domain), ("kind", .str "theta"), ("leaves", Lean.toJson t.leaves), ("root", .str t.root),
+       ("value", .str t.value)] ++ (if t.wordBits == 16 then [] else [("word_bits", Lean.toJson t.wordBits)]) ++
+      [("words", Lean.toJson t.words)])
+  | .builder b => Json.mkObj [("advice", .str b.advice), ("cap", Lean.toJson b.cap), ("digest", .str b.digest),
+      ("kind", .str "builder")]
 
 def Entry.format (e : Entry) : String :=
   match e.body with
@@ -301,6 +297,12 @@ private def keysOf : Json → Option (List String)
 def exactly (j : Json) (ks : List String) (what : String) : V Unit :=
   if keysOf j == some ks then pure () else throw s!"{what}: the keys must be [{", ".intercalate ks}]"
 
+/-- Registration is ASCII-only: `j`'s canonical JSON holds no other character, so its digest is the same however a
+canonical JSON escapes the rest. -/
+def ascii (j : Json) (what : String) : V Unit :=
+  if ((Flock.canon j).toOption.getD "").all (fun (c : Char) => c.toNat < 128) then pure ()
+  else throw s!"ascii: {what} holds a character outside ASCII"
+
 def hex64 (j : Json) (what : String) : V String := do
   let s ← Flock.J.asStr j what
   let b ← (Flock.unhex s).mapError (s!"{what}: " ++ ·)
@@ -342,23 +344,24 @@ def Link.ofJson (j : Json) : V Link := do
 def Item.ofJson (j : Json) : V Item := do
   match ← Flock.J.str j "kind" "an item" with
   | "theta" =>
-    exactly j ["kind", "state", "weights"] "a theta item"
-    pure (.theta { weights := ← hex64 (← Flock.J.get j "weights" "θ") "θ's weights",
-                   state := ← hex64 (← Flock.J.get j "state" "θ") "θ's state" })
+    let has := fun k => (j.getObjVal? k).isOk
+    exactly j ((if has "checkpoint_sha512" then ["checkpoint_sha512"] else []) ++
+      ["domain", "kind", "leaves", "root", "value"] ++ (if has "word_bits" then ["word_bits"] else []) ++ ["words"])
+      "a theta item"
+    let wordBits ← if has "word_bits" then Flock.J.nat j "word_bits" "a theta item" else pure 16
+    if has "word_bits" && wordBits != 32 then throw "a theta item: word_bits is 32 when present (16 is left out)"
+    pure (.theta { value := ← Flock.J.str j "value" "a theta item",
+                   root := ← hex64 (← Flock.J.get j "root" "a theta item") "a theta item's root",
+                   leaves := ← Flock.J.nat j "leaves" "a theta item", words := ← Flock.J.nat j "words" "a theta item",
+                   wordBits, domain := ← hex64 (← Flock.J.get j "domain" "a theta item") "a theta item's domain",
+                   checkpoint := ← if has "checkpoint_sha512" then
+                     some <$> hex64 (← Flock.J.get j "checkpoint_sha512" "a theta item") "a theta item's checkpoint"
+                     else pure none })
   | "builder" =>
-    exactly j ["cap", "digest", "kind"] "a builder item"
+    exactly j ["advice", "cap", "digest", "kind"] "a builder item"
     pure (.builder { digest := ← hex64 (← Flock.J.get j "digest" "the builder") "the builder's digest",
-                     cap := ← Flock.J.nat j "cap" "the builder" })
-  | "program" =>
-    exactly j ["kind", "params", "program", "protocol"] "a program item"
-    pure (.program { protocol := ← Flock.J.str j "protocol" "a program",
-                     program := ← hex64 (← Flock.J.get j "program" "a program") "a program's digest",
-                     params := ← hex64 (← Flock.J.get j "params" "a program") "a program's params digest" })
-  | "proof-system" =>
-    exactly j ["digest", "id", "kind"] "a proof-system item"
-    pure (.proofSystem { id := ← Flock.J.str j "id" "the proof system",
-                         digest := ← hex64 (← Flock.J.get j "digest" "the proof system") "the proof system's digest" })
-  | k => throw s!"an item: kind {k} is not one of [theta, builder, program, proof-system]"
+                     advice := ← Flock.J.str j "advice" "the builder", cap := ← Flock.J.nat j "cap" "the builder" })
+  | k => throw s!"an item: kind {k} is not one of [theta, builder]"
 
 def Entry.ofJson (j : Json) : V Entry := do
   let format ← Flock.J.str j "format" "an entry"
@@ -544,31 +547,24 @@ def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) St
 
 /-! ## Views: what a component reads of the log -/
 
-/-- What a component reads of an accepted log: the site, θ, the builder, the proof system, and each subprotocol's
-registered Program and parameters. -/
+/-- What a component reads of an accepted log, at its head: the site, θ's registered values in order, and the builder. -/
 structure View where
   site : Site
-  theta : Option Theta
+  theta : List Theta
   builder : Option Builder
-  proofSystem : Option ProofSystem
-  programs : List Program
   head : String
 
 def State.view (s : State) : View :=
   { site := s.site, head := s.head,
-    theta := s.items.findSome? fun | .theta t => some t | _ => none,
-    builder := s.items.findSome? fun | .builder b => some b | _ => none,
-    proofSystem := s.items.findSome? fun | .proofSystem p => some p | _ => none,
-    programs := s.items.filterMap fun | .program p => some p | _ => none }
+    theta := s.items.filterMap fun | .theta t => some t | _ => none,
+    builder := s.items.findSome? fun | .builder b => some b | _ => none }
 
-/-- The subprotocol `id`'s registered Program and parameters. -/
-def View.program? (v : View) (id : String) : Option Program := v.programs.find? (·.protocol == id)
+/-- θ's registered value named `value`. -/
+def View.value? (v : View) (value : String) : Option Theta := v.theta.find? (·.value == value)
 
 def View.toJson (v : View) : Json :=
-  Json.mkObj [("builder", optJson (Item.toJson ∘ .builder) v.builder),
-    ("programs", .arr (v.programs.map (Item.toJson ∘ .program)).toArray),
-    ("proof_system", optJson (Item.toJson ∘ .proofSystem) v.proofSystem), ("site", v.site.toJson),
-    ("theta", optJson (Item.toJson ∘ .theta) v.theta)]
+  Json.mkObj [("builder", optJson (Item.toJson ∘ .builder) v.builder), ("head", .str v.head),
+    ("site", v.site.toJson), ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
 
 /-! ## The core protocol -/
 
@@ -577,6 +573,7 @@ structure Params where
   auditor : Auditor
 
 def Params.ofJson (j : Json) : V Params := do
+  ascii j "the params"
   exactly j ["composite", "keys", "sheets"] "the params"
   let sheets ← (← Flock.J.arr j "sheets" "the params").toList.mapM Card.ofJson
   let keys ← (← Flock.J.arr j "keys" "the params").toList.mapM fun k => do
@@ -593,7 +590,9 @@ structure Commitment where
   head : ByteArray
 
 def commitmentOf (b : ByteArray) : V Commitment := do
-  let committed ← Committed.ofJson (← canonicalJson b)
+  let j ← canonicalJson b
+  ascii j "the log"
+  let committed ← Committed.ofJson j
   pure { committed, head := ← Flock.unhex (head committed.composite committed.log) }
 
 def evidenceOf (b : ByteArray) : V Unit := do
@@ -610,7 +609,7 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
 (`{"composite", "keys": [{"id", "key"}], "sheets": [CARD]}`), the commitment is the log
 (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the check passes,
 making public its view (`View.toJson`) and keeping its length, and rejects the first entry the check refuses as
-`entry I: REFUSAL`. It is never undecided. -/
+`entry I: REFUSAL`, and a log or parameters outside ASCII as `ascii`. It is never undecided. -/
 def protocol : Protocol where
   id := protocolId
   Params := Params
@@ -648,10 +647,12 @@ def links : List Link :=
    { id := "up1", ends := ("cert0", outside), β := 100, latency := 1 },
    { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 }]
 
+def weights : Theta :=
+  { value := "weights", root := hex 'a', leaves := 4, words := 64, domain := hex 'b', checkpoint := some (hex 'c') }
+
 def items : List Item :=
-  [.theta { weights := hex 'a', state := hex 'b' }, .builder { digest := hex 'c', cap := 32 },
-   .program { protocol := "verity/pouw/v1", program := hex 'd', params := hex 'e' },
-   .proofSystem { id := "c-flock", digest := hex 'f' }]
+  [.theta weights, .theta { value := "state", root := hex 'd', leaves := 1, words := 8, wordBits := 32, domain := hex 'e' },
+   .builder { digest := hex 'f', advice := "verity/advice/v1", cap := 32 }]
 
 def bodies : List Body := [.hardware [card] locs links, .information items]
 
@@ -661,8 +662,7 @@ def refusal (c : Composite) (bodies : List Body) (A : Auditor := auditor) : Opti
   | .error r => some r
 
 #guard refusal .onsite bodies == none
-#guard ((check auditor .onsite (chain .onsite bodies)).toOption.map (·.view.program? "verity/pouw/v1")) ==
-  some (some { protocol := "verity/pouw/v1", program := hex 'd', params := hex 'e' })
+#guard ((check auditor .onsite (chain .onsite bodies)).toOption.map (·.view.value? "weights")) == some (some weights)
 #guard (chain .onsite bodies).all fun e => match Entry.ofJson e.toJson with | .ok e' => e' == e | .error _ => false
 #guard head .onsite (chain .onsite bodies) != head .remote (chain .remote bodies)
 -- a log chained for remote is not onsite's
@@ -687,8 +687,10 @@ private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0"
   some (0, .unknownRef)
 #guard refusal .remote [.hardware [] (locs.take 2 ++ [{ id := "node1", kind := .host, parent := some "node0" }]) []] ==
   some (0, .kind)
--- θ registered twice
+-- θ's weights registered twice, and a second builder; another θ value is a new item
 #guard refusal .onsite (bodies ++ [.information (items.take 1)]) == some (2, .duplicateInformation)
+#guard refusal .onsite (bodies ++ [.information (items.drop 2)]) == some (2, .duplicateInformation)
+#guard refusal .onsite (bodies ++ [.information [.theta { weights with value := "tables" }]]) == none
 
 private def bytes (j : Json) : ByteArray := ((Flock.canon j).toOption.getD "").toUTF8
 
@@ -705,6 +707,9 @@ private def answer (c : Composite) (log : Committed) : Answer :=
 #guard (answer .onsite { composite := .remote, log := chain .remote bodies }).reason ==
   some "composite: the log is remote's, not onsite's"
 #guard (answer .onsite { composite := .onsite, log := chain .onsite bare }).reason == some "entry 0: uncertified"
+private def accented : Committed :=
+  { composite := .onsite, log := chain .onsite [.information [.theta { weights with value := "poids\u00e9" }]] }
+#guard ((answer .onsite accented).reason.map (·.startsWith "commitment: ascii")) == some true
 
 end Example
 

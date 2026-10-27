@@ -3,8 +3,8 @@ the core interface's package) against its Python (`verity.core.protocols.registr
 either composite, from the honest example site and its information (`EXAMPLE`, the Lean's `Core.Registration.Example`)
 with a few changes, or from small random entries, chained or with a broken `previous`; it checks it under the
 example's auditor or a changed one, and sometimes breaks the JSON of the log, the params or the evidence. The two must
-agree on every field of the outcome, and on the reason when the check refuses a log (`entry I: REFUSAL`, or a composite
-the params don't name): the public view of an accepted log among them."""
+agree on every field of the outcome, and on the reason when the check refuses a log (`entry I: REFUSAL`, a composite
+the params don't name, or a log or params outside ASCII): the public view of an accepted log among them."""
 
 from __future__ import annotations
 
@@ -33,9 +33,11 @@ LOCS = (G.Loc("site0", "site"), G.Loc("node0", "host", "site0"), G.Loc("gpu0", "
         G.Loc("chal0", "challenger", "site0", owner="auditor", key="k1"))
 LINKS = (G.Link("up0", ("node0", "cert0"), 100, 1), G.Link("up1", ("cert0", G.OUTSIDE), 100, 1),
          G.Link("mc0", ("chal0", "node0"), 10, 1))
-ITEMS = ({"kind": "theta", "state": "b" * 128, "weights": "a" * 128}, {"cap": 32, "digest": "c" * 128, "kind": "builder"},
-         {"kind": "program", "params": "e" * 128, "program": "d" * 128, "protocol": "verity/pouw/v1"},
-         {"digest": "f" * 128, "id": "c-flock", "kind": "proof-system"})
+WEIGHTS = {"checkpoint_sha512": "c" * 128, "domain": "b" * 128, "kind": "theta", "leaves": 4, "root": "a" * 128,
+           "value": "weights", "words": 64}
+ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d" * 128, "value": "state",
+                   "word_bits": 32, "words": 8},
+         {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
 EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS))
 
 
@@ -73,7 +75,7 @@ class RegistrationPort(D.ProtocolPort):
             return outcome
         out = json.loads(outcome[1])
         reason = out.get("reason") or ""
-        if not reason.startswith(("entry ", "composite: ")):
+        if not reason.startswith(("entry ", "composite: ", "commitment: ascii", "params: ascii")):
             out.pop("reason")
         return out
 
@@ -88,12 +90,19 @@ links = st.builds(G.Link, st.sampled_from(["up0", "up1", "mc0", "l3", "gpu0"]),
                   st.tuples(st.sampled_from(IDS), st.sampled_from(IDS)), st.sampled_from([0, 1, 100]),
                   st.sampled_from([0, 1]))
 cards = st.sampled_from([CARD, CARD_B, dataclasses.replace(CARD, mem=1)])
+#: Names a θ value takes: the example's, a new one, and one outside ASCII.
+VALUES = ["weights", "state", "tables", "poids\u00e9"]
+
+
+def _theta(value: str, root: str, leaves: int, wide: bool, pin: str | None) -> dict:
+    return {"domain": "b" * 128, "kind": "theta", "leaves": leaves, "root": root, "value": value, "words": 64,
+            **({"word_bits": 32} if wide else {}), **({"checkpoint_sha512": pin} if pin else {})}
+
+
 items = st.one_of(
-    st.builds(lambda w, s: {"kind": "theta", "state": s, "weights": w}, HEX, HEX),
-    st.builds(lambda d, c: {"cap": c, "digest": d, "kind": "builder"}, HEX, st.sampled_from([0, 32])),
-    st.builds(lambda p, q, i: {"kind": "program", "params": q, "program": p, "protocol": i}, HEX, HEX,
-              st.sampled_from(["verity/pouw/v1", "verity/pous/p2/v4/run"])),
-    st.builds(lambda d: {"digest": d, "id": "c-flock", "kind": "proof-system"}, HEX))
+    st.builds(_theta, st.sampled_from(VALUES), HEX, st.sampled_from([0, 4]), st.booleans(), st.none() | HEX),
+    st.builds(lambda d, a, c: {"advice": a, "cap": c, "digest": d, "kind": "builder"}, HEX,
+              st.sampled_from(["verity/advice/v1", "verity/advice/v2"]), st.sampled_from([0, 32])))
 hardware = st.builds(G.Hardware, st.lists(cards, max_size=2).map(tuple), st.lists(locs, max_size=4).map(tuple),
                      st.lists(links, max_size=3).map(tuple))
 information = st.builds(G.Information, st.lists(items, max_size=3).map(tuple))
@@ -189,7 +198,8 @@ def cases(draw) -> dict:
         k = pick(draw, range(len(log)))
         log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, G.genesis("remote")]))
     auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), G.Auditor((CARD_B,), AUDITOR.keys),
-                                         G.Auditor(AUDITOR.sheets, (("cert0", "k1"), ("chal0", "k1")))])
+                                         G.Auditor(AUDITOR.sheets, (("cert0", "k1"), ("chal0", "k1"))),
+                                         G.Auditor(AUDITOR.sheets, (("cert0", "k\u00e9"), ("chal0", "k1")))])
     composed = composite if pick(draw, range(16)) else pick(draw, G.COMPOSITES)
     c = case(composite, log, auditor, composed)
     broken = pick(draw, ["none"] * 12 + ["commitment", "params", "evidence"])
@@ -215,7 +225,11 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
               (case("remote", G.chain("remote", bare)), None),
               (case("onsite", G.chain("onsite", [G.Hardware((CARD,), LOCS[:5], LINKS[:2])])), "entry 0: challenger-reach"),
               (case("onsite", G.chain("onsite", [*EXAMPLE, G.Information(ITEMS[:1])])), "entry 2: duplicate-information"),
-              (case("onsite", G.chain("remote", EXAMPLE), composed="remote"), "composite: the log is remote's, not onsite's")]
+              (case("onsite", G.chain("onsite", [*EXAMPLE, G.Information(ITEMS[2:])])), "entry 2: duplicate-information"),
+              (case("onsite", G.chain("onsite", [*EXAMPLE, G.Information(({**WEIGHTS, "value": "tables"},))])), None),
+              (case("onsite", G.chain("remote", EXAMPLE), composed="remote"), "composite: the log is remote's, not onsite's"),
+              (case("onsite", G.chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\u00e9"},))])),
+               "commitment: ascii: the log holds a character outside ASCII")]
     with D.Server(PORT.argv()) as server:
         for c, reason in expect:
             out = reference(c)
@@ -223,7 +237,8 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
             assert out["verdict"] == ("accept" if reason is None else "reject")
             D.replay(PORT, c, server)
     view = G.check(AUDITOR, "onsite", G.chain("onsite", EXAMPLE)).view()
-    assert view.program("verity/pouw/v1") == ITEMS[2] and view.theta == ITEMS[0] and view.site.locs == LOCS
+    assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
+    assert view.site.locs == LOCS
 
 
 def test_registration_difftest() -> None:
