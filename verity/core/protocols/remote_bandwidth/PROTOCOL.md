@@ -998,7 +998,7 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
   `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
   conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
-  field's names, and the evidence store's labeller holds it to the file) until certifiers cover the gate node's boundary
+  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
   (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
   `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
   links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
