@@ -1,4 +1,5 @@
 import PouwCheck
+import Flock.WindowRecord
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
@@ -115,9 +116,10 @@ def UndecidedOnlyFromService : Prop :=
 
 /-! ## The commitment -/
 
-/-- The digest is one-stage's registration digest, SHA-512 of the format, a zero byte and the canonical record. -/
+/-- The digest is one-stage's window record digest (`Flock.WindowRecord.digestOf`), SHA-512 of the format, a zero byte
+and the canonical record. -/
 def DigestIsOneStage's : Prop :=
-  ∀ c : Registration, protocol.digest c = Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+  ∀ c : Registration, protocol.digest c = Flock.WindowRecord.digestOf c.format c.bytes
 
 /-- A decoded registration keeps the bytes it was read from, so its digest is of exactly those bytes. -/
 def CommitmentKeepsBytes : Prop := ∀ (b : ByteArray) (c : Registration), protocol.commitment b = .ok c → c.bytes = b
