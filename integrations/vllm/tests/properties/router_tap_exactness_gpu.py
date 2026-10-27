@@ -40,7 +40,7 @@ def _bf16(v: float) -> int:
 
 
 def edge_rows(E: int, rng: random.Random) -> dict[str, list[int]]:
-    """Named bf16 logit rows at the router's edges (vu-export's `router_eq.cases`, the rows PR #86 was checked on, plus a NaN and a
+    """Named bf16 logit rows at the router's edges (vu-export's `router_eq.cases`, plus a NaN and a
     subnormal at the head of a thread's columns, where the max's NaN and subnormal handling decide it)."""
     g = lambda: [_bf16(rng.gauss(0.0, 1.0)) for _ in range(E)]   # noqa: E731
     out: dict[str, list[int]] = {"all +0": [PZ] * E, "all -0": [NZ] * E, "mixed +-0": [PZ if i % 2 else NZ for i in range(E)],

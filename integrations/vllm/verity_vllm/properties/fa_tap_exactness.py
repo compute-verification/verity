@@ -28,7 +28,7 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
 Beside the property, an FA3 run can check every row of its prefill launches against the decode-shaped Definitions (`--against-decode`,
 `prefill_cases`, `out_vs_decode`, `decode_shaped`): `Attention_v4` at the one-row decode's tile (`decode_tile`) and its `MASKED_FROM`,
 which the window circuit's class Program binds at every position, prompt positions included, while the engine prefills a prompt at the
-prefill's tile (VLLM-127).  It is a finding, not part of `ok`.
+prefill's tile.  It is a finding, not part of `ok`.
 
 Every stream word is `FILL` before the launch.  The `edge_rows` cases give some query rows the scores -inf (so the max and the guard see
 -inf everywhere), +inf or NaN throughout (`SPECIAL`).
@@ -111,7 +111,7 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
 
 
 #: the H200 window class of record's attention heads (32 query heads over 8 KV heads) prefilling its 1,024-id prompt, beside a 200-id
-#: and a 17-id prompt (VLLM-127)
+#: and a 17-id prompt
 GQA4_PREFILL = _case("prefill_1024_gqa4", 32, 8, [1024, 200, 17], [1024, 200, 17])
 
 

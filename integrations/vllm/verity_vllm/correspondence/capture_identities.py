@@ -689,7 +689,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
     if program_factory is None and port.serve is None and port.program_factory is not None:
         program_factory = port.program_factory  # a port whose Serve is specialised under a binding record (CF2)
     if circuit_map is None and port.circuit_map is not None:
-        # a port-supplied mapping: QZ's `CIRCUIT_MAP(program)` or CF2's `CIRCUIT_MAP(program, names)` (merge 2026-09-08)
+        # a port-supplied mapping: QZ's `CIRCUIT_MAP(program)` or CF2's `CIRCUIT_MAP(program, names)`
         import inspect
         _cm, _names = port.circuit_map, port.names
         try:

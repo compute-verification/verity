@@ -498,7 +498,7 @@ def test_requests_at_other_local_steps_of_one_engine_step_are_refused_by_name(pa
 
 
 def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_layout(pair):
-    """Gemma-2-2B B8 (m006, r20260930-190524-cd72): the bounded warm-up runs `warmup-<i>` stand-ins, which no workload id resolves, so
+    """Gemma-2-2B B8: the bounded warm-up runs `warmup-<i>` stand-ins, which no workload id resolves, so
     every warm-up step refused ('engine step 0 ran (request, rows) [('warmup-0-aec3dda0', 11), ...]'), the learned plans held no
     call-boundary tensor, and record step 0 ran 7,392,522,240 bytes against a 4,134,862,080-byte plan.  Warm-up request i is workload
     request i's stand-in (same prompt length and schedule): it takes that request's rows and the step commits the same names and shapes."""

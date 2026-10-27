@@ -94,7 +94,7 @@ def test_mid_module_sites_and_patch_targets():
 
 
 def test_a_call_under_an_instance_flag_counts_only_when_the_flag_allows_it():
-    """Qwen3-30B-A3B TP2 Commit r20261003-085103-4792: the finder counted Qwen3MoeSparseMoeBlock's sequence-parallel all-gather at all
+    """A Qwen3-30B-A3B TP2 Commit: the finder counted Qwen3MoeSparseMoeBlock's sequence-parallel all-gather at all
     48 `model.layers.N.mlp` blocks, the run issued none, and identity_check failed every step on both ranks (`tp_sites_bad` 48)."""
     off, on = Qwen3MoeSparseMoeBlockLike(False), Qwen3MoeSparseMoeBlockLike(True)
     assert CS.class_collective_calls(Qwen3MoeSparseMoeBlockLike, model_prefix=THIS) == {"all_gather": 1}

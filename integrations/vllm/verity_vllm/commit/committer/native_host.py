@@ -272,7 +272,7 @@ class GcPauses:
 
     `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
     sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
-    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce (r20261017-193316-4d59).  Collections never touch a value."""
+    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce.  Collections never touch a value."""
 
     def __init__(self, min_s: float = 1e-3) -> None:
         self.min_s = min_s
@@ -517,7 +517,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
         phases["later_pair_replay"] = phase_replay + carry          # pairs >= 1: the residual is already in phase_replay; + the carried pool pages
     peak_phase = max(phases, key=phases.get)
     bound = phases[peak_phase] + int(slack_bytes) + pairs_extra
-    # [R17-29 planner, Daniel M-0309] the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
+    # the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
     # the largest host term, and -- separately -- the largest single materialization of the stream (the whole-step plane the bound keeps
     # OFF the host under retain-exclude, opened by replay), with its step / tokens / bytes from the declared schedule
     _terms = {"engine": int(engine_rss_bytes), "levels": levels, "kept": kept, "learn": learn, "replay": replay, "slack": int(slack_bytes), "pairs": pairs_extra,

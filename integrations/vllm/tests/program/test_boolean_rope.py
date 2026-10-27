@@ -34,7 +34,7 @@ U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]
 
 #: (NHEADS, D) of the `RoPE_v1` Calls in each model's traced workload Programs, q then k (one binding where the model has as
-#: many kv heads as heads): every Build descriptor of the coverage rows, art:5c594ebc74d2374816ced39e2b2bc114422a42bfc06ccf09a0090b523a8bc50f
+#: many kv heads as heads): every Build descriptor of the coverage rows
 SERVED = {
     "SmolLM2-135M": ((9, 64), (3, 64)),
     "Llama-3.2-1B": ((32, 64), (8, 64)),
@@ -253,7 +253,7 @@ def test_gptj_agrees_with_its_word_definition(target) -> None:
 
 
 #: (x[2i], x[2i+1], cos[i], sin[i], out[2i+1]) that vLLM d9105ea80's `rotary_embedding(is_neox=False)` wrote on sm_120
-#: (run r20261004-060203-ba52, rope-gptj cases 2 and 4) where `RoPEHeadGptJ_v1`'s odd half gives another word: in each,
+#: (rope-gptj cases 2 and 4) where `RoPEHeadGptJ_v1`'s odd half gives another word: in each,
 #: x*sin or y*cos overflows f32, so the word depends on which product the FMA keeps unrounded
 GPTJ_ODD_HW = [(0x7F7F, 0xFF7F, 0xBF1A, 0xBF94, 0xFF0D), (0x7F7F, 0x7F7F, 0xBFE3, 0x3F6E, 0xFF80),
                (0xFF7F, 0xFF7F, 0xBEA2, 0x3FA7, 0xFF7C), (0x7F7F, 0x7F7F, 0x3FF1, 0xBF65, 0x7F80),

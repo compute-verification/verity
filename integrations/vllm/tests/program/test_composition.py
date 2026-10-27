@@ -446,7 +446,7 @@ def test_authored_v2_corresponds_to_registry_v2(label, name, statics):
 
 
 # =====================================================================================================================
-# [E7 D54 2026-09-13] Serve_v4: the kernel-geometry attention chain beside the untouched Serve_v1
+# Serve_v4: the kernel-geometry attention chain beside the untouched Serve_v1
 # =====================================================================================================================
 
 

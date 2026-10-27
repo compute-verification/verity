@@ -306,7 +306,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self._nc.enable_gather(65536)
             # thread blocks per staged descriptor in the gather kernel (R10 default 4; 32 = R10's labelled-extra Llama geometry, the R11 default).
             # Size-adaptive, it is only a cap, 1024: a 256 MB prefill window holds a handful of descriptors, and at 32 blocks each the copy
-            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step, r20261017-205629-7b49 vs r20261017-205439-5d0c)
+            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step)
             blocks = settings.NATIVE_GATHER_BLOCKS
             self._nc.blocks_per_desc = blocks if blocks is not None else 1024 if self.auto_blocks else 32 if self.native_hooks else 4
             # R11 candidate B: size-adaptive blocks per window (cap = blocks_per_desc; ceil(max staged bytes / auto_bytes_per_block) otherwise)

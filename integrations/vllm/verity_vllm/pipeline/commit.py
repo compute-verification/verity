@@ -1536,7 +1536,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f" -> peak phase {_admit.get('peak_phase')} MiB; "
                       f"cgroup {((host_cap or 0) >> 20) or None} MiB; margin "
                       f"{(_admit['margin_bytes'] or 0) >> 20 if host_cap else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_cap else None} %)", flush=True)
-                # [R17-29 planner / Daniel M-0309] the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
+                # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
                 print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
                 (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
                 (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
@@ -2301,7 +2301,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
 
-    # [R16 compiled unit B -- Daniel M-0776 (3): repeated graph replay must be covered, not only compilation/warm-up] re-read the code
+    # repeated graph replay must be covered, not only compilation/warm-up: re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
     # the CUDA graphs replay the launchers that existed at capture, so an unchanged executed set (no new module / kernel / binary / config)
     # is the evidence that the artifact identity recorded at build is the identity of every replayed and eager step of every run

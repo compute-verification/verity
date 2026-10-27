@@ -15,7 +15,7 @@ The first record: OLMoE B2 i32/o32 mixedstop (cp-moe, lane e32550951): r0 served
 index 10, LAG 1), r1 32 / 32 (cap) -- G6 PASS with the lag exercised; the Commit's population, placed over every request's cap, required
 r0's 20 unexecuted steps (bound 13808/19988) and failed by name.
 
-Daniel's ruling puts this in a box -- the ACTIVE-REFERENCE table only, on three conditions `check.executed_prefix.link_to_match_account` checks:
+This holds in a box -- the ACTIVE-REFERENCE table only, on three conditions `check.executed_prefix.link_to_match_account` checks:
 (a) n_exec is determined from the properly LINKED serving transcript: the Commit's own served tokens count only because they EQUAL the Match
 record's served output (capture/tokens.json of the same attempt) and the Match account (GM-01 G6: PASS, the same two lengths per request)
 -- "the committer says EOS happened here" is never sufficient by itself; (b) the lag rule is attested: declared == the engine's read-back ==

@@ -22,9 +22,7 @@ Both share the epilogue `s = rsqrtf(var / N + eps)` (MUFU.RSQ), `out = bf16((z *
 
     PYTHONPATH=. verity-vllm rmsnorm-fused-sweep [--bundle PATH] [--out sweep.json]
 
-Result (2026-09-07, this machine): v1 exact on 2,327/2,340 rows (1,347,826/1,347,840 words); v2 exact on
-2,340/2,340 rows; the variance differs between the trees in 1,218 rows, `s` in 689, the bf16 output in 13 —
-every one of those 13 words is what production committed under v2.
+On the B0 store v2 is exact on every row and v1 misses 13 output words, each the word production committed under v2.
 """
 
 from __future__ import annotations

@@ -50,7 +50,7 @@ COORD_RE = re.compile(r"^(0|[1-9][0-9]*)(,(0|[1-9][0-9]*))*$")
 
 PHASES = ("prefill", "decode")
 NAMED_LAYERS = ("embed", "norm", "lm_head", "sampler")
-# ``output_logprob`` (WB2, 2026-09-07): the chosen token's logprob as the API reported it, one
+# ``output_logprob``: the chosen token's logprob as the API reported it, one
 # ``float32`` leaf per present output record; a boundary written before the field has no such leaves.
 BOUNDARY_FIELDS_WITH_T = ("prompt_token", "output_token", "output_presence", "output_logprob")
 BOUNDARY_FIELDS_WITHOUT_T = ("sampling_params", "seed", "finish_reason")

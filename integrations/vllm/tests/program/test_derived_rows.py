@@ -720,7 +720,7 @@ def test_attention_head_states_vs_gates(T, D_):
 
 
 # =====================================================================================================================
-# [E7 D54/D57 2026-09-13] the declared-geometry chain: AttnBlock_v3 / AttentionHead_v3 bound with BN = 128 (the FA2 split-KV
+# the declared-geometry chain: AttnBlock_v3 / AttentionHead_v3 bound with BN = 128 (the FA2 split-KV
 # kBlockN at head dim 64, `b1.fa2_kblock_n(64)`); E1's row arithmetic with that block size is gate-for-gate the v3 bodies,
 # including the two-block rows (T = 129, 130, 190) that the 128×64 record reaches and Serve_v1 got wrong.
 # =====================================================================================================================

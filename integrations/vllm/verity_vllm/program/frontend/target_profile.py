@@ -78,7 +78,7 @@ class TargetProfile:
                            construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
-                           conformance on committed bytes; fused region == composed relations NOT established; Daniel's ruling).
+                           conformance on committed bytes; fused region == composed relations NOT established).
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
     fp8_block_gemm      -> env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
                            (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
@@ -416,9 +416,9 @@ class TargetProfile:
     @property
     def execution_label(self) -> str:
         """The row's `execution` label: `bi-eager` (batch-invariant eager, vLLM's own attention selection) with the suffix `-fa2`
-        when FA2 is FORCED on a capability whose selector would pick another version (Daniel: a separately labelled configuration,
+        when FA2 is FORCED on a capability whose selector would pick another version (a separately labelled configuration,
         never a substitute for the native row)."""
-        mode = "compiled" if self.compilation is not None else "eager"       # [R15 compiled] `bi-compiled`: the panel's compiled rows
+        mode = "compiled" if self.compilation is not None else "eager"       # `bi-compiled`: the panel's compiled rows
         base = f"bi-{mode}" if self.batch_invariant else mode
         if self.flash_attn_version is not None and self.flash_attn_version != self.with_overrides(flash_attn_version=None).effective_flash_attn_version():
             return f"{base}-fa{self.flash_attn_version}"
