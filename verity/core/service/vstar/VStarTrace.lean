@@ -115,7 +115,7 @@ def regionAddrs (kl : Nat) (reg : Region) : Array (Nat × Nat) :=
 def byRow (bs : Nat) (d : Array (Nat × Nat)) : Std.HashMap Nat (Array Nat) :=
   d.foldl (fun m (i, j) => if i < bs && j < bs then m.insert i ((m.getD i #[]).push j) else m) {}
 
-def placed (st : Stmt) : Except String Placed := do
+def placed (st : Flock.Stmt) : Except String Placed := do
   let c := st.c
   let bs := 2 ^ c.kLog
   if c.nets.any (·.2.lookup.isSome) then throw "a net with a lookup table: outside what --sat places"
