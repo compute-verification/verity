@@ -1,6 +1,6 @@
-"""Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**.
+"""Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**, lane `pad` (R16, BRIEF §7B).
 
-The registered fused-MoE block (`verity/ml/definitions/registry/moe.py`, MOE-01: router top-k → expert row gather with the expert index as an
+The registered fused-MoE block (`verity/ml/definitions/registry/moe.py`, R13 MOE-01: router top-k → expert row gather with the expert index as an
 I32 VALUE → expert GEMMs → routed sum) lifted by node replay (`lifted.lift_def`), on a tiny per-token MoE FFN (E=4 experts, TOPK=2,
 K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for gate:
 
@@ -19,8 +19,8 @@ K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for 
     every expert's weight row is in the dataflow of every pair (the wide-fan-in gather), so no per-request Program shape depends on
     who is routed where — the fixed population holds for MoE as for dense.
 
-What it does NOT establish: anything about a real OLMoE record (that needs a real OLMoE step under a larger cap,
-served on a GPU).
+What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger cap is the `moe` lane's pod time; not
+tonight).
 """
 from __future__ import annotations
 
