@@ -77,7 +77,7 @@ the luck term is `ln(1/δ)/q`. The served block is `ditherSelected` (its check c
 honest kernel and hashing are the public best), the honest work that is neither (no lower bound, full weight), the
 sampling luck (`ε_skip`'s at `δ_coin = δ`), the exchanged bits, and the walk and log the extraction adds.
 
-The phases (Daniel, 26 Oct, 11:09 AM PDT): each sampling block's commit phase commits its operands before any of its
+The phases: each sampling block's commit phase commits its operands before any of its
 coins, the challenge phase's work commits its words before its check coin, and only the response phase follows the
 check coin (`Prover`). The cap (L39, CMP-154, RT-POOL RP20, RP23): the challenger times each block's commit phase
 and work, from the previous block's work to the block's commitment, so on the event bounded they fit the devices, and
@@ -117,7 +117,7 @@ Open (stated so the red team can aim at them):
   (RT-LEAN L4, L9; RT-MODEL M12), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the
   dither bits and counting `K = E_in + E_out` (RT-PROTO P2, which holds only while the dither bits stay streamed), and
   makes the hosts and DPUs resources of `G` (P9; that they are all the processors the cards reach is
-  `PeriodInventory`, held pending Daniel). -/
+  `PeriodInventory`, held until it is decided whether they are devices of the period). -/
 def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)

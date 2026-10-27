@@ -40,7 +40,7 @@ namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither
 
-/-- `pouw-sak-matmul` (proposed; R-ACCEL-6, Daniel 25 Oct). **Symmetric algorithmic knowledge for exact matrix
+/-- `pouw-sak-matmul` (proposed). **Symmetric algorithmic knowledge for exact matrix
 products, SAK(matmul)**, on a round's words: in the model at its device premises, on every registrable instance
 `a ∈ Reg`, every words program that exchanges no bits with outside machines, on any advice `s` of at most `B` bits
 fixed before the round's coins, has moment at most 1 at the prices `μ` and rate `η a` against the public best's
@@ -85,7 +85,7 @@ def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Ins
     ∀ (s : St) (Mw : G.Mc.Alg (St × P.Draw) P.Tr), (∀ i, G.ext Mw i = 0) →
       ∃ Deg : P.Draw → Prop, prob Deg ≤ κdeg B ∧ wordsMoment G P μ (pub a) (η a) a s Mw Deg ≤ 1
 
-/-- `pouw-sha512-speed` (proposed; R-ACCEL-7, Daniel 25 Oct: "sure"). **Nobody computes SHA-512 meaningfully faster
+/-- `pouw-sha512-speed` (proposed). **Nobody computes SHA-512 meaningfully faster
 than the best public implementation**, on a round's commitment, in sampling form and per prover (RT-LEAN-2 L37): in
 the model at its device premises (with (G3): an oracle call is a step priced at the public implementation's use), for
 every prover `A`, every advice of at most `B` bits on which each sampling block's programs read nothing of that
@@ -182,19 +182,18 @@ def OwnDither (P : RoundProto) (k N : ℕ) {Ω : Type} [Fintype Ω] (coin : Ω �
 
 /-- `pouw-coins-confidential` (proposed; the network certifiers on `trusted-host`, RT-POOL RP4, CMP-152). **A
 replica's coins reach no machine outside it before it has them**: a sampling block's dither and check coin are
-readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device (Daniel's
-RP4 ruling, 26 Oct): the device that runs a server's network certifier also produces that server's live coins, so the
-challenger issues them inside the boundary the certifier counts, and trust in that device and its host provider is
-`trusted-host`.
+readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device: the device
+that runs a server's network certifier also produces that server's live coins, so the challenger issues them inside
+the boundary the certifier counts, and trust in that device and its host provider is `trusted-host`.
 
 So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
 other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through
 its own programs, in the challenger's order, as `Prover` has them. A machine outside the boundary that read a coin
 early could serve the block's words, work no extraction sees.
 
-Placement discharges it (Daniel, 26 Oct, 4:41 PM PDT): for now private messages travel only on private links, a named
-placement premise (proposed `WitnessPathPrivate`), and a replica's coins reach it only on its certifier device's coin
-link. The rigorous version, over a secure transport, is the secure-transport workstream's (due Wed 28 Oct 18:00Z). -/
+Placement discharges it: for now private messages travel only on private links, a named placement premise (proposed
+`WitnessPathPrivate`), and a replica's coins reach it only on its certifier device's coin link. The rigorous version,
+over a secure transport, is the secure-transport workstream's. -/
 def CoinsConfidential {G : Accel} {P : RoundProto} {k N : ℕ} {Ω : Type} (coin : Ω → Fin N → Fin k → P.Draw × P.Chk)
     (A : Fin N → Ω → Prover G P k) : Prop :=
   ∀ u ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A u ω = A u ω'

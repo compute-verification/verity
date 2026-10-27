@@ -1,7 +1,7 @@
 import Definitions.Pouw.DitherInstance
 
 /-!
-# The headline on the cards: the auditor's devices, causality, and the premise held pending Daniel (trusted)
+# The headline on the cards: the auditor's devices, causality, and the held inventory premise (trusted)
 
 * `CertifierSeesImports`: the network certifier's counts take in every exchanged bit, class L (the auditor's devices,
   trust base item 3: the certifier runs on a machine the prover doesn't control).
@@ -20,7 +20,7 @@ import Definitions.Pouw.DitherInstance
 
   `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all four.
 * `PeriodInventory`, the period's devices are its inventory (RT-PROTO P9). It is stated and held: no guarantee reads it
-  until Daniel decides whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
+  until it is decided whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
   protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
   `Assumptions.CardWithinAccel`.
 -/
@@ -38,7 +38,7 @@ verdict reads them from its readings `dev`.
 
 **The coin stream is the coins and nothing else** (RT-POOL RP5), the one thing `Accel.ext` leaves out: a sampling
 block's dither and check coins are its `Draw` and `Chk`, inputs of its programs, not exchanged bits.
-* Under the MVP the challenger is the replica's certifier device (Daniel, 26 Oct; `CoinsConfidential`), which makes
+* Under the MVP the challenger is the replica's certifier device (`CoinsConfidential`), which makes
   each coin at the boundary, so no bit that crosses a link from outside is left out.
 * A challenger on a device of its own is left out message by message: only a coin message that verifies under its key
   and carries its expected (period, replica, sampling block, kind, sequence number), once, at its expected length.
@@ -105,13 +105,13 @@ def AnswerAfterWork (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev :
   ∀ (A : Prover G P nsb) (o : P.Orc) (x : Fin nsb → P.Draw × P.Chk) (b : Fin nsb), sel (x b).2 →
     t (dev A o x) b + G.wall (A.answer b) (A.answerIn o x b) ≤ ansAt (dev A o x) b
 
-/-- `pouw-period-inventory` (proposed, held pending Daniel; RT-PROTO P9, RT-UNITS U9, O-REDTEAM NF4; class 1, the
-accelerator model at θ, extended to the period's other processors). **The period's devices are its inventory**: every
-processor the period's cards reach without crossing a network certifier (the cards, host CPUs over PCIe or
-NVLink-C2C, DPUs) is a device of the period (`Devices`: the cards, and `Others` at their θ rows), and what those
-processors together compute within `t` seconds (`can F t`, on any code), some program of `G` computes on every input
-within `t` seconds, exchanging nothing. With `Assumptions.CardWithinAccel` for the cards, it is what carries the
-headline from the model's provers to the fleet's. -/
+/-- `pouw-period-inventory` (proposed, and held until it is decided whether host CPUs and DPUs are devices of the
+period; class 1, the accelerator model at θ, extended to the period's other processors). **The period's devices are
+its inventory**: every processor the period's cards reach without crossing a network certifier (the cards, host CPUs
+over PCIe or NVLink-C2C, DPUs) is a device of the period (`Devices`: the cards, and `Others` at their θ rows), and
+what those processors together compute within `t` seconds (`can F t`, on any code), some program of `G` computes on
+every input within `t` seconds, exchanging nothing. With `Assumptions.CardWithinAccel` for the cards, it is what
+carries the headline from the model's provers to the fleet's. -/
 def PeriodInventory (G : Accel) (can : ∀ {I O : Type}, (I → O) → ℝ → Prop) : Prop :=
   ∀ {I O : Type} (F : I → O) (t : ℝ), can F t →
     ∃ f : G.Mc.Alg I O, ∀ i, G.Mc.eval f i = F i ∧ G.wall f i ≤ t ∧ G.ext f i = 0

@@ -82,9 +82,9 @@ buy.
 
 The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
 them, and `SAKMatmul` and `SAKSha` hold at the dual price over them too. That they are all of the processors the
-cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
-capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
-price. -/
+cards reach is `Assumptions.PeriodInventory`, held until it is decided whether they are devices of the period, and not
+read here. `Q` calls use at least the capacity of one card resource `r` a public compression uses
+(`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
   ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr → CallsAtPub G e pb →

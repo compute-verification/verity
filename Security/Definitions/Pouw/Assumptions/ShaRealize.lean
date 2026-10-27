@@ -5,7 +5,7 @@ import Definitions.Pouw.MerkleExtract
 # Commit-and-open from SHA-512 as a random oracle: the extraction premise and its realization (trusted)
 
 `ExtractAdv` (commit-and-open costs what computing costs) is a theorem from SHA-512 as a random oracle for the
-commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of its own
+commitments (a named use not yet decided) and its realization, not a premise of its own
 (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`). This file holds `ExtractAdv` and what that theorem reads:
 
 * `QueryLog` (ABSORB-THM's B2): a period's commitment-path queries, per value of the verifier's coins, in the
@@ -204,8 +204,8 @@ def Realization (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Fin k → Set (noFold
       ∀ w (c : Fin nf.n × Fin nf.n' × Fin nf.nb), G.Mc.eval (Mw w) (adv o x w, (x w).1) c.1 c.2.1 c.2.2 =
         (ext ((L.prover x w).oracle u) E ((L.prover x w).pre u) (L.root x w u) (dirs c)).getD 0)
 
-/-- `pouw-commit-realize` (proposed; the realization half of SHA-512 as a random oracle for the commitments, R-ACCEL-3
-with R-ACCEL-7, pending Daniel; the Accel instance of ASK-16's card 9cd57182, beside `StraightLineExtraction`). In the
+/-- `pouw-commit-realize` (proposed; the realization half of SHA-512 as a random oracle for the commitments, a named
+use not yet decided; the Accel instance, beside `StraightLineExtraction`). In the
 model at its device premises, with the oracle reached only through priced calls (G3, `Accel.OracleCalls`), every
 prover `A` of `k` sampling blocks on the no-fold protocol `nf` at the registrable instances `Reg` has a `Realization` on
 its runs within the cap `Q` at the selection `sel`, at its own query budget `q A`, schedule `τ A` and advice size `Badv A`, with the walk's use

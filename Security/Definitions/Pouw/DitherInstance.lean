@@ -320,8 +320,7 @@ section Clock
 /-- **The verdict with the auditor's clocks** (RT-PROTO P5, RT-PROTO-2 P13, P25, O-REDTEAM NF5, RT-LEAN L33, CMP-154,
 RT-POOL RP26): the service's verdict, read with the challenger's signed issue times and the network certifier's signed
 arrival times, as the verdict reads them from the devices' readings `ob`. Each sampling block runs its commit phase,
-then its challenge phase, then its response phase, every commitment bound before any of its coins (Daniel, 26 Oct,
-11:09 AM PDT).
+then its challenge phase, then its response phase, every commitment bound before any of its coins.
 
 * **The commit phase.** The network certifier signs the arrival of sampling block `b`'s operand root
   (`opArrive ob b`), and the challenger issues the block's dither coins at `t ob b`, after it: the period is refused
