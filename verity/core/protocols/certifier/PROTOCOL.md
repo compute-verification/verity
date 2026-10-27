@@ -501,7 +501,7 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   which the compile unit holds to the advice. A server that admits in release order (a serve-openai change, vllm's)
   makes it the identity and the charge zero.
 - **The order within a bucket.** W4 releases a bucket's frames in queue order, a channel of up to log2 n_t! bits a
-  bucket that neither advice v0 nor the timing term charges (advice v0's "The order within a bucket"). The active
+  bucket that neither advice v0 nor the timing term charges. The active
   warden (`warden`) instead gives each live connection r slots of every bucket, ranked by ordinal, its cells in
   order, and a `PAD` on its stream where it has none. The map pins every slot, its stream, its kind and a data cell's
   entry: of every order of a bucket's cells the tie accepts the network certifier's, so the order is a function of the
@@ -1535,7 +1535,7 @@ composition below): what the bound counts is the charge, not the committed lengt
   `code_v1.encode` is injective on the windows (`code_v1.decode` inverts it), and the order entries' inverse, the
   replay and the walk give the advice from the windows, so at most 2^c residuals, and so at most that many advices,
   are accepted at a charge of c or less.
-- *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
+- *v0's per-window parts.* Each window's part is self-delimited.
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. *The values are the committed advice.* The advice's hiding rows hold each window's residual raw, as
    `replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'

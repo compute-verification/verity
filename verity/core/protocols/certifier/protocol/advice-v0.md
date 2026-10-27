@@ -127,22 +127,3 @@ egress window it can show in:
 So windows 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
 is wholly window 0's. A per-window charge over the first m windows covers at least these records. The charge itself
 is the residual code's (above).
-
-**Left to the other workstreams**, which v0 doesn't settle:
-- **Per-window parts.** v0 is one string, and `bits_by_window` divides its records among windows by a rule computed
-  from the decoded advice, so the prover can't choose the split. But the header's counts and widths depend on later
-  windows, and the records a window holds aren't one contiguous, self-delimiting part. A per-window bound that
-  counts each window's part as its own string (A5 and attack 9 of the attacks) needs an encoding that sends
-  each window's part self-delimited (its step and request counts as `uvar`s, with widths registered or per part). That
-  costs a few bits a window, and it is the residual code's and N2's advised mode's to choose.
-- **The order within a bucket.** Several requests' frames released in one bucket can go out in any order, a channel of
-  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O
-  has to fix a canonical order, for example by id then output index.
-- **One frame per kept output.** Each kept output is to be one egress frame, the HTTP head folded into the first and
-  `[DONE]` into the last, and a chunk into which vLLM merged tokens split back per token (the variable-length served
-  link).
-- **The id.** The shim's `user` names the session; it has to name the request, unique within a session.
-- **Equal tokens at a source.** The compiler has to hold a source run's tokens equal to the hitting request's, or the
-  hit wires in another prompt's KV (the compiler's).
-- **Arrival before admission.** A request's first row has to follow its certified arrival, which the tie to the
-  certified ingress checks.
