@@ -116,14 +116,14 @@ DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under
            "the window in a period whose open commits its draw K, rows and weights")
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
 H1_CALLS = "h1/w{k}/pouw-h1-calls.json"
-#: serve-openai's declared window Program's meta under the serve dir (`serve_h1.PROGRAM_META`)
+#: serve-openai's declared window Program's meta under the serve dir (`pouw_h1.PROGRAM_META`)
 H1_META = "h1/window-program.meta.json"
 #: `pouw_h1_circuits`' manifest in its ``--out``
 CIRCUITS_MANIFEST = "circuit-files.json"
 #: the period this serve dir's windows joined, its open's and close's answers (``period``)
 PERIOD = "period.json"
 #: the int8 linears serve-openai declares its window Program over, by served model: its layers and each layer's
-#: ``(module, n, K)`` in vLLM's module order (`serve_h1.H1Windows`: each ``weight.shape``, named by `pouw._named`)
+#: ``(module, n, K)`` in vLLM's module order (serve-openai's H1 arm: each ``weight.shape``, named by `pouw._named`)
 DECLARED: dict[str, tuple[int, tuple[tuple[str, int, int], ...]]] = {
     "verity-int8/Llama-3.2-1B-INT8": (16, (("self_attn.qkv_proj", 3072, 2048), ("self_attn.o_proj", 2048, 2048),
                                            ("mlp.gate_up_proj", 16384, 2048), ("mlp.down_proj", 2048, 8192))),
@@ -252,10 +252,10 @@ def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, st
 
 def program(out: Path, model: str, rows: int, steps: int, like: Path | None = None) -> dict[str, Any]:
     """``program``: the window Program serve-openai declares for `model` at T `rows` and S `steps`, built without serving
-    (`DECLARED`'s linears) and written as serve-openai writes it (`serve_h1.write_program`) into `out`; its meta. With
+    (`DECLARED`'s linears) and written as serve-openai writes it (`served.write_program`) into `out`; its meta. With
     `like`, a serve-openai run's dir, its model, T and S are that run's and its digest must be the run's
     (serve.json's ``protocols.program``), else ValueError."""
-    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     want = None
@@ -269,12 +269,12 @@ def program(out: Path, model: str, rows: int, steps: int, like: Path | None = No
     named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in linears]
     shapes = [(n, k) for _m, n, k in named]
     modules = {w: m for w, (m, _n, _k) in enumerate(named)}
-    digest = SH.write_program(SV.declared(shapes, modules, rows, steps),
+    digest = SV.write_program(SV.declared(shapes, modules, rows, steps),
                               SV.declared_layout(shapes, modules, rows, steps), out, rows=rows, steps=steps)
     if want is not None and digest != want:
         raise ValueError(f"{model}'s Program at T {rows}, S {steps} is {digest[:16]}..., not {like}'s {str(want)[:16]}...: "
                          "DECLARED's linears aren't the ones that run served")
-    return json.loads((out / SH.PROGRAM_META).read_text())
+    return json.loads((out / PH.PROGRAM_META).read_text())
 
 
 def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, max_tokens: int,
@@ -351,7 +351,7 @@ def period_close(serve_dir: Path, gate: str) -> dict[str, Any]:
 
 def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
     """What core's credit reads of the window beyond its record and session, as ``--check-challenger``'s flags: the
-    declared Program serve-openai wrote (``--descriptor``, `serve_h1.PROGRAM`), the period ``period open`` opened
+    declared Program serve-openai wrote (``--descriptor``, `pouw_h1.PROGRAM`), the period ``period open`` opened
     (``--period``, `PERIOD`), the drawn calls' statements (``--statements``) and the live evidence (``--live-evidence``,
     ``h1_prove/live.py evidence``'s), each where it exists."""
     got: dict[str, str] = {}

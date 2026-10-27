@@ -448,10 +448,10 @@ def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_
 
 def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes_it(tmp_path, monkeypatch):
     """``program`` declares the served model's linears (`DECLARED`) in vLLM's order and naming, ``(n, K)`` each, at T and
-    S, and writes them with serve-openai's own `serve_h1.write_program`; ``--like`` takes model, T and S from a serve
+    S, and writes them with serve-openai's own `served.write_program`; ``--like`` takes model, T and S from a serve
     dir and refuses a digest other than the one that run declared. The declaration and its digest are stand-ins here
     (a real one takes minutes); the node job checks the real one against a recorded run's digest."""
-    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     seen = []
@@ -461,10 +461,10 @@ def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes
     def write(prog, layout, out, *, rows, steps):
         seen.append((prog, layout, out, rows, steps))
         out.mkdir(parents=True, exist_ok=True)
-        (out / SH.PROGRAM_META).write_text(json.dumps({"program_digest": DIGEST, "rows": rows, "steps": steps,
+        (out / PH.PROGRAM_META).write_text(json.dumps({"program_digest": DIGEST, "rows": rows, "steps": steps,
                                                        "bytes": 9, "layout": layout}))
         return DIGEST
-    monkeypatch.setattr(SH, "write_program", write)
+    monkeypatch.setattr(SV, "write_program", write)
     meta = S.program(tmp_path / "h1", "verity-int8/Llama-3.2-1B-INT8", 512, 16)
     (_tag, shapes, modules, rows, steps), _layout, out, *_ = seen[0]
     assert meta["program_digest"] == DIGEST and out == tmp_path / "h1" and (rows, steps) == (512, 16)

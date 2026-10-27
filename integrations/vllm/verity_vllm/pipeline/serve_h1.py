@@ -14,7 +14,7 @@ own Commit.
   key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
   template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
-  times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`write_program`),
+  times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
   so the period-open of it (``served_verdicts.py period open``) can go out once the server listens, before any window
   reserves.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.protocols.pouw.h1 import SCHEME
+from verity_vllm.protocols.pouw.h1 import PROGRAM, PROGRAM_META, SCHEME
 
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
@@ -55,9 +55,6 @@ SESSIONED = ("challenger", "session", "gate", "period")
 AT = "127.0.0.1:7811"
 #: how many times, a second apart, a session's state is polled: its ``ssh -R`` port listening here, its end entry
 POLLS = 300
-#: the declared window Program under ``--out``'s ``h1/`` (`write_program`): its descriptor, gzipped, and what a period-open
-#: of it reads, the names ``pouw_h1_rehearsal`` gives them, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
-PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -144,36 +141,6 @@ def units(shapes: Any, rows: int, steps: int) -> int:
 
     r, c = PH.TILE
     return int(steps) * (HW.slot(int(rows), PH.TILE) // r) * sum(int(n) // c for n, _k in shapes)
-
-
-def write_program(program: Any, layout: Mapping[str, Any], out: Path, *, rows: int, steps: int) -> str:
-    """`program`'s `codec.program_digest`, streamed once into ``out/PROGRAM`` (its descriptor as the period commits it,
-    `pouw_h1_served.descriptor`, gzipped) as it is hashed, and ``out/PROGRAM_META``: the digest, the descriptor's bytes,
-    its `layout` (`pouw_h1_served.declared_layout`, which core's `credit.layout_of` reads from it), T ``rows`` and S
-    ``steps``. A period-open commits the digest and the circuit files built from these (``served_verdicts.py period``)."""
-    import gc
-    import gzip
-    import hashlib
-
-    from verity.ml.circuits.codec import descriptor_chunks
-
-    out.mkdir(parents=True, exist_ok=True)
-    h, size, on = hashlib.sha512(), 0, gc.isenabled()
-    gc.disable()
-    try:
-        with gzip.open(out / PROGRAM, "wb", compresslevel=1) as f:
-            for chunk in descriptor_chunks(program):
-                h.update(chunk)
-                f.write(chunk)
-                size += len(chunk)
-    finally:
-        if on:
-            gc.enable()
-    digest = h.hexdigest()
-    meta = {"program_digest": digest, "file_sha512": digest, "bytes": size, "rows": int(rows), "steps": int(steps),
-            "layout": dict(layout)}
-    (out / PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
-    return digest
 
 
 def listening(port: int) -> bool:
@@ -294,7 +261,7 @@ class H1Windows:
         t0 = time.perf_counter()
         self.program = SV.declared(shapes, modules, self.rows, self.steps, unit=unit)
         t1 = time.perf_counter()
-        self.digest = write_program(self.program, SV.declared_layout(shapes, modules, self.rows, self.steps),
+        self.digest = SV.write_program(self.program, SV.declared_layout(shapes, modules, self.rows, self.steps),
                                     self.out / "h1", rows=self.rows, steps=self.steps)
         print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
               f"{time.perf_counter() - t1:.1f} s", flush=True)
@@ -307,7 +274,7 @@ class H1Windows:
 
     def describe(self) -> dict[str, Any]:
         """serve.json's ``protocols``: the entry, T and S, the period's Program digest and its descriptor's file
-        (`write_program`), the weights' root and where the coins come from (``challenger``, with the gate's peer, or
+        (`served.write_program`), the weights' root and where the coins come from (``challenger``, with the gate's peer, or
         ``in-process``)."""
         coins = {"coins": "in-process"} if self.sessions is None else {"coins": "challenger", "peer": self.sessions.peer}
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
@@ -398,4 +365,4 @@ class H1Windows:
 
 
 __all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "OWN", "POLLS", "PROGRAM", "PROGRAM_META", "SCHEME",
-           "SESSIONED", "config_of", "listening", "refusal", "sessions_of", "units", "write_program"]
+           "SESSIONED", "config_of", "listening", "refusal", "sessions_of", "units"]
