@@ -112,7 +112,7 @@ else
     --lean-jobs "${PB_LEAN_JOBS:-1}" > "$O/prove_bundle.log" 2> "$O/prove_bundle.err"
 fi
 rc=$?
-grep '^PROVEBUNDLE' "$O/prove_bundle.log" | tee -a "$O/job.log"
+grep '^PROVEBUNDLE\|^DRAWN \|^CHECK \|^VERDICT ' "$O/prove_bundle.log" | tee -a "$O/job.log"
 [ $rc = 0 ] || tail -30 "$O/prove_bundle.err"
 cp "$W/pb/summary.json" "$O/" 2>/dev/null
 (cd "$W/pb" && { find honest blocks tampered -type f 2>/dev/null \( -name 'session.json' -o -name '*.log' -o -name 'draw.json' \) -size -8M -print0
