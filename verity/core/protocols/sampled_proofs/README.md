@@ -8,6 +8,31 @@ probability δ, at most so many proof blocks are faulty, a proof block being fau
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
+Sampled proofs is a subprotocol of both composite protocols. Remote Verity (`verity/remote/v0`,
+`verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
+(`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
+composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
+component accepts.
+
+## Guarantee and assumptions
+
+The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
+accepts, at most the profile's count of proof blocks are faulty. Its top statement is C-Flock's
+`Flock.Guarantees.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/Refused.lean`), proved, and it bounds the probability
+that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
+rests on these named assumptions:
+
+- `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
+  idealized; its docstring says what that leaves out).
+- `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
+  draw file is the one `flock-verify draw` printed for the verifier's own draw.
+- `TableCRZ` and `LinkCRZC`: SHA-512's collision resistance (`ecr/sha-512`), for the collision finders the proof builds
+  from the prover.
+
+The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
+before any coin. In the remote protocol the coins come from the auditor's challenger, which adds two premises about
+where it runs (`CoinsConfidential` and `OneClock`, under "Where things are").
+
 ## Outline
 
 **The one-stage audit** is the audit protocol in use. One round goes like this:
@@ -53,12 +78,12 @@ plus a term for which proof blocks are faulty, and compute security by their wor
 
 Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
-Not built yet: the security function and its red-team review, and composition checks such as PoUW's tiles
+Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
 
-Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
-captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchmarks/one_stage/a5.py`) registers a stand-in
-too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
+registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
+served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
 `served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred window becomes
@@ -71,7 +96,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), the retired two stages
   (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
   (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are
-  assumption A3 (`Assumptions.UniformRandomBytes`).
+  the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
@@ -114,12 +139,12 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
     allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
-    auditor host, vy-challenger-1, runs both, and a window's coins leave it only on the peer's certifier coin link,
+    auditor host runs both, and a window's coins leave it only on the peer's certifier coin link,
     which the gate refuses to open without (`auditor.coin_ports`). In the Lean it is the Prop
     `Pouw.Assumptions.CoinsConfidential`: a replica's prover is the same function whatever the other replicas' coins,
     the form ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` takes as a hypothesis.
   - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
-    ingress and receipt times are read on one clock. Deployed, that is vy-challenger-1's. A challenger on a device of its own would have to keep its clock within
+    ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
@@ -336,7 +361,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The one-stage audit applies `Q_template_instance` v0 and `Q_template_instances` v0, and `Q_word` v1 at X = 16 and
   `Q_call` v1 at X <= 16. Under a template query each instance of a listed template in the program's root body is one
   proof block, in canonical order (node, then member). Every proof block's committed bits fit a public size class, a power of two
-  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`; provisional), and a program with a wider proof block is refused. The
+  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`), and a program with a wider proof block is refused. The
   template queries are demo queries for template runs, not the serving partition. Only they define strata; any other
   query refuses the stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same
@@ -469,7 +494,7 @@ log's history by `tests/test_service_history.py`, sessions by `tests/test_servic
 ### The verifier's randomness
 
 The draw of record is `coins.OwnRandomness` on the Lean verifier of record's coins (`one_stage.verifier.coins`:
-`IO.getRandomBytes`, A3; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
+`IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
 `Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
