@@ -38,7 +38,9 @@ A module of PKG is kept, with the first reason that holds:
   module doc saying it shows some hypotheses can be met (not vacuous, satisfiable, have teeth), or its title that one is
   needed (needs, beats, a counterexample). Its owner decides whether it goes;
 - `cited`: a comment of a Lean file outside PKG (a Definition's docstring) cites it, by its module's name or path or a
-  constant's name: what that text argues rests on it, and its owner decides whether it goes. A module that declares
+  constant's name, or by a name in backticks that names no constant but ends in one of its constants' last component, one
+  that reads as a lemma's or a definition's (`DISTINCT`) and that nothing outside PKG declares (`ksJoint_le` written
+  bare): what that text argues rests on it, and its owner decides whether it goes. A module that declares
   nothing, cited by its own name or path, is cited for what it gathers, so what it imports is kept too (a lock's root
   aside: a package's root names where its proofs are, not what one argument rests on);
 - `refs`: a kept module's declarations use its constants. A module is deleted whole, so every declaration of a kept module
@@ -100,6 +102,9 @@ NAME = re.compile(r"(?<![\w.'])[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*
 NAME_OR_WORD = re.compile(r"(?<![\w.'])[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)*")
 #: a comment's code span, `x`
 CODE_SPAN = re.compile(r"`([^`\n]+)`")
+#: a name's last component that reads as a lemma's or a definition's, not a word: an underscore, or a capital after a
+#: letter or digit (`ksJoint_le`, `TagCutSplit`; not `pads`, `rep0`, `Capacity`)
+DISTINCT = re.compile(r"_|[^\W_][A-Z]")
 #: an `open` command's namespaces (and the words of its `hiding`, `renaming` or `in`, which name none)
 OPEN = re.compile(r"(?m)^[ \t]*open[ \t]+(?:scoped[ \t]+)?([^\n(]*)")
 #: a declaration (comments blanked): its modifiers and its name as written
@@ -255,10 +260,24 @@ def references(files: list[str], pkg: str, mods: dict[str, str],
     `NOT_READERS`) naming the module's file (from the root, or from the source directory, `Proofs/A/B.lean`; a path joined
     from quoted parts, `"Proofs" / "A"`, is read as one; a path without `.lean` names it only where no directory has that
     path), its module name, a constant one component under it, or one of its constants by full name (``consts``: each
-    name's modules), or a name under one; a Lean file outside PKG names only what it imports.
+    name's modules), or a name under one; a Lean file outside PKG names only what it imports. A Lean file's name in
+    backticks may be relative to its namespaces and opens, and one that names no constant but ends in a `DISTINCT` last
+    component of ``consts``' that no Lean file outside PKG declares cites each module declaring one so.
     The mentions that read nothing are under the key `(docs, module)` for a document's, which a deletion edits, and
     `(cited, module)` for a Lean comment's, whose flag says whether it names the module itself rather than a constant."""
     consts = consts or {}
+    short: dict[str, set[str]] = collections.defaultdict(set)
+    for n, ms in consts.items():
+        if DISTINCT.search(s := n.rsplit(".", 1)[-1]):
+            short[s] |= ms
+    for f in files if short else []:
+        if f.endswith(".lean") and not f.startswith((pkg + "/", *NOT_READERS)):
+            try:
+                text = (ROOT / f).read_text(errors="replace")
+            except OSError:
+                continue
+            for n in declared(C.strip_comments(text)):
+                short.pop(n.rsplit(".", 1)[-1], None)
     by_path = {f"{pkg}/{r}": m for m, r in mods.items()}
     by_src = {m.replace(".", "/") + ".lean": m for m in mods}
     src = next(((ROOT / pkg / r).parents[m.count(".")] for m, r in mods.items()), ROOT / pkg)
@@ -269,9 +288,9 @@ def references(files: list[str], pkg: str, mods: dict[str, str],
     paths = re.compile(re.escape(pkg) + r"/[\w./-]*\w")
     local = re.compile(r"(?<![\w./-])(?:" + either + r")/[\w./-]*\w")
 
-    def mentioned(text: str, within: set[str] = frozenset()) -> dict[str, bool]:
-        """{module: whether the text names the module itself (its path or name), not only a constant under it}; a name
-        written as code may be relative to a namespace of ``within``"""
+    def mentioned(text: str, within: set[str] | None = None) -> dict[str, bool]:
+        """{module: whether the text names the module itself (its path or name), not only a constant under it}; a Lean
+        file's (``within``: the namespaces it is in and opens) name written as code may be relative to one of them"""
         hit: dict[str, bool] = {}
         for found, table, base in ((paths, by_path, ROOT), (local, by_src, src)):
             for p in found.finditer(text):
@@ -286,12 +305,21 @@ def references(files: list[str], pkg: str, mods: dict[str, str],
             elif x.rsplit(".", 1)[1][:1].islower() and (x := x.rsplit(".", 1)[0]) in mods:
                 hit.setdefault(x, False)
         written = [(x, ()) for x in NAME.findall(text)] if consts else []
-        written += [(x, within) for code in CODE_SPAN.findall(text) for x in NAME_OR_WORD.findall(code)] if within else []
+        written += [(x, within) for code in CODE_SPAN.findall(text) for x in NAME_OR_WORD.findall(code)] if within is not None else []
         for x, under in written:
             for full in (x, *(f"{w}.{x}" for w in under)):
                 parts = full.split(".")
                 if n := next((n for k in range(len(parts), 1, -1) if (n := ".".join(parts[:k])) in consts), None):
                     for m in consts[n]:
+                        hit.setdefault(m, False)
+        for code in CODE_SPAN.findall(text) if within is not None else []:
+            for w in NAME_OR_WORD.finditer(code):
+                x = w.group(0)
+                if (s := x.rsplit(".", 1)[-1]) not in short or "/" in code[max(w.start() - 1, 0):w.end() + 1]:
+                    continue
+                if not any(".".join(f.split(".")[:k]) in consts for f in (x, *(f"{u}.{x}" for u in within))
+                           for k in range(2, f.count(".") + 2)):
+                    for m in short[s]:
                         hit.setdefault(m, False)
         return hit
 
@@ -310,7 +338,7 @@ def references(files: list[str], pkg: str, mods: dict[str, str],
             imported = {i for i in source_imports(text) if i in mods}
             for m in imported:
                 out[m].append((f, True))
-            for m, whole in mentioned(text, opened(C.strip_comments(text)) if consts else frozenset()).items():
+            for m, whole in mentioned(text, opened(C.strip_comments(text)) if consts else None).items():
                 if m not in imported:
                     out[("cited", m)].append((f, whole))
             continue

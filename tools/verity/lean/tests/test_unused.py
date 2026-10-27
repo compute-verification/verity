@@ -179,6 +179,22 @@ def test_a_constant_named_outside_keeps_its_module(stand_in):
     assert U.decide(pkg, policy, used, [test, U.rel(doc)], [])["kept"]["Prune.A.Side"] == f"named: {U.rel(doc)}"
 
 
+def test_a_lemma_written_bare_outside_its_namespace_cites_its_module(stand_in):
+    pkg, policy, used, test = stand_in
+    (pkg / path_of("Prune.A.Side")).write_text("import Prune.A.Base\n\nnamespace Pool.Lemmas\n\n"
+                                               "theorem side_eq : base = 1 := rfl\n\nend Pool.Lemmas\n")
+    spec = pkg.parent / "spec" / "Spec.lean"
+    spec.parent.mkdir()
+    for text, cited in (("/-! The bound is `side_eq`'s. -/\ndef bound : Nat := 1\n", True),
+                        ("namespace Other\n\n/-- Through `Loop.side_eq`. -/\ndef bound : Nat := 1\n\nend Other\n", True),
+                        ("/-! The stream `t/side_eq` is a path. -/\ndef bound : Nat := 1\n", False),
+                        ("/-! Its own `side_eq`. -/\ntheorem side_eq : True := trivial\n", False),
+                        ("/-! side_eq, not written as code. -/\ndef bound : Nat := 1\n", False)):
+        spec.write_text(text)
+        got = U.decide(pkg, policy, used, [test, U.rel(spec)], [])
+        assert (got["kept"].get("Prune.A.Side") == f"cited: a Lean comment of {U.rel(spec)} cites it") == cited, text
+
+
 def test_declared_reads_names_off_namespaces():
     src = ("namespace A.B\nsection S\ntheorem x : True := trivial\nend S\n@[simp] private lemma hidden : True := trivial\n"
            "protected noncomputable def y := 1\ninstance : Inhabited Nat := ⟨0⟩\n"
