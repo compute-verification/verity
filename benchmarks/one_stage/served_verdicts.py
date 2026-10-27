@@ -288,18 +288,18 @@ def check_answer(a: Any) -> dict[str, Any]:
 def epsilon(a: Mapping[str, Any]) -> str | None:
     """A sampled protocol's bound on wrong units (``public.bound``) over its checked level's size (`Core.Integrity`), or
     None for an answer that has no such bound."""
-    try:
-        bound, size = a["public"]["bound"], a["profile"]["levels"][-1]["size"]
-    except (KeyError, IndexError, TypeError):
+    public, profile = a.get("public"), a.get("profile")
+    levels = profile.get("levels") if isinstance(profile, Mapping) else None
+    if not isinstance(public, Mapping) or not isinstance(levels, list) or not levels or not isinstance(levels[-1], Mapping):
         return None
+    bound, size = public.get("bound"), levels[-1].get("size")
     return str(Fraction(bound, size)) if isinstance(bound, int) and isinstance(size, int) and size > 0 else None
 
 
-def row_of(owner: str, a: Any, out: Path) -> dict[str, Any]:
-    """A subprotocol's report row from its answer (checked to be a core answer first)."""
+def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, Any]:
+    """A subprotocol's report row from its answer (checked to be a core answer first); ``run`` is the recording run."""
     a = check_answer(a)
     runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
-    run = os.environ.get("RESEARCH_RUN_ID")
     accepted = a["verdict"] == "accept"
     return {"protocol": a["protocol"], "owner": owner, "verdict": a["verdict"], "reason": a["reason"],
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
@@ -307,19 +307,19 @@ def row_of(owner: str, a: Any, out: Path) -> dict[str, Any]:
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
 
 
-def sampled_proofs_row(audit_dir: Path) -> dict[str, Any]:
+def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
     """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
     import served_integrity as SI
 
     reg = audit_dir / "windows" / "rank0" / "registration.json"
     try:
         a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
-        return row_of(INTEGRITY_OWNER, a, audit_dir)
+        return row_of(INTEGRITY_OWNER, a, audit_dir, run)
     except (RuntimeError, ValueError) as e:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
-def piece_row(key: str, pieces_dir: Path) -> dict[str, Any]:
+def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer, or ``missing`` with its issue; a development piece's is
     ``missing`` with its document when it accepts (it credits nothing), else ``reject``."""
     _name, comp, owner, issue, what = PIECES.get(key, WIPE)
@@ -333,7 +333,7 @@ def piece_row(key: str, pieces_dir: Path) -> dict[str, Any]:
     if not f.exists():
         return {"verdict": "missing", "owner": owner, "issue": issue, "why": what}
     try:
-        return row_of(owner, json.loads(f.read_text()), f.parent)
+        return row_of(owner, json.loads(f.read_text()), f.parent, run)
     except ValueError as e:
         return {"verdict": "error", "owner": owner, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
@@ -419,10 +419,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         got = pieces(a.serve_run, a.window, a.out)
         return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs), **{k: piece_row(k, a.pieces) for k in PIECES},
-            "wipe": piece_row("wipe", a.pieces)}
-    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node,
-                               run=os.environ.get("RESEARCH_RUN_ID"))
+    run = os.environ.get("RESEARCH_RUN_ID")
+    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: piece_row(k, a.pieces, run) for k in PIECES},
+            "wipe": piece_row("wipe", a.pieces, run)}
+    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
