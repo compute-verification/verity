@@ -12,7 +12,7 @@ establishes. It accepts exactly when
   the declared one taken on trust), and a public setup's blocks hash to the root and decode to the committed `W`
   (`Wire.setupFailure`);
 * the audit's `(epoch, audit id)` pair is not one the verifier has used (`Verifier.seen`);
-* the challenge key is derived from the verifier's secret as §5 specifies, bound to the epoch, the root and the salt
+* the challenge key is derived from the verifier's secret, bound to the epoch, the root and the salt
   (`Challenge.auditKey`, or round `j`'s beacon in mode 1), and the audit id is the one derived for the counter;
 * every challenge carries the derived index and nonce, round by round in order, and every response is for the open
   round (`Wire.rounds`);
