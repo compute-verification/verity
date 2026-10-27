@@ -7,7 +7,7 @@
 # NATIVE_COLLECT_BUILD, HF_HOME (the node's, as iterate.sh's tables set them), LEASE (gpu-lease's flags, default "--max-min 75"),
 # CHECK_TESTS (the committer's GPU byte-identity tests, run in the lease before timing, once in each rows-sha512 leaf form,
 # VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing; empty skips them; a branch that carries rows-blake3, which
-# stays off main, adds check_b3.py and check_hfirst.py).  The timed arms run the device's own form (native_rows.cu,
+# stays off main, adds the checks it carries).  The timed arms run the device's own form (native_rows.cu,
 # verity_rows_leaves_form).
 # PIN_BUILD_NAME (iterate.sh sets it on each GPU it has a Build of record for: the H200, and the RTX PRO 6000 once named): the Build sent with the run,
 # as $RESEARCH_RUN_DIR/inputs/<name>; prof.sh then runs every arm under its compile artifact (PIN_BUILD) and checks the winners after.
