@@ -1334,9 +1334,9 @@
   "verity/ml/randomness/tests/vectors.json": "ddf31f7f92ac4e022bd9cbe26f2df3a3b66b529825c5d57efda665454eea1b63",
   "verity/core/primitives/randomness/Randomness.lean": "4e1d2377135b9f044236fb6cb03681f0db505c8de783674cd18b7d27040bfd53",
   "Security/Proofs/Flock/Soundness/PlanDraw.lean": "c43af291e915dd33fe3111010ad61179e4422f0ff3fd145488f79d149d9c4478",
-  "Security/Proofs/lake-manifest.json": "dff5d799d07c5962dde6e0967f8925956561be6b011b7e0187188495fcbe8088",
+  "Security/Proofs/lake-manifest.json": "f4cb72d3c83b113593469e056cc6fb514bd049421264f74adca175527ba3bb29",
   "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
   "verity/core/service/flock/Flock/Hash.lean": "21fc9913ecb9aa3ef0e463c94b7b810b9bc9e832c5c8862472c8376e39662885",
-  "verity/core/service/flock/Flock/Draw.lean": "9ca895edc41bfd9ae48444d85c403fd4120baf51789885ac7e22e3bec9f55886"
+  "verity/core/service/flock/Flock/Draw.lean": "76957b191e5a2ac67c02ed70dfc4d1845147a9984c53eaf722053d180f6ed8c0"
  }
 }

@@ -89,10 +89,13 @@ class Session:
         return dataclasses.replace(self, signed=dataclasses.replace(s, signature=sig))
 
 
-def tiers_of(labels: int, cuts: list[int], names: list[str]) -> tuple[tuple[str, int], ...]:
-    """The fill's `labels · 64` bytes cut at `cuts` (labels) into tiers named `names`, each at least one label."""
+def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -> tuple[tuple[str, int], ...]:
+    """The fill's `labels · 64` bytes cut at `cuts` (labels) into tiers named `names`, each at least one label, and
+    `outside` bytes the fill doesn't reach (`R`) in the last."""
     edges = [0, *sorted({c for c in cuts if 0 < c < labels}), labels]
-    return tuple((names[i], sw.LABEL_BYTES * (b - a)) for i, (a, b) in enumerate(zip(edges, edges[1:])))
+    tiers = [(names[i], sw.LABEL_BYTES * (b - a)) for i, (a, b) in enumerate(zip(edges, edges[1:]))]
+    tiers[-1] = (tiers[-1][0], tiers[-1][1] + outside)
+    return tuple(tiers)
 
 
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
@@ -138,7 +141,8 @@ def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
     limit = draw(st.integers(1, 10 ** 6))
     names = draw(st.permutations(TIER_NAMES))
     cuts = draw(st.lists(st.integers(1, max(1, labels - 1)), max_size=2))
-    params = sw.WipeParams(labels, k, batch, limit, tiers_of(labels, cuts, names))
+    outside = draw(st.sampled_from([0, 0, 1, sw.LABEL_BYTES, 4096]))
+    params = sw.WipeParams(labels, k, batch, limit, tiers_of(labels, cuts, names, outside))
     batches = params.batches
     spend = draw(st.lists(st.one_of(st.integers(0, limit), st.just(limit)), min_size=batches, max_size=batches))
     fault, at = draw(st.sampled_from(["none", "none", "late", "wrong"])), draw(st.integers(0, batches - 1))
@@ -280,6 +284,7 @@ JSON_MUTATIONS = [
     _tiers(lambda t, x: t + [t[0]]),
     _tiers(lambda t, x: [[t[0][0], 0]] + t),
     _tiers(lambda t, x: [[t[0][0], t[0][1] + 64]] + t[1:]),
+    _tiers(lambda t, x: [[t[0][0], t[0][1] - 64]] + t[1:]),
     _tiers(lambda t, x: [t[0][:1]] + t[1:]),
     _tiers(lambda t, x: [t[0] + [1]] + t[1:]),
     _tiers(lambda t, x: [[1, t[0][1]]] + t[1:]),
