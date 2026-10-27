@@ -118,11 +118,11 @@ def Shows (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursi
           ∃ hk : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k]
 
 /-- **The staged rows are the component's.** V\*'s shared rows (`--rec-rows`) are no part of `x` (#4744): the prover
-stages one set for every part, off the staging message (`Stage.rows`). The compiled component reads each part's rows
-from its parameters, so the run's staged rows, read as JSON, are every part's. -/
-def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (o : VStar.Recursive.Own) (v : Claims.Seen) : Prop :=
-  ∀ j (hj : j < o.parts.size),
-    o.parts[j].rows.map Except.ok = some (FlockDeploy.jsonOf "rec-rows" (st.rows x (v.msgs.take (kIS IV x))))
+stages one set for every part, off the staging message (`Stage.rows`). The compiled component reads them once, from
+the evidence's `rows` blob (`innerHeld`), so that blob is the run's staged rows. -/
+def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursive.Proofs) (bs : Core.Blobs)
+    (v : Claims.Seen) : Prop :=
+  bs.get pr.rows "the staged rows" = .ok (st.rows x (v.msgs.take (kIS IV x)))
 
 /-- **The records hold the live coins** (`live-verifier` at the recursive session, `Assumptions.Zk.RecordCustodyZKJ`):
 at each V\* session `s` of the run's view `v`, wherever the outer verifier decides on session `s`'s messages and coins
@@ -157,11 +157,11 @@ theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω
     rw [vstarAt_staged ho]
     exact hacc s hs
 
-/-- **What the compiled component is to refuse and does not yet** (PRF-201; ONE9-A's refusal branch
-`cursor/soundness-one9-refuse-4dd5` stages each): Flock's own checks on the inner statement (`InnerOkAt`, its
-`innerOk`), plain SHA-512 leaves under `--zk` at the part statement's tags (its `need (!tags0.plainLeaves)`), and files
-too long for their length words (its `fits` at `2^56`): `x` with each part's public file, the inner session's record,
-the coin server's transcript and V\*'s staged rows, at the inner rounds `ms`. -/
+/-- **What the compiled component refuses, as the model states it** (PRF-201): Flock's own checks on the inner
+statement (`InnerOkAt`, the compiled `innerOk`), plain SHA-512 leaves under `--zk` at the part statement's tags (its
+`need (!tags0.plainLeaves)`), and files too long for their length words (its `fits` at `2^56`): `x` with each part's
+public file, the inner session's record, the coin server's transcript and V\*'s staged rows, at the inner rounds
+`ms`. -/
 structure Refusals (x : Msg) (st : Stage) (ms : List (Msg × Out)) : Prop where
   innerOk : InnerOkAt x
   plain : ∀ t, Flock.Tags.find? VStar.Recursive.STATEMENT = some t → t.plainLeaves = false
@@ -206,8 +206,8 @@ theorem regC_of_part {pr : Option Lean.Json} {registered : Option (Array Flock.R
 
 /-- **An accepted compiled part sets up as the model's part** (pieces C, D1 and D2 at one part). Where the compiled part
 `j`'s verdict is `.ok ()`, `x`'s inner statement and part `j` are the component's (`InnerNames`, `PartNames`), the staged
-files are the blobs' (`Shows`' and `RowsShow`'s clauses at `j`) and the part statement's tags have no plain leaves:
-the model reads part `j`'s statement (`partRaw`) as the compiled part's inputs (`partIns`), its recursive setup passes
+files are the blobs' (`Shows`' clauses at `j`, and `RowsShow`): the model reads part `j`'s statement (`partRaw`) as
+the compiled part's inputs (`partIns`), its recursive setup passes
 with the compiled session, and so does its statement check. -/
 theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) (hsp : h.shape.sparse = none)
@@ -215,29 +215,29 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
     {st : Stage} {x : Msg} {ms : List (Msg × Out)} {j : ℕ} {q : PartX}
     {po : VStar.Recursive.PartOwn} {pp : VStar.Recursive.PartProof}
     (hpv : VStar.Recursive.partVerdict h j po pp bs = .ok (.ok ())) (hP : PartNames po pp bs j q)
-    (hplain : ∀ t, Flock.Tags.find? VStar.Recursive.STATEMENT = some t → t.plainLeaves = false)
     (hSp : bs.get pp.pub "a part's public file" = .ok (st.pub x ms j))
     (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
     (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
-    (hSrows : po.rows.map Except.ok = some (FlockDeploy.jsonOf "rec-rows" (st.rows x ms))) :
-    ∃ (tags0 : Flock.Tags) (registered rows : Option (Array Flock.Registered.Port)) (bindings : VStar.Bindings)
+    (hSrows : bs.get pr.rows "the staged rows" = .ok (st.rows x ms)) :
+    ∃ (tags0 : Flock.Tags) (registered : Option (Array Flock.Registered.Port)) (bindings : VStar.Bindings)
       (recordB : ByteArray) (record : String) (d : Lean.Json) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
       Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 ∧
       po.registered.bind (fun r => (VStar.Recursive.registeredOf r).toOption.map (·.1)) = registered ∧
       bs.get pp.record s!"part {j}'s record" = .ok recordB ∧ String.fromUTF8? recordB = some record ∧
       Flock.Witness.recordDraw record = some d ∧
       (partRaw (xrOf o h w ri) st x ms j q).ins =
-        .ok (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings rows) ∧
-      (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings rows).setup =
+        .ok (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings (some h.rows)) ∧
+      (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings (some h.rows)).setup =
         .ok (spec, sts) ∧
-      (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings rows).base.read.check =
+      (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings (some h.rows)).base.read.check =
         .ok () ∧
       SampledProofs.OneStageZk.buildSessionOf
         (Flock.ProvedScope.circuitOf (partTags tags0 q.base.circuit) q.base.circuit [])
         (partTags tags0 q.base.circuit) q.base.circuit (st.pub x ms j) (partCoins tags0) [] 1 (some d)
         (some po.partition) (some po.program) registered = .ok (spec, sts) := by
-  obtain ⟨tags0, circuitB, pubB, registered, complete, known, regParams, rows, bindings, recordB, record, d, spec, sts,
-    hT, hcB, hpB, hPR, hrows, hbind, hrecB, hrec, hhm, hrd, -, hbuild, -, -, -, hc, hscope⟩ := partVerdict_setup hpv rfl
+  obtain ⟨tags0, circuitB, pubB, registered, complete, known, regParams, bindings, recordB, record, d, spec, sts,
+    hT, hplain, hcB, hpB, -, hPR, hbind, hrecB, hrec, hhm, hrd, -, hbuild, -, -, -, hc, hscope⟩ :=
+    partVerdict_setup hpv rfl
   obtain rfl : q.base.circuit = circuitB := Except.ok.inj (hP.circuit.symm.trans hcB)
   obtain rfl : st.pub x ms j = pubB := Except.ok.inj ((get_what hSp).symm.trans hpB)
   obtain ⟨hregC, hregB⟩ := regC_of_part hPR
@@ -245,22 +245,22 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
       (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
   have hdraw := hP.draw tags0 recordB record hT hrecB hrec
   rw [if_pos hhm', hrd] at hdraw
-  have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT (hplain tags0 hT)
-    hregC hrows hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.draw (hI.shape h hh)
+  have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT hplain
+    hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.draw (hI.shape h hh)
     hI.registration hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
   obtain ⟨-, hbset, hregs, -, hfull⟩ := baseSetup_of_build (tags0 := tags0) (circuitB := q.base.circuit)
     (pubB := st.pub x ms j) (draw := some d) (partition := some po.partition) (program := some po.program)
     (registered := registered) hbuild
-    (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings rows).base.read
+    (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings (some h.rows)).base.read
     rfl rfl rfl rfl
-  have hm : SetupMatch (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings rows)
+  have hm : SetupMatch (Part.partIns tags0 q.base.circuit (st.pub x ms j) po registered (some d) h j bindings (some h.rows))
       h j tags0 (partTags tags0 q.base.circuit) q.base.circuit (st.pub x ms j) po.partition po.program registered
-      bindings rows (some d) :=
+      bindings (some h.rows) (some d) :=
     { zk := rfl, stmtTags := rfl, tags := Part.partIns_tags _ _ _ _ _ _ _ _ _ _, circuitFile := rfl,
       publicFile := rfl, tables := rfl, count := rfl, partition := rfl, program := rfl, publicInputs := rfl,
       readRegistered := rfl, registered := rfl, draw := rfl, inner := rfl, src := rfl, commits := rfl, link := rfl,
       part := rfl, bindings := rfl, rows := rfl }
-  exact ⟨tags0, registered, rows, bindings, recordB, record, d, spec, sts, hT, hregB, hrecB, hrec, hrd, hins,
+  exact ⟨tags0, registered, bindings, recordB, record, d, spec, sts, hT, hregB, hrecB, hrec, hrd, hins,
     recIns_setup_of_compiled hm hsp hhm hbset hregs hfull hc, read_check_of_scope hm hscope, hbuild⟩
 
 /-- **The staged statement sets up** where it reads back as itself and the model's recursive setup passes on its
@@ -358,7 +358,7 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
     {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Evidence}
     {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hnames : Names p e bs x)
-    (hshow : Shows IV st x e.proofs bs v) (hrows : RowsShow IV st x p.own v) (hlive : LiveCoins IV st x v)
+    (hshow : Shows IV st x e.proofs bs v) (hrows : RowsShow IV st x e.proofs bs v) (hlive : LiveCoins IV st x v)
     (hrf : Refusals x st (v.msgs.take (kIS IV x))) :
     DenseAt x ∧ 0 < nS x ∧ ∀ s < nS x,
       (∃ o, setupO (staged st x (v.msgs.take (kIS IV x)) s) = some o) ∧
@@ -376,8 +376,8 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
     hPN s q _ _ hq (Array.getElem?_eq_getElem (hlt s q hq).1) (Array.getElem?_eq_getElem (hlt s q hq).2)
   have hcore := fun s q (hq : w.parts[s]? = some q) =>
     part_setup_of_verdict (st := st) (x := x) (ms := v.msgs.take (kIS IV x)) hh hsp hI
-      (hparts s (hlt s q hq).1 (hlt s q hq).2) (hPN' s q hq) hrf.plain
-      (hshow.2.2 s _ (Array.getElem?_eq_getElem (hlt s q hq).2)).1 hshow.2.1 hshow.1 (hrows s (hlt s q hq).1)
+      (hparts s (hlt s q hq).1 (hlt s q hq).2) (hPN' s q hq)
+      (hshow.2.2 s _ (Array.getElem?_eq_getElem (hlt s q hq).2)).1 hshow.2.1 hshow.1 hrows
   have hset : PartsSetUp p.own h x := by
     intro w' ri' hx' hi' s q hq
     have ew : w' = w := Option.some.inj (hx'.symm.trans hx)
@@ -385,7 +385,7 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
     have eri : ri' = ri := (Option.some.inj hi').symm
     rw [ew, eri]
     rw [ew] at hq
-    obtain ⟨_, _, _, _, _, _, _, _, _, -, -, -, -, -, hins, hsu, hck, -⟩ := hcore s q hq
+    obtain ⟨_, _, _, _, _, _, _, _, -, -, -, -, -, hins, hsu, hck, -⟩ := hcore s q hq
     exact ⟨st, _, _, _, _, hins, hsu, hck⟩
   obtain ⟨w', ri', hx', hi', -, hrx, hdense⟩ := readX_of_names hnames hh hss hsz1 hrf.innerOk hset
   have ew : w' = w := Option.some.inj (hx'.symm.trans hx)
@@ -402,7 +402,7 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
   refine ⟨hdense, hpos, fun s hs => ?_⟩
   have hsw : s < w.parts.length := by omega
   have hq : w.parts[s]? = some w.parts[s] := List.getElem?_eq_getElem hsw
-  obtain ⟨tags0, registered, rows, bindings, recordB, record, d, spec, sts, hT, hreg, hrecB, hrec, hrd, hins, hsu, -,
+  obtain ⟨tags0, registered, bindings, recordB, record, d, spec, sts, hT, hreg, hrecB, hrec, hrd, hins, hsu, -,
     hbuild⟩ := hcore s _ hq
   obtain ⟨hpubS, ⟨m, link, hhd, hlk⟩, f, hfin, hstmt, hrecf, hrep⟩ :=
     hshow.2.2 s _ (Array.getElem?_eq_getElem (hlt s _ hq).2)
@@ -440,7 +440,7 @@ theorem acc_of_accepts_of (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ �
     (r : Fin ((recordAt wE w b aux nOf hd recRest).V.k x) → Coin)
     (hshow : Shows (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x e.proofs bs
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
-    (hrows : RowsShow (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x p.own
+    (hrows : RowsShow (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x e.proofs bs
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
     (hlive : LiveCoins (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
@@ -461,8 +461,8 @@ deployed recursive verifier (`recordAt`) at `x` (`Shows`) whose staged rows are 
 that run's records hold its live coins (`LiveCoins`).
 Then `x` is dense (`RecDeploy.DenseAt`, the statements `RecursiveKSAt` covers), and the run accepts.
 
-The proof is `acc_of_accepts_of` but for `Refusals`, what the compiled component is to refuse and does not yet: they
-come from ONE9-A's refusal branch (`innerOk`, `need (!tags0.plainLeaves)`, `fits`) once it is merged. -/
+The proof is `acc_of_accepts_of` but for `Refusals`: the model's statement of what the compiled component refuses
+(`innerOk`, `need (!tags0.plainLeaves)`, `fits`), which is still to be read off its check. -/
 theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (p : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment) (e : VStar.Recursive.Evidence)
@@ -472,7 +472,7 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
     (r : Fin ((recordAt wE w b aux nOf hd recRest).V.k x) → Coin)
     (hshow : Shows (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x e.proofs bs
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
-    (hrows : RowsShow (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x p.own
+    (hrows : RowsShow (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x e.proofs bs
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
     (hlive : LiveCoins (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen) :
@@ -615,7 +615,7 @@ structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.S
     Names p e (Core.Blobs.ofArray bs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray bs)
         (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen ∧
-      RowsShow q.Bd.IVStar q.st (x ξ) p.own (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
+      RowsShow q.Bd.IVStar q.st (x ξ) e.proofs bs (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
   calls_le : ∀ ξ ω r, runCalls (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) ω r) ≤ V.cost θ F c σ
 
 attribute [instance] SessionIn.finΞ SessionIn.neΞ SessionIn.finΩ SessionIn.neΩ

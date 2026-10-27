@@ -34,10 +34,10 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`:
   compute-accounting's 70 layers at width 8,192, 128 heads of 64 and an MLP of 32,768, 52.5 GiB of INT8 linears and
   35.0 GiB of KV for 1,023 sequences on one 96 GiB card, its requests a block from an estimated 195 ms step; each
-  dimension a flag). Every op is a proof unit of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
+  dimension a flag). Every op is a proof block of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
   them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and CIR-100's ops (RMSNorm, the s8
   quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
-  chunked or recomputed. The harm is faulty ANDs, the same whatever the cut, with the faulty units (IntegrityPeriod's W)
+  chunked or recomputed. The harm is faulty ANDs, the same whatever the cut, with the faulty proof blocks (IntegrityPeriod's W)
   beside it. It writes the frontier of expected C-Flock cost (every serve-time commitment and the replay in it) against
   certified faulty ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at

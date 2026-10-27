@@ -581,12 +581,53 @@ theorem registeredOf_own {j : Json}
   cases h
   exact h1
 
+/-- `fits` passes only a file under `FIELD_MAX` bytes. -/
+theorem fits_ok {b : ByteArray} {what : String} (h : VStar.Recursive.fits b what = .ok ()) :
+    b.size < VStar.Recursive.FIELD_MAX := by
+  unfold VStar.Recursive.fits VStar.Recursive.need at h
+  split at h
+  · exact of_decide_eq_true ‹_›
+  · first | (simp [throw, throwThe, MonadExceptOf.throw] at h; done) | cases h
+
+theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : α} (h : x.mapError f = .ok a) :
+    x = .ok a := by
+  cases x with
+  | error e => cases h
+  | ok b => cases h; rfl
+
+/-- **The staged rows as the compiled `innerHeld` reads them are `RecRaw.ins`' `--rec-rows`**, port for port. -/
+theorem rows_model {b : ByteArray} {rows : Array Registered.Port}
+    (h : ((do
+        let some t := String.fromUTF8? b | throw "not UTF-8"
+        pure (← VStar.Recursive.registeredOf (← (Json.parse t).mapError (s!"not JSON: " ++ ·))).1) : Flock.V _).mapError
+          (s!"rec rows: " ++ ·) = .ok rows) :
+    (some b).mapM (fun b => do
+      (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok (some rows) := by
+  have h := mapError_ok h
+  cases hu : String.fromUTF8? b with
+  | none =>
+    simp only [hu] at h
+    first | (simp [throw, throwThe, MonadExceptOf.throw] at h; done) | cases h
+  | some t =>
+    simp only [hu] at h
+    obtain ⟨j, hj, h⟩ := bind_ok h
+    obtain ⟨r, hr, h⟩ := bind_ok h
+    cases h
+    have hjs : jsonOf "rec rows" b = .ok j := by
+      simp only [jsonOf, hu, mapError_ok hj]
+      try rfl
+    simp only [Option.mapM]
+    rw [hjs, ok_bind, registeredOf_own hr]
+    try rfl
+
 /-- **What `innerHeld` holds**, read off the blobs: the inner circuit, the inner public file, the inner session's
 record, the inner statement's draw, the coin server's transcript and the registration, each as text where `innerHeld`
-reads text; its shape (`shapeOf`), check 5's source, the inner circuit's binding, the commits and the link points. -/
+reads text; its shape (`shapeOf`), check 5's source, the inner circuit's binding, the commits and the link points; V*'s
+staged shared rows, read as `RecRaw.ins` reads `--rec-rows`; Flock's own checks on the inner statement (`innerOk`);
+and the record, transcript and staged rows each under `FIELD_MAX` bytes (`fits`). -/
 theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
-    ∃ (circuitB pubB recB drawB trB : ByteArray) (record t : String) (reg : Option String),
+    ∃ (circuitB pubB recB drawB trB rowsB : ByteArray) (record t : String) (reg : Option String),
       bs.get o.circuit "the inner circuit" = .ok circuitB ∧ bs.get o.pub "the inner public file" = .ok pubB ∧
       VStar.Recursive.shapeOf circuitB pubB o.partition o.program = .ok h.shape ∧
       bs.get pr.record "the inner session's record" = .ok recB ∧ String.fromUTF8? recB = some record ∧
@@ -603,18 +644,27 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       RecSetup.commits (some h.shape) (pure t) (pure reg) h.bound record = .ok h.commits ∧
       (match Json.parse t with
         | .ok j => RecVStar.innerLink j record
-        | .error e => throw s!"rec inner transcript: not JSON: {e}") = .ok h.link := by
+        | .error e => throw s!"rec inner transcript: not JSON: {e}") = .ok h.link ∧
+      bs.get pr.rows "the staged rows" = .ok rowsB ∧
+      (some rowsB).mapM (fun b => do
+        (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok (some h.rows) ∧
+      VStar.Recursive.innerOk o circuitB pubB drawB = .ok () ∧
+      recB.size < VStar.Recursive.FIELD_MAX ∧ trB.size < VStar.Recursive.FIELD_MAX ∧
+      rowsB.size < VStar.Recursive.FIELD_MAX := by
   unfold VStar.Recursive.innerHeld at hh
   obtain ⟨circuitB, hc, hh⟩ := bind_ok hh
   obtain ⟨pubB, hp, hh⟩ := bind_ok hh
   obtain ⟨shape, hs, hh⟩ := bind_ok hh
   obtain ⟨recB, hrB, hh⟩ := bind_ok hh
+  obtain ⟨⟨⟩, hfr, hh⟩ := bind_ok hh
   cases hu : String.fromUTF8? recB with
   | none => rw [hu] at hh; cases hh
   | some record =>
     rw [hu] at hh
     obtain ⟨drawB, hd, hh⟩ := bind_ok hh
+    obtain ⟨⟨⟩, hio, hh⟩ := bind_ok hh
     obtain ⟨trB, htB, hh⟩ := bind_ok hh
+    obtain ⟨⟨⟩, hft, hh⟩ := bind_ok hh
     cases ht : String.fromUTF8? trB with
     | none => rw [ht] at hh; cases hh
     | some t =>
@@ -630,9 +680,13 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       | ok j =>
         rw [hj] at hh
         obtain ⟨link, hl, hh⟩ := bind_ok hh
+        obtain ⟨rowsB, hrowsB, hh⟩ := bind_ok hh
+        obtain ⟨⟨⟩, hfw, hh⟩ := bind_ok hh
+        obtain ⟨rows, hrows, hh⟩ := bind_ok hh
         cases hh
-        exact ⟨circuitB, pubB, recB, drawB, trB, record, t, reg, hc, hp, hs, hrB, hu, hd, rfl, rfl, htB, ht, hreg,
-          hcm, by rw [hj]; exact hl⟩
+        exact ⟨circuitB, pubB, recB, drawB, trB, rowsB, record, t, reg, hc, hp, hs, hrB, hu, hd, rfl, rfl, htB, ht,
+          hreg, hcm, by rw [hj]; exact hl, hrowsB, rows_model hrows, mapError_ok hio, fits_ok hfr, fits_ok hft,
+          fits_ok hfw⟩
 
 /-! ## The correspondence -/
 
@@ -761,11 +815,9 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
     {pj : VStar.Recursive.PartOwn} {tags0 : Tags} (htags : Tags.find? VStar.Recursive.STATEMENT = some tags0)
     (hplain : tags0.plainLeaves = false)
-    {circuitB pubB : ByteArray} {registered rows : Option (Array Registered.Port)} {bindings : VStar.Bindings}
+    {circuitB pubB : ByteArray} {registered : Option (Array Registered.Port)} {bindings : VStar.Bindings}
     {draw : Option Json}
     (hregC : (pj.registered.mapM VStar.Recursive.registeredOf).map (Option.map (·.1)) = .ok registered)
-    (hrowsC : pj.rows.mapM (fun j => ((do pure (← VStar.Recursive.registeredOf j).1 : Flock.V _)).mapError
-      (s!"rec rows: " ++ ·)) = .ok rows)
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
@@ -784,10 +836,10 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hSp : st.pub x ms s = pubB)
     (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
     (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
-    (hSrows : pj.rows.map Except.ok = some (jsonOf "rec-rows" (st.rows x ms))) :
-    (partRaw r st x ms s q).ins = .ok (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
-  obtain ⟨cI, pI, recB, drawB, trB, record, t, reg, hc, hp, hs, hrB, hu, hd, hsrc, hbound, htB, ht, hreg, hcm, hl⟩ :=
-    innerHeld_ok hh
+    (hSrows : bs.get pr.rows "the staged rows" = .ok (st.rows x ms)) :
+    (partRaw r st x ms s q).ins = .ok (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)) := by
+  obtain ⟨cI, pI, recB, drawB, trB, rowsB, record, t, reg, hc, hp, hs, hrB, hu, hd, hsrc, hbound, htB, ht, hreg, hcm,
+    hl, hrowsB, hrows, -⟩ := innerHeld_ok hh
   have ecI : r.innerRaw.circuit = cI := Except.ok.inj (hIc.symm.trans hc)
   have epI : r.innerRaw.publicFile = pI := Except.ok.inj (hIp.symm.trans hp)
   have erec : st.record x ms = recB := Except.ok.inj (hSr.symm.trans hrB)
@@ -802,7 +854,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     | some pq => exact ⟨pq, rfl, Option.some.inj h'⟩
   obtain ⟨pq, hpq, hpqj⟩ := hpart _ _ _ hIpart
   have hbase : (partRaw r st x ms s q).base.ins =
-      .ok (partIns tags0 circuitB pubB pj registered draw h s bindings rows).base := by
+      .ok (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)).base := by
     obtain ⟨d, hd1, hd2⟩ : ∃ d, q.base.draw.mapM (jsonOf "draw") = .ok d ∧ d.map Flock.norm = draw := by
       revert hPdraw
       cases q.base.draw.mapM (jsonOf "draw") with
@@ -886,46 +938,31 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     | ok j => intro hl; dsimp only at hl ⊢; rw [hl]; rfl
     | error e => intro hl; cases hl
   have h7 : (partRaw r st x ms s q).recRows.mapM (fun b => do
-      (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok rows := by
+      (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok (some h.rows) := by
     show (some (st.rows x ms)).mapM _ = _
-    revert hSrows
-    revert hrowsC
-    cases pj.rows with
-    | none => intro _ hS; cases hS
-    | some j =>
-      intro hC hS
-      have hj := jsonOf_what (a' := "rec rows") (Option.some.inj hS).symm
-      have hro : ∀ t, VStar.Recursive.registeredOf j = .ok t → Registered.ofJson j = .ok t.1 :=
-        fun _ h' => registeredOf_own h'
-      simp only [Option.mapM] at hC ⊢
-      rw [hj, ok_bind]
-      revert hC hro
-      cases VStar.Recursive.registeredOf j with
-      | error e => intro hC; cases hC
-      | ok t =>
-        intro hC hro
-        rw [hro t rfl]
-        cases hC
-        rfl
+    rw [Except.ok.inj (hSrows.symm.trans hrowsB)]
+    exact hrows
   rw [recIns_of hbase h2 h3 h4 h5 h6 h7]
   rw [hb]
   rfl
 
 /-- **Piece C: part `s`'s staged statement is read as compiled part `s`'s inputs.** Take `readX`'s reading `r` of `x`
 and its part `s`, `q`; the compiled check's inner session held (`innerHeld`), and part `s`'s own inputs `pj` with what
-the compiled `partVerdict` reads of them (`registered`, `rows`, `bindings`, the statement's tags `tags0`, the part's
-circuit and public file). Suppose:
+the compiled `partVerdict` reads of them (`registered`, `bindings`, the statement's tags `tags0`, the part's circuit and
+public file; its rows are `innerHeld`'s). Suppose:
 * `Names`' clauses: the inner statement's circuit, public file, partition and draw are the blobs' and `p.own`'s, its
   statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the coin server's coins, no tables), its own inner
   shape `innerHeld`'s, the registration the blobs'; part `s`'s circuit, partition, program and registered reads
   `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
 * `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the coin server's
-  transcript the blobs', and V*'s staged shared rows `pj`'s (`hSrows`, ONE9P's `RowsShow` at part `s`);
+  transcript the blobs', and V*'s staged shared rows the evidence's `rows` blob (`hSrows`, `RowsShow`), which
+  `innerHeld` reads once for every part;
 * `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean
-  can't evaluate it (`Tags.plainLeaves` compares `Json`, whose `==` is a `partial def`), and compiled `partVerdict`
-  doesn't check it (PRF-201);
+  can't evaluate it (`Tags.plainLeaves` compares `Json`, whose `==` is a `partial def`); compiled `partVerdict`
+  refuses it (`need (!tags0.plainLeaves)`);
 * and the staged files fit their length words: `x` with part `s`'s public file, the inner session's record, the
-  transcript and the staged rows are each under `2^64` bytes (PRF-201: the compiled check is to refuse larger ones).
+  transcript and the staged rows are each under `2^64` bytes (the compiled check refuses a file of `2^56` bytes or
+  more, `fits`).
 
 Then the outer verifier reads part `s`'s staged statement (`insO`) as `partIns`: compiled part `s`'s inputs. -/
 theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
@@ -934,11 +971,9 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
     {pj : VStar.Recursive.PartOwn} {tags0 : Tags} (htags : Tags.find? VStar.Recursive.STATEMENT = some tags0)
     (hplain : tags0.plainLeaves = false)
-    {circuitB pubB : ByteArray} {registered rows : Option (Array Registered.Port)} {bindings : VStar.Bindings}
+    {circuitB pubB : ByteArray} {registered : Option (Array Registered.Port)} {bindings : VStar.Bindings}
     {draw : Option Json}
     (hregC : (pj.registered.mapM VStar.Recursive.registeredOf).map (Option.map (·.1)) = .ok registered)
-    (hrowsC : pj.rows.mapM (fun j => ((do pure (← VStar.Recursive.registeredOf j).1 : Flock.V _)).mapError
-      (s!"rec rows: " ++ ·)) = .ok rows)
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
@@ -957,13 +992,13 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hSp : st.pub x ms s = pubB)
     (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
     (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
-    (hSrows : pj.rows.map Except.ok = some (jsonOf "rec-rows" (st.rows x ms)))
+    (hSrows : bs.get pr.rows "the staged rows" = .ok (st.rows x ms))
     (hpub : x.length + pubB.size < 2 ^ 64) (hrec : (st.record x ms).size < 2 ^ 64)
     (htr : (st.transcript x ms).size < 2 ^ 64) (hrows : (st.rows x ms).size < 2 ^ 64) :
-    insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
+    insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)) := by
   have hfit := partRaw_fits hr hq hPform (by rw [hSp]; exact hpub) hrec htr hrows
   rw [insO_staged hr hq hfit hPform.2.1,
-    ins_partRaw hh htags hplain hregC hrowsC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hPform hPc
+    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hPform hPc
       hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
   rfl
 

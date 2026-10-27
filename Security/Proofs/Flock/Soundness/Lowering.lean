@@ -1,6 +1,5 @@
+import Definitions.Flock.Lowering
 import Proofs.Flock.Soundness.Audit.Circuit
-import Definitions.Flock.Statement
-import Properties.Flock.Circuit.Prog
 
 /-!
 # The compiled lowering: a satisfied table makes every placed unit correct
@@ -37,11 +36,6 @@ namespace Rows
 
 variable (R : Rows)
 
-
-/-- **The rows are satisfied** by column values `z`. -/
-def Sat (z : Fin R.w → Bool) : Prop :=
-  ∀ i, z (R.comp i) = (xorSum (R.a i) z && xorSum (R.b i) z)
-
 theorem comp_injective : Function.Injective R.comp := fun i j h => by
   have := congrArg Fin.val h
   simp only [comp] at this
@@ -53,30 +47,9 @@ namespace Audit.Partition
 
 variable {C : Circuit} {n : ℕ} (P : Partition C n)
 
-/-- **Unit `u` is an instance of the rows `R`.** Computed row `i` is the unit's gate
-`wire (R.comp i)`, the row gate of its columns' wires. The unit's gates are exactly these, and its
-input columns and constant are wires outside it. Two columns share a gate only if both are inputs. -/
-structure IsRowsUnit (u : Fin n) (R : Rows) where
-  wire : Fin R.w → Fin C.N
-  shared : ∀ c c', wire c = wire c' → c = c' ∨ c.val < R.nIn ∧ c'.val < R.nIn
-  mem : ∀ i, P.unit (wire (R.comp i)) = some u
-  op : ∀ i, C.op (wire (R.comp i)) = .row ((R.a i).map wire) ((R.b i).map wire)
-  outside : ∀ c, (∀ i, c ≠ R.comp i) → P.unit (wire c) ≠ some u
-  onto : ∀ g, P.unit g = some u → ∃ i, wire (R.comp i) = g
-
 namespace IsRowsUnit
 
 variable {P} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
-
-open Classical in
-/-- **The transcript a unit's column values give**: each of the unit's wires carries the value of a
-column on it, and every other gate is `false`. -/
-noncomputable def decode (z : Fin R.w → Bool) : Fin C.N → Bool :=
-  fun g => if h : ∃ c, I.wire c = g then z (Classical.choose h) else false
-
-/-- **Column values agreeing on shared gates**: the unit's input columns on one gate carry one value. -/
-def Agree (z : Fin R.w → Bool) : Prop :=
-  ∀ c c', I.wire c = I.wire c' → c.val < R.nIn → c'.val < R.nIn → z c = z c'
 
 theorem decode_wire {z : Fin R.w → Bool} (hz : I.Agree z) (c : Fin R.w) : I.decode z (I.wire c) = z c := by
   have h : ∃ c', I.wire c' = I.wire c := ⟨c, rfl⟩
@@ -147,9 +120,6 @@ end Audit.Partition
 
 /-! ## Rows placed in a statement -/
 
-/-- A witness bit as a Boolean. -/
-def bit (x : ZMod 2) : Bool := decide (x = 1)
-
 theorem bit_add (x y : ZMod 2) : bit (x + y) = Bool.xor (bit x) (bit y) := by
   fin_cases x <;> fin_cases y <;> rfl
 
@@ -179,15 +149,6 @@ theorem sum_count_mul {k : ℕ} (l : List (Fin k)) (v : Fin k → ZMod 2) :
         have : (c == j) = false := by simpa using fun h => hj h.symm
         simp [this]
       · simp
-
-/-- **A unit's rows placed in a statement**, at the block columns `col`: the block matrices' rows at
-the unit's computed columns read exactly the placed columns of its rows, and the rows at its constant
-read the pin (every slot's constant is wired to the pin, PROTOCOL.md §16.1). -/
-structure Placement (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : Prop where
-  hA : ∀ i j, S.A₀ (col (R.comp i)) j = (((R.a i).map col).count j : ZMod 2)
-  hB : ∀ i j, S.B₀ (col (R.comp i)) j = (((R.b i).map col).count j : ZMod 2)
-  hA₁ : ∀ j, S.A₀ (col R.one) j = if j = S.pin then 1 else 0
-  hB₁ : ∀ j, S.B₀ (col R.one) j = if j = S.pin then 1 else 0
 
 theorem mulVec_placed {S : Statement} (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2))
     (r : Fin (2 ^ S.kLog)) {ι : Type} (l : List ι) (col : ι → Fin (2 ^ S.kLog))
@@ -227,26 +188,9 @@ theorem lowering_sound {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fi
     P.Correct (I.decode fun c => bit (S.block z o (col c))) u :=
   I.correct_decode (rowsSat_of_satisfies hpl hz o) ha
 
-/-- **A drawn unit's place in a table**: its template's rows, its instance in the circuit, and the
-block and columns where the table's statement holds its rows. The unit's input columns on one gate
-carry one value in every witness satisfying the statement (`aliased`): they copy one source's
-position, or forced-zero rows. -/
-structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : Statement) (u : Fin n) where
-  R : Rows
-  inst : P.IsRowsUnit u R
-  o : Fin (2 ^ S.nbl)
-  col : Fin R.w → Fin (2 ^ S.kLog)
-  placed : Placement S R col
-  aliased : ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn →
-    ∀ z : Witness S.m, S.Satisfies z → S.block z o (col c) = S.block z o (col c')
-
 namespace UnitPlace
 
 variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
-
-/-- The transcript a witness gives for a placed unit, read from its block. -/
-noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → Bool :=
-  pl.inst.decode fun c => bit (S.block z pl.o (pl.col c))
 
 theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=
@@ -273,11 +217,6 @@ namespace Prog
 
 variable {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
-
-/-- The program-level instance is the audit's. -/
-def RowsWire.toIsRowsUnit {N n : ℕ} {p : Prog N n} {u : Fin n} {R : Rows} (W : p.RowsWire u R)
-    (outs : Finset (Fin N)) : (p.partition outs).IsRowsUnit u R :=
-  ⟨W.wire, W.shared, W.mem, W.op, W.outside, W.onto⟩
 
 omit p R ins one hone in
 /-- **Every unit of a program is an instance of its template's rows** (program level). -/

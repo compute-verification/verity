@@ -19,13 +19,13 @@ language), so a weight crosses at the bits the forward circuit reads it, the com
 every declared episode reads the committed `θ`, so an update made inside an episode reaches a later declared episode
 only as its output `Y` coming back in as `X` (`Rules.persist = "outputs"`); `"recommit"` is the page's reading, a prover
 that commits new parameters and pays `P`. What an episode computes also stays with whoever ran it, for covert
-computation: onsite, the server, until its wipe, which the physical cut bounds with everything else the window holds
-(other servers learn only its certified outputs, timing and side channels); remote, the prover, whose covert computation
-only the uncertified capacity bounds. Both are cuts the wrapped regime already has.
+computation: onsite, the server, until its wipe, which the serving cut bounds with everything else the serving block
+holds (other servers learn only its certified outputs, timing and side channels); remote, the prover, whose covert
+computation only the uncertified gates bound. Both are cuts the wrapped regime already has.
 
 PoFC enters ρ beside the layers it touches, never in them:
 
-* `Pofc` wraps any regime: every cut with declared blocks gains a copy whose declared work runs as episodes
+* `Pofc` wraps any regime: every cut with inference blocks gains a copy whose declared work runs as episodes
   (`episode`), and so does the layout. With `link`, the physical instantiation (forward-only links, each GPU reading only
   its own static memory), every other block of those copies gets the link's bits over its time as its forward cut.
   `apply` wraps a scenario's regime and adds PoFC's bounds and attacks to its own.
@@ -45,15 +45,15 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from rho.classes import Outside
+from rho.classes import Allowance, FlopBudget, Outside
 from rho.params import Registry
 from rho.profile import Profile
-from rho.theorem import Allowance, Blocks, Budget, Cut, Partition
+from rho.theorem import Blocks, Budget, Cut, Partition
 
 if TYPE_CHECKING:
+    from rho.envelopes import Context, Delta, Regime
     from rho.families import Family
     from rho.instances import Model, Run
-    from rho.regimes import Context, Regime
     from rho.scenario import Scenario
 
 #: the page's conjecture, its rules (enforced on declared episodes), its physical instantiation and its known attacks;
@@ -191,14 +191,14 @@ class Trained:
         b = self.weight_bits if bits is None else bits
         return max(0.0, (self.depth - self.held) * self.layer_params * b - self.spare)
 
-    def toll(self, budget: Budget, bits: float | None = None) -> float:
+    def toll(self, budget: FlopBudget, bits: float | None = None) -> float:
         return self.behind(bits) / budget.cut
 
     def tokens(self, bits: float) -> float:
         """Counted products of `bits / s` trained tokens: `κ/2 · token_flops · bits / s`."""
         return self.kappa / 2 * self.token_flops * bits / self.position_bits
 
-    def within(self, budget: Budget, bits: float | None = None) -> float:
+    def within(self, budget: FlopBudget, bits: float | None = None) -> float:
         """Counted products of the tokens whose positions the weights leave free: `tokens((cut − behind)⁺)`."""
         return self.tokens(max(0.0, budget.cut - self.behind(bits)))
 
@@ -221,8 +221,9 @@ class Backprop:
     gradient stops short of `L`, finishes none of them). A block under a forward cut finishes at most those of the
     tokens whose positions the weights behind the cut leave free, `κ/2 · token_flops · (cut − behind) / s`
     (`Trained.within`): every trained token's activation takes a position, and trains at the reference algorithm's
-    cost. `theorem.share` caps it at `κ C / 2`, so it binds only when `(1 − t) n_max · token_flops < C`; with
-    `token_flops = C / n_max` (rule 6 charged a position) it is the page's useful share, `(1 − t) κ C / 2`.
+    cost. `theorem.terms` caps it at `κ C / 2`, so it binds only when `(1 − t) n_max · token_flops < C`; with
+    `token_flops = C / n_max` (rule 6 charged a position) it is the page's useful share, `(1 − t) κ C / 2`. Like every
+    class it is in the FLOP model (`classes.FlopBudget`).
 
     At `t ≥ 1` the within-episode route is blocked and only sharding across episodes remains, which this class doesn't
     bound and the NCI classes price at the episode's `X`: it gives no cap (`math.inf`) there, nor on a block with no
@@ -241,7 +242,7 @@ class Backprop:
     def allowance(self, p: Profile) -> Allowance:
         t = trained(p, self.model, self.rules, self.depth)
 
-        def a(budget: Budget) -> float:
+        def a(budget: FlopBudget) -> float:
             if math.isinf(budget.cut):
                 return math.inf
             if self.signal:
@@ -250,7 +251,7 @@ class Backprop:
         return a
 
 
-def _cut(budget: Budget) -> bool:
+def _cut(budget: FlopBudget) -> bool:
     return math.isfinite(budget.cut)
 
 
@@ -369,44 +370,51 @@ FAMILIES: Mapping[str, str] = {
 
 @dataclass(frozen=True)
 class Pofc:
-    """`regime` under PoFC. Every cut with declared blocks gains a copy (`<cut>+pofc`) whose declared compute runs as
+    """`regime` under PoFC. Every cut with inference blocks gains a copy (`<cut>+pofc`) whose declared work runs as
     `episode`s (`n_max` tokens forward, `X` novel bits, `n_max s` bits across the narrowest forward cut), valid under
     the page's rules as well as the cut's own citations; NCI's cuts keep their blocks, whose cut stays `math.inf`. The
     layout's declared work runs as episodes. With `link` (bit/s; the physical instantiation: forward-only links, each
     GPU reading only its own static memory), every other block of the copies gets the link's bits over its time as its
-    cut, so the physical cut gains a copy too. The layout's other blocks keep none: the constructions act on episodes
-    only, and a strategy there still carries its state across the wipe through the block's inputs."""
+    cut, so the serving cut gains a copy too. The layout's other blocks keep none: the constructions act on episodes
+    only, and a strategy there still carries its state across the wipe through the block's inputs. `episode` is in the
+    FLOP model; it enters a serving block in gates (`hardware.Units`)."""
 
     name: str
     regime: Regime
-    episode: Budget
+    episode: FlopBudget
     link: float | None = None
 
-    def _block(self, b: Blocks, rate: float, link: float | None) -> Blocks:
-        if b.kind == "declared":
-            return Blocks("episode", self.episode, b.count * b.budget.compute / self.episode.compute)
+    def _block(self, b: Blocks, episode: Budget, rate: float, link: float | None) -> Blocks:
+        if b.kind == "inference":
+            return Blocks("episode", episode, b.count * b.budget.gates / episode.gates)
         if link is None:
             return b
-        return replace(b, budget=replace(b.budget, cut=min(b.budget.cut, link * b.budget.compute / rate)))
+        return replace(b, budget=replace(b.budget, cut=min(b.budget.cut, link * b.budget.gates / rate)))
 
-    def _under(self, c: Cut, name: str, rate: float, link: float | None) -> Cut:
-        physical = link is not None and any(b.kind != "declared" for b in c.blocks)
+    def _under(self, c: Cut, name: str, episode: Budget, rate: float, link: float | None) -> Cut:
+        physical = link is not None and any(b.kind != "inference" for b in c.blocks)
         cites = c.cites + (RULES,) + ((PHYSICAL,) if physical else ())
-        return Cut(name, tuple(self._block(b, rate, link) for b in c.blocks), c.free, tuple(dict.fromkeys(cites)))
+        return Cut(name, tuple(self._block(b, episode, rate, link) for b in c.blocks), c.uncertified,
+                   tuple(dict.fromkeys(cites)))
 
     def _touches(self, c: Cut) -> bool:
-        return any(b.kind == "declared" or self.link is not None for b in c.blocks)
+        return any(b.kind == "inference" or self.link is not None for b in c.blocks)
+
+    def delta(self, ctx: Context) -> Delta:
+        return self.regime.delta(ctx)
 
     def partition(self, ctx: Context) -> Partition:
         inner = self.regime.partition(ctx)
-        # the blocks a link cuts carry peak compute (the serving block is Φ Δτ), so their time is compute over Φ
+        e = self.episode
+        episode = Budget(ctx.units.gates(e.compute), e.inputs, e.cut)
+        # the blocks a link cuts run at capacity (the serving block is Φ_s Δ_wipe), so their time is gates over Φ
         rate = ctx.location.phi
-        regions = tuple(
-            replace(r, cuts=r.cuts + tuple(self._under(c, f"{c.name}+pofc", rate, self.link)
-                                           for c in r.cuts if self._touches(c)),
-                    layout=self._under(r.layout, r.layout.name, rate, None) if r.layout else None)
-            for r in inner.regions)
-        return replace(inner, regions=regions)
+        serving = tuple(
+            replace(b, cuts=b.cuts + tuple(self._under(c, f"{c.name}+pofc", episode, rate, self.link)
+                                           for c in b.cuts if self._touches(c)),
+                    layout=self._under(b.layout, b.layout.name, episode, rate, None) if b.layout else None)
+            for b in inner.serving)
+        return replace(inner, serving=serving)
 
 
 def rules(registry: Registry, name: str = "reference") -> Rules:
@@ -421,10 +429,10 @@ def link(registry: Registry, location: str) -> float:
     return registry[f"pofc.link.{location}.bandwidth"]
 
 
-def episode(rules: Rules, model: Model) -> Budget:
+def episode(rules: Rules, model: Model) -> FlopBudget:
     """One episode's budget: the forward of `n_max` tokens (`2 N_active n_max`: rule 6 calibrated to inference), `X`
     novel bits, and `n_max s` bits across its narrowest forward cut."""
-    return Budget(2 * model.n_active * rules.n_max, rules.x, rules.n_max * rules.s(model))
+    return FlopBudget(2 * model.n_active * rules.n_max, rules.x, rules.n_max * rules.s(model))
 
 
 def wrap(regime: Regime, rules: Rules, model: Model, link: float | None = None) -> Pofc:
@@ -438,17 +446,17 @@ def bounds(model: Model, rules: Rules, depth: int | None = None) -> tuple[Backpr
 
 def matched_link(rules: Rules, model: Model, ctx: Context) -> float:
     """The link bandwidth (bit/s) that carries exactly the write allowance at the location's serving rate:
-    `s · Φ · mfu_serve / (2 N_active)`. A link `B` over a window `Δτ` carries `B Δτ / (n_max s)` episodes' cuts, so the
+    `s · Φ · mfu_serve / (2 N_active)`, `Φ` in FLOP/s. A link `B` over a window `Δτ` carries `B Δτ / (n_max s)` episodes' cuts, so the
     physical instantiation bounds an episode as the declared rules do only with links this slow and dynamic memory
     cleared between episodes."""
-    return rules.s(model) * ctx.location.phi * ctx.fleet.mfu_serve / (2 * model.n_active)
+    return rules.s(model) * ctx.units.flops(ctx.location.phi) * ctx.fleet.mfu_serve / (2 * model.n_active)
 
 
 def junk_share(rules: Rules, model: Model, ctx: Context) -> float:
     """The share of a location's declared work that episodes padded to `n_max` cover when it runs at most
     `episodes_per_day` of them."""
     return min(1.0, rules.episodes_per_day * episode(rules, model).compute
-               / (ctx.location.phi * DAY * ctx.fleet.mfu_serve))
+               / (ctx.units.flops(ctx.location.phi) * DAY * ctx.fleet.mfu_serve))
 
 
 def attacks(model: Model, rules: Rules, ctx: Context, depth: int | None = None) -> tuple[Any, ...]:

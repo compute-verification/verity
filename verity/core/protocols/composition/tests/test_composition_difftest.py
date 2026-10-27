@@ -110,7 +110,7 @@ PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "cas
                 for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
 
 #: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
-KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken-params", "broken-evidence"]
+KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", "broken-params", "broken-evidence"]
 
 
 def kinds(C) -> list[str]:
@@ -233,10 +233,17 @@ def reference(product: R.Product, seen: collections.Counter):
     return answer
 
 
+class UndecidedAtBest(D.ProtocolPort):
+    """A product's port whose best verdict is undecided: sampled proofs (v2) accepts only on a session's proof, which no
+    case carries, so the harness's check that the strategy isn't vacuous asks for an undecided product instead."""
+
+    accepted = R.UNDECIDED
+
+
 def port(name: str, product: R.Product, seen: collections.Counter) -> D.ProtocolPort:
     """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
-    return D.ProtocolPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                          package=PROTOCOLS / name)
+    return UndecidedAtBest(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
+                           package=PROTOCOLS / name)
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
@@ -271,7 +278,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) 
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")
-    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.ACCEPT, R.REJECT, R.UNDECIDED) if seen[v]}
     assert seen[R.ACCEPT] == 0, dict(seen)
     for kind in (R.REJECT, R.UNDECIDED, "reject, a component undecided", "reject, no component rejected"):
         assert seen[kind] > examples // 50, (kind, dict(seen))

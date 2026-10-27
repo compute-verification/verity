@@ -45,7 +45,7 @@ modeled under (`calibrate_run`).
 **Checks.** The certifier's audit (`active_replay.audit_configuration` with `audit.Audit`) on each block's raw and committed
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
 records show it: the timing. N3 over the same raw records (`lab.check`): the content. N3Window_v5 with the canonical
-framing's templates (`n3_canonical.verdicts` on `n3_unit.lab_windows`) on each of them: the content as the proof unit
+framing's templates (`n3_canonical.verdicts` on `n3_unit.lab_windows`) on each of them: the content as the proof block
 checks it, every frame its direction's template on the committed outboxes. N2's served verdict on each block's link
 (`n2_verdicts`): each link-window's published records, their heads signed by a stand-in certifier (the lab's proxy
 signs nothing), through the proof service's stream on live coins and N2's verifier of record, so the counts only. And

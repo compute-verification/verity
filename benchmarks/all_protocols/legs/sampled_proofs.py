@@ -66,6 +66,32 @@ def _codes(checks: Mapping[str, Any]) -> list[str]:
     return sorted(c for c, v in checks.items() if not (v.get("ok") if isinstance(v, Mapping) else v))
 
 
+#: a refused member's verdicts, said in this order: its live session's verifier of record first, whose rejection leaves
+#: no proof files, then the Lean replay that finds none, then the draw check
+SAID = ("m0-verifier/", "lean-verify/", "lean-draw/")
+
+
+def _said_first(kv: tuple[str, Any]) -> tuple[int, str]:
+    k = kv[0]
+    return next((i for i, p in enumerate(SAID) if k.startswith(p)), len(SAID)), k
+
+
+def unproved(rec: Mapping[str, Any]) -> str:
+    """The audit record's drawn units its statement doesn't prove (its ``proved`` check), by the draw's template
+    strata: `` (drawn units not proved: T u0-u1, ...)``, or nothing."""
+    units = (((rec.get("checks") or {}).get("proved") or {}).get("detail") or {}).get("units") or {}
+    missing = sorted(set(units.get("drawn") or ()) - set(units.get("statement") or ()))
+    if not missing:
+        return ""
+    named = []
+    for s in (rec.get("draw") or {}).get("strata") or []:
+        got = [u for u in missing if any(lo <= u < hi for lo, hi in s["units"])]
+        if got:
+            named.append(f"{s['template']} {got[0]}-{got[-1]}" if got == list(range(got[0], got[-1] + 1))
+                         else f"{s['template']} {','.join(map(str, got))}")
+    return f" (drawn units not proved: {'; '.join(named) or ','.join(map(str, missing))})"
+
+
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the draw ran). On acceptance its public ``bound`` is the most of the profile's
@@ -89,11 +115,12 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         raise RuntimeError(f"the records audit wrote no audit record and no refusal under {out}")
     rec = json.loads(rec_file.read_text())
     if rec.get("accepted") is not True:
-        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items()) if v}
+        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items(), key=_said_first) if v}
         why = _codes(rec.get("checks") or {}) or sorted(lean) or ["not accepted"]
         said = [f"{k}: {v}" for k, v in lean.items()]
         more = f"; and {len(said) - 3} more" if len(said) > 3 else ""
-        return _refusal("audit record: " + ", ".join(why) + "".join(f"; {s}" for s in said[:3]) + more, commitment)
+        return _refusal("audit record: " + ", ".join(why) + unproved(rec) + "".join(f"; {s}" for s in said[:3]) + more,
+                        commitment)
     fixed = summary.get("fixed_before_draw")
     if fixed is not None and not fixed.get("ok"):
         return _refusal("not fixed before the draw: " + ", ".join(fixed.get("codes") or []), commitment)

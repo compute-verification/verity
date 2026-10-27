@@ -176,8 +176,10 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
   · simp only [hT] at hpart
     try exact absurd hpart throw_ne
   simp only [hT] at hpart
+  obtain ⟨_, -, hpart⟩ := bind_ok hpart
   obtain ⟨circuitB, hc, hpart⟩ := bind_ok hpart
   obtain ⟨pubB, hp, hpart⟩ := bind_ok hpart
+  obtain ⟨_, -, hpart⟩ := bind_ok hpart
   rcases hpr : p.registered with _ | rj <;> simp only [hpr] at hpart
   all_goals obtain ⟨⟨registered, complete, known, regParams⟩, hr, hpart⟩ := bind_ok hpart
   all_goals
@@ -197,7 +199,6 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     clear hr
   all_goals
     try dsimp only at hpart
-    obtain ⟨rows, -, hpart⟩ := bind_ok hpart
     obtain ⟨bindings, -, hpart⟩ := bind_ok hpart
     obtain ⟨rB, hrB, hpart⟩ := bind_ok hpart
     rcases hu : String.fromUTF8? rB with _ | record
