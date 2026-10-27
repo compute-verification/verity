@@ -243,7 +243,7 @@ theorem prob_pos_of {Ω : Type} [Fintype Ω] {P : Ω → Prop} (ω : Ω) (h : P 
   classical
   unfold prob
   exact div_pos (Nat.cast_pos.mpr (Finset.card_pos.mpr ⟨ω, Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩⟩))
-    (Nat.cast_pos.mpr Fintype.card_pos)
+    (Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨ω⟩))
 
 include hk in
 /-- **`SAKServed` fails on the free machine** (`fa 0`: every program costs nothing) at price 1 a credited word, with

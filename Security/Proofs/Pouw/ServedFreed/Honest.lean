@@ -196,7 +196,8 @@ theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
     OutsourceWithinEgressServed (Fin (tileCount σ sT) → Bool) (hr1 _) (fa 0) (fun _ => 1) 0
       (fun (_ : Paths (Ω1 σ sT) n) _ => ()) (fun _ _ => ()) ∧
     CertifiedExchange (fun _ => True)
-      (fun x => ∑ w, (fa 0).ext (work 0 (Np := tileCount σ sT) x w) ((), saltCoin (hr1 _) x w)) 0 0 ∧
+      (fun x : Paths (Ω1 σ sT) n => ∑ w, (fa 0).ext (work 0 (Np := tileCount σ sT) x w) ((), saltCoin (hr1 _) x w))
+      0 0 ∧
     ¬ prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧ True ∧
       ∃ z, (pd 0 (n * tileCount σ sT)).Fits
           (fun r => ∑ w, (fa 0).use (work 0 (Np := tileCount σ sT) x w) ((), saltCoin (hr1 _) x w) r) z ∧
