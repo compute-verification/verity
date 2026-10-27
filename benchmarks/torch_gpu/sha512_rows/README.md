@@ -111,7 +111,8 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
   waves.
 - `tests/`: the host twin always, every variant on a CUDA device.
 
+From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:
+
 ```bash
-research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-  --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/gpu.sh
+OUT=DIR bash benchmarks/torch_gpu/sha512_rows/gpu.sh
 ```
