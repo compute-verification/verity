@@ -5,8 +5,8 @@
 # committed at its C2 site before the bundle is sealed (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte
 # run root. Then the Commit's C2 replay on CPU from the sealed bundle, and a5.sh (WINDOW=served, A5_ROW_DIR) on that bundle and
 # window, in the same job, so the window's private bodies (m*-private.bin: rows and salts) never leave the node.
-#   GPU_LEASE_WHO=LANE bash benchmarks/one_stage/a5_llama1b_h200.sh
-#   (a job run from a clone of the tree, 192 GB, up to 6 h)
+#   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --mem-gb 192 --timeout 6h \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 # Needs on the node what served_verdicts.sh does: vLLM's venv /workspace/cp/venv312, the int8 checkpoint in /workspace/hf, the
 # sm_90 taps of r20261026-185144-3ccb under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
