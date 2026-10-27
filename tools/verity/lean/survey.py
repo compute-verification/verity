@@ -1604,12 +1604,9 @@ def references(root: Path, files: list[str], pkg: Package, mods: dict[str, str],
     for f in files:
         if (f.startswith(pkg.dir + "/") and f.endswith(".lean")) or f.startswith(NOT_READERS) or not f.endswith(CODE + (".md",)):
             continue
-        if f.endswith((C.POLICY, "lake-manifest.json")):
+        if f.endswith((C.POLICY, "lake-manifest.json")) or not (root / f).is_file():
             continue
-        try:
-            text = JOINED.sub("/", (root / f).read_text(errors="replace"))
-        except OSError:
-            continue
+        text = JOINED.sub("/", (root / f).read_text(errors="replace"))
         if not f.startswith(pkg.dir + "/") and not f.endswith(".md"):
             bases = [str(p) for p in Path(f).parents]
             for x in dict.fromkeys(LEAN_PATH.findall(text)):

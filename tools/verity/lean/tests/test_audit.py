@@ -899,8 +899,12 @@ def test_an_audit_without_build_refuses_a_build_older_than_its_sources(tmp_path)
     record of other sources; the package built again passes."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+
+    def build():
+        subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert unshaped(audit(update=True)) == [] and unshaped(audit()) == []
     defs = pkg / "Control" / "Defs.lean"
