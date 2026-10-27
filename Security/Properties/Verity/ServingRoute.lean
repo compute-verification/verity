@@ -11,7 +11,7 @@ and the commitment `c` (`Vocab.game`), onsite's compiled verifier's acceptance o
 circuit (`Accounting.ServingRoute.Play`) is read off each strategy and run.
 
 `OnsiteServingEndToEnd` composes `Verity.Soundness` (Layer 2, a hypothesis until the five targets are proved, pinned at
-#4613's f76306ccd4) with `Accounting.Guarantees.ServingRoute.ServingEndToEnd` (Layer 3 on the serving route, the serving
+#4613's 566733557e) with `Accounting.Guarantees.ServingRoute.ServingEndToEnd` (Layer 3 on the serving route, the serving
 bridge and coverage). The bound is the subprotocols' errors at the strategy (each its published `δ` plus its collision
 term at its finder's SHA-512 collisions, `Vocab.error`), the bridge's `δ_b` and coverage's `η`.
 -/
