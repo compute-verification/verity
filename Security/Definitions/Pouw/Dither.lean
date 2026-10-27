@@ -23,7 +23,7 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
   (`Prover`), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`, `Prover.calls`:
   its sampling blocks' work, from each block's dither coins to its commitment), and the service's
   verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
-* **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
+* **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): the definition, kept in
   this one place, and its probability form, the headline's conclusion;
 * the error (`epsWorkSound`).
 -/
