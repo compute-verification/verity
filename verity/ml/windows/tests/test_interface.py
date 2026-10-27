@@ -22,7 +22,11 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.commitments import row_table as RT
+from verity.ml.commitments.gates import embedding as E
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
 from verity.ml.windows import interface as I, rows as CS, wiring as WI
 
 K = 64
@@ -466,9 +470,28 @@ class Held:
                 {"value": self.name, "positions": list(positions), "paths": []})
 
 
-#: core's ``one_stage.registered`` names `interface.registered_reads` reads, as the caller passes the module
+class Supplied(Held):
+    """A supplied value as core's ``Registered.commit`` makes it for `interface.supplied`: its rows under the salts given,
+    its entry's root and domain digests of what it was committed from."""
+
+    @classmethod
+    def commit(cls, program, value, rows, salts, schema):
+        v = cls(value, np.array(rows, dtype=np.uint16))
+        v.salts, v.program, v.schema = list(salts), program, schema
+        return v
+
+    def entry(self):
+        return {"value": self.name, "leaves": self.leaves, "words": self.words,
+                "root": hashlib.sha512(repr((self.program, self.rows.tolist(), self.salts, self.schema)).encode()).hexdigest(),
+                "domain": hashlib.sha512(f"{self.program} {self.name}".encode()).hexdigest()}
+
+
+#: core's ``one_stage.registered`` names `interface.registered_reads` and `interface.supplied` read, as the caller passes
+#: the module
 REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM": "reads_from",
-                       "READS_V1": "verity/registered-reads/v1"})
+                       "READS_V1": "verity/registered-reads/v1", "Registered": Supplied,
+                       "supplied_salts": staticmethod(lambda program, value, n: [
+                           hashlib.shake_256(f"{program} {value} {i}".encode()).digest(CS.SALT_BYTES) for i in range(n)])})
 #: 12 units, unit u reading row u // 2 of six weight rows
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
@@ -539,7 +562,8 @@ def test_a_read_covers_whole_members_and_reads_whole_rows():
         I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
                  RUN, LAW, 4)
     with pytest.raises(ValueError, match="uncut registered reads"):
-        I.Window(I.Circuit("ingress", ((COORD, 12),), ingress=(I.Ingress(TID, "x", 0, 12, 0),)), RUN, LAW, 4)
+        I.Window(I.Circuit("cut", ((COORD, 12),), cuts={TID: {"x": 2}},
+                           registered=reg(I.Read(TID, "x", "w", 0, (12, 2), 0, (0, K // 4), cut=(0, 2)))), RUN, LAW, 4)
 
 
 def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
@@ -605,6 +629,114 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     with pytest.raises(ValueError, match="own rows"):
         CS.Window(win.window.program, win.window.query, LAW, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
+
+
+class Table(Held):
+    """`EMB`'s table, one token a row under ``hm96-sha512/row-seg/v1`` (`gates.embedding`), as core registers it: its rows,
+    salts, tree and entry."""
+
+    def __init__(self) -> None:
+        rng = np.random.default_rng(7)
+        super().__init__("embed", rng.integers(0, 1 << 16, (4, 16), dtype=np.uint16))
+        self.salts = [bytes(rng.integers(0, 256, E.SALT_BYTES, dtype=np.uint8)) for _ in range(4)]
+        self.dom = CommitmentDomain(hashlib.sha512(b"embed").digest(), -2, RangeIndexedDomain(0, 4), hash="sha512")
+        self.tree = RT.commit(self.dom, [bit_row((r.tolist(), 16)) for r in self.rows], self.salts)
+
+    def entry(self):
+        return {"value": "embed", "root": self.tree.root.hex(), "leaves": 4, "words": 16, "domain": self.dom.domain_id.hex()}
+
+    def path(self, tok: int) -> list[bytes]:
+        p = self.tree.path(tok)
+        return [p[k:k + 64] for k in range(0, len(p), 64)]
+
+
+def embedding(**edit) -> I.Circuit:
+    """Three embedding reads of `Table`, their tokens free."""
+    reg = I.Registered({"embed": 64}, (I.Table("embed", "embed", 0, 16, 4),), (),
+                       (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
+                       (I.Opening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
+    return I.Circuit("embedding", ((EMB, 3),), **{"registered": reg, **edit})
+
+
+def embedding_window() -> tuple[I.Window, Table]:
+    """`embedding`'s window in members of at most 2 units, its units' values `gates.embedding`'s reference on tokens
+    (3, 3, 1)."""
+    table = Table()
+    win = I.Window(embedding(), RUN, LAW, 2, registered={"embed": table})
+    toks = [3, 3, 1]
+    got = [E.reference(4, t, table.tree.root, table.dom.domain_id, table.rows[t].tolist(), table.salts[t], table.path(t))
+           for t in toks]
+    assert [ok for _, ok in got] == [1, 1, 1]
+
+    def digest(d: bytes) -> np.ndarray:
+        return np.frombuffer(d, ">u8").astype(np.uint64)
+
+    ins = [np.array(toks, dtype=np.uint32), np.stack([digest(table.tree.root)] * 3), np.stack([digest(table.dom.domain_id)] * 3),
+           table.rows[toks], np.stack([np.frombuffer(table.salts[t], ">u8").astype(np.uint64) for t in toks]),
+           np.stack([np.stack([digest(s) for s in table.path(t)]) for t in toks])]
+    win.record(EMB, ins, [np.array([h for h, _ in got], dtype=np.uint16), np.array([ok for _, ok in got], dtype=np.uint16)])
+    return win, table
+
+
+def test_a_tables_reads_and_verdicts_take_its_supplied_values():
+    """CMP-164's default as reads, no window built: a table read takes the table's supplied root or domain id and an
+    opening's verdict its supplied 1, each one row for all its units, made from the entry of the table's parameter alone
+    under public salts. A table that isn't its parameter's every row, and an ingress, are refused by the committer."""
+    c, table = embedding(), Table()
+    assert [(r.port, r.param, r.at, r.reader_units, r.base, r.step) for r in I.committed_reads(c.registered)] == [
+        ("root", "embed/root", 0, 3, 0, (0,)), ("domain", "embed/domain", 0, 3, 0, (0,)), ("o1", "embed/opened", 0, 3, 0, (0,))]
+    got = I.supplied(c.registered, {"embed": table.entry()}, "p", module=REG)
+    assert {v: (x.rows.tolist(), x.salts, x.program) for v, x in got.items()} == {
+        "embed/root": ([I.digest_words(table.tree.root)], REG.supplied_salts("p", "embed/root", 1), "p"),
+        "embed/domain": ([I.digest_words(table.dom.domain_id)], REG.supplied_salts("p", "embed/domain", 1), "p"),
+        "embed/opened": ([[1]], REG.supplied_salts("p", "embed/opened", 1), "p")}
+    assert I.supplied(c.registered, {}, "p", module=REG) == {}
+    words = I.digest_words(bytes(range(64)))
+    assert len(words) == 32 and words[:4] == [0x0607, 0x0405, 0x0203, 0x0001]
+    with pytest.raises(ValueError, match="a registered parameter of its own"):
+        I.Window(embedding(registered=replace(c.registered, params={"embed": 80})), RUN, LAW, 3)
+    with pytest.raises(ValueError, match="ingress are recorded by their description"):
+        I.Window(embedding(ingress=(I.Ingress(EID, "tok", 0, 2, 0),)), RUN, LAW, 3)
+
+
+@pytest.mark.slow
+def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
+    """CMP-164's default committed: each table read and verdict a registered read of its supplied value, the opening's row,
+    salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
+    the record and its pin of the table's parameter alone, which no cheaper test reaches. Slow (about 140 s on one core)
+    for the two population Programs of `EmbeddingRead_v1` it builds, the prover's and the verifier's, its Merkle path
+    traced in each; the cheap check of the reads themselves is `test_a_tables_reads_and_verdicts_take_its_supplied_values`."""
+    win, table = embedding_window()
+    with pytest.raises(ValueError, match="Window.supply"):
+        win.close(salt_key=bytes(32))
+    win.supply(REG)
+    c = win.close(salt_key=bytes(32))
+    m0, m1 = win.window.members
+    assert [(m.base, m.n, m.tables) for m in (m0, m1)] == [
+        (0, 2, (("tok", 2), ("root", 1), ("domain", 1), ("row", 2), ("salt", 2), ("path", 2))),
+        (2, 1, (("tok", 1), ("root", 1), ("domain", 1), ("row", 1), ("salt", 1), ("path", 1)))]
+    root, opened = win.registered["embed/root"], win.registered["embed/opened"]
+    assert root.rows.tolist() == [I.digest_words(table.tree.root)] and opened.rows.tolist() == [[1]]
+    assert np.array_equal(c.rows[m0.port("root")], root.rows) and c.salts[m0.port("root")] == root.salts[0]
+    assert c.salts[m0.port("o1")] == opened.salts[0] * 2 and c.salts[m1.port("o1")] == opened.salts[0]
+    assert table.salts[3] not in c.salts[m0.port("row")]
+    assert win._entries[m0.key]["o1"]["positions"] == [0, 0] and sorted(win._entries[m1.key]) == ["domain", "o1", "root"]
+
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    mine = I.window_of_record(doc, LAW, {EID: EMB}.__getitem__)
+    assert mine.members == win.window.members
+    files = I.registered_reads(doc, mine, {"embed": table.entry()}, registered=REG)
+    ports = files[m0.key]["ports"]
+    assert sorted(ports) == sorted(files[m1.key]["ports"]) == ["domain", "o1", "root"]
+    assert {p: (e["value"], e["root"], e["reads"]) for p, e in ports.items()} == {
+        "root": ("embed/root", root.entry()["root"], [0, 0]),
+        "domain": ("embed/domain", win.registered["embed/domain"].entry()["root"], [0, 0]),
+        "o1": ("embed/opened", opened.entry()["root"], [0, 0])}
+    with pytest.raises(ValueError, match="didn't pin"):
+        I.registered_reads(doc, mine, {}, registered=REG)
+    win.registered = {**win.registered, "embed/opened": Held("embed/opened", np.ones((1, 3), dtype=np.uint16))}
+    with pytest.raises(ValueError, match="rows of 3 words"):
+        win.close(salt_key=bytes(32))
 
 
 def test_the_boundary_is_carried_as_given():
