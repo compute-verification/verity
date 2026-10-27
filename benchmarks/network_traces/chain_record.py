@@ -39,9 +39,9 @@
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
   ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, #4404's ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``), #4404's
-  `block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is ``network-period
-  check``'s own on its case (`decide_period`; `block_entry`).
+  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
+  `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
+  ``network-period check``'s own on its case (`decide_period`; `block_entry`).
 * **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's
   ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
   refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the warden's own offline check on its witness
@@ -58,7 +58,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import math
 import os
@@ -125,8 +124,6 @@ OUT_BITS = 16
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
-#: the all-protocols runner's network accounting, whose `block_leg` is the block record's one certifier entry
-ALLP_CERTIFIER = HERE.parent / "all_protocols" / "legs" / "certifier.py"
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
                     "answer) beside each link-window's N2 registration and one-stage v2 proof, and this report has "
@@ -507,10 +504,10 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
 
 
 def free_inputs(circuit: dict) -> int:
-    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by the rule of #4404's
-    ``legs/certifier.free_inputs``: every unit's input-row bits (each template's units times its statement's
-    ``in_rows`` widths), less each unit's rows whose every port a wire feeds from another unit's output (``wires``) or
-    ``external`` names as the system's I/O. A row the registration's anchors register still counts, an overcount."""
+    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by #4404's rule: every unit's
+    input-row bits (each template's units times its statement's ``in_rows`` widths), less each unit's rows whose every
+    port a wire feeds from another unit's output (``wires``) or ``external`` names as the system's I/O. A row the
+    registration's anchors register still counts, an overcount."""
     from verity.ml.windows.interface import Wire
 
     units = {t: n for t, n in circuit["templates"]}
@@ -753,24 +750,17 @@ def stubbed(job: dict, custody_doc: dict) -> list[str]:
     return out
 
 
-def _allp():
-    name = "network_traces_allp_certifier"
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ALLP_CERTIFIER)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
 def decide_period(case: dict) -> dict:
     """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
-    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as #4404's runner decides a period:
-    one-stage v2 run on each link-window's proof, the files it names the case's ``blobs`` (paths, read when this
-    runs)."""
+    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as #4404's runner decides a period
+    (`block_certifier.check`): one-stage v2 run on each link-window's proof, the files it names the case's ``blobs``
+    (paths, read when this runs)."""
+    from block_certifier import check
+
     exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
     if not exe:
         raise RuntimeError("no VERITY_NETWORK_PERIOD_EXE: no network-period executable to re-decide the case")
-    return _allp().check(exe, case)
+    return check(exe, case)
 
 
 def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], audits: list[dict]) -> str | None:
@@ -818,11 +808,13 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
 
 def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server: str | None, runs: list[str],
                 chain: dict) -> dict:
-    """The block record's certifier entry: #4404's `block_leg` of certifier/v0's period ``answer`` on ``server``, from
-    ``runs``. Written only when the chain itself is accepted, the answer is held to it (`period_binding` on ``chain``:
+    """The block record's certifier entry: `block_certifier.block_leg` of certifier/v0's period ``answer`` on
+    ``server``, from ``runs``. Written only when the chain itself is accepted, the answer is held to it (`period_binding` on ``chain``:
     its certificates, N2's registrations and the ``--audit`` registrations) and ``network-period check`` gives exactly
     that answer on its ``case`` (`decide_period`), so neither a refused chain nor another period's answer carries a K;
     else why not, `block_leg`'s refusal included."""
+    from block_certifier import block_leg
+
     why = (NO_PERIOD_ANSWER if answer is None else
            f"the chain is {verdict}: only an accepted chain carries a K" if verdict != "accepted" else
            "no --server: the node the block ran on" if not server else
@@ -838,7 +830,7 @@ def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server:
         return {"written": False, "why": f"network-period check on the case answers {again.get('verdict')} with K "
                 f"{(again.get('public') or {}).get('K')}, not the given answer: it isn't the verifier's on this case"}
     try:
-        return {"written": True, "entry": _allp().block_leg(answer, server=server, runs=runs, source="real")}
+        return {"written": True, "entry": block_leg(answer, server=server, runs=runs, source="real")}
     except ValueError as e:
         return {"written": False, "why": f"block_leg: {e}"}
 

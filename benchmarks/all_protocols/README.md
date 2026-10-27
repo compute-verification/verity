@@ -83,8 +83,8 @@ every machine of a census deployment, the pooled total first and the per-window 
   `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a period
   whose every link-window has a scan answer is put to certifier/v0's rows form, which refuses it by name at the scan's
   answer until one-stage v2 runs the scan; a later period waits on
-  `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
-  turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`,
+  `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them.
+  `benchmarks/network_traces/block_certifier.py`'s `block_leg` turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`,
   CMP-95 item 6), the one shape a loop's run and the H200 fallback write.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
   one `ALLP` line per window, led by the monitoring period. Outer proofs go through the firewall one at a time, one
