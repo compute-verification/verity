@@ -119,6 +119,8 @@ LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lak
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
+#: a PR whose title holds this lands on its land verdict without a Lean check first (`Driver._lean_change`)
+TWO_DEMOS = "two demos"
 #: the steps of a check (`tools/verity/check/check.py`)
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
@@ -1857,9 +1859,17 @@ class Driver:
         return {m.owner, self._owner(m), self.ready_by(m.pr, m.head)}
 
     def _lean_change(self, m: Member) -> bool:
+        """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`) and its
+        title doesn't say ``two demos`` (`TWO_DEMOS`).  A two-demos PR's Lean is checked after landing instead, by the
+        after-landing run's lean-audit, which reverts it if it fails; its ready mark already passed the records gate."""
         if m.commit not in self._lean_of:
-            self._lean_of[m.commit] = lean_change(self.repo, m.commit)
+            self._lean_of[m.commit] = lean_change(self.repo, m.commit) and not self._two_demos(m)
         return self._lean_of[m.commit]
+
+    def _two_demos(self, m: Member) -> bool:
+        subject = subprocess.run(["git", "log", "-1", "--format=%s", m.commit], cwd=self.repo, capture_output=True, text=True,
+                                 check=False).stdout
+        return TWO_DEMOS in subject.lower()
 
     def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool, reviewed: int | None = None) -> tuple[int, str]:
         """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
