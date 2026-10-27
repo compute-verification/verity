@@ -83,3 +83,13 @@ def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
     assert not (tmp_path / "case-v2.json").exists()
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
+
+
+def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
+    monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})
+    monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
+    monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
+    part = {"program": "p", "rule": "r"}
+    a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[], partition=part)
+    assert json.loads((tmp_path / "case.json").read_text())["params"]["partition"] == part
