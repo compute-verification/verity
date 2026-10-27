@@ -13,7 +13,8 @@ Down from the root, each step gives the next equality or a collision among what 
 4. **The row digest** (`inner_bind`). Under `sha512/row/v2` (`rowV2_bind`), one message gives one bit length (`P(ℓ)`) and
    one row's bytes, so one row. Under `sha512/row-seg/v1` (`rowSeg_bind`), one outer message gives one bit length
    (`Q(ℓ)`) and one list of segment digests. Each segment digest comes from one segment message, so from one segment,
-   and the segments cover the row.
+   and the segments cover the row. Under `sha512/row/v1` (`rowV1_bind`), one message gives one row's bytes after the
+   fixed-width `P(w)`, so one byte length, which at whole words is one bit length, and one row.
 -/
 
 namespace Hash.BindingProofs
@@ -73,13 +74,25 @@ theorem rowSeg_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length <
     · exact List.mem_append_left _ (List.mem_append_left _ (mem r₁ j hj))
     · exact List.mem_append_right _ (List.mem_append_left _ (mem r₂ j hj₂))
 
-/-- **A format's row digest binds the row.** -/
-theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : r₁.length < 2 ^ 64)
-    (h₂ : r₂.length < 2 ^ 64) (h : f.digest G r₁ = f.digest G r₂) :
+/-- **`sha512/row/v1` binds a row of whole words.** -/
+theorem rowV1_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length % 16 = 0) (h₂ : r₂.length % 16 = 0)
+    (h : RowV1.digest G r₁ = RowV1.digest G r₂) : r₁ = r₂ ∨ CollisionIn G (RowV1.hashed r₁ ++ RowV1.hashed r₂) := by
+  rcases eq_or_collisionIn (xs := RowV1.hashed r₁ ++ RowV1.hashed r₂) (x := RowV1.msg r₁) (y := RowV1.msg r₂)
+    (by simp [RowV1.hashed]) (by simp [RowV1.hashed]) h with hm | hc
+  · obtain ⟨-, hb⟩ := List.append_inj hm (by simp [RowV1.rowPrefix, padTo_length, be_length])
+    have hl := congrArg List.length hb
+    simp only [RowSeg.packBits, List.length_map, List.length_range] at hl
+    exact Or.inl (packBits_inj (by omega) hb)
+  · exact Or.inr hc
+
+/-- **A format's row digest binds a row of its lengths.** -/
+theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : r₁.length < 2 ^ 64) (f₁ : f.fits r₁.length)
+    (h₂ : r₂.length < 2 ^ 64) (f₂ : f.fits r₂.length) (h : f.digest G r₁ = f.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (f.hashed G r₁ ++ f.hashed G r₂) := by
   cases f
   · exact rowSeg_bind G h₁ h₂ h
   · exact rowV2_bind G h₁ h₂ h
+  · exact rowV1_bind G f₁ f₂ h
 
 /-- **The hm96 leaf binds its inner digest.** -/
 theorem hm96_bind (H : Msg → Digest) (key : Msg) {x₁ x₂ : Digest} {y₁ y₂ : Msg}
@@ -114,12 +127,12 @@ theorem Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding := by
     fun s hs z hz => by
       simp only [List.mem_append] at hz ⊢
       exact hz.imp (fun h => hs o₁ h) (fun h => hs o₂ h)
-  rcases Hash.SecurityProofs.TreeBinding H V.domain root rank _ _ o₁.sibs o₂.sibs h₁.2.2 h₂.2.2 with hl | hc
+  rcases Hash.SecurityProofs.TreeBinding H V.domain root rank _ _ o₁.sibs o₂.sibs h₁.2.2.2 h₂.2.2.2 with hl | hc
   · rcases eq_or_collisionIn
       (xs := RowLeaf.outerHashed H G V rank o₁ ++ RowLeaf.outerHashed H G V rank o₂) (x := RowLeaf.leafMsg H G V rank o₁) (y := RowLeaf.leafMsg H G V rank o₂)
       (by simp [RowLeaf.outerHashed]) (by simp [RowLeaf.outerHashed]) hl with hL | hc
     · rcases hm96_bind H V.key (leafMsg_inj hL) with hx | hc
-      · rcases inner_bind G V.format h₁.1 h₂.1 hx with hr | hc
+      · rcases inner_bind G V.format h₁.1 h₁.2.1 h₂.1 h₂.2.1 hx with hr | hc
         · exact Or.inl hr
         · exact Or.inr (Or.inr hc)
       · refine Or.inr (Or.inl (collisionIn_mono ?_ hc))

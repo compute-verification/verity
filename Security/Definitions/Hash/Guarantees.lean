@@ -28,7 +28,8 @@ namespace Hash.Guarantees
 hm96 bit-row leaf in its format (`RowLeaf.accepts`: a frame-v3 tree over the verifier's domain, its frame leaf binding the
 domain id, rank, position and the format's schema, its nodes their level and index; the hm96-sha512 leaf under the
 verifier's key, bound through `H(key)` in its prefix; the format's row digest binding the row's bit length and its bits,
-each segment's under `sha512/row-seg/v1`; every part length-framed or fixed-width), carry the same row, or two different
+each segment's under `sha512/row-seg/v1`, its bytes of whole words under `sha512/row/v1`; every part length-framed or
+fixed-width), carry the same row, or two different
 messages that `H` hashed in the two checks have one digest, or two different messages that `G` hashed in the two row
 digests have one digest.
 
@@ -37,11 +38,11 @@ inputs the two openings hashed. It is stated for any 64-byte `H` and `G`.
 
 Scope:
 * **Leaves.** The verifier's format (`RowLeaf.Format`): `hm96-sha512/row-seg/v1` leaves (`seg`: PoUW's per-call A rows,
-  the vLLM row tables, A6's `x` port, the clear sampled audit's rows) or `hm96-sha512/row/v2` leaves (`v2`: H1's tables
+  the vLLM row tables, A6's `x` port, the clear sampled audit's rows), `hm96-sha512/row/v2` leaves (`v2`: H1's tables
   and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, the remote audit's
-  receipts). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound leaf by leaf, at each
-  leaf's rank; which leaves form a row is the layout's. Leaves under `hm96-sha512/row/v1` (C-Flock's default ports, M0's
-  serving rows) are outside it: a row/v1 format adds role, word width and word count to the prefix.
+  receipts) or `hm96-sha512/row/v1` leaves (`v1`: C-Flock's default ports, M0's serving rows), whose rows are whole u16
+  words (`Format.fits`). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound leaf by
+  leaf, at each leaf's rank; which leaves form a row is the layout's.
 * **Domain.** `V.domain` is free, and RowBinding holds for every domain. It does not say that a root is a rows tree. The
   schema doesn't separate them: PoUW's tile-digest trees write `hm96-sha512/row-seg/v1` too, with `x` the 64-byte digest
   itself, and there a row's leaf equals the leaf of its own row-seg digest with no collision. Only the domain's binding
@@ -49,9 +50,9 @@ Scope:
   separates them, so a consumer establishes that `V.domain` is a rows domain from its binding.
 * **Relation to C-Flock.** `FlockSoundness.Binding.ExplicitLeaf.rowSeg` already proves row-seg binding at the hm96 leaf,
   in explicit-pair form, over `SegRow l`, `List UInt8` digests and one hash. RowBinding's hm96 and row-seg part is the
-  same property in this area's types, from a frame root. No lemma relates `RowSeg.digest` to `HmRow.segDigest` or
-  `Hm96.leaf` to `Hm96.Default512` yet. A later bridge connects them, and states the break as a search over the listed
-  messages (`Claims.findColl`'s shape) for a link finder. -/
+  same property in this area's types, from a frame root. The openings bridge (`Flock.Bridge.Openings`) relates each
+  format's digest to C-Flock's row message and `Hm96.leaf` to `Hm96.Default512` at SHA-512, so an opening C-Flock's
+  registered check passes is one `RowLeaf.accepts` passes (`Flock.Bridge.Openings.rowLeaf_accepts`). -/
 def RowBinding : Prop :=
   ∀ (H G : Msg → Digest) (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o₁ o₂ : RowLeaf.Opening),
     RowLeaf.accepts H G V root rank o₁ → RowLeaf.accepts H G V root rank o₂ →
