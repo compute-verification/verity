@@ -1,6 +1,7 @@
 import Proofs.Properties.Verity.SampledSim
 import Std.Data.String.ToNat
 import Proofs.Flock.Claims.Complete.Json.Hex
+import Proofs.Flock.Claims.Complete.Json.Parse
 
 /-!
 # The device's refusals, read in the play
@@ -19,7 +20,9 @@ record holds reads as its coin's 16 bytes, two big-endian words (`OneStageZk.f12
 that `coinF128s` reads from its bits, where each byte holds its eight bits as the device writes them
 (`f128OfHex_coin`, `bytesOfBits_get`). A session's first use
 is its link points, released after the SHA-512 of its record's `root_b_sha512` digests in key order
-(`OneStageZk.sessionUses_points`, `OneStageZk.pointsAfter_ok`).
+(`OneStageZk.sessionUses_points`, `OneStageZk.pointsAfter_ok`). Its record names exactly `TABLES` there
+(`OneStageZk.roundsOk_tables`), so where each digest is its root's SHA-512 (`Flock.Record.decode`'s S5), that hash is
+`LiveHash.pointsHash` of the roots (`OneStageZk.sessionUses_pointsHash`).
 -/
 
 open Lean (Json)
@@ -709,6 +712,138 @@ theorem sessionUses_points {slot : Nat} {record : String} {us : List (Challenger
             | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
             | (cases hq; exact ⟨_, rfl⟩)) _ _ _ heq2) _ _ _ heq
   exact ⟨j, a, pts, mapError_ok hj, ha, rfl⟩
+
+/-- **A record `roundsOk` passes names exactly `TABLES`** in its link's root_B digests, in key order. -/
+theorem roundsOk_tables {record : String} (h : roundsOk record = .ok ()) :
+    ∃ j, Flock.JsonParse.parse record = .ok j ∧
+      (entries (getD (getD j "link") "root_b_sha512")).map (·.1) = TABLES := by
+  unfold roundsOk at h
+  cases hj : Flock.JsonParse.parse record with
+  | error e =>
+    rw [hj] at h
+    first
+      | (cases h; done)
+      | (simp [Except.mapError, bind, Except.bind] at h; done)
+  | ok j =>
+    refine ⟨j, rfl, ?_⟩
+    rw [hj] at h
+    cases hb : ((entries (getD (getD j "link") "root_b_sha512")).map (·.1) == TABLES) with
+    | true => exact beq_iff_eq.1 hb
+    | false =>
+      first
+        | (simp [Except.mapError, bind, Except.bind, hb, throw, throwThe, MonadExceptOf.throw] at h; done)
+        | (simp only [Except.mapError, bind, Except.bind, hb, Bool.false_eq_true, if_false, ite_false, throw,
+            throwThe, MonadExceptOf.throw] at h; cases h)
+
+theorem foldl_append_data (L : List ByteArray) : ∀ acc : ByteArray,
+    (L.foldl (· ++ ·) acc).data.toList = acc.data.toList ++ (L.map fun b => b.data.toList).flatten := by
+  induction L with
+  | nil => intro acc; simp
+  | cons b L ih =>
+      intro acc
+      rw [List.foldl_cons, ih, ByteArray.data_append, Array.toList_append]
+      simp
+
+/-- The digests of the roots, concatenated, are `LiveHash.pointsHash`'s preimage. -/
+theorem foldl_digests (rb : Array ByteArray) :
+    (rb.map Flock.Sha512.hash).foldl (· ++ ·) .empty =
+      ⟨(Flock.Guarantees.LiveHash.rootDigests rb).toArray⟩ := by
+  have e0 : ByteArray.empty.data.toList = [] := rfl
+  apply ByteArray.ext
+  apply Array.toList_inj.mp
+  rw [← Array.foldl_toList, foldl_append_data]
+  simp [Flock.Guarantees.LiveHash.rootDigests, e0, List.map_map, Function.comp_def]
+
+/-- A member of a parsed value is well formed. -/
+theorem wf_getD {j : Json} (hw : _root_.Claims.Json.Wf j) (k : String) : _root_.Claims.Json.Wf (getD j k) := by
+  cases hw with
+  | obj hm hv =>
+    rename_i m
+    cases hg : m.get? k with
+    | none =>
+      have e : getD (Json.obj m) k = Json.null := by
+        simp only [getD, field?, Json.getObjVal?, hg]
+        try rfl
+      rw [e]
+      exact .null
+    | some v =>
+      have e : getD (Json.obj m) k = v := by
+        simp only [getD, field?, Json.getObjVal?, hg]
+        try rfl
+      rw [e]
+      exact hv k v hg
+  | _ =>
+    first
+      | exact .null
+      | (simp only [getD, field?, Json.getObjVal?]; exact .null)
+
+theorem str_of_get {m : Std.TreeMap.Raw String Json compare} {k s x : String}
+    (hg : m.get? k = some (.str s)) (h : Flock.Record.str (.obj m) k = .ok x) : s = x := by
+  unfold Flock.Record.str Flock.Record.fld at h
+  simp only [Json.getObjVal?] at h
+  rw [hg] at h
+  first
+    | (simp only [bind, Except.bind, pure, Except.pure, Json.getStr?, Except.ok.injEq] at h; exact h)
+    | (simp [bind, Except.bind, pure, Except.pure, Json.getStr?] at h; exact h)
+    | (cases h; rfl)
+
+/-- **The link points' hash is the roots'**: where a parsed link names the tables `ts` in its root_B digests, in key
+order (`roundsOk_tables`), and each table's digest is the hex of its root's SHA-512 (`Flock.Record.decode`'s S5),
+`pointsAfter` of the link is `LiveHash.pointsHash` of the roots. -/
+theorem pointsAfter_eq_pointsHash {link : Json} {a : ByteArray} {ts : Array String} {rb : Array ByteArray}
+    (hw : _root_.Claims.Json.Wf link) (ha : pointsAfter link = .ok a)
+    (hk : (entries (getD link "root_b_sha512")).map (·.1) = ts) (hsz : rb.size = ts.size)
+    (h5 : ∀ i (hi : i < ts.size) (hr : i < rb.size),
+      Flock.Record.str (getD link "root_b_sha512") ts[i] = .ok (Flock.hexOf (Flock.Sha512.hash rb[i]))) :
+    a = Flock.Guarantees.LiveHash.pointsHash rb := by
+  subst hk
+  obtain ⟨ds, hds, hall, rfl⟩ := pointsAfter_ok ha
+  have hwv := wf_getD hw "root_b_sha512"
+  generalize getD link "root_b_sha512" = v at hwv hds hall h5 hsz
+  have hd : ds = rb.map Flock.Sha512.hash := by
+    apply Array.ext
+    · rw [Array.size_map, hds, hsz, Array.size_map]
+    · intro i hi1 hi2
+      have hie : i < (entries v).size := by omega
+      have hir : i < rb.size := by rw [Array.size_map] at hi2; exact hi2
+      obtain ⟨s, hs, -, hu⟩ := hall i hie hi1
+      have h5i := h5 i (by rw [Array.size_map]; exact hie) hir
+      simp only [Array.getElem_map] at h5i
+      cases v with
+      | obj m =>
+        cases hwv with
+        | obj hm _ =>
+          have hmem : (entries (Json.obj m))[i] ∈ m.toArray := Array.getElem_mem hie
+          rw [show (entries (Json.obj m))[i] = ((entries (Json.obj m))[i].1, Json.str s) from
+            Prod.ext rfl hs] at hmem
+          have hg : m.get? (entries (Json.obj m))[i].1 = some (.str s) := by
+            rw [Std.TreeMap.Raw.get?_eq_getElem?]
+            exact (Std.TreeMap.Raw.mem_toArray_iff_getElem?_eq_some hm).1 hmem
+          have e := str_of_get hg h5i
+          subst e
+          rw [FlockComplete.JsonRT.unhex_hexOf] at hu
+          rw [Array.getElem_map]
+          exact (Except.ok.inj hu).symm
+      | _ => simp [entries] at hie
+  rw [hd, foldl_digests]
+  try rfl
+
+/-- **A session's link points are released after `pointsHash` of its roots**: where its record's table digests
+(`TABLES`, the only tables `roundsOk` lets it name) are the hex of the roots' SHA-512 (`Flock.Record.decode`'s S5). -/
+theorem sessionUses_pointsHash {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : sessionUses slot record = .ok us) {rb : Array ByteArray} (hsz : rb.size = TABLES.size)
+    (h5 : ∀ j, Flock.JsonParse.parse record = .ok j → ∀ i (hi : i < TABLES.size) (hr : i < rb.size),
+      Flock.Record.str (getD (getD j "link") "root_b_sha512") TABLES[i] =
+        .ok (Flock.hexOf (Flock.Sha512.hash rb[i]))) :
+    ∃ pts, us.head? =
+      some (⟨Hello.slotStream slot POINTS, Flock.Guarantees.LiveHash.pointsHash rb, (pts.size + 3) / 4⟩, pts) := by
+  obtain ⟨j, a, pts, hj, ha, hhd⟩ := sessionUses_points h
+  obtain ⟨j', hj', hk⟩ := roundsOk_tables (usesOf_of_sessionUses h).2
+  rw [hj] at hj'
+  cases hj'
+  have hw := wf_getD (FlockComplete.JsonRT.parse_wf record j hj) "link"
+  rw [← pointsAfter_eq_pointsHash hw ha hk hsz (h5 j hj)]
+  exact ⟨pts, hhd⟩
 
 end SampledProofs.OneStageZk
 
