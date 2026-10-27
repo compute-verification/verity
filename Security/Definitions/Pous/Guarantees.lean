@@ -218,7 +218,8 @@ def ChainDenseMeets64 : Prop :=
 
 /-! ### The band at `D = 2`, `D = 1` and `D = 0` rounds
 
-Each statement is a band pin above with only the round budget `D`, the challenge count `k` and the
+Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 Oct 2026). Each
+statement is a band pin above with only the round budget `D`, the challenge count `k` and the
 bound on the in-degree `d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there (`D = 0` puts no
 bound on `d`, since the responder makes no `Π₂` call). The proofs are
 `Security/Proofs/Pous/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D`
@@ -257,8 +258,8 @@ def BandMultiMeetsFamilyD1 : Prop :=
 
 /-- **Unconditional: the band store at `D = 0` rounds and `k = 89`, at every segment count from 1 to 2^64.**
 `BandMultiMeetsFamily` at `D = 0` and `k = 89`, for every `d` with no bound on the in-degree: at `D = 0` the responder
-makes no `Π₂` call and answers from its state alone, so the band needs no bound on `d`. Both domain layouts. Proof:
-`Pous.BandMulti.Rounds.band_meets_family_d0`; here
+makes no `Π₂` call and answers from its state alone, so the band needs no bound on `d`. Both domain layouts. Approved
+by Daniel (3 Oct 2026). Proof: `Pous.BandMulti.Rounds.band_meets_family_d0`; here
 `Pous.SecurityProofs.BandMultiMeetsFamilyD0`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
