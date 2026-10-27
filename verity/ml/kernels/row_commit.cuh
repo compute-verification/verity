@@ -623,7 +623,7 @@ RC_HD int node_plan(const uint8_t* did, NodeK& N) {
 }
 // the root of domain did's empty tree
 RC_HD void empty_root(const uint8_t* did, u64* out) {
-  uint8_t m[128] = {};
+  uint8_t m[256] = {};
   digest_padded(m, frame_head(m, "empty", did), out);
 }
 
