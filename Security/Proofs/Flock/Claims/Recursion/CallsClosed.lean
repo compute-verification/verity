@@ -31,7 +31,7 @@ theorem setupTablesWith_le {h₀ : ByteArray → ByteArray} {tags : Tags} {cf pf
     {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
     {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray} {spec : SessionSpec}
     {sts : Array Stmt}
-    (h : Stmt.setupTablesWith (Flock.Hashes.ofSha512 h₀ : Flock.Hashes V) tags cf pf coins count tables draw partition
+    (h : Stmt.setupTablesWith (Flock.Hashes.ofSha512 h₀ : Flock.Hashes Flock.V) tags cf pf coins count tables draw partition
       program work stratified closure publicInputs = .ok (spec, sts)) :
     sts.size ≤ Tags.MAX_TABLES ∧ spec.tables.size = sts.size := by
   unfold Stmt.setupTablesWith at h
