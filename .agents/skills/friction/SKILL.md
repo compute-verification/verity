@@ -149,8 +149,8 @@ Landing:
 Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
-  the overhead lower bound, which reports in AND gates. Credit is a statement about values; SAK is a premise of the
-  overhead lower bound only. Whoever finds a reason this is wrong floats it at once.
+  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
+  finds a reason this is wrong floats it at once.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
