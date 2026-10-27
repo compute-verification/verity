@@ -93,7 +93,7 @@ theorem pinned_word {c : Circuit} (h : HmOut.checkPinned c = .ok ()) {o : ℕ} (
           obtain ⟨⟨⟨hn, hsha⟩, hhm⟩, hs⟩ := hA
           refine ⟨hn, hsha, hhm, hs, fun t ht => ?_⟩
           have := List.any_eq_false.1 hrow t (List.mem_range.2 ht)
-          simpa using this
+          simpa [FlockSoundness.Discharge.Inst.netOf] using this
 
 /-- **Every pinned bit of a statement `HmOut.checkPinned` accepts is a linear row**, at an untyped circuit whose nets
 `Net.ofRows` or `Lookup.build` built (`ParseFacts.nets`). -/
