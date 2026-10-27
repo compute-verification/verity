@@ -58,14 +58,20 @@ ALLOWED = {
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
-    # the deployment layer is protocol-agnostic: what a protocol and a workload declare is handed to it, so it imports none.
-    "core.deploy": set(),
+    # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
+    # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
+    # a workload declare to it, so neither gains an ml edge.
+    "core.wire": set(),
+    "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
                                       "core.protocols.profile"},
-    "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
+    # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
+    # deployment layer (`wipe_parties`), their messages the wire's.
+    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
+                            "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
