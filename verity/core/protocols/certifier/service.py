@@ -80,7 +80,7 @@ It runs on every link-window, as a structural check must. In a proof it is an eq
 with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
 N3, the content check, is a design and the simulator's behaviour, not part of this protocol: a prototype unit evaluated
-in the clear (`benchmarks/network_sim`, "N3 in zero knowledge"), in no proof-service Spec and not proved. Its design
+in the clear (`examples/network_sim`, "N3 in zero knowledge"), in no proof-service Spec and not proved. Its design
 runs it on every port-window that recorded frames, recomputing the head's frames root over its N frames, which would
 hold N to the head's Σ n_t up to a SHA-512 collision (`certificate`: leaf k is frame k for k < Σ n_t and E_0 after).
 

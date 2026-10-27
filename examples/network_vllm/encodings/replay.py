@@ -952,7 +952,7 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
 
 def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16,
                       egress: str = "engine", ingress: str = "client") -> Trace:
-    """One trace of TRACE-CORPUS (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its directory's
+    """One trace of TRACE-CORPUS (`examples/network_vllm/traces`, store kind `vllm-trace-corpus/v1`): its directory's
     `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's size unless
     `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step are its first
     scheduling (FCFS schedules new requests in arrival order), and a step's release is the time its output was back. With

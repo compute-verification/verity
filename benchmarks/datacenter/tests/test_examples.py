@@ -1,5 +1,5 @@
 """The declaration library: the measured node, a BlueField-3 behind its NIC, the leaf-spine generator and the demo's rack.
-The values' sources are pinned in `benchmarks/network_sim/tests/test_graph.py`, since this package doesn't import
+The values' sources are pinned in `examples/network_sim/tests/test_graph.py`, since this package doesn't import
 `verity`."""
 from __future__ import annotations
 

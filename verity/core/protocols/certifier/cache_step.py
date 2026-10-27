@@ -4,7 +4,7 @@
 
 `ReplayStep_v1` (`replay_step`) takes each admitting row's prefix-cache hit as witness that it only bounds, so a hit
 the cache didn't give would be a channel nobody charges. ENC-DERIVED's rules
-(`benchmarks/network_e2e/encodings/derived.py`, `Prefixes`) fix the hit while the cumulative pool bound rules out
+(`examples/network_vllm/encodings/derived.py`, `Prefixes`) fix the hit while the cumulative pool bound rules out
 eviction, and fix the canonical sources always. Past the bound, advice v1 sends and charges each hit's shortfall from
 the longest cached prefix. This Definition is those rules over a committed cache state, with
 `reference` as their specification in Python. The encodings' `test_cache_step.py` difftests both against `Prefixes`
