@@ -14,6 +14,7 @@ import Proofs.Properties.Verity.Recursive.PartStatement
 import Proofs.Properties.Verity.Recursive.PartVerdict
 import Proofs.Properties.Verity.Recursive.SetupChecks
 import Proofs.Properties.Verity.Recursive.ScheduleRun
+import Proofs.Properties.Verity.Recursive.Refusals
 
 /-!
 # Sampled proofs' recursive configuration: the component's property and its target (ONE-9p)
@@ -460,8 +461,8 @@ deployed recursive verifier (`recordAt`) at `x` (`Shows`) whose staged rows are 
 that run's records hold its live coins (`LiveCoins`).
 Then `x` is dense (`RecDeploy.DenseAt`, the statements `RecursiveKSAt` covers), and the run accepts.
 
-The proof is `acc_of_accepts_of` but for `Refusals`: the model's statement of what the compiled component refuses
-(`innerOk`, `fits`), which is still to be read off its check. -/
+The proof is `acc_of_accepts_of` at `Refusals`, the model's statement of what the compiled component refuses
+(`innerOk`, `fits`, `statementFits`), read off its check (`RefusalsOf`). -/
 theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (p : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment) (e : VStar.Recursive.Evidence)
@@ -477,7 +478,12 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen) :
     RecDeploy.DenseAt x ∧
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).out = .acc :=
-  acc_of_accepts_of wE w b aux nOf hd recRest p c e bs hacc x hnames P ω r hshow hrows hlive sorry
+  acc_of_accepts_of wE w b aux nOf hd recRest p c e bs hacc x hnames P ω r hshow hrows hlive
+    ⟨RefusalsOf.innerOkAt_of_compiled hacc hnames,
+     RefusalsOf.pub_of_compiled hacc hnames (fun s q hq => (hshow.2.2 s q hq).1),
+     RefusalsOf.record_of_compiled hacc hshow.2.1,
+     RefusalsOf.transcript_of_compiled hacc hshow.1,
+     RefusalsOf.rows_of_compiled hacc hrows⟩
 
 /-- **Sampled proofs' one-stage form is v2** (the bridge's carry-over lemma, soundness 02:10Z): where the parameters name
 the one-stage form and `VStar.Recursive.Sampled` accepts, the evidence is one-stage too and v2
