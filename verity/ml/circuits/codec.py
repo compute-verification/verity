@@ -454,7 +454,30 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
 
 
 def canonical_json(obj: Any) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    """`obj` as compact JSON with its keys sorted: the bytes every canonical-JSON digest hashes. Every string, keys
+    included, is ASCII without DEL, so the text is the same whether a writer escapes the rest (`ensure_ascii`) or writes
+    it as UTF-8 (Lean's `Flock.canon`); any other string is refused (`ValueError`, naming where it is)."""
+    text = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if not text.isascii() or "\x7f" in text:
+        raise ValueError(f"outside the canonical JSON domain: {_string_error(obj)}")
+    return text.encode()
+
+
+def _string_error(v: Any) -> str:
+    """The first string of `v`, a key or a value, that isn't ASCII without DEL, as `jcs_domain_error` names it."""
+    stack: list[tuple[Any, Any]] = [(v, (None, "$"))]
+    while stack:
+        x, at = stack.pop()
+        if isinstance(x, str):
+            if not x.isascii() or "\x7f" in x:
+                return f"{_path(at)}: string {x[:40]!r} is not ASCII without DEL"
+        elif isinstance(x, (list, tuple)):
+            stack.extend((y, (at, i)) for i, y in enumerate(x))
+        elif isinstance(x, dict):
+            for k, y in x.items():
+                stack.append((k, (at, ".<key>")))
+                stack.append((y, (at, f".{k}")))
+    return "$: a string is not ASCII without DEL"
 
 
 MAX_SAFE_INT = 2**53 - 1
