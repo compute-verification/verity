@@ -151,7 +151,8 @@ theorem roundCoins_ok {key : ChallengerKey} {w : String} {us : List Use} {order 
     · intro j s hj
       try dsimp only at hj
       split at hj <;>
-        first | (cases hj; rfl) | (cases hj; done) | (cases (‹(throw _ : Except String _) = Except.ok _›); done)
+        first | (cases hj; rfl) | (cases hj; assumption) | (cases hj; done) |
+          (cases (‹(throw _ : Except String _) = Except.ok _›); done)
     · intro i u hu
       obtain ⟨ξ, s, hξ, hs, hd⟩ := zip_draw (P := fun u s r => drawCoins key w u.label u.after
           (Json.mkObj [("ledger", getD coins "ledger"), ("main", getD coins "main"), ("pins", getD coins "pins"),
@@ -197,7 +198,7 @@ theorem before_of_releaseOrderReason {labels : List String} {order : List (Strin
     ∀ i j : Nat, labels[i]? = some a → labels[j]? = some b → i < j := by
   intro i j hi hj
   have hx := List.findSome?_eq_none_iff.1 h (a, b) hab
-  dsimp only at hx
+  try dsimp only at hx
   have hmem : (a, i) ∈ labels.zipIdx.filter (·.1 == a) :=
     List.mem_filter.2 ⟨List.mem_zipIdx_iff_getElem?.2 hi, by simp⟩
   obtain ⟨⟨a', i0⟩, hlast⟩ : ∃ y, (labels.zipIdx.filter (·.1 == a)).getLast? = some y := by
@@ -236,7 +237,7 @@ theorem roots_of_exactlyReason {c : LiveCommitment} {roots : Roots} {us : List U
     {l : String} {n : Nat} (hl : (l, n) ∈ c.families) :
     ((roots.find? (·.1 == l)).map (·.2)).getD [] = Use.roots us l := by
   have hx := List.findSome?_eq_none_iff.1 h (l, n) hl
-  dsimp only at hx
+  try dsimp only at hx
   split at hx
   · exact beq_iff_eq.1 ‹_›
   · cases hx
@@ -342,6 +343,8 @@ theorem order_self_gap (a : String) (s : Session) (hs : receivedOrder s.log = [a
     releaseOrderReason (receivedOrder s.log) [(a, a)] = none ∧ ¬ s.Before a a := by
   refine ⟨?_, fun hb => Nat.lt_irrefl 0 (hb 0 0 (by simp [hs]) (by simp [hs]))⟩
   rw [hs]
-  simp [releaseOrderReason, List.findIdx?_cons, List.findSome?_cons]
+  first
+    | simp [releaseOrderReason, List.findIdx?_cons, List.findSome?_cons, List.filter_cons]
+    | simp [releaseOrderReason, List.findIdx?, List.findIdx?.go, List.findSome?, List.filter, List.zipIdx]
 
 end Properties.Challenger
