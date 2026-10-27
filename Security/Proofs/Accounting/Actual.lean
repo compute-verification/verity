@@ -9,8 +9,7 @@ import Proofs.Accounting.Actual.Device
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Bridges
 import Proofs.Accounting.Actual.Transducer
-import Proofs.Accounting.Actual.Ticks
-import Proofs.Accounting.Actual.Source
+import Proofs.Accounting.Defs.Actual.Source
 import Proofs.Accounting.Actual.WipePool
 import Proofs.Accounting.Actual.WipeReadPool
 import Proofs.Accounting.Actual.WipeLag

@@ -2,7 +2,6 @@ import Proofs.Accounting.BoundReceipt.Audit
 import Proofs.Accounting.BoundReceipt.Interactive
 import Proofs.Accounting.BoundReceipt.Tile
 import Proofs.Accounting.BoundReceipt.Sketch
-import Proofs.Accounting.BoundReceipt.Tiers
 
 /-! The proofs for receipts bound to the matmul: co-location (`Accounting.SecurityProofs.Colocation`), the link relay
 (`Accounting.SecurityProofs.BoundReceiptLink`), the same at `e > 0`, where the answers between the locations may depend

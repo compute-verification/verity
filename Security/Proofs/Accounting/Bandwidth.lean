@@ -2,7 +2,7 @@ import Proofs.Accounting.Bandwidth.AuditRO
 import Proofs.Accounting.Bandwidth.Honest
 import Proofs.Accounting.Bandwidth.Relay
 import Proofs.Accounting.Bandwidth.Interactive
-import Proofs.Accounting.Bandwidth.Actual
+import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Bandwidth.Causal
 import Proofs.Accounting.Bandwidth.Joint

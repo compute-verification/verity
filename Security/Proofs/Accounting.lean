@@ -7,7 +7,6 @@ import Proofs.Accounting.Headline
 import Proofs.Accounting.HeadlineDc
 import Proofs.Accounting.HeadlineDc.Meets
 import Proofs.Accounting.Gates.Rows
-import Proofs.Accounting.Gates.Macs
 import Proofs.Accounting.Gates.Bitwise
 import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
@@ -86,7 +85,7 @@ import Proofs.Accounting.TS.Session.Lanes.KnownFields
 import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Accounting.TS.Session.Lanes.Lane
-import Proofs.Accounting.TS.Session.Lanes.Stream
+import Proofs.Pouw.H1Zy.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.TileSound
