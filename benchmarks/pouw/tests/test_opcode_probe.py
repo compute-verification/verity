@@ -366,6 +366,46 @@ def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
 
 
+pipes_verdict = _load("opcode_probe_pipes_verdict", POUW / "opcode_probe" / "pipes_verdict.py")
+
+
+def _pipes_rows(**over: dict[str, float]) -> dict[str, dict]:
+    rates = {
+        "lop3": {"LOP3.LUT": 2.0}, "mufu": {"MUFU.EX2": 0.5},
+        "plop3": {"PLOP3.LUT": 2.0}, "mix_plop3_lop3": {"PLOP3.LUT": 0.5, "LOP3.LUT": 1.5},
+        "sgxt": {"SGXT": 2.0}, "mix_sgxt_lop3": {"SGXT": 1.0, "LOP3.LUT": 1.0},
+        "bmsk": {"BMSK": 2.0}, "mix_bmsk_lop3": {"BMSK": 1.0, "LOP3.LUT": 1.0},
+        "i2f_f2i": {"I2F.U32.RP": 0.25, "F2I.FTZ.U32.TRUNC.NTZ": 0.25},
+        "mix_i2f_f2i_mufu": {"I2F.U32.RP": 0.125, "F2I.FTZ.U32.TRUNC.NTZ": 0.125, "MUFU.EX2": 0.25},
+        "i2f16_f2i16": {"I2F.S16": 0.25, "F2I.TRUNC.NTZ": 0.25},
+        "mix_i2f16_f2i16_mufu": {"I2F.S16": 0.125, "F2I.TRUNC.NTZ": 0.125, "MUFU.EX2": 0.25},
+        "f2f64": {"F2F.F64.F32": 0.25, "F2F.F32.F64": 0.25},
+        "mix_f2f64_mufu": {"F2F.F64.F32": 0.125, "F2F.F32.F64": 0.125, "MUFU.EX2": 0.25},
+        "frnd": {"FRND.FLOOR": 0.5, "FADD": 0.5}, "mix_frnd_mufu": {"FRND.FLOOR": 0.25, "FADD": 0.25, "MUFU.EX2": 0.25},
+        "bar_or": {"BAR.RED.OR*": 0.05}, "mix_bar_or_lop3": {"BAR.RED.OR*": 0.04, "LOP3.LUT": 1.9},
+        "iadd": {"IADD": 4.0}, "mix_iadd_lop3": {"IADD": 2.0, "LOP3.LUT": 2.0},
+        "iadd64": {"IADD.64": 2.0}, "mix_iadd64_lop3": {"IADD.64": 1.0, "LOP3.LUT": 1.0},
+        "iabs": {"IABS": 2.0}, "mix_iabs_lop3": {"IABS": 1.0, "LOP3.LUT": 1.0},
+    } | over
+    return {n: {"probe": n, "binary": "pipes", "rates": {f"0:{k}": v for k, v in r.items()}} for n, r in rates.items()}
+
+
+def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
+    """`pipes_verdict.py`: each alu row's opcode within 2 alone and with LOP3, each conversion within 0.5 alone and with
+    MUFU.EX2 (FRND's FADD off the XU), LOP3 + BAR.RED/2 within 2; a conversion at the ALU's rate fails the XU."""
+    held, lines = pipes_verdict.verdict(_pipes_rows())
+    assert held, lines
+    assert "FRND.FLOOR 0.5000 alone, 0.2500 + 0.2500 = 0.5000 beside MUFU" in lines
+    assert "BAR.RED.OR 0.0500 alone; LOP3 + BAR/2 = 1.9000 + 0.0400/2 = 1.9200" in lines
+    assert "IADD 4.0000 alone, 4.0000 with LOP3 (beside alu)" in lines
+    held, lines = pipes_verdict.verdict(_pipes_rows(i2f_f2i={"I2F.U32.RP": 1.0, "F2I.FTZ.U32.TRUNC.NTZ": 1.0}))
+    assert not held and lines[0] == "I2F.U32.RP+F2I.FTZ.U32.TRUNC.NTZ alone 2.0000 > sfu's 0.5"
+    rows = tmp_path / "rows.jsonl"
+    rows.write_text("".join(json.dumps(r) + "\n" for n, r in _pipes_rows().items() if n != "mix_bar_or_lop3"))
+    assert pipes_verdict.main([str(rows)]) == 0
+    assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_bar_or_lop3; ")
+
+
 def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, capsys):
     """`eps1.py jitter`: each (trial, length) group's host-timed SM clock mean, its random spread (rel u%) and the
     systematic gap below the chip's own timer, and a per-trial u taken at the longest length (the tightest bound)."""
