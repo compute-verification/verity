@@ -120,7 +120,7 @@ open Classical in
 (`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`), the bound of `ZkLink.zk_flock_countPr_reg` (its knowledge term at
 `ksBoundAccZ`) is below the probability, 1, that the verifier that accepts everything accepts with the unit wrong, at
 every prover whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `J²·K·Pr[B^τ] ≤ 2^-200`, `J` the
-plan's tables. That premise only places the prover, as in `sampledKSLiveV2_nontrivial`. -/
+plan's tables. That premise only places the prover, as in `sampledKSLiveV2Z_unopened`. -/
 theorem countPrReg_nontrivial {mPts : ℕ} {Reg : Type} {I : Discharge.Exec.Inputs} (dj : Finset (Fin 1) → Lean.Json)
     {S₀ : Finset (Fin 1)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (L : Law 1)
     (hL : ∀ ω, L.draw ω = Finset.univ)

@@ -15,13 +15,15 @@ import Proofs.Flock.Soundness.Game.Prob
 * **The transfer** (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`): at any circuit whose commitment opens nothing,
   a computed output fails the claim for every witness when every unit is drawn; and an event that never holds has
   probability 1 under every strategy. V2's `_nontrivial` reads the instance through these.
-* **V2 and V3** (`sampledKSLiveV2_honest`, `sampledKSLiveV2_nontrivial`): their parameter hypotheses hold as
-  deployed, and at the verifier that accepts everything their additive bound is below the event's probability, 1, at
-  every prover whose finder `B^τ` has `J²·K·Pr[B^τ] ≤ 2^-200` (`Bridge.boundPr_le_pub`).
+* **V2 and V3's parameters** (`sampledKSLiveV2_honest`): their parameter hypotheses hold as deployed. Their nontrivial
+  lemmas are `RowsRegWitnesses`'.
+* **`SampledKSLiveV2Z` unopened** (`sampledKSLiveV2Z_unopened`): at the verifier that accepts everything its additive
+  bound is below the event's probability, 1, at every prover whose finder `B^τ` has `J²·K·Pr[B^τ] ≤ 2^-200`
+  (`Bridge.boundPr_le_pub`), at a circuit with no port that returns a computed gate.
 * **Nontrivial**: `SampledKSLivePubAll`, `SampledKSLivePub` at the verifier that accepts everything, states what
   `PublicNontrivial`'s `sampledKSLivePub_nontrivial` refutes at the toy session's files.
 * **Vacuous as stated** (`Bridge.outputs_noPort`, `HiddenReturns`): with the parse `hD` of an untyped statement in
-  scope, a circuit with no port returns no gate, so the structural premises of `sampledKSLiveV2_nontrivial` are never
+  scope, a circuit with no port returns no gate, so the structural premises of `sampledKSLiveV2Z_unopened` are never
   met together, and it holds for want of an instance.
 -/
 
@@ -332,18 +334,17 @@ theorem sampledKSLiveV2_honest {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Fi
     fun S R j => (rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) _).trans Bridge.rateM1_kDep⟩
 
 open Classical in
-/-- **`SampledKSLiveV2`'s nontrivial lemma**: at the verifier that accepts everything, V2's conclusion fails.
+/-- **`SampledKSLiveV2Z` at an unopened circuit**: at the verifier that accepts everything, its conclusion fails.
 At any setting of its file-level fields whose circuit has no port and returns a computed gate, with a registrant who
 opens no registered read (so the rows term is `0`, `rowsPrZC_noReads`, and the claims' values are the evaluation on
 the extracted plurality's inputs), with every unit drawn
 (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires and the deployed parameters (`sampledKSLiveV2_honest`), V2's
 additive bound is below `Pr[True ∧ ¬ RelS] = 1` (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`) at every prover
 whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `J²·K·Pr[B^τ] ≤ 2^-200`: there the bound is at
-most `δ + f(J²·K·Pr[B^τ]) < 1` (`Bridge.boundPr_le_pub`). That premise is this lemma's, not V2's: V2 holds at every
-prover, and it only places the prover where its bound is below 1. `SampledKSLiveV3`'s bound
-and its event at the verifier that accepts everything are V2's, so this is V3's nontrivial lemma too. The toy
+most `δ + f(J²·K·Pr[B^τ]) < 1` (`Bridge.boundPr_le_pub`). That premise is this lemma's, not the statement's: it holds at every
+prover, and the premise only places the prover where its bound is below 1. The toy
 (`Bridge.toy_exceeds`) is such a circuit, built by hand. -/
-theorem sampledKSLiveV2_nontrivial :
+theorem sampledKSLiveV2Z_unopened :
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)

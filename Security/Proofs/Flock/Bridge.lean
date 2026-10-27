@@ -19,6 +19,7 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.PublicWitnesses
 import Proofs.Flock.Bridge.PublicNontrivial
+import Proofs.Flock.Bridge.RowsRegWitnesses
 import Proofs.Flock.Bridge.PublicToyDesc
 import Proofs.Flock.Bridge.HiddenReturns
 import Proofs.Flock.Bridge.HiddenLayer
