@@ -1641,8 +1641,7 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   else salt_prf(off + pos, Y);
   hm96_mask<false, true>(T, Y, m);
   salt_digest(Y, c);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  rc::mask_words(m, my);
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
