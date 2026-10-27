@@ -27,20 +27,20 @@ the runs of `d` with the baseline at `θv`. -/
 noncomputable def novelInfo (d : Declaration) (θv : d.D.Transcript) (R : Finset (Fin d.D.N)) : ℝ :=
   Real.logb 2 (support d θv (d.D.into R \ d.θ))
 
-/-- **A small subcircuit, by information**: at most `Γ` computed gates, whose novel reads carry at most `S` bits over
+/-- **A small subcircuit, by information**: at most `c` computed gates, whose novel reads carry at most `S` bits over
 the runs with the baseline at `θv`. -/
-def SmallInfo (c : Declaration) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (R : Finset (Fin c.D.N)) : Prop :=
-  R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ novelInfo c θv R ≤ S
+def SmallInfo (r : Declaration) (θv : r.D.Transcript) (c : ℕ) (S : ℝ) (R : Finset (Fin r.D.N)) : Prop :=
+  R ⊆ r.D.computed ∧ r.D.size R ≤ c ∧ novelInfo r θv R ≤ S
 
 namespace Threading
 
-variable {c : Declaration} (T : Threading c)
+variable {r : Declaration} (T : Threading r)
 
-/-- **`(d, e)`-threaded by information** at `(Γ, S)`: every subcircuit small by information that reads fewer than `d`
+/-- **`(d, e)`-threaded by information** at `(c, S)`: every subcircuit small by information that reads fewer than `d`
 novel values of a thread computes at most `e` of that thread's counted multiplications per value it reads from the
 thread. -/
-def ThreadedInfo (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (d e : ℕ) : Prop :=
-  ∀ R, SmallInfo c θv Γ S R → ∀ t, (T.threadReads R t).card < d →
+def ThreadedInfo (θv : r.D.Transcript) (c : ℕ) (S : ℝ) (d e : ℕ) : Prop :=
+  ∀ R, SmallInfo r θv c S R → ∀ t, (T.threadReads R t).card < d →
     (T.threadMults R t).card ≤ e * (T.threadReads R t).card
 
 end Threading

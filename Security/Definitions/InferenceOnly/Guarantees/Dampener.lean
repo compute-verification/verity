@@ -73,36 +73,36 @@ weights, and complies with NCI at `(Γ, α)`, with its baseline registered (`Bas
 `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ` with
 `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
 def DampenerThreaded : Prop :=
-  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ)
-    (Mc : Containment c.D d.D),
-    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies Γ α d → Assumptions.BaselineRegistered c d (PartialContainment.ofContainment Mc) →
-    T.Threaded Γ (α * Γ) dd e →
-    Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n c k : ℕ) (F H L R b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ)
+    (Mc : Containment r.D d.D),
+    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 < c → 0 < b_w → 0 < b_a → 0 < dd →
+    Complies c k d → Assumptions.BaselineRegistered r d (PartialContainment.ofContainment Mc) →
+    T.Threaded c k dd e →
+    Assumptions.WeightsIncompressible r T c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e) →
+    n * F * H ≤ C → (k / c : ℝ) * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e) →
       efficiency κ M C U ≤
-        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
-          declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
+        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
+          declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ
 
 /-- **The compute dampener over NCI's thread bound, per parameter slot**: `DampenerThreaded` with the reference
 circuit's weights incompressible per parameter slot of a slot map `σ` (`Assumptions.WeightsIncompressibleSlots`), its
 declared computation's bound from `InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
 def DampenerThreadedSlots : Prop :=
-  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c)
-    (σ : T.Slots) (dd e : ℕ) (Mc : Containment c.D d.D),
-    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies Γ α d → Assumptions.BaselineRegistered c d (PartialContainment.ofContainment Mc) →
-    T.Threaded Γ (α * Γ) dd e →
-    Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n c k : ℕ) (F H L R b_w b_a : ℝ) (r d : Declaration) (T : Threading r)
+    (σ : T.Slots) (dd e : ℕ) (Mc : Containment r.D d.D),
+    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 < c → 0 < b_w → 0 < b_a → 0 < dd →
+    Complies c k d → Assumptions.BaselineRegistered r d (PartialContainment.ofContainment Mc) →
+    T.Threaded c k dd e →
+    Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e) →
+    n * F * H ≤ C → (k / c : ℝ) * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e) →
       efficiency κ M C U ≤
-        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
-          declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
+        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
+          declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ
 
 end InferenceOnly.Guarantees

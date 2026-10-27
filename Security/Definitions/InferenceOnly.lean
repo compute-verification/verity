@@ -10,11 +10,14 @@ beforehand; every other value is novel information. A division of `D` into isola
 of an IU read `width(in(R) \ θ)` bits of novel information (`novelReads`): baseline information is free, and so is
 anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = novelReads R / size R`, in bits per gate.
 
-`Complies Γ α` is the NCI policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`. A policy is a
-condition on declarations that the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its
-own. `slowdown policy t` is the factor by which every declaration that complies with `policy` and implements `t` is
-larger than `t`. `Reads Γ c` is the least total novel information that the IUs of a division of `c` into IUs of at most
-`Γ` gates read.
+`Complies c k` is the inference-only policy: `D` has a `(c, k)`-partition (`Verity.Partition.IsCK`), every IU exactly
+`c` gates, padding included, reading at most `k` unregistered input bits. Its rate is `α = k / c`, the most novel
+information an IU reads per gate. `CompliesRate c α` is the policy as the NCI check reads it, on a circuit of any widths:
+IUs of at most `c` gates, each with NCI at most `α`. A `(c, k)`-partition complies at rate `k / c`, and an IU of at most
+`c` gates with NCI at most `α` reads at most `k = α c` bits. A policy is a condition on declarations that the verifier
+checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by
+which every declaration that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total
+novel information that the IUs of a division of `C` into IUs of at most `c` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
 gates where a circuit computes the products, the complete output entries, and the links between consecutive
@@ -34,17 +37,22 @@ def novelReads (d : Declaration) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.
 /-- A policy: a condition on declarations. -/
 abbrev Policy : Type := Declaration → Prop
 
-/-- **The NCI policy** at maximum IU size `Γ` and NCI limit `α`: `d`'s circuit divides into IUs of at most `Γ` gates,
-each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an IU with no gates
-needs no division). -/
-def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
-  ∃ (n : ℕ) (P : Partition d.D n),
-    ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)
+/-- **The inference-only policy** at `(c, k)`: `d` has a `(c, k)`-partition, its circuit Boolean and divided into IUs of
+exactly `c` gates, padding included, each with at most `k` unregistered input bits. -/
+def Complies (c k : ℕ) : Policy := fun d =>
+  ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d c k
 
-/-- `Reads_Γ(c)`: the least total novel information that the IUs of a division of `c` into IUs of at most `Γ` gates
+/-- **The policy at a rate**, as the NCI check reads it on a circuit of any widths: `d`'s circuit divides into IUs of at
+most `c` gates, each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an IU
+with no gates needs no division). -/
+def CompliesRate (c : ℕ) (α : ℝ) : Policy := fun d =>
+  ∃ (n : ℕ) (P : Partition d.D n),
+    ∀ u, d.D.size (P.gates u) ≤ c ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)
+
+/-- `Reads_c(C)`: the least total novel information that the IUs of a division of `C` into IUs of at most `c` gates
 read. -/
-noncomputable def Reads (Γ : ℕ) (c : Declaration) : ℕ :=
-  sInf {r | ∃ (n : ℕ) (P : Partition c.D n), (∀ u, c.D.size (P.gates u) ≤ Γ) ∧ r = ∑ u, novelReads c (P.gates u)}
+noncomputable def Reads (c : ℕ) (C : Declaration) : ℕ :=
+  sInf {r | ∃ (n : ℕ) (P : Partition C.D n), (∀ u, C.D.size (P.gates u) ≤ c) ∧ r = ∑ u, novelReads C (P.gates u)}
 
 /-- **The slowdown factor** `ρ_policy(t)`: the least ratio of `size(d)` to `size(t)` over the declarations `d` that
 implement `t` and comply with `policy`, and `⊤` when none does. -/
@@ -131,13 +139,13 @@ noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin 
 end Chain
 
 /-- **The slowdown factor for updated matrix multiplications** `F` (the draft's theorem, "Throttling updated matrix
-multiplications"), at NCI limit `α`, read cap `K`, widths `b_w` of a weight entry and `b_a` of an activation entry, and
-smallest inner dimension `d`:
-`F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / K, √2 (1 + √μ) √(1 − μ) b_a √(b_w / K)}`,
+multiplications"), at rate `α` (under the policy `k / c`), read cap `k`, widths `b_w` of a weight entry and `b_a` of an
+activation entry, and smallest inner dimension `d`:
+`F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / k, √2 (1 + √μ) √(1 − μ) b_a √(b_w / k)}`,
 the maximum written as a supremum. The first term covers IUs that complete entries themselves, the second IUs that split
 entries with other IUs. -/
-noncomputable def F (α K b_w b_a d : ℝ) : ℝ :=
+noncomputable def F (α k b_w b_a d : ℝ) : ℝ :=
   1 / (2 * α) * ⨆ μ : Set.Ioo (0 : ℝ) 1,
-    min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / K) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / K))
+    min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / k) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / k))
 
 end InferenceOnly

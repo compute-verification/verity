@@ -20,11 +20,11 @@ IUs of at most `Γ` gates, each reading at most `K` bits of novel information, u
 `(Γ, K)`, the IUs together read at least `G · f(K)` bits of novel information, for a chain of `G` products that `D`
 runs. `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` the smallest inner dimension. -/
 def UpdatedMatMulReads : Prop :=
-  ∀ (Γ : ℕ) (K b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d n : ℕ) (P : Partition D.D n),
-    0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) →
-    (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
-    Assumptions.ActivationsIncompressible D c Γ K b_w b_a →
-    Assumptions.PartialSumsIncompressible D c Γ K b_w b_a →
-      c.G * readFactor K b_w b_a d ≤ ∑ u, (novelReads D (P.gates u) : ℝ)
+  ∀ (c : ℕ) (k b_w b_a : ℝ) (D : Declaration) (ch : Chain D.D) (d n : ℕ) (P : Partition D.D n),
+    0 < b_w → 0 < b_a → (∀ ℓ, d ≤ ch.d ℓ) →
+    (∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k) →
+    Assumptions.ActivationsIncompressible D ch c k b_w b_a →
+    Assumptions.PartialSumsIncompressible D ch c k b_w b_a →
+      ch.G * readFactor k b_w b_a d ≤ ∑ u, (novelReads D (P.gates u) : ℝ)
 
 end InferenceOnly.Guarantees

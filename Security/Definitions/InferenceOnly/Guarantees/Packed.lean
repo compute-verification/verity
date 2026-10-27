@@ -22,14 +22,14 @@ them, and, at positions it completes entries of, `K / (4 b_w dd)` per `b_a` bits
 It needs only `PackedActivationsIncompressible` on `c` at read cap `K ≥ αΓ`, besides the baseline premise
 `BaselineRegistered`. -/
 def PackedContainedFanOutOn : Prop :=
-  ∀ (k Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (ch : PackedChain c.D k) (dd emax : ℕ)
-    (M : PartialContainment c d),
-    0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
-    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.BaselineRegistered c d M →
-    Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a →
+  ∀ (p c k : ℕ) (K b_w b_a : ℝ) (r d : Declaration) (ch : PackedChain r.D p) (dd emax : ℕ)
+    (M : PartialContainment r d),
+    0 < c → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → (k : ℝ) ≤ K →
+    (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.BaselineRegistered r d M →
+    Assumptions.PackedActivationsIncompressible r ch c K b_w b_a →
       b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
         (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
           ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
-      α * d.D.size d.D.computed
+      (k / c : ℝ) * d.D.size d.D.computed
 
 end InferenceOnly.Guarantees

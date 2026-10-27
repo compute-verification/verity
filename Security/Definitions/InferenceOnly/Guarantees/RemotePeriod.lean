@@ -38,13 +38,14 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
 * **NCI** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
-  `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ α Λ_i size(d_i)`, which
+  `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
-  out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `Γ = gamma` and `α = num/den`, under
+  out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate
+  `k / c = num/den`, under
   `BaselineRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
   code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   guarantee yet: it rests on `Novel.ReadsExact`, through `DescAgrees`. The cover theorem's factor on the same verdicts,
-  `NciCheck.Properties.CheckedCoverTraining`, would replace `ρ_T = b_a/(αΛ)` by its own.
+  `NciCheck.Properties.CheckedCoverTraining`, would replace `ρ_T = b_a/((k / c) Λ)` by its own.
 
 Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`
@@ -64,7 +65,7 @@ with its own uniform coins `Ω t`, independent of the others' (a window is a rou
 window, or a finer cut of it where its PoUW and sampled-proofs coins are drawn at different times). Every bound on a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
 
-* PoUW certifies window `t` at capacity `c_t ≥ 0`, `∑ c_t ≤ C`, its certificate wrong (`wrong t`) with probability at
+* PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate wrong (`wrong t`) with probability at
   most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
 * Sampled proofs: the developer's faulty proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
   declared work) are fixed before their window's coins; the units the window draws (`drawn`) and the faulty blocks it
@@ -77,7 +78,8 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
   (`TerminalDetection`), and one identity's faulty blocks within any span of `Δ` skip at most `Φ Δ`, `Φ H ≤ C` over the
   period's length `H > 0`, as in `VerdictLag`.
 * NCI: each declared run `i` (declaration `d_i`, containing a reference circuit `r_i` threaded by `Th_i`) meets
-  `Throttled`'s conclusion, `b_a |M_i| ≤ α Λ_i size(d_i)` at `Λ_i = Th_i.bound (αΓ) b_w dd e ≤ Λ`: what
+  `Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)` at `Λ_i = Th_i.bound k b_w dd e ≤ Λ`, at the read
+  cap `k ≥ 0` and the rate `k / c`: what
   `DescThrottles` gives for a declaration the check of record accepts. The runs fit on the monitored compute,
   `∑ size(d_i) ≤ C`.
 * The counted multiplications `M` are as in `DampenerRemote`, with the declared runs' `∑ |M_i|`: unmonitored compute at
@@ -89,19 +91,19 @@ Then, for any `ε' > 0` and `K`, with probability at least `1 − δ` over the p
 `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t`, the compute efficiency is at most
 `s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + J K B/C) + ν_T + χ`, and the hardware multiple the developer needs is at
 least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + J K B/C) + ν_T + χ)/MFU₀))`, with
-`r̂ = 1 − W_cert/C`, `s = U/(C + U)` and `ν_T = (1 − s) · 2αΛ/(κ b_a)`. At a pooled `δ` (1% and 10⁻⁶),
+`r̂ = 1 − W_cert/C`, `s = U/(C + U)` and `ν_T = (1 − s) · 2(k / c)Λ/(κ b_a)`. At a pooled `δ` (1% and 10⁻⁶),
 `ε' = 2p/δ` and `K ≥ ln(2J/δ)/q` give `δ + ∑_t ks t`; the per-window figure is the statement at `T = 1`.
 With every proof block proved (`q = 1`), `K = 0` and the escape share is 0. -/
 def DampenerRemotePeriod : Prop :=
   ∀ (T : ℕ) (Ω : Fin T → Type) [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
-    (c : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
+    (cap : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
     (I : Finset ι) (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (ks : Fin T → ℝ) (K : ℕ)
     (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
-    (R : Type) [Fintype R] (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
+    (R : Type) [Fintype R] (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (c : ℕ) (k b_w b_a Λ : ℝ)
     (dd e : ℕ),
     -- PoUW, per window
-    0 ≤ p → 0 < ε → (∀ t, 0 ≤ c t) → ∑ t, c t ≤ C →
+    0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → ∑ t, cap t ≤ C →
     (∀ t (ξ : (t : Fin T) → Ω t),
       prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) →
     -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
@@ -122,13 +124,13 @@ def DampenerRemotePeriod : Prop :=
     (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) →
     (∀ b, 0 ≤ w b) → 0 ≤ B → (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) →
     -- NCI: each declared run as a verdict of compliance of the check of record carries it
-    0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ α → 0 < b_a → 0 ≤ Λ →
-    (∀ i, b_a * (Th i).M.card ≤ α * (Th i).bound (α * Γ) b_w dd e * (d i).D.size (d i).D.computed) →
-    (∀ i, (Th i).bound (α * Γ) b_w dd e ≤ Λ) → ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C →
+    0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ k → 0 < b_a → 0 ≤ Λ →
+    (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) →
+    (∀ i, (Th i).bound k b_w dd e ≤ Λ) → ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C →
     -- the counted multiplications
     (∀ ξ, 0 < M ξ) → (∀ ξ, M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Th i).M.card + Mx ξ) →
     (∀ ξ, (Mu ξ : ℝ) ≤ mfu * κ * U / 2) →
-    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity c (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) →
+    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) →
     (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - (p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t) ≤
         prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) (fun ξ =>
@@ -136,11 +138,11 @@ def DampenerRemotePeriod : Prop :=
               unmonitoredShare C U +
                   (1 - unmonitoredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
-                declaredShare κ (rhoT α b_a Λ) C U + χ ∧
+                declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ ∧
             remoteDampener mfu (unmonitoredShare C U)
                 ((1 - unmonitoredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
-                  declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
+                  declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ≤
               hardwareMultiple mfu κ (M ξ) C U)
 
 /-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something**: an instance meets every premise with
@@ -152,14 +154,14 @@ compute at `MFU₀ = 1/2`, at the remote reference's `p = 3 · 2⁻⁴⁰` (`Cir
 `ε' = 2p/δ` at the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`, `K = 0`). -/
 def DampenerRemotePeriod_honest : Prop :=
   ∃ (T : ℕ) (Ω : Fin T → Type) (_ : ∀ t, Fintype (Ω t)) (_ : ∀ t, Nonempty (Ω t))
-    (c : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
+    (cap : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
     (β ι : Type) (_ : DecidableEq ι) (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
     (I : Finset ι) (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (ks : Fin T → ℝ) (K : ℕ)
     (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
-    (R : Type) (_ : Fintype R) (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
+    (R : Type) (_ : Fintype R) (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (c : ℕ) (k b_w b_a Λ : ℝ)
     (dd e : ℕ),
     -- PoUW, per window
-    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ c t) ∧ ∑ t, c t ≤ C ∧
+    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ ∑ t, cap t ≤ C ∧
     (∀ t (ξ : (t : Fin T) → Ω t),
       prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) ∧
     -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
@@ -180,23 +182,23 @@ def DampenerRemotePeriod_honest : Prop :=
     (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) ∧
     (∀ b, 0 ≤ w b) ∧ 0 ≤ B ∧ (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) ∧
     -- NCI: each declared run as a verdict of compliance of the check of record carries it
-    0 < κ ∧ 0 < C ∧ 0 ≤ U ∧ 0 < mfu ∧ mfu ≤ 1 ∧ 0 ≤ α ∧ 0 < b_a ∧ 0 ≤ Λ ∧
-    (∀ i, b_a * (Th i).M.card ≤ α * (Th i).bound (α * Γ) b_w dd e * (d i).D.size (d i).D.computed) ∧
-    (∀ i, (Th i).bound (α * Γ) b_w dd e ≤ Λ) ∧ ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C ∧
+    0 < κ ∧ 0 < C ∧ 0 ≤ U ∧ 0 < mfu ∧ mfu ≤ 1 ∧ 0 ≤ k ∧ 0 < b_a ∧ 0 ≤ Λ ∧
+    (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) ∧
+    (∀ i, (Th i).bound k b_w dd e ≤ Λ) ∧ ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C ∧
     -- the counted multiplications
     (∀ ξ, 0 < M ξ) ∧ (∀ ξ, M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Th i).M.card + Mx ξ) ∧
     (∀ ξ, (Mu ξ : ℝ) ≤ mfu * κ * U / 2) ∧
-    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity c (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
+    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
     (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) ∧
     p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t ≤ 1 / 10 ^ 6 ∧
     ∀ ξ, 1 < remoteDampener mfu (unmonitoredShare C U)
         ((1 - unmonitoredShare C U) *
             (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
-          declaredShare κ (rhoT α b_a Λ) C U + χ) ∧
+          declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ∧
       remoteDampener mfu (unmonitoredShare C U)
           ((1 - unmonitoredShare C U) *
               (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
-            declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
+            declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ≤
         hardwareMultiple mfu κ (M ξ) C U
 
 noncomputable section
@@ -208,7 +210,7 @@ multiplication is in the residual. `DampenerRemotePeriod_nontrivial` is stated a
 namespace AcceptAll
 
 /-- The window certifies all of the monitored compute, `C = 1`. -/
-abbrev c : Fin 1 → ℝ := fun _ => 1
+abbrev cap : Fin 1 → ℝ := fun _ => 1
 
 /-- The window's certificate is wrong on every run. -/
 abbrev wrong : Fin 1 → (Fin 1 → Bool) → Prop := fun _ _ => True
@@ -249,7 +251,7 @@ efficiency is 1, above the bound `51/100`, and its hardware multiple is 1, below
 run. -/
 def DampenerRemotePeriod_nontrivial : Prop :=
   -- every other premise: PoUW's capacities
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.c t) ∧ ∑ t, AcceptAll.c t ≤ 1 ∧
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ ∑ t, AcceptAll.cap t ≤ 1 ∧
   -- sampled proofs, per window
   (∀ (t : Fin 1) (ξ ξ' : Fin 1 → Bool), (∀ s, s < t → ξ s = ξ' s) → ∀ b, AcceptAll.win b = t →
     (b ∈ AcceptAll.bad ξ ↔ b ∈ AcceptAll.bad ξ')) ∧
@@ -275,15 +277,15 @@ def DampenerRemotePeriod_nontrivial : Prop :=
   -- NCI
   (0 : ℝ) < 2 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (0 : ℝ) < 100 ∧ (0 : ℝ) ≤ 1 ∧
   (∀ i, 100 * (AcceptAll.Th i).M.card ≤
-    1 * (AcceptAll.Th i).bound (1 * (0 : ℕ)) 0 0 0 * (AcceptAll.d i).D.size (AcceptAll.d i).D.computed) ∧
-  (∀ i, (AcceptAll.Th i).bound (1 * (0 : ℕ)) 0 0 0 ≤ 1) ∧
+    1 / ((1 : ℕ) : ℝ) * (AcceptAll.Th i).bound 1 0 0 0 * (AcceptAll.d i).D.size (AcceptAll.d i).D.computed) ∧
+  (∀ i, (AcceptAll.Th i).bound 1 0 0 0 ≤ 1) ∧
   ∑ i, ((AcceptAll.d i).D.size (AcceptAll.d i).D.computed : ℝ) ≤ 1 ∧
   -- the counted multiplications
   (∀ ξ, 0 < AcceptAll.M ξ) ∧
   (∀ ξ, AcceptAll.M ξ ≤ AcceptAll.Mu ξ + AcceptAll.Mr ξ + ∑ i, (AcceptAll.Th i).M.card + AcceptAll.Mx ξ) ∧
   (∀ ξ, (AcceptAll.Mu ξ : ℝ) ≤ 1 * 2 * 0 / 2) ∧
   (∀ ξ, (AcceptAll.Mr ξ : ℝ) ≤ 2 * (1 - (1 - 0) * AcceptAll.W ξ +
-    wrongCapacity AcceptAll.c (fun t => AcceptAll.wrong t ξ) + ∑ b ∈ AcceptAll.bad ξ, AcceptAll.w b) / 2) ∧
+    wrongCapacity AcceptAll.cap (fun t => AcceptAll.wrong t ξ) + ∑ b ∈ AcceptAll.bad ξ, AcceptAll.w b) / 2) ∧
   (∀ ξ, (AcceptAll.Mx ξ : ℝ) ≤ 2 * 0 * (1 + 0) / 2) ∧
   -- PoUW's per-window bound fails
   ¬ (∀ (t : Fin 1) (ξ : Fin 1 → Bool),
@@ -296,12 +298,12 @@ def DampenerRemotePeriod_nontrivial : Prop :=
                 (1 - unmonitoredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
-              declaredShare 2 (rhoT 1 100 1) 1 0 + 0 ∧
+              declaredShare 2 (rhoT (1 / ((1 : ℕ) : ℝ)) 100 1) 1 0 + 0 ∧
           remoteDampener 1 (unmonitoredShare 1 0)
               ((1 - unmonitoredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
-                declaredShare 2 (rhoT 1 100 1) 1 0 + 0) ≤
+                declaredShare 2 (rhoT (1 / ((1 : ℕ) : ℝ)) 100 1) 1 0 + 0) ≤
             hardwareMultiple 1 2 (AcceptAll.M ξ) 1 0))
 
 end InferenceOnly.Guarantees
