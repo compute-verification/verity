@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 /-!
 # KS's route with each part's decision (`showsDec`)
 
-The residual leaf holds only at each part's own decision (`ResLower.ResLoweredPD`, `DecompBR.ResLowJPD`: `JointP` over
+The residual leaf holds only at each part's own decision (`ResLower.ResLoweredPD`, `DecompBR.ResLowJPD`: `JointV` over
 `ResLower.showsDec`), so KS reads its parts' checks at `showsDec` where it lowers `DecompBV`. The run supplies the
 decision: at an accepted run each part's staged statement shows `showsPart` (`stagedB_deployRec_part`) and is decided
 (`ResLower.partDec_run`), so `StagedB` holds at `showsDec` (`stagedB_deployRec_dec`). The other leaves stay at
@@ -175,11 +175,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
 
-/-- What each part's circuit accepts at layout `L`, at its V\* statement and witness, showing its decision. -/
-abbrev acceptsLVD :=
-  PartAcceptsV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (deployZkRec _root_.Flock.Readable.relation)
-    L Claims.Recursion.Form.Dense (ResLower.showsDec recRead (bB b aux nOf hd rest)) (cmtTr recRead)
-
 /-- **`RecKSDecompLV` at each part's decision**: `DecompBV` at `acceptsLVD`, the form
 `Flock.SecurityProofs.recursiveKSAt_ofVD` takes. -/
 def RecKSDecompLVD : Prop :=
@@ -202,7 +197,7 @@ theorem resLowJPD_of_resLoweredPD (rd : Msg → Option FinalP) (b : Brings) (aux
     (h : ResLower.ResLoweredPD rd wE final w (bB b aux nOf hd rest) elem Claims.Recursion.Form.Dense recRead
       (cmtTr recRead) pieces ownQ elemAt vvAt) :
     ResLowJPD rd b aux nOf hd rest wE final w (DeployedR.layR elem) pieces elemAt vvAt ownQ :=
-  fun x st hx hf c ws hJ s hs => h x st hx hf c ws hJ s hs
+  fun x st hx hf c xs ws hJ s hs => h x st hx hf c xs ws hJ s hs
 
 end RecDeploy.DecompBR
 

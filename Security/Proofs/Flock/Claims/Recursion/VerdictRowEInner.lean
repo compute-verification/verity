@@ -59,7 +59,7 @@ theorem innerReads_of_checkAccReads {i : RecVStar.Inner} {k : ℕ} {name : Strin
       #[some (RecVStar.opensBelow sch sch.levels.size), some (2 * RecVStar.opensBelow sch sch.levels.size)]) nm)
     ?_ _ h nm hnm
   intro nm' r hr
-  dsimp only at hr
+  try dsimp only at hr
   split at hr
   · rename_i p hf
     split at hr
@@ -82,14 +82,14 @@ theorem endRow_eq {N n x d : ℕ} {nm : String} (hd : (nm, d) ∈ [("acc0", 0), 
   · have e : RecVStar.endWant (#[some 0, some N], #[some N, some (2 * N)]) "acc0" = #[some 0, some N] := rfl
     rw [e] at h
     rcases n with _ | _ | n
-    · refine ⟨by omega, ?_⟩; simp at h ⊢ <;> omega
-    · refine ⟨by omega, ?_⟩; simp at h ⊢ <;> omega
+    · refine ⟨by omega, ?_⟩; simp at h ⊢; omega
+    · refine ⟨by omega, ?_⟩; simp at h ⊢; omega
     · simp at h
   · have e : RecVStar.endWant (#[some 0, some N], #[some N, some (2 * N)]) "acc1" = #[some N, some (2 * N)] := rfl
     rw [e] at h
     rcases n with _ | _ | n
-    · refine ⟨by omega, ?_⟩; simp at h ⊢ <;> omega
-    · refine ⟨by omega, ?_⟩; simp at h ⊢ <;> omega
+    · refine ⟨by omega, ?_⟩; simp at h ⊢; omega
+    · refine ⟨by omega, ?_⟩; simp at h ⊢; omega
     · simp at h
 
 /-- **An algebra part's `acc0`/`acc1` slot at unit `u` is the registered `rec-acc` row at the rep's end**: at a staged

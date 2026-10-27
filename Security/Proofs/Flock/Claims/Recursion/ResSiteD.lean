@@ -29,12 +29,6 @@ open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **Part `s`'s decision**: the session at its staged statement `xO` decided, and its checks (`drawLaw`, `drawEq`) and
-last refusals (`fullDrawO`) passed. -/
-def PartDec (xO : Msg) (i : RecIns) : Prop :=
-  ∃ (spec' : SessionSpec) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Msg × Coin))
-    (f : FlockDeploy.Final), FlockDeploy.checks true i.base spec' xO link c₁ mids f = .ok () ∧ fullDrawO xO f = true
-
 /-- **At part `s`'s decision, table 0 labels its instances `0..n-1`** (`labels_full`, at the staged statement's inner
 shape, `insO_staged`). -/
 theorem idx_of_dec {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {i : RecIns} {spec : SessionSpec}
