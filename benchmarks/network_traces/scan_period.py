@@ -12,18 +12,19 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
   three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
   ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
-  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries.
+  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries and its ``scan/state``
+  that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
-  answer accepts, at the state tie alone (the mirror's ``UNTIED`` in its reason and in Lean's). The block round's o0
-  is a `SlotEntry_v1` stand-in's entries, so the scan's `prog` is wired, and the rows form refuses every link-window
-  until a slot's Program's `SCAN_STATE` is tied to the scan's state: the honest case passes every other check and is
-  refused there. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  ``network-period check`` (``--lean``), whose verdicts and public outputs must agree and be the case's: accept for the
+  honest case where the scan's answer accepts, reject for every other. The block round's o0 is a `SlotEntry_v1`
+  stand-in's entries, so the scan's `prog` is wired, and its registration names the scan's state tree as
+  ``scan/state``, so the scan's state is tied (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each
+  case's answers.
 """
 from __future__ import annotations
 
@@ -131,10 +132,8 @@ def main(argv=None) -> int:
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        why = m.UNTIED if not round_ and scan_said == {"accept"} else None
-        want = "reject" + (" at the state tie" if why else "")
-        good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+        want = "accept" if not round_ and scan_said == {"accept"} else "reject"
+        good = py.get("verdict") == lean.get("verdict") == want and py.get("public") == lean.get("public")
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
         got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
