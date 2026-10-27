@@ -6,8 +6,8 @@ import Flock.Hash
 
 A one-stage window record (format `verity/registration/v1` or `verity/registration/v2`) is named by
 `SHA-512(format ‖ 0 ‖ canon(record))`, its own format the tag. This is that digest's one definition, in C-Flock's
-verifier so that every reader reaches it without a new requirement: PoUW's check (`PouwCheck.Registration.digest`), the
-NCI check (`NciCheck.Baseline.digest`) and the network check (`NetworkCheck.Period.registrationOf`) read it here.
+verifier so that every reader reaches it without a new requirement: PoUW's check (`PouwCheck.Registration.digest`) and
+the network check (`NetworkCheck.Period.registrationOf`) read it here.
 Python's `registration.digest` is its mirror on ASCII records.
 -/
 
