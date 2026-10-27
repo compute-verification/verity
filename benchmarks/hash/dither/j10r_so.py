@@ -1,6 +1,6 @@
-"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; RT-ALGO-16's verifier form, #3574: each unit's call is its call's
+"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; RT-ALGO-16's verifier form: each unit's call is its call's
 first position and its blocks `core_check.j10r_blocks` at the call's slot M, as credit derives them from the window's
-layout, when M is "slot" on a slot T with every row block computed, `forms.j10r_part`): the gate's references for it,
+layout, when M is "slot" on a slot T with every row tile computed, `forms.j10r_part`): the gate's references for it,
 swapped into dither_a's check as j10served.py swaps banded noise's.
 
     every capture, the window's end   each receipt against h1r.cu's version 1 under J10-R (`RefH1R`: h1r_launch_j10r, its
@@ -32,7 +32,7 @@ LABEL = ("J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's
          f"{J10R_SHA}; RT-ALGO-16's verifier form, #3574)")
 M_MODES = {"slot": "each call's A slot, T rows (j10r_blocks' docstring: the call's slot)",
            "live": "the step's live rows rounded up to 32"}
-# dither_so's $DITHER_UNITS_SKIP_DEAD: a row block wholly past the live rows computed in full (unset), or skipped ("1")
+# dither_so's $DITHER_UNITS_SKIP_DEAD: a row tile wholly past the live rows computed in full (unset), or skipped ("1")
 DEAD = {False: "computed in full (PouwH1Tile_v5 / v6)",
         True: "skipped: the zero receipt (h1tile's canonical dead tile, $DITHER_UNITS_SKIP_DEAD=1)"}
 
@@ -52,7 +52,7 @@ def checked_calls(L: int) -> list[int]:
 
 
 class RefH1R(H1R):
-    """h1r.py's H1R whose version 1 is h1r_launch_j10r at the class's layout rows M; unless SKIP, every call's row blocks
+    """h1r.py's H1R whose version 1 is h1r_launch_j10r at the class's layout rows M; unless SKIP, every call's row tiles
     all live (a dead one's units computed in full)."""
     M = 0
     SKIP = True
@@ -87,7 +87,7 @@ class Refs:
         return self.s * self.win.u_step + self.win.offs[w]
 
     def receipts(self, w: int, salt: bytes, root_a: bytes, root_b: bytes) -> np.ndarray:
-        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, and a dead row block's by j10r_units too, or
+        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, and a dead row tile's by j10r_units too, or
         under `skip` the zero receipt (the dead tile, as h1u and h1r then write it)."""
         import j10r_units as JU
         key = (w, salt, root_a, root_b)

@@ -20,7 +20,7 @@ and these premises, each a named `Prop` taken as a hypothesis:
   counts whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the
   pass, not necessarily at one tick.
 
-The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean (art:d3c891e4).
+The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean.
 -/
 
 namespace Accounting.Assumptions
@@ -29,8 +29,8 @@ open Accounting.Remote.Sketch
 
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
-/-- `random-oracle` (the random-oracle card, 9cd57182, ASK-16: PoUW only, each use a named premise; its use for the
-memory sketch is asked of Daniel, 24 Oct). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
+/-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; its use for the
+memory sketch is not yet ruled on). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
 uniform**: at every prover coin `b` and registered store `D`, no event `E` of the keys (each candidate seed's signs and
 receipt hash) is more than `ε` likelier at `A.keys b D x`, over SHA-512's outputs `x`, than at uniform keys, so the
 keys' law is within statistical distance `ε` of uniform:

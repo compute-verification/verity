@@ -5,7 +5,7 @@ answer but its reason, the certified `q_bytes`, `eps` and the profile among them
 window in flight, which no property of the Lean covers.
 
 The cases are a small period on one node (`period.run` on a clock the test sets): honest, its prover reading a store
-that dropped every other block, and stopped before its last window is verified; every recorded scenario
+that dropped every other chunk, and stopped before its last window is verified; every recorded scenario
 (`ra_cases.SCENARIOS`) as a case; drawn honest sessions of drawn shapes; and recorded ones with one or two edits
 (`test_drawn.edited`) or one edit of the case's framing."""
 
@@ -128,7 +128,7 @@ COINS = hashlib.sha512(b"the period's live coins").digest()
 
 
 def periods() -> dict[str, period.Period]:
-    """The small period on node `n0`, honest, under a prover that dropped every other block, and one verified only up
+    """The small period on node `n0`, honest, under a prover that dropped every other chunk, and one verified only up
     to its first window."""
     out = {}
     for name, kw in (("honest", {}), ("dropping", {"cheat": M.dropping(lambda j: j % 2 == 1)}), ("unverified", {"verify": 1})):
@@ -143,7 +143,7 @@ def _part(answer: dict) -> dict:
 
 def test_a_small_periods_answers_agree(server) -> None:
     """The hook's own answer (the live session's) is the Python verifier's of its case and the Lean's: accepted with the
-    reads its openings certify, rejected for the dropped blocks' paths, and undecided with a window unverified."""
+    reads its openings certify, rejected for the dropped chunks' paths, and undecided with a window unverified."""
     got = {}
     for name, p in periods().items():
         assert _part(protocol(copy.deepcopy(p.case))) == _part(p.answer), name

@@ -4,8 +4,8 @@ the digest of each encoded segment, and `vk`'s root) through `verity.core.protoc
 whole-segment vector at the registered point in `fixtures/vectors.json`, which `VERITY_POUS_SLOW=1` checks through the
 interface.
 
-A scheme whose encode is slow in Python (`SLOW_ENCODE`: P2's two roots per block, about 2.4 s at 16,448 bits) also pins
-its small instance's blocks; the default tests decode those, and `VERITY_POUS_SLOW=1` re-encodes.
+A scheme whose encode is slow in Python (`SLOW_ENCODE`: P2's two roots per label, about 2.4 s at 16,448 bits) also pins
+its small instance's labels; the default tests decode those, and `VERITY_POUS_SLOW=1` re-encodes.
 
 `python tests/pous_scheme_vectors.py` rewrites them (about 5 s).
 """
@@ -62,7 +62,7 @@ def vector(name: str, blocks: list[list[bytes]] | None = None) -> dict:
 
 
 def pinned_blocks(pinned: dict) -> list[list[bytes]] | None:
-    """A vector's pinned blocks, when it has them."""
+    """A vector's pinned labels, when it has them."""
     blocks = pinned["small"].get("blocks")
     return None if blocks is None else [[bytes.fromhex(b) for b in seg] for seg in blocks]
 

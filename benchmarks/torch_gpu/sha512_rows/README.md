@@ -103,6 +103,7 @@ compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the frozen H200 shape.
 - `sass.py`: opcode counts per variant.
+- `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`ruler.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU session.
 - `ruler.sh`, `as_commit_gpu.cuh`: the variants on commit_gpu's ruler (`commit_gpu sha`, gated by `reference.py check`)
   against its default build, with each build's SASS pipe mix, SM clock and ncu's pipe utilization.
