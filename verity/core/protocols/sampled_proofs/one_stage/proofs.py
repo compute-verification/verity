@@ -264,13 +264,42 @@ def _unhex(h: str) -> bytes:
     return bytes.fromhex(h)
 
 
+def round_request(stream: str, chain: bytes, n: int) -> bytes:
+    """Lean `OneStageZk.roundRequest`: round k's request to the window's challenger, all of it public: its stream's name
+    (two bytes big-endian of its UTF-8 length, then the name), the stream's chain at the round (64 bytes), then the
+    round's coin count `n`, its F128s as the record's `coins` lists them (eight bytes little-endian). Its coins are
+    released after its SHA-512."""
+    s = stream.encode()
+    if len(s) >= 1 << 16:
+        raise ValueError("record: a stream's name is past 65535 bytes")
+    return len(s).to_bytes(2, "big") + s + chain + n.to_bytes(8, "little")
+
+
+def parse_round_request(request: bytes) -> tuple[str, bytes, int] | None:
+    """`round_request`'s `(stream, chain, n)` read back from its bytes; None when they are not one."""
+    if len(request) < 2:
+        return None
+    k = int.from_bytes(request[:2], "big")
+    if len(request) != 2 + k + 64 + 8:
+        return None
+    try:
+        stream = request[2:2 + k].decode()
+    except UnicodeDecodeError:
+        return None
+    return stream, request[2 + k:2 + k + 64], int.from_bytes(request[-8:], "little")
+
+
 def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str]]]:
     """Lean `OneStageZk.sessionUses`: session `slot`'s uses of the challenger's coins as `(label, after, coins, want)`,
     `want` the record's F128 hex its coins' bytes must begin with: its link points, of family `slot/<slot>/session`
     after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
-    record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
-    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Raises
-    ValueError with Lean's reason."""
+    record's order, of family `slot/<slot>/<stream>` after the SHA-512 of the round's request (`round_request`) at the
+    stream's chain a_k = SHA-512(a_{k-1} ‖ msg_sha512_k) from a_{-1} empty and the round's own coin count, the record's
+    F128s n (two rounds of equal bytes are two uses, and a release after a request of another count is no use);
+    ceil(n/4) coins of 64 bytes for n F128s.
+    A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Lean
+    reads them (`usesOf`) only once the record's link, streams and rounds are what `_rounds_ok` asks. Raises ValueError with
+    Lean's reason."""
     j = json.loads(record)
     link = j.get("link") if isinstance(j, dict) else None
     pts_j = link.get("points") if isinstance(link, dict) else None
@@ -296,9 +325,12 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
             raise ValueError("record: a stream's name is not a string")
         if name == "session":
             raise ValueError("record: a stream is named session, the link points' family")
+        if len(name.encode()) >= 1 << 16:
+            raise ValueError("record: a stream's name is past 65535 bytes")
         rounds = s.get("rounds")
         if type(rounds) is not list:
             raise ValueError(f"record: {name}'s rounds are not a list")
+        chain = b""
         for r in rounds:
             sha = r.get("msg_sha512") if isinstance(r, dict) else None
             if type(sha) is not str:
@@ -306,8 +338,56 @@ def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str
             if len(sha) != 128:
                 raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
             cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
-            out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
+            chain = hashlib.sha512(chain + _unhex(sha)).digest()
+            out.append((f"slot/{slot}/{name}", hashlib.sha512(round_request(name, chain, len(cs))).digest(),
+                        (len(cs) + 3) // 4, cs))
+    _rounds_ok(rbs, streams)
     return out
+
+
+#: Lean `OneStageZk.TABLES`: the statement's one table, the only table a record's link may name.
+TABLES = ("circuit",)
+
+#: Lean `OneStageZk.STREAMS`: the statement's one table's two rep streams, the only streams a record may hold.
+STREAMS = tuple(f"{t}/rep{r}" for t in TABLES for r in (0, 1))
+
+
+def squeeze_count(x: bytes) -> int | None:
+    """Lean `OneStageZk.squeezeCount`: the coin count of the squeeze header a round message ends in (op 4, the coin's
+    kind, six zero bytes, the count as eight bytes little-endian); None when it ends in none."""
+    if len(x) < 16 or x[-16] != 4:
+        return None
+    return int.from_bytes(x[-8:], "little")
+
+
+def _rounds_ok(rbs: dict, streams: list) -> None:
+    """Lean `OneStageZk.roundsOk`, on a record `session_uses` has read: its link's root_B digests named by `TABLES`
+    exactly, each stream one of `STREAMS`, none named twice, each round's retained ``msg`` its ``msg_sha512``'s and
+    ending in the squeeze header of its coins."""
+    if tuple(sorted(rbs)) != TABLES:
+        raise ValueError("record: link.root_b_sha512 does not name exactly the statement's table")
+    seen: set[str] = set()
+    for s in streams:
+        name = s["stream"]
+        if name not in STREAMS:
+            raise ValueError(f"record: a stream is named {name}, not a rep stream of the statement's table")
+        if name in seen:
+            raise ValueError(f"record: two streams are named {name}")
+        seen.add(name)
+        for r in s["rounds"]:
+            cs = r["coins"]
+            m = r.get("msg")
+            if type(m) is not str:
+                raise ValueError(f"record: a round of {name} retains no msg")
+            try:
+                msg = _unhex(m)
+            except ValueError:
+                raise ValueError(f"record: a round of {name}'s msg is not hex") from None
+            if hashlib.sha512(msg).digest() != _unhex(r["msg_sha512"]):
+                raise ValueError(f"record: a round of {name}'s msg is not its msg_sha512's")
+            if squeeze_count(msg) != len(cs):
+                raise ValueError(
+                    f"record: a round of {name}'s msg does not end in the squeeze header of its {len(cs)} coins")
 
 
 def uses_v2(slot: int, record: Path) -> dict:
@@ -318,6 +398,44 @@ def uses_v2(slot: int, record: Path) -> dict:
         return json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
         raise LeanError(f"{V2_EXE} uses answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+
+
+#: the key of the registration's ``window`` that names the public file the window's statement reads (Lean
+#: `OneStageZk.PUBLIC_KEY`)
+PUBLIC_KEY = "public_file"
+
+
+def registered_public(record: Mapping[str, Any]) -> str | None:
+    """Lean `OneStageZk.registeredPublic`: the public file the registration `record` names, ``window.public_file``, when
+    it names one as a SHA-512 digest (lowercase hex of 64 bytes)."""
+    w = record.get("window")
+    d = w.get(PUBLIC_KEY) if isinstance(w, Mapping) else None
+    return d if type(d) is str and re.fullmatch(r"[0-9a-f]{128}", d) else None
+
+
+def public_why(record: Mapping[str, Any], pub: str) -> str | None:
+    """Lean `OneStageZk.publicWhy`: why the evidence's public file of SHA-512 `pub` is not the one the registration
+    `record` names; None when it is. v2 refuses the evidence then."""
+    d = registered_public(record)
+    if d is None:
+        return f"the registration names no public file (window.{PUBLIC_KEY}, a SHA-512 digest)"
+    return None if pub == d else f"the evidence's public file is not the one the registration names, {d}"
+
+
+def with_public(record: Mapping[str, Any], public: Path) -> dict:
+    """`record` with its window naming the public file `public` (``window.public_file``, its SHA-512), as a prover
+    registers its window's statement for v2 before any coin."""
+    return {**record, "window": {**record["window"], PUBLIC_KEY: file_sha512(public)}}
+
+
+def public_v2(record: Path, pub: str) -> dict:
+    """`public_why` by the v2 audit's Lean (`sampled-proofs-one-stage-zk public`): its line, ``{"why": why | null}`` or
+    ``{"refused": why}``."""
+    p = subprocess.run([str(v2_executable()), "public", str(record), pub], capture_output=True, text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} public answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
@@ -341,6 +459,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
-           "executable", "file_sha512", "proved_units", "reads_registered", "session_uses", "uses_v2", "v2_executable",
-           "verdicts_v2", "verify"]
+__all__ = ["EXE", "PACKAGE", "PUBLIC_KEY", "STATEMENT", "STREAMS", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
+           "check_v2", "evidence_v2", "executable", "file_sha512", "parse_round_request", "proved_units", "public_v2",
+           "public_why", "reads_registered", "registered_public", "round_request", "session_uses", "squeeze_count",
+           "uses_v2", "v2_executable", "verdicts_v2", "verify", "with_public"]

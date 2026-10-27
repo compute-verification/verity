@@ -88,6 +88,113 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 open Classical
 
+/-- **flock-verify `--zk` reads a transcript only through its draw, its decoded session and its proof files**: the
+statement sets up from the record's draw alone (`setupOf`), and `Flock.Zk.verify` reads the record only through
+`Record.decode`. -/
+theorem acceptsZK_congr {I : Inputs} {t t' : Discharge.Exec.Transcript} (hd : recordDraw t.record = recordDraw t'.record)
+    (hs : ∀ spec, Flock.Record.decode spec t.record = Flock.Record.decode spec t'.record) (hp : t.proofs = t'.proofs)
+    (h : AcceptsZK I t) : AcceptsZK I t' := by
+  obtain ⟨spec, sts, hset, hsh, hv⟩ := h
+  refine ⟨spec, sts, ?_, hsh, ?_⟩
+  · rw [setupOf, ← hd]
+    exact hset
+  · have hver : Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t'.record t'.proofs =
+        Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs := by
+      unfold Flock.Zk.verify
+      rw [← hs spec, ← hp]
+    rw [hver]
+    exact hv
+
+/-- **`t` is the record of the live outcome `o` at the draw `S`**, at `J` tables (`RecordsLiveZKJ`'s conclusion): the
+record carries the draw `dj S`, the proof files are `o`'s, and the record decodes to a session whose link points are
+`o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
+def RecordOfZKJ {n mPts : ℕ} (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (J : ℕ) (S : Finset (Fin n))
+    (o : LiveOutJ J mPts) (t : Discharge.Exec.Transcript) : Prop :=
+  recordDraw t.record = some (dj S) ∧ t.proofs = o.proofs ∧
+    ∀ spec sts sess, setupOf (zkInputs I) t.record = .ok (spec, sts) →
+      Flock.Record.decode spec t.record = .ok sess →
+      FlockSoundness.Refine.ptsOf mPts sess.points = o.pts ∧
+      ∀ j : Fin J, sess.rootB[j.val]! = o.rootB[j.val]! ∧ ∀ r : Fin 2, ∃ s : Flock.StreamRec,
+        sess.streams.find? (fun x => x.name == toString spec.tables[j.val]! ++ toString "/rep" ++ toString r.val) =
+          some s ∧ s.rounds.toList = o.reps j r
+
+/-- **The live audit's record writer**: at the draw `S`, the registration `R` and the live outcome `o`, a record of `o`
+(`RecordOfZKJ`) that flock-verify `--zk --registered` accepts at the roots `own` where there is one, else one
+flock-verify `--zk` accepts where there is one, else a transcript it refuses where there is one. It reads nothing but the
+live outcome, and wherever any record of `o` is accepted, under either check, its record is (`accepts_canonWr`,
+`acceptsR_canonWr`). -/
+noncomputable def canonWr {n : ℕ} {Reg : Type} (I : Inputs) (own : Array Flock.Registered.Port)
+    (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ) (mPts : ℕ) (S : Finset (Fin n)) (R : Reg)
+    (o : LiveOutJ (Jf S R) mPts) : Discharge.Exec.Transcript :=
+  if h : ∃ t, RecordOfZKJ I dj (Jf S R) S o t ∧ Discharge.ZkReg.AcceptsZKR I own t then Classical.choose h
+  else if h₁ : ∃ t, RecordOfZKJ I dj (Jf S R) S o t ∧ AcceptsZK I t then Classical.choose h₁
+  else if h' : ∃ t, ¬ AcceptsZK I t then Classical.choose h' else ⟨"", #[]⟩
+
+/-- **Where a record of the live outcome is accepted under `--registered`, the writer's is.** -/
+theorem acceptsR_canonWr {n : ℕ} {Reg : Type} {I : Inputs} {own : Array Flock.Registered.Port}
+    {dj : Finset (Fin n) → Lean.Json} {Jf : Finset (Fin n) → Reg → ℕ} {mPts : ℕ} {S : Finset (Fin n)} {R : Reg}
+    {o : LiveOutJ (Jf S R) mPts} {t : Discharge.Exec.Transcript} (hr : RecordOfZKJ I dj (Jf S R) S o t)
+    (ha : Discharge.ZkReg.AcceptsZKR I own t) : Discharge.ZkReg.AcceptsZKR I own (canonWr I own dj Jf mPts S R o) := by
+  unfold canonWr
+  split
+  next h => exact (Classical.choose_spec h).2
+  next h => exact (h ⟨t, hr, ha⟩).elim
+
+/-- **Where a record of the live outcome is accepted, the writer's is.** -/
+theorem accepts_canonWr {n : ℕ} {Reg : Type} {I : Inputs} {own : Array Flock.Registered.Port}
+    {dj : Finset (Fin n) → Lean.Json} {Jf : Finset (Fin n) → Reg → ℕ} {mPts : ℕ} {S : Finset (Fin n)} {R : Reg}
+    {o : LiveOutJ (Jf S R) mPts} {t : Discharge.Exec.Transcript} (hr : RecordOfZKJ I dj (Jf S R) S o t)
+    (ha : AcceptsZK I t) : AcceptsZK I (canonWr I own dj Jf mPts S R o) := by
+  unfold canonWr
+  split
+  next h => exact Discharge.ZkReg.acceptsZK_of_R (Classical.choose_spec h).2
+  next h =>
+    split
+    next h₁ => exact (Classical.choose_spec h₁).2
+    next h₁ => exact (h₁ ⟨t, hr, ha⟩).elim
+
+/-- **flock-verify `--zk` refuses some transcript**: the empty record where it sets up nothing, else the empty record
+with one proof file more than its session has rep streams (`zk_verify_ok`). -/
+theorem exists_refused (I : Inputs) : ∃ t : Discharge.Exec.Transcript, ¬ AcceptsZK I t := by
+  cases hs : setupOf (zkInputs I) "" with
+  | error e =>
+    refine ⟨⟨"", #[]⟩, fun ⟨spec, sts, h, _⟩ => ?_⟩
+    change setupOf (zkInputs I) "" = _ at h
+    rw [hs] at h
+    cases h
+  | ok p =>
+    refine ⟨⟨"", Array.replicate (p.1.repStreams.size + 1) ByteArray.empty⟩, fun ⟨spec, sts, h, _, hv⟩ => ?_⟩
+    change setupOf (zkInputs I) "" = _ at h
+    rw [hs] at h
+    cases h
+    obtain ⟨_, _, _, _, _, _, hp, _⟩ := zk_verify_ok _ _ _ _ hv
+    simp at hp
+
+/-- **The writer's records are the live session's** (`RecordsLiveZKJ`): where flock-verify accepts what `canonWr`
+writes, it wrote an accepted record of the outcome, since otherwise it wrote a refused transcript
+(`exists_refused`). -/
+theorem recordsLive_canonWr {n : ℕ} {Reg : Type} (I : Inputs) (own : Array Flock.Registered.Port)
+    (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ) (mPts : ℕ) :
+    RecordsLiveZKJ I dj Jf (canonWr I own dj Jf mPts) := by
+  intro S R o ha
+  show RecordOfZKJ I dj (Jf S R) S o (canonWr I own dj Jf mPts S R o)
+  by_cases h : ∃ t, RecordOfZKJ I dj (Jf S R) S o t ∧ Discharge.ZkReg.AcceptsZKR I own t
+  · have hw : canonWr I own dj Jf mPts S R o = Classical.choose h := by
+      rw [canonWr, dite_eq_left_of_eq_true (eq_true h)]
+    rw [hw]
+    exact (Classical.choose_spec h).1
+  by_cases h₁ : ∃ t, RecordOfZKJ I dj (Jf S R) S o t ∧ AcceptsZK I t
+  · have hw : canonWr I own dj Jf mPts S R o = Classical.choose h₁ := by
+      rw [canonWr, dite_eq_right_of_eq_false (eq_false h), dite_eq_left_of_eq_true (eq_true h₁)]
+    rw [hw]
+    exact (Classical.choose_spec h₁).1
+  · have hr := exists_refused I
+    have hw : canonWr I own dj Jf mPts S R o = Classical.choose hr := by
+      rw [canonWr, dite_eq_right_of_eq_false (eq_false h), dite_eq_right_of_eq_false (eq_false h₁),
+        dite_eq_left_of_eq_true (eq_true hr)]
+    rw [hw] at ha
+    exact absurd ha (Classical.choose_spec hr)
+
 /-- **`SampledKSLivePub`'s setting at one session**: at the parsed circuit file `D` (its unit built, `hU`) with `n`
 units, the draw size `kd`, `K₀` and the descriptor `desc`, everything else `SampledKSLivePub` quantifies before the
 strategy, named assumption A3 included. `t' τ` bounds the SHA-512 evaluations of one run of the strategy `τ`, `v`

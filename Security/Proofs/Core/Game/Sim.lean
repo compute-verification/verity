@@ -286,13 +286,16 @@ def recOf (z : Σ m : ℕ, M × (Fin m → Bool)) : ρ := mk z.2.1 (List.ofFn z.
 
 variable {p : α → Prop}
 
-theorem dom_reach_aux
-    (hfin : ∀ hs (K : List ρ → Game α) (s : Strategy (K [])), K = (fun l => k₀ (hs.map (recOf mk) ++ l)) →
-      Dominated p (K []) s q (G (runPlan plan st₀ hs))) :
-    ∀ (ns : List ℕ) hs (K : List ρ → Game α), K = (fun l => k₀ (hs.map (recOf mk) ++ l)) →
+theorem dom_reach_aux {ns₀ : List ℕ}
+    (hfin : ∀ hs (K : List ρ → Game α) (s : Strategy (K [])), hs.map Sigma.fst = ns₀ →
+      K = (fun l => k₀ (hs.map (recOf mk) ++ l)) → Dominated p (K []) s q (G (runPlan plan st₀ hs))) :
+    ∀ (ns : List ℕ) hs (K : List ρ → Game α), hs.map Sigma.fst ++ ns = ns₀ → K = (fun l => k₀ (hs.map (recOf mk) ++ l)) →
       ∀ s : Strategy (roundsThen mk K ns), Dominated p (roundsThen mk K ns) s q (G (runPlan plan st₀ hs))
-  | [], hs, K, hK, s => hfin hs K s hK
-  | n :: ns, hs, K, hK, s => by
+  | [], hs, K, hn, hK, s => hfin hs K s (by simpa using hn) hK
+  | n :: ns, hs, K, hn, hK, s => by
+    have hn' : ∀ (b : M) (x : Fin n → Bool),
+        (hs ++ [(⟨n, b, x⟩ : Σ m : ℕ, M × (Fin m → Bool))]).map Sigma.fst ++ ns = ns₀ := fun b x => by
+      rw [← hn]; simp
     have hK' : ∀ x : Fin n → Bool, (fun log => K (mk s.1 (List.ofFn x) :: log)) =
         fun l => k₀ ((hs ++ [(⟨n, s.1, x⟩ : Σ m : ℕ, M × (Fin m → Bool))]).map (recOf mk) ++ l) := fun x => by
       subst hK
@@ -304,22 +307,22 @@ theorem dom_reach_aux
       refine dom_coin_left fun x => ?_
       have hst : runPlan plan st₀ (hs ++ [(⟨n, s.1, x⟩ : Σ m : ℕ, M × (Fin m → Bool))]) = st' := by rw [runPlan_append, hp]; rfl
       rw [← hG, ← hst]
-      exact dom_reach_aux hfin ns _ _ (hK' x) _
+      exact dom_reach_aux hfin ns _ _ (hn' s.1 x) (hK' x) _
     | step S =>
       refine S.reach _ _ _ (dom_coin_split S.f S.hf fun c r => ?_)
       have hst : runPlan plan st₀ (hs ++ [(⟨n, s.1, S.f (c, r)⟩ : Σ m : ℕ, M × (Fin m → Bool))]) = S.next c := by
         rw [runPlan_append, hp]
         exact congrArg S.next (S.dec_f c r)
       rw [← hst]
-      exact dom_reach_aux hfin ns _ _ (hK' _) _
+      exact dom_reach_aux hfin ns _ _ (hn' s.1 _) (hK' _) _
 
 /-- **The play's rounds driven through the live game**: the live game at `st₀` dominates the rounds then `k₀`, given
-the domination at the live state each history of rounds reaches (`runPlan`). -/
-theorem dom_reach
-    (hfin : ∀ hs (K : List ρ → Game α) (s : Strategy (K [])), K = (fun l => k₀ (hs.map (recOf mk) ++ l)) →
-      Dominated p (K []) s q (G (runPlan plan st₀ hs)))
-    (ns : List ℕ) (s : Strategy (roundsThen mk k₀ ns)) : Dominated p (roundsThen mk k₀ ns) s q (G st₀) :=
-  dom_reach_aux mk G plan st₀ k₀ hfin ns [] k₀ rfl s
+the domination at the live state each history of rounds reaches (`runPlan`), its rounds of the play's bit counts. -/
+theorem dom_reach (ns : List ℕ)
+    (hfin : ∀ hs (K : List ρ → Game α) (s : Strategy (K [])), hs.map Sigma.fst = ns →
+      K = (fun l => k₀ (hs.map (recOf mk) ++ l)) → Dominated p (K []) s q (G (runPlan plan st₀ hs)))
+    (s : Strategy (roundsThen mk k₀ ns)) : Dominated p (roundsThen mk k₀ ns) s q (G st₀) :=
+  dom_reach_aux mk G plan st₀ k₀ hfin ns [] k₀ (by simp) rfl s
 
 end Drive
 

@@ -2,6 +2,7 @@ import Proofs.Properties.Verity.SampledDeploy
 import Proofs.Properties.SampledProofs.OneStageZkRun
 import Proofs.Properties.SampledProofs
 import Proofs.Core.Game.Sim
+import Proofs.Flock.Bridge.LiveHash
 
 /-!
 # `SampledDeploy.accept_le` from a coupling of the play to the live audit
@@ -16,19 +17,19 @@ probability that flock-verify `--zk` accepts the live audit's transcript at the 
   `AcceptsZK` reads no coin, so this needs no run of the deployed Flock verifier, no `Shows` and no `LiveCoins`; it is
   `session_verdict` read up to the decision.
 * **The coupling, `PlayCoupling`, open.** A transcript of the play (`proj`) that, off the break and wherever v2
-  accepts, is a session's of the evidence, at the coupling's inputs `I` (`covers`); and the transport of the verdict
+  accepts, flock-verify `--zk` accepts at the coupling's inputs `I` (`covers`); and the transport of the verdict
   with `AcceptsZK I ∘ proj` off the break from the play at `σ` to the live audit at `τ` (`prob_le`). `prob_le` is where the
   device's releases become the session's coins: the play's raw release bits against `auditLive`'s draw (A3's `src`)
   and the live session's points, with `DrawnByDevice` putting a record whose coins no device session released
   in the break.
 
 `accept_le_of_coupling` is `accept_le` in the field's shape from a `PlayCoupling` at the session's setting `A`
-(`I = A.I`, `G = A.G`); `accept_le_of_couplings` takes the coupling's break to be the collision `SampledDeploy.col`
+(`I = A.I`, `G = A.GH`, the hash-first audit); `accept_le_of_couplings` takes the coupling's break to be the collision `SampledDeploy.col`
 reads off the outcome or sampled proofs' forger's success (`Vocab.Forges`), as `SampledDeploy.accept_le` states it. In
 a play the blobs are the committed file and the blobs sent last (`Outcome.sent`), each fetched by its SHA-512 digest,
 so the circuit and public files a session reads are the registered ones off a collision (`get_single` where the
-committed file is the only blob). v2 accepts only evidence with a session (`session_of_accept`), so `covers` has a
-session to name.
+committed file is the only blob). v2 accepts only evidence with a session (`session_of_accept`), so a `proj` that
+reads a session's transcript has one to read.
 
 `PlayCoupling.ofDominated` takes `prob_le` from a reduction that runs the play's strategy against the live audit
 (`Game.Dominated`, built with `Proofs.Core.Game.Sim`'s rules), and `uniform_of_A3` is the rule's premise at the draw:
@@ -128,6 +129,85 @@ theorem acceptsZK_of_transcript {p : Params} {c : OneStage.Commitment} {e : Evid
   obtain rfl := Except.ok.inj (hf1.symm.trans hf)
   exact hA
 
+theorem arr_forM_ok {ε α : Type} {f : α → Except ε Unit} (xs : Array α) (h : ∀ x ∈ xs, f x = .ok ()) :
+    xs.forM f = .ok () := by
+  rcases xs with ⟨l⟩
+  simp only [List.forM_toArray]
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    have ha := h a (by simp)
+    have hl : ∀ x ∈ l.toArray, f x = .ok () := fun x hx => h x (by simp at hx ⊢; exact Or.inr hx)
+    simp only [List.forM_cons, ha, bind, Except.bind]
+    exact ih hl
+
+/-- **Under the verifier's registered reads, v2's acceptance is flock-verify `--zk --registered`'s at each session**:
+where `checkBlobs` accepts, each session of the evidence set up at its record's draw from the session's inputs, and
+wherever the verifier's registered reads hold the ports `own`, every table passed the registered check and the
+completeness check at `own` (`buildSessionOf`, `setupChecks`), `Zk.shapeOk` and `Zk.verify`. -/
+theorem acceptsZKR_of_session {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
+    {pub : OneStage.Public} {prof : Core.Integrity}
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {s : Session} (hs : s ∈ e.sessions) :
+    ∃ tags0 circuitB pubB rd b record proofs, Flock.Tags.find? STATEMENT = some tags0 ∧
+      (Core.Blobs.ofArray blobs).get p.own.circuit "circuit" = .ok circuitB ∧
+      (Core.Blobs.ofArray blobs).get e.pub "public file" = .ok pubB ∧ readsOf p.own.registered = .ok rd ∧
+      (Core.Blobs.ofArray blobs).get s.record s!"session {s.name}'s record" = .ok b ∧
+      String.fromUTF8? b = some record ∧
+      filesOf (Core.Blobs.ofArray blobs) s
+        (setupAt (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs)) rd (Flock.Witness.recordDraw record)) =
+        .ok proofs ∧
+      ∀ own, rd.registered = some own →
+        ZkReg.AcceptsZKR (sessionI tags0 circuitB pubB (tablesOf (Core.Blobs.ofArray blobs)) p.own) own
+          ⟨record, proofs⟩ := by
+  obtain ⟨tags0, circuitB, pubB, rd, ht, -, hcB, hpB, hrd, ck, b, record, hb, hu, hver⟩ := Run.session_verdict hacc hs
+  obtain ⟨proofs, spec, tabs, x0, hf, hst, hz, -, -, -⟩ := Run.verdictOf_parts hver
+  obtain ⟨sts, hsa, htabs, -⟩ := Run.setupAt_parts hst
+  subst htabs
+  obtain ⟨-, hbso, hsc, hshape, -⟩ := Run.sessionAt_parts hsa
+  have hsetT := Run.bso_ok hbso
+  have h3 : (Run.insE tags0 circuitB pubB (tablesOf (Core.Blobs.ofArray blobs)) p.own.partition p.own.program
+      (Flock.Witness.recordDraw record) rd.registered).read.setup = .ok (spec, sts) := by
+    unfold Flock.Readable.Read.setup
+    rw [Run.insE_tags, Run.insE_coins]
+    exact hsetT
+  have hset := Claims.Bridge.Custody.setupOf_zkInputs h3 rfl rfl (Run.exec_recordDraw record)
+  refine ⟨tags0, circuitB, pubB, rd, b, record, proofs, ht, hcB, hpB, hrd, hb, hu, hf, fun own hown => ?_⟩
+  obtain ⟨-, hreg, -⟩ := Run.buildSessionOf_parts hbso
+  refine ⟨spec, sts, hset, arr_forM_ok sts fun st hst => ?_, ?_, hshape, hz⟩
+  · rw [← hown]
+    exact (hreg st hst).1
+  · unfold setupChecks at hsc
+    rw [hown] at hsc
+    obtain ⟨u, h1, -⟩ := Run.bind_ok hsc
+    cases u
+    exact h1
+
+/-- **Each session's transcript is accepted under `--registered`** at the session's inputs and the ports `own`, where
+v2 accepts and its registered reads hold `own`. -/
+theorem acceptsZKR_of_transcript {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
+    {pub : OneStage.Public} {prof : Core.Integrity}
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {s : Session} (hs : s ∈ e.sessions)
+    {t : Exec.Transcript} (ht : SessionTranscript p e blobs s t) {I : Exec.Inputs} (hI : SessionInputs p e blobs I)
+    {own : Array Flock.Registered.Port} (hown : ∀ rd, readsOf p.own.registered = .ok rd → rd.registered = some own) :
+    ZkReg.AcceptsZKR I own t := by
+  obtain ⟨tags0, circuitB, pubB, rd, b, record, proofs, ht0, hcB, hpB, hrd, hb, hu, hf, hA⟩ :=
+    acceptsZKR_of_session hacc hs
+  have hA' := hA own (hown rd hrd)
+  obtain ⟨tr, tp⟩ := t
+  obtain ⟨tags1, c1, p1, rd1, b1, ht1, hc1, hp1, hrd1, hb1, hu1, hf1⟩ := ht
+  obtain ⟨tags2, c2, p2, ht2, hc2, hp2, rfl⟩ := hI
+  obtain rfl := Option.some.inj (ht1.symm.trans ht0)
+  obtain rfl := Option.some.inj (ht2.symm.trans ht0)
+  obtain rfl := Except.ok.inj (hc1.symm.trans hcB)
+  obtain rfl := Except.ok.inj (hc2.symm.trans hcB)
+  obtain rfl := Except.ok.inj (hp1.symm.trans hpB)
+  obtain rfl := Except.ok.inj (hp2.symm.trans hpB)
+  obtain rfl := Except.ok.inj (hrd1.symm.trans hrd)
+  obtain rfl := Except.ok.inj (hb1.symm.trans hb)
+  obtain rfl := Option.some.inj (hu1.symm.trans hu)
+  obtain rfl := Except.ok.inj (hf1.symm.trans hf)
+  exact hA'
+
 /-- A blob found among the one blob `F` is `F`. -/
 theorem get_single {F b : ByteArray} {d w : String} (h : (Core.Blobs.ofArray #[F]).get d w = .ok b) : b = F := by
   unfold Core.Blobs.get at h
@@ -150,7 +230,8 @@ undecided (`OneStage.verdictOf`: no verifier of record), never an acceptance. -/
 theorem session_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} (hacc : checkBlobs p c e bs = .accept pub prof) :
     ∃ s, s ∈ e.sessions := by
-  unfold checkBlobs at hacc
+  replace hacc := _root_.SampledProofs.OneStageZk.checkProofs_of_accept hacc
+  unfold checkProofs at hacc
   split at hacc
   · cases hacc
   · next r hrun =>
@@ -187,6 +268,37 @@ theorem session_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} 
       | exact (hchk _ _ (hne.symm ▸ hacc)).elim
       | (subst hne; exact (hchk _ _ hacc).elim)
 
+/-- **The statement's inputs**: `SessionInputs` with the public file the registration `c` names (`registeredPublic`) in
+place of the evidence's: the statement's tags, and the circuit and public files the blobs hold under the digests the
+parameters and the registration name. It reads no evidence. -/
+def StatementInputs (p : Params) (c : OneStage.Commitment) (blobs : Array ByteArray) (I : Exec.Inputs) : Prop :=
+  ∃ d tags0 circuitB pubB, registeredPublic c = some d ∧ Flock.Tags.find? STATEMENT = some tags0 ∧
+    (Core.Blobs.ofArray blobs).get p.own.circuit "circuit" = .ok circuitB ∧
+    (Core.Blobs.ofArray blobs).get d "public file" = .ok pubB ∧
+    I = sessionI tags0 circuitB pubB (tablesOf (Core.Blobs.ofArray blobs)) p.own
+
+/-- **An accepted session's inputs are the statement's**: where v2 accepts, the evidence's public file is the one the
+registration names (`public_of_accept`: `checkBlobs` refuses any other), so the statement's inputs are the session's. -/
+theorem sessionInputs_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
+    {pub : OneStage.Public} {prof : Core.Integrity}
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {I : Exec.Inputs}
+    (hI : StatementInputs p c blobs I) : SessionInputs p e blobs I := by
+  obtain ⟨d, tags0, circuitB, pubB, hd, ht, hc, hp, rfl⟩ := hI
+  have he := _root_.SampledProofs.OneStageZk.public_of_accept hacc
+  rw [hd] at he
+  obtain rfl := Option.some.inj he
+  exact ⟨tags0, circuitB, pubB, ht, hc, hp, rfl⟩
+
+/-- **Where v2 accepts, the statement has inputs, and they are the session's.** -/
+theorem statementInputs_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
+    {pub : OneStage.Public} {prof : Core.Integrity}
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) :
+    ∃ I, StatementInputs p c blobs I ∧ SessionInputs p e blobs I := by
+  obtain ⟨s, hs⟩ := session_of_accept hacc
+  obtain ⟨tags0, circuitB, pubB, _rd, _b, _record, _proofs, ht, hcB, hpB, _⟩ := acceptsZK_of_session hacc hs
+  exact ⟨_, ⟨e.pub, tags0, circuitB, pubB, _root_.SampledProofs.OneStageZk.public_of_accept hacc, ht, hcB, hpB, rfl⟩,
+    tags0, circuitB, pubB, ht, hcB, hpB, rfl⟩
+
 end Properties.SampledProofs.OneStageZk
 
 namespace Verity
@@ -220,34 +332,31 @@ theorem componentAccepts_sampled {s : Sent} (h : ComponentAccepts .sampled s) :
   subst hx1
   exact ⟨p, c, e, pub, prof, ⟨n, ps, b, dg, k, ev, hD, nm, cs, hx, hp, hc, he⟩, hacc⟩
 
-/-- **The play coupled to a live audit**, at the session's inputs `I`, the live audit's game `G` and the strategy `τ`
-the play at `σ` induces: a transcript of each outcome (`proj`) that, off the break `Brk` and wherever sampled proofs'
-verdict accepts, is a session's transcript of v2's evidence, at inputs `I` (`covers`); and off the break, the play
-gives sampled proofs' verdict with a transcript `proj` flock-verify `--zk` accepts at most as often as the live audit
-gives its own (`prob_le`). -/
+/-- **The play coupled to a live audit**, at a check `Acc` of transcripts, the live audit's game `G` and the strategy
+`τ` the play at `σ` induces: a transcript of each outcome (`proj`) that, off the break `Brk` and wherever sampled
+proofs' verdict accepts, passes `Acc` (`covers`; a session's transcript of v2's evidence at the session's inputs passes
+flock-verify `--zk`, `acceptsZK_of_transcript`, and `--zk --registered` at v2's registered ports,
+`acceptsZKR_of_transcript`); and off the break, the play gives sampled proofs' verdict with a transcript `proj` that
+passes `Acc` at most as often as the live audit gives its own (`prob_le`). -/
 structure PlayCoupling (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (Brk : Outcome → Prop)
-    {n : ℕ} {Reg : Type} (I : Exec.Inputs) (G : FlockSoundness.Game (Reg × Finset (Fin n) × Exec.Transcript))
+    {n : ℕ} {Reg : Type} (Acc : Exec.Transcript → Prop) (G : FlockSoundness.Game (Reg × Finset (Fin n) × Exec.Transcript))
     (τ : FlockSoundness.Game.Strategy G) where
   proj : Outcome → Exec.Transcript
-  covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
-    _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
-    SessionInputs p e o.sent.blobs I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o)
-  prob_le : Game.prob (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ ≤
-    FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK I o) G τ
+  covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → Acc (proj o)
+  prob_le : Game.prob (fun o => V.Verdict .sampled o ∧ Acc (proj o) ∧ ¬ Brk o) (V.game θ F c) σ ≤
+    FlockSoundness.Game.prob (fun o => Acc o.2.2) G τ
 
 /-- **The verdict off the break is a coupled acceptance**: off the break, sampled proofs' verdict accepts at most as
-often as the live audit accepts at the coupling's inputs. -/
+often as the live audit's transcript passes the coupling's check. -/
 theorem accept_le_of_coupling {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    {Brk : Outcome → Prop} {n : ℕ} {Reg : Type} {I : Exec.Inputs}
+    {Brk : Outcome → Prop} {n : ℕ} {Reg : Type} {Acc : Exec.Transcript → Prop}
     {G : FlockSoundness.Game (Reg × Finset (Fin n) × Exec.Transcript)} {τ : FlockSoundness.Game.Strategy G}
-    (Cp : PlayCoupling V θ F c σ Brk I G τ) :
+    (Cp : PlayCoupling V θ F c σ Brk Acc G τ) :
     Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk o) (V.game θ F c) σ ≤
-      FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK I o) G τ := by
+      FlockSoundness.Game.prob (fun o => Acc o.2.2) G τ := by
   refine (Game.prob_mono (fun o ho => ?_) _ σ).trans Cp.prob_le
   obtain ⟨hv, hb⟩ := ho
-  obtain ⟨p, c', e, pub, prof, hcase, hacc⟩ := componentAccepts_sampled hv.2.2
-  obtain ⟨hI, s, hs, ht⟩ := Cp.covers o hv hb p c' e pub prof hcase hacc
-  exact ⟨hv, acceptsZK_of_transcript hacc hs ht hI, hb⟩
+  exact ⟨hv, Cp.covers o hv hb, hb⟩
 
 /-- **`SampledDeploy.accept_le` from a coupling** at the session `A θ F c σ r hr` and its strategy `τOf`, for each
 registered file that parses, off the collision `col` reads off the outcome and sampled proofs' forger's success (the
@@ -256,16 +365,16 @@ theorem accept_le_of_couplings {V : Vocab d α} (kd : ByteArray → ℕ) (desc :
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
-      (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
+      (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).GH)
     (col : ByteArray → ByteArray → ByteArray → Outcome → Option (Claims.Msg × Claims.Msg))
     (Cp : ∀ θ F c σ r (hr : V.parsed F = some r), V.Registered θ F →
-      PlayCoupling V θ F c σ (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr).I
-        (A θ F c σ r hr).G (τOf θ F c σ r hr)) :
+      PlayCoupling V θ F c σ (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o)
+        (ZkReg.AcceptsZKR (A θ F c σ r hr).I (A θ F c σ r hr).own) (A θ F c σ r hr).GH (τOf θ F c σ r hr)) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), V.Registered θ F →
       Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
-        FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
-          (A θ F c σ r hr).G (τOf θ F c σ r hr) :=
+        FlockSoundness.Game.prob (fun o => ZkReg.LiveAcceptsZKR (A θ F c σ r hr).I (A θ F c σ r hr).own o)
+          (A θ F c σ r hr).GH (τOf θ F c σ r hr) :=
   fun θ F c σ r hr hreg =>
     (Game.prob_mono (fun o ho => ⟨ho.1, fun h => h.elim ho.2.1 ho.2.2⟩) _ σ).trans
       (accept_le_of_coupling (Cp θ F c σ r hr hreg))
@@ -273,14 +382,12 @@ theorem accept_le_of_couplings {V : Vocab d α} (kd : ByteArray → ℕ) (desc :
 /-- **`prob_le` from a reduction**: a play strategy that the live audit dominates (`Game.Dominated`, built node by node
 with `Proofs.Core.Game.Sim`'s rules, in core's image of `G`) gives a coupling at the strategy the reduction builds. -/
 noncomputable def PlayCoupling.ofDominated {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    {Brk : Outcome → Prop} {n : ℕ} {Reg : Type} {I : Exec.Inputs}
+    {Brk : Outcome → Prop} {n : ℕ} {Reg : Type} {Acc : Exec.Transcript → Prop}
     {G : FlockSoundness.Game (Reg × Finset (Fin n) × Exec.Transcript)} (proj : Outcome → Exec.Transcript)
-    (covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
-      _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
-      SessionInputs p e o.sent.blobs I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o))
-    (h : Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
-      (fun o => ZkExec.LiveAcceptsZK I o) (Pouw.PearlC.FlockTile.toVerity G)) :
-    PlayCoupling V θ F c σ Brk I G (Pouw.PearlC.FlockTile.stratOfVerity G (Classical.choose h)) where
+    (covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → Acc (proj o))
+    (h : Game.Dominated (fun o => V.Verdict .sampled o ∧ Acc (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
+      (fun o => Acc o.2.2) (Pouw.PearlC.FlockTile.toVerity G)) :
+    PlayCoupling V θ F c σ Brk Acc G (Pouw.PearlC.FlockTile.stratOfVerity G (Classical.choose h)) where
   proj := proj
   covers := covers
   prob_le := by

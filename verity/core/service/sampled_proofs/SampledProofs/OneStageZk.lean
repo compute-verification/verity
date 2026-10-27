@@ -6,13 +6,15 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify --registered`'s object, or null
   for a program that reads no registered value). The partition must not be null: the sessions are verified against the
   verifier's own partition object;
-* **commitment**: v1's (the registration record);
+* **commitment**: v1's (the registration record), whose window names the public file the statement reads,
+  `window.public_file`: its SHA-512, lowercase hex of 64 bytes (`registeredPublic`);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
   for each of v1's `sessions` in order, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
   `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`);
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
   SHA-512 as `flock-verify --archive` finds them;
-* **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
+* **check**: a public file other than the one the registration names rejects (`publicWhy`), as does a registration that
+  names none; then `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
@@ -196,7 +198,7 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
   let h ← Json.parse line
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
-  let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
+  let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
   let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
@@ -293,7 +295,7 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
   match st with
   | .ok (spec, _, _) =>
     if spec.coinTree.isNone then none
-    else (Json.parse record).toOption.bind fun j =>
+    else (Flock.JsonParse.parse record).toOption.bind fun j =>
       (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
   | .error _ => none
 
@@ -393,7 +395,8 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
 /-- The session stream its link points are drawn on (`Firewall.Coins.SESSION`). -/
 def POINTS : String := "session"
 
-private def hexes (j : Json) (what : String) : V (Array String) := do
+/-- A JSON list of hex strings, each as it is. -/
+def hexes (j : Json) (what : String) : V (Array String) := do
   let .arr xs := j | throw s!"{what} is not a list of hex strings"
   xs.mapM fun | .str s => pure s | _ => throw s!"{what} is not a list of hex strings"
 
@@ -406,12 +409,38 @@ def pointsAfter (link : Json) : V ByteArray := do
     | _ => throw s!"record: link.root_b_sha512.{t} is not 64 bytes of hex"
   return Flock.Sha512.hash (ds.foldl (· ++ ·) .empty)
 
-/-- Session `slot`'s uses of the challenger's coins, each with the coins (as the record's F128 hex) its bytes must
-begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each stream's rounds in the
-record's order, of family `slot/<slot>/<stream>` after the round's `msg_sha512` (`Round.sha`); `⌈n/4⌉` coins of 64
-bytes for `n` F128s. -/
-def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
-  let j ← (Json.parse record).mapError (s!"record: not JSON: {·}")
+/-- The tables a session's record links: its statement's one table (`Flock.Tags.tableNames` at the one table
+`inputsOf` sets up), the tables whose root_B digests `Flock.Record.decode` checks. -/
+def TABLES : Array String :=
+  match Flock.Tags.find? STATEMENT with
+  | some t => t.tableNames 1
+  | none => #[]
+
+/-- The streams a session's record may hold: its table's two reps, the rep streams `Flock.Record.decode` requires. -/
+def STREAMS : Array String := TABLES.flatMap fun n => #[n ++ "/rep0", n ++ "/rep1"]
+
+/-- A round message's coin count: the count its squeeze header frames last (`Flock.Transcript.framed`: op `4`, the
+coin's kind, six zero bytes, then the count in eight bytes little-endian); none when it ends in no such header. -/
+def squeezeCount (x : ByteArray) : Option Nat :=
+  if x.size < 16 ∨ x.get! (x.size - 16) ≠ 4 then none
+  else some ((List.range 8).foldl (fun acc i => acc + (x.get! (x.size - 8 + i)).toNat * 256 ^ i) 0)
+
+/-- Round k's request to the window's challenger (live PROTOCOL.md §9), all of it public: its stream's name (two bytes
+big-endian of its UTF-8 length, then the name), the stream's chain at the round `a` (64 bytes), then the round's coin
+count `n`, its F128s as the record's `coins` lists them (eight bytes little-endian). Its coins are released after its
+SHA-512. -/
+def roundRequest (stream : String) (a : ByteArray) (n : Nat) : ByteArray :=
+  let s := stream.toUTF8
+  ⟨#[(s.size / 256 % 256).toUInt8, (s.size % 256).toUInt8]⟩ ++ s ++ a ++ Flock.le64 n.toUInt64
+
+/-- Session `slot`'s uses of the challenger's coins as its record lists them, each with the coins (as the record's
+F128 hex) its bytes must begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each
+stream's rounds in the record's order, of family `slot/<slot>/<stream>` after the SHA-512 of the round's request
+(`roundRequest`) at the stream's chain `a_k = SHA-512(a_{k-1} ‖ msg_sha512_k)` from `a_{-1}` empty and the round's own
+coin count, the record's F128s `n` (live PROTOCOL.md §9), so two rounds of equal bytes are two uses and a release after
+a request of another count is no use; `⌈n/4⌉` coins of 64 bytes for `n` F128s. -/
+def usesOf (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
+  let j ← (Flock.JsonParse.parse record).mapError (s!"record: not JSON: {·}")
   let link := getD j "link"
   let .arr ps := getD link "points" | throw "record: link.points is not a list"
   let pts ← ps.foldlM (fun acc p => return acc ++ (← hexes p "a link point")) #[]
@@ -421,13 +450,49 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
   for s in ss do
     let .str name := getD s "stream" | throw "record: a stream's name is not a string"
     if name == POINTS then throw s!"record: a stream is named {POINTS}, the link points' family"
+    if name.toUTF8.size ≥ 65536 then throw s!"record: a stream's name is past 65535 bytes"
     let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
+    let mut chain := ByteArray.empty
     for r in rs do
       let .str sha := getD r "msg_sha512" | throw s!"record: a round of {name} has no msg_sha512"
       if sha.length != 128 then throw s!"record: a round of {name}'s msg_sha512 is not 64 bytes of hex"
       let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
-      out := out ++ [({ label := Hello.slotStream slot name, after := ← Flock.unhex sha, coins := (cs.size + 3) / 4 }, cs)]
+      chain := Flock.Sha512.hash (chain ++ (← Flock.unhex sha))
+      let after := Flock.Sha512.hash (roundRequest name chain cs.size)
+      out := out ++ [({ label := Hello.slotStream slot name, after, coins := (cs.size + 3) / 4 }, cs)]
   return out
+
+/-- Why the record's link and streams are not what the coins' families and counts are read from; none when they are:
+its link's root_B digests named by `TABLES` exactly (`pointsAfter` hashes every one), each stream one of `STREAMS`,
+none named twice, and each round's retained message (`msg`) its `msg_sha512`'s, ending in the squeeze header of its
+coins (`squeezeCount`). `Flock.Record.decode` and the replay require as much of a record `--zk` accepts. -/
+def roundsOk (record : String) : V Unit := do
+  let j ← (Flock.JsonParse.parse record).mapError (s!"record: not JSON: {·}")
+  unless (entries (getD (getD j "link") "root_b_sha512")).map (·.1) == TABLES do
+    throw "record: link.root_b_sha512 does not name exactly the statement's table"
+  let .arr ss := getD j "streams" | throw "record: streams is not a list"
+  let mut seen : Array String := #[]
+  for s in ss do
+    let .str name := getD s "stream" | throw "record: a stream's name is not a string"
+    unless STREAMS.contains name do throw s!"record: a stream is named {name}, not a rep stream of the statement's table"
+    if seen.contains name then throw s!"record: two streams are named {name}"
+    seen := seen.push name
+    let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
+    for r in rs do
+      let .str sha := getD r "msg_sha512" | throw s!"record: a round of {name} has no msg_sha512"
+      let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
+      let .str m := getD r "msg" | throw s!"record: a round of {name} retains no msg"
+      let msg ← (Flock.unhex m).mapError fun _ => s!"record: a round of {name}'s msg is not hex"
+      if Flock.Sha512.hash msg != (← Flock.unhex sha) then throw s!"record: a round of {name}'s msg is not its msg_sha512's"
+      if squeezeCount msg != some cs.size then
+        throw s!"record: a round of {name}'s msg does not end in the squeeze header of its {cs.size} coins"
+
+/-- Session `slot`'s uses of the challenger's coins (`usesOf`), once its record's streams and rounds are what they are
+read from (`roundsOk`). -/
+def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
+  let us ← usesOf slot record
+  roundsOk record
+  return us
 
 /-- Why the coins `ξ` don't begin with the F128s `want` (record hex, `{hi:016x}{lo:016x}`, 16 bytes each); none when
 they do. -/
@@ -480,11 +545,28 @@ def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.B
     | .error why => some why
   | _, _ => some ROUNDS_NEED_CHALLENGER
 
-/-- v2's check: the sessions' verdicts (`run`), then v1's check on them at the draw's coins (`OneStage.checkLive`:
-`OneStage.coinsOf`, `OneStage.checkAt`), an accept only when every session's verifier accepted (the run's own `all`, so an
-acceptance reads the run rather than the verdicts' JSON), and only when every coin the window read is the challenger's,
-one release a use (`roundsWhy`). -/
-def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+/-- The key of the registration's window that names the public file the window's statement reads. -/
+def PUBLIC_KEY : String := "public_file"
+
+/-- The public file the registration `c` names, `window.public_file`, when it names one as a SHA-512 digest (lowercase
+hex of 64 bytes). -/
+def registeredPublic (c : OneStage.Commitment) : Option String :=
+  match getD (getD c.record "window") PUBLIC_KEY with
+  | .str d => if digest? d then some d else none
+  | _ => none
+
+/-- Why the evidence's public file `pub` is not the one the registration `c` names (`registeredPublic`); none when it
+is. -/
+def publicWhy (c : OneStage.Commitment) (pub : String) : Option String :=
+  match registeredPublic c with
+  | none => some s!"the registration names no public file (window.{PUBLIC_KEY}, a SHA-512 digest)"
+  | some d => if pub == d then none else some s!"the evidence's public file is not the one the registration names, {d}"
+
+/-- v2's check on the statement's files: the sessions' verdicts (`run`), then v1's check on them at the draw's coins
+(`OneStage.checkLive`: `OneStage.coinsOf`, `OneStage.checkAt`), an accept only when every session's verifier accepted
+(the run's own `all`, so an acceptance reads the run rather than the verdicts' JSON), and only when every coin the window
+read is the challenger's, one release a use (`roundsWhy`). -/
+def checkProofs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match run p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
@@ -497,6 +579,14 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
         | none => .accept pub prof
       else .reject "proofs: a session's verifier did not accept"
     | o => o
+
+/-- v2's check: a refusal when the evidence's public file is not the one the registration names (`publicWhy`), else
+`checkProofs`. -/
+def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome OneStage.Public Core.Integrity :=
+  match publicWhy c e.pub with
+  | some why => .reject s!"proofs: {why}"
+  | none => checkProofs p c e bs
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -519,7 +609,9 @@ proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evid
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
 difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). `uses SLOT RECORD`: the session record's
 uses of the challenger's coins at slot `SLOT` (`sessionUses`), one line `{"uses": [{after, coins, label, want}, ...]}`
-or `{"refused": why}`, which `one_stage.proofs.session_uses` is held to. -/
+or `{"refused": why}`, which `one_stage.proofs.session_uses` is held to. `public RECORD DIGEST`: why the public file of
+SHA-512 `DIGEST` is not the one the registration record `RECORD` names (`publicWhy`), one line `{"why": why}` (null
+when it is) or `{"refused": why}` for a record v2 can't decode, which `one_stage.proofs.public_why` is held to. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -546,6 +638,13 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
+  | ["public", record, pub] =>
+    let r := OneStage.commitmentOf (← IO.FS.readBinFile record)
+    let line := match r with
+      | .ok c => Json.mkObj [("why", match publicWhy c pub with | some w => Json.str w | none => Json.null)]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
@@ -561,10 +660,38 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
-#guard ((sessionUses 1 ("{\"link\":{\"points\":[[\"" ++ "aa".pushn 'a' 30 ++ "\"]],\"root_b_sha512\":{\"t\":\"" ++
+#guard ((usesOf 1 ("{\"link\":{\"points\":[[\"" ++ "aa".pushn 'a' 30 ++ "\"]],\"root_b_sha512\":{\"t\":\"" ++
     "".pushn '0' 128 ++ "\"}},\"streams\":[{\"stream\":\"t/rep0\",\"rounds\":[{\"msg_sha512\":\"" ++ "".pushn '1' 128 ++
     "\",\"coins\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}]}]}")).toOption.map
     (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/1/session", 1, 1), ("slot/1/t/rep0", 2, 5)]
+#guard (roundRequest "t/é" (ByteArray.mk (Array.replicate 64 7)) 261).data ==
+  #[0, 4, 116, 47, 195, 169] ++ Array.replicate 64 7 ++ #[5, 1, 0, 0, 0, 0, 0, 0]
+#guard TABLES == #["circuit"]
+#guard STREAMS == #["circuit/rep0", "circuit/rep1"]
+#guard squeezeCount (Flock.Transcript.header 4 1 300) == some 300
+#guard squeezeCount (ByteArray.mk #[0] ++ Flock.Transcript.header 4 1 7) == some 7
+#guard squeezeCount (Flock.Transcript.header 3 1 7) == none
+#guard squeezeCount (ByteArray.mk (Array.replicate 15 4)) == none
+
+/-- A record with no link points and one round on `stream`, its retained message `msg` and `n` coins. -/
+private def recordOf (stream : String) (msg : ByteArray) (n : Nat) (table : String := "circuit") : String :=
+  "{\"link\":{\"points\":[],\"root_b_sha512\":{\"" ++ table ++ "\":\"" ++ "".pushn '0' 128 ++
+    "\"}},\"streams\":[{\"stream\":\"" ++ stream ++
+    "\",\"rounds\":[{\"msg_sha512\":\"" ++ Flock.hexOf (Flock.Sha512.hash msg) ++ "\",\"msg\":\"" ++ Flock.hexOf msg ++
+    "\",\"coins\":[" ++ ",".intercalate (List.replicate n "\"00\"") ++ "]}]}]}"
+
+#guard ((sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 5) 5)).toOption.map
+  (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/0/session", 0, 0), ("slot/0/circuit/rep1", 2, 5)]
+#guard (sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 4) 5)).toOption.isNone
+#guard (sessionUses 0 (recordOf "t/rep0" (Flock.Transcript.header 4 1 5) 5)).toOption.isNone
+#guard (sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 5) 5 "t")).toOption.isNone
+#guard publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
+  digest := .empty } ("".pushn 'a' 128) == none
+#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
+  digest := .empty } ("".pushn 'b' 128)).isSome
+#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'A' 128))])],
+  digest := .empty } ("".pushn 'A' 128)).isSome
+#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [])], digest := .empty } ("".pushn 'a' 128)).isSome
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 

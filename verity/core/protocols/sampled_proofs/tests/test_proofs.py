@@ -225,14 +225,26 @@ def test_the_v2_audit_refuses_a_circuit_no_blob_holds(fx):
     assert got is None and why.startswith("circuit: no blob has the SHA-512"), why
 
 
+def _msg(body: bytes, n: int, op: int = 4) -> bytes:
+    """A round message: `body`, then the squeeze header of `n` coins (`Flock.Transcript.framed`'s, op 4)."""
+    return body + bytes([op, 1]) + bytes(6) + n.to_bytes(8, "little")
+
+
+def _round(msg: bytes, coins: list[str]) -> dict:
+    return {"msg_sha512": hashlib.sha512(msg).hexdigest(), "msg": msg.hex(), "coins": coins}
+
+
+ROUND0, ROUND1 = _msg(b"\x01" * 40, 5), _msg(b"\x02", 4)
+
+
 def _record(**over) -> dict:
-    """A session record with what `session_uses` reads: two tables' root_B digests, out of key order, five link points
-    and a stream of two rounds beside one of none."""
+    """A session record with what `session_uses` reads: the statement's table's root_B digest, five link points and
+    its first rep stream with two retained rounds beside its second with none."""
     r = {"link": {"points": [["0" * 32, "1" * 32, "2" * 32], ["3" * 32, "4" * 32]],
-                  "root_b_sha512": {"b": "bb" * 64, "a": "aa" * 64}},
-         "streams": [{"stream": "t/rep0", "rounds": [{"msg_sha512": "01" * 64, "coins": ["5" * 32] * 5},
-                                                     {"msg_sha512": "02" * 64, "coins": ["6" * 32] * 4}]},
-                     {"stream": "u", "rounds": []}]}
+                  "root_b_sha512": {"circuit": "aa" * 64}},
+         "streams": [{"stream": "circuit/rep0", "rounds": [_round(ROUND0, ["5" * 32] * 5),
+                                                           _round(ROUND1, ["6" * 32] * 4)]},
+                     {"stream": "circuit/rep1", "rounds": []}]}
     for path, v in over.items():
         *ks, last = path.split(".")
         at = r
@@ -247,16 +259,28 @@ def _record(**over) -> dict:
 
 #: records `session_uses` refuses, each by one field (`_record`'s dotted path) or as a whole
 REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex strings": _record(**{"link.points.1": [3]}),
-           "no root_B digests": _record(**{"link.root_b_sha512": []}),
-           "a short root_B digest": _record(**{"link.root_b_sha512.a": "aa" * 63}),
-           "a root_B digest not hex": _record(**{"link.root_b_sha512.a": "zz" * 64}),
+           "root_B digests not an object": _record(**{"link.root_b_sha512": []}),
+           "no root_B digests": _record(**{"link.root_b_sha512": {}}),
+           "a root_B digest of another table": _record(**{"link.root_b_sha512": {"t": "aa" * 64}}),
+           "a root_B digest beside the table's": _record(**{"link.root_b_sha512.t": "bb" * 64}),
+           "a short root_B digest": _record(**{"link.root_b_sha512.circuit": "aa" * 63}),
+           "a root_B digest not hex": _record(**{"link.root_b_sha512.circuit": "zz" * 64}),
            "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
            "rounds not a list": _record(**{"streams.1.rounds": None}),
            "a stream named as the points' family": _record(**{"streams.1.stream": "session"}),
+           "a stream's name past 65535 bytes": _record(**{"streams.1.stream": "é" * 32768}),
            "a round without its digest": _record(**{"streams.0.rounds.0": {"coins": []}}),
            "a short round digest": _record(**{"streams.0.rounds.1.msg_sha512": "02" * 63}),
            "an uppercase round digest": _record(**{"streams.0.rounds.1.msg_sha512": "AB" * 64}),
            "coins not a list": _record(**{"streams.0.rounds.0.coins": "5" * 32}),
+           "a stream not the statement's": _record(**{"streams.1.stream": "t/rep0"}),
+           "a stream named twice": _record(**{"streams.1.stream": "circuit/rep0"}),
+           "a round retaining no msg": _record(**{"streams.0.rounds.1.msg": None}),
+           "a msg not hex": _record(**{"streams.0.rounds.1.msg": "0g"}),
+           "a msg not its digest's": _record(**{"streams.0.rounds.1.msg": ROUND0.hex()}),
+           "a msg without a squeeze header": _record(**{"streams.0.rounds.1": _round(_msg(b"", 4, op=3), ["6" * 32] * 4)}),
+           "a short msg": _record(**{"streams.0.rounds.1": _round(b"\x04" * 15, ["6" * 32] * 4)}),
+           "a squeeze header of other coins": _record(**{"streams.0.rounds.1": _round(_msg(b"", 5), ["6" * 32] * 4)}),
            "a record not an object": [], "not JSON": "{"}
 
 
@@ -268,16 +292,31 @@ def _uses(slot: int, text: str) -> dict:
         return {"refused": str(refused)}
 
 
-def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_digest():
+def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_request():
     """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
-    SHA-512 of the tables' root_B digests in key order, then each round after its own digest, a 64-byte coin for each
-    four F128s, under the session's slot."""
+    SHA-512 of the table's root_B digest, then each round after the SHA-512 of its request, its stream's name, its
+    stream's chain (the SHA-512 of the previous round's chain and its own digest) and its F128 count, a 64-byte coin
+    for each four F128s, under the session's slot. Two rounds of equal bytes are two uses. A record whose link names
+    other than the statement's one table, whose streams aren't its rep streams, each once, or whose round doesn't
+    retain its message, ending in the squeeze header of its coins, is refused."""
     pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
+    a0 = hashlib.sha512(hashlib.sha512(ROUND0).digest()).digest()
+    a1 = hashlib.sha512(a0 + hashlib.sha512(ROUND1).digest()).digest()
+    q0 = b"\x00\x0ccircuit/rep0" + a0 + (5).to_bytes(8, "little")
+    assert PF.round_request("circuit/rep0", a0, 5) == q0 and PF.parse_round_request(q0) == ("circuit/rep0", a0, 5)
     assert PF.session_uses(3, json.dumps(_record())) == [
-        ("slot/3/session", hashlib.sha512(b"\xaa" * 64 + b"\xbb" * 64).digest(), 2, pts),
-        ("slot/3/t/rep0", b"\x01" * 64, 2, ["5" * 32] * 5), ("slot/3/t/rep0", b"\x02" * 64, 1, ["6" * 32] * 4)]
+        ("slot/3/session", hashlib.sha512(b"\xaa" * 64).digest(), 2, pts),
+        ("slot/3/circuit/rep0", hashlib.sha512(q0).digest(), 2, ["5" * 32] * 5),
+        ("slot/3/circuit/rep0", hashlib.sha512(PF.round_request("circuit/rep0", a1, 4)).digest(), 1, ["6" * 32] * 4)]
+    same = PF.session_uses(3, json.dumps(_record(**{"streams.0.rounds.1": _round(ROUND0, ["5" * 32] * 5)})))
+    a1 = hashlib.sha512(a0 + hashlib.sha512(ROUND0).digest()).digest()
+    assert same[1][1] == hashlib.sha512(q0).digest() != same[2][1]
+    assert same[2][1] == hashlib.sha512(PF.round_request("circuit/rep0", a1, 5)).digest()
+    for bad in (b"", b"\x00", b"\x00\x0ccircuit/rep0" + a0, q0 + b"\x00", b"\x00\x02\xff\xfe" + a0 + bytes(8)):
+        assert PF.parse_round_request(bad) is None, bad
     for name, r in REFUSED.items():
         assert "refused" in _uses(0, r if isinstance(r, str) else json.dumps(r)), name
+    assert PF.squeeze_count(ROUND0) == 5 and PF.squeeze_count(b"\x04" * 15) is None
 
 
 @lean
@@ -294,6 +333,49 @@ def test_session_uses_is_the_v2_audits_own(tmp_path):
             assert "refused" in mine and "refused" in lean_, (mine, lean_)
         else:
             assert mine == lean_, (name, mine, lean_)
+
+
+PUB = "ab" * 64
+#: registrations and the evidence's public digest, and whether v2 takes the public file as the registration's
+PUBLICS = {"the registered one": ({"window": {"kind": "stand-in", "public_file": PUB}}, PUB, True),
+           "another": ({"window": {"kind": "stand-in", "public_file": PUB}}, "cd" * 64, False),
+           "the registered one in uppercase": ({"window": {"kind": "stand-in", "public_file": PUB}}, PUB.upper(), False),
+           "none registered": ({"window": {"kind": "stand-in"}}, PUB, False),
+           "a window not an object": ({"window": PUB}, PUB, False),
+           "no window": ({"kind": "stand-in"}, PUB, False),
+           "an uppercase registration": ({"window": {"public_file": PUB.upper()}}, PUB.upper(), False),
+           "a short registration": ({"window": {"public_file": PUB[:-2]}}, PUB[:-2], False),
+           "a registration not a string": ({"window": {"public_file": 7}}, "7", False)}
+
+
+def test_v2_takes_only_the_public_file_the_registration_names():
+    """v2 refuses evidence whose public file is not the one the registration names (`public_why`, Lean
+    `OneStageZk.publicWhy`, before any session is verified), so an accepted session's public file is the statement's:
+    the registration's ``window.public_file``, a SHA-512 digest in lowercase hex. A registration naming none, or naming
+    it in another form, is refused too. `with_public` registers a file."""
+    for name, (rec, pub, ok) in PUBLICS.items():
+        assert (PF.public_why(rec, pub) is None) is ok, name
+    assert PF.registered_public({"window": {"kind": "stand-in", "public_file": PUB}}) == PUB
+
+
+def test_with_public_registers_the_files_sha512_in_the_window(tmp_path):
+    f = tmp_path / "pub-8.bin"
+    f.write_bytes(b'{"units": {}}\nbody')
+    rec = PF.with_public({"window": {"kind": "stand-in", "run": "r"}, "previous": None}, f)
+    assert rec == {"window": {"kind": "stand-in", "run": "r", "public_file": hashlib.sha512(f.read_bytes()).hexdigest()},
+                   "previous": None}
+    assert PF.public_why(rec, PF.file_sha512(f)) is None
+
+
+@lean
+@pytest.mark.slow
+def test_public_why_is_the_v2_audits_own(tmp_path):
+    """`public_why` against `sampled-proofs-one-stage-zk public` (Lean `publicWhy`, which `checkBlobs` refuses on): the
+    same reason, or none, on each registration and digest. Slow for the v2 executable's build, which the v2 tests above
+    share."""
+    for name, (rec, pub, _) in PUBLICS.items():
+        (tmp_path / "record.json").write_bytes(PF._canonical(rec))
+        assert PF.public_v2(tmp_path / "record.json", pub) == {"why": PF.public_why(rec, pub)}, name
 
 
 @lean
