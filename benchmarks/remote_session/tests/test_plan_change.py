@@ -1,6 +1,6 @@
-"""`prover.plan_change` is the set difference of the two plans' blocks as runs, whatever order each plan reads its runs
+"""`prover.plan_change` is the set difference of the two plans' chunks as runs, whatever order each plan reads its runs
 in and wherever in a store of up to 2^64 − 1 blocks they are, and the verifier's `Plan.changed` takes the plan sent
-before, in store order, and that change to the blocks of the plan after."""
+before, in store order, and that change to the chunks of the plan after."""
 from __future__ import annotations
 
 import random
@@ -24,7 +24,7 @@ def reference(before: rb.Plan, after: rb.Plan):
 
 
 def plan(rng: random.Random, blocks: int, lo: int, hi: int, shuffled: bool) -> rb.Plan:
-    """A plan of some of blocks lo … hi − 1 in a store of `blocks`: in store order, or cut at random places (within a
+    """A plan of some of chunks lo … hi − 1 in a store of `blocks`: in store order, or cut at random places (within a
     run as well as between them) and read in a random order."""
     order = sorted(rng.sample(range(lo, hi), rng.randrange(1, hi - lo + 1)))
     if not shuffled:

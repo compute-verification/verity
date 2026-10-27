@@ -1,4 +1,4 @@
-"""The seeded weights the skeleton serves: ALLP-IFACE's generator and stream (`verity_torch_loop.weights`, CMP-95 item 1),
+"""The seeded weights the skeleton serves: ALLP-IFACE's generator and stream (`e2e_h200.served_weights`, CMP-95 item 1),
 with the reads the driver, the store and replay make.
 
 The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what memory-accounting's
@@ -12,7 +12,7 @@ from dataclasses import asdict
 import numpy as np
 
 from .shape import Shape
-from verity_torch_loop import weights as SW
+from e2e_h200 import served_weights as SW
 
 #: the linears of a layer, in the order the step runs them
 LINEARS = ("wq", "wk", "wv", "wo", "wup", "wdown")

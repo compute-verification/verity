@@ -533,7 +533,7 @@ def _registry():
     fails to import is reported with the lookup that needed it, never treated as "not registered"."""
     try:
         from verity.ml.circuits.defs import REGISTRY  # noqa: F401
-    except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
+    except Exception as e:  # the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
         from verity_vllm.query.manifest.format import RegistryUnavailable
         raise RegistryUnavailable(e) from e
     from verity.ml.definitions.registry.catalog import load
