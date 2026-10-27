@@ -108,7 +108,7 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: a commit period's ε from its calls' (`Pouw.Guarantees.WindowEps`, and `Pouw.Guarantees.ServiceEscapes` for
+Stated, open: a commit period's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and `Pouw.Guarantees.Window.ServiceEscapes` for
 the deployed sampling, `Security/Definitions/Pouw/Guarantees/Window.lean`); Dither's guarantees
 (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and per-model instances
 (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept
