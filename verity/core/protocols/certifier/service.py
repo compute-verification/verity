@@ -12,7 +12,7 @@ a head leaf in the head's two or three SHA-512 compressions instead of the certi
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
-one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
+one link-window, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
@@ -162,8 +162,20 @@ without a clock source, every advised link is refused too. It refuses a window w
 network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
 are one advice's. The in-the-clear check runs `advised_check` too.
 
-A link whose egress end has no occupancy profile and is neither served nor advised has no verdict (`ValueError`,
-failing closed): nothing would hold its egress timing.
+**A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
+of each link-window: its responses on egress and its requests on ingress, on its one grid, certified under its
+schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
+(`certificate.parameters_digest`). The warden is the auditor's device, and its code puts every bucket's cells, r for
+each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's units in zero
+knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms charge them
+(log2 #S_s and Σ_c log2(cap_c + 1)), and the warden runs no shaper clock, so a window declares no sync and the
+charge is 0. Its unit is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its end's
+head to the warden's grid and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The
+in-the-clear check is the opening's root and the head checks: the records' cells are the scan's, and the certifier's
+host audit doesn't read a warden's records.
+
+A link whose egress end has no occupancy profile and is neither served, advised nor a warden's has no verdict
+(`ValueError`, failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
@@ -175,13 +187,17 @@ When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `a
 reference: a link-window where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's
 accept bit (`reference`), never a violation's kind.
 
-**The verdict of record is the Lean's** on plain and served links: `NetworkCheck.LinkWindow.verdict`
+**The verdict of record is the Lean's** on plain, served and warden links: `NetworkCheck.LinkWindow.verdict`
 (`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD` under the 8 Oct ruling. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects a link-window where they differ or the
-Lean refuses the case. The gap list, what `python_verdict` reads that the Lean takes as an input rather than checks:
+Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
+both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what `python_verdict` reads that the
+Lean takes as an input rather than checks:
 - an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
   syncs), which is why an advised link's verdict of record stays this module's;
+- on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
+  as its schedule's, `warden.WardenParams.digest`), which neither derives;
 - what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -242,7 +258,7 @@ from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
 #: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
 #: kind to ``"python"`` is the one line that switches it back. An advised link stays Python's: the Lean takes its
 #: window view (`advised.view`) as an input.
-OF_RECORD = {"plain": "lean", "served": "lean", "advised": "python"}
+OF_RECORD = {"plain": "lean", "served": "lean", "advised": "python", "warden": "lean"}
 
 SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
@@ -362,19 +378,19 @@ def _units(check, served, advised=AD.gate) -> tuple[CompositeDefinition, Composi
 
     return (CompositeDefinition(
         "NetworkLinkWindow", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
-        doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
+        doc="the proof block of network accounting: one link-window, both directions, over the two certificates' signed "
             "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
             "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
         CompositeDefinition(
         "NetworkServedLinkWindow", 4, ("EGRESS", "INGRESS", "SERVED"),
         lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
-        doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
             "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False),
         CompositeDefinition(
         "NetworkAdvisedLinkWindow", 2, ("EGRESS", "INGRESS", "ADVISED"),
         lambda S_: (_SIGNED + _heads(S_) + _advice(S_), _OUT), body_advised,
-        doc="the proof unit of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts held to the advice's releases, and the advice to the ingress head's counts "
             "(`advised.NetworkAdvisedCounts`, ADVISED its (T, RIN, OWN)), in its verdict bit", register=False))
 
@@ -386,7 +402,7 @@ _PROOF_UNIT, _PROOF_SERVED_UNIT, _PROOF_ADVISED_UNIT = _units(_head_expanded, _s
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None,
          advised: tuple[int, int, int] | None = None, *, proof: bool = False):
-    """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
+    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
     and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`), or on an
     advised link the advised counts' `advised`, (T, RIN, OWN) (`advised.unit`). With `proof`, the unit a proof's
     circuit lowers: the same id and signature, so the template the registered query names, with each gate the
@@ -439,6 +455,12 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
              "ingress's by the tie, and the framing) and its windows' received request frames, in the proof's public "
              "row; each window reports the SHA-512 of the advice's encoding and those frames (`advised.digest`), "
              "which the network verdict holds to one advice"),
+)
+#: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
+PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
+    S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
+             "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
+             "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
 )
 #: an advised link's: and the advice its window read (`advised.digest`), which the verifier reports beside the unit's
 #: two output bits
@@ -497,7 +519,7 @@ def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
                "nothing would hold its egress counts (declare LinkWindows.occupancy, LinkWindows.served on a served "
-               "link, or LinkWindows.advised on an advised one)")
+               "link, LinkWindows.advised on an advised one, or LinkWindows.warden on a warden's)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -600,12 +622,29 @@ class Opening:
 
 
 @dataclass(frozen=True)
+class WardenProfile:
+    """A warden link's profile (`LinkWindows.warden`, the module docstring's "A warden link"): the link's windows and the
+    warden's parameters digest (`warden.WardenParams.digest`), which both ends' heads bind, both fixed before the run."""
+
+    windows: int
+    digest: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.windows) is not int or self.windows < 1:
+            raise ValueError(f"a warden link has one or more windows, not {self.windows!r}")
+        if type(self.digest) is not bytes or len(self.digest) != HC.DIGEST_BYTES:
+            raise ValueError(f"a warden's parameters digest is {HC.DIGEST_BYTES} bytes")
+
+
+@dataclass(frozen=True)
 class LinkWindows:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger drew for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
-    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
+    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile, nor
+    has a warden's (`warden`: the active warden's records, its key and session the certifier's here, its counts its
+    schedule's, and no sync, so `sync_set` is unread).
     `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
     place `_view` takes IoTieRequest's verdict from (`tie_service.Ties`, on the ingress tie's stream of record): None
     refuses every advised link. `certified_clocks` is no public field either: the certifier's salted clock
@@ -627,6 +666,7 @@ class LinkWindows:
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
     served: SV.ServedProfile | None = None
     advised: AD.AdvisedProfile | None = None
+    warden: WardenProfile | None = None
     ties: AD.TieSource | None = field(default=None, compare=False, repr=False)
     clocks: AD.ClockSource | None = field(default=None, compare=False, repr=False)
     certified_clocks: Sequence[CertifiedClock] | None = field(default=None, compare=False, repr=False)
@@ -639,6 +679,12 @@ class LinkWindows:
                              "(clocks), not both")
         if self.served is not None and self.advised is not None:
             raise ValueError("a link is served (FIXLEN) or advised, not both")
+        if self.warden is not None:
+            if self.served is not None or self.advised is not None or tuple(self.occupancy) != (None, None):
+                raise ValueError("a warden link's counts are its schedule's: it has no occupancy, served or advised "
+                                 "profile")
+            if self.ingress_params != self.params:
+                raise ValueError("a warden link's two ends are on the warden's one grid")
         if self.advised is not None:
             g, i = self.params, self.ingress_params
             if self.occupancy[0] is not None:
@@ -664,8 +710,10 @@ class LinkWindows:
 
     @property
     def kind(self) -> str:
-        """``"served"``, ``"advised"``, or ``"plain"`` (neither: its egress counts are its occupancy profile's)."""
-        return "served" if self.served is not None else "advised" if self.advised is not None else "plain"
+        """``"served"``, ``"advised"``, ``"warden"``, or ``"plain"`` (none of them: its egress counts are its occupancy
+        profile's)."""
+        return ("served" if self.served is not None else "advised" if self.advised is not None
+                else "warden" if self.warden is not None else "plain")
 
     @cached_property
     def clock_source(self) -> AD.ClockSource | None:
@@ -684,8 +732,8 @@ class LinkWindows:
 
     @property
     def charge(self) -> float:
-        """log2 #Σ_sync: 7 bits per window at 16 × 8."""
-        return self.sync_set.bits
+        """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a warden link, which declares no sync."""
+        return 0.0 if self.warden is not None else self.sync_set.bits
 
     def head_key(self, direction: int) -> tuple[int, int, int]:
         """The end's head check's size class (L, T, COUNTS): the link name's UTF-8 length, the end's buckets, and 1 when
@@ -695,7 +743,9 @@ class LinkWindows:
 
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the egress grid's parameters digest
-        binds Σ_sync, the ingress grid's none."""
+        binds Σ_sync, the ingress grid's none; on a warden link both are the warden's (`WardenProfile.digest`)."""
+        if self.warden is not None:
+            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
         if direction == 0:
             return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
         return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
@@ -715,16 +765,15 @@ class LinkWindows:
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: the served or advised profile's, else the
-        egress occupancy profile's."""
-        if self.occupancy[0] is None and self.served is None and self.advised is None:
-            raise ValueError(_NO_PROFILE)
-        derived = self.served or self.advised
+        """The link's windows, which `network_verdict` takes by default: the served, advised or warden profile's, else
+        the egress occupancy profile's."""
+        self._profiled()
+        derived = self.served or self.advised or self.warden
         return derived.windows if derived is not None else len(self.occupancy[0])
 
     @cached_property
     def unit(self):
-        """N2's proof unit for this link (`unit`): its heads' size classes are the link's, and on a served link its
+        """N2's proof block for this link (`unit`): its heads' size classes are the link's, and on a served link its
         served counts' (`served_key`), on an advised link its advised counts' (`advised_key`)."""
         return unit(self.head_key(0), self.head_key(1), self.served_key(), self.advised_key())
 
@@ -757,17 +806,19 @@ class LinkWindows:
         context = canonical_json({
             "format": SPEC, "link": self.link, "run": self.run, "key": self.key.key_id.hex(),
             "certifier_session": self.certifier_session.hex(), "charge": self.charge,
-            "parameters": {"egress": parameters_digest(self.params, self.sync_set).hex(),
-                           "ingress": parameters_digest(self.ingress_params).hex()},
+            "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
+                           "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
             "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
             **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
                                                           self.served.windows, self.served.own]}),
             **({} if self.advised is None else {"advised": [self.advised.windows, self.advised.own,
-                                                            _sha512(list(self.advised.request_frames))]})})
+                                                            _sha512(list(self.advised.request_frames))]}),
+            **({} if self.warden is None else {"warden": [self.warden.windows, self.warden.digest.hex()]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query,
                         public_outputs=OUTPUTS if self.advised is None else OUTPUTS_ADVISED,
                         proof_deadline=self.proof_deadline)
-        public = PUBLIC_SERVED if self.served is not None else PUBLIC_ADVISED if self.advised is not None else PUBLIC
+        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_ADVISED if self.advised is not None
+                  else PUBLIC_WARDEN if self.warden is not None else PUBLIC)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
@@ -1034,7 +1085,7 @@ class LinkWindows:
             and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
 
     def _profiled(self) -> None:
-        if self.occupancy[0] is None and self.served is None and self.advised is None:
+        if self.occupancy[0] is None and self.served is None and self.advised is None and self.warden is None:
             raise ValueError(_NO_PROFILE)
 
     def _advice_output(self, advice: Any) -> dict[str, str | None]:
@@ -1064,7 +1115,7 @@ class LinkWindows:
                          self.bits("pub")) if proved else None
         word = opened if opened is not None else 0
         accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-                    and w < len(syncs) and syncs[w] in self.sync_set)
+                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
         return self._decided(draw, sessions, accepted,
                              {"verdict": int(accepted), "deadline": word >> 1 & 1} | self._advice_output(advice))
 
@@ -1076,8 +1127,9 @@ class LinkWindows:
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync,
-        the key and session, each end's grid and profile, and on an advised link the window's view (`advised.view`)
-        and the advice output. None for a key the Lean doesn't read (not an `LmsKey`)."""
+        the key and session, each end's grid and profile, on an advised link the window's view (`advised.view`) and
+        the advice output, and on a warden link the warden's parameters digest. None for a key the Lean doesn't read
+        (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
         reg, p = draw.registration.record, self.key.params
@@ -1124,6 +1176,8 @@ class LinkWindows:
             case["view"] = None if v is None else {"released": list(v.released), "floor": list(v.floor),
                                                    "received": v.received}
             case["advice"] = self._advice_output(advice)["advice"]
+        if self.warden is not None:
+            case["warden"] = self.warden.digest.hex()
         return case
 
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1153,11 +1207,12 @@ class LinkWindows:
           registered root, the public fields and both certificates' signed digests, and on an advised link the window's
           view of `advice`, the link's advice, which `advised.view` takes under the tie from `ties` alone), and its
           output row to the word delivered (`_opened`), whose verdict bit and deadline bit are both 1;
-        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync.
+        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a warden
+          link, which declares none, nothing is read of `syncs`).
         The verdict reports the public outputs, the proved deadline bit among them, on an advised link the advice it
         read (`advised.digest`), and never a violation's kind. `opening` (the witness) is for a debug comparison only,
         off by default: given, the verdict also carries the in-the-clear check's accept bit (`clear`), which decides
-        nothing. Raises `ValueError` on a link with no egress occupancy, served or advised profile.
+        nothing. Raises `ValueError` on a link with no egress occupancy, served, advised or warden profile.
 
         The Lean (`NetworkCheck.LinkWindow`, `lean_verdict`) decides the same on every call beside this Python, and
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
@@ -1186,7 +1241,8 @@ class LinkWindows:
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w (on an advised link, of every window the
         advice releases a frame in). On a served link it also runs the served counts' check (`served_check`), and on an
-        advised link the advised counts' on `advice` (`advised_check`), reporting the advice it read as `advice`."""
+        advised link the advised counts' on `advice` (`advised_check`), reporting the advice it read as `advice`. On a
+        warden link it is the root and the head checks alone (the module docstring's "A warden link")."""
         self._profiled()
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
@@ -1194,6 +1250,9 @@ class LinkWindows:
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
         headed = headed and (self.advised is None or self.advised_check(opening, syncs, advice))
+        if self.warden is not None:
+            public = {"verdict": int(sealed and headed), "deadline": int(egress.head.deadline and ingress.head.deadline)}
+            return {"of_record": False, "accepted": sealed and headed, "public": public}
         audit = Audit()
         out, inn = self._audit(audit, opening, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)

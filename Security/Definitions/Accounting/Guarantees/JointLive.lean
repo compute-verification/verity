@@ -11,13 +11,15 @@ gates, and its break is the probability that a fixed finder built from the strat
 
 Each subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds, at every strategy of the whole game, the
 probability that it accepts while its claim fails by its error at that strategy (`PeriodLive.error`: its `δ` plus its
-reduction's loss at its finder's success). That is the adaptive form: the subprotocols' coins interleave in the device's
+reduction's loss at its finder's success; or `Accounting.condError`: its `δ` where its finders meet a quantitative
+collision bound, `⊤` elsewhere). That is the adaptive form: the subprotocols' coins interleave in the device's
 order, and the prover may adapt every byte to every coin released before it. Given those guarantees, at every strategy,
 the probability that some subprotocol accepts while its claim fails is at most the errors summed:
 
 * `JointPeriodLive`: one period, the five subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit and the network
   certifier);
-* `JointPeriodLiveECR`: the same with `ecr/sha-512` asked of each finder, so the bound is numbers;
+* `JointPeriodLiveECR`: the same in Daniel's form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
+  bound is numbers;
 * `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
 * `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block and each
   block's memory term (`Accounting.BlocksRun`'s wipes and memory terms, on the run).
@@ -36,37 +38,37 @@ open scoped ENNReal
 
 /-- **The joint guarantee over a period played as a causal game.** On any device and any period read off the run of a
 causal game `G`, over a circuit, whose five subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit and the
-network certifier) have their per-period guarantees over `G` at hash `H`, certificates `c` (integrity `ε`, work `W`,
-space `S`, bandwidth `Q`, communication `K`), errors `δ` and losses `loss`: at every strategy `s`, the probability that
-some subprotocol accepts while its claim fails (more than an `ε` share of the circuit's units unbound in the
-extractor's transcript, fewer than `W` gates computed after their coin, fewer than `S` bits held on average, fewer than
-`Q` bits read, or more than `K` bits through the network certifiers) is at most
-`∑_a (δ_a + loss_a(Pr[B_a^s finds a collision of H]))`. -/
+network certifier) have their per-period guarantees over `G` at certificates `c` (integrity `ε`, work `W`, space `S`,
+bandwidth `Q`, communication `K`) and errors `err`, each a function of the strategy (`PeriodLive.error`'s
+`δ + loss(Pr[B^s finds a collision])`, or `condError`'s): at every strategy `s`, the probability that some subprotocol
+accepts while its claim fails (more than an `ε` share of the circuit's units unbound in the extractor's transcript,
+fewer than `W` gates computed after their coin, fewer than `S` bits held on average, fewer than `Q` bits read, or more
+than `K` bits through the network certifiers) is at most `∑_a err_a(s)`. -/
 def JointPeriodLive : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
-    (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates) (δ : Audit → ℝ≥0∞)
-    (loss : Audit → ℝ≥0∞ → ℝ≥0∞),
-    (∀ a, r.Sound H c a (δ a) (loss a)) →
+    (r : PeriodLive d α C G) (c : Certificates) (err : Audit → Verity.Game.Strategy G → ℝ≥0∞),
+    (∀ a, r.Sound c a (err a)) →
     ∀ s : Verity.Game.Strategy G,
-      Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤
-        ∑ a, r.error H a (δ a) (loss a) s
+      Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤ ∑ a, err a s
 
-/-- **The joint guarantee over a period, with `ecr/sha-512` asked of the finders only.** As `JointPeriodLive`, and
-suppose each subprotocol's loss is monotone and, at every strategy, its finder meets `ecr/sha-512` at `H`
-(`Claims.ExpectedCR`: it outputs a collision with probability at most its expected calls over `2^256`) within `q_a`
-expected calls. Then at every strategy the probability that some subprotocol accepts while its claim fails is at most
-`∑_a (δ_a + loss_a(q_a / 2^256))`. -/
+/-- **The joint guarantee over a period in Daniel's form, with `ecr/sha-512` asked of the finders only.** As
+`JointPeriodLive`, with each subprotocol's error `δ_a(s) + loss_a(Pr[B_a^s finds a collision of H])`
+(`PeriodLive.error`), and suppose each subprotocol's loss is monotone and, at every strategy `s`, its finder meets
+`ecr/sha-512` at `H` (`Claims.ExpectedCR`: it outputs a collision with probability at most its expected calls over
+`2^256`) within `q_a(s)` expected calls. Then at every strategy the probability that some subprotocol accepts while its
+claim fails is at most `∑_a (δ_a(s) + loss_a(q_a(s) / 2^256))`. -/
 def JointPeriodLiveECR : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
-    (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates) (δ : Audit → ℝ≥0∞)
-    (loss : Audit → ℝ≥0∞ → ℝ≥0∞) (q : Audit → ℝ),
-    (∀ a, r.Sound H c a (δ a) (loss a)) →
+    (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates)
+    (δ : Audit → Verity.Game.Strategy G → ℝ≥0∞) (loss : Audit → ℝ≥0∞ → ℝ≥0∞)
+    (q : Audit → Verity.Game.Strategy G → ℝ),
+    (∀ a, r.Sound c a (fun s => r.error H a (δ a s) (loss a) s)) →
     (∀ a, Monotone (loss a)) →
     (∀ a (s : Verity.Game.Strategy G), Claims.ExpectedCR H (r.finder a s)) →
-    (∀ a (s : Verity.Game.Strategy G), Claims.Ex (fun x => ((r.finder a s).cost x : ℝ)) ≤ q a) →
+    (∀ a (s : Verity.Game.Strategy G), Claims.Ex (fun x => ((r.finder a s).cost x : ℝ)) ≤ q a s) →
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤
-        ∑ a, (δ a + loss a (ENNReal.ofReal (q a / 2 ^ (256 : ℝ))))
+        ∑ a, (δ a s + loss a (ENNReal.ofReal (q a s / 2 ^ (256 : ℝ))))
 
 /-- **The honest prover meets every claim.** On any device and any period of a causal game `G`, at a strategy `s`
 whose extractor reads an evaluation of the circuit on every run (the honest prover commits the circuit's evaluation on
@@ -99,49 +101,47 @@ def JointPeriodLive_nontrivial : Prop :=
 /-- **The joint guarantee over a horizon of periods played as one causal game.** On any device, for any `m` periods
 read off the run of one causal game `G`, period `j` over the circuit `C j` (each period's parameters and commitment sent
 after the coins of the periods before it, so a period may adapt to them), whose subprotocols have their per-period
-guarantees over `G`, period `j`'s at hash `H`, certificates `c j`, errors `δ j` and losses `loss j`: at every strategy,
-the probability that some subprotocol of some period accepts while its claim fails is at most
-`∑_j ∑_a (δ_{j,a} + loss_{j,a}(Pr[B_{j,a}^s finds a collision of H]))`. -/
+guarantees over `G`, period `j`'s at certificates `c j` and errors `err j`, each a function of the strategy: at every
+strategy `s`, the probability that some subprotocol of some period accepts while its claim fails is at most
+`∑_j ∑_a err_{j,a}(s)`. -/
 def JointHorizonLive : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (m : ℕ) (C : Fin m → Verity.Circuit) (O : Type) (G : Verity.Game O)
-    (r : (j : Fin m) → PeriodLive d α (C j) G) (H : Claims.Msg → Claims.Msg) (c : Fin m → Certificates)
-    (δ : Fin m → Audit → ℝ≥0∞) (loss : Fin m → Audit → ℝ≥0∞ → ℝ≥0∞),
-    (∀ j a, (r j).Sound H (c j) a (δ j a) (loss j a)) →
+    (r : (j : Fin m) → PeriodLive d α (C j) G) (c : Fin m → Certificates)
+    (err : Fin m → Audit → Verity.Game.Strategy G → ℝ≥0∞),
+    (∀ j a, (r j).Sound (c j) a (err j a)) →
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s ≤
-        ∑ j, ∑ a, (r j).error H a (δ j a) (loss j a) s
+        ∑ j, ∑ a, err j a s
 
 /-- **The joint guarantee over a horizon of `B` server-time blocks and the wipes that open them, played as one causal
 game.** On any device and any `B` blocks read off the run of one causal game `G`, block `b` over the circuit `C b`,
-suppose, over `G` at every strategy:
+suppose, over `G` at every strategy `s`:
 
-* each subprotocol `a` of block `b` has its per-period guarantee at hash `H`, certificates `c b`, error `δ b a` and
-  loss `loss b a`;
+* each subprotocol `a` of block `b` has its per-period guarantee at certificates `c b` and error `err b a`;
 * the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
-  state survive beyond the committed carried state with probability at most `ε_wipe b`;
+  state survive beyond the committed carried state with probability at most `ε_wipe b s`;
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
-  `0.07 · U + S_chip + c` with probability at most `δ_PoUS b`.
+  `0.07 · U + S_chip + c` with probability at most `δ_PoUS b s`.
 
-Then at every strategy the probability that some block's accepted subprotocol's claim fails, some accepted wipe's
+Then at every strategy `s` the probability that some block's accepted subprotocol's claim fails, some accepted wipe's
 survivor bound fails, or some block's memory term fails while its PoUS accepted is at most
-$$\sum_b \sum_a \big(\delta_{b,a} + \mathrm{loss}_{b,a}(\Pr[B_{b,a}^s \text{ finds}])\big)
-  + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \delta_{\mathrm{PoUS},b}.$$
+$$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{wipe},b}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s).$$
 **Gap (PRF-167):** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
 it) is outside the integrity bound. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
-    (G : Verity.Game O) (S : BlocksLive d α B C G) (H : Claims.Msg → Claims.Msg) (c : Fin B → Certificates)
-    (fw : ℝ) (δ : Fin B → Audit → ℝ≥0∞) (loss : Fin B → Audit → ℝ≥0∞ → ℝ≥0∞) (εWipe δPous : Fin B → ℝ≥0∞),
-    (∀ b a, (S.block b).Sound H (c b) a (δ b a) (loss b a)) →
+    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (fw : ℝ)
+    (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (εWipe δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞),
+    (∀ b a, (S.block b).Sound (c b) a (err b a)) →
     (∀ b (s : Verity.Game.Strategy G),
-      Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ εWipe b) →
+      Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ εWipe b s) →
     (∀ b (s : Verity.Game.Strategy G),
-      Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ δPous b) →
+      Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ δPous b s) →
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o =>
           (∃ b a, (S.block b).accepts a o ∧ ¬ (S.block b).Holds (c b) s a o) ∨
           (∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) ∨
           (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o)) G s ≤
-        ∑ b, ∑ a, (S.block b).error H a (δ b a) (loss b a) s + ∑ b, εWipe b + ∑ b, δPous b
+        ∑ b, ∑ a, err b a s + ∑ b, εWipe b s + ∑ b, δPous b s
 
 end Accounting.Guarantees

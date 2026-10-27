@@ -10,7 +10,8 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
 * ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the leg's certificate
-  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, f·M); ``error`` the probability over the leg's
+  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
+  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (`DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
@@ -93,8 +94,8 @@ def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fractio
         return ({"symbol": "K", "value": int(q["K"]), "unit": "bits", "windows": int(q["windows"])}, frac(q["eps"]),
                 "quantity.eps")
     if leg == "wipe":
-        cert = (a.get("profile") or {}).get("certificate") or {}
-        return ({"symbol": "f·M", "value": int(pub["foreign_bits"]), "unit": "bits", "f": cert.get("f"),
+        k = pub.get("k", (a.get("profile") or {}).get("k"))
+        return ({"symbol": "foreign_bits", "value": int(pub["foreign_bits"]), "unit": "bits", "k": k, "r": pub.get("r"),
                  "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])}, frac(pub["eps"]), "answer.public.eps")
     raise ValueError(f"{leg}: not a leg of {LEGS}")
 

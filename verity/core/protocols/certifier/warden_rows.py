@@ -1,4 +1,4 @@
-"""The warden's cells as the rows a proof unit reads (design v3: the transfer gates are the cells' bits). Each
+"""The warden's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits). Each
 link-window's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a frame-v3-sha512
 tree. The warden signs a head that names the root and a salted digest of the link-window's wiring with the certifier's
 signer (`certificate.Issuer.sign`, LMS n = 64). A unit opens a cell's row as its output port (the sender's) or its input

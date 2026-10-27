@@ -13,19 +13,23 @@ honest server) unless a test passes another, such as `keeping`. Then the verifie
 * else `streamed_wipe.verdict`, whose reasons, joined by `"; "`, are a rejection's: a late or wrong read, an untrusted
   key, a bad signature, an uncovered batch size.
 
-What an accepted wipe certifies is `certify`'s: `{"certified", "egress_mib", "eps", "foreign_bits", "memory_bits"}`,
-`memory_bits = M`, the fill's `labels · 512` bits. When the bound covers the session (`READS` timed reads, a fill of at
-least `LEAST_FILL_BYTES`, an egress count that isn't saturated) `foreign_bits` is `⌈f·M⌉ + E` at `eps = 2^-128`, with
-`f = 1/19` and `E` the egress the network certifier counted over the session. Off it, `foreign_bits` is `M` and `eps`
-0, the vacuous statement, and the profile names each gap. `EXPERIMENTAL` says what the bound rests on.
+What an accepted wipe certifies is `certify`'s: `{"certified", "egress_mib", "eps", "foreign_bits", "k", "memory_bits",
+"r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
+`k` the session's timed reads, which the memory challenger chose (`wipe_party --reads`), and `r = ratio(k)`, the
+largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k` at most `MAX_READS`, an egress count
+that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold
+`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128` (`foreign_bits`), with `E` the egress the network
+certifier counted over the session. Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement, and the profile
+names each gap. `EXPERIMENTAL` says what the bound rests on.
 
 `leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
-(`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`), the memory
-challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by default, a process whose key and
-session log are beside the periods). No network certifier counts the session's egress yet, so the challenger signs
-`UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. The leg's record names
-what the bound doesn't cover (`uncertified`): the key off its own host, an uncounted egress, the node's memory outside
-the declared tiers (`undeclared`) and each link leaving the node that no network certifier counts (`wipe_party.link`).
+(`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
+device declared so that its memory outside the fill counts in `R`), the memory challenger on `period.json`'s
+`challenger_host` (`wipe_party.Party.of`; this node by default, a process whose key and session log are beside the
+periods). No network certifier counts the session's egress yet, so the challenger signs `UNCOUNTED` and an accepted
+leg's bound is vacuous: its verdict is real and its quantity isn't. The leg's record names what the bound doesn't cover
+(`uncertified`): the key off its own host, an uncounted egress, the node's memory outside the declared tiers
+(`undeclared`) and each link leaving the node that no network certifier counts (`wipe_party.link`).
 `main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
 """
 
@@ -51,70 +55,96 @@ from . import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_party, wipe_store
 from .period import serve
-from .wipe_party import UNCOUNTED
+from .wipe_party import READS, UNCOUNTED
 
 PROTOCOL = "verity/wipe/v0"
 """`MemoryChallenger.WipeProtocol.ID`; a test signer's wipes answer under `memory_challenger.TEST_PREFIX` + it."""
-READS = 2152
-"""The timed spot reads the bound is at."""
-F = Fraction(1, 19)
 EPS = Fraction(1, 2 ** 128)
-LEAST_FILL_BYTES = 1 << 25
-"""The least fill the bound is stated for: one 32 MiB segment."""
-SEGMENT_LABELS = LEAST_FILL_BYTES // sw.LABEL_BYTES
+MAX_READS = 1 << 17
+"""The most reads the certificate is computed at: `ratio` compares numbers of about `k · log₂ r` bits."""
+SAMPLING_BITS = 129
+"""`StreamedWipeMeetsReads`' sampling share of the error, `(1 − 1/r)^k ≤ 2^-129`."""
+COUNT_BITS = 130
+"""The threshold's constant: the compression share's `log₂(1/δ)`, 129, and one more for `k < 2^(⌊log₂ k⌋ + 1)`."""
+SEGMENT_BYTES = 1 << 25
+SEGMENT_LABELS = SEGMENT_BYTES // sw.LABEL_BYTES
 SEGMENTS = 1
 """The leg's fill, in 32 MiB segments."""
 LIMIT_NS = 20_000_000
 """The leg's deadline a read: 20 ms, a socket round trip on one machine or a nearby one with room to spare."""
 TIER = "host-dram"
 EXPERIMENTAL = (
-    "f = 1/19 at eps = 2^-128 with 2152 timed reads is Pous.Guarantees.SecureErasureMeetsFamily's bound, proved for the "
-    "band fill (chainBandSeg); this verdict judges the streamed-label fill, whose proved guarantee is "
-    "Pous.Guarantees.StreamedWipe. That it implies the published bound for a fill of at least one 32 MiB segment at "
-    "k = 2152 is a numeric step (streamed_wipe.retained_bits), not proved in Lean, and eps leaves out StreamedWipe's PRF "
-    "advantage and its premises: every tier declared, the egress certified by the network certifier, no side channel")
+    "foreign_bits at eps = 2^-128 is Pous.Guarantees.StreamedWipeMeetsReads' threshold at the session's k and r = "
+    "ratio(k), proved for the streamed-label fill in the wipe game; that game's acceptance is not this verdict (the "
+    "guarantee is frozen, no-function), and eps leaves out its PRF advantage and its premises: every tier declared, the "
+    "egress certified by the network certifier, no side channel")
 OTHER = "the wipe's commitment is not of the period's server and session"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
 
 
-def params_for(segments: int = SEGMENTS, *, k: int = READS, limit_ns: int = LIMIT_NS,
-               tier: str = TIER) -> sw.WipeParams:
-    """A wipe of `segments` 32 MiB segments in one tier, `k` reads one at a time under `limit_ns` each."""
-    return sw.WipeParams(segments * SEGMENT_LABELS, k, 1, limit_ns, ((tier, segments * LEAST_FILL_BYTES),))
+def params_for(segments: int = SEGMENTS, *, k: int = READS, limit_ns: int = LIMIT_NS, tier: str = TIER,
+               tier_bytes: int | None = None) -> sw.WipeParams:
+    """A wipe of `segments` 32 MiB segments in one tier of `tier_bytes` (by default the fill's), `k` reads one at a
+    time under `limit_ns` each."""
+    fill = segments * SEGMENT_BYTES
+    return sw.WipeParams(segments * SEGMENT_LABELS, k, 1, limit_ns, ((tier, fill if tier_bytes is None else tier_bytes),))
 
 
 def memory_bits(p: sw.WipeParams) -> int:
-    """`M`: the fill in bits, every declared tier."""
-    return p.labels * sw.LABEL_BITS
+    """`M`: every declared tier in bits, the fill and `R` past it."""
+    return p.labels * sw.LABEL_BITS + p.outside_bits
+
+
+def ratio(k: int) -> int:
+    """`MemoryChallenger.WipeProtocol.ratio`: the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, `(1 − 1/r)^k ≤ 2^-129`, by
+    bisection between `1`, which meets it for every `k ≥ 1`, and `k // 89 + 2`, which doesn't (`(1 − 1/r)^k ≥
+    e^(−k/(r − 1))` and `129 · ln 2 > 89`)."""
+    lo, hi = 1, k // 89 + 2
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if (mid - 1) ** k << SAMPLING_BITS <= mid ** k:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def foreign_bits(p: sw.WipeParams, r: int) -> int:
+    """`StreamedWipeMeetsReads`' threshold before the egress: `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R`."""
+    n = p.labels
+    return sw.LABEL_BITS * ((n + r - 1) // r - 1) + n + p.k.bit_length() - 1 + COUNT_BITS + p.outside_bits
 
 
 def gaps(p: sw.WipeParams, egress_mib: int) -> list[str]:
     """`MemoryChallenger.WipeProtocol.gaps`: why the bound doesn't cover an accepted wipe (none when it does)."""
     out = []
-    if p.k != READS:
-        out.append(f"k = {p.k}: the bound is at {READS} timed reads")
-    size = p.labels * sw.LABEL_BYTES
-    if size < LEAST_FILL_BYTES:
-        out.append(f"the fill is {size} bytes, below one 32 MiB segment ({LEAST_FILL_BYTES} bytes), the least the bound "
-                   "is stated for")
+    if p.k > MAX_READS:
+        out.append(f"k = {p.k}: the certificate is computed for at most {MAX_READS} reads")
     if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
         out.append(f"the egress count is {egress_mib} MiB, outside 0 to {sw.EGRESS_MAX_UNITS - 1}: it bounds nothing")
     return out
 
 
+def ratio_of(p: sw.WipeParams) -> int:
+    """`ratio(k)`, or 0 past `MAX_READS`, where it isn't computed."""
+    return ratio(p.k) if p.k <= MAX_READS else 0
+
+
 def certify(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
     """`MemoryChallenger.WipeProtocol.certify`'s public outputs, eps an exact ratio."""
-    m = memory_bits(p)
+    m, r = memory_bits(p), ratio_of(p)
     if gaps(p, egress_mib):
-        return {"certified": False, "egress_mib": egress_mib, "eps": "0", "foreign_bits": m, "memory_bits": m}
+        return {"certified": False, "egress_mib": egress_mib, "eps": "0", "foreign_bits": m, "k": p.k, "memory_bits": m,
+                "r": r}
     return {"certified": True, "egress_mib": egress_mib, "eps": str(EPS),
-            "foreign_bits": -(-m * F.numerator // F.denominator) + egress_mib * sw.EGRESS_UNIT_BITS, "memory_bits": m}
+            "foreign_bits": foreign_bits(p, r) + egress_mib * sw.EGRESS_UNIT_BITS, "k": p.k, "memory_bits": m, "r": r}
 
 
 def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
     """`MemoryChallenger.WipeProtocol.profileJson`: the wipe the session ran, the bound and every gap."""
     return {"batch": p.batch,
-            "certificate": {"eps": str(EPS), "f": str(F), "least_fill_bytes": LEAST_FILL_BYTES, "reads": READS},
+            "certificate": {"eps": str(EPS), "max_reads": MAX_READS, "outside_bits": p.outside_bits, "r": ratio_of(p),
+                            "reads": p.k},
             "experimental": EXPERIMENTAL, "gaps": gaps(p, egress_mib), "k": p.k, "labels": p.labels,
             "limit_ns": p.limit_ns, "tiers": [[t, b] for t, b in p.tiers]}
 
@@ -247,18 +277,21 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
 
 CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
           "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
-          "egress_bits": None, "links": []}
+          "egress_bits": None, "reads": None, "links": []}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
-through `wipe_store`; `cuda`, GPU `device`'s memory), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills
-the device's free memory less `reserve_bytes`), the declared `tier` (the store's own by default), the deadline a read,
-and the fill's streamer (`native`, `wipe_stream` on `threads` CPUs, or `python`) when the challenger runs on this node.
-A challenger on its own host streams as its `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat
-that keeps that much prior content in place of the fill's first labels (`foreign_labels`; `"fM"`, one label past `f·M`),
-and `placement` `"simulated"` names a challenger on this node the stand-in for one on its own host
-(`wipe_party.placement`). `egress_bits` is the network certifier's count over the session, which a challenger on this
-node signs (`wipe_party --egress-bits`); `None` signs `UNCOUNTED`. `links` are the links leaving the node besides the
-one to a challenger on its own host, which the leg adds from the connection it made: each `{"name", "to", "via"}`, with
-`mbps` and `counted_by` (the network certifier that counts it) when known (`wipe_party.link`)."""
+through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, so that what the fill doesn't reach counts in `R`),
+the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills the device's free memory less `reserve_bytes`), the
+declared `tier` (the store's own by default), the deadline a read, and the fill's streamer (`native`, `wipe_stream` on
+`threads` CPUs, or `python`) when the challenger runs on this node. A challenger on its own host streams as its
+`challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
+of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
+`"simulated"` names a challenger on this node the stand-in for one on its own host (`wipe_party.placement`).
+`egress_bits` is the network certifier's count over the session, which a challenger on this node signs (`wipe_party
+--egress-bits`); `None` signs `UNCOUNTED`. `reads` is the session's timed reads: a challenger on this node is started
+with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the leg refuses
+a session at another count. `None`: whatever the challenger chooses (`READS` here). `links` are the links leaving the
+node besides the one to a challenger on its own host, which the leg adds from the connection it made: each `{"name",
+"to", "via"}`, with `mbps` and `counted_by` (the network certifier that counts it) when known (`wipe_party.link`)."""
 LINK_KEYS = {"name", "to", "via", "mbps", "counted_by"}
 
 
@@ -270,11 +303,11 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
     c = CONFIG | got
     if c["store"] not in ("python", "host", "cuda") or c["streamer"] not in ("python", "native"):
         raise ValueError(f"period.json's wipe: store is python, host or cuda and streamer python or native, not {got}")
-    f, e = c["foreign_bytes"], c["egress_bits"]
+    f, e, k = c["foreign_bytes"], c["egress_bits"], c["reads"]
     if not (f == "fM" or type(f) is int and f >= 0) or c["placement"] not in (None, "simulated") or not (
-            e is None or type(e) is int and e >= 0):
+            e is None or type(e) is int and e >= 0) or not (k is None or type(k) is int and 1 <= k < 1 << 32):
         raise ValueError(f"period.json's wipe: foreign_bytes is a byte count or \"fM\", placement null or "
-                         f"\"simulated\" and egress_bits null or a bit count, not {got}")
+                         f"\"simulated\", egress_bits null or a bit count and reads null or 1 to 2^32 - 1, not {got}")
     for e in c["links"]:
         if not (isinstance(e, dict) and set(e) <= LINK_KEYS and all(type(e.get(k)) is str for k in ("name", "to", "via"))
                 and (e.get("mbps") is None or type(e["mbps"]) is int)
@@ -286,9 +319,9 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 def foreign_labels(foreign_bytes: int | str, p: sw.WipeParams) -> int:
     """The labels a cheat of `foreign_bytes` keeps prior content in place of: whole labels covering the bytes, or for
-    `"fM"` the fewest labels past `⌈f·M⌉` bits, the least a wipe must reject."""
+    `"fM"` the fewest labels past `p`'s published `foreign_bits` with no egress, the least a wipe must reject."""
     if foreign_bytes == "fM":
-        return -(-memory_bits(p) * F.numerator // F.denominator) // sw.LABEL_BITS + 1
+        return min(p.labels, certify(p, 0)["foreign_bits"] // sw.LABEL_BITS + 1)
     return min(p.labels, -(-int(foreign_bytes) // sw.LABEL_BYTES))
 
 
@@ -303,7 +336,7 @@ def segments_of(c: Mapping[str, Any], memory: wipe_store.Memory | None) -> int:
     if not isinstance(memory, wipe_store.Cuda):
         return SEGMENTS
     free, _ = memory.mem_info()
-    if (n := (free - c["reserve_bytes"]) // LEAST_FILL_BYTES) < 1:
+    if (n := (free - c["reserve_bytes"]) // SEGMENT_BYTES) < 1:
         raise RuntimeError(f"the device has {free} bytes free, less than one segment past the reserve")
     return n
 
@@ -329,17 +362,17 @@ def disks(mounts: Path = Path("/proc/mounts")) -> int:
     return total
 
 
-def undeclared(tier: str, fill_bytes: int, store: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
-    """The memory this host holds outside the fill's declared tier `tier`, which `M` doesn't count: the device's memory
-    outside the fill (from `store`, `wipe_store`'s `info`, when it gives `total_bytes`), the host's DRAM (outside the fill
-    when it is the tier) and its local disks (`disks`)."""
+def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The memory this host holds outside the declared tier `tier` (`declared_bytes` of it), which `M` doesn't count:
+    the device's memory outside the tier (from `store`, `wipe_store`'s `info`, when it gives `total_bytes` past the
+    tier), the host's DRAM (outside the tier when it is the tier) and its local disks (`disks`)."""
     out = []
-    if store is not None and "total_bytes" in store:
-        out.append({"tier": store["tier"], "bytes": store["total_bytes"] - fill_bytes,
-                    "what": f"{store.get('device', 'the device')}'s memory outside the fill"})
+    if store is not None and store.get("total_bytes", 0) > declared_bytes:
+        out.append({"tier": store["tier"], "bytes": store["total_bytes"] - declared_bytes,
+                    "what": f"{store.get('device', 'the device')}'s memory outside the declared tier"})
     dram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-    out.append({"tier": "host-dram", "bytes": dram - fill_bytes if tier == "host-dram" else dram,
-                "what": "the host's DRAM outside the fill" if tier == "host-dram" else "the host's DRAM"})
+    out.append({"tier": "host-dram", "bytes": dram - declared_bytes if tier == "host-dram" else dram,
+                "what": "the host's DRAM outside the declared tier" if tier == "host-dram" else "the host's DRAM"})
     if d := disks():
         out.append({"tier": "disk", "bytes": d, "what": "the host's filesystems on block devices"})
     return out
@@ -377,20 +410,23 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     tools, c = doc.get("tools") or {}, config(doc)
     extra = (("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ()))
              if c["streamer"] == "native" else ()) + (() if c["egress_bits"] is None else
-                                                       ("--egress-bits", str(c["egress_bits"])))
+                                                       ("--egress-bits", str(c["egress_bits"]))) + (
+        () if c["reads"] is None else ("--reads", str(c["reads"])))
     party = wipe_party.Party.of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
     if party.host != node and c["egress_bits"] is not None:
         raise ValueError(f"period.json's wipe.egress_bits reaches only a challenger on this node: the challenger on "
                          f"{party.host} signs the count its own side is started with (challenger.wipe.command)")
     memory = store_of(c)
     tier = c["tier"] or (TIER if memory is None else memory.tier)
-    params = params_for(segments_of(c, memory), limit_ns=c["limit_ns"], tier=tier)
+    info = None if memory is None else memory.info()
+    params = params_for(segments_of(c, memory), k=c["reads"] or READS, limit_ns=c["limit_ns"], tier=tier,
+                        tier_bytes=(info or {}).get("total_bytes"))
     foreign = foreign_labels(c["foreign_bytes"], params)
     store = None if memory is None else wipe_store.StoreProver(params, memory, foreign=foreign)
     try:
         if store is not None:
             store.gate()
-        kept = None if memory is None else memory.info() | {"bytes": store.size}
+        kept = None if memory is None else info | {"bytes": store.size}
         t, p0 = time.monotonic(), time.time_ns()
         in_python = keeping(foreign) if foreign else sw.Prover
         wipe = run(node, params, party=party, prover=in_python if store is None else lambda _: store)
@@ -400,13 +436,17 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if store is not None:
             store.close()
             memory.close()
+    k = json.loads(bytes.fromhex(wipe.case["commitment"]))["k"]
+    if c["reads"] is not None and k != c["reads"]:
+        raise RuntimeError(f"the memory challenger on {party.host} ran {k} reads, not period.json's wipe.reads "
+                           f"{c['reads']}: its command chooses them (wipe_party --reads)")
     links = [wipe_party.link(e["name"], node, e["to"], e["via"], mbps=e.get("mbps"), counted_by=e.get("counted_by"))
              for e in c["links"]]
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
         conn = wipe.report["connection"]
         links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
     where = wipe_party.placement(node, party.host, store=kept, simulated=c["placement"] == "simulated", links=links,
-                                 undeclared=undeclared(tier, params.labels * sw.LABEL_BYTES, kept))
+                                 undeclared=undeclared(tier, memory_bits(params) // 8, kept))
     window = {"challenger": wipe.report.get("window"),
               "prover": {"t0": wipe_party.utc(p0), "t1": wipe_party.utc(p1),
                          "clock": f"{socket.gethostname()}'s real-time clock, around the whole session (the "
@@ -424,19 +464,23 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     (out / "wipe.json").write_text(json.dumps({"answer": answer, "lean": lean, "placement": where, "prover": prover,
                                                "report": wipe.report, "seconds": seconds, "session": timing(wipe.signed),
                                                "uncertified": uncertified(where, wipe.signed), "window": window,
-                                               "wipe": c | {"foreign_labels": foreign, "memory_bits": memory_bits(params),
+                                               "wipe": c | {"foreign_labels": foreign, "k": k,
+                                                            "memory_bits": memory_bits(params),
+                                                            "outside_bits": params.outside_bits,
                                                             "segments": params.labels // SEGMENT_LABELS, "tier": tier}},
                                               sort_keys=True, indent=1))
     return answer
 
 
 def summary(record: Mapping[str, Any]) -> dict[str, Any]:
-    """`wipe.json`'s headline: the verdict and who gave it, where each party ran, the session's window on the
-    challenger's clock (`t0`, `t1`), what the bound doesn't cover, and the fill's and the reads' figures on each side."""
+    """`wipe.json`'s headline: the verdict and who gave it, the reads the challenger ran (`k`), where each party ran, the
+    session's window on the challenger's clock (`t0`, `t1`), what the bound doesn't cover, and the fill's and the reads'
+    figures on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
     w, window = record["wipe"], (record.get("window") or {}).get("challenger") or {}
     return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "judge": "lean" if record["lean"] else
-            "python", "segments": w["segments"], "tier": w["tier"], "foreign_labels": w.get("foreign_labels", 0),
+            "python", "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
+            "foreign_labels": w.get("foreign_labels", 0),
             "placement": record["placement"], "seconds": record["seconds"],
             "t0": window.get("t0"), "t1": window.get("t1"), "uncertified": record.get("uncertified", []),
             "challenger": {"fill_GBps": (session.get("fill") or {}).get("GBps"), "reads": session.get("reads"),
@@ -462,10 +506,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0 if answer["verdict"] == a.expect else 1
 
 
-__all__ = ["CONFIG", "EPS", "EXPERIMENTAL", "F", "LEAST_FILL_BYTES", "LIMIT_NS", "LINK_KEYS", "PROTOCOL", "READS",
-           "SEGMENTS", "UNCOUNTED", "Keeping", "Wipe", "answer", "case", "certify", "config", "digest", "disks",
-           "foreign_labels", "gaps", "keeping", "leg", "main", "memory_bits", "outcome", "params_for", "profile", "run",
-           "segments_of", "serve", "store_of", "summary", "timing", "uncertified", "undeclared"]
+__all__ = ["CONFIG", "COUNT_BITS", "EPS", "EXPERIMENTAL", "LIMIT_NS", "LINK_KEYS", "MAX_READS", "PROTOCOL", "READS",
+           "SAMPLING_BITS", "SEGMENTS", "SEGMENT_BYTES", "UNCOUNTED", "Keeping", "Wipe", "answer", "case", "certify",
+           "config", "digest", "disks", "foreign_bits", "foreign_labels", "gaps", "keeping", "leg", "main", "memory_bits",
+           "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
+           "timing", "uncertified", "undeclared"]
 
 if __name__ == "__main__":
     sys.exit(main())

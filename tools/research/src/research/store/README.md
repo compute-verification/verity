@@ -376,7 +376,8 @@ run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no
 (`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
 untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent.
 A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
-after a last listing of `manifests/`, so an upload that reused it meanwhile keeps it. Cite what you need before its TTL: a
+after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
+keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
 
 ## 8. Labels
@@ -392,7 +393,7 @@ immutable, append-only; a target's assertion set is the listing of its prefix):
 Assertions travel with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
 about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
 one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/machine assertions into the local layout and index.
-`preserved` is a three-leg gate (attempt manifest, artifacts, labels) naming the leg that fails; a preserved Attempt is not
+`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails; a preserved Attempt is not
 preserved until its assertions are on the remote. `labels TARGET --remote` marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
 trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).

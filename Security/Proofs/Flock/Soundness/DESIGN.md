@@ -548,7 +548,7 @@ If real concurrency is ever needed:
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
 - **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is faulty
-  relative to a committed trace defined by extraction. A drawn faulty unit is charged to one of two named events:
+  relative to a committed trace defined by extraction. A drawn faulty proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).
 - **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
