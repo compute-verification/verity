@@ -4,7 +4,7 @@ import Proofs.Pouw.PeriodJ10R.Honest
 /-!
 # `ServedWork` is honest and nontrivial
 
-The twins of `Properties.Pouw.Served.ServedWork` (LEAN-66), over `Proofs.Pouw.PeriodJ10R.Honest`'s honest J10-R
+The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.PeriodJ10R.Honest`'s honest J10-R
 period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windows' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
