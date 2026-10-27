@@ -33,7 +33,7 @@ Statements, in `Security/Definitions/NetworkCertifier/`:
 | `AdviceString.lean`, `Assumptions/AdviceString.lean`, `Guarantees/AdviceString.lean` | the advice string's per-window caps (`WithinCaps`), the compiler, acceptance within the caps, and the leak bound |
 | `AdviceV1.lean`, `Guarantees/AdviceV1.lean`, `Guarantees/AdviceV1Kraft.lean` | advice v1's charge, `ChargeCount_v1`'s reference one for one, and the leak bound with it |
 | `WindowCharge.lean`, `Guarantees/WindowCharge.lean`, `Guarantees/WindowChargeKraft.lean` | the whole window's charge, `ChargeCount_v2`'s reference one for one, and the leak bound with it |
-| `Warden.lean`, `Tap.lean`, `RecordRows.lean`, `Guarantees/Warden.lean` | the warden, the tap (the warden and the certifier as one auditor device on a server's uplink), the record format the Python certifier writes (`RowsFormat`), the warden's channel bound |
+| `Warden.lean`, `Tap.lean`, `RecordRows.lean`, `Guarantees/Warden.lean` | the network certifier on a server's uplink, which re-frames every byte into cells on a public schedule and records what it sends, as one device; the record format the Python certifier writes (`RowsFormat`); its channel bound |
 | `Premises.lean` | what a property of the certifier may take besides acceptance: `DeviceIntact`, the `trusted-host` premise |
 | `SampledAudit.lean`, `Guarantees/SampledAudit.lean` | the sampled audit and what its acceptance says about the egress at `δ` (`KSAccepted`) |
 | `SampledCharge.lean`, `SampledReg.lean`, `TapRows.lean`, `Guarantees/SampledCharge.lean` | what the faulty proof blocks add under a sampled audit (`faultyBits`, `faultySets`, `AccSeqsSampled`), the registered inputs and their finder (`Breg`), the certifier's rows at the transfer gates (`TapOpens`, `RLeakTap`, `Btap`) |
@@ -49,7 +49,7 @@ Proofs, here:
 | `Schedule.lean`, `PerWindow.lean` | Theorem 3 for the constant-rate Program, and the bounds over a run's first `m` whole windows |
 | `Ingress.lean` | the ingress bound |
 | `AdviceString.lean`, `AdviceV1.lean`, `WindowCharge.lean` | the leak bound, and `BitsCount` for advice v1 and for the whole-window charge (Kraft) |
-| `Warden.lean`, `Tap.lean`, `RecordRows.lean` | the warden's bound; the tap's cells read back from its own record (`tap_cells_read`); the Python rows format is a record format (`RowsFormat.tapRecord`) |
+| `Warden.lean`, `Tap.lean`, `RecordRows.lean` | the network certifier's channel bound; its cells read back from its own record (`tap_cells_read`); the Python rows format is a record format (`RowsFormat.tapRecord`) |
 | `SampledAuditAccepted.lean`, `SampledAuditInstance.lean` | `SampledAuditAccepted`, and its `KS` hypothesis discharged at the masked and plain records |
 | `SampledCharge.lean`, `SampledLeak.lean`, `SampledLeakReg.lean`, `SampledLeakRegPlain.lean`, `TapRows.lean` | the leak bound under a sampled audit, at the registration's values, and at the certifier's rows |
 | `Period.lean`, `PeriodSum.lean`, `Horizon.lean`, `HorizonLeak.lean` | the monitoring period's and the horizon's bounds |
@@ -89,7 +89,7 @@ Proofs, here:
 | Theorem 3, condition 1 | `FramesReadNoTimingAdvice P step occ` | a step's rows read the timing advice only through the predicted occupancy |
 | Theorem 3, condition 2 | `OccupancyReadsOwnBlock blk occ` | a cell's predicted occupancy reads only its own block's timing advice |
 | the advice string's charge | `BitsCount`, `CompilerDeterministic`, `CompilerPrecommitted` | the charge counts, and the compiler is deterministic and fixed before the run |
-| the auditor's device | `trusted-host` (`Verity.Assumptions.TrustedHost`) | the warden and certifier device runs its code as built |
+| the auditor's device | `trusted-host` (`Verity.Assumptions.TrustedHost`) | the network certifier runs its code as built |
 | sampling | `Claims.Sampling.KS`, `Claims.Sampling.Commitment.Binds`, `Claims.Flock.ListWithin` | sampling's knowledge soundness, the trace commitment's binding, a decoder listing every trace within Flock's radius |
 
 For the ingress bound the same `Prop`s are read inward. `Sanity.lean` shows every hypothesis satisfiable, and meets every
@@ -99,8 +99,8 @@ hypothesis of `Guarantees.EncardDecodableLeBlocks` and of `Guarantees.EncardIngr
 
 Every guarantee below is listed in `Security/lean-audit.json` as `NetTiming.SecurityProofs.G` and is under
 `shape.frozen` as `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract
-`Program`'s `AccSeqs`, `expectedRow`, or the grids; advice v1's over its charge as `Definitions` states it; the warden's
-over its code as `Definitions` states it), not over the network check's code. An accepted run of the network check
+`Program`'s `AccSeqs`, `expectedRow`, or the grids; advice v1's over its charge as `Definitions` states it; the
+channel bound's over the certifier's code as `Definitions` states it), not over the network check's code. An accepted run of the network check
 reaches them through `AcceptedRunsAreProgramRuns` (`Accepted.lean`). The calibration
 (`verity.core.protocols.certifier.calibration`) reports the bounds of `EncardDecodableLeConstantRate`,
 `EncardDecodableLeConstantRatePerWindow`, `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
@@ -127,7 +127,7 @@ reaches them through `AcceptedRunsAreProgramRuns` (`Accepted.lean`). The calibra
   `EncardAccSeqsWithinLeConstantRateV1Whole`, `EncardDecodableWithinLeCompiledV1Whole`,
   `EncardDecodableWithinLeCompiledPerWindowV1Whole`. That `ChargeCount_v2`'s circuit computes the Lean charge is
   circuit-check's, not proved here.
-- **The warden's channel bound** (`Warden.lean`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
+- **The network certifier's channel bound** (`Warden.lean`), what the client sees of the server side: `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-host`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`, `SampledAuditInstance.lean`):
   `SampledAuditAccepted`, under `Claims.Sampling.KS`.
