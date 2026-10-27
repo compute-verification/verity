@@ -934,7 +934,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
-          "commit ms | wgl ms | gamma ovl_w / wgl | O hashed in the GEMM: rows / chunks |")
+          "commit ms | wgl ms | gamma ovl_w / wgl | rows hashed in the GEMMs: rows / chunks |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
@@ -943,12 +943,14 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
+                   + (" r5w0" if r.get("rp") == 5 and r.get("W") and r.get("wgw", 1) and not r.get("r5w", 1) else "")
                    + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
         fused = "-"
-        if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
-            fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
+        rows_all = r.get("leaves") or r.get("o_leaves")
+        if r.get("fused_leaves", -1) >= 0 and rows_all:
+            fused = f"{100 * r['fused_leaves'] / rows_all:.1f}%"
             if r.get("fused_blocks", -1) >= 0 and r.get("row_blocks"):
-                fused += f" / {100 * r['fused_blocks'] / (r['o_leaves'] * r['row_blocks']):.1f}%"
+                fused += f" / {100 * r['fused_blocks'] / (rows_all * r['row_blocks']):.1f}%"
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
