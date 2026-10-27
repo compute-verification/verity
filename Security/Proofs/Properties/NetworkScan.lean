@@ -47,7 +47,7 @@ theorem scanFits_nontrivial :
   exact absurd hj (Nat.not_lt_zero j)
 
 /-- **`ScanScopeAcc`'s conclusion is not trivial**, transferred from `scanFits_nontrivial`'s instance (the transfer
-form of the two-lemma rule's `_nontrivial`, as soundness ruled on PRF-193): at any deployment, a statement that parses
+form of the two-lemma rule's `_nontrivial`): at any deployment, a statement that parses
 to a descriptor decoding to the empty Program, with the empty circuit, is not in `ScopeAcc` at that Program's
 schedule, though a scan check and a scope check accepting everything would pass it. -/
 theorem scanScopeAcc_nontrivial_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
