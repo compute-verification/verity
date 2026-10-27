@@ -3,8 +3,8 @@
 predicate). What a recorded honest session meets is asserted; what none meets yet is asserted refused by name, so the
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
-* `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
-  `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
+* `rec-coins/16-16-8-n64` (a recorded inner statement and honest inner session, and level 3's `pub.bin`,
+  `registered.json` and outer session, proved again at the current leaf scheme), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
   `verity/flock-circuit`; its outer session was proved before the OS masks and the current coin schedule, so every
   identity refuses it at its Hello, and only the checks that don't read the Hello are asserted on it. The inner
@@ -17,14 +17,14 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
   programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
   the art's own listing once decompressed; RecCap's statement and session were staged and proved over the gate's inner
-  session after it (`r20261020-002938-635a`, `85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). All ten
-  sessions were proved again over those statements at the current coin schedule, one firewalled session each
-  (STEP=oprove MODES=firewall WARM=0 RUNS=1). Lean's verifier
+  session after it (`85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). All ten sessions were proved again
+  over those statements at the current coin schedule, one firewalled session each (STEP=oprove MODES=firewall WARM=0
+  RUNS=1). Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s seven staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with the OS masks
   in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
-  gate is witnessed under today's identity. The event's last conjunct is shown in its executable form only: the honest
+  gate is witnessed under the current identity. The event's last conjunct is shown in its executable form only: the honest
   outputs are the circuit's, and a public file whose one output row is committed one bit off still sets up. That is
   the executable fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to
   `holds`, and the cheater's row not being the circuit's output is up to a SHA-512 second preimage for that row.
