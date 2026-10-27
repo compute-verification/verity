@@ -164,14 +164,16 @@ def _static(v: Any) -> Any:
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.ml.circuits.ops`, the catalog's, and the embedding's registered read
-    (`commitments.gates.embedding`): each registers its Definitions as it loads."""
+    """Import every module of `verity.ml.circuits.ops`, the catalog's, the embedding's registered read
+    (`commitments.gates.embedding`) and the streamed SHA-512 a checkpoint tie reads (`commitments.gates.sha512_stream`):
+    each registers its Definitions as it loads."""
     from verity.ml.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:
             importlib.import_module(m.name)
     importlib.import_module("verity.ml.commitments.gates.embedding")
+    importlib.import_module("verity.ml.commitments.gates.sha512_stream")
 
 
 def resolve(tid: str, *, template: bool = True) -> Any:
@@ -1419,6 +1421,15 @@ def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable
     return window_of_record(doc, law, resolve), doc
 
 
+def _word_bits(a: Any, n: int, leaves: int) -> np.ndarray:
+    """``n`` units' words of a Boolean-profile port (`boolean.word_type`'s, each element's bits LSB first) as their first
+    ``leaves`` bits, the port's leaves in order (a return field of fewer than 16 bits is one recorded u16 word)."""
+    a = np.ascontiguousarray(a)
+    w = a.view(f"u{a.dtype.itemsize}").reshape(n, -1).astype(np.uint64)
+    bits = (w[:, :, None] >> np.arange(8 * a.dtype.itemsize, dtype=np.uint64)) & np.uint64(1)
+    return bits.reshape(n, -1)[:, :leaves].astype(np.uint8)
+
+
 @dataclass(frozen=True)
 class _Recorded:
     inputs: list[np.ndarray]
@@ -1495,14 +1506,19 @@ class Window:
 
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
         """Per template, the units whose recorded outputs are not its Definition's outputs on their recorded inputs
-        (`evaluate_batch` under ``kernel``): what the proof of a drawn one would refuse."""
+        (`evaluate_batch` under ``kernel``): what the proof of a drawn one would refuse. A Boolean-profile template's
+        ports are recorded as their `boolean.word_type` words, and evaluated and compared as their bits."""
         out = {}
         for fn, _n in self.circuit.templates:
             tid, bad, at = descriptor_id(fn), [], 0
-            leaves = [len(f.leaf_widths()) for f in _fields(fn.signature()[1])]
+            params, ret = fn.signature()
+            leaves = [len(f.leaf_widths()) for f in _fields(ret)]
+            boolean = B.is_boolean(fn)
             for b in self._recorded.get(tid, ()):
-                want = np.asarray(evaluate_batch(fn, *b.inputs, kernel=kernel)).reshape(b.n, -1).astype(np.uint64)
-                got = np.concatenate([o.view(f"u{o.dtype.itemsize}").reshape(b.n, -1).astype(np.uint64) for o in b.outputs], axis=1)
+                ins = [_word_bits(a, b.n, ty.leaves) for a, (_, ty) in zip(b.inputs, params)] if boolean else b.inputs
+                outs = [_word_bits(o, b.n, ty.leaves) for o, ty in zip(b.outputs, _fields(ret))] if boolean else b.outputs
+                want = np.asarray(evaluate_batch(fn, *ins, kernel=kernel)).reshape(b.n, -1).astype(np.uint64)
+                got = np.concatenate([o.view(f"u{o.dtype.itemsize}").reshape(b.n, -1).astype(np.uint64) for o in outs], axis=1)
                 if got.shape != want.shape or want.shape[1] != sum(leaves):
                     raise ValueError(f"{tid}: outputs of {got.shape[1]} leaves a unit, its Definition's {want.shape[1]}")
                 bad += [at + int(i) for i in np.flatnonzero((got != want).any(axis=1))]
