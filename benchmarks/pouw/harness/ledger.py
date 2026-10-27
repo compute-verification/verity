@@ -42,8 +42,8 @@ REPO = HERE.parents[2]
 
 KIND = "kernel-attempt/v1"
 #: the gate code's version, so a record's validity is derived from it rather than voided by hand: 1 = the reference verifier
-#: accepts the timed run's own transcript (08:35Z); 2 = outputs poisoned before the dumped call and a no-write
-#: negative control the verifier rejects (11:50Z)
+#: accepts the timed run's own transcript; 2 = outputs poisoned before the dumped call and a no-write
+#: negative control the verifier rejects
 GATES = "pouw-gates/2"
 GATES_REQUIRED = 2
 TIERS = ("1", "2a", "2b", "3")
