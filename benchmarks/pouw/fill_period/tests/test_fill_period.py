@@ -15,7 +15,7 @@ from verity.core.protocols.pouw import fill as F
 from verity.core.protocols.pouw.circuit import dither as D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import fill_period as FP  # noqa: E402
+import fill_period as FP
 
 
 def test_block_of_walks_every_block_once():

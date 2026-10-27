@@ -170,11 +170,11 @@ def work(sh: D.Shape, calls: int) -> int:
 
 def eps(sh: D.Shape, calls: int, k: int) -> Fraction | None:
     """The ε a draw of K = `k` establishes at `credit.DELTA` over the whole of a filler window's work (`window.eps_at`),
-    or None when it establishes none."""
-    try:
-        return Wd.eps_at(k, Cr.DELTA, work(sh, calls), work(sh, calls), 1)
-    except ValueError:
+    or None when it establishes none (not even ε = 1: `window.k_prime` at 1 above K; K and the work are positive)."""
+    w = work(sh, calls)
+    if Wd.k_prime(Fraction(1), Cr.DELTA, w, w, 1) > k:
         return None
+    return Wd.eps_at(k, Cr.DELTA, w, w, 1)
 
 
 def _live(c: Ch.LiveCommitment, doc: Any, label: str, index: int, after: bytes, what: str) -> tuple[str, str] | None:

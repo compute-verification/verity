@@ -33,7 +33,7 @@ import os
 import secrets
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -152,7 +152,7 @@ def run(g: Any, main: list[str], out: Path, name: str = "fill-demo") -> dict:
     """The fill period of served period `name` on gate `g` (`window_salt.local`'s), its record written to
     ``out/fill.json`` and returned."""
     A, host = g.A, g.host
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     hooks = dict(by=LANE, now=now, own=lambda p: None, seal=lambda p: None,
                  period=lambda args: A.period(host, args, signer=g.signer, pinned=g.pin, now=now, active=lambda s: False))
 
