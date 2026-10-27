@@ -158,7 +158,7 @@ def AccOfAccepts (q : Dep) : Prop :=
     VStar.Recursive.checkBlobs p c e bs = .accept pub prof → ∀ x, Names p e bs x →
     ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (q.D.V.k x) → Coin),
       Shows q.Bd.IVStar q.st x e.proofs bs (Claims.run FlockDeploy.sha512 P q.D.V x ω r).seen →
-      RowsShow q.Bd.IVStar q.st x p.own (Claims.run FlockDeploy.sha512 P q.D.V x ω r).seen →
+      RowsShow q.Bd.IVStar q.st x e.proofs bs (Claims.run FlockDeploy.sha512 P q.D.V x ω r).seen →
       LiveCoins q.Bd.IVStar q.st x (Claims.run FlockDeploy.sha512 P q.D.V x ω r).seen →
       RecDeploy.DenseAt x ∧ (Claims.run FlockDeploy.sha512 P q.D.V x ω r).out = .acc
 
@@ -482,13 +482,13 @@ theorem sampledProofsRecursive_of (q : Dep) (hG : AccOfAccepts q)
   by_cases hH : V.Holds θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty⟩
   · refine le_trans (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ) ?_
     rw [Game.prob_false]
-    exact zero_le _
+    exact zero_le
   -- where the files fail the commit phase's check, no play is accepted
   by_cases hreg : V.Registered θ F
   swap
   · rw [show Game.prob (fun o => RecVerdict V o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ = 0 from
       prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ h => hreg h.1.1) σ]
-    exact zero_le _
+    exact zero_le
   -- more than an `ε` share of the units is unbound in the extracted transcript
   have hU : K₀ θ F ≤ (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (q.extract V S (readX F))).card := by
     refine hK₀ θ F _ ?_
