@@ -16,16 +16,16 @@ own Commit.
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
   times.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
-  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): each window's session
-  is reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) before the window opens, window
-  0's at the server's start and window k+1's while window k serves, off the engine loop (`GateSessions.take`), round 0
-  opens it on the window's open root (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the
-  gate's open answers once the auditor host's ``ssh -R`` listens there, and the window's release waits for its end
-  entry. The gate's open answers a port no session without an end entry holds, so a window whose session opens while
-  the window before is still releasing takes a port of its own. A reserve joins its lane's open period, if one is open:
-  a reserve made ahead that no window opens (the server stopped first) would leave its period incomplete, so the next
-  window's is reserved ahead only while the last reserve joined no period (window 0's, made before any answer, is
-  ``unused`` in the summary if the server serves no window). Without a gate, the epoch's in-process coins,
+  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
+  reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at its open and window k+1's while
+  window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
+  (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
+  host's ``ssh -R`` listens there, and the window's release waits for its end entry. The gate's open answers a port no
+  session without an end entry holds, so a window whose session opens while the window before is still releasing takes
+  a port of its own. A reserve joins its lane's open period, if one is open, so window 0's waits for its open, after a
+  period opened once the server listens; and a reserve made ahead that no window opens (the server stopped first) would
+  leave its period incomplete, so the next window's is reserved ahead only while the last reserve joined no period, and
+  one no window opened is ``unused`` in the summary. Without a gate, the epoch's in-process coins,
   one epoch a window (`pouw_h1_settings.from_engine`): such a window credits nothing (`pouw_h1.IN_PROCESS`).
   ``--protocols-config`` sets no session (``SESSIONED``).
 * **Off the engine loop.** At a window's close the loop takes only H1's hooks and tap off; its release (the empty
@@ -195,7 +195,7 @@ class GateSessions:
     `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
     pouw setting ``gate``) opens it on the window's open root and `ended` waits for its end entry. ``held`` is each
     session reserved, as the gate answered it, under the window it was reserved for; one no window opened says why
-    (``unused``). With ``ahead`` (a `worker`), each session is reserved there before its window opens (`ahead_of`).
+    (``unused``). With ``ahead`` (a `worker`), each window's after the first is reserved there before it opens (`take`).
     `wait` sleeps between polls, `listens` is `listening` and `now` the UTC time a reserve's expiry is read against
     (tests)."""
 
@@ -320,7 +320,7 @@ class H1Windows:
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
-    coins), window 0's reserved ahead here. ``closer`` (a `worker`) runs each window's release off the engine loop, and
+    coins). ``closer`` (a `worker`) runs each window's release off the engine loop, and
     `close` hands back its outcome's `Future`; None: on the loop, the outcome itself. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
@@ -359,12 +359,11 @@ class H1Windows:
         self.outcomes: list[dict[str, Any]] = []
         self.releasing = 0
         self._lock = threading.Lock()
-        if sessions is not None:
-            sessions.ahead_of(0)
 
     def describe(self) -> dict[str, Any]:
         """serve.json's ``protocols``: the entry, T and S, the period's Program digest, the weights' root, where the
-        coins come from (``challenger``, with the gate's peer, or ``in-process``) and where each window's release runs."""
+        coins come from (``challenger``, with the gate's peer, or ``in-process``), where each window's session is reserved
+        (``ahead``: window k+1's while window k serves, outside a period) and where its release runs."""
         coins = {"coins": "in-process"} if self.sessions is None else {"coins": "challenger", "peer": self.sessions.peer}
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
                 "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,

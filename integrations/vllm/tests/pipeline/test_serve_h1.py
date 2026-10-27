@@ -222,10 +222,11 @@ class _InOrderAuditor(_GateAuditor):
 
 
 def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp_path, monkeypatch):
-    """With ``ahead`` and ``closer``: window 0's session is reserved at the start and window k+1's while window k
-    serves, and window k's release (its manifest, draw coin, session close and the wait for its end entry) runs after
-    window k+1 has opened and served on a session of its own. No reserve and no status poll is the loop's; each window
-    keeps its own session, coins and transcript, and the outcomes are recorded in window order."""
+    """With ``ahead`` and ``closer``: window 0's session is reserved at its open (after any period the run opened) and
+    window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the wait for
+    its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls are window
+    0's reserve and each window's open; each window keeps its own session, coins and transcript, and the outcomes are
+    recorded in window order."""
     srv, auditor = _Server(monkeypatch), _InOrderAuditor(tmp_path, monkeypatch)
     ahead, closer = Later(), Later()
     calls: list[tuple[str, bool]] = []
@@ -238,7 +239,7 @@ def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
     assert (arm.describe()["reserve"], arm.describe()["release"]) == ("ahead", "off the loop")
-    assert len(ahead.jobs) == 1 and not calls, "window 0's reserve waits on the worker"
+    assert not ahead.jobs and not calls, "nothing is reserved before window 0 opens"
     pending, runs = [], []
     for w, prompts in enumerate(PROMPTS):
         ahead.run()
@@ -260,7 +261,8 @@ def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp
         assert set(out["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
     assert outs[0]["session"]["session"] != outs[1]["session"]["session"]
     arm.drain()
-    assert [verb for verb, off in calls if not off] == ["open", "status"] * 2, "round 0's open, its commitment by status"
+    assert [verb for verb, off in calls if not off] == ["reserve"] + ["open", "status"] * 2, \
+        "window 0's reserve, then round 0's open and its commitment by status"
     assert [verb for verb, _off in calls].count("reserve") == 3, "window 2's, reserved ahead, is never opened"
     assert arm.summary()["unused"] == [sessions.held[-1]["session"]] and sessions.held[-1]["window"] == 2
     srv.src.uninstall()
