@@ -25,7 +25,9 @@ failure message carries its fix.
  - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
  counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
- through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
+ through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name. A hash's
+ domain-separation tag reads like one but names no record: a module-level constant named `*_TAG` or `*_DOMAIN` holds it as
+ a plain literal, which the rule skips.
 - **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
  `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
