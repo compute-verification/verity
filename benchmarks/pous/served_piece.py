@@ -61,10 +61,9 @@ from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
 from verity.ml.commitments import advice
 from verity.ml.commitments.identity import canonical_json_bytes
-from verity_vllm import config
 from verity_vllm import protocols as PO
-from verity_vllm.protocols import pous
 
+pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
 PINS = ROOT / "integrations" / "vllm" / "manifests" / "checkpoints-int8.json"
 ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
@@ -300,7 +299,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     types = pous.linear_types
     pous.linear_types = _linear_types
     try:
-        ctx = PO.Context(stage="serve", enabled=config.parse_protocols([ENTRY]),
+        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]),
                          settings={"pous": {"salt_source": _salt_source, "p2_lib": p2_lib, "experimental": True}})
         t = time.monotonic()
         comp = PO.install(model, ctx)

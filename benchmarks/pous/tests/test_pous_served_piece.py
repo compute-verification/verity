@@ -30,7 +30,6 @@ from verity.core.protocols.pous import period
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.ml.commitments import advice
 from verity.ml.commitments.identity import canonical_json_bytes
-from verity_vllm.protocols import pous
 
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
@@ -58,6 +57,7 @@ SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py"
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
 ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
+pous = SP.pous
 
 
 def _tensors() -> dict[str, torch.Tensor]:
