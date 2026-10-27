@@ -318,12 +318,13 @@ def test_a_reserve_for_a_peer_without_a_certifier_coin_link_is_refused(host, sig
 
 def test_an_open_takes_a_port_of_its_peers_coin_link_and_its_serve_py_opens_no_tunnel(host, signer):
     host.coin_ports.write_text("vy-nebius-1 7850-7851\n")
-    rc, out = open_window(host, signer, active=lambda s: True)
-    assert rc == 0 and json.loads(out)["port"] == 7850
-    session = json.loads(out)["session"]
-    rc, out = open_window(host, signer, token="cd34", commit="cd" * 64, active=lambda s: True)
-    assert rc == 0 and json.loads(out)["port"] == 7851
-    rc, out = open_window(host, signer, token="ef56", commit="ef" * 64, active=lambda s: True)
+    live: set[str] = set()
+    for token, commit, port in (("ab12", COMMIT, 7850), ("cd34", "cd" * 64, 7851)):
+        rc, out = open_window(host, signer, token=token, commit=commit, active=live.__contains__)
+        assert rc == 0 and json.loads(out)["port"] == port
+        live.add(json.loads(out)["session"])
+    session = min(live)
+    rc, out = open_window(host, signer, token="ef56", commit="ef" * 64, active=live.__contains__)
     assert rc == 3 and "every port of 7850..7851 has a live session" in json.loads(out)["refused"]
 
     argv = A.serve_argv(host, session, A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"])
