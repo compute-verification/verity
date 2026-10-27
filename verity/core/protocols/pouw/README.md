@@ -6,7 +6,7 @@ noised checked values. One protocol carries several named schemes behind one int
 them; PoUW states what each window commits, the Program each drawn proof block must pass, and what the outcome credits.
 What the draw established is ε at δ; PoUW carries no policy parameter.
 
-Lean is the source of truth. The verifier of record is the three Lake packages under `lean/`; the Python modules of the
+Lean is the source of truth. The verifier is the three Lake packages under `lean/`; the Python modules of the
 same names are their references, held to them by the difftests. The guarantees are in `Security/`, and every name below
 is listed in `Security/lean-audit.json`.
 
@@ -75,7 +75,7 @@ spec, `dither/PROTOCOL.md`.
 from verity.core.protocols.pouw import core_check, credit, window, verifier
 from verity.core.protocols.pouw import schemes
 
-verdict = core_check.check(params, commitment, evidence)   # one audit window, as `pouw-check` answers (Lean of record)
+verdict = core_check.check(params, commitment, evidence)   # one audit window, as `pouw-check` answers (the Lean verifier)
 outcome = credit.window(key, ledger, pins, main, ...)      # a served window's credited set and its drawn units' outcome
 period = credit.period_credit(key, ledger, pins, main, name, windows, verify, ...)   # a period, closed and complete
 passes = credit.pearl_c_period_credit(key, ledger, pins, main, name, passes, earlier, ...)   # a Pearl-C period
@@ -85,7 +85,7 @@ item = window.sampling(eps, delta, work, tile_work)        # the registered samp
 scheme = schemes.get("pearl-c-sm120-v1-h3")                # a configured PoUWScheme
 ~~~
 
-`verifier.lean(fn, value)` runs the Lean verifier of record (`RECORD_VERDICT`), and `verifier.coins(n)` is the
+`verifier.lean(fn, value)` runs the Lean verifier (`RECORD_VERDICT`), and `verifier.coins(n)` is the
 challenger's entropy, read by the Lean from the operating system.
 
 ## Where things are
@@ -97,7 +97,7 @@ challenger's entropy, read by the Lean from the operating system.
   references the Lean is held to, and the reference rules not yet ported.
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
   (`compile`) and the draw plan (`plan`). Each Definition has its `circuit-check` sidecar.
-- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier of record, each with its difftest.
+- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
 - `tests/`: the package's suite. `benchmarks/pouw/` is the measuring side and the clear reference lifecycle
   (`benchmarks/pouw/clear`); nothing here imports it.
