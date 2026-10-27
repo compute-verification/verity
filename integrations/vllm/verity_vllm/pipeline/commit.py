@@ -729,22 +729,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     unbound = [B.identity_dict(i) for i, e, _ in picks if e is None]
     ops, ok = [], []
     po_skipped: str | None = None
-    po_deferred: list[tuple[int, int]] = []
     if getattr(com, "retain", "device") == "none":
         po_skipped = "retain=none: values by replay" if bound else None
-    elif bound and getattr(com, "retain_exclude", None):
-        # [R17 fp8, R17-5] retain=host + exclude: a population pick whose leaf lies in an excluded family's interior has no host bytes here;
-        # it is handed to openings_after_release (com._oar_deferred) and opened there by REPLAY against this run's root.  The host share
-        # opens now and must verify (binding_check).  Nothing is dropped: every drawn identity is opened by one of the two paths.
-        want = [(e["identity"]["step"], leaf) for _, e, leaf in bound]
-        held = [p for p in want if com.leaf_retained(*p)]
-        po_deferred = [p for p in want if not com.leaf_retained(*p)]
-        ops = com.open(held) if held else []
-        ok = [com.verify(rc, o) for o in ops]
-        if po_deferred:
-            po_skipped = (f"retain=host excluding {sorted(com.retain_exclude)}: {len(po_deferred)} of {len(want)} population-drawn leaves lie in "
-                          "excluded families -> opened by replay (openings_after_release)")
-            com._oar_deferred = list(getattr(com, "_oar_deferred", []) or []) + po_deferred
     elif bound:
         ops = com.open([(e["identity"]["step"], leaf) for _, e, leaf in bound])
         ok = [com.verify(rc, o) for o in ops]
@@ -758,20 +744,11 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
            "openings_population": {"n": len(picks), "bound": len(bound), "unbound_n": len(unbound), "unbound": unbound[:8], "opened": len(ops), "verified": sum(ok),
                                    "late_step_in_sample": max((e["identity"]["step"] for _, e, _ in bound), default=-1) == horizon - 1,
                                    "families": sorted({e["identity"]["op_path"].split(".")[-1].split("/")[0] for _, e, _ in bound}),
-                                   "skipped": po_skipped, "deferred_replay_n": len(po_deferred),
-                                   "deferred_positions": [list(p) for p in po_deferred], "deferred_digest": _positions_digest(po_deferred)}}
+                                   "skipped": po_skipped}}
     if args.out:
         (Path(args.out) / f"binding_map_p{pair}.json").write_text(json.dumps({k: v for k, v in bmap.items() if k != "entries"} | {"entries": bmap["entries"]}, separators=(",", ":"), default=str))
         (Path(args.out) / f"structure_p{pair}.json").write_text(json.dumps(structure, indent=1, default=str))
     return rec
-
-
-def _positions_digest(positions) -> str | None:
-    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest."""
-    pos = sorted({(int(s), int(i)) for s, i in (positions or [])})
-    if not pos:
-        return None
-    return hashlib.sha256(json.dumps(pos, separators=(",", ":")).encode()).hexdigest()
 
 
 def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, tokens_ref: dict | None = None) -> dict[str, Any]:
@@ -806,14 +783,8 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         if first != big:
             forced.append((first, 0)); forced_why[forced[-1]] = "first step: first leaf"
     forced = [f for f in forced if f not in sample]
-    # [R17 fp8, R17-5] the in-run challenge / population picks this run could NOT open from host (excluded families' interior; handed over
-    # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every drawn leaf is opened by one of the paths
-    handed = list(dict.fromkeys(tuple(p) for p in (getattr(com, "_oar_deferred", None) or [])))
-    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are drawn here anyway (and open by replay when not held)
-    com._oar_deferred = []
-    picks = sample + forced + deferred
-    # which picks the frozen run can open from its OWN retained bytes: all of them (retain=host), none (retain=none), or
-    # all but the excluded families' interior chunks (retain=host + VERITY_RETAIN_EXCLUDE -- the FA3 hidden plane opens by replay).
+    picks = sample + forced
+    # which picks the frozen run can open from its OWN retained bytes: all of them (retain=host) or none (retain=none).
     # `--replay-openings always` replays even when every pick is held (root-parity demonstration on the small fixtures).
     held = [p for p in picks if has_host and frozen.leaf_retained(*p)]
     not_held = [p for p in picks if p not in set(held)]
@@ -896,7 +867,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             fam = value_family(o.identity.get("name", ""))
             replay_fams[fam] = replay_fams.get(fam, 0) + 1
     steps_opened = sorted({o.step for o in ops})
-    n_sf = len(sample) + len(forced)
     # [coord R17-16 (iii)] the windows the openings touched, on the record: every pick's (step, window index) -- the challenge is salted
     # across the whole run, the forced picks pin the first window of the largest step and the LAST window of the LAST step
     _Wb = int(getattr(frozen, "win_bytes", 0) or 0)
@@ -905,13 +875,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            "forced_why": [{"step": int(st), "leaf": int(ix), "why": forced_why.get((st, ix), "")} for st, ix in forced],
            "windows_opened_n": len(windows_opened), "windows_opened_steps": len({w[0] for w in windows_opened}),
            "last_window_opened": bool(steps_sorted) and any((st == steps_sorted[-1] and ix == rc.steps[steps_sorted[-1]].n_leaves - 1) for st, ix in picks),
-           "forced_families": [value_family(o.identity.get("name", "")) for o in ops[len(sample):n_sf]], "families": fams,
-           # the in-run challenge / population picks deferred to this stage (excluded families): all opened by replay, all must verify
-           "deferred_n": len(deferred), "deferred_received_n": len(handed), "deferred_verified": sum(ok[n_sf:]),
-           "deferred_families": sorted({value_family(o.identity.get("name", "")) for o in ops[n_sf:]}),
-           # [rev F-r17b-13] the received POSITIONS (every one is in `picks`, opened + verified above); the verdict compares the union of the
-           # in-run phases' deferred positions with these, not the counts
-           "deferred_received_positions": [list(p) for p in handed], "deferred_received_digest": _positions_digest(handed),
+           "forced_families": [value_family(o.identity.get("name", "")) for o in ops[len(sample):]], "families": fams,
            "steps_opened": steps_opened, "source": source, "freed": freed, "retained_device_after": retained_after,
            "replay_run_root": replay_root, "replay_root_equal": (replay_root == rc.run_root.hex()) if replay_root else None,
            "replay_tokens_equal": replay_tokens_equal,
@@ -1020,10 +984,6 @@ def staging_environ(args: Options) -> None:
     settings.put("VERITY_STAGING_BOUNDED", "1" if args.bounded_staging else "0")
     if args.bounded_staging:
         settings.put("VERITY_LEARN_HOST_BUDGET_MB", str(int(args.learn_budget_mb)))
-    if args.retain_exclude:
-        if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
-            raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
-        settings.put("VERITY_RETAIN_EXCLUDE", args.retain_exclude)
     if args.footprint:
         settings.put("VERITY_FOOTPRINT", args.footprint)
         Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
@@ -1076,7 +1036,6 @@ class Options:
     footprint: str | None = option("--footprint", default=None, help="R13 P0: write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
     bounded_staging: bool | None = option("--bounded-staging", default=None, action="boolean_optional", help="[R17 fp8, F-fp8-B8MEM] bounded host staging (sets VERITY_STAGING_BOUNDED; windowed path only; omitted = on whenever " "staging is windowed): a learning step's transient " "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the " "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named " "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). --no-bounded-staging: the hedge copies")
     learn_budget_mb: int = option("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
-    retain_exclude: str | None = option("--retain-exclude", default=None, help="[R17 fp8, R17-5] with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned " "interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in " "openings_after_release (needs --open-after-release); everything else opens from host as before")
     host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="[R17-7.3] with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the " "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
     replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens " "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots: R17-5 parity)")
     open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="R13 P0 acceptance (default on): after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); " "--no-open-after-release opens in the run only (not under --retain none)")
@@ -1463,8 +1422,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # [R17 fp8, R17-7.3 no doomed launches] the HOST peak bound of a bounded run, every term named (bytes):
                 #   engine       the process RSS now (weights are on device; this is vLLM + torch + the tokenizer + the pinned pool so far)
                 #   levels       the run's tree levels on pinned host: 32 B per 256 B chunk per level -> <= raw / 4 (kept for openings)
-                #   raw          retain=host: the raw bytes kept on host = the bound minus the excluded families' prefill hidden bytes
-                #                (decode-step hidden rows are counted as retained: conservative); retain=none|sample: 0
+                #   raw          retain=host: the raw bytes kept on host (the raw bound); retain=none|sample: 0
                 #   learn        the learning-step transient budget (given back after each re-hash; at most one step at a time)
                 #   replay       openings-after-release: a second run's levels (raw / 4) + the challenged windows on host (<= picks x W)
                 #   ring         the windowed device ring is DEVICE memory (not counted); the pinned pool rounds slices up to 64 MiB blocks
@@ -1472,9 +1430,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 _rss_now = int((rss_kb()[0] or 0) * 1024)
                 # TERM BY TERM against the B1 1024/128 measurements on cp-h100 (R17 fp8, FP8-STAGING.md §3; runs.jsonl of the record and
                 # bounded-x arms): the stream has two components the sizing models with very different accuracy --
-                #   hidden (fa3_hidden_m1, the FA3 slab padded to the step's longest query): sized 19,636,365,312 B, measured (excluded_bytes)
+                #   hidden (fa3_hidden_m1, the FA3 slab padded to the step's longest query): sized 19,636,365,312 B, measured
                 #            19,635,194,880 B -> exact to 1.2 MB; factor 1.05
-                #   other  (every other family, per-token widths): sized ~3.43 GB, measured (host kept under exclude) 5,440,526,844 B -> x1.59;
+                #   other  (every other family, per-token widths): sized ~3.43 GB, measured (host kept) 5,440,526,844 B -> x1.59;
                 #            factor 2.0 (the per-token widths of the declaration under-size these planes; bounded, not explained)
                 # A blanket x1.15 on the total held on B1 only because hidden is 78 % of the stream; on B8 (hidden 92 %) it under-sizes the
                 # kept raw by ~7 GiB while over-sizing the levels. Env overrides for a re-derivation, never for a launch.
@@ -1486,7 +1444,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 from verity_vllm.commit.committer.native_host import schedule_stream_bound
                 _ssb = schedule_stream_bound(asz, reqs, sampling)
                 asz["schedule_stream_bound"] = _ssb
-                _excl = set(getattr(com, "retain_exclude", ()) or ())
                 from verity_vllm.commit.committer.native_host import bounded_host_bound
                 # [R17 fp8, F-fp8-C2PROG] the C2 sampled replay's Programs of record become Python objects in THIS process (B8: 70,300 MiB,
                 # the peak of attempt 1); forecast them BEFORE the run from the instance files the replay will load (streamed count, ~17 s
@@ -1497,7 +1454,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] C2 PROGRAMS FORECAST: {_c2f['rows']:,} instance rows in {len(_c2f['files'])} files, json {_c2f['json_bytes'] >> 20} MiB -> "
                       f"{_c2f['bytes'] >> 20} MiB of Python objects (x{_c2f.get('factor')}, {_c2f.get('calibration')})"
                       f"{(' -- ' + str(_c2f.get('why'))) if _c2f.get('why') else ''}", flush=True)
-                _admit = bounded_host_bound(_ssb, engine_rss_bytes=_rss_now, retain=com.retain, retain_exclude=_excl,
+                _admit = bounded_host_bound(_ssb, engine_rss_bytes=_rss_now, retain=com.retain,
                                             c2_programs_bytes=int(_c2f["bytes"]), c2_freed_before_replay=True,       # freed after the replay + linkage records (this file)
                                             fork_children_bytes=(FORK_CHILDREN_BYTES if args.replay_per_stratum else 0),
                                             c2_residual_bytes=(int(_c2f["bytes"] * C2_RESIDUAL_FRACTION) if args.replay_per_stratum else 0),
@@ -1526,10 +1483,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                # [revb F-r17b-19] not a literal: the admission's own print time; verdict.host_peak compares it with the first
                                # pair's start (first_run_started_utc) and records printed_before_run from the two timestamps
                                "admission_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "admission_monotonic_s": round(time.monotonic(), 3)})
-                _bound, _raw_bound, _levels, _raw_kept, _hidden_prefill, _learn, _replay, _slack, _pairs_x = (
+                _bound, _raw_bound, _levels, _raw_kept, _learn, _replay, _slack, _pairs_x = (
                     _admit["host_peak_bound_bytes"], _admit["raw_bound_bytes"], _admit["levels_bytes"], _admit["raw_kept_bytes"],
-                    _admit["excluded_prefill_hidden_bytes"], _admit["learn_budget_bytes"], _admit["replay_bytes"], _admit["slack_bytes"],
-                    _admit["pairs_extra_bytes"])
+                    _admit["learn_budget_bytes"], _admit["replay_bytes"], _admit["slack_bytes"], _admit["pairs_extra_bytes"])
                 _hidden_sized, _other_sized = _admit["hidden_sized_bytes"], _admit["other_sized_bytes"]
                 asz["bounded_host_admission"] = _admit
                 com.host_admission = _admit          # rides on the record: extra.bounded_staging.host_admission
@@ -1540,8 +1496,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"(factors measured on B1)", flush=True)
                 _ph = _admit.get("phases_bytes") or {}
                 print(f"[delta] bounded staging HOST BOUND ({kind}): {_bound >> 20} MiB = max(phases) + pairs {_pairs_x >> 20} ({_admit['pairs']} pairs) + slack {_slack >> 20}; "
-                      f"phases: run {_ph.get('run', 0) >> 20} = engine {_rss_now >> 20} + levels {_levels >> 20} + raw kept {_raw_kept >> 20} (bound {_raw_bound >> 20}, "
-                      f"excluded hidden {_hidden_prefill >> 20}) + learn {_learn >> 20} + pool_rounding {_admit.get('pool_rounding_bytes', 0) >> 20} "
+                      f"phases: run {_ph.get('run', 0) >> 20} = engine {_rss_now >> 20} + levels {_levels >> 20} + raw kept {_raw_kept >> 20} (bound {_raw_bound >> 20}) "
+                      f"+ learn {_learn >> 20} + pool_rounding {_admit.get('pool_rounding_bytes', 0) >> 20} "
                       f"(pool {'exact' if _admit.get('pool_exact') else 'torch-pow2'}) | c2 {_ph.get('c2_sampled_replay', 0) >> 20} = run + c2_programs "
                       f"{_admit.get('c2_programs_bytes', 0) >> 20} + fork_children {_admit.get('fork_children_bytes', 0) >> 20} (cgroup scope) | "
                       f"replay {_ph.get('openings_after_release', 0) >> 20} = run + replay {_replay >> 20}"
@@ -1574,9 +1530,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 adm["override"] = settings.VERITY_ADMIT_OVER_BOUND
                 adm["host_cap_source"] = host_cap_src
                 adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"
-                # [revb M-0254, fp8 x stoch on one tree] a --bounded-staging run pins the NON-excluded families sparsely and opens the excluded
-                # one by replay: its governing admission is the bounded HOST BOUND printed above (asz["admission_of_record"]); this envelope
-                # admission counts the whole run's raw bytes (the excluded family too) and is RECORDED beside it, never refuses alone
+                # [revb M-0254] a --bounded-staging run's governing admission is the bounded HOST BOUND printed above
+                # (asz["admission_of_record"]); this envelope admission counts the whole run's raw bytes and is RECORDED beside it, never refuses alone
                 adm["governs_this_run"] = not bool(getattr(com, "bounded", False))
                 asz["admission"] = adm
                 (out / f"admission_{kind}.json").write_text(json.dumps(adm, indent=1, default=str) + "\n")
@@ -1820,27 +1775,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 TL.start("validate.openings", pair=pair)
                 t_o = time.perf_counter()
                 skipped = None
-                deferred_n = 0
-                deferred_pos: list[tuple[int, int]] = []
                 if getattr(com, "retain", "device") == "none":
                     # retain=none: no raw copy anywhere -> the openings come from the REPLAY in openings_after_release (required by the verdict)
                     ops, skipped = [], "retain=none: values by replay (openings_after_release)"
                     if not args.open_after_release:
                         raise SystemExit("--retain none needs --open-after-release (the only opening path is replay)")
-                elif getattr(com, "retain_exclude", None):
-                    # [R17 fp8, R17-5] retain=host + exclude: a challenged leaf inside an excluded family's interior has no host bytes -> it
-                    # opens by REPLAY in openings_after_release (required by the verdict when `skipped` is set); every other leaf opens
-                    # from host here.  The in-run record keeps n / verified of the host openings (a failure among them is still a FAIL).
-                    held = [p for p in sample if com.leaf_retained(*p)]
-                    deferred_pos = [(int(s), int(i)) for s, i in sample if not com.leaf_retained(s, i)]
-                    deferred_n = len(deferred_pos)
-                    ops = com.open(held)
-                    if deferred_n:
-                        com._oar_deferred = list(getattr(com, "_oar_deferred", []) or []) + deferred_pos
-                        skipped = (f"retain=host excluding {sorted(com.retain_exclude)}: {deferred_n} of {len(sample)} challenged leaves lie in "
-                                   "excluded families -> opened by replay (openings_after_release)")
-                        if not args.open_after_release:
-                            raise SystemExit("--retain-exclude needs --open-after-release (the excluded families open by replay)")
                 else:
                     ops = com.open(sample)
                 t_open = time.perf_counter() - t_o
@@ -1855,9 +1794,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "t_ready_minus_last_step_s": t_ready - r["t_last_step"],
                     "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "extra": rc.extra,
                     "openings": {"n": len(ops), "verified": sum(ok), "generate_s": t_open, "verify_s": t_ver, "skipped": skipped,
-                                 "deferred_replay_n": deferred_n, "challenge_n": len(sample),
-                                 # [R17-5, rev F-r17b-13] the deferred POSITIONS (step, leaf) on record: openings_after_release must receive them all
-                                 "deferred_positions": [list(p) for p in deferred_pos], "deferred_digest": _positions_digest(deferred_pos),
+                                 "challenge_n": len(sample),
                                  "bytes_mean": statistics.fmean(len(o.value) + 32 * sum(1 for p in o.path if p is not None) for o in ops) if ops else None,
                                  # fail-closed diagnostics: WHICH positions failed (step, leaf index, identity) -- a failed opening is a Commit FAIL
                                  "failed": [{"step": o.step, "index": o.index, "identity": {k: (v if isinstance(v, (int, str, bool)) else str(v)) for k, v in (o.identity or {}).items()}}
@@ -2245,7 +2182,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _tx["source"] = row["commit"]["openings_after_release"].get("source")
                         _tx["n"] = row["commit"]["openings_after_release"].get("n")
                     oar = row["commit"]["openings_after_release"]
-                    if "replay" in str(oar.get("source") or ""):          # replay | host+replay (R17-5: the excluded families by replay)
+                    if "replay" in str(oar.get("source") or ""):          # replay | host+replay
                         _vc = row["commit"]["value_correspondence"]
                         _vc["method"] += " + replay (openings_after_release.replay_root_equal)"
                         _rep = bool(oar.get("replay_root_equal"))

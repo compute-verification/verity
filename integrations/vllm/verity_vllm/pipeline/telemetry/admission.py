@@ -50,22 +50,6 @@ GiB = 1 << 30
 SCHEMA = "verity/admission-plan/v1"
 
 
-#: [R19 admit fix (a)] the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's
-#: M1 export stream, FA2 (Ada/Ampere) or FA3 (Hopper) -- the families no C2 consumer reads back from host.
-HIDDEN_M1_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
-RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_FAMILIES}
-
-
-def retain_exclude_families(spec: str | None) -> list[str]:
-    """`--retain-exclude` / VERITY_RETAIN_EXCLUDE -> sorted family names (the `_stream` suffix tolerated, aliases expanded)."""
-    out: set[str] = set()
-    for f in (spec or "").split(","):
-        f = f.strip().removesuffix("_stream")
-        if f:
-            out |= set(RETAIN_EXCLUDE_ALIASES.get(f, (f,)))
-    return sorted(out)
-
-
 # Named allocation objects (the inventory), with lifetime as (first substage, last substage) on the stage timeline.
 INVENTORY: dict[str, dict[str, str]] = {
     "serving.engine_host": {"stage": "commit", "where": "commit_delta committer process at engine construction", "freed": "process exit", "scales": "constant per engine"},
@@ -124,10 +108,7 @@ class RowConfig:
     # of R17 #23 (= the parent's programs + oracle heap copied on write, NOT 2.9 x the largest tensor -- a VU reads its own rows only) is a
     # 250 MiB worker.  False models the pre-R19 code for `compare` against the R17/R18 records.
     fork_gc_freeze: bool = True
-    # [R19 admit, F-r18-admit-1 fix (a)] the RETAIN-windowed pool: `--bounded-staging --retain host --retain-exclude hidden_m1` keeps the
-    # C2 byte source (module outputs) and drops the M1 export stream's chunk-aligned interior (no C2 consumer reads it; opens by replay)
     bounded_staging: bool = False
-    retain_exclude: list[str] = field(default_factory=list)
     largest_request_rows: int | None = None   # (cap + lag) of the request with the largest rows x context product
     largest_request_ctx: int | None = None    # its prompt_len + cap + lag
     largest_tensor_bytes: int | None = None   # 'largest tensor bound' ledger line when the row has run before
@@ -351,14 +332,8 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     pts = commit_points(cfg.pairs)
     last = pts[-1]
     lf = float(C["commit.pinned_pool.levels_factor"]["value"])
-    excl_hidden = bool(set(cfg.retain_exclude) & set(HIDDEN_M1_FAMILIES))
     pool_kept = raw
-    if cfg.bounded_staging and cfg.retain == "host" and excl_hidden:
-        # fix (a): the M1 export stream's interior is not copied off the staging window; the pool holds the C2-read families + levels
-        pool_kept = max(0, raw - hid_b)
-        pool = pool_kept + int(raw * (lf - 1.0))
-        pool_basis = f"bounded staging, --retain host --retain-exclude {','.join(sorted(cfg.retain_exclude))}: (raw {raw // MiB} - hidden M1 {hid_b // MiB}) MiB + levels over every leaf raw {raw // MiB} MiB x {lf - 1.0:.2f} (R19 admit fix (a))"
-    elif cfg.bounded_staging and cfg.retain != "host":
+    if cfg.bounded_staging and cfg.retain != "host":
         pool = int(raw * (lf - 1.0))
         pool_basis = f"bounded staging, --retain {cfg.retain}: Merkle levels only, raw {raw // MiB} MiB x {lf - 1.0:.2f} (raw released per window; openings by replay)"
     else:
@@ -435,7 +410,7 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     plan["parent_c2_heap_mib"] = (c2_heap_p0 + base_b) // MiB
     plan["largest_tensor_mib"] = cfg.largest_tensor() // MiB
     plan["pinned_pool"] = {"bytes": pool, "kept_raw_bytes": pool_kept, "basis": pool_basis, "bounded_staging": cfg.bounded_staging, "retain": cfg.retain,
-                           "retain_exclude": sorted(cfg.retain_exclude), "hidden_bytes_est": hid_b}
+                           "hidden_bytes_est": hid_b}
     plan["fork_gc_freeze"] = cfg.fork_gc_freeze
     out["commit"] = plan
     return out
@@ -995,8 +970,8 @@ def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dic
                    "pairs": cfg.pairs, "replay_workers": cfg.workers(), "prefill_rows": getattr(cfg, "prefill_rows", None),
                    "snapshot_steps": getattr(cfg, "snapshot_steps", None), "snapshot_max_bytes": getattr(cfg, "snapshot_max_bytes", None),
                    "largest_vu_in_parent": cfg.largest_vu_in_parent, "n_instances_est": cfg.instances(), "largest_tensor_bytes_est": cfg.largest_tensor(),
-                   # [R19 admit, F-r18-admit-1] the host-working-set mechanisms the plan models (fix (c) default-on in the code; fix (a) by flags)
-                   "fork_gc_freeze": cfg.fork_gc_freeze, "retain": cfg.retain, "bounded_staging": cfg.bounded_staging, "retain_exclude": sorted(cfg.retain_exclude)},
+                   # [R19 admit, F-r18-admit-1] the host-working-set mechanisms the plan models (fix (c) default-on in the code)
+                   "fork_gc_freeze": cfg.fork_gc_freeze, "retain": cfg.retain, "bounded_staging": cfg.bounded_staging},
         "notes": list(cfg.notes), "stages": {}, "would_refuse": [], "lower_bound": [],
     }
     for s in stages:

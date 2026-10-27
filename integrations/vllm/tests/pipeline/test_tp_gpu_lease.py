@@ -91,7 +91,6 @@ class _Com:
     """A committer that retains its bytes in registered shared host mappings, so nothing after its root reads the device
     (`gpu_lease._kept_by`); each call goes on the shared event list."""
 
-    retain_exclude = None
     pool = SimpleNamespace(mode="exact-registered-shared")
 
     def __init__(self, rank: int, ev: list, retain: str = "host") -> None:

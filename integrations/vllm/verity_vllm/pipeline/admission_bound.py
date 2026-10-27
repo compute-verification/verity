@@ -141,28 +141,17 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
             "per_step": steps}
 
 
-#: [R19 admit, F-dA-15 correction] the windowed collector (native_collect_v2b, row_pod default `--window-mb 256`) WITHOUT bounded staging
-#: copies EVERY window of every step to the pinned pool as the learning re-hash source / hit-plan hedge copy, whatever `--retain` says
-#: (R18 #60 datum: `--retain none` still allocated the 112 GiB pool).  The pool is a term of the run under every retention on that path.
-HIDDEN_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
-
-
-def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: float, windowed: bool, bounded: bool,
-                         retain_exclude: set[str] | frozenset[str] | None) -> tuple[int, str]:
+def predicted_pool_bytes(raw: int, *, retain: str, levels_factor: float, windowed: bool, bounded: bool) -> tuple[int, str]:
     """The pinned host pool one Commit run allocates, by path, with the rule that produced it (named on the record):
-      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window; F-dA-15 correction)
-      bounded, retain host (raw - excluded hidden) + raw x (levels_factor - 1): `--retain-exclude hidden_m1` keeps the C2 byte source
-                           (the module outputs) and drops the M1 stream's chunk-aligned interior, which no C2 consumer reads (opens by
-                           replay); the Merkle levels still span every leaf, the excluded ones too
+      unbounded windowed   raw x levels_factor under EVERY retention: the windowed collector (native_collect_v2b, row_pod default
+                           `--window-mb 256`) without bounded staging copies every window of every step to the pinned pool as the learning
+                           re-hash source / hit-plan hedge copy, whatever `--retain` says (F-dA-15 correction)
+      bounded, retain host raw x levels_factor
       bounded, other       levels only: raw x (levels_factor - 1) (the raw bytes are hashed in the window and released; openings by replay)
       per-step blocks      raw x levels_factor for retain host, 0 otherwise (the pre-P0 path: nothing is copied unless retained)"""
-    excl = set(retain_exclude or ())
     if bounded:
         if retain == "host":
-            kept = raw - hidden if excl & set(HIDDEN_FAMILIES) else raw
-            rule = (f"bounded staging, retain host excluding {sorted(excl)}: kept raw {kept >> 20} MiB (= raw {raw >> 20} - hidden M1 {hidden >> 20}) "
-                    f"+ levels over every leaf raw {raw >> 20} MiB x {levels_factor - 1.0:.2f}" if excl else f"bounded staging, retain host: raw {raw >> 20} MiB x {levels_factor}")
-            return kept + int(raw * (levels_factor - 1.0)), rule
+            return raw + int(raw * (levels_factor - 1.0)), f"bounded staging, retain host: raw {raw >> 20} MiB x {levels_factor}"
         return int(raw * (levels_factor - 1.0)), f"bounded staging, retain {retain}: levels only, raw {raw >> 20} MiB x {levels_factor - 1.0:.2f} (raw bytes released per window, openings by replay)"
     if windowed:
         return int(raw * levels_factor), (f"unbounded windowed staging, retain {retain}: raw {raw >> 20} MiB x {levels_factor} -- every window is copied to the pinned pool "
@@ -189,7 +178,7 @@ def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, 
 def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_bytes: int | None, *, retain: str = "host",
               max_num_batched_tokens: int | None = None, lag: int = 1, levels_factor: float = LEVELS_FACTOR,
               envelope_bound_bytes: int | None = None, windowed: bool = True, bounded: bool = False,
-              retain_exclude: set[str] | frozenset[str] | None = None, resident: dict[str, Any] | None = None) -> dict[str, Any]:
+              resident: dict[str, Any] | None = None) -> dict[str, Any]:
     """The F-dA-15 verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
     and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is unchanged (`--retain host`, unbounded);
     under another retention the pool is now PREDICTED and named (a non-host retention on the windowed path allocates it anyway: a
@@ -198,13 +187,12 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
     sched = scheduled_step_bytes(sizing, requests, max_num_batched_tokens=max_num_batched_tokens, lag=lag)
     raw = int(sched["total_bytes"])
     hidden = int(sched["composition"]["hidden_bytes"])
-    pool, pool_rule = predicted_pool_bytes(raw, hidden, retain=retain, levels_factor=levels_factor, windowed=windowed, bounded=bounded,
-                                           retain_exclude=retain_exclude)
+    pool, pool_rule = predicted_pool_bytes(raw, retain=retain, levels_factor=levels_factor, windowed=windowed, bounded=bounded)
     predicted = pool + int((resident or {}).get("bytes") or 0)
     rec = {"schema": SCHEMA, "retain": retain, "domain": "--retain host: the whole run's raw bytes pinned on host (a non-host retention is recorded, never refused)",
            "scheduled_raw_bytes": raw, "scheduled_hidden_bytes": hidden, "levels_factor": levels_factor, "predicted_host_bytes": predicted, "pool_bytes": pool, "resident": resident,
            "pool_rule": pool_rule,
-           "staging": {"windowed": bool(windowed), "bounded": bool(bounded), "retain_exclude": sorted(retain_exclude or ())},
+           "staging": {"windowed": bool(windowed), "bounded": bool(bounded)},
            "host_cap_bytes": host_cap_bytes, "envelope_retained_bytes_bound": envelope_bound_bytes,
            "envelope_predicted_host_bytes": (int(envelope_bound_bytes * levels_factor) if envelope_bound_bytes else None),
            "would_exceed_by_bytes": (max(0, predicted - host_cap_bytes) if host_cap_bytes is not None else None),
@@ -286,9 +274,7 @@ class Options:
     per_step_blocks: bool = option("--per-step-blocks", default=False, action="store_true",
                                    help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")
     bounded_staging: bool = option("--bounded-staging", default=False, action="store_true",
-                                   help="the run uses --bounded-staging (no hedge copies; retain host keeps the non-excluded families)")
-    retain_exclude: str | None = option("--retain-exclude", default=None,
-                                        help="the run's --retain-exclude families (e.g. hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
+                                   help="the run uses --bounded-staging (no hedge copies)")
     observed: str | None = option("--observed", default=None,
                                   help="a record's commit/steps.jsonl: report per-step soundness of the prediction")
     json: bool = option("--json", default=False, action="store_true")
@@ -304,14 +290,9 @@ def main(a: Options) -> int:
     sw = wl.get("sweep") or {}
     same_row = (int(env.get("batch") or 0) == int(sw.get("batch") or len(wl["requests"])) and int(env.get("max_prompt") or 0) == max(int(r.get("prompt_len") or 0) for r in wl["requests"])
                 and int(env.get("max_new") or 0) == max(int(r.get("max_tokens") or 0) for r in wl["requests"]))
-    excl: set[str] = set()
-    for f in (a.retain_exclude or "").split(","):
-        f = f.strip().removesuffix("_stream")
-        if f:
-            excl |= set(HIDDEN_FAMILIES) if f in ("hidden_m1", "hidden") else {f}
     rec = admission(sizing, wl["requests"], cap, retain=a.retain, max_num_batched_tokens=mnbt, lag=a.lag,
                     envelope_bound_bytes=(sizing.get("retained_bytes_bound") if same_row else None),
-                    windowed=not a.per_step_blocks, bounded=a.bounded_staging, retain_exclude=excl)
+                    windowed=not a.per_step_blocks, bounded=a.bounded_staging)
     rec["sizing_record_is_this_row"] = same_row
     rec["host_cap_source"] = cap_src
     if a.observed:

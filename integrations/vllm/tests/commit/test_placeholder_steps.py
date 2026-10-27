@@ -2,7 +2,7 @@
 
 Bounded staging's warm-up is a learn-only pass: a learning step over the transient budget records its plan, discards its windows and
 commits a placeholder root b"" (`native_collect._commit_step_windowed`).  Core's fold takes 32-byte digests only, so folding those roots
-raised `InvalidArtifact: leaf must be a 32-byte digest` at the warm-up's finalize (#74, --bounded-staging --retain-exclude fa3_hidden_m1)
+raised `InvalidArtifact: leaf must be a 32-byte digest` at the warm-up's finalize (#74, --bounded-staging)
 before any record run.  A run whose every step has a root folds exactly as before.
 """
 

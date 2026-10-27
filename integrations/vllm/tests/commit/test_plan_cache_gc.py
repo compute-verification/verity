@@ -63,7 +63,7 @@ def counted(monkeypatch, native_worker: bool, count: int) -> dict[str, list[int]
 
 
 def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
-    """The readers that take a record's columns (the retain-exclude ranges, the layout summary, the names) or a pass-only
+    """The readers that take a record's columns (the stream spans, the layout summary, the names) or a pass-only
     `scan()` (the layout digest, the step's sequences) get what the plan's `TensorMeta`s give, and the record builds none;
     iterating it builds them once, so every pass sees the same objects."""
     from verity_vllm.commit.committer.native_host import NativeHostCommitter as NH
@@ -77,8 +77,7 @@ def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
         entries.append((i, dtype, shape, nbytes, off + gap, gap))
         off += gap + nbytes
     record, metas = PlanMetas.of_entries(entries, names, 256), list(PlanMetas.of_entries(entries, names, 256))
-    ranges = P.NC._excluded_chunk_ranges(record, {"fa2_hidden_m1"}, 256)
-    assert ranges == P.NC._excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, 256) and len(ranges) == 2
+    assert list(zip(record.names, record.offsets, record.sizes)) == [(m.name, m.dev_off, m.nbytes) for m in metas]
     assert record.summary() == [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas]
     assert list(record.names) == [m.name for m in metas] and record.nbytes == sum(m.nbytes for m in metas)
     assert NH.layout_digest(record.scan()) == NH.layout_digest(metas)

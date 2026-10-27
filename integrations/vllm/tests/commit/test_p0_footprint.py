@@ -158,10 +158,9 @@ def test_e2e_windowed_roots(tmp_path: Path):
     win = ["--window-mb", os.environ.get("VERITY_E2E_WINDOW_MB", "256"), "--window-slots", "8"]
     arms = [("block", ["--window-mb", "0"]), ("win", win + ["--no-bounded-staging"])]
     if os.environ.get("VERITY_E2E_BOUNDED", "1") != "0":
-        # [R17 fp8] the BOUNDED staging arms: same roots as the retained implementation -- (a) retain=host with the hidden family's
-        # interior chunks excluded from host (they open by replay), (b) retain=none (everything by replay); both with openings after release
-        fam = os.environ.get("VERITY_E2E_EXCLUDE", "fa3_hidden_m1")
-        arms += [("win-bounded-x", win + ["--bounded-staging", "--retain-exclude", fam, "--open-after-release", "--learn-budget-mb", os.environ.get("VERITY_E2E_LEARN_MB", "4096")]),
+        # [R17 fp8] the BOUNDED staging arms: same roots as the retained implementation -- (a) retain=host (every chunk on host, opened
+        # from host), (b) retain=none (everything by replay); both with openings after release
+        arms += [("win-bounded-host", win + ["--bounded-staging", "--open-after-release", "--learn-budget-mb", os.environ.get("VERITY_E2E_LEARN_MB", "4096")]),
                  ("win-bounded-none", win + ["--bounded-staging", "--open-after-release", "--learn-budget-mb", os.environ.get("VERITY_E2E_LEARN_MB", "4096")])]
     for name, extra in arms:
         cmd = list(base)
@@ -189,9 +188,7 @@ def test_e2e_windowed_roots(tmp_path: Path):
                 assert bs["enabled"] and not bs["learned_only_steps"] and bs["plan_mismatches"] == 0, bs
                 oar = r["commit"]["openings_after_release"]
                 assert oar["verified"] == oar["n"] and oar["replay_root_equal"] is True, oar
-                assert (oar["source"] == "replay") if name == "win-bounded-none" else (oar["source"] in ("host+replay", "replay")), oar["source"]
-                if name == "win-bounded-x":
-                    assert bs["excluded_bytes"] > 0 and fam in (oar.get("replay_families") or {}), (bs["excluded_bytes"], oar.get("replay_families"))
+                assert oar["source"] == ("replay" if name == "win-bounded-none" else "host"), oar["source"]
     assert len(set(roots)) == 1, f"the run root differs across arms {dict(zip([a for a, _ in arms], roots))} (layout must be unchanged under chunk-leaf-v1)"
 
 

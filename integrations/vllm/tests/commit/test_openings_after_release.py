@@ -162,41 +162,23 @@ def test_verdict_fails_closed_on_openings_after_release():
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# [R17 fp8, R17-5] retain=host + excluded families: the excluded interior chunks are NOT on host (`_HostRanges`), every other leaf is;
-# the excluded leaves open by replay -- regenerated value AND regenerated authentication path -- against the ORIGINAL root.
+# [R17 fp8, R17-5] a sparse host retention (`_HostRanges` with gaps, what a bounded replay's chunk picks keep): the chunks in a gap are NOT
+# on host, every other leaf is; the gap's leaves open by replay -- regenerated value AND regenerated authentication path -- against the
+# ORIGINAL root.
 
-def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
-    """Turn the CPU fixture's contiguous host blocks into `_HostRanges` that omit the excluded families' interiors (what the bounded
-    windowed worker builds); returns the excluded bytes per step."""
-    from verity_vllm.commit.committer.native_collect import _HostRanges, _excluded_chunk_ranges
+def _sparse(com: NativeHostCommitter) -> dict[int, int]:
+    """Turn the CPU fixture's contiguous host blocks into `_HostRanges` that omit the chunk-aligned interior of the `fa2.m1/` row (a
+    gap with a held chunk on each side); returns the omitted bytes per step."""
+    from verity_vllm.commit.committer.native_collect import _HostRanges
 
     out = {}
     for step, (blk, used) in list(com._gpu_blocks.items()):
-        ex = _excluded_chunk_ranges(com._layouts[step], exclude, GPU_CHUNK_BYTES)
-        ranges, pos, n = [], 0, int(blk.numel())
-        for lo, hi, _fam in ex:
-            if lo > pos:
-                ranges.append((pos, lo, blk[pos:lo].clone()))
-            pos = hi
-        if pos < n:
-            ranges.append((pos, n, blk[pos:n].clone()))
-        com._gpu_blocks[step] = (_HostRanges(ranges, used, {f: sum(h - l for l, h, ff in ex if ff == f) for f in exclude}), used)
-        out[step] = sum(h - l for l, h, _f in ex)
+        fa2 = next(m for m in com._layouts[step] if m.name.startswith("fa2.m1/"))
+        lo, hi = -(-fa2.dev_off // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES, (fa2.dev_off + fa2.nbytes) // GPU_CHUNK_BYTES * GPU_CHUNK_BYTES
+        n = int(blk.numel())
+        com._gpu_blocks[step] = (_HostRanges([(0, lo, blk[0:lo].clone()), (hi, n, blk[hi:n].clone())], used), used)
+        out[step] = hi - lo
     return out
-
-
-def test_excluded_chunk_ranges_are_the_chunk_aligned_interior():
-    from verity_vllm.commit.committer.native_collect import _excluded_chunk_ranges
-
-    metas, _ = _metas(0, 1)
-    fa2 = next(m for m in metas if m.name.startswith("fa2.m1/"))
-    ex = _excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, GPU_CHUNK_BYTES)
-    assert len(ex) == 1 and ex[0][2] == "fa2_hidden_m1"
-    lo, hi, _ = ex[0]
-    assert lo % GPU_CHUNK_BYTES == 0 and hi % GPU_CHUNK_BYTES == 0
-    assert lo >= fa2.dev_off and hi <= fa2.dev_off + fa2.nbytes            # strictly inside the tensor: boundary chunks stay on host
-    assert lo - fa2.dev_off < GPU_CHUNK_BYTES and (fa2.dev_off + fa2.nbytes) - hi < GPU_CHUNK_BYTES
-    assert _excluded_chunk_ranges(metas, {"no_such_family"}, GPU_CHUNK_BYTES) == []
 
 
 def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
@@ -205,7 +187,7 @@ def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
     com = _committer("host")
     rc = _run(com)
     full = {s: bytes(b.numpy().tobytes()) for s, (b, _u) in com._gpu_blocks.items()}
-    excl = _sparse(com, {"fa2_hidden_m1"})
+    excl = _sparse(com)
     assert all(v > 0 for v in excl.values())
     for step, (blk, used) in com._gpu_blocks.items():
         assert isinstance(blk, _HostRanges) and blk.numel() == -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
@@ -213,7 +195,7 @@ def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
         fa2 = next(m for m in com._layouts[step] if m.name.startswith("fa2.m1/"))
         n_leaves = rc.steps[step].n_leaves
         held = [com.leaf_retained(step, i) for i in range(n_leaves)]
-        # the excluded leaves are exactly the interior chunks of the FA2 row; every other leaf (incl. its two boundary chunks) is held
+        # the leaves in the gap are exactly the interior chunks of the FA2 row; every other leaf (incl. its two boundary chunks) is held
         for i in range(n_leaves):
             lo, hi = i * GPU_CHUNK_BYTES, (i + 1) * GPU_CHUNK_BYTES
             interior = lo >= fa2.dev_off and hi <= fa2.dev_off + fa2.nbytes
@@ -229,13 +211,13 @@ def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
 
 
 @pytest.mark.slow
-def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_replay_with_replay_paths():
+def test_sparse_retention_opens_held_leaves_from_host_and_the_gap_by_replay_with_replay_paths():
     orig = _committer("host")
     rc = _run(orig)
-    _sparse(orig, {"fa2_hidden_m1"})
+    _sparse(orig)
     sample, k = _sample(rc)
     fa2 = next(m for m in orig._layouts[0] if m.name.startswith("fa2.m1/"))
-    inside = (fa2.dev_off + fa2.nbytes // 2) // orig.chunk                  # an excluded (interior) leaf of step 0
+    inside = (fa2.dev_off + fa2.nbytes // 2) // orig.chunk                  # a leaf in step 0's gap
     assert not orig.leaf_retained(0, inside)
     held = [p for p in sample if orig.leaf_retained(*p)]
     not_held = [p for p in sample if not orig.leaf_retained(*p)] + [(0, inside)]
@@ -243,7 +225,7 @@ def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_rep
     # host share: opens and verifies with no replay
     ops_h = orig.open(held)
     assert all(orig.verify(rc, o) for o in ops_h)
-    # excluded share: no replay source -> a named error, never zeros
+    # the gap: no replay source -> a named error, never zeros
     with pytest.raises(RuntimeError, match="raw bytes released / not retained"):
         orig.open([(0, inside)])
     # a byte-identical replay: regenerated VALUES + regenerated AUTHENTICATION PATHS verify against the ORIGINAL roots (R17-5)
@@ -302,17 +284,23 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     """[F-dA-15 / R17-7.3, revb S-r17b-03 (ii)] the bound is derived term by term (native_host.bounded_host_bound) and must sit ABOVE every
     RSS peak measured on cp-h100 for the B1 1024/128 bounded arms (FP8-STAGING.md §3, rss_timeline 2 s samples) -- including the three runs
     that beat the earlier formulas -- while the per-component factors are the ones measured on the same row (hidden exact -> 1.05; other
-    x1.59 -> 2.0).  The B8 row (declared schedule: one 3,537-token prefill) must be admitted under the 239,372 MiB cgroup with margin."""
+    x1.59 -> 2.0).  Those arms committed the attention hidden family (its tree levels on host, its raw bytes opened by replay); the Commit
+    no longer does, so retain=host is bounded on the stream without it (`hidden_m1` False), whose peak a heavier arm's peak bounds from
+    above.  The B8 row (declared schedule: one 3,537-token prefill) must be admitted under the 239,372 MiB cgroup with margin."""
     from verity_vllm.commit.committer.native_host import bounded_host_bound, schedule_stream_bound
     asz = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,
            "model": {"hidden": 2560, "heads": 32, "kv_heads": 8, "head_dim": 128, "layers": 36, "hidden_m1": True, "attn_backend": "fa3"},
            "prefill_step_bytes": 20203618816, "prefill_hidden_bytes": 17232297984, "decode_step_bytes": 22531588, "decode_hidden_bytes": 18929664,
            "retained_bytes_bound": 23087662080}
     MiB = 1 << 20
-    s1 = schedule_stream_bound(asz, [{"prompt_token_ids": list(range(1024)), "arrive_step": 0, "max_tokens": 128}], {"max_tokens": 128})
-    # measured components (runs.jsonl, bounded-x arm): excluded hidden 19,635,194,880 B (sized 19,636,365,312: exact), other kept 5,440,526,844 B
+    asz0 = {**asz, "model": {**asz["model"], "hidden_m1": False}}
+    b1 = [{"prompt_token_ids": list(range(1024)), "arrive_step": 0, "max_tokens": 128}]
+    s1 = schedule_stream_bound(asz, b1, {"max_tokens": 128})
+    s10 = schedule_stream_bound(asz0, b1, {"max_tokens": 128})
+    # measured components (runs.jsonl, bounded-x arm): hidden 19,635,194,880 B (sized 19,636,365,312: exact), other kept 5,440,526,844 B
     assert abs(s1["hidden_bytes"] - 19635194880) < 2 * MiB
     assert 1.5 < 5440526844 / (s1["run_bytes"] - s1["hidden_bytes"]) < 2.0                       # the 'other' under-sizing the 2.0 factor covers
+    assert s10["hidden_bytes"] == 0 and s10["run_bytes"] == s1["run_bytes"] - s1["hidden_bytes"]      # the stream without it is the 'other'
     # [F-fp8-POW2 / F-fp8-C2PROG] the B1 records of §3 ran on torch's pinned pool with no C2 Programs term: this part of the test keeps
     # that derivation (pool_exact=False, c2_programs_bytes=0) and the historical numbers; `pool_rounding` is removed from the sums below
     # to compare like with like -- the new terms are asserted in test_bound_phases.py
@@ -322,48 +310,47 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     def _legacy(b):   # the §3 sum: engine + levels + kept + learn + replay + slack + pairs (no pow2 rounding term)
         return b["host_peak_bound_bytes"] - b["pool_rounding_bytes"]
 
-    bx = bounded_host_bound(s1, engine_rss_bytes=2189 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"}, **common)
-    bn = bounded_host_bound(s1, engine_rss_bytes=2178 * MiB, retain="none", retain_exclude=set(), **common)
+    bx = bounded_host_bound(s10, engine_rss_bytes=2189 * MiB, retain="host", **common)
+    bn = bounded_host_bound(s1, engine_rss_bytes=2178 * MiB, retain="none", **common)
     assert bx["pool_rounding_bytes"] == bx["levels_bytes"] + bx["raw_kept_bytes"] + bx["learn_budget_bytes"]     # torch pool: x2 worst case, named
     # every measured peak of the arms (MiB): bounded-x try1 37,281 / try2 42,272 (window replay, superseded) / try3 25,643; bounded-none try1
     # 35,131 (window replay, superseded) / try3 23,325 -- the chunk-replay runs are the ones this formula is for; the window-replay peaks are
     # listed so the record shows what the formula does NOT cover (a window replay is not a bounded replay)
-    assert _legacy(bx) > 25643 * MiB and _legacy(bx) // MiB == 36166, _legacy(bx) // MiB
+    assert _legacy(bx) > 25643 * MiB and _legacy(bx) // MiB == 26334, _legacy(bx) // MiB
     assert _legacy(bn) > 23325 * MiB and _legacy(bn) // MiB == 29615, _legacy(bn) // MiB
-    assert bx["raw_kept_bytes"] > 5440526844 and bx["levels_bytes"] > 6268967168                   # kept raw and levels each cover their measurement
+    assert bx["raw_kept_bytes"] == bx["raw_bound_bytes"] > 5440526844 and bx["levels_bytes"] == bx["raw_bound_bytes"] // 4   # kept covers its measurement
     assert bn["raw_kept_bytes"] == 0 and bn["replay_bytes"] == bn["levels_bytes"] + bn["learn_budget_bytes"] + bn["picks"] * 256
     # B8 row of record: 365/633/11/1024/817/449/165/73 at step 0 (one prefill of 3,537 tokens), caps up to 128
     reqs8 = [{"prompt_token_ids": list(range(n)), "arrive_step": 0, "max_tokens": c}
              for n, c in zip((365, 633, 11, 1024, 817, 449, 165, 73), (128, 113, 95, 35, 121, 3, 9, 2))]
-    s8 = schedule_stream_bound(asz, reqs8, {"max_tokens": 128})
-    b8 = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"}, **common)
+    s8 = schedule_stream_bound(asz0, reqs8, {"max_tokens": 128})
+    b8 = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", **common)
     assert s8["largest_step"]["tokens"] == 3537 and s8["largest_step"]["prefill_seqs"] == 8
-    assert _legacy(b8) < 239372 * MiB * 0.9 and (239372 * MiB - _legacy(b8)) / (239372 * MiB) > 0.45, (_legacy(b8) // MiB)
+    assert _legacy(b8) < 239372 * MiB * 0.9 and (239372 * MiB - _legacy(b8)) / (239372 * MiB) > 0.75, (_legacy(b8) // MiB)
     assert b8["raw_kept_bytes"] // MiB > 13188                                                    # the blanket-1.15 kept term this replaces
     assert bx["pairs_extra_bytes"] == 0 and b8["pairs_extra_bytes"] == 0 and b8["pairs"] == 1     # a 1-pair bound has no pairs term
     # PAIRS >= 2: one more frozen pool (levels + kept + learn), once -- the B1 PAIRS=3 bounded-x curve (in-process per-step RSS, try 4
     # pairs3: 16.7 -> 25.6 -> 29.6 -> 30.2 -> 30.2 GiB) grew 4.6 GiB = 41 % of that pool after pair 0 and then held flat through pair 2
-    bx3 = bounded_host_bound(s1, engine_rss_bytes=2189 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"}, pairs=3, **common)
+    bx3 = bounded_host_bound(s10, engine_rss_bytes=2189 * MiB, retain="host", pairs=3, **common)
     assert bx3["pairs_extra_bytes"] == bx3["levels_bytes"] + bx3["raw_kept_bytes"] + bx3["learn_budget_bytes"]
     assert _legacy(bx3) == _legacy(bx) + bx3["pairs_extra_bytes"]
     assert _legacy(bx3) > 30189 * MiB and (30189 * MiB - 25634 * MiB) < 0.5 * bx3["pairs_extra_bytes"]   # measured growth < half the term
     # the B8 row's Commit of record runs row_pod's 3 pairs: the pairs term must still fit the cgroup at --host-admit 0.10
-    b8x3 = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"}, pairs=3, **common)
-    assert _legacy(b8x3) < 239372 * MiB * 0.9 and (239372 * MiB - _legacy(b8x3)) / (239372 * MiB) > 0.15, (_legacy(b8x3) // MiB)
-    # ... and WITH the pow2 rounding term the same 3-pair torch-pool B8 run is NOT admissible -- attempt 1 (01:26Z) ran 223,776 MiB against
-    # that 193,827 MiB sum; the new derivation says so before the run (test_bound_phases.py reconstructs the attempt)
-    assert b8x3["host_peak_bound_bytes"] > 239372 * MiB * 0.9
-    # [R17-29 planner] the dominant contributor is NAMED: the largest host term and the largest single materialization (the 3,537-token
-    # prefill step's hidden export) with where it is (excluded from host, opened by replay) -- a refusal never reads merely "predicted OOM"
+    b8x3 = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", pairs=3, **common)
+    assert _legacy(b8x3) < 239372 * MiB * 0.9 and (239372 * MiB - _legacy(b8x3)) / (239372 * MiB) > 0.6, (_legacy(b8x3) // MiB)
+    # ... and WITH the pow2 rounding term the same 3-pair torch-pool B8 run fits too (test_bound_phases.py has the phases)
+    assert b8x3["host_peak_bound_bytes"] < 239372 * MiB * 0.9
+    # [R17-29 planner] the dominant contributor is NAMED: the largest host term and the largest single step of the declared schedule (the
+    # 3,537-token prefill) with where it is -- a refusal never reads merely "predicted OOM"
     dom = b8x3["dominant_contributor"]
     assert dom["host_term"] == "pairs" and dom["host_term_bytes"] == b8x3["pairs_extra_bytes"]                  # 3 pairs: the pairs term leads
     assert b8["dominant_contributor"]["host_term"] == "pool_rounding"      # 1 pair, torch pool: the pow2 rounding term (x2 worst case) leads
-    b8e = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"}, **{**common, "pool_exact": True})
-    assert b8e["dominant_contributor"]["host_term"] == "replay" and b8e["pool_rounding_bytes"] == 0          # exact pool: the fresh replay pool
+    b8e = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", **{**common, "pool_exact": True})
+    assert b8e["dominant_contributor"]["host_term"] == "kept" and b8e["pool_rounding_bytes"] == 0          # exact pool: the kept raw bytes
     lm = dom["largest_materialization"]
-    assert lm["step"] == s8["largest_step"]["step"] and lm["tokens"] == 3537 and lm["hidden_bytes"] == s8["largest_step"]["hidden_bytes"]
-    assert lm["hidden_bytes"] > 100 * 1024 * MiB and "opened by replay" in lm["where"] and "excluded from host" in lm["where"]
-    assert "step" in dom["text"] and "3537 tok" in dom["text"] and "excluded from host" in dom["text"]
+    assert lm["step"] == s8["largest_step"]["step"] and lm["tokens"] == 3537 and lm["hidden_bytes"] == 0
+    assert lm["where"] == "counted in kept (retain host)"
+    assert "step" in dom["text"] and "3537 tok" in dom["text"] and "counted in kept" in dom["text"]
     assert bn["dominant_contributor"]["largest_materialization"]["where"].startswith("not retained (retain none)")
     # [revb F-r17b-20] the derivation names per_pick as the 256 B chunk and where the replay's transient windows are counted
     assert "256 B chunk" in b8x3["derivation"] and "learn term" in b8x3["derivation"]

@@ -92,7 +92,7 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
         r2 = ADM.admission(sizing, wl["requests"], small, retain=mode, max_num_batched_tokens=5348, lag=1)
         assert r2["admitted"] is True and mode in r2["why"]
         assert r2["predicted_host_bytes"] == rec["predicted_host_bytes"] and r2["would_exceed_by_bytes"] == rec["predicted_host_bytes"] - small
-        assert "WARNING" in r2["why"] and "regardless of --retain" in r2["pool_rule"] and r2["staging"] == {"windowed": True, "bounded": False, "retain_exclude": []}
+        assert "WARNING" in r2["why"] and "regardless of --retain" in r2["pool_rule"] and r2["staging"] == {"windowed": True, "bounded": False}
         # the pre-P0 per-step-block path copies nothing under a non-host retention: 0 by that rule, named
         r2b = ADM.admission(sizing, wl["requests"], small, retain=mode, max_num_batched_tokens=5348, lag=1, windowed=False)
         assert r2b["predicted_host_bytes"] == 0 and "per-step blocks" in r2b["pool_rule"] and "WARNING" not in r2b["why"]
@@ -100,28 +100,19 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
     assert r3["admitted"] is True and "no container memory limit" in r3["why"] and r3["would_exceed_by_bytes"] is None
 
 
-def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
-    """[R19 admit, F-r18-admit-1 fix (a)] the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
-    is (raw - hidden M1) + the levels over every leaf; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
+def test_bounded_staging_predicts_the_kept_pool_by_retention():
+    """Under --bounded-staging --retain host the pool keeps every raw byte and the levels over it; bounded + a non-host retention keeps the
     levels only.  Bounded runs are governed by the bounded HOST BOUND (revb M-0254): recorded here, never refused."""
     sizing, wl, _ = _fixture("b16")
     small = 32 << 30
     full = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1)
-    raw, hidden = full["scheduled_raw_bytes"], full["scheduled_hidden_bytes"]
-    assert 0 < hidden < raw and hidden > 0.5 * raw, (raw, hidden)                 # the M1 stream dominates the stream at this geometry
-    kept = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True, retain_exclude={"fa2_hidden_m1", "fa3_hidden_m1"})
-    assert kept["predicted_host_bytes"] == raw - hidden + int(raw * (full["levels_factor"] - 1.0)) < full["predicted_host_bytes"]
-    assert kept["admitted"] is True and "bounded HOST BOUND governs" in kept["why"] and kept["staging"]["retain_exclude"] == ["fa2_hidden_m1", "fa3_hidden_m1"]
-    # bounded without the exclusion keeps everything; excluding an unrelated family keeps everything too (the rule is by hidden family)
+    raw = full["scheduled_raw_bytes"]
     b_all = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True)
     assert b_all["predicted_host_bytes"] == full["predicted_host_bytes"]
-    b_other = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True, retain_exclude={"gemm_qkv"})
-    assert b_other["predicted_host_bytes"] == full["predicted_host_bytes"]
+    assert b_all["admitted"] is True and "bounded HOST BOUND governs" in b_all["why"] and b_all["staging"] == {"windowed": True, "bounded": True}
     lv = ADM.admission(sizing, wl["requests"], small, retain="none", max_num_batched_tokens=5348, lag=1, bounded=True)
     assert lv["predicted_host_bytes"] == int(raw * (full["levels_factor"] - 1.0)) and "levels only" in lv["pool_rule"]
-    # the CLI alias hidden_m1 names both tap families
-    rule = ADM.predicted_pool_bytes(1000, 600, retain="host", levels_factor=1.25, windowed=True, bounded=True, retain_exclude={"fa2_hidden_m1"})
-    assert rule[0] == 650 and "hidden M1" in rule[1]
+    assert ADM.predicted_pool_bytes(1000, retain="host", levels_factor=1.25, windowed=True, bounded=True)[0] == 1250
 
 
 def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
@@ -241,18 +232,12 @@ def test_commit_main_passes_the_resident_bytes():
     assert "resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers)" in src
 
 
-def test_row74_both_staging_modes():
+def test_row74_unbounded_staging_is_over_the_limit():
     """#74 (Qwen3-4B-FP8, H100): unbounded, the pool of every window (152,257 MiB raw x 1.25) + resident is over the 251 GB limit and at or
-    above what the run held when it was stopped; bounded with the FA3 hidden stream excluded it admits, and its pool counts the Merkle
-    levels over every leaf (the warm-up primed 59,246 MiB pinned; kept raw x 1.25 alone was 16,058 MiB)."""
+    above what the run held when it was stopped."""
     peaks = json.loads((FIX / "commit_peaks.json").read_text())
     r, limit, M = peaks["rows"]["74"], peaks["limit_bytes"], 1 << 20
     wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
     res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])["bytes"]
-    raw, hid = r["scheduled_raw_mib"] * M, r["scheduled_hidden_mib"] * M
-    unb, _ = ADM.predicted_pool_bytes(raw, hid, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=False, retain_exclude=None)
+    unb, _ = ADM.predicted_pool_bytes(r["scheduled_raw_mib"] * M, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=False)
     assert unb + res > limit and unb + res >= r["unbounded"]["peak_anon_shmem_mib"] * M
-    bnd, rule = ADM.predicted_pool_bytes(raw, hid, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=True,
-                                         retain_exclude={"fa3_hidden_m1"})
-    assert bnd + res < limit and "levels over every leaf" in rule
-    assert 0.8 <= bnd / (r["bounded_exclude_fa3_hidden_m1"]["warmup_pinned_mib"] * M) <= 1.0

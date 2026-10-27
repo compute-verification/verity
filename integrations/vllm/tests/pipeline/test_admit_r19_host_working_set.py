@@ -5,10 +5,9 @@
     of R17 #23 (= the parent's programs + oracle heap, 74.8 GB modelled), the >= 17 GiB post-fork growth that killed #60 twice.  Tests:
     the children run with the frozen heap, the parent is unfrozen after the pool joins, the record names it, the replay record is
     byte-identical serial vs forked (semantics-free).
-(a) the RETAIN-windowed pool: `--bounded-staging --retain host --retain-exclude hidden_m1` keeps every family the C2 forms read and drops
-    the M1 export stream (84 % of the raw bytes at 1024/128).  Tests: the alias resolves to both tap families; the sampled replay never
-    addresses a hidden-M1 name (a reader that refuses them yields the same record as the full reader); oracle_compare classifies the
-    family out before any read (the same refusing reader, same verdict).
+(a) the C2 forms never read the attention interior (a record's hidden-M1 family).  Tests: the sampled replay never addresses a
+    hidden-M1 name (a reader that refuses them yields the same record as the full reader); oracle_compare classifies the family out
+    before any read (the same refusing reader, same verdict); a reader over host byte ranges answers None outside them.
 """
 from __future__ import annotations
 
@@ -227,21 +226,10 @@ def test_a_tp_rank_forks_its_share_of_the_default_pool(monkeypatch):
     assert (SR.default_workers(), SR.default_workers(8), SR.default_workers(128)) == (32, 8, 1)
 
 
-# ------------------------------------------------------------------------------------------ (a) the RETAIN-windowed pool by family
-def test_retain_exclude_alias_names_both_tap_families():
-    assert NC.retain_exclude_families("hidden_m1") == {"fa2_hidden_m1", "fa3_hidden_m1"}
-    assert NC.retain_exclude_families("hidden") == {"fa2_hidden_m1", "fa3_hidden_m1"}
-    assert NC.retain_exclude_families("fa3_hidden_m1") == {"fa3_hidden_m1"}
-    assert NC.retain_exclude_families("fa2_hidden_m1_stream, gemm_qkv") == {"fa2_hidden_m1", "gemm_qkv"}
-    assert NC.retain_exclude_families("") == set() and NC.retain_exclude_families(None) == set()
-    # the alias names exactly the FAMILY_RULES families of the two taps (value_family of a tap plane name)
-    from verity_vllm.commit.committer.native_host import value_family
-    assert {value_family("fa2.m1/L0/s0/g32x8x1/S"), value_family("fa3.m1/L3/s0/g8x8x1/P")} == NC.HIDDEN_M1_FAMILIES
-
-
+# ------------------------------------------------------------------------------------------ (a) the C2 forms never read the attention interior
 def _refusing(committed, seen: list):
-    """A committed reader with the hidden-M1 family NOT on host: a read of one of its names is what `--retain-exclude hidden_m1` would
-    answer (None) -- and is recorded, so the test can assert the C2 forms never ask."""
+    """A committed reader with the hidden-M1 family NOT on host: a read of one of its names answers None -- and is recorded, so the
+    test can assert the C2 forms never ask."""
     def read(step, name, lo, hi):
         if any(name.startswith(p) or p in name for p in HIDDEN_PREFIXES):
             seen.append((step, name))
@@ -282,10 +270,9 @@ def test_oracle_compare_classifies_the_hidden_family_out_before_any_read(tmp_pat
     assert seen == []
 
 
-def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_bytes_for_the_kept_boundary():
-    """The collector-side contract the exclusion rests on: `_HostRanges.holds` routes a read inside the excluded interior to None (opens by
-    replay), a read of the kept ranges answers bytes -- opened from the kept leaves and verified against the run root (`OpenedReader`);
-    `_excluded_chunk_ranges` excludes the chunk-aligned INTERIOR of the family only."""
+def test_the_opened_reader_answers_none_outside_the_kept_ranges_and_verified_bytes_inside_them():
+    """`_HostRanges.holds` routes a read of bytes the host did not keep to None (opens by replay), a read of the kept ranges answers
+    bytes -- opened from the kept leaves and verified against the run root (`OpenedReader`)."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -301,15 +288,11 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     com, run = commit_steps({0: tensors})                                      # the GPU-tree step block, retain=host
     metas = com._layouts[0]
     assert [m.dev_off for m in metas] == [0, 300, 300 + 4 * C + 100]
-    excl = NC._excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, C)
-    assert len(excl) == 1 and excl[0][2] == "fa2_hidden_m1"
-    lo, hi = excl[0][0], excl[0][1]
-    assert lo == C * (-(-300 // C)) and hi == ((300 + 4 * C + 100) // C) * C and lo % C == 0 and hi % C == 0
-    assert lo >= 300 and hi <= 300 + 4 * C + 100                              # interior only: the boundary chunks stay on host
+    lo, hi = C * (-(-300 // C)), ((300 + 4 * C + 100) // C) * C              # the middle tensor's chunk-aligned interior is not kept
     n = -(-used // C) * C
     blk = com._gpu_blocks[0][0]
-    ranges = [(0, lo, blk[0:lo]), (hi, n, blk[hi:n])]                         # the collector keeps whole chunk-padded windows outside the interior
-    hr = NC._HostRanges(ranges, used, excluded={"fa2_hidden_m1": hi - lo})
+    ranges = [(0, lo, blk[0:lo]), (hi, n, blk[hi:n])]
+    hr = NC._HostRanges(ranges, used)
     assert hr.retained_bytes == n - (hi - lo) and hr.numel() == n
     assert hr.holds(0, 300) and hr.holds(metas[2].dev_off, metas[2].dev_off + 200) and not hr.holds(lo, lo + C) and not hr.holds(300, 300 + C)
     assert bytes(hr[0:300].numpy()) == bytes(stream[0:300].numpy())
@@ -319,7 +302,7 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     rd = OpenedReader(com, run)
     assert rd(0, "model.layers.0.self_attn.qkv_proj/0", 0, 300) == bytes(stream[0:300].numpy())
     assert rd(0, "model.layers.0.self_attn.o_proj/0", 0, 200) == bytes(stream[metas[2].dev_off:metas[2].dev_off + 200].numpy())
-    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", 0, lo - 300) == bytes(stream[300:lo].numpy())   # the excluded tensor's kept boundary chunk
-    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", C, 2 * C) is None                   # the excluded interior: 'not committed on host', opens by replay
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", 0, lo - 300) == bytes(stream[300:lo].numpy())   # the middle tensor's kept boundary chunk
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", C, 2 * C) is None                   # its interior: 'not committed on host', opens by replay
     assert np.frombuffer(rd(0, "model.layers.0.self_attn.qkv_proj/0", 0, 300), dtype=np.uint8).size == 300
     assert rd.stats["reads"] == 4 and rd.stats["not_retained"] == 1 and rd.stats["failed"] == 0

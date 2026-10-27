@@ -335,7 +335,7 @@ def _args(**kw):
 
 
 def _com(**kw):
-    return SimpleNamespace(**{"retain": "host", "retain_exclude": None, "pool": SimpleNamespace(mode="exact-registered-shared"),
+    return SimpleNamespace(**{"retain": "host", "pool": SimpleNamespace(mode="exact-registered-shared"),
                               "_retained_device_bytes": lambda: 0, **kw})
 
 
@@ -350,7 +350,6 @@ ONE = {"CUDA_VISIBLE_DEVICES": "5", "GPU_LEASE_UUID": "GPU-5"}
     (_args(serving_rows="request.json"), _com(), ENG, ONE, "--serving-rows commits its window at the C2 site", True),
     (_args(tensor_digests=True), _com(), ENG, ONE, "--tensor-digests", True),
     (_args(), _com(retain="none"), ENG, ONE, "replay the run on the engine", True),
-    (_args(), _com(retain_exclude={"fa3_hidden_m1"}), ENG, ONE, "replay the run on the engine", True),
     (_args(replay_openings="always"), _com(), ENG, ONE, "replay the run on the engine", True),
     (_args(), _com(pool=SimpleNamespace(mode="torch-pinned-pow2")), ENG, ONE, "torch's pinned host memory", True),
     (_args(), _com(_retained_device_bytes=lambda: 3 << 20), ENG, ONE, "3 MiB of committed bytes", True),

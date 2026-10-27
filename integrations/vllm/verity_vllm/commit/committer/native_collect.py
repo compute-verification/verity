@@ -60,8 +60,7 @@ from verity.ml.commitments.merkle import merkle_depth
 from verity_vllm import settings
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
-from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
-                                                         _HostRanges, _HostWindows, outside, retain_exclude_families)
+from verity_vllm.commit.committer.host_retention import _HostRanges, _HostWindows
 from verity_vllm.commit.committer.native_hidden import NativeHiddenM1Source, NativeHiddenM1SourceFA3
 from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
@@ -262,24 +261,17 @@ class NativeCollectCommitter(NativeHostCommitter):
         #     re-hash; over budget, a LEARN-ONLY pass (`learn_only`, the warm-up instrumented run) records the plan and discards the
         #     windows (no copy, no hash; placeholder commitment, never a record), a record run fails CLOSED by name;
         #   * a hit-plan step takes NO hedge copy: a plan mismatch is a named collector error (the plan of a prior identical step
-        #     is the prescribed layout; an unexpected shape is a finding, not something to absorb silently);
-        #   * retain=host + VERITY_RETAIN_EXCLUDE=<family,...> keeps every chunk EXCEPT the chunk-aligned interior of the excluded
-        #     families (`_HostRanges`): those leaves open by replay against the original root (R17-5), all others from host (C2's
-        #     module outputs stay on host).
+        #     is the prescribed layout; an unexpected shape is a finding, not something to absorb silently).
         bounded = settings.VERITY_STAGING_BOUNDED
         self.bounded = self.windowed if bounded is None else bounded
         self.learn_only = False                                  # set by the harness around the warm-up instrumented run
         self.learn_budget_bytes = int(settings.VERITY_LEARN_HOST_BUDGET_MB * (1 << 20))
-        self.retain_exclude: set[str] = retain_exclude_families(settings.VERITY_RETAIN_EXCLUDE)
         self.retain_chunks: set[tuple[int, int]] = set()          # bounded retain=sample by CHUNK: (step, leaf index) -- a replay keeps only these
         if self.bounded and not self.windowed:
             raise ValueError("bounded staging (VERITY_STAGING_BOUNDED=1) is implemented on the windowed path only (--window-mb > 0)")
-        if self.retain_exclude and not (self.bounded and self.retain == "host"):
-            raise ValueError("VERITY_RETAIN_EXCLUDE needs VERITY_STAGING_BOUNDED=1 and retain=host (the excluded families open by replay)")
         self.learned_only_steps: list[int] = []                  # steps whose windows a learn-only pass discarded (plan recorded, no root)
         self.learned_only_bytes = 0
         self.transient_peak_bytes = 0                            # largest learning-step transient host copy (given back after the re-hash)
-        self.excluded_bytes = 0                                  # retain=host + exclude: bytes NOT copied to host over the run
         self.plan_mismatches = 0
         # the model step runs on a HIGH-priority CUDA stream (VERITY_HI_PRIO, default on; 0 keeps the caller's) so the worker's SHA kernels
         # (side stream, default priority) yield SM slots to the serving kernels and the gather; fenced both ways with wait_stream at the
@@ -752,10 +744,6 @@ class NativeCollectCommitter(NativeHostCommitter):
             job.windowed = True                                                 # type: ignore[attr-defined]
             job.done_evt = threading.Event()                                    # type: ignore[attr-defined]
             job.plan_used = int(self._nc.plan_used(self._plan_key))             # type: ignore[attr-defined]  (-1: learning step, size unknown)
-            # [R17 fp8] the metas of the plan this hit step is predicted to follow (None on a learning step): the worker needs them
-            # BEFORE step end to know which chunks of a window belong to an excluded family (retain=host + exclude)
-            job.plan_hint = (self._plan_key, int(self._nc.plan_version(self._plan_key))) if job.plan_used >= 0 else None  # type: ignore[attr-defined]
-            job.hint_entries = self._nc.export_plan(self._plan_key) if self.retain_exclude and job.plan_hint and not self._plan_held(job.plan_hint) else None  # type: ignore[attr-defined]
             job.plan_shape = getattr(self, "_plan_shape", (0, 0))                # type: ignore[attr-defined]  (ntok, nreq) for messages/records
             self._prof_s = 0.0
             self._nc.begin_step(self._plan_key, 0, 0, True, job.seq)            # its windows keyed by the job's seq: unique across windows
@@ -857,8 +845,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             return kv in self._metas_cache
         return behind == 1 and kv in self._metas_cache.now
 
-    def _metas_for(self, job: _StepJob, plan: tuple | None = None) -> PlanMetas:
-        key, version, entries = plan or job.plan  # type: ignore[attr-defined]
+    def _metas_for(self, job: _StepJob) -> PlanMetas:
+        key, version, entries = job.plan  # type: ignore[attr-defined]
         metas = self._metas_cache.get((key, version))
         if metas is None:
             if entries is None:
@@ -1032,25 +1020,17 @@ class NativeCollectCommitter(NativeHostCommitter):
             state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, []))
 
     def _retain_from_transient(self, job: _StepJob, tblocks: list[tuple[int, Any, Any, int]], keep_set: Any, chunk_parts: Any,
-                               ranges: list[tuple[int, int, Any]], side: Any) -> int:
+                               ranges: list[tuple[int, int, Any]], side: Any) -> None:
         """Retention of a bounded LEARNING step, carved out of its transient copies (`tblocks`) now that the metas are known (retain=host:
-        every chunk outside the excluded families' interiors; retain=sample: the challenged windows, or with `chunk_parts` only their
-        challenged chunks), pinned -> pinned into `ranges`; then the transient blocks go back to the pool, so the step's host footprint
-        returns to its retained bytes.  -> the bytes the exclusions kept off host"""
-        W, C = self.win_bytes, self.chunk
-        excl_bytes = 0
+        every window; retain=sample: the challenged windows, or with `chunk_parts` only their challenged chunks), pinned -> pinned into
+        `ranges`; then the transient blocks go back to the pool, so the step's host footprint returns to its retained bytes."""
+        W = self.win_bytes
         with torch.inference_mode(), torch.cuda.stream(side):
             if self.retain == "host":
-                excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
                 for kk, _hb, hv, n in tblocks:
-                    base = kk * W
-                    kept_b = 0
-                    for a, b in outside(excl, base, base + n):
-                        rv = self.pool.take(b - a)
-                        rv.copy_(hv[a - base:b - base], non_blocking=True)
-                        ranges.append((a, b, rv))
-                        kept_b += b - a
-                    excl_bytes += n - kept_b
+                    rv = self.pool.take(n)
+                    rv.copy_(hv[:n], non_blocking=True)
+                    ranges.append((kk * W, kk * W + n, rv))
             elif keep_set is not None:
                 for kk, _hb, hv, n in tblocks:
                     if (job.step, kk) in keep_set:
@@ -1067,7 +1047,6 @@ class NativeCollectCommitter(NativeHostCommitter):
             side.synchronize()
         for _kk, hb, _hv, _n in tblocks:
             self.pool.give_back(hb)
-        return excl_bytes
 
     def _commit_step_windowed(self, job: _StepJob) -> None:
         """Worker: absorb the step WINDOW BY WINDOW while the serving thread is still filling later windows.  Per window: wait for the
@@ -1152,7 +1131,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         # retain=none nothing leaves the device -- the window is hashed in place and released (openings by replay, p0b's path)
         keep_set = self.retain_windows if self.retain == "sample" else None     # retain=sample: only these (step, k) windows are kept
         # [R17 fp8] BOUNDED staging (see __init__): v1 learning steps copy windows to TRANSIENT pool blocks under a budget (given back after
-        # the re-hash), or discard them on a learn-only pass; hit steps take no hedge copy; retain=host + exclude keeps byte RANGES.
+        # the re-hash), or discard them on a learn-only pass; hit steps take no hedge copy; retain=host keeps byte RANGES.
         bounded = self.bounded and not self.layout_v2
         learning = plan_used < 0
         learn_only = bounded and learning and self.learn_only
@@ -1166,17 +1145,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         tblocks: list[tuple[int, Any, Any, int]] = []                           # bounded learning: (k, block, view, bytes) re-hash source
         tbytes = 0
         discard = False
-        excl: list[tuple[int, int, str]] = []
-        ranges: list[tuple[int, int, Any]] = []                                 # bounded retain=host (+ exclude): retained byte ranges
-        excl_bytes = 0
-        if bounded and not learning and self.retain == "host" and self.retain_exclude:
-            # the metas of the plan this step follows: cached by the worker at the end of the learning step of the same (key, version) (it
-            # absorbs steps in order), or, when it no longer holds that plan, built from the plan the serving thread exported at step begin
-            hint = self._metas_for(job, (*job.plan_hint, job.hint_entries)) if getattr(job, "plan_hint", None) else None
-            if hint is None:
-                raise RuntimeError(f"bounded staging: hit step {job.step} has no cached metas for plan {getattr(job, 'plan_hint', None)} "
-                                   "(cannot place the retain-exclude ranges)")
-            excl = _excluded_chunk_ranges(hint, self.retain_exclude, C)
+        ranges: list[tuple[int, int, Any]] = []                                 # bounded retain=host: retained byte ranges
 
         # bounded retain=sample with the picks known by chunk (`retain_chunks`, set by openings_after_release for a replay): the retained
         # bytes of a window are the challenged chunks inside it, sorted, as absolute step-stream ranges
@@ -1249,14 +1218,9 @@ class NativeCollectCommitter(NativeHostCommitter):
                                 tblocks.append((k, hb, hvb, padded_k))
                                 tbytes += padded_k
                     elif padded_k and self.retain == "host":
-                        base = k * W
-                        kept_b = 0
-                        for a, b in outside(excl, base, base + padded_k):
-                            rv = self.pool.take(b - a)
-                            rv.copy_(st[a - base:b - base], non_blocking=True)  # D2H pinned, side stream (only the retained chunks)
-                            ranges.append((a, b, rv))
-                            kept_b += b - a
-                        excl_bytes += padded_k - kept_b
+                        rv = self.pool.take(padded_k)
+                        rv.copy_(st[:padded_k], non_blocking=True)              # D2H pinned, side stream
+                        ranges.append((k * W, k * W + padded_k, rv))
                     elif padded_k and keep_set is not None and (job.step, k) in keep_set:
                         if chunk_picks is not None:
                             # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (`chunk` bytes each) as byte ranges -- not the
@@ -1348,13 +1312,12 @@ class NativeCollectCommitter(NativeHostCommitter):
             state.clear()
             if padded and self.retain_pinned:
                 # prime the pinned pool with the LEVEL buffers the record run will take for this step (same sizes as begin_tree) and, under
-                # retain=host (+ exclude), the same `take` sequence for the retained byte ranges -- all returned to the pool's free list by
+                # retain=host, the same `take` sequence for the retained byte ranges -- all returned to the pool's free list by
                 # reset() -- so the cudaHostAlloc cost (~0.4 s/GB) falls in the warm-up, not inside the measured pair.  `reserve` makes
                 # the blocks these takes allocate in one burst, their pages faulted in over the pool's helper threads at once
                 parts: list[tuple[int, int]] = []
                 if self.retain == "host":
-                    excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
-                    parts = [p for kk in range(-(-padded // W)) for p in outside(excl, kk * W, kk * W + min(W, padded - kk * W))]
+                    parts = [(kk * W, kk * W + min(W, padded - kk * W)) for kk in range(-(-padded // W))]
                 sizes, dig = self._window_levels(padded // C, j)
                 self.pool.reserve(([dig * sum(sizes)] if self.retain_levels else []) + [b - a for a, b in parts])
                 begin_tree(padded // C)
@@ -1445,7 +1408,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         levels, mr, tree_ms = self._window_root(job.step, state, padded, side)
         nc.finish_step(job.seq)
         if bounded and learning:
-            excl_bytes += self._retain_from_transient(job, tblocks, keep_set, chunk_parts if chunk_picks is not None else None, ranges, side)
+            self._retain_from_transient(job, tblocks, keep_set, chunk_parts if chunk_picks is not None else None, ranges, side)
             tblocks = []
             host_wins = []
         if bounded and self.retain in ("host", "sample"):
@@ -1453,11 +1416,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient]
                 keep = _HostWindows(kept, used, W, C) if kept else None
             else:
-                ex_fams: dict[str, int] = {}
-                for elo, ehi, fam in excl:
-                    ex_fams[fam] = ex_fams.get(fam, 0) + (min(ehi, padded) - elo if elo < padded else 0)
-                keep = _HostRanges(ranges, used, ex_fams, C) if ranges else None
-            self.excluded_bytes += excl_bytes
+                keep = _HostRanges(ranges, used, C) if ranges else None
         else:
             kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient] if self.retain in ("host", "sample") else []
             keep = _HostWindows(kept, used, W, C) if kept else None
@@ -1662,7 +1621,6 @@ class NativeCollectCommitter(NativeHostCommitter):
                                        # [F-fp8-PLANKEY] how the plan key was formed: "geometry" = (ntok, nreq, multiset of per-request
                                        # (num_computed_tokens, num_scheduled_tokens)); "counts" = (ntok, nreq) only (older scheduler output)
                                        "plan_key_mode": getattr(self, "_plan_key_mode", "counts"),
-                                       "retain_exclude": sorted(self.retain_exclude), "excluded_bytes": int(self.excluded_bytes),
                                        "host_retained_raw_bytes": sum(int(getattr(b, "retained_bytes", b.numel() if b is not None else 0))
                                                                       for b, _u in self._gpu_blocks.values() if b is not None and not getattr(b, "is_cuda", False)),
                                        # the admission this run was launched under (commit_delta's host bound + the DECLARED schedule it came
@@ -1688,13 +1646,11 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.learned_only_steps = []    # [R17 fp8] per-run bounded-staging counters (the plans learned stay for the next run)
         self.learned_only_bytes = 0
         self.transient_peak_bytes = 0
-        self.excluded_bytes = 0
         self.plan_mismatches = 0
         self._win_reupload_bytes = 0    # windowed: per-run counters of finalize's extra["windows"]
         self._win_hfirst_steps = 0
         self._win_leaf_folds = 0
         self._win_relayouts = 0
-        self._oar_deferred = []         # picks the in-run phases could not open from host (excluded families) -> openings_after_release
         for src in self.sources:
             fn = getattr(src, "begin_run", None)
             if fn is not None:

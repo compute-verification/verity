@@ -286,7 +286,7 @@ class _Sched:
 
 def committer(mp, *, native_worker: bool = False) -> NC.NativeCollectCommitter:
     """The served committer of the network traces (wrap, no gather, the arena and the GPU tree, retain none) over the fakes."""
-    for k in ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_STAGING_BOUNDED", "VERITY_RETAIN_EXCLUDE", "VERITY_FAULT", "VERITY_FOOTPRINT",
+    for k in ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_STAGING_BOUNDED", "VERITY_FAULT", "VERITY_FOOTPRINT",
               "VERITY_HI_PRIO", "VERITY_CONSUMER_DELAY_MS", "VERITY_SKIP", "VERITY_INLINE_D2H", "VERITY_ABL"):
         mp.delenv(k, raising=False)
     fake = _Torch()
@@ -489,20 +489,3 @@ def test_a_plan_learned_after_a_drop_never_takes_a_version_the_worker_still_hold
     rc = run(com, [kv])
     assert rc.steps[0].root == one_block_root(0, step_tensors(kv)) and com.errors == []
     assert com._nc.plan_version(1) > 1
-
-
-def test_a_windowed_hit_step_exports_the_hinted_plan_the_worker_has_not_absorbed(monkeypatch):
-    """Bounded windowed staging with excluded families places its retained ranges from the metas of the plan a hit step is
-    predicted to follow, before the step ends. When the serving thread runs ahead of the worker, the step that learned that plan
-    may not be absorbed yet: the serving thread exports the plan at step begin, and the worker builds the same metas from it."""
-    com = committer(monkeypatch)
-    com.install()
-    learn = serve(com, schedule(400, 1)[0])
-    key, _version, entries = learn.plan
-    com.windowed, com.retain_exclude, com._plan_key = True, {"fa2"}, key
-    com._begin_step()
-    job = com._q.get_nowait()
-    com._nc.active = False
-    assert (key, 1) not in com._metas_cache and job.plan_hint == (key, 1) and job.hint_entries is not None
-    got = com._metas_for(job, (*job.plan_hint, job.hint_entries))
-    assert [(m.name, m.dev_off, m.nbytes) for m in got] == [(com._names[nid], off, nb) for nid, _dt, _sz, nb, off, _gap in entries]

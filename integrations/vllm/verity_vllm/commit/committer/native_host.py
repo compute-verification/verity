@@ -376,9 +376,9 @@ def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampl
     request prefills at its `arrive_step` in one step, then decodes one token per step for `max_tokens`), with the same per-token / per-
     sequence / per-step widths and the same FA2/FA3 hidden-m1 launch geometry as `step_bound_bytes` (`asz` = its record).  The envelope
     bound `retained_bytes_bound` is a worst case over any packing (B x max_prompt tokens of prefill, every sequence padded to the longest);
-    for a known workload this is the stream of record: per step, and the hidden family's share (the bytes `--retain-exclude fa3_hidden_m1`
-    leaves on the device).  Conservative where vLLM's actual packing is unknown: a step with prefill AND decode sequences pads every
-    sequence of its hidden launch to the step's longest query (the FA3 varlen slab); chunked prefill is not modelled (one step per prompt)."""
+    for a known workload this is the stream of record: per step, and the hidden family's share.  Conservative where vLLM's actual packing
+    is unknown: a step with prefill AND decode sequences pads every sequence of its hidden launch to the step's longest query (the FA3
+    varlen slab); chunked prefill is not modelled (one step per prompt)."""
     from verity_vllm.acquire.sources.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
 
     md = asz.get("model") or {}
@@ -436,10 +436,10 @@ def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampl
             "model": "declared schedule: one prefill step per arrive_step group, one decode token per step; hidden launch padded to the step's longest query"}
 
 
-def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: str, retain_exclude: set[str] | frozenset[str] | list[str],
-                       learn_budget_bytes: int, openings: int, chunk_bytes: int, window_bytes: int, bounded: bool, open_after_release: bool,
-                       host_cap_bytes: int | None, hidden_factor: float = 1.05, other_factor: float = 2.0, slack_bytes: int = 6 << 30,
-                       pairs: int = 1, c2_programs_bytes: int = 0, c2_freed_before_replay: bool = True, pool_exact: bool = PINNED_EXACT,
+def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: str, learn_budget_bytes: int, openings: int, chunk_bytes: int,
+                       window_bytes: int, bounded: bool, open_after_release: bool, host_cap_bytes: int | None, hidden_factor: float = 1.05,
+                       other_factor: float = 2.0, slack_bytes: int = 6 << 30, pairs: int = 1, c2_programs_bytes: int = 0,
+                       c2_freed_before_replay: bool = True, pool_exact: bool = PINNED_EXACT,
                        replay_cache: bool = False, fork_children_bytes: int = 0, c2_residual_bytes: int = 0, pool_carry_bytes: int = 0) -> dict[str, Any]:
     """The host peak bound of a `--bounded-staging` Commit, TERM BY TERM, from the declared-schedule stream
     (`schedule_stream_bound`).  Every term is a measured quantity on the B1 1024/128 row (cp-h100, FP8-STAGING.md §3) or a budget the run
@@ -447,10 +447,10 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
       raw     = hidden x f_hidden + other x f_other        hidden (the FA3 slab, padded to the step's longest query) sized exact to 1.2 MB on
                                                            B1 -> 1.05; other (per-token widths of every other family) measured x1.59 -> 2.0
       levels  = raw / 4                                    the tree above the leaves (32 B per 128 B leaf... every level, /4 by the layout)
-      kept    = raw - hidden                               retain=host with the hidden family excluded: what stays on host (0 for retain=none)
+      kept    = raw                                        retain=host: what stays on host (0 for retain=none)
       learn   = learn budget                               the learning steps' transient host windows; the pool keeps their capacity
       replay  = levels + learn + picks x chunk             openings-after-release runs on a FRESH pool that grows like the run's; picks =
-                                                           3 x openings + 64 (after-release + both in-run phases' deferred picks), 256 B each
+                                                           3 x openings + 64, 256 B each
       slack   = engine growth after admission              measured +3,539 MiB (RSS 2,218 -> 5,757 MiB, B1) + pool rounding -> 6 GiB
       pairs   = levels + kept + learn once, for pairs >= 2   a second pair allocates its frozen pool while torch's pinned-host cache still
                                                            holds the first pair's frozen + replay blocks: B1 PAIRS=3 bounded-x (in-process
@@ -495,9 +495,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
     other_sized = max(0, int(ssb["run_bytes"]) - hidden_sized)
     hidden_bound, other_bound = int(hidden_sized * hidden_factor), int(other_sized * other_factor)
     raw = hidden_bound + other_bound
-    excl = set(retain_exclude or ())
-    hidden_excluded = hidden_bound if ({"fa3_hidden_m1", "fa2_hidden_m1"} & excl) else 0
-    kept = max(0, raw - hidden_excluded) if retain == "host" else 0
+    kept = raw if retain == "host" else 0
     levels = raw // 4
     learn = int(learn_budget_bytes or 0)
     picks = 3 * int(openings) + 64
@@ -518,14 +516,13 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
     peak_phase = max(phases, key=phases.get)
     bound = phases[peak_phase] + int(slack_bytes) + pairs_extra
     # the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
-    # the largest host term, and -- separately -- the largest single materialization of the stream (the whole-step plane the bound keeps
-    # OFF the host under retain-exclude, opened by replay), with its step / tokens / bytes from the declared schedule
+    # the largest host term, and -- separately -- the largest single materialization of the stream, with its step / tokens / bytes from
+    # the declared schedule
     _terms = {"engine": int(engine_rss_bytes), "levels": levels, "kept": kept, "learn": learn, "replay": replay, "slack": int(slack_bytes), "pairs": pairs_extra,
               "c2_programs": c2, "pool_rounding": pool_rounding, "fork_children": forkc, "c2_residual": c2res, "pool_carry": carry}
     _dom = max(_terms, key=_terms.get)
     _big = ssb.get("largest_step") or {}
-    _hidden_where = ("excluded from host (retain-exclude), opened by replay" if hidden_excluded else
-                     ("counted in kept (retain host)" if retain == "host" else "not retained (retain none), opened by replay"))
+    _hidden_where = "counted in kept (retain host)" if retain == "host" else "not retained (retain none), opened by replay"
     dominant = {"host_term": _dom, "host_term_bytes": _terms[_dom], "peak_phase": peak_phase, "peak_phase_bytes": phases[peak_phase],
                 "host_term_share": (_terms[_dom] / bound) if bound else None,
                 "largest_materialization": {"family": "hidden stream (fa3/fa2 _hidden_m1 export, prefill)", "step": _big.get("step"),
@@ -537,7 +534,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                          f"-- {_hidden_where}")}
     return {"engine_rss_bytes": int(engine_rss_bytes), "levels_bytes": levels, "raw_kept_bytes": kept, "raw_bound_bytes": raw, "pairs": int(pairs or 1),
             "pairs_extra_bytes": pairs_extra, "dominant_contributor": dominant,
-            "excluded_prefill_hidden_bytes": hidden_excluded, "learn_budget_bytes": learn, "replay_bytes": replay, "window_bytes": int(window_bytes or 0),
+            "learn_budget_bytes": learn, "replay_bytes": replay, "window_bytes": int(window_bytes or 0),
             "picks": picks, "per_pick_bytes": per_pick, "slack_bytes": int(slack_bytes), "host_peak_bound_bytes": bound,
             # [F-fp8-C2PROG / F-fp8-POW2] the two terms and the phase the bound is the max of; every number says what kind it is
             "c2_programs_bytes": c2, "c2_freed_before_replay": bool(c2_freed_before_replay), "pool_rounding_bytes": pool_rounding, "pool_exact": bool(pool_exact),
@@ -546,7 +543,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
             "scope": {"parent_vmhwm": "engine, levels, kept, learn, pool_rounding, c2_programs, replay, pairs, slack, c2_residual, pool_carry",
                       "cgroup_only": "fork_children (the evaluator children's private pages; the parent's VmHWM never sees them)"},
             "term_kinds": {"engine": "measured at admission (RSS of this process on the built engine)",
-                           "levels": "conservative bound (raw bound / 4; raw = declared schedule x measured B1 factors)", "kept": "conservative bound (raw bound - excluded hidden)",
+                           "levels": "conservative bound (raw bound / 4; raw = declared schedule x measured B1 factors)", "kept": "conservative bound (the raw bound under retain host)",
                            "learn": "budget the run enforces by name", "replay": "conservative bound (a fresh pool: levels + learn + picks x chunk)",
                            "c2_programs": "empirical forecast (instance-file json bytes x 15.0; B8 calibration 4,924 MB -> 70,300 MiB; the run measures it)",
                            "pool_rounding": "conservative bound (x2 worst case of torch's pow2 rounding) or 0 with the exact pool (measured: RSS == bytes_total)",
@@ -557,7 +554,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                            "slack": "measured engine growth after admission (B1 +3,539 MiB) rounded to 6 GiB"},
             "hidden_factor": hidden_factor, "other_factor": other_factor, "hidden_sized_bytes": hidden_sized, "other_sized_bytes": other_sized,
             "hidden_bound_bytes": hidden_bound, "other_bound_bytes": other_bound,
-            "derivation": ("raw = hidden x f_hidden + other x f_other; levels = raw / 4; kept = raw - hidden (retain host + exclude); "
+            "derivation": ("raw = hidden x f_hidden + other x f_other; levels = raw / 4; kept = raw (retain host); "
                            f"replay = levels + learn + picks x per_pick (per_pick = the opened leaf's {int(chunk_bytes)} B chunk when bounded, else one window) "
                            "on a fresh pool whose transient windows in flight are inside its learn term (pool window capacity = learn budget); "
                            "slack = engine growth after admission; "
@@ -569,7 +566,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                            "later_pair_replay (pairs >= 2) = replay + pool_carry; "
                            "bound = max(phases) + pairs + slack; factors measured on B1 1024/128 cp-h100 (FP8-STAGING.md §3, §6, §7)"),
             "host_memory_cap_bytes": host_cap_bytes, "margin_bytes": (host_cap_bytes - bound) if host_cap_bytes is not None else None,
-            "margin_frac": ((host_cap_bytes - bound) / host_cap_bytes) if host_cap_bytes else None, "retain": retain, "retain_exclude": sorted(excl)}
+            "margin_frac": ((host_cap_bytes - bound) / host_cap_bytes) if host_cap_bytes else None, "retain": retain}
 
 
 def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0,
@@ -2280,7 +2277,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     @staticmethod
     def _block_holds(blk: Any, lo: int, hi: int) -> bool:
         """Does the retained block hold bytes [lo, hi)?  A contiguous tensor holds everything; the sparse host retainers (`_HostWindows`
-        with retain=sample, `_HostRanges` with retain=host + exclude) answer per range."""
+        with retain=sample, `_HostRanges` with bounded retain) answer per range."""
         if blk is None:
             return False
         holds = getattr(blk, "holds", None)
@@ -2288,7 +2285,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     def leaf_retained(self, step: int, index: int) -> bool:
         """True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
-        (raw bytes released / never kept / an excluded family's interior chunk)."""
+        (raw bytes released / never kept / a chunk a sparse retainer did not keep)."""
         if self._padding_leaf(step, index) is not None:
             return True                                   # [B9.1] a padding leaf's bytes are the synthesized block's, always held
         if step not in self._gpu_blocks:
@@ -2300,8 +2297,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     def open(self, sample: list[tuple[int, int]], *, values_from: "NativeHostCommitter | None" = None,
              paths_from_replay: bool = False) -> list[Opening]:
         """Openings for (step, leaf) positions.  The value bytes come from this committer's retained copy (device or host), or -- when the raw
-        copy was released / never kept (`retain=none`), or the leaf lies in a range that was not retained (retain=sample; retain=host with
-        excluded families) -- from `values_from`: a committer that REPLAYED the same committed inputs (same layouts, same bytes under BI
+        copy was released / never kept (`retain=none`), or the leaf lies in a range that was not retained (retain=sample) -- from
+        `values_from`: a committer that REPLAYED the same committed inputs (same layouts, same bytes under BI
         determinism).  The sibling path comes from THIS committer's levels, or -- `paths_from_replay` (regenerated values AND
         authentication-path material) -- from the replay's levels; either way `verify()` checks the result against THIS run's original
         roots, so a replay that differs in any byte (value or tree) fails to open."""

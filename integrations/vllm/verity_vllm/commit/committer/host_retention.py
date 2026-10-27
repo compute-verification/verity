@@ -1,5 +1,5 @@
-"""What a windowed step keeps on host for openings (`native_collect`'s windowed staging): its pinned windows (`_HostWindows`) or, with
-value families excluded (`--retain-exclude`), byte ranges of its stream (`_HostRanges`), and the families and chunk ranges excluded."""
+"""What a windowed step keeps on host for openings (`native_collect`'s windowed staging): its pinned windows (`_HostWindows`) or
+byte ranges of its stream (`_HostRanges`)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from typing import Any
 import torch
 
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
-from verity_vllm.commit.committer.plan_cache import PlanMetas
 
 class _HostWindows:
     """The raw bytes of one step retained on host as pinned windows (P0 windowed staging); quacks like the contiguous `keep` tensor for
@@ -67,20 +66,17 @@ class _HostWindows:
 
 
 class _HostRanges:
-    """The raw bytes of one step retained on host as pinned BYTE RANGES of the step stream (retain=host with
-    `VERITY_RETAIN_EXCLUDE`): the chunk-aligned interior of every tensor whose value family is excluded (the FA3 hidden M1 plane at
-    3,545 tokens: 93 % of the prefill step) is NOT copied off the staging window -- those leaves open by REPLAY against the original
-    root; every other chunk (module outputs, the boundary chunks an excluded tensor shares with its neighbours) is kept and
-    opens from host as before.  `ranges` = [(lo, hi, hv)] disjoint, sorted, hv a pinned uint8 view of exactly hi - lo bytes; a slice
-    may span consecutive ranges (a window boundary splits one retained region in two) but never a gap: a gap is a KeyError, never
-    zeros.  Same duck type as `_HostWindows` / the contiguous `keep` tensor."""
+    """The raw bytes of one step retained on host as pinned BYTE RANGES of the step stream: bounded retain=host (each window as it
+    lands, or carved out of a learning step's transient copies) and a replay's challenged chunks (bounded retain=sample by chunk).
+    `ranges` = [(lo, hi, hv)] disjoint, sorted, hv a pinned uint8 view of exactly hi - lo bytes; a slice may span consecutive ranges
+    (a window boundary splits one retained region in two) but never a gap: a gap is a KeyError, never zeros.  Same duck type as
+    `_HostWindows` / the contiguous `keep` tensor."""
     is_cuda = False
 
-    def __init__(self, ranges: list[tuple[int, int, Any]], used: int, excluded: dict[str, int] | None = None, chunk: int = GPU_CHUNK_BYTES) -> None:
+    def __init__(self, ranges: list[tuple[int, int, Any]], used: int, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.ranges = sorted(((int(lo), int(hi), hv) for lo, hi, hv in ranges if hi > lo), key=lambda r: r[0])
         self.used = int(used)
         self.n = -(-self.used // chunk) * chunk
-        self.excluded = dict(excluded or {})                     # family -> bytes not retained (for the record)
         self._lows = [r[0] for r in self.ranges]
 
     def numel(self) -> int:
@@ -118,74 +114,9 @@ class _HostRanges:
             return torch.empty(0, dtype=torch.uint8)
         cov = self._cover(lo, hi)
         if cov is None:
-            fams = ",".join(sorted(self.excluded)) or "-"
-            raise KeyError(f"bytes [{lo}, {hi}) of the step stream were not retained on host (retain=host excluding {fams}): open by replay")
+            raise KeyError(f"bytes [{lo}, {hi}) of the step stream were not retained on host: open by replay")
         parts = [hv[max(lo, rlo) - rlo:min(hi, rhi) - rlo] for rlo, rhi, hv in cov]
         return parts[0] if len(parts) == 1 else torch.cat(parts)
 
     def cpu(self) -> "_HostRanges":
         return self
-
-
-#: [R19 admit, F-r18-admit-1 fix (a): the RETAIN-windowed pool] the value families NO C2 consumer reads back from host: the attention
-#: launch's M1 export stream (FA2 on Ada/Ampere, FA3 on Hopper).  oracle_compare classifies `hidden_stream` out before any read
-#: (`no oracle family`), sampled_replay has no VU row for it (`fa2_hidden_m1_stream: attention interior, no VU row of its own`), the
-#: boundary linkage reads ids only; its leaves are COMMITTED (coverage + openings) and open by REPLAY against the original root
-#: (openings_after_release, R17-5).  It is 84 % of the raw stream at 1024/128 (planner: #60 hidden 100,126 of 119,879 MiB; #23 122,740
-#: of 146,955), so `--retain-exclude hidden_m1` (= both families, whichever tap the pod has) keeps the C2 byte source whole and the
-#: pinned pool at the 16 % the C2 forms read -- byte-identical oracle / sampled-replay / linkage forms by construction.
-HIDDEN_M1_FAMILIES = frozenset({"fa2_hidden_m1", "fa3_hidden_m1"})
-RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_FAMILIES}
-
-
-def retain_exclude_families(spec: str | None) -> set[str]:
-    """`VERITY_RETAIN_EXCLUDE` / `--retain-exclude` -> the set of value families (native_host.FAMILY_RULES names) whose chunk-aligned
-    interior is not copied to host: comma-separated family names (`_stream` suffix tolerated) and the aliases `hidden_m1` / `hidden`."""
-    out: set[str] = set()
-    for f in (spec or "").split(","):
-        f = f.strip().removesuffix("_stream")
-        if not f:
-            continue
-        out |= set(RETAIN_EXCLUDE_ALIASES.get(f, {f}))
-    return out
-
-
-def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUNK_BYTES) -> list[tuple[int, int, str]]:
-    """The chunk-aligned INTERIOR [lo, hi) of every tensor of an excluded value family in step-stream order (merged when adjacent): the
-    bytes retain=host + exclude does not copy off the staging window.  Boundary chunks shared with a neighbouring tensor are retained
-    (the neighbour opens from host); a tensor shorter than one chunk contributes nothing."""
-    from verity_vllm.commit.committer.native_host import value_family
-    out: list[tuple[int, int, str]] = []
-    spans = zip(metas.names, metas.offsets, metas.sizes) if isinstance(metas, PlanMetas) else (   # name, byte offset in the step stream, nbytes
-        (m.name, int(m.dev_off) if int(getattr(m, "dev_off", -1)) >= 0 else int(m.stream_off), int(m.nbytes)) for m in metas)
-    for name, off, nbytes in spans:
-        fam = value_family(name)
-        if fam not in exclude:
-            continue
-        lo = -(-off // chunk) * chunk
-        hi = ((off + nbytes) // chunk) * chunk
-        if hi <= lo:
-            continue
-        if out and out[-1][1] == lo and out[-1][2] == fam:
-            out[-1] = (out[-1][0], hi, fam)
-        else:
-            out.append((lo, hi, fam))
-    return out
-
-
-def outside(excl: list[tuple[int, int, str]], lo: int, hi: int) -> list[tuple[int, int]]:
-    """[lo, hi) minus the excluded chunk ranges `excl` (`_excluded_chunk_ranges`; absolute step-stream offsets): the bytes kept."""
-    out, pos = [], lo
-    for elo, ehi, _fam in excl:
-        if ehi <= pos:
-            continue
-        if elo >= hi:
-            break
-        if elo > pos:
-            out.append((pos, min(elo, hi)))
-        pos = max(pos, ehi)
-        if pos >= hi:
-            break
-    if pos < hi:
-        out.append((pos, hi))
-    return out

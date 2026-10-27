@@ -222,11 +222,11 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None, wai
 
 
 def _kept_by(args: Any, com: Any) -> str | None:
-    retain, exclude = getattr(com, "retain", None), getattr(com, "retain_exclude", None)
-    replays = getattr(args, "replay_openings", "auto") == "always" or retain != "host" or bool(exclude)
+    retain = getattr(com, "retain", None)
+    replays = getattr(args, "replay_openings", "auto") == "always" or retain != "host"
     mode = getattr(getattr(com, "pool", None), "mode", None)
     on_device = com._retained_device_bytes() if hasattr(com, "_retained_device_bytes") else 0
-    return (f"the openings after release replay the run on the engine (retain {retain}, excluded {sorted(exclude or [])}, replay openings "
+    return (f"the openings after release replay the run on the engine (retain {retain}, replay openings "
             f"{getattr(args, 'replay_openings', 'auto')})" if getattr(args, "open_after_release", False) and replays else
             f"the retained bytes are in torch's pinned host memory ({mode}), which the CUDA context's end frees"
             if mode is not None and not str(mode).startswith("exact-registered") else

@@ -158,7 +158,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_PINNED_POPULATE_THREADS", int, None, VALUE, "helper threads that fault a fresh pinned pool in (`commit --pinned-populate-threads`)"),
     S("VERITY_RETAIN", lowered, None, VALUE, "where raw copies are retained: host, device, gpu, none or sample; unset, the committer's; "
       "empty is refused", empty=True),
-    S("VERITY_RETAIN_EXCLUDE", str, "", VALUE, "families whose raw copies aren't retained (`native_collect.retain_exclude_families`)"),
     S("VERITY_RETAIN_PINNED", not_off, True, VALUE, "host retention goes to pinned memory (else pageable)"),
     S("VERITY_ROWS_FORM", str, None, VALUE, "the rows-sha512 leaf form, fused or split; unset, the device's (native_rows.cu)"),
     S("VERITY_ROWS_PHASES", int, None, VALUE, "the launches a row's blocks take in the split leaf form; unset, 4 (native_rows.cu)"),
@@ -280,7 +279,7 @@ ELSEWHERE = frozenset("""
 VERITY_BENCH_ VERITY_SUITE_ VERITY_VLLM_BENCH_
 VERITY_ADV_CACHE VERITY_ADV_SEED VERITY_AMBIENT VERITY_AMBIENT_TEST VERITY_CAPTURED_101_GUMBEL VERITY_CENSUS
 VERITY_CHECKER_VARIANT VERITY_CIRCUIT_CHECK_SLOW VERITY_COMMIT VERITY_DENSE_PROGRAM_DIRS VERITY_E2E_B VERITY_E2E_BOUNDED
-VERITY_E2E_CASE VERITY_E2E_EXCLUDE VERITY_E2E_GPU_UTIL VERITY_E2E_HIDDEN_SO VERITY_E2E_LEARN_MB VERITY_E2E_UTIL
+VERITY_E2E_CASE VERITY_E2E_GPU_UTIL VERITY_E2E_HIDDEN_SO VERITY_E2E_LEARN_MB VERITY_E2E_UTIL
 VERITY_E2E_WINDOW_MB VERITY_E2E_WORKLOAD VERITY_ENCODINGS_ADVICE_V0 VERITY_EVALUATE_FULL_LOGF VERITY_EXHAUSTIVE VERITY_FA2_CSRC
 VERITY_FLOCK_CACHE VERITY_FLOCK_INNER_FOLD VERITY_FLOCK_SAME_SHAPE_FULL VERITY_GIT_GUARD VERITY_GPU_TORCH_ONLY
 VERITY_H1_REGISTER VERITY_HP_ARCHIVE VERITY_KV_SO VERITY_LEAF_LAYOUT VERITY_LEAN_MEM_FLOOR_GIB VERITY_ML_BOOLEAN_EXHAUSTIVE

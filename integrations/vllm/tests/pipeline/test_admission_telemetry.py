@@ -110,23 +110,13 @@ def test_r19_fork_gc_freeze_is_the_default_and_makes_every_worker_a_250_mib_work
 
 
 def test_r19_retain_windowed_pool_terms():
-    """[R19 admit, F-r18-admit-1 fix (a)] bounded staging + --retain host --retain-exclude hidden_m1: the pool is (raw - hidden M1) + raw x 0.25 (levels over every leaf);
-    bounded + a non-host retention keeps the levels only; bounded without the exclusion (or an unrelated family) keeps the full pool."""
+    """Bounded staging + --retain host keeps the full pool; bounded + a non-host retention keeps the levels only (raw x 0.25)."""
     full = adm.predict(_cfg())["commit"]
-    raw, hid = adm.predict(_cfg())["derived"]["raw_bytes"], adm.predict(_cfg())["derived"]["hidden_bytes"]
-    assert 0 < hid < raw and hid > 0.5 * raw
-    kept = adm.predict(_cfg(bounded_staging=True, retain_exclude=["fa2_hidden_m1", "fa3_hidden_m1"]))["commit"]
-    assert kept["pinned_pool"]["bytes"] == raw - hid + int(raw * 0.25) == next(t["bytes"] for t in kept["terms"] if t["name"] == "commit.pinned_pool")
-    assert kept["pinned_pool"]["kept_raw_bytes"] == raw - hid and "fix (a)" in kept["pinned_pool"]["basis"]
-    assert kept["reserved_bytes"] < full["reserved_bytes"] and kept["pinned_pool"]["retain_exclude"] == ["fa2_hidden_m1", "fa3_hidden_m1"]
-    assert adm.predict(_cfg(bounded_staging=True))["commit"]["pinned_pool"]["bytes"] == full["pinned_pool"]["bytes"]
-    assert adm.predict(_cfg(bounded_staging=True, retain_exclude=["gemm_qkv"]))["commit"]["pinned_pool"]["bytes"] == full["pinned_pool"]["bytes"]
+    raw = adm.predict(_cfg())["derived"]["raw_bytes"]
+    kept = adm.predict(_cfg(bounded_staging=True))["commit"]["pinned_pool"]
+    assert kept["bytes"] == full["pinned_pool"]["bytes"] and kept["kept_raw_bytes"] == raw
     lv = adm.predict(_cfg(bounded_staging=True, retain="none"))["commit"]["pinned_pool"]
     assert lv["bytes"] == int(raw * 0.25) and "levels only" in lv["basis"]
-    # the alias
-    assert adm.retain_exclude_families("hidden_m1") == ["fa2_hidden_m1", "fa3_hidden_m1"]
-    assert adm.retain_exclude_families("fa3_hidden_m1_stream,gemm_qkv") == ["fa3_hidden_m1", "gemm_qkv"]
-    assert adm.retain_exclude_families(None) == []
 
 
 def test_largest_tensor_law_matches_the_ledger():
