@@ -25,6 +25,8 @@ COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once
 
 COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
+COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges with any other change to the count
+
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
