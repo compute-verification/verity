@@ -3,7 +3,7 @@
 and hashes.
 
     format = "verity/config/v0"
-    protocols = ["sampled-proofs", "certifier"]      the components, by the six subprotocols' names
+    protocols = ["sampled-proofs", "certifier"]      the components, by the seven subprotocols' names
     [workload]  name, params                         the computation audited, and its public shape
     [service]   law                                  the proof service's selection law (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run

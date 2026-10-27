@@ -1,10 +1,14 @@
 /-
 Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardware of its own at the site. Its
-components are integrity by sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`) and work by proof of
-useful work (`PouwCheck.protocol`). `Core.Composition.product` composes them: both accept or remote doesn't, and either
-one's rejection rejects remote whatever the other answers.
+subprotocols are integrity by sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`), work by proof of
+useful work (`PouwCheck.protocol`), and the inference-only policy (`NciCheck.Protocol.protocol`,
+`verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
+budgets), which reads only the declared circuit and the registered information and so needs no hardware at the site.
+`Core.Composition.product` composes them: every subprotocol accepts or remote doesn't, and any subprotocol's rejection
+rejects remote whatever the others answer.
 -/
 import CoreComposition.Cases
+import NciCheck.Protocol
 import PouwCheck.Protocol
 import SampledProofs.OneStage
 
@@ -13,7 +17,7 @@ namespace Core.Remote
 open Composition
 
 /-- Remote's components, in the order of their ids. -/
-def components : List Protocol := [PouwCheck.protocol, SampledProofs.OneStage.protocol]
+def components : List Protocol := [NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStage.protocol]
 
 def protocol : Protocol := product "verity/remote/v0" components
 
@@ -26,14 +30,18 @@ private def answer (xs : List Case) : Answer := Cases.answerCases protocol xs 鉄
 private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard ordered components
-#guard components.map (路.id) == ["verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"]
+#guard components.map (路.id) == ["verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"]
 
--- both refuse their cases: remote rejects on both, and makes nothing public
-private def bothRefused : Answer := answer [refused PouwCheck.protocol, refused SampledProofs.OneStage.protocol]
-#guard bothRefused.verdict == .reject
-#guard bothRefused.published.isNone && bothRefused.profile.isNone
-#guard bothRefused.reason.map (路.startsWith "verity/pouw/v1 reject: params: ") == some true
-#guard bothRefused.reason.map (contains 路 "; verity/sampled-proofs/one-stage/v1 reject: params: ") == some true
-#guard (answer [refused PouwCheck.protocol]).reason == some "params: verity/sampled-proofs/one-stage/v1 is missing"
+-- every subprotocol refuses its case: remote rejects on each, and makes nothing public
+private def allRefused : Answer := answer (components.map refused)
+#guard allRefused.verdict == .reject
+#guard allRefused.published.isNone && allRefused.profile.isNone
+#guard allRefused.reason.map (路.startsWith "verity/inference-only/v0 reject: params: ") == some true
+#guard allRefused.reason.map (contains 路 "; verity/pouw/v1 reject: params: ") == some true
+#guard allRefused.reason.map (contains 路 "; verity/sampled-proofs/one-stage/v1 reject: params: ") == some true
+#guard (answer [refused PouwCheck.protocol, refused SampledProofs.OneStage.protocol]).reason ==
+  some "params: verity/inference-only/v0 is missing"
+#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.protocol]).reason ==
+  some "params: verity/sampled-proofs/one-stage/v1 is missing"
 
 end Core.Remote

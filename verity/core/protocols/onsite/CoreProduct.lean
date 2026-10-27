@@ -1,6 +1,6 @@
 /-
 The verifier's product for a configuration (`verity run CONFIG`): `Core.Composition.product` over exactly the components
-the configuration's `protocols` lists, by their ids. Onsite is its five-component case, so listing every one of
+the configuration's `protocols` lists, by their ids. Onsite is its case over all six subprotocols, so listing every one of
 onsite's components is onsite's own protocol (`verity/onsite/v0`); any other list is `product "verity/product/v0"` over
 the listed components, in the order of their ids. A list naming a component onsite doesn't have, naming one twice, or naming none is refused by
 name, so a product never runs over a component it can't check, and an unlisted component is never read as accepted.

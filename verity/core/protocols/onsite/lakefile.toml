@@ -1,7 +1,7 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
-# period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
-# drives. Code: no Mathlib.
+# the inference-only policy (`verity/inference-only/v0`), space (PoUS's run check), bandwidth (the remote bandwidth
+# session) and communication (the network certifier over the period, `verity/certifier/v0`). Its executable is the core
+# CLI (`onsite id | check | serve`), which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
@@ -30,6 +30,11 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
+# The inference-only policy: its check of record as a core protocol (`NciCheck.Protocol`).
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
+
 # Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
 [[require]]
@@ -54,7 +59,7 @@ name = "onsite"
 root = "OnsiteMain"
 
 # A configuration's product: `Core.Composition.product` over exactly the components its `protocols` lists (onsite for all
-# five), `product IDS id | check | serve` (CoreProduct.lean).
+# six), `product IDS id | check | serve` (CoreProduct.lean).
 [[lean_lib]]
 name = "CoreProduct"
 
