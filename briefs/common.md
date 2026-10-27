@@ -53,3 +53,6 @@ wire strings (the verdict keys `integrity`, `communication`) and `Core.Protocol`
 
 ## Marking with main's research (27 Oct, 15:50Z)
 Your VM's `research` may predate main's records gate (#5191, since 10:16Z: a pass at any commit whose input trees for a package equal the head's vouches for it, so carried locks need no run of their own). Before running a records job only to satisfy a mark, try the mark with main's research: export origin/main's tools/research into a scratch dir and run `uv run --project <dir> research queue ready N --mark --by soundness`. Records `--update` writes the regenerated lock under the run's $OUT/lean-audit/, not into the tree: commit it from there. In a multi-package job, later passes read the old lock and fail, so run one package per job.
+
+## Never merge next (27 Oct, 17:15Z)
+Never merge origin/next into a branch: drive then treats the PR as carrying everything next held. To clear a conflict with next, merge the specific PRs' heads you conflict with (only if you need their content) plus origin/main; a conflict that comes only from a next-only PR resolves when that PR reaches main.
