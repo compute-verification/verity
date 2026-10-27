@@ -13,11 +13,11 @@ requests. The network chain's run of record (`chain_record.sh`'s warden path) th
     python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
-FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 80] [--height 12] [--minutes M]
+FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
        [--prompt-ids 256] [--tokens 64] [--vocab 128000]
 
-``--requests`` is by default `REQUESTS`, what h200-2's free disk seals at about 1 GB a request (vllm's estimate, until
-its sizing rehearsal's count replaces it); ``--tokens`` is each request's max_tokens, at most KO.
+``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by vllm's sizing; ``--tokens`` is each request's
+max_tokens, at most KO.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
@@ -115,8 +115,9 @@ import auditor as A  # noqa: E402
 KI, KO = 1024, 64
 #: the session's prompt ids a request, which reach the warden in time (KI's don't: NET-107)
 PROMPT_IDS = 256
-#: the session's requests: what vy-dc-h200-2's free disk seals, about 80 GB at about 1 GB a request (vllm's estimate)
-REQUESTS = 80
+#: the session's requests: what vy-dc-h200-2's free disk seals, within 72 GB even if every request runs all KO ids
+#: (vllm's sizing, r20261027-125522-d460: 636.5 MB a full-length request)
+REQUESTS = 113
 PEER, PORT, GATE, LANE = "vy-dc-h200-2", 18782, "research@204.12.178.84", "network-accounting"
 #: the auditor's side, where the chain runs and the gate's coins for its draw arrive
 AUDITOR = "vy-nebius-cpu-2"
@@ -136,8 +137,9 @@ ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol i
 CONTEXT = 512
 HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
-              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and a --disk-floor-gb under h200-2's free disk "
-              "(serve-openai's own default under --seal is 300 GB); serve.sh refuses on h200-2 under its 300 GB disk floor "
+              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
+              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
+              "h200-2 under its 300 GB disk floor "
               "and sends its own smoke and load requests into the records. Its --copy-records-to copies requests.jsonl "
               "too, which the records art leaves out")
 

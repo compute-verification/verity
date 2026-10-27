@@ -62,13 +62,14 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
     data = json.dumps(ps, separators=(",", ":")).encode()
     doc = SS.plan(a, data)
-    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 9 --requests 80 --height 12 "
+    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     assert doc["runs"]["chain"].endswith("--endpoint ART --eos-ids 128001")
-    assert "--required-manifest ROW/manifest.json" in doc["hand_start"] and "not examples/vllm/serve.sh" in doc["hand_start"]
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
+                                                 "--disk-floor-gb 40"))
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
     long.minutes = a.minutes
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
