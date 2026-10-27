@@ -179,7 +179,7 @@ theorem deltaPubR_lt_one {n kd K₀ W : ℕ} {p : ℝ} (h0 : 0 < n) (hK : K₀ �
   have hW' : (W : ℝ) ≤ 2 ^ 40 := by exact_mod_cast hW
   have he : (1 : ℝ) ≤ Real.exp 1 := by linarith [Real.add_one_le_exp (1 : ℝ)]
   have hk : (kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) ≤ 2 ^ 23 / 2 ^ 192 := by
-    push_cast
+    rw [show ((2 ^ 192 : ℕ) : ℝ) = (2 : ℝ) ^ 192 by norm_num]
     exact div_le_div₀ (by positivity) kDep_le (by positivity) (le_mul_of_one_le_left (by positivity) he)
   have hWk : (W : ℝ) * ((kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ))) ≤ 2 ^ 40 * (2 ^ 23 / 2 ^ 192) :=
     mul_le_mul hW' hk (by positivity) (by positivity)
