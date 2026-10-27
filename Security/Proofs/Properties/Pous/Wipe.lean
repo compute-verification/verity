@@ -23,6 +23,9 @@ import Mathlib.Tactic.DefEqTransformations
   (`Accounting.Wipe.Strategy.deltaNet`).
 * **The ratio** (`ratioSearch_samples`, `ratio_samples`): `ratio`'s bisection keeps a lower end `lo ≥ 1` that samples,
   so at `k ≥ 1` reads `ratio k ≥ 1` and `(ratio k − 1)^k · 2^129 ≤ (ratio k)^k`, `StreamedWipeMeetsReads`' condition.
+* **The decoded commitment** (`decodeCommitment_k`): `decodeCommitment` decodes with `StreamedWipe.Commitment.ofJson`
+  (`exactly_decodes`), which returns only parameters `Params.check` passes (`commitment_ofJson_check`), and those have
+  `1 ≤ batch ≤ k` (`params_check_k`), so at least one read.
 * **What `check` publishes** (`check_accept`, `certify_certified`): an accepted `check` publishes `certify` of the
   commitment's parameters, and a certified one has `k ≤ MAX_READS`, `memory_bits` the declared tiers' bits,
   `eps = 1/2^128` and `foreign_bits = foreignBits p (ratio k) + egress_mib · 2^23`. At most `MAX_READS` reads and no
@@ -322,12 +325,6 @@ theorem exactly_decodes {α : Type} {f : Lean.Json → Flock.V α} {enc : α →
           rfl
         · simp [hf, hc1, hc2, hne, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
-theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error e => first | cases h | simp [bind, Except.bind] at h
-  | ok a => exact ⟨a, rfl, h⟩
-
 /-- A commitment `StreamedWipe.Commitment.ofJson` decodes has parameters `Params.check` passes. -/
 theorem commitment_ofJson_check {j : Lean.Json} {c : StreamedWipe.Commitment}
     (h : StreamedWipe.Commitment.ofJson j = .ok c) : c.params.check = .ok () := by
@@ -342,35 +339,8 @@ theorem commitment_ofJson_check {j : Lean.Json} {c : StreamedWipe.Commitment}
     exact hp
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-theorem commitment_ofJson_check' {j : Lean.Json} {c : StreamedWipe.Commitment}
-    (h : StreamedWipe.Commitment.ofJson j = .ok c) : c.params.check = .ok () := by
-  unfold StreamedWipe.Commitment.ofJson at h
-  try dsimp only at h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  try dsimp only at h
-  split at h
-  · rename_i hp
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    cases h
-    exact hp
-  · simp [throw, throwThe, MonadExceptOf.throw] at h
-
 /-- Parameters `Params.check` passes have at least one read: `1 ≤ batch ≤ k`. -/
 theorem params_check_k {q : StreamedWipe.Params} (h : q.check = .ok ()) : 0 < q.k := by
-  by_cases hc : (q.labels < 1 || q.batch < 1 || q.batch > q.k || q.k ≥ 2 ^ 32 || q.limitNs == 0) = true
-  · unfold StreamedWipe.Params.check at h
-    rw [if_pos hc] at h
-    simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at hc
-    omega
-
-theorem params_check_k' {q : StreamedWipe.Params} (h : q.check = .ok ()) : 0 < q.k := by
   rcases Nat.eq_zero_or_pos q.k with hk | hk
   · exfalso
     revert h
