@@ -45,7 +45,7 @@ theorem εMax_ne_top : Params.εMax ≠ ⊤ := by
   exact ENNReal.pow_ne_top (ENNReal.inv_ne_top.2 two_ne_zero)
 
 theorem periodHeld : PeriodHeld := by
-  intro hH D Q L hP ι α ΩW ΩQ _ _ d r P round S hdev hS o
+  intro D Q L hP ι α ΩW ΩQ _ _ d r P round S hdev hS o
   by_cases hpos : 0 < S * (r.win .capacity).len
   · set B := ⌊S * (r.win .capacity).len⌋₊
     have hfl : (B : ℝ) ≤ S * (r.win .capacity).len := Nat.floor_le hpos.le
@@ -55,24 +55,24 @@ theorem periodHeld : PeriodHeld := by
         linarith
       exact_mod_cast this
     obtain ⟨A, hA⟩ := hdev o B hn
-    refine le_trans (Pouw.pr_mono (P' := Passes P.sid (P.pub o).root (P.W o) A) ?_) ?_
+    refine le_trans (Pouw.pr_mono (P' := Passes P.sid (P.W o) A) ?_) ?_
     · rintro x ⟨ha, hb, hh⟩
       exact hA x (fun t ht => Nat.le_floor ((Nat.cast_le.2 (r.mem_le_held ht)).trans hh.le))
         (certified_of P ha hb)
     · have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
         ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
-      calc Pouw.pr (Passes P.sid (P.pub o).root (P.W o) A)
-          = (Pous.pr (Passes P.sid (P.pub o).root (P.W o) A)).toReal := Accounting.pr_eq_toReal _
+      calc Pouw.pr (Passes P.sid (P.W o) A)
+          = (Pous.pr (Passes P.sid (P.W o) A)).toReal := Accounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
-          ENNReal.toReal_mono hfin (Pous.EndToEnd.SecurityProofs.endToEndRing hH D Q L hP _ _ _ A)
+          ENNReal.toReal_mono hfin (Pous.EndToEnd.SecurityProofs.endToEndRing D Q L hP _ _ A)
         _ = _ := by rw [ENNReal.toReal_add ENNReal.ofReal_ne_top εMax_ne_top, ENNReal.toReal_ofReal δ_nonneg]
   · rw [Pouw.pr_eq_zero fun x hx => hpos (lt_of_le_of_lt (Nat.cast_nonneg _) hx.2.2)]
     exact add_nonneg δ_nonneg ENNReal.toReal_nonneg
 
 theorem periodCapacity : PeriodCapacity := by
-  intro hH D Q L hP ι α ΩW ΩQ _ _ _ _ d r P round S hdev hS hv
+  intro D Q L hP ι α ΩW ΩQ _ _ _ _ d r P round S hdev hS hv
   have h : r.CapacitySoundPerRun S ((Params.δ : ℝ) + Params.εMax.toReal) := fun x q => by
-    refine le_trans (Pouw.pr_mono ?_) (periodHeld hH D Q L hP ι α ΩW ΩQ d r P round S hdev hS (x, q))
+    refine le_trans (Pouw.pr_mono ?_) (periodHeld D Q L hP ι α ΩW ΩQ d r P round S hdev hS (x, q))
     rintro s ⟨hacc, hheld⟩
     exact ⟨(hv _ hacc).1, (hv _ hacc).2, hheld⟩
   exact ⟨h, r.capacitySound_of_perRun h⟩

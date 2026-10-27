@@ -32,7 +32,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     S q δI hq hδI hqt hA3 RI hT hL hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
     macs u bUnit help RW hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
-    hd hp hH Dr Qr Lr hP ΩW ΩQ run P round RS hdev hS
+    hd hp Dr Qr Lr hP ΩW ΩQ run P round RS hdev hS
     N bits h sB G k lam hN0 RB hQ
     Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
     hW hMem
@@ -52,7 +52,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
         staged flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (help b) (RW b) (hcost b)
         (hhelp b) hScope hρ hw hluck (hgame b)
         (hdead b) (hpre b) (hbind b) (hreg b) (hdraw b) (hsvc b) (hsalt b) hpins (hmu b) (hrb b) (hguess b) (hfix b)
-    · exact Bridge.SpaceOfPeriodHeld hd hp hH Dr Qr Lr hP ι α d C I Ω (s.block b) (ΩW b) (ΩQ b) (run b) (P b)
+    · exact Bridge.SpaceOfPeriodHeld hd hp Dr Qr Lr hP ι α d C I Ω (s.block b) (ΩW b) (ΩQ b) (run b) (P b)
         (round b) (c b) p (RS b) (hdev b) (hS b)
     · exact Bridge.BandwidthOfAuditPerRunPeriod N bits h sB G k lam ι α d C I Ω (s.block b) (c b) p hN0 (RB b) (hQ b)
     · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hbc hδc hdec εks εbind εtap (herr b) (hbindN b) (htap b)

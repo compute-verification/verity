@@ -177,7 +177,6 @@ def JointHorizonBlocksDeployed : Prop :=
       (fun _ t => (Accounting.Compose.tileWords Sc Cd 144 t : ℝ)) (folded b ξ)) →
     -- PoUS: the ring audit's period
     PousCheck.Properties.AcceptsDecodes → PousCheck.Properties.PublishesRoot →
-    Pous.P2.Assumptions.CoinCommitHides Pous.EndToEnd.coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
     ∀ Dr Qr Lr : ℕ, Pous.P2.Assumptions.P2RingAuditSecure Dr Qr Lr →
     ∀ (ΩW ΩQ : Fin B → Type)
       (run : (b : Fin B) → Run d α (ΩW b) (ΩQ b)
