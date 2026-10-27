@@ -24,7 +24,7 @@ o = attn.pv(p, v, lens, path="ref")              # the same words through the re
   `run.py` check also runs every tiling with S and O 1 and 2 words into their buffers, to reach the narrower stores. The `_s16` kernels are
   `_h16`'s where no query sees more than 32 keys (the H200 model's decode step): a warp loads K's or V's fragments once
   for all of its head groups. `attn.LAUNCH` picks the tiling and launch shape for each op, and `attn.serves` says where
-  each applies. The `_ref` kernels are the reference path: a block takes 8 columns of one KV head and sequence, its warps
+  each applies. The `_ref` kernels are the reference path: a CTA takes 8 columns of one KV head and sequence, its warps
   take the (16 query heads, query) pairs in turn, and every operand word is gathered on its own.
 - `attn.py`: the kernels as torch functions (the skeleton's interface), `qk(q, k, lens=None, *, out, fill, warps,
   check_lens, path)` and `pv(p, v, lens=None, *, out, kpv, warps, check_lens, path)`: S past `lens` is `fill` (-inf),

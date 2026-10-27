@@ -17,8 +17,8 @@
 //
 // A warp computes a 16 x 8 tile of output words at a time and runs each word's whole k chain in registers: no split-K, no
 // atomics, no shared reduction.  In the q8 kernels a tile's 8 columns are 8 queries of one head (grid: query tiles of 8, H,
-// B), and a block's warps stride over its key tiles (QK^T) or d tiles (PV).  In the _h8 kernels they are one query of 8
-// heads that share a KV head (8 divides 2^gshift; grid: Mq, any Y, B): block y runs the head groups y, y + Y, ..., its
+// B), and a CTA's warps stride over its key tiles (QK^T) or d tiles (PV).  In the _h8 kernels they are one query of 8
+// heads that share a KV head (8 divides 2^gshift; grid: Mq, any Y, B): CTA y runs the head groups y, y + Y, ..., its
 // warps take every warps-th of them, and a warp runs every tile of its group (QK^T: each key tile, with the group's Q loaded
 // once; PV: each d tile, with P loaded once a key block), so a decode step reads each key and value once for 8 heads.  The
 // _h16 kernels run head groups of 16 (16 divides 2^gshift) the same way, with the heads as the tile's 16 rows instead.  The
@@ -37,7 +37,7 @@
 // point gets its own mma with V zeroed past it, and each column takes its word from the mma of its own; a column whose keys
 // ended before the block keeps its accumulator unless the block is below kpv, so its chain is its own kp/16 steps.  The _h8
 // kernels' columns share one length, so each block is one mma.
-// The _ref kernels are the slow reference path (attn_ref's kernels before HASH-32), tuned for nothing: a block takes 8
+// The _ref kernels are the slow reference path (attn_ref's kernels before HASH-32), tuned for nothing: a CTA takes 8
 // columns (QK^T: keys; PV: d) of one KV head and sequence (grid: column tiles, Hkv, B), its warps take turns over the
 // (16 query heads of that KV head, query row) pairs, and every operand word is gathered on its own, so a tile's rows share
 // one query and its chain is that query's.
@@ -88,7 +88,7 @@ __device__ __forceinline__ void k_rows(uint32_t (&A)[4], const uint16_t* karow, 
     A[3] = jbok ? ld_pair(kbrow + c + 8) : 0u;
 }
 
-// A q8 block's tile, from the grid alone (no division: the SASS gate refuses the floating-point reciprocal an integer one
+// A q8 CTA's tile, from the grid alone (no division: the SASS gate refuses the floating-point reciprocal an integer one
 // becomes): columns c are queries q0 + c of head h.
 struct Tile {
     int b, h, q0, warp, warps, L, M;
@@ -562,7 +562,7 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
 // Word i of p, the zero code unless ok.
 __device__ __forceinline__ uint32_t word(const uint16_t* p, int64_t i, bool ok) { return ok ? (uint32_t)p[i] : 0u; }
 
-// The _ref kernels.  Item i of a block is row tile i & (2^rs - 1) of query i >> rs: rows ra and rb are heads
+// The _ref kernels.  Item i of a CTA is row tile i & (2^rs - 1) of query i >> rs: rows ra and rb are heads
 // (kvh << gshift) + ra and + rb, the zero code past the KV head's G heads, and B's column is key or d c0 + g.
 template <int D, bool QK>
 __device__ __forceinline__ void ref(const AttnArgs& a) {

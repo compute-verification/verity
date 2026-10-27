@@ -6,11 +6,11 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.  A mismatch exits 3 before any launch.
 1. The check, on every case in CHECK (fixture.py's): S and O are filled with 0xA5 and QK^T and PV run on the case's
    inputs; each buffer must equal the fixture's byte for byte (every word the Definition defines, and 0xA5A5 everywhere
-   else).  The tilings are q8 (a block per 8 query rows, head and sequence) and ref (the reference kernels: a block per 8
-   columns, KV head and sequence), each at 4, 1 and 8 warps a block, and each head tiling that serves the case
+   else).  The tilings are q8 (a CTA per 8 query rows, head and sequence) and ref (the reference kernels: a CTA per 8
+   columns, KV head and sequence), each at 4, 1 and 8 warps a CTA, and each head tiling that serves the case
    (attn.serves: h8 and h16 where 8 or 16 divides the query heads a KV head serves, s16 too where no query sees more than
-   32 keys and PV's K is at most 32; a block per query row and sequence and Y blocks of head groups), each with one group
-   a block of 1 warp, every 8th group a block of 8 warps, all of them in one block of 4 warps, and all of them in one
+   32 keys and PV's K is at most 32; a CTA per query row and sequence and Y CTAs of head groups), each with one group
+   a CTA of 1 warp, every 8th group a CTA of 8 warps, all of them in one CTA of 4 warps, and all of them in one
    warp: each gives the tiles to other warps, for the same bytes.  Each tiling again at 4 warps with S and O starting
    SHIFTS words into their buffers (1: no word pair 32-bit aligned, 2: no 8-word run 16-byte aligned), so the kernels take
    their narrower stores.  The SLACK poisoned words around S and O must stay poison in every arm.  A control arm fills the
@@ -182,7 +182,7 @@ class Attn:
         return self.funcs[attn.kernel(op, self.D, tiling)]
 
     def launch(self, op: str, tiling: str, warps: int, Y: int = 0) -> None:
-        """attn.grid's blocks for ``tiling`` (h8, h16, s16: Y blocks of head groups), of ``warps`` warps."""
+        """attn.grid's CTAs for ``tiling`` (h8, h16, s16: Y CTAs of head groups), of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
         params = (vp * 1)(C.cast(C.pointer(args), vp))
         blocks = grid(tiling, self.B, self.H, self.Mq, Y, self.Lcap if op == "qk" else self.D, self.Hkv)
@@ -190,7 +190,7 @@ class Attn:
 
     def shapes(self) -> list[tuple[str, int, int]]:
         """The check's launches, (tiling, warps, Y): q8 and ref at 4, 1 and 8 warps; each head-group tiling one group a
-        block of 1 warp, every 8th group a block of 8 warps, every group in one block of 4 warps, and every group in one warp
+        CTA of 1 warp, every 8th group a CTA of 8 warps, every group in one CTA of 4 warps, and every group in one warp
         (s16's reuse of K and V across a warp's groups, and its reload where they change KV head)."""
         out = [("q8", w, 0) for w in WARPS]
         for t in self.tilings:
@@ -462,7 +462,7 @@ def timing_at(cu: Cuda, funcs: dict, reps: int, z: dict) -> dict:
 
     arms = {}
     heads = [t for t in a.tilings if t in attn.GROUP]
-    for t in heads:  # every launch shape of the head-group kernels: Y blocks of head groups, of 1 to 8 warps
+    for t in heads:  # every launch shape of the head-group kernels: Y CTAs of head groups, of 1 to 8 warps
         g = H // attn.GROUP[t]
         for Y in sorted({max(1, g >> s) for s in range(0, 8)}, reverse=True):
             for w in (1, 2, 4, 8):

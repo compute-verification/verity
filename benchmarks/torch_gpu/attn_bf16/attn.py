@@ -14,7 +14,7 @@ words) on one CUDA device; a copy is made only of one whose last dimension isn't
 aren't 4-byte aligned).  ``lens`` (B,) int32 in 0..T, default T each: words of p and v past lens[b] are read as +0, and a
 sequence of no keys gets O = +0.  ``check_lens`` (default True) refuses lens outside [0, T], at the price of a device sync;
 pass False under a CUDA graph, where the caller vouches for them.  ``out`` takes a contiguous bf16 tensor of the result's shape and writes
-every word of it.  ``warps`` (1, 2, 4 or 8 a block; default attn.LAUNCH's) decides only which warp runs a tile, never a word.
+every word of it.  ``warps`` (1, 2, 4 or 8 a CTA; default attn.LAUNCH's) decides only which warp runs a tile, never a word.
 ``path`` "fast" (the default) launches attn.LAUNCH's tiling, and "ref" the reference kernels (the _ref kernels, which
 were attn_ref's until HASH-32: slow and tuned for nothing), for the same words.
 Without lens each call is one launch; with lens, S is filled before the launch (one more pass over S) and, without
@@ -36,7 +36,7 @@ ARCH = {(9, 0): "sm_90a", (12, 0): "sm_120a"}
 GROUP = {"s16": 16, "h16": 16, "h8": 8}
 #: the s16 kernels' most keys a query sees, and PV's largest K
 S16_KEYS = 32
-#: each op's launch: (tiling, warps a block, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
+#: each op's launch: (tiling, warps a CTA, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
 #: serve; run.py's timing sweeps the alternatives (r20261026-015211-8087 on the H200 at the frozen shape: QK^T and PV each
 #: fastest with every group of a sequence in one warp, at M = 4,096, 16,384 and 20,480 within 3%)
 LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 1, 16)}
@@ -63,8 +63,8 @@ class Args(C.Structure):
 
 
 def grid(tiling: str, B: int, H: int, Mq: int, Y: int = 0, cols: int = 0, Hkv: int = 1) -> tuple[int, int, int]:
-    """q8: a block per (8 query rows, head, sequence); h8, h16, s16: per (query row, sequence) and Y blocks of head groups
-    (default one group a block), each block's warps running every Y-th group; ref: per (8 of the op's ``cols`` columns, keys
+    """q8: a CTA per (8 query rows, head, sequence); h8, h16, s16: per (query row, sequence) and Y CTAs of head groups
+    (default one group a CTA), each CTA's warps running every Y-th group; ref: per (8 of the op's ``cols`` columns, keys
     or d, KV head, sequence)."""
     if tiling == "ref":
         return -(-cols // 8), Hkv, B
