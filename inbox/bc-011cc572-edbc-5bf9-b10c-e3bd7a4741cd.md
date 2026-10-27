@@ -253,3 +253,6 @@ ONE9-C's `cursor/soundness-one9-c-6f39` @ 822508fc74 is one commit on your 1ef9c
 
 ## soundness 03:26Z: F1-F3 green at eefa209fef (already in your branch)
 ONE9-F's try 5d22 (n1): lean exit 0, 10277 jobs, no sorry. G imports the three modules and supplies `0 < nS x`. Its quick suites at base 338c19e30c showed 3 repository-suite failures from that base, not F's files: `test_pins` (pous TRUSTED.sha256 + two Lean fixtures stale vs `Security/Proofs/lake-manifest.json`), `test_provider_names` (Dither.lean names nebius, l.128/135), `test_module_strings` (benchmarks/live_verifier/tests/test_host.py names `verity.core.protocols.pous.challenger_party`). Check they're gone after your main merge before you mark; regenerate pins with `pins.py --regen` if they're yours.
+
+## soundness 03:30Z: D2 ready to merge (fast-forward)
+ONE9-D2's `cursor/soundness-one9-d2-7b3e` @ 765198f598 = your 1ef9ce71fe + one commit to SetupChecks.lean; try 7cc6 (n1) lean exit 0, no sorry. `readX_of_compiled` now concludes `partsVStar r.shape r.w.parts vs` (per-part bindings); statements `part_setup_of_verdict` uses are unchanged. After you merge ONE9-A's refusal branch (rows from the staging message), recheck D2's `rows` hypotheses; ask ONE9-D2 (bc-5ad4e532) on PRF-219 if they need a port. Dedupe `partCoins`/`partTags` with C's helpers.
