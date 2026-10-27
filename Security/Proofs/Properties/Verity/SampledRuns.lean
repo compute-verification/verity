@@ -122,16 +122,17 @@ theorem roots_nil_of_runs {us vs : List Use} {g R : List String} {ℓ : String} 
   exact hR (List.mem_filter.1 this).1
 
 /-- **Session 0's runs**: where the draw's use `d` (family `label`) comes first, then session 0's link points `pts`
-(family `P`) and rounds `rds0`, then later uses of other families; every root of the draw's family is received before
-any of a later use's family, and the link points' before any other family of session 0's; session 0's families are
-received as their uses' runs (`Session.Runs`), and each family's roots are its uses' (`Use.roots`): the releases of the
-draw's and session 0's families, each its family and root, are the draw's run, the link points', then some of session
-0's rounds' runs, each with a coin; and no later use is of the draw's family. -/
+(family `P`) and rounds `rds0`, then later uses of other families, none of the draw's family; every root of the draw's
+family is received before any of a later use's family, and the link points' before any other family of session 0's;
+session 0's families are received as their uses' runs (`Session.Runs`), and each family's roots are its uses'
+(`Use.roots`): the releases of the draw's and session 0's families, each its family and root, are the draw's run, the
+link points', then some of session 0's rounds' runs, each with a coin. -/
 theorem runs_session0 {Z : Type} (lab : Z → String) (rt : Z → ByteArray) (S : List Z)
     (label P : String) (d pts : Use) (rds0 later : List Use)
-    (hd : d.label = label) (hdc : d.coins ≠ 0) (hpl : pts.label = P) (hpc : pts.coins ≠ 0)
+    (hd : d.label = label) (hpl : pts.label = P) (hpc : pts.coins ≠ 0)
     (hrP : ∀ u ∈ rds0, u.label ≠ P)
     (hlat : ∀ u ∈ later, ∀ v ∈ pts :: rds0, u.label ≠ v.label)
+    (hne : ∀ u ∈ pts :: (rds0 ++ later), u.label ≠ label)
     (hbefD : ∀ u ∈ pts :: (rds0 ++ later), ∀ i j : Nat, (S.map lab)[i]? = some label → (S.map lab)[j]? = some u.label →
       i < j)
     (hbefP : ∀ ℓ ∈ ((pts :: rds0).map (·.label)).eraseDups, ℓ ≠ P →
@@ -151,24 +152,6 @@ theorem runs_session0 {Z : Type} (lab : Z → String) (rt : Z → ByteArray) (S 
     intro ℓ
     rw [← hF, List.mem_eraseDups, List.mem_map]
   obtain ⟨vs, hvs, hrun⟩ := hruns
-  have hdroots : Use.roots (d :: pts :: (rds0 ++ later)) label ≠ [] := by
-    unfold Use.roots
-    obtain ⟨k, hk⟩ := Nat.exists_eq_succ_of_ne_zero hdc
-    simp [List.filter_cons, hd, hk, List.replicate_succ]
-  have hocc : ∃ i : Nat, (S.map lab)[i]? = some label := by
-    have h := hroots label List.mem_cons_self
-    rw [← h] at hdroots
-    obtain ⟨x, hx⟩ := List.exists_mem_of_ne_nil _ hdroots
-    obtain ⟨z, hz, -⟩ := List.mem_map.1 hx
-    obtain ⟨hzS, hzl⟩ := List.mem_filter.1 hz
-    obtain ⟨i, hi, hiz⟩ := List.getElem_of_mem hzS
-    refine ⟨i, ?_⟩
-    rw [List.getElem?_map, List.getElem?_eq_getElem hi, hiz]
-    simpa using hzl
-  have hne : ∀ u ∈ pts :: (rds0 ++ later), u.label ≠ label := by
-    intro u hu he
-    obtain ⟨i, hi⟩ := hocc
-    exact Nat.lt_irrefl i (hbefD u hu i i hi (by rw [he]; exact hi))
   have hlf : label ∉ fams := by
     intro hm
     obtain ⟨v, hv, hvl⟩ := (hfams label).1 hm
@@ -827,6 +810,13 @@ theorem label_of_case (V : Vocab d α) {θ : ByteArray} {o : Outcome} (hθ : o.p
   rw [hd]
   simp [Except.toOption, hfind, hpn, hc]
 
+/-- **The registration's challenger label is no session's family**: it is none of `Hello.slotStream i s`, the
+families v2 names session `i`'s link points and rounds by. v2 checks only that the label is a string, and its order
+check passes a pair `(a, a)` whose family the log receives once, so an accepted window can read the draw from a family
+one of its sessions names (a use of it with no coins); this is a fact about the registration, not the window. -/
+def DrawFresh (θ : ByteArray) : Prop :=
+  ∀ (i : ℕ) (s : String), drawLabel θ ≠ _root_.SampledProofs.Hello.slotStream i s
+
 /-! ## The round requests sent, and the collision they would be -/
 
 /-- The round requests session 0's record rebuilds, in one of the components' cases (`OneStageZk.reqsOf`). -/
@@ -927,9 +917,9 @@ set_option maxHeartbeats 1000000 in
 registration whose releases are 512 bits each and the sizes `SizesAt` reads: the challenger device runs v2's uses
 (`RoundsByDevice`), so the device's log serves the draw's family, the link points' and session 0's rounds' as their
 uses' runs; each release of a served request is tagged by it, a round's request off the collision being the one v2
-rebuilds from the record. -/
+rebuilds from the record. The registration's challenger label is no session's family (`DrawFresh`). -/
 theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
-    (hf : ∀ θ o, V.forger .sampled θ o = V.forgerAt recsAt θ o) {θ F c : ByteArray}
+    (hf : ∀ θ o, V.forger .sampled θ o = V.forgerAt recsAt θ o) {θ F c : ByteArray} (hfresh : DrawFresh θ)
     (rounds_eq : ∀ k ∈ V.rounds θ, k = 512) (R₀ : A.Reg)
     (hSz : SizesAt V (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) A) :
     RunsAt V θ F c (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o)
@@ -943,7 +933,17 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
   have hkey := key_of_case V (o := outAt θ F c hs e) rfl hv hcase hc
   have hpub : key.pub = (registeredKey θ).2 := by
     rw [hkey] <;> rfl
-  rcases V.rounds_at_play hR (outAt θ F c hs e) hpub hrc with ⟨-, hrel, hroots, hbef, hruns⟩ | ⟨i, u, hu, hbrk⟩
+  have husne : uses ≠ [] := by
+    rintro rfl
+    obtain ⟨s0, hs0⟩ := Properties.SampledProofs.OneStageZk.session_of_accept hacc
+    rcases hl : ev.sessions.toList with _ | ⟨s, rest⟩
+    · have h := Array.mem_toList_iff.2 hs0
+      rw [hl] at h
+      cases h
+    · obtain ⟨_, _, _, _, _, _, _, hu0, -⟩ := hS0 s rest hl
+      simp at hu0
+  rcases V.rounds_at_play hR (outAt θ F c hs e) hpub husne hrc with
+    ⟨-, hrel, hroots, hbef, hruns⟩ | ⟨i, u, hu, hbrk⟩
   swap
   · exact (no_break V hf (o := outAt θ F c hs e) rfl hv hb' hcase hc hin ⟨i, u, by simpa using hu, hbrk⟩).elim
   have hlog : (outAt θ F c hs e).log = logOf hs := rfl
@@ -1007,10 +1007,10 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
       (servedReqs (V.device θ) hs).map zLab := by
     rw [PlayDevice.receivedOrder_session]
     exact hlabs.symm
-  have hbef' : ∀ ab ∈ order, ∀ i j : ℕ, ((servedReqs (V.device θ) hs).map zLab)[i]? = some ab.1 →
+  have hbef' : ∀ ab ∈ order, ab.1 ≠ ab.2 → ∀ i j : ℕ, ((servedReqs (V.device θ) hs).map zLab)[i]? = some ab.1 →
       ((servedReqs (V.device θ) hs).map zLab)[j]? = some ab.2 → i < j := by
-    intro ab hab i j hi hj'
-    exact hbef ab hab i j (by rw [hrecv]; exact hi) (by rw [hrecv]; exact hj')
+    intro ab hab hab' i j hi hj'
+    exact hbef ab hab hab' i j (by rw [hrecv]; exact hi) (by rw [hrecv]; exact hj')
   have hz512 : ∀ z ∈ servedReqs (V.device θ) hs, z.1 = 512 := by
     intro z hz
     obtain ⟨w', hw', h1, -⟩ := annot_mem [] hs z (List.mem_filter.1 hz).1
@@ -1072,6 +1072,15 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
       exact _root_.SampledProofs.Hello.slotStream_ne (by omega) h
   have hF0 : (pt :: rest0).map (·.1.label) = (pt.1 :: rest0.map Prod.fst).map (·.label) := by
     simp [Function.comp_def]
+  have hneU : ∀ u ∈ pt.1 :: (rest0.map Prod.fst ++ L), u.label ≠ drawLabel θ := by
+    intro u hu h
+    rcases List.mem_cons.1 hu with rfl | hu
+    · exact hfresh 0 _ (h.symm.trans hptl)
+    rcases List.mem_append.1 hu with hu | hu
+    · obtain ⟨name, a, k, -, -, -, rfl, -⟩ := hRU u hu
+      exact hfresh 0 name h.symm
+    · obtain ⟨i, nm, -, hul⟩ := hlater u hu
+      exact hfresh i nm (h.symm.trans hul)
   have hbefD : ∀ u ∈ pt.1 :: (rest0.map Prod.fst ++ L), ∀ i j : ℕ,
       ((servedReqs (V.device θ) hs).map zLab)[i]? = some (drawLabel θ) →
       ((servedReqs (V.device θ) hs).map zLab)[j]? = some u.label → i < j := by
@@ -1081,7 +1090,7 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
       exact hu
     have hord := _root_.SampledProofs.OneStageZk.roundsIn_order hin u hu'
     rw [List.toList_toArray] at hord
-    exact hbef' _ hord i j hi hj'
+    exact hbef' _ hord (fun h => hneU u hu h.symm) i j hi hj'
   have hbefP : ∀ ℓ ∈ ((pt.1 :: rest0.map Prod.fst).map (·.label)).eraseDups,
       ℓ ≠ _root_.SampledProofs.Hello.slotStream 0 _root_.SampledProofs.OneStageZk.POINTS → ∀ i j : ℕ,
       ((servedReqs (V.device θ) hs).map zLab)[i]? =
@@ -1091,7 +1100,7 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
     have hℓ' : ℓ ∈ ((pt :: rest0).map (·.1.label)).eraseDups := by
       rw [hF0]
       exact hℓ
-    exact hbef' _ (hordP ℓ hℓ' hne) i j hi hj'
+    exact hbef' _ (hordP ℓ hℓ' hne) (fun h => hne h.symm) i j hi hj'
   have hruns' : ∃ vs : List _root_.SampledProofs.Challenger.Use,
       (∀ ℓ, vs.filter (·.label == ℓ) = (du :: pt.1 :: (rest0.map Prod.fst ++ L)).filter fun u =>
         u.label == ℓ && ((pt.1 :: rest0.map Prod.fst).map (·.label)).eraseDups.contains ℓ && u.coins != 0) ∧
@@ -1140,7 +1149,7 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
   obtain ⟨rUs, hT, hrUs, hlen, hneL⟩ := _root_.SampledProofs.Challenger.runs_session0 zLab zRoot
     (servedReqs (V.device θ) hs) (drawLabel θ)
     (_root_.SampledProofs.Hello.slotStream 0 _root_.SampledProofs.OneStageZk.POINTS) du pt.1 (rest0.map Prod.fst) L
-    hdl hdc hptl hpc hrP hlat hbefD hbefP hruns' hroots'
+    hdl hptl hpc hrP hlat hneU hbefD hbefP hruns' hroots'
   have hPl : _root_.SampledProofs.Hello.slotStream 0 _root_.SampledProofs.OneStageZk.POINTS ≠ drawLabel θ := by
     rw [← hptl]
     exact hneL _ List.mem_cons_self
@@ -1355,11 +1364,14 @@ noncomputable def acceptGH {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built
 /-- **`SampledDeploy.accept_le` at the readers `readersAt`**: `accept_le_of_canon` with the releases' split into blocks
 proved (`runs_at`), where the challenger device runs v2's uses, the forger is the one on the records sent, every release
 is 512 bits, `SizesAt` holds at each session, and the inputs are the statement's (`inputsAt_of_statement`); the pairs
-a collision reads are the play's requests with the round requests sent (`pairsAt`). -/
+a collision reads are the play's requests with the round requests sent (`pairsAt`). Every registration's challenger
+label is no session's family (`DrawFresh`): over every `θ` that fails for a label of the form `slot/i/s`, which v2
+doesn't refuse, so this bound holds only where registrations are known to name another label. -/
 theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (hR : Properties.Challenger.RoundsByDevice) (hf : ∀ θ o, V.forger .sampled θ o = V.forgerAt recsAt θ o)
+    (hfresh : ∀ θ, DrawFresh θ)
     (rounds_eq : ∀ θ, ∀ k ∈ V.rounds θ, k = 512) (R₀ : ∀ θ F c σ r hr, (A θ F c σ r hr).Reg)
     (hSz : ∀ θ F c σ r hr,
       SizesAt V (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr))
@@ -1379,11 +1391,12 @@ theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : Byte
         acceptGH (A θ F c σ r hr)
           (drive V θ F c σ _ (readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ))
             (inputsAt_of_statement (hSt θ F c σ r hr))
-            (runs_at (θ := θ) (F := F) (c := c) V hR hf (rounds_eq θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
+            (runs_at (θ := θ) (F := F) (c := c) V hR hf (hfresh θ) (rounds_eq θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
             (hDraw θ F c σ r hr) (hLink θ F c σ r hr)).τ :=
   accept_le_of_canon kd desc A pairsAt (fun θ F c σ r hr => readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ))
     (fun θ F c σ r hr => inputsAt_of_statement (hSt θ F c σ r hr))
-    (fun θ F c σ r hr => runs_at (θ := θ) (F := F) (c := c) V hR hf (rounds_eq θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
+    (fun θ F c σ r hr =>
+      runs_at (θ := θ) (F := F) (c := c) V hR hf (hfresh θ) (rounds_eq θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
     hDraw hLink
 
 end Verity.Canon

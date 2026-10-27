@@ -17,11 +17,11 @@ What ties those checks to the device is two binding facts about the reader's cod
 * `CoinBinding`: what `drawCoins` reads from such a session is what the session released, or the finder outputs a
   break from the record.
 
-`roundsByDevice_of` derives `RoundsByDevice`'s conclusion from them for every read with at least one use and no pair
-`(a, a)` in `order`; `drawnByDevice_of` derives `DrawnByDevice` from the same two. Neither side condition can be
-dropped. With no uses, the conclusion's break disjunct names no record, so a read under a key the device never used
-satisfies neither disjunct. A pair `(a, a)` whose family the log receives once passes `releaseOrderReason` while
-`Session.Before s a a` fails (`order_self_gap`).
+`roundsByDevice_of` proves `RoundsByDevice` from them, and `drawnByDevice_of` `DrawnByDevice`. `RoundsByDevice` reads
+only reads with at least one use (v2's first is the window's draw), since with none the break disjunct names no
+record, and claims `Session.Before` only of pairs of distinct families, since a pair `(a, a)` whose family the log
+receives once passes `releaseOrderReason` while `Session.Before s a a` fails (`order_self_gap`).
+`roundsByDevice_nontrivial` shows the statement false for a reader that accepts every record.
 -/
 
 namespace Properties.Challenger
@@ -255,9 +255,10 @@ theorem Session.rootsOf_of {s : Session} {c : LiveCommitment} {roots : Roots} (h
     s.rootsOf ℓ = ((roots.find? (·.1 == ℓ)).map (·.2)).getD [] := by
   simp only [Session.rootsOf, hc, hr]
 
-/-- **The session the reader trusts is the device's** (a fact about the reader's code, not yet proved): where
-`trustedSessionOf` accepts the session's files `session` from the ledger `ledger` on window `w` under `key`, and
-`withheldOn` the window, the device ran under `key` a session `s` that its own ledger opens withheld on `w`
+/-- **The session the reader trusts is the device's**: a fact about `trustedSessionOf` on a withheld window, not yet
+proved from its code. Where `trustedSessionOf` accepts the session's files `session` from the ledger `ledger` on window
+`w` under `key` (the ledger's open of `w`, `auditedOpen`, pinned by `pins` on `main`'s first-parent line, then the
+session's record, release log and close, `sessionNamed`), and `withheldOn` the window, the device ran under `key` a session `s` that its own ledger opens withheld on `w`
 (`OpensOn`), whose commitment is the one read, whose log reads to the roots read, and whose log the session's files
 hold, line for line; or the finder outputs a break from every record that carries those ledger, pins, main and session
 files. The reader checks the record's, the close's and every ledger line's LMS signature under `key`
@@ -273,8 +274,8 @@ def SessionBinding : Prop :=
         ∀ (label : String) (rec : Json), getD rec "ledger" = ledger → getD rec "pins" = pins →
           getD rec "main" = main → getD rec "session" = session → Break dev key label rec
 
-/-- **What the reader reads from the device's session is what it released** (a fact about the reader's code, not yet
-proved): where the session `trustedSessionOf` reads from the record `rec` is the device's session `s` (its commitment
+/-- **What the reader reads from the device's session is what it released**: a fact about the bytes `drawCoins` returns,
+not yet proved from its code. Where the session `trustedSessionOf` reads from the record `rec` is the device's session `s` (its commitment
 `cr.1`, its log's roots `cr.2`), what `drawCoins` reads from `rec` for family `label` after `after` is what `s`
 released of `label` after `after`; or the finder outputs a break from `rec`. `challengerStream` checks each opening's
 coin against the commitment's root (`openingHashed`), the device's tree over its own coins (`deviceHashed`), so a coin
@@ -287,19 +288,12 @@ def CoinBinding : Prop :=
       (getD rec "session") = .ok cr →
     drawCoins key w label after rec = .ok ξ → ξ = s.released label after ∨ Break dev key label rec
 
-/-- **`RoundsByDevice`'s conclusion, from the two binding facts**: for every read `roundCoins` accepts with at least
-one use and no pair `(a, a)` in `order`, one session of the device under the key, which its ledger opens withheld on
-the window, released each use's coins, shows exactly the uses' roots, releases each pair of `order` in order and each
-group's uses one run each; or the finder outputs a break from some use's record. -/
-theorem roundsByDevice_of (hS : SessionBinding) (hC : CoinBinding) (dev : Device) (key : ChallengerKey) (w : String)
-    (us : List Use) (order : List (String × String)) (groups : List (List String)) (coins : Json)
-    (ξs : List ByteArray) (hus : us ≠ []) (hord : ∀ ab ∈ order, ab.1 ≠ ab.2)
-    (h : roundCoins key w us order groups coins = .ok ξs) :
-    (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧
-        (∀ (i : Nat) (u : Use), us[i]? = some u → ξs[i]? = some (s.released u.label u.after)) ∧
-        (∀ ℓ ∈ s.families.map (·.1), s.rootsOf ℓ = Use.roots us ℓ) ∧
-        (∀ ab ∈ order, s.Before ab.1 ab.2) ∧ ∀ g ∈ groups, s.Runs g us) ∨
-      ∃ (i : Nat) (u : Use), us[i]? = some u ∧ Break dev key u.label (useCoins coins i) := by
+/-- **`RoundsByDevice`, from the two binding facts**: for every read `roundCoins` accepts with at least one use, one
+session of the device under the key, which its ledger opens withheld on the window, released each use's coins, shows
+exactly the uses' roots, releases each pair of distinct families of `order` in order and each group's uses one run
+each; or the finder outputs a break from some use's record. -/
+theorem roundsByDevice_of (hS : SessionBinding) (hC : CoinBinding) : RoundsByDevice := by
+  intro dev key w us order groups coins ξs hus h
   obtain ⟨⟨cr, htr, hex⟩, hwh, ⟨ls, lines, hlog, hls, hro, hrw⟩, hdraw⟩ := roundCoins_ok h
   rcases hS dev key w (getD coins "ledger") (getD coins "pins") (getD coins "main") (getD coins "session") cr htr hwh
     with ⟨s, hs, hopen, hc, hr, hslog⟩ | hB
@@ -320,8 +314,8 @@ theorem roundsByDevice_of (hS : SessionBinding) (hC : CoinBinding) (dev : Device
         obtain ⟨⟨l, n⟩, hmem, rfl⟩ := List.mem_map.1 hℓ
         rw [Session.rootsOf_of hc hr]
         exact roots_of_exactlyReason hex (by rw [Session.families_of_commitment hc]; exact hmem)
-      · rintro ⟨a, b⟩ hab i j hi hj
-        exact before_of_releaseOrderReason hro hab (hord _ hab) i j hi hj
+      · rintro ⟨a, b⟩ hab hne i j hi hj
+        exact before_of_releaseOrderReason hro hab hne i j hi hj
   · right
     obtain ⟨u, us', rfl⟩ := List.exists_cons_of_ne_nil hus
     obtain ⟨hl, hp, hm, hss⟩ := useCoins_get coins 0
@@ -346,5 +340,42 @@ theorem order_self_gap (a : String) (s : Session) (hs : receivedOrder s.log = [a
   first
     | simp [releaseOrderReason, List.findIdx?_cons, List.findSome?_cons, List.filter_cons]
     | simp [releaseOrderReason, List.findIdx?, List.findIdx?.go, List.findSome?, List.filter, List.zipIdx]
+
+/-- `RoundsByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since at one use
+under a key the device never used, the device ran no session and the finder outputs nothing from the empty record. -/
+theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ _ => .ok []) := by
+  intro h
+  have hnone : findBreak (⟨fun _ => [], fun _ => []⟩ : Device) ⟨Lms.deployed, ByteArray.empty⟩ ""
+      (useCoins Json.null 0) = none := by
+    obtain ⟨hl, hp, hm, hss⟩ := useCoins_get Json.null 0
+    have hseg : getD (useCoins Json.null 0) "segment" = getD Json.null "segment" := by
+      unfold useCoins
+      rw [getD_mkObj_of (by simp) (by simp)]
+      rfl
+    have hsig : signatures ⟨Lms.deployed, ByteArray.empty⟩ (useCoins Json.null 0) =
+        signatures ⟨Lms.deployed, ByteArray.empty⟩ Json.null := by
+      unfold signatures
+      simp only [hss, hl]
+    have hread : readHashed ⟨Lms.deployed, ByteArray.empty⟩ "" (useCoins Json.null 0) =
+        readHashed ⟨Lms.deployed, ByteArray.empty⟩ "" Json.null := by
+      unfold readHashed
+      simp only [hss, hl, hp, hseg]
+    have h0 : findBreak (⟨fun _ => [], fun _ => []⟩ : Device) ⟨Lms.deployed, ByteArray.empty⟩ "" Json.null = none :=
+      rfl
+    unfold findBreak at h0 ⊢
+    rw [hsig, hread]
+    exact h0
+  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [⟨"", .empty, 0⟩] [] [] Json.null []
+      (List.cons_ne_nil _ _) rfl with ⟨s, hs, -⟩ | ⟨i, u, hu, w, hw, -⟩
+  · simp at hs
+  · cases i with
+    | zero =>
+      simp at hu
+      subst hu
+      have hw' : findBreak (⟨fun _ => [], fun _ => []⟩ : Device) ⟨Lms.deployed, ByteArray.empty⟩ ""
+          (useCoins Json.null 0) = some w := hw
+      rw [hnone] at hw'
+      cases hw'
+    | succ i => simp at hu
 
 end Properties.Challenger

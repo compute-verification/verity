@@ -6,8 +6,8 @@ import Proofs.Properties.Challenger
 
 The play's device (`Vocab.deviceOf`) runs one session under its registered key, the one `PlayDevice.session` writes
 from the play's releases (`PlayDevice.mem_sessions`). So where `roundCoins` accepts under that key,
-`RoundsByDevice` names that session: it released each use's coins, its log shows the uses' roots, each order pair in
-order and each group's uses one run each, or the finder outputs a break from one use's record
+`RoundsByDevice` names that session: it released each use's coins, its log shows the uses' roots, each order pair of
+distinct families in order and each group's uses one run each, or the finder outputs a break from one use's record
 (`Vocab.rounds_at_play`). A break at the play's device under its registered key is a SHA-512 collision the finder
 outputs, or a forgery at the play (`Vocab.forgery`), the signature verifying under the registered key over a message
 the play's device never signed (`Vocab.break_at_play`).
@@ -30,22 +30,24 @@ namespace Vocab
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
-/-- **`RoundsByDevice` at the play's device**: where `roundCoins` reads `ξs` for the uses `us` under a key whose public
-key is the registered one, the session the play's device wrote from the play's releases is opened withheld on the
-window by its ledger, released each use's coins, shows the uses' roots, each pair of `order` in order and each group's
-uses one run each; or the finder outputs a break at the play's device from one use's record. -/
+/-- **`RoundsByDevice` at the play's device**: where `roundCoins` reads `ξs` for at least one use from the uses `us`
+under a key whose public key is the registered one, the session the play's device wrote from the play's releases is
+opened withheld on the window by its ledger, released each use's coins, shows the uses' roots, each pair of distinct
+families of `order` in order and each group's uses one run each; or the finder outputs a break at the play's device
+from one use's record. -/
 theorem rounds_at_play (hR : Properties.Challenger.RoundsByDevice) {θ : ByteArray} (o : Outcome) {key : ChallengerKey}
     {w : String} {us : List Use} {order : List (String × String)} {groups : List (List String)} {coins : Lean.Json}
-    {ξs : List ByteArray} (hk : key.pub = (registeredKey θ).2) (h : roundCoins key w us order groups coins = .ok ξs) :
+    {ξs : List ByteArray} (hk : key.pub = (registeredKey θ).2) (hus : us ≠ [])
+    (h : roundCoins key w us order groups coins = .ok ξs) :
     (Properties.Challenger.OpensOn (V.deviceOf θ o) key.pub w ((V.device θ).session o.log).id ∧
         (∀ (i : Nat) (u : Use), us[i]? = some u → ξs[i]? = some (((V.device θ).session o.log).released u.label u.after)) ∧
         (∀ ℓ ∈ ((V.device θ).session o.log).families.map (·.1),
           ((V.device θ).session o.log).rootsOf ℓ = Use.roots us ℓ) ∧
-        (∀ ab ∈ order, ((V.device θ).session o.log).Before ab.1 ab.2) ∧
+        (∀ ab ∈ order, ab.1 ≠ ab.2 → ((V.device θ).session o.log).Before ab.1 ab.2) ∧
         ∀ g ∈ groups, ((V.device θ).session o.log).Runs g us) ∨
       ∃ (i : Nat) (u : Use), us[i]? = some u ∧
         Properties.Challenger.Break (V.deviceOf θ o) key u.label (Properties.Challenger.useCoins coins i) := by
-  rcases hR (V.deviceOf θ o) key w us order groups coins ξs h with ⟨s, hs, rest⟩ | hb
+  rcases hR (V.deviceOf θ o) key w us order groups coins ξs hus h with ⟨s, hs, rest⟩ | hb
   · left
     have hs' : s = (V.device θ).session o.log := by
       rw [hk] at hs

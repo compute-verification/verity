@@ -5,8 +5,8 @@ import Properties.Challenger
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
 the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
-`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement, and
-`roundsByDevice_nontrivial` likewise `RoundsByDevice`'s.
+`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement
+(`RoundsByDevice`'s is in `Proofs.Properties.ChallengerRounds`).
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts.
 `verifies_iff`: the reader's LMS check is `LmsVerifies`; `keyOfParams_eq_some`: the key v2's compiled check reads from
@@ -78,15 +78,6 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
   · simp at hs
   · rw [hnone] at hw
     cases hw
-
-/-- `RoundsByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
-device's ledger opens no session and an empty list of uses has no use whose record could carry a break. -/
-theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ _ => .ok []) := by
-  intro h
-  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [] [] [] Lean.Json.null [] rfl with
-    ⟨s, hs, -⟩ | ⟨i, u, hu, -⟩
-  · simp at hs
-  · simp at hu
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}

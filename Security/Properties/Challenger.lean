@@ -21,13 +21,13 @@ what that record shows, for every input: the coins the challenger device drew, o
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 * `RoundsByDevice`: what `SampledProofs.Challenger.roundCoins` reads for v2's uses (the window's draw, each session's
-  link points and rounds) is, use by use, what one session of the device released of the use's family after its root,
-  a session the device's own ledger opens withheld on the window; that session's log shows every family of its layout
-  released after exactly the uses' roots, coin for coin (one release a use: a second query is refused, not charged);
-  and its log releases each pair of `order` in order (the draw before every session's families, a session's link
-  points before its rounds), and releases each group's uses one run each among the group's releases (`Session.Runs`;
-  v2's groups are its sessions' families, so a session's rounds come out one after another, each whole). Or the fixed
-  finder outputs a break from one use's record.
+  link points and rounds; at least one, the draw) is, use by use, what one session of the device released of the use's
+  family after its root, a session the device's own ledger opens withheld on the window; that session's log shows every
+  family of its layout released after exactly the uses' roots, coin for coin (one release a use: a second query is
+  refused, not charged); and its log releases each pair of distinct families of `order` in order (the draw before
+  every session's families, a session's link points before its rounds), and releases each group's uses one run each
+  among the group's releases (`Session.Runs`; v2's groups are its sessions' families, so a session's rounds come out
+  one after another, each whole). Or the fixed finder outputs a break from one use's record.
 * `keyOfParams`: the challenger key v2's compiled check reads from the registered components' parameters, and
   `lmsKey` it as LMS's parameters and public key. Every LMS check the reader makes is `Challenger.verifies` under that
   key, which accepts exactly what `LmsVerifies` does there (`verifies_iff`, `verifies_registered`, security_proofs).
@@ -413,21 +413,25 @@ def RoundsByDeviceAt
     (read : ChallengerKey → String → List Use → List (String × String) → List (List String) → Json →
       Flock.V (List ByteArray)) : Prop :=
   ∀ (dev : Device) (key : ChallengerKey) (w : String) (us : List Use) (order : List (String × String))
-    (groups : List (List String)) (coins : Json) (ξs : List ByteArray), read key w us order groups coins = .ok ξs →
+    (groups : List (List String)) (coins : Json) (ξs : List ByteArray), us ≠ [] →
+    read key w us order groups coins = .ok ξs →
       (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧
           (∀ (i : Nat) (u : Use), us[i]? = some u → ξs[i]? = some (s.released u.label u.after)) ∧
           (∀ ℓ ∈ s.families.map (·.1), s.rootsOf ℓ = Use.roots us ℓ) ∧
-          (∀ ab ∈ order, s.Before ab.1 ab.2) ∧ ∀ g ∈ groups, s.Runs g us) ∨
+          (∀ ab ∈ order, ab.1 ≠ ab.2 → s.Before ab.1 ab.2) ∧ ∀ g ∈ groups, s.Runs g us) ∨
         ∃ (i : Nat) (u : Use), us[i]? = some u ∧ Break dev key u.label (useCoins coins i)
 
 /-- **Every coin a v2 window reads is its challenger's, one release a use, in the play's order.** For every challenger
-device, if `roundCoins` reads `ξs` for the uses `us` (each a family, the root its coins were released after, and how
-many) under the verifier's key `key` and window `w`, then one session of the device under `key`, which the device's own
-ledger opens withheld on `w`, released each use's coins (`ξs[i]` is what it released of `us[i]`'s family after its
-root), its log shows every family of its layout released after exactly the uses' roots, coin for coin and in order
-(`Use.roots`: no second release for one use, none no use reads), its log receives every root of `a` before any of
-`b` for each pair of `order`, and it releases each group's uses one run each among the group's releases
-(`Session.Runs`); or the fixed finder outputs a break from some use's record (`useCoins`). -/
+device, if `roundCoins` reads `ξs` for at least one use (v2's first use is always the window's draw) from the uses
+`us` (each a family, the root its coins were released after, and how many) under the verifier's key `key` and window
+`w`, then one session of the device under `key`, which the device's own ledger opens withheld on `w`, released each
+use's coins (`ξs[i]` is what it released of `us[i]`'s family after its root), its log shows every family of its layout
+released after exactly the uses' roots, coin for coin and in order (`Use.roots`: no second release for one use, none no
+use reads), its log receives every root of `a` before any of `b` for each pair `(a, b)` of `order` with `a ≠ b` (a
+pair `(a, a)` the order check passes whenever its log receives `a` once), and it releases each group's uses one run
+each among the group's releases (`Session.Runs`); or the fixed finder outputs a break from some use's record
+(`useCoins`). With no uses there is no record for the break to come from, so a read under a key the device never
+used would satisfy neither case. -/
 def RoundsByDevice : Prop := RoundsByDeviceAt roundCoins
 
 /-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`

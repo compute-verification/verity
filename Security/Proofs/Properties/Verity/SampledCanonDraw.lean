@@ -425,7 +425,7 @@ theorem draw_at_play (hR : Properties.Challenger.RoundsByDevice) {θ : ByteArray
         Finset.univ.filter (fun u : Fin n => u.val ∈ _root_.SampledProofs.OneStage.drawnOf e.base.draw) ∨
       ∃ (i : ℕ) (u : Use), us[i]? = some u ∧
         Properties.Challenger.Break (V.deviceOf θ o) key u.label (Properties.Challenger.useCoins coins i) := by
-  rcases V.rounds_at_play hR o hk hrc with ⟨-, hrel, -⟩ | hb
+  rcases V.rounds_at_play hR o hk (by rintro rfl; simp at hu) hrc with ⟨-, hrel, -⟩ | hb
   · left
     obtain ⟨src, law, hξ, hder, hr⟩ := _root_.SampledProofs.OneStageZk.draw_src hacc hc hw hrc hu hrec
     have h0 := hrel 0 _ hu
