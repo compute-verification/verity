@@ -261,7 +261,8 @@ def submit_command(a, data: Path) -> list[str]:
         flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
         flags += " " + " ".join(shlex.quote(s) for s in a.spec)
         return ["research", "run", "--on", a.on, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
-                "--cwd", "source", "--custody-ttl", "12h", "--mem-gb", str(a.mem_gb), "--mem-wait", "1800", *sends,
+                "--cwd", "source", "--custody-ttl", "12h", "--timeout", f"{a.max_min}m", "--mem-gb", str(a.mem_gb),
+                "--mem-wait", "1800", *sends,
                 "--env", f"PPL_ARGS={flags}", "--", "bash", "benchmarks/ppl/cpu_job.sh"]
     gpus = a.gpus or models.get(a.model)["gpus"]
     if gpus > 2:
@@ -410,7 +411,8 @@ def main(argv: list[str]) -> int:
     q = sub.add_parser("submit")
     run_flags(q, False)
     q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
-    q.add_argument("--max-min", type=int, default=120)
+    q.add_argument("--max-min", type=int, default=120,
+                   help="minutes: the gpu-lease's bound, or with --device cpu the run's timeout")
     q.add_argument("--on", default=CPU_NODE, help="with --device cpu: the CPU node")
     q.add_argument("--mem-gb", type=int, default=96, help="with --device cpu: the memory the run reserves")
     q.add_argument("--campaign", default="cmp-13")

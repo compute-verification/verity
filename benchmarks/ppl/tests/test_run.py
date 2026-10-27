@@ -44,9 +44,9 @@ def test_submit_is_a_research_run_on_the_node_under_a_lease():
 
 
 def test_a_cpu_submit_is_a_research_run_on_a_cpu_node_with_no_lease():
-    cmd = submit(device="cpu", threads=32, on="vy-nebius-cpu-4", mem_gb=256)
+    cmd = submit(device="cpu", threads=32, on="vy-nebius-cpu-4", mem_gb=256, max_min=300)
     assert cmd[:4] == ["research", "run", "--on", "vy-nebius-cpu-4"] and cmd[-3:] == ["--", "bash", "benchmarks/ppl/cpu_job.sh"]
-    assert cmd[cmd.index("--mem-gb") + 1] == "256" and "--mem-wait" in cmd
+    assert cmd[cmd.index("--mem-gb") + 1] == "256" and "--mem-wait" in cmd and cmd[cmd.index("--timeout") + 1] == "300m"
     env = dict(cmd[i + 1].split("=", 1) for i, x in enumerate(cmd) if x == "--env")
     assert env == {"PPL_ARGS": "--model llama-3.1-8b --set c4 --ctx 2048 --seeds 0,1,2 --device cpu --threads 32 adopted"}
 
