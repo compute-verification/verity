@@ -18,6 +18,8 @@ from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
 
+__all__ = ["DEFAULT_SEED"]
+
 #: The public default seed: the first 63 bits of SHA-512 over its name, so nobody chose its value.
 DEFAULT_SEED = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
 

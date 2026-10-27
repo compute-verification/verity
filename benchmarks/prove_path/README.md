@@ -222,10 +222,15 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
     as vllm's advice compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
-    as `verity-vllm advice` registers it (`served_identity`: `compile_steps` by module path, its digest over
-    `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree whose two are
-    the server's. `prove_path.py compiler --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones
-    vllm's advice compiler wrote into the row dir (`manifest.json`, by I1 id).
+    as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
+    digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
+    whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
+    tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
+    default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
+    one the advice was registered under names another compiler, refused before the draw (`serve_check`'s `compiler`), and
+    one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
+    prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the row dir
+    (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
   gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
