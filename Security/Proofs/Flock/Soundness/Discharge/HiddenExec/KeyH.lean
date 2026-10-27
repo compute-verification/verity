@@ -444,8 +444,7 @@ theorem keyProgH_valPinned (hkeys : KeysRow c hU (portRowW c)) :
         (out_pin_key (si.acc S R u hu) hc ho hrf (si.pin S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
           (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) hoc' hjr)
     have hb0 : bit (0 : ZMod 2) = false := by decide
-    rw [Layout.keyGate, if_neg hne1, if_neg hne0]
-    exact (congrArg bit hz0).trans hb0
+    exact (congrArg bit hz0).trans (hb0.trans (by simp [Layout.keyGate, hne1, hne0]))
 
 /-- **`lay` at `keyProg`'s places in hidden-output tables**: the readers' layout (`Layout.Readers.layout`), with
 `bitCode` for the single gates and Δ's copies from `keyProgH_copies`. -/

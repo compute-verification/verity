@@ -766,8 +766,7 @@ theorem instProgH_valPinned (hkeys : InstKeysRow c (portRowW c)) :
         (out_pin_instH (si.acc S R u hu) hc hrf.1 (pinnedCols_nodupI (si.acc S R u hu) hc hpo)
           (si.pin S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu) (Fin.cast (congrArg Rows.w hrw) x) hoc' hjr)
     have hb0 : bit (0 : ZMod 2) = false := by decide
-    rw [instGate, if_neg hne1, if_neg hne0]
-    exact (congrArg bit hz0).trans hb0
+    exact (congrArg bit hz0).trans (hb0.trans (by simp [instGate, hne1, hne0]))
 
 /-- **`lay` at `instProg`'s places in hidden-output tables**: the readers' layout (`Layout.Readers.layout`), with
 `bitCode` for the single gates and Δ's copies from `instProgH_copies`. -/
