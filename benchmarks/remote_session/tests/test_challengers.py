@@ -69,6 +69,7 @@ class Host:
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n"
                                     "vy-auditor-1 challenger@10.0.0.3\n")
+        (root / "coin-ports").write_text("vy-nebius-1 7811-7854\nvy-auditor-1 7855-7899\n")
         (root / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
         self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
@@ -89,11 +90,9 @@ class Host:
                                                    active=lambda s: False))
 
     def start(self, session: str) -> None:
-        """The session's unit: serve.py on a port of its own (no tunnel), returning once it listens."""
+        """The session's unit: serve.py on a port of its own, returning once it listens."""
         body = A.sessions_of(A.read_ledger(self.host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(self.host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv = [sys.executable, str(LIVE / "tests" / "stub_serve.py"), *argv[2:], "--params", "4,4",
                 "--keygen-workers", "1"]
