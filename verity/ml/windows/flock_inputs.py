@@ -79,7 +79,9 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     got = {"circuit_sha512": c.pin, "class": c.cls}
     if "pub" in write:
         got["pub"] = str(o / f"m{k}-pub-{n}.bin")
-        Path(got["pub"]).write_bytes(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + pub)
+        # `verity_flock.circuit.public_file`'s header line, so the file's SHA-512 is the prover's record's public_file_sha512
+        line = json.dumps(dict(head, rows=False), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        Path(got["pub"]).write_bytes(line.encode() + b"\n" + pub)
     if "inst" in write:
         got["inst"] = str(o / f"m{k}-inst-{n}.bin")
         fd = os.open(got["inst"], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

@@ -3919,6 +3919,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
                "circuit_sha512": hex(&c.sha512), "statement_digest": hex(&st.digest), "public_sha512": hex(&inst.public_sha512),
+               "public_file_sha512": hex(&inst.public_file_sha512),
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),

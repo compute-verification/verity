@@ -14,6 +14,7 @@ reach."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import shutil
 import subprocess
@@ -94,6 +95,15 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     moved = register_served(program, query, [dataclasses.replace(tree, root="00" * 64)])
     bad = _verify(fx, moved.write(tmp_path / "registered-root.json"))
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
+
+
+def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
+    """`live.json`'s ``public_file_sha512`` is the SHA-512 of ``stage/pub-32.bin``, the file `verify --public` reads. Its
+    ``public_sha512`` is Σ's public digest, over the drawn statement's header, which no file holds."""
+    _, fx = fx
+    live = json.loads((fx / "live.json").read_text())
+    assert live.get("public_file_sha512") == hashlib.sha512((fx / "stage" / "pub-32.bin").read_bytes()).hexdigest()
+    assert live["public_sha512"] != live["public_file_sha512"]
 
 
 def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tmp_path):
