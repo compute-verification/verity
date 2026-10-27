@@ -36,7 +36,8 @@ every subprotocol accepts its own case, and the commitment binds all of theirs.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
   PoUS, PoUB and network certification.
-- **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
+- **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
+  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
 
 The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
 policy is not yet a subprotocol of the composites.
