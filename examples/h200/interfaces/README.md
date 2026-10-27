@@ -52,7 +52,7 @@ for one server-time block and what the composed verdict reads. It extends the al
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
 - the composed verdict and the error of `Accounting.Guarantees.JointHorizon` over the block: the accepted subprotocols'
-  errors summed. The statement is not yet proved and not on `main` (lane fc8d);
+  errors summed. The statement is not yet proved and not on `main`;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizon's
   union bound over that many blocks and the per-block error each δ needs.
 
@@ -78,6 +78,6 @@ drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line
 H200 proof block is proved in C-Flock and accepted by Lean. Per-call noise's serving overhead is one line,
 `serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
 `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
-evidence store (`research data put --kind demo-a-report/v1 --file F --preserve`), never Git.
+evidence store (kind `demo-a-report/v1`), never Git.
 
     python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE

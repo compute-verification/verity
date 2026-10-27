@@ -95,7 +95,7 @@ class Shape:
     context: int
     #: s8 codes in one registered row of a linear: the K of the part a unit reads
     row_codes: int
-    #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover (proofs, 26 Oct 00:39Z);
+    #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover;
     #: ``hm96-sha512/row-seg/v1`` is ``EmbeddingRead_v1``'s
     tok_schema: str = REG.SCHEMA_V2
     #: ``tok``'s rows: ``"coordinate"`` (H, V), a coordinate over the tokens (the default),
@@ -577,8 +577,8 @@ def write(shape: Shape, seed: bytes, path: str | Path, *, workers: int = 1, star
     return done
 
 
-#: the H200 demo's seed (compute-accounting, 25 Oct 23:33Z): public, so its weights are reproducible; the demo's salt key is
-#: the prover's, drawn from the OS at registration
+#: the H200 demo's seed, frozen (its weights' registration roots depend on these bytes): public, so its weights are
+#: reproducible; the demo's salt key is the prover's, drawn from the OS at registration
 DEMO_SEED = b"verity/cmp92/h200/weights/v1"
 #: the fixture's public seed and dummy salt key: test values, never the demo's
 TEST_SEED = b"verity/seeded-weights/test-seed"

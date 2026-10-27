@@ -17,7 +17,7 @@ makes one from finite inputs), except that `argmax` and `quantize` take a NaN in
     argmax     Argmax_v2{V}: TokenSelect, the first index of the greatest logit, a NaN never taken
 
 The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and a float64 matmul in row chunks on the CPU (exact: integers below 2^53): the stand-in for
-kernels' KP2-S8 GEMM until it is handed over.
+kernels' s8 GEMM until it is handed over.
 """
 from __future__ import annotations
 

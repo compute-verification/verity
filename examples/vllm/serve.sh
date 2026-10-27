@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' row dirs, for PROVE-PATH's served
+# A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' row dirs, for prove_path's served
 # windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench row's Commit of record's
 # committer and acquire sources, built from its manifest ROW/manifest.json and taps HIDDEN_SO, NORM_TAP_SO: hm96-sha512 rows in
 # frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
-# idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
+# idle), `verity-vllm advice` per closed window under prove_path's registered compiler for a served run (`prove_path.py compiler
 # --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
 # a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
 # committed under salts drawn from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
@@ -11,7 +11,7 @@
 # circuit's weight reads count registered at the pins the verifier holds before the first window's coins, `window-circuit
 # --pins weights_registration.json`; without it, which steps.txt says, they count free),
 # then each window's request Programs and
-# manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
+# manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as prove_path opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
 # endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB free (default 300,
 # top's rule for n1: checked before serving and every 10 s). The serve dir's records (requests.jsonl, serve.json, windows.jsonl,

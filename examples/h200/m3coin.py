@@ -1,5 +1,4 @@
-"""M3's live coin (PRF-172): one session of the auditor host's challenger (vy-challenger-1, `benchmarks/live_challenger/
-auditor.py`) under the lane's own gate key, reserved for this machine, opened at the registration's digest, and one coin
+"""M3's live coin: one session of the auditor host's challenger (`benchmarks/live_challenger/auditor.py`) under the lane's own gate key, reserved for this machine, opened at the registration's digest, and one coin
 opened after that root; the drawn units are a `subset:K` of the registered population derived from that coin alone.
 
     python examples/h200/m3coin.py --registration REG.json --gate-key KEY --gate research@HOST --peer NAME --out DIR
