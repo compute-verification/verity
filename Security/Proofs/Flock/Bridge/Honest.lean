@@ -42,9 +42,9 @@ def SampledKSLiveHonest : Prop :=
     ∃ (I : Inputs) (D : Flock.Desc) (pub : Flock.Public),
       I.tags = Flock.Tags.circuit ∧ I.count = 1 ∧ I.tables = [] ∧
       Flock.hexOf (Flock.Sha512.hash I.circuitFile) =
-        "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0" ∧
+        "0c1d6ad42ebf34efa4370690f077ae1302319ba7dbde4f3ac18565ae97c06f11d2633d210e2b9a923f3cb1a398b34d31419b3ffea2d56a820927b0b1ca4db099" ∧
       Flock.hexOf (Flock.Sha512.hash I.publicFile) =
-        "6bea4647565a87a873bc66670482ec0cdb86c4424d061ccb03354b81ec55cbe302564836f08c4a9757085746f6000b904657749c2f84b028fe56fde816c26dd1" ∧
+        "56861c780e639f52be33394f86b369de7bec45c3e5290d0150720673ffb6032b465ca3a5cb00953301661aa97a3e7a3e6fe4525651ecee7cc0e7cc13412e9209" ∧
       I.tags.typed = false ∧
       Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
       HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub ∧ pub.tables = none ∧

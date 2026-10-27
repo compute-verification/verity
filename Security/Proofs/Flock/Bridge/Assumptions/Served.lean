@@ -7,7 +7,7 @@ import Flock.Desc
 
 `SampledKSLiveV2`, `SampledKSLiveV3` and `SampledKSLivePub` take a circuit file that parses to a descriptor `D`, a
 public file that loads at it with no shared-row tables, and `scopeOkH` at `D`. Whether the deployed files do is a
-computation on a 56 MB circuit file, which the kernel can't run, so it is one named premise, stated with the verifier's
+computation on a 97 MB circuit file, which the kernel can't run, so it is one named premise, stated with the verifier's
 own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by running the verifier on them.
 -/
 
@@ -16,23 +16,27 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The deployed session's files parse.** There are a circuit file and a public file with the SHA-512 digests of the
-row/v1 session fixture `art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b`, recorded at the
-verifier's coin schedule (`rounds_log` 9): `stage/circuit.txt`, 56,327,749 bytes, and `stage/pub-32.bin`, 44,158 bytes,
-such that, under the tags `verify --zk --statement verity/flock-circuit` sets one session up with (`Witness.zkTags`
-at the inputs `⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no session tables, and no partition or program,
-which the tags don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in the hidden-output headlines' scope
+honest case of the one-stage audit's `--zk` fixture `art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35`
+(`benchmarks/one_stage/forged_proofs.sh`, run `r20261019-070603-7331`: one A8 unit, `LlBf16DotprodDot_v1` at K = 128,
+staged by `UnitStager` bound to a template query's partition, four instances, every unit drawn): `stage/circuit.txt`,
+97,364,260 bytes, and `honest/pub-4.bin`, 3,194 bytes, a per-instance public file (no `shared_rows`), such that, under
+the tags `verify --zk --statement verity/flock-circuit` sets one session up with (`Witness.zkTags` at the inputs
+`⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no session tables, and no partition or program, which the tags
+don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in the hidden-output headlines' scope
 (`ProvedScope.scopeOkH`), and the public file loads at `D` (`HmOut.loadPublic`) with no shared-row tables.
 
-Assumption record. It assumes a computation's result: run `r20261027-013348-1edf` evaluated each conjunct with these
-functions, built from the verifier's source, on that fixture's two files, beside `flock-verify verify --zk` on its
-session. It asks nothing of a hash or of the prover; a change to any of these functions or to the files makes it a new
-premise, to be checked by a new run. -/
+Assumption record. It assumes a computation's result: run `r20261027-025931-f22c` evaluated each conjunct with these
+functions, built from the verifier's source at `main` 0600bab855, on that fixture's two files. It reads the files only:
+the fixture's recorded session is refused by that verifier at `S2/R7` (its session parameters are not the verifier's),
+which no conjunct reads. A shared-row public file (the served registered fixtures) is `SampledKSLiveV5`'s. It asks
+nothing of a hash or of the prover; a change to any of these functions or to the files makes it a new premise, to be
+checked by a new run. -/
 def ServedFilesParse : Prop :=
   ∃ cf pf : ByteArray,
     hexOf (Sha512.hash cf) =
-        "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0" ∧
+        "0c1d6ad42ebf34efa4370690f077ae1302319ba7dbde4f3ac18565ae97c06f11d2633d210e2b9a923f3cb1a398b34d31419b3ffea2d56a820927b0b1ca4db099" ∧
       hexOf (Sha512.hash pf) =
-        "6bea4647565a87a873bc66670482ec0cdb86c4424d061ccb03354b81ec55cbe302564836f08c4a9757085746f6000b904657749c2f84b028fe56fde816c26dd1" ∧
+        "56861c780e639f52be33394f86b369de7bec45c3e5290d0150720673ffb6032b465ca3a5cb00953301661aa97a3e7a3e6fe4525651ecee7cc0e7cc13412e9209" ∧
       ∃ D : Desc,
         Desc.parse (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) cf [] = .ok D ∧
         ProvedScope.scopeOkH D.unroll = true ∧
