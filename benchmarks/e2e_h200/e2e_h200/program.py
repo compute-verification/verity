@@ -23,7 +23,7 @@ view; the Program calls the Boolean Definition whose `word` that is):
 | ``RmsSumSqChunks_v1{C, K}``, ``RmsNormOutSums_v1{C, S, G, N, EPS}`` | the same |
 | ``RowAbsMax_v1{N, RELU}`` | ``RowAbsMax_v2`` |
 | ``QuantChunkS8_v1{N, RELU}`` | ``QuantChunkS8_v2`` (chunk 0's scale is the linear's ``sx``) |
-| ``RmsNormAbsMax_v1{C, S, G, N, EPS}``, ``RmsNormQuantChunk_v1{C, S, G, N, EPS}`` (``fused`` ``norm``) | the same (chunk 0's scale is the linear's ``sx``) |
+| ``RmsNormAbsMax_v1{C, S, G, N, EPS}``, ``RmsNormQuantCodes_v1{C, S, G, N, EPS}``, ``QuantScaleS8_v1`` (``fused`` ``norm``) | the same, the combine over the parts' partials ``RowAbsMax_v2`` (chunk 0's scale is the linear's ``sx``) |
 | ``ScaledMmS8CoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` | ``ScaledMmS8CoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}`` |
 | ``ScaledMmS8ResidualCoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` (``fused`` ``residual``) | ``ScaledMmS8ResidualCoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}``, r the stream's word |
 | ``QkSoftmaxRowPad_v1{T, D}`` | ``QkSoftmaxRowPad_v1{T, D, HopperBF16WgmmaDot16_v2}`` |
@@ -101,20 +101,32 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
                           axes=(0, 0, None), name=op + "_norm")
             return out.reshape(Array(N, BF16))
 
-        def normed(op: str, qop: str, x: Coll, gain: Coll) -> Coll:
-            """RMSNorm ``op`` into the quantizer ``qop``: under the ``norm`` fusion one amax block over the row and one
-            block a chunk, each from x, the gain and the sums."""
+        def normed(op: str, qop: str, x: Coll, gain: Coll) -> tuple[list[Coll], Coll]:
+            """RMSNorm ``op`` into the quantizer ``qop``: under the ``norm`` fusion the amax a block a part and a combine
+            over the partials, the codes a block of ``ncodes`` words, each part and block from x, the gain and the sums,
+            and each chunk's scale a block from the amax."""
             if "norm" not in fused:
                 return quant(qop, norm(op, x, gain), False)
             N = x.type.n
-            q, st = f.qchunk(N), dict(S=N // c, G=f.groups(N), N=N, EPS=EPS_KEY)
+            (parts, pw), q, cw = f.norm_parts(N), f.qchunk(N), f.ncodes(N)
+            st = dict(S=N // c, G=f.groups(N), N=N, EPS=EPS_KEY)
             s = sums(op, x)
-            amax = B.call(bind(NQ.RmsNormAbsMax, C=N, **st), x, gain, s, name=qop + "_amax")
-            chunks = Array(N // q, Array(q, BF16))
-            return B.batch(bind(NQ.RmsNormQuantChunk, C=q, **st), x.reshape(chunks), gain.reshape(chunks), s, amax,
-                           axes=(0, 0, None, None), name=qop + "_quant")
+            if parts > 1:
+                cut = Array(parts, Array(pw, BF16))
+                partial = B.batch(bind(NQ.RmsNormAbsMax, C=pw, **st), x.reshape(cut), gain.reshape(cut), s,
+                                  axes=(0, 0, None), name=qop + "_amax.part")
+                amax = B.call(bind(BQ.RowAbsMax, N=parts, RELU=False), partial, name=qop + "_amax")
+            else:
+                amax = B.call(bind(NQ.RmsNormAbsMax, C=N, **st), x, gain, s, name=qop + "_amax")
+            blocks = Array(N // cw, Array(cw, BF16))
+            codes = B.batch(bind(NQ.RmsNormQuantCodes, C=cw, **st), x.reshape(blocks), gain.reshape(blocks), s, amax,
+                            axes=(0, 0, None, None), name=qop + "_quant").reshape(Array(N // q, Array(q, CODE)))
+            scale = B.batch(BQ.QuantScaleS8, Coll(Array(N // q, BF16), concat([amax.refs] * (N // q))), axes=(0,),
+                            name=qop + "_quant.scale")
+            return [codes[r] for r in range(N // q)], scale[0]
 
-        def quant(op: str, x: Coll, relu: bool) -> Coll:
+        def quant(op: str, x: Coll, relu: bool) -> tuple[list[Coll], Coll]:
+            """The quantizer ``op`` over x: each chunk's codes, and chunk 0's scale (the linear's ``sx``)."""
             N = x.type.n
             parts, pw = f.parts(N)
             if parts > 1:
@@ -125,18 +137,22 @@ def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
             else:
                 amax = B.call(bind(BQ.RowAbsMax, N=N, RELU=relu), x, name=op + "_amax")
             q = f.qchunk(N)
-            return B.batch(bind(BQ.QuantChunkS8, N=q, RELU=relu), x.reshape(Array(N // q, Array(q, BF16))), amax,
-                           axes=(0, None), name=op + "_quant")
+            out = B.batch(bind(BQ.QuantChunkS8, N=q, RELU=relu), x.reshape(Array(N // q, Array(q, BF16))), amax,
+                          axes=(0, None), name=op + "_quant")
+            return [out[r][0] for r in range(N // q)], out[0][1]
 
-        def linear(op: str, qx: Coll, stream: Coll | None = None) -> Coll:
-            """Linear ``op``'s coordinates; given the residual ``stream``, each adds its word to the stream's."""
+        def linear(op: str, qx: tuple[list[Coll], Coll], stream: Coll | None = None) -> Coll:
+            """Linear ``op``'s coordinates over the quantizer's (chunk codes, scale); given the residual ``stream``, each
+            adds its word to the stream's."""
             W, sw = a[op], a[op + ".scale"]
             N, K = W.type.n, W.type.elem.n
             q = f.qchunk(K)
             R = K // q
-            xs = [qx[r][0] for r in range(R)]
+            xs, sx = qx
+            if len(xs) != R:
+                raise ValueError(f"{op}: {len(xs)} quantizer chunks, not R = {R}")
             wrows = [Coll(Array(N, Array(q, CODE)), strided_view(W, r * q * 8, q * 8, K * 8, 1, N * q * 8)) for r in range(R)]
-            ports, axes = [*xs, qx[0][1], *wrows, sw], (None,) * (R + 1) + (0,) * (R + 1)
+            ports, axes = [*xs, sx, *wrows, sw], (None,) * (R + 1) + (0,) * (R + 1)
             if stream is None:
                 return B.batch(bind(BG.ScaledMmS8CoordinateRows, K=K, R=R, DOT=S8_DOT), *ports, axes=axes, name=op)
             return B.batch(bind(BG.ScaledMmS8ResidualCoordinateRows, K=K, R=R, DOT=S8_DOT), *ports, stream,
