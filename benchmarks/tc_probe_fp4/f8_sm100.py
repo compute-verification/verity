@@ -40,7 +40,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[1] / "tools" / "config"))
 import f8_model as FM  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 M_T, N_T, K_STEP = 128, 32, 32
 SEED = 20261019
@@ -879,7 +881,7 @@ def main(argv=None) -> int:
     ap.add_argument("--run-out", help="pin: a run's out/ (summary.json, fixture.json, capture.json)")
     ap.add_argument("--run", help="pin: that run's id")
     ap.add_argument("--uniform", type=int, default=2, help="pin: uniform records a family")
-    ap.add_argument("--out", default=os.environ.get("OUT", "."))
+    ap.add_argument("--out", default=SHARED.OUT or ".")
     ap.add_argument("--lib")
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--tiles", type=int, default=24, help="tiles per adversarial family (x its multiplier); 4,096 outputs a tile")

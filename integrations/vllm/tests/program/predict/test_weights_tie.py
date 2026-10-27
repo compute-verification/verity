@@ -55,9 +55,9 @@ def _pins(want: dict) -> dict[str, dict]:
 
 
 def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -> set[tuple[str, str]]:
-    """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`, as torch_loop's
-    `opened_reads` holds them), from its records and the verifier's ``pins`` alone: each member's ports, ``(member,
-    port)``, whose table rows' ``b || c`` don't open the pinned root at their stated positions."""
+    """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`), from its records
+    and the verifier's ``pins`` alone: each member's ports, ``(member, port)``, whose table rows' ``b || c`` don't open
+    the pinned root at their stated positions."""
     mine, doc = IF.of_records(d, LAW, IF.resolve)
     files = IF.registered_reads(doc, mine, pins, registered=G)
     assert set(files) == {m.key for m in mine.members}

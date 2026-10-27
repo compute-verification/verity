@@ -166,7 +166,9 @@ def _static_key(v: StaticValue):
         return ("fn", v.id)
     if isinstance(v, (list, tuple)):
         return ("tuple",) + tuple(_static_key(x) for x in v)
-    if isinstance(v, (int, str, bool)) or v is None:
+    if isinstance(v, bool):  # True == 1 and hash(True) == hash(1): untagged, FLAG=1 would hit FLAG=True's entry
+        return ("bool", v)
+    if isinstance(v, (int, str)) or v is None:
         return v
     if isinstance(v, float):
         return ("float", v.hex())
@@ -222,8 +224,7 @@ def _consistent_statics(a, b) -> bool:
 
 def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) -> "SpecializedDefinition":
     """Explicit binding record. Partial binds compose; all statics must be bound before the body is built. A record
-    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached, and before the cache is
-    read: the key holds 1 and True alike, so a record refused for its type is refused after an equal-keyed one binds.
+    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached.
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
@@ -238,11 +239,11 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
         if k not in F.statics:
             raise TypeError(f"{F.id} has no static parameter {k!r}")
     key = tuple((k, _static_key(merged[k])) for k in F.statics if k in merged)
-    why = F.refuse(merged) if F.refuse is not None else None
-    if why:
-        raise ValueError(f"{F.id} refuses this binding: {why}")
     sp = F._cache.get(key)
     if sp is None:
+        why = F.refuse(merged) if F.refuse is not None else None
+        if why:
+            raise ValueError(f"{F.id} refuses this binding: {why}")
         sp = SpecializedDefinition(F, merged, key)
         F._cache[key] = sp
     elif not _consistent_statics(sp.bindings, merged):

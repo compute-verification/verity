@@ -24,7 +24,9 @@ import pytest
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
@@ -240,6 +242,44 @@ def test_a_boolean_templates_units_are_recorded_as_words_and_checked_as_bits():
     wrong[2, 0] ^= 1
     bad.record(row, [cv, carry, data], [o0, wrong])
     assert bad.mismatches() == {tid: [2]}
+
+
+ROUND, WIDEN = bind(BG.F2fpBf16), bind(BC.Bf16ToF32)
+RID, WID = descriptor_id(ROUND), descriptor_id(WIDEN)
+
+
+def rounded(n: int = 6) -> tuple[I.Circuit, np.ndarray, np.ndarray, np.ndarray]:
+    """``n`` f32 words rounded to bf16 (``F2fpBf16_v2``) and widened back (``Bf16ToF32_v2``), each widening's ``a`` wired from
+    its rounding's output: Boolean-profile Definitions, every leaf one bit and every value its `boolean.word_type` word, as
+    the evaluator's word view computes it. -> the circuit, the f32, bf16 and widened words."""
+    f32 = np.random.default_rng(5).standard_normal(n).astype(np.float32).view(np.uint32)
+    bf16 = evaluate_words(ROUND, f32).astype(np.uint16)
+    wire = I.Wire(WID, "a", RID, "o0", at=0, radix=(n,), base=0, step=(1,))
+    return I.Circuit("bits", ((ROUND, n), (WIDEN, n)), wires=(wire,)), f32, bf16, evaluate_words(WIDEN, bf16).astype(np.uint32)
+
+
+@pytest.mark.parametrize("given", [True, False], ids=["in-full", "by-reference"])
+def test_a_boolean_profile_ports_rows_are_read_bit_by_bit(given):
+    """`Window.mismatches` on Boolean-profile templates: the Definition reads each port's rows bit by bit, the widening's
+    ``a`` recorded in full or read through its wire, so honest values have no mismatch, and one bit flipped in a rounding's
+    output (which its widening reads), an f32's sign or a widened word is that unit's mismatch."""
+    circuit, f32, bf16, wide = rounded()
+
+    def mismatches(f: np.ndarray, b: np.ndarray, w: np.ndarray) -> dict[str, list[int]]:
+        win = I.Window(circuit, RUN, LAW, 4)
+        win.record(ROUND, [f], [b])
+        win.record(WIDEN, [b if given else None], [w])
+        return win.mismatches()
+
+    def flip(a: np.ndarray, unit: int, bit: int) -> np.ndarray:
+        a = a.copy()
+        a[unit] ^= a.dtype.type(1) << a.dtype.type(bit)
+        return a
+
+    assert mismatches(f32, bf16, wide) == {}
+    assert mismatches(f32, flip(bf16, 2, 5), wide) == {RID: [2], WID: [2]}
+    assert mismatches(flip(f32, 4, 31), bf16, wide) == {RID: [4]}
+    assert mismatches(f32, bf16, flip(wide, 1, 16)) == {WID: [1]}
 
 
 def test_several_templates_are_one_population():

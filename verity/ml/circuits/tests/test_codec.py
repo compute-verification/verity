@@ -8,13 +8,14 @@ composite."""
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
 from verity.ml.circuits import codec
 from verity.ml.circuits.codec import IdentityConflict
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.defs import CompositeDefinition, same_definition
 
 from test_running_example import Add16, Dot, Id16, Mul16, Relu16
 
@@ -170,8 +171,7 @@ def test_conflict_through_a_static_bundle_is_rejected_by_the_binding_cache():
 
 def test_bind_refuses_a_record_its_composite_refuses_and_caches_none():
     """`refuse` sees the statics bound so far: a partial record it has nothing against binds, the record it names a reason
-    for raises before it is cached, and an admitted record binds to the same digest as the composite without `refuse`. A
-    record refused for its type (M=True) is refused after the equal-keyed M=1 binds."""
+    for raises before it is cached, and an admitted record binds to the same digest as the composite without `refuse`."""
     def even(b):
         return f"M={b['M']} is odd" if b.get("M", 0) % 2 else None
 
@@ -185,11 +185,35 @@ def test_bind_refuses_a_record_its_composite_refuses_and_caches_none():
             partial.bind(M=3)
     assert all(dict(k).get("M") != 3 for k in Even._cache)
     assert program_digest(Program(partial.bind(M=4))) == program_digest(Program(bind(Plain, M=4, ops=ops)))
-    Typed = CompositeDefinition("TypedOps", 1, ("M", "ops"), sig, body, register=False,
-                                refuse=lambda b: "M is a bool" if isinstance(b.get("M"), bool) else None)
-    bind(Typed, M=1, ops=ops)
-    with pytest.raises(ValueError, match=r"^TypedOps_v1 refuses this binding: M is a bool$"):
-        bind(Typed, M=True, ops=ops)
+
+
+def _flags(v) -> bool:
+    if isinstance(v, (list, tuple)):
+        return all(_flags(x) for x in v)
+    return all(_flags(x) for x in v.values()) if isinstance(v, dict) else type(v) is bool
+
+
+LOOKALIKES = [(True, 1), (False, 0), ((True, False), (1, 0)), ({"a": True}, {"a": 1})]
+
+
+def test_bind_keys_a_bool_static_apart_from_the_int_it_equals():
+    """`True == 1` and `hash(True) == hash(1)`: keyed on the raw value, `FLAG=1` would hit the entry `FLAG=True` made, so
+    `refuse` never saw it and its id said whichever bind came first. Alone or nested in a tuple or a record, the lookalike
+    bound after the accepted form is still refused, and where both are admitted they are two specializations and two ids."""
+    sig, body = (lambda S: ((("x", V16),), V16)), (lambda B, S, x: B.call(Id16, x))
+    Flag = CompositeDefinition("FlagOnly", 1, ("FLAG",), sig, body, register=False,
+                               refuse=lambda b: None if _flags(b["FLAG"]) else f"FLAG={b['FLAG']!r} is not a flag")
+    for accepted, lookalike in LOOKALIKES:
+        assert bind(Flag, FLAG=accepted).bindings["FLAG"] == accepted
+        with pytest.raises(ValueError, match=rf"^FlagOnly_v1 refuses this binding: FLAG={re.escape(repr(lookalike))} is not"):
+            bind(Flag, FLAG=lookalike)
+    Both = CompositeDefinition("AnyFlag", 1, ("FLAG",), sig, body, register=False)
+    for a, b in LOOKALIKES + [(1.0, 1), (1.0, True)]:
+        sa, sb = bind(Both, FLAG=a), bind(Both, FLAG=b)
+        assert sa is not sb and sb is bind(Both, FLAG=b)
+        assert sa.id != sb.id and not same_definition(sa, sb)
+        assert program_digest(Program(sa)) != program_digest(Program(sb))
+    assert (bind(Both, FLAG=True).id, bind(Both, FLAG=1).id) == ("AnyFlag_v1{FLAG=True}", "AnyFlag_v1{FLAG=1}")
 
 
 def test_unbound_composite_as_a_static_value_is_not_encodable():

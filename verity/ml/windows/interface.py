@@ -296,6 +296,37 @@ def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
     return w.astype(np.uint16)
 
 
+def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
+    """A port's ``(n, words)`` u16 rows as its ``(n, leaves)`` leaves of type ``ty``, as `evaluate_batch` takes them: a row
+    is the little-endian bit concatenation of the leaves, so a 16-bit leaf is one word, and a 1-bit leaf (a Boolean-profile
+    port's, whose rows are its `boolean.word_type` words) one bit."""
+    b, w = np.ascontiguousarray(rows, dtype="<u2").view(np.uint8), ty.homogeneous_width()
+    if w is not None and w % 8 == 0:
+        return np.ascontiguousarray(b[:, :ty.leaves * w // 8]).view(f"<u{w // 8}")
+    bits = np.unpackbits(b, axis=1, bitorder="little")
+    if w == 1:
+        return bits[:, :ty.leaves]
+    at = np.cumsum([0, *ty.leaf_widths()])
+    return np.stack([(bits[:, lo:hi].astype(np.uint64) << np.arange(hi - lo, dtype=np.uint64)).sum(axis=1)
+                     for lo, hi in zip(at, at[1:])], axis=1)
+
+
+def _port_rows(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
+    """`_port_leaves`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
+    w = ty.homogeneous_width()
+    if w is not None and w % 8 == 0:
+        b = np.ascontiguousarray(leaves.astype(f"<u{w // 8}")).view(np.uint8)
+    elif w == 1:
+        b = np.packbits(leaves.astype(np.uint8), axis=1, bitorder="little")
+    else:
+        a = leaves.astype(np.uint64)
+        bits = [(a[:, e:e + 1] >> np.arange(x, dtype=np.uint64)) & np.uint64(1) for e, x in enumerate(ty.leaf_widths())]
+        b = np.packbits(np.concatenate(bits, axis=1).astype(np.uint8), axis=1, bitorder="little")
+    out = np.zeros((len(leaves), 2 * count), dtype=np.uint8)
+    out[:, :b.shape[1]] = b
+    return out.view("<u2")
+
+
 def _ints(*xs: Any) -> bool:
     return all(type(x) is int for x in xs)
 
@@ -1480,15 +1511,6 @@ def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable
     return window_of_record(doc, law, resolve), doc
 
 
-def _word_bits(a: Any, n: int, leaves: int) -> np.ndarray:
-    """``n`` units' words of a Boolean-profile port (`boolean.word_type`'s, each element's bits LSB first) as their first
-    ``leaves`` bits, the port's leaves in order (a return field of fewer than 16 bits is one recorded u16 word)."""
-    a = np.ascontiguousarray(a)
-    w = a.view(f"u{a.dtype.itemsize}").reshape(n, -1).astype(np.uint64)
-    bits = (w[:, :, None] >> np.arange(8 * a.dtype.itemsize, dtype=np.uint64)) & np.uint64(1)
-    return bits.reshape(n, -1)[:, :leaves].astype(np.uint8)
-
-
 @dataclass(frozen=True)
 class _Recorded:
     inputs: list[np.ndarray | None]   # None: by reference (`Window.record`)
@@ -1599,28 +1621,22 @@ class Window:
 
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
         """Per template, the units whose recorded outputs are not its Definition's outputs on their recorded inputs
-        (`evaluate_batch` under ``kernel``): what the proof of a drawn one would refuse. A Boolean-profile template's
-        ports are recorded as their `boolean.word_type` words, and evaluated and compared as their bits."""
+        (`evaluate_batch` under ``kernel``): what the proof of a drawn one would refuse. The Definition reads each input row
+        by its leaves' width (`_port_leaves`: a Boolean-profile port bit by bit), and each output row it gives is held to
+        the committed row whole, its zero padding too."""
         out = {}
         for fn, _n in self.circuit.templates:
             tid, bad, at = descriptor_id(fn), [], 0
-            params, ret = fn.signature()
-            leaves = [len(f.leaf_widths()) for f in _fields(ret)]
-            widths, boolean = layout(fn).widths, B.is_boolean(fn)
+            (params, ret), lay = fn.signature(), layout(fn)
             for b in self._recorded.get(tid, ()):
-                given = self.input_words(tid, at, b.n) if any(x is None for x in b.inputs) else None
-                inputs = [x if x is not None else
-                          np.ascontiguousarray(given[g].astype("<u2")).view(f"<u{widths[g] // 8}").reshape(b.n, -1)
-                          for g, x in enumerate(b.inputs)]
-                outs = b.outputs
-                if boolean:
-                    inputs = [_word_bits(a, b.n, ty.leaves) for a, (_, ty) in zip(inputs, params)]
-                    outs = [_word_bits(o, b.n, ty.leaves) for o, ty in zip(outs, _fields(ret))]
-                want = np.asarray(evaluate_batch(fn, *inputs, kernel=kernel)).reshape(b.n, -1).astype(np.uint64)
-                got = np.concatenate([o.view(f"u{o.dtype.itemsize}").reshape(b.n, -1).astype(np.uint64) for o in outs], axis=1)
-                if got.shape != want.shape or want.shape[1] != sum(leaves):
-                    raise ValueError(f"{tid}: outputs of {got.shape[1]} leaves a unit, its Definition's {want.shape[1]}")
-                bad += [at + int(i) for i in np.flatnonzero((got != want).any(axis=1))]
+                given = self.input_words(tid, at, b.n) if any(x is None for x in b.inputs) else b.words[:len(params)]
+                want = np.asarray(evaluate_batch(fn, *(_port_leaves(r, ty) for r, (_, ty) in zip(given, params)),
+                                                 kernel=kernel)).reshape(b.n, -1)
+                wrong, k = np.zeros(b.n, dtype=bool), 0
+                for ty, (_, count), got in zip(_fields(ret), lay.outs, b.words[len(params):]):
+                    wrong |= (_port_rows(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
+                    k += ty.leaves
+                bad += [at + int(i) for i in np.flatnonzero(wrong)]
                 at += b.n
             if bad:
                 out[tid] = bad

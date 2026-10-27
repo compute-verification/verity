@@ -1941,7 +1941,9 @@ them.
   | Fault | Status |
   |---|---|
   | A tick that runs more than `slack` after its boundary, read when it reads its link (the ticks due at one boundary run in one step, ingress first: `active.TICK_ORDER`). Its bucket is still emitted, as padding, so no bucket slips into the next | `monitor-unavailable` |
-  | More than a bucket left unwritten on the link at a tick | `delivery-refused` |
+  | More than a bucket left unwritten on the link at a tick (with a pacer, more than one bucket past its time whose write hasn't ended) | `delivery-refused` |
+  | With a pacer, a bucket that reached it after its time, or whose write started more than `slack` after it | `monitor-unavailable`, on the bucket's window: the open one, or the record held until its last bucket's write is reported |
+  | With a pacer, a bucket the link refused, and every one after it | `delivery-refused`, on the bucket's window as above |
   | A server that refuses a stream, or the salt's connection | `delivery-refused` (ingress) |
   | A released request not written to its server connection by `slack` after its release tick, nor by the end of its anchor's egress bucket | `delivery-refused`: ingress, on its window if still open; egress, from the check until the stream has ended and every frame that arrived before its end is handed |
   | The shaper's buffer or the queue past Q | `overflow` |
@@ -1963,6 +1965,14 @@ them.
   one too, with the same reason, until a faulted window closes with none.
 - **The slack** bounds how late a tick may run: 25 ms by default, a quarter bucket. A deployment sets it from the jitter
   its timing bounds assume (J).
+- **The pacer** (`Proxy(paced=…)`, `pacer.Pacer`). One loop runs the ticks and reads the link and every server
+  connection, so when the server writes within a bucket moves when the tick runs, and a bucket written at its tick leaves
+  then: the prover's offset within a bucket reaches the client, against J. With `paced`, a time past the slack, the
+  egress tick hands its bucket to a process of its own, which writes it to the link `paced` after the bucket's boundary
+  on the host's monotonic clock, a time fixed before the bucket is made. A thread would share the loop's interpreter
+  lock, which the loop holds while it reads. So a tick late by up to the slack never moves when a bucket leaves, and a
+  bucket that can't leave at its time fails its window closed (above). `benchmarks/network_traces/certifier_serve.py`
+  paces at 50 ms (`PACED_MS`).
 
 The clock and the sleep are injected (`VirtualClock` serves a run driven event by event). `Shaper` and `Bucketer` do no
 I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
@@ -2095,6 +2105,11 @@ how they were read.
     failing the connection.
   - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its J). A tick past
     the slack faults every record's window.
+  - With `paced` (`Warden(paced=…)`), the tick hands each connection's cells to the egress pacer, as the active
+    certifier's pacer (above), which writes them to the connection's socket `paced` after the bucket's boundary, a
+    time fixed before the bucket is made. A bucket that reaches the pacer after that time, or whose release starts
+    past the slack, faults every record's window: the open one, or the records held until each of its buckets'
+    releases is reported. `benchmarks/network_traces/warden_serve.py` paces at 50 ms by default (`--paced-ms`).
 - **The advice is not on the wire.** The network certifier sends no advice. Whatever the proofs need beyond the committed values
   travels on the proof side and is charged there (`A_c`).
 - **log2 of the schedule's public parameters**, once per deployment: log2 of the number of parameter sets it may
