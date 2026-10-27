@@ -240,6 +240,16 @@ def _str(x: dict, k: str) -> str:
     return x[k]
 
 
+
+def _verdicts(run: Callable[[], Any]) -> list[str]:
+    """The components' verdicts from ``run``, the composition's run on a case, else none: when the case doesn't fit the
+    composition (it doesn't decode, or ``run`` refuses it)."""
+    try:
+        answers = run()
+    except (Reject, KeyError, TypeError):
+        return []
+    return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+
 @dataclass(frozen=True)
 class Product:
     """`Core.Composition.product id components`."""
@@ -323,12 +333,10 @@ class Product:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case that fits the composition, else none."""
-        try:
-            case, blobs = self.split(case)
-            answers = self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])), blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def run():
+            c, blobs = self.split(case)
+            return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
+        return _verdicts(run)
 
 
 @dataclass(frozen=True)
@@ -398,14 +406,12 @@ class Registered:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case whose components fit the composition, else none."""
-        try:
-            case, blobs = Product.split(case)
-            _, ps = self.params(case["params"])
-            _, ev = self.evidence(P.unhex(case["evidence"]))
-            answers = self.product.run(ps, ev, blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def run():
+            c, blobs = Product.split(case)
+            _, ps = self.params(c["params"])
+            _, ev = self.evidence(P.unhex(c["evidence"]))
+            return self.product.run(ps, ev, blobs)
+        return _verdicts(run)
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its
