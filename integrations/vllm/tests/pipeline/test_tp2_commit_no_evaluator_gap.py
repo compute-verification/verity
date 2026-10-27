@@ -59,14 +59,14 @@ def test_the_dense_verdict_fails_a_no_evaluator_family_without_a_complete_form_b
     oc = {"result": True, "complete": False, "mismatch_n": 0, "compared": 2}
     note, fail = _complete_replay_population_gap(sr, oc)
     assert note is None and fail is not None
-    assert fail.startswith("C2 of record not established (COORD M-0721 (1))") and "MoeRouterSqrtSoftplus_v1" in fail
+    assert fail.startswith("C2 of record not established: ") and "MoeRouterSqrtSoftplus_v1" in fail
 
 
 def test_the_tp_verdict_fails_no_evaluator_families_the_oracle_exempts():
     ok, why, cb = _gates(_sr(NO_EVALUATOR))
     assert ok is False, why
     assert "MoeRouterSqrtSoftplus_v1" in (why or "")
-    assert why.startswith("no-evaluator families (rank 0): C2 of record not established (COORD M-0721 (1))") and TP_FORM_B_SCOPE in why
+    assert why.startswith("no-evaluator families (rank 0): C2 of record not established: ") and TP_FORM_B_SCOPE in why
     assert cb["no_evaluator_gap"]["fail"] and cb["no_evaluator_gap"]["waived_cross_rank"] == []
 
 

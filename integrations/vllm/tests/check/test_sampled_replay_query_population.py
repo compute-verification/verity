@@ -79,7 +79,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert pop["scope"].startswith(f"Q_module_body_v1(P) = {qt['identities']} identities") and "uncovered by name: input_token_ids" in pop["scope"]
     # the verdict states the scope on the PASS
     note, fail = _query_population_scope(rep)
-    assert fail is None and note.startswith("C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = ") and "exact replay reaches" in note
+    assert fail is None and note.startswith("C2 population scope (query of record Q_module_body_v1): Q_module_body_v1(P) = ") and "exact replay reaches" in note
 
 
 def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditioned_on_measured_never_declared(world, monkeypatch):
@@ -144,7 +144,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     assert chk["identities_without_rows"]["first"][0]["op_path"] == "model.layers.7.mlp.down_proj"
     assert chk["accounted"] is False                                             # the ghost is neither reached nor uncovered by name
     note, fail = _query_population_scope(rep)
-    assert note is None and fail.startswith("C2 population does not reconcile with Q(P) (R17-3)") and "identities_without_rows x1" in fail
+    assert note is None and fail.startswith("C2 population does not reconcile with Q(P): ") and "identities_without_rows x1" in fail
     # through the verdict of record: a row-procedure record (binding block) with this replay FAILs by that name, whatever else holds
     rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": run_root,
            "binding": {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}},
@@ -156,7 +156,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     # the honest manifest on the same record: PASS carrying the scope
     rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=man)
     ok, why = commit_verdict(dict(rec, sampled_replay=rep_ok), True, min_openings=64)
-    assert ok is True and "C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = " in why, why
+    assert ok is True and "C2 population scope (query of record Q_module_body_v1): Q_module_body_v1(P) = " in why, why
 
 
 def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_never_added_to_the_reach(world):
@@ -341,15 +341,15 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert r0["required_row_identities"] + n_r0_last_rows == sum(1 for i in man["identities"] if i.get("request_id") == "r0" and i.get("family") in COV.QUERY_FAMILIES_WITH_ROWS)
     # [revb F-r17b-39] the excluded rows are 'not-executed' (never a 'last'): r0's `last` stratum is anchored to its last EXECUTED step
     # n_exec - 1 (the lag step), so r0 HAS a `last` stratum in the pool -- at step cap-2, where the cap-anchored base has a `mid`
-    assert ne["strata_excluded"] and all(k.split("|")[1] == "r0" and k.split("|")[3] == "not-executed" and v["label"] == "not evaluable: unexecuted (R17-1)"
+    assert ne["strata_excluded"] and all(k.split("|")[1] == "r0" and k.split("|")[3] == "not-executed" and v["label"] == "not evaluable: unexecuted"
                                          for k, v in ne["strata_excluded"].items())
     assert sum(v["population"] for v in ne["strata_excluded"].values()) == ne["vus"]
     r0_last_strata = [k for k in rep["strata"] if k.split("|")[1] == "r0" and k.split("|")[3] == "last"]
-    assert r0_last_strata, "r0's last EXECUTED step (the lag step) is its `last` stratum (F-r17b-39)"
+    assert r0_last_strata, "r0's last EXECUTED step (the lag step) is its `last` stratum"
     assert any(k.split("|")[1] == "r0" and k.split("|")[3] == "last" for k in base["strata"])
     anchors = rep["strata_keys"]["phase_anchor"]
     assert anchors["r0"]["last_step"] == cap - 2 and anchors["r0"]["anchor"] == "n_exec - 1" and anchors["r0"]["lag_step"] == cap - 2
-    assert anchors["r0"]["n_exec"] == cap - 1 and anchors["r0"]["cap_last_step"] == cap - 1 and "F-r17b-39" in anchors["r0"]["why"]
+    assert anchors["r0"]["n_exec"] == cap - 1 and anchors["r0"]["cap_last_step"] == cap - 1 and "anchored there, not at the cap" in anchors["r0"]["why"]
     assert anchors["r1"]["last_step"] == cap - 1 and anchors["r1"]["anchor"] == "cap - 1" and anchors["r1"]["lag_step"] is None
     assert base["strata_keys"]["phase_anchor"]["r0"] == {"last_step": cap - 1, "anchor": "cap - 1", "cap_last_step": cap - 1, "n_exec": None,
                                                          "lag_step": None, "why": "no executed prefix"}
@@ -369,10 +369,10 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert ss["identities_reached"] + pop["uncovered_identities"] + ne["identities"] == pop["query_total"]["identities"]
     assert ss["identities_reached"] == bpop["sampled_strata"]["identities_reached"] - n_r0_last_rows           # reach is over rows
     assert rep["result"] is True and rep["grade"] == "complete", rep["why"]
-    assert f"not-executed(R17-1) {n_r0_last_ids} identities (r0: a_r {cap - 2} LAG 1 -> steps [{cap - 1}, {cap}))" in pop["scope"]
+    assert f"not-executed {n_r0_last_ids} identities (r0: a_r {cap - 2} LAG 1 -> steps [{cap - 1}, {cap}))" in pop["scope"]
     # the verdict's scope note carries the class (it reads the scope line)
     note, fail = _query_population_scope(rep)
-    assert fail is None and "not-executed(R17-1)" in note
+    assert fail is None and f"not-executed {n_r0_last_ids} identities" in note
     # NEGATIVE: an early stop that is not a declared EOS -> the class is not applicable: nothing classified, the checks fail by name
     bad = {"r0": POP.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=False, served_len_commit=cap - 2, **ok)}
     assert bad["r0"]["faults"] and "not asserted a declared EOS id" in bad["r0"]["faults"][0]
@@ -427,7 +427,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
     assert ep["n_exec"] == 2 and ep["faults"] == []
     anchor = POP.phase_anchor(cap, ep)
     assert anchor == {"last_step": 1, "anchor": "n_exec - 1", "cap_last_step": cap - 1, "n_exec": 2, "lag_step": 1, "why": anchor["why"]}
-    assert "lag step" in anchor["why"] and "F-r17b-39" in anchor["why"]
+    assert "lag step" in anchor["why"] and "anchored there, not at the cap" in anchor["why"]
     base, _, _ = POP.population(pi, "r0")
     moved, _, _ = POP.population(pi, "r0", last_step=anchor["last_step"])
     assert [v["i"] for v in base] == [v["i"] for v in moved]                      # the SAME rows
@@ -667,7 +667,7 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
         "program_rows_sum": 14, "header_rows": 7, "program_rows_by_request": {"r0": 10, "r1": 4}, "scope": c4["compare_scope"]}
     # the verdict NAMES the check (never 'see population.query_checks' for a check that has a name)
     _note, fail = _query_population_scope(rep4)
-    assert fail is not None and "controller rows: header 7 != request Programs' sum 14" in fail and "F-r17b-36" in fail
+    assert fail is not None and "controller rows: header 7 != request Programs' sum 14" in fail and "sum over request Programs" in fail
     # (iv) the controller families of Continuation_v1 (LIsEOS / LEmitNext) count as controller rows: 2 rows -> 2, never 0
     progs5 = {rid: _with_guard_rows(world.inst, ["LIsEOS1_v1", "LEmitNext[H=1]_v1"]) for rid in world.prompts}
     assert COV.controller_rows_of(progs5) == {str(rid): 2 for rid in world.prompts}

@@ -223,7 +223,7 @@ def test_a_block_that_is_not_a_json_object_is_refused():
 def test_the_c2_rules_grade_every_writers_block_to_the_same_texts():
     outcomes = _outcomes()
     assert hashlib.sha256(json.dumps(outcomes, sort_keys=True, default=str).encode()).hexdigest() == OUTCOMES_SHA256
-    assert outcomes["coverage reconciled"]["scope"][0].startswith("C2 population scope (R17-3; query of record Q_module_body_v1)")
+    assert outcomes["coverage reconciled"]["scope"][0].startswith("C2 population scope (query of record Q_module_body_v1)")
     assert "ranks replay [1] != manifest [0]" in outcomes["served other rank"]["scope"][1]
     assert outcomes["coverage prefix faulted, account missing"]["account_missing"] is True
 

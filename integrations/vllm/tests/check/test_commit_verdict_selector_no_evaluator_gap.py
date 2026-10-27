@@ -70,7 +70,7 @@ def test_the_class_label_is_the_domains_and_the_family_is_not_in_the_domain():
 def test_stochastic_commit_only_rerun_without_form_b_fails_by_name():
     """The vacuous path: complete replay, 0 mismatch, C1 / C3 hold, no --match-dir oracle -> the 32 sampled ids are computed by nothing."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_STOCH}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (F-r16-20): 32 selector output VUs (GumbelTopPTokenSelect_v1 x32) not replayed"), why
+    assert not ok and why.startswith("C2 of record not established: 32 selector output VUs (GumbelTopPTokenSelect_v1 x32) not replayed"), why
     assert "form (B) absent" in why and "value-checked by NEITHER form" in why and "REQ-03" in why
 
 
@@ -100,7 +100,7 @@ def test_form_b_that_does_not_cover_every_sampled_id_fails_by_name(oc, expect):
     if oc.get("result") is False:
         assert why == "3781 identities differ", why                          # the oracle's own FAIL leads (earlier rule, unchanged)
     else:
-        assert why.startswith("C2 of record not established (F-r16-20)") and expect in why, why
+        assert why.startswith("C2 of record not established: ") and expect in why, why
 
 
 def test_b8_needs_every_step_request_pair_not_just_the_selector_count():
@@ -120,7 +120,7 @@ def test_greedy_rows_and_the_not_yet_domain_are_unchanged():
     """TokenSelect_v1 has an evaluator (no exclusion); RoPE / Attention exclusions are the applicability domain and are not gated here."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(8), "sampled_replay": SR_GREEDY}, True, min_openings=64)
     assert ok and why.startswith("PASS"), why                                      # no oracle, no note about selectors
-    assert "selector" not in why and "F-r16-20" not in why
+    assert "selector" not in why
     assert _complete_replay_population_gap(SR_GREEDY, None) == (None, None)
     # an OLDER record's RoPE / attention labels by name (K_ROPE, K_ATTN: RoPE_v1 left NOT_YET in R17 -- dense, ruling R17-9 -- and
     # Attention_v3 / Attention_v2 in R17-11; every replay on this tree evaluates those rows) are neither the domain nor a gated gap: the
