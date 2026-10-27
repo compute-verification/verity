@@ -79,4 +79,7 @@ theorem Flock.SecurityProofs.SampledKSLiveV5Honest : Flock.Guarantees.SampledKSL
   · exact FlockC3.VStarList.built_of_parse
       (FlockSoundness.Discharge.Hidden.parse_untyped ((zkTags_typed _).trans ht) (Flock.Desc.parse_flat hD')).1
   · intro kd
-    simp [FlockSoundness.Discharge.Composed.nTab, Flock.Bridge.servedIV5]
+    have h1 : FlockSoundness.Discharge.Composed.nTab (Flock.Bridge.servedIV5 cf pf) = 1 := by
+      simp [FlockSoundness.Discharge.Composed.nTab, Flock.Bridge.servedIV5]
+    rw [h1]
+    exact Nat.mod_one kd
