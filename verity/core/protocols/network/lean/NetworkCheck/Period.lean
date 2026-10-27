@@ -127,7 +127,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
-  draw is stratified), and its `bound`.
+  draw is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
+  link-window's `prog` is its output) is refused unless every unit is drawn (`Σ k = N`), as `K` charges no faulty term
+  for it.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -148,7 +150,10 @@ lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows. A compute audit reads none, so its own terms are in none (it is an acceptance condition),
 but the free inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
-renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak:
+renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. A wrong unit of such
+an audit would leak through the egress too, and no term charges one: the check refuses a tied audit with any unit
+undrawn (`Properties.NetworkPeriod.RowsTiedDrawn`), and a tied audit's `faulty_bits` and the audit's δ in `eps` come
+with the change that ties a compute audit drawn in part and lifts that refusal:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
      "scans": [terms, …], "schedules": c, "windows": m}
@@ -752,18 +757,20 @@ def holds (reg : Registration) (r : Rows) : Bool :=
 value, is `scan/prog`. -/
 def progName : String := "scan/prog"
 
-/-- A unit's committed output port, `<unit>/o<j>` with j ≥ 1: an output a unit computes past its public word `o0`. -/
+/-- A unit's committed output port, `<unit>/o<j>` with j ≥ 1: an output a unit computes past its public word `o0`. Read
+over the port's characters, which the kernel evaluates (`String.splitOn` it doesn't). -/
 def outputPort (port : String) : Bool :=
-  match (port.splitOn "/").reverse with
-  | s :: _ :: _ => let j := s.drop 1; s.front == 'o' && !j.isEmpty && j.all Char.isDigit && j.front != '0'
-  | _ => false
+  let cs := port.toList
+  cs.contains '/' && match (cs.reverse.takeWhile (· != '/')).reverse with
+    | 'o' :: d :: ds => (d :: ds).all Char.isDigit && d != '0'
+    | _ => false
 
 /-- The audits the scan's Programs' row is an output of, by index: those whose registration's `roots` has an output
 port's entry (`outputPort`) at the root and domain of the scan's registration's `scan/prog` entry (`progName`), so the
 rows its ingress units read as `prog` are the ones that audit's units computed. -/
 def tiedAudits (audits : Array Registration) (reg : Registration) : Array Nat :=
   let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
-  let named := fun (k n : String) (e : Json) => e.getObjValD k == .str n
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str s => s == n | _ => false
   let prog := (entries reg.record "roots").filter (named "port" progName) ++
     (entries reg.record "registered").filter (named "value" progName)
   (Array.range audits.size).filter fun i => prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
@@ -774,6 +781,15 @@ def tiedAudits (audits : Array Registration) (reg : Registration) : Array Nat :=
 
 /-- The scan's Programs' row is a compute audit's output: some audit is tied to it (`tiedAudits`). -/
 def progTied (audits : Array Registration) (reg : Registration) : Bool := !(tiedAudits audits reg).isEmpty
+
+/-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
+def tiedIn (audits windows : Array Registration) (i : Nat) : Bool :=
+  windows.any fun reg => (tiedAudits audits reg).contains i
+
+/-- The audits the form ties to a link-window's scan: the rows form's `tiedIn`, and none in the clock form. -/
+def tiedOf : Form → Commitment → Nat → Bool
+  | .clock _, _ => fun _ => false
+  | .rows .., c => tiedIn c.audits c.windows
 
 /-- The certified records of the rows form's link-window: the requests' (ingress), responses' (egress) and fails'. -/
 def records (link : String) : Array (String × Direction) :=
@@ -814,15 +830,23 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
-/-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, and the answer's units are
-the Program's. -/
-def auditCheck (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer) : Found Facts := do
+/-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, the answer's units are the
+Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) has every unit drawn, since its
+link-window's term charges its free inputs and no faulty term for it. -/
+def auditCheck (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
   let what := s!"audit {i}"
   unless reg.record.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
   let f ← factsOf what prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
+  if tied && f.drawn != f.units then
+    refuse s!"{what}: tied to a link-window's scan with {f.drawn} of its {f.units} units drawn: K charges a tied audit \
+      no faulty term (its wrong units' outputs are the egress's), so draw all {f.units}"
   pure f
+
+/-- The audits' findings, in order, each tied as the period's form ties it (`tiedOf`). -/
+def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Facts) :=
+  ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x (tiedOf p.form c i)
 
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
@@ -936,7 +960,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun (f0, _) =>
       (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
-    let as := ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x
+    let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r

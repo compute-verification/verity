@@ -28,7 +28,8 @@ profile's types, as the scan's Definitions have them (`scan_descriptor`), and a 
 scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks (`scan_negatives`). Beside them,
 the compute audits (in the rows form at least one, whose registrations' `roots` hold the scans' `prog`), each
 registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
-(`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units.
+(`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units, every
+unit drawn for an audit a scan's `prog` is tied to (`tied-undrawn`: one such audit drawn `subset:k`, k < N).
 `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
 `cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
@@ -670,6 +671,11 @@ def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
     return bool(_tied_audits(audits, reg))
 
 
+def _tied_in(audits: list[Registration], windows: list[Registration], i: int) -> bool:
+    """`tiedIn`: some link-window's `prog` is audit `i`'s output (`_tied_audits`)."""
+    return any(i in _tied_audits(audits, reg) for reg in windows)
+
+
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
     """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
@@ -721,8 +727,9 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     return Facts(lv["size"], drawn, prof["delta"], bound)
 
 
-def _audit_check(i: int, audit: Audit, reg: Registration, a: dict) -> Facts:
-    """`auditCheck`: the registration names the audit's Program, and the answer's units are the Program's."""
+def _audit_check(i: int, audit: Audit, reg: Registration, a: dict, tied: bool = False) -> Facts:
+    """`auditCheck`: the registration names the audit's Program, the answer's units are the Program's, and one tied to
+    a link-window's scan (`_tied_in`, in the rows form) has every unit drawn."""
     what = f"audit {i}"
     if reg.record.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
@@ -730,6 +737,10 @@ def _audit_check(i: int, audit: Audit, reg: Registration, a: dict) -> Facts:
     f = _facts(what, prof, pub)
     if f.units != audit.units:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not its Program's {audit.units}")
+    if tied and f.drawn != f.units:
+        raise Finding(REJECT, f"{what}: tied to a link-window's scan with {f.drawn} of its {f.units} units drawn: K "
+                              "charges a tied audit no faulty term (its wrong units' outputs are the egress's), so "
+                              f"draw all {f.units}")
     return f
 
 
@@ -798,7 +809,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         try:
-            facts.append(_audit_check(i, audit, reg, a))
+            facts.append(_audit_check(i, audit, reg, a, p.schedule is not None and _tied_in(c.audits, c.windows, i)))
         except Finding as f:
             findings.append(f)
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
@@ -855,6 +866,7 @@ EXPECT = {
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
+    "rows-tied-undrawn": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
@@ -1125,6 +1137,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     untie = rp.choice(UNTIES) if m == "prog-untied" else None
     if untie == "untyped":
         ties[first + t]["root"] = rp.choice([None, 7, False])
+    if m == "tied-undrawn":
+        a = ties[first + t]["audit"]
+    tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
 
     def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key, s: bytes = session) -> Certificate:
@@ -1326,16 +1341,17 @@ def build(m: str, seed: int, small: bool = False) -> dict:
 
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
-        units = r.randint(1, 40)
+        undrawn = i == a and m == "tied-undrawn"
+        units = r.randint(2 if undrawn else 1, 40)
         n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
         split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
         outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         desc = json.loads(audit_descriptor(((n_prog, outs[0]),) if split is None else
                                            ((split, outs[0]), (n_prog - split, outs[1]))))
         prog = program_sha512(desc)
-        k, strata = r.randint(1, units), None
+        k, strata = r.randint(1, units - 1) if undrawn else units if i in tied else r.randint(1, units), None
         law = {"k": k, "law": "subset"}
-        if r.random() < 0.5:
+        if r.random() < 0.5 and not undrawn:
             cuts = [0, *([r.randint(1, units - 1)] if units > 1 and r.random() < 0.5 else []), units]
             law = {"k": k, "law": "stratified", "strata": [
                 {"k": stratum_k(k, hi - lo, units), "template": f"s{j}", "units": [[lo, hi]]}

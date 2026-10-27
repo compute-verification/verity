@@ -1580,6 +1580,12 @@
    "assumptions": [],
    "type_hash": "9c2d2b9e87028da9d2e41ec888d86584934d9ce56316dae1a6fc0c242db4d385"
   },
+  "Properties.NetworkPeriod.rowsTiedDrawn": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkRecords.acceptMeans : Properties.NetworkRecords.AcceptMeans"],
@@ -3473,6 +3479,10 @@
     "function": "NetworkCheck.Period.terms",
     "outcome": "none"
    },
+   "Properties.NetworkPeriod.rowsTiedDrawn": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
    "Properties.NetworkPeriod.rowsKBoundsCount": {
     "function": "NetworkCheck.Period.rowsTerms",
     "outcome": "none"
@@ -3559,6 +3569,7 @@
    }
   },
   "frozen": {
+   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "lemma: RowsTiedDrawn's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsTiedDrawnOf at a rows-form period whose tied audit one-stage didn't answer",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",

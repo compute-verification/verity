@@ -75,4 +75,139 @@ theorem rowsKBoundsCount : RowsKBoundsCount := by
   simp only [AuditTerms.bits, Scan.terms, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
+/-! ## A tied audit draws every unit -/
+
+theorem firstFinding_none {fs : List (Option (Core.Verdict × String))} (h : firstFinding fs = none) :
+    ∀ f ∈ fs, f = none := by
+  unfold firstFinding at h
+  split at h
+  · cases h
+  · intro f hf
+    simpa using List.findSome?_eq_none_iff.mp h f hf
+
+theorem auditChecks_getElem? {p : Params} {c : Commitment} {e : Evidence} {i : ℕ} {a : Audit} {reg : Registration}
+    {x : Core.Answer} (ha : p.audits[i]? = some a) (hreg : c.audits[i]? = some reg) (hx : e.audits[i]? = some x) :
+    (auditChecks p c e)[i]? = some (auditCheck i a reg x (tiedOf p.form c i)) := by
+  have hz : ((p.audits.zip c.audits).zip e.audits)[i]? = some ((a, reg), x) :=
+    Array.getElem?_zip_eq_some.mpr ⟨Array.getElem?_zip_eq_some.mpr ⟨ha, hreg⟩, hx⟩
+  simp [auditChecks, Array.getElem?_zipIdx, hz]
+
+/-- On acceptance in the rows form, every audit's finding is its facts. -/
+theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    {s : Schedule} {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan)
+    (h : check p c e = .accept pub prof) : ∀ y ∈ auditChecks p c e, ∃ f, y = .ok f := by
+  intro y hy
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF (findingOf y)
+      (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))
+    cases y with
+    | error r => cases h0
+    | ok f => exact ⟨f, rfl⟩
+
+/-- The refusal: an audit the check ties that it accepts drew every unit. -/
+theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Answer} {f : Facts}
+    (h : auditCheck i a reg x true = .ok f) : DrawnWhole i reg x := by
+  unfold auditCheck at h
+  cases ha : answered s!"audit {i}" reg x with
+  | error r =>
+    by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      simp [c1, ha, bind, Except.bind, refuse, pure, Except.pure] at h
+  | ok pp =>
+    obtain ⟨prof, pub⟩ := pp
+    cases hf : factsOf s!"audit {i}" prof pub with
+    | error r =>
+      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+        simp [c1, ha, hf, bind, Except.bind, refuse, pure, Except.pure] at h
+    | ok g =>
+      refine ⟨prof, pub, g, ha, hf, ?_⟩
+      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+        by_cases c2 : g.units = a.units <;> by_cases c3 : g.drawn = g.units <;>
+          simp_all [bind, Except.bind, refuse, pure, Except.pure]
+
+/-- The refusal refuses no audit drawn whole: one passes the tied check as it passes the untied one. -/
+theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Answer} {f : Facts}
+    (h : auditCheck i a reg x = .ok f) (hd : f.drawn = f.units) : auditCheck i a reg x true = .ok f := by
+  unfold auditCheck at h ⊢
+  cases ha : answered s!"audit {i}" reg x with
+  | error r =>
+    by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      simp [c1, ha, bind, Except.bind, refuse, pure, Except.pure] at h
+  | ok pp =>
+    obtain ⟨prof, pub⟩ := pp
+    cases hf : factsOf s!"audit {i}" prof pub with
+    | error r =>
+      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+        simp [c1, ha, hf, bind, Except.bind, refuse, pure, Except.pure] at h
+    | ok g =>
+      by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
+        by_cases c2 : g.units = a.units <;> simp_all [bind, Except.bind, refuse, pure, Except.pure]
+
+theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) : c.audits.size = p.audits.size := by
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i hs
+  by_contra hc
+  exact hs hc
+
+theorem rowsTiedDrawn : RowsTiedDrawn := by
+  intro p c e pub prof h s sd scan hform i reg x hreg hx htied
+  obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
+  have hi : i < p.audits.size := by rw [← check_sizes h]; exact hlt
+  have hget := auditChecks_getElem? (Array.getElem?_eq_getElem hi) hreg hx
+  obtain ⟨f, hf⟩ := auditChecks_ok hform h _ (Array.mem_of_getElem? hget)
+  have ht : tiedOf p.form c i = true := by rw [hform]; exact htied
+  rw [ht] at hf
+  exact auditCheck_tied hf
+
+/-! ## Its nontrivial lemma -/
+
+/-- An audit's registration with an output port's entry, `u/o1` at the root `r` and the domain `d`. -/
+def tiedAudit : Registration :=
+  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "u/o1"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+
+/-- A link-window's registration whose `prog` is at that root and domain. -/
+def tiedWindow : Registration :=
+  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "scan/prog"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+
+theorem tiedWindow_ties : tiedIn #[tiedAudit] #[tiedWindow] 0 = true := by
+  decide +kernel
+
+/-- An answer of another protocol than one-stage's. -/
+def otherAnswer : Core.Answer :=
+  { protocol := "other", verdict := .accept, reason := none, digest := none, published := none, profile := none }
+
+theorem otherAnswer_refused : (answered s!"audit {0}" tiedAudit otherAnswer).toBool = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsTiedDrawn`'s property** (its nontrivial lemma): such a check
+accepts a rows-form period whose audit 0 is tied and answered by another protocol than one-stage's. -/
+theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
+  intro h
+  let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
+  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩
+  obtain ⟨prof, pub, f, ha, -, -⟩ := h p ⟨#[tiedAudit], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl s .empty
+    ⟨0, 0, 0, 0⟩ rfl 0 tiedAudit otherAnswer rfl rfl tiedWindow_ties
+  have := otherAnswer_refused
+  rw [ha] at this
+  simp [Except.toBool] at this
+
 end Properties.NetworkPeriod

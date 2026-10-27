@@ -107,6 +107,7 @@ ROWS_REFUSALS = {
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
     "rows-prog-untied": ("is no compute audit's output",) * 2,
+    "rows-tied-undrawn": ("units drawn: K charges a tied audit no faulty term",) * 2,
 }
 
 
@@ -114,8 +115,8 @@ def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
-    other than its 2T units, and a scan whose `prog` is no compute audit's output: Lean and the mirror each refuse
-    every one at that check."""
+    other than its 2T units, a scan whose `prog` is no compute audit's output, and an audit a scan's `prog` is tied to
+    with a unit undrawn: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -175,6 +176,32 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypa
             D.replay(PORT, case, server)
         lean, python = (json.loads(o[1])["public"] for o in (x.value.lean, x.value.python))
         assert lean["K"] - python["K"] == sum(t["free"] for t in lean["scans"]) > 0, (lean, python)
+
+
+def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
+    """K charges an audit a scan's `prog` is tied to its free inputs and no faulty term, so the rows form refuses one
+    with a unit undrawn (`rows-tied-undrawn` above), and only such an audit: over honest rows periods every tied audit
+    draws all its units and some untied audit fewer, each accepted with Lean's public the mirror's; and a mirror that
+    skips the refusal accepts what Lean refuses."""
+    partial = []
+    for n in range(24):
+        case = build("rows-honest", n)
+        c, out = json.loads(bytes.fromhex(case["commitment"])), reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
+        for i, f in enumerate(out["public"]["audits"]):
+            assert f["drawn"] == f["units"] or not PC._tied_in(audits, windows, i), (n, i, f)
+        if any(f["drawn"] < f["units"] for f in out["public"]["audits"]):
+            partial.append(case)
+    assert partial
+    for case in partial[:3]:
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == reference(case)["public"], got
+    monkeypatch.setattr(PC, "_tied_in", lambda audits, windows, i: False)
+    for n in range(2):
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, build("rows-tied-undrawn", n, small=True), server)
+        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
 
 
 def test_an_output_port_is_a_units_past_o0():
