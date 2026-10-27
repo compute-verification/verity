@@ -27,12 +27,10 @@ The configuration is `test_active_replay`'s synthetic trace, three windows of 60
 library. A block's strategy is its server's: `honest`; `bits`, which writes each session's frames all at once or spread out
 by a random bit (`active_replay.adversary_writes`); `late`, which holds a session in window 0 past every sync;
 `extra`, honest but for one more event, at a position the Program doesn't have; or `maintenance`, an honest server
-whose certifier is down for window 1. Each block is audited three times: by the
+whose certifier is down for window 1. Each block is audited twice: by the
 certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
-by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
-against the ones the Program declares (`records`), and by N3Window_v5's reference on every raw window, each frame
-checked against its direction's template of the canonical framing (`workload.n3_canonical`): the content, which only
-`extra` changes, in its last window. For that check the declaration's cadence is the certifiers'
+and by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
+against the ones the Program declares (`records`). For that check the declaration's cadence is the certifiers'
 calibrated parameters (`records.cadence`), whatever it declared. The record check also runs once on every block's
 records together, over the declaration's ports (a fleet's merged ones), with the account's charge for the whole run. A
 non-honest block's wire is compared with an honest block's of the same run (`active_replay.against_honest`).
@@ -449,10 +447,7 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     A block's records are declared from the honest plan, or, for a block down for maintenance, from its own drained
     plan, and checked against the verifier's plan (`verifier_plan`), which has that block out for its outage window, so
     the window owes no record. A block out for maintenance is also checked without it (`unplanned`). Each check comes
-    with the account's charge for the block's claims (`charge`), and with N3Window_v5's verdict on every window of the
-    block's raw records, by its canonical framing's templates, against the same plan (`workload.n3_canonical`)."""
-    from workload import n3_canonical
-
+    with the account's charge for the block's claims (`charge`)."""
     setup = ar.Setup(report)
     verifier = verifier_plan(dc, plans)
     unplanned_plan = Plan(verifier.epoch)
@@ -474,8 +469,6 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
             else None
         mine = plans[b] if "outage" in plans[b] else honest_plan
         declared = records.declared(mine, setup, dc, b, salts, verifier)
-        n3, windows = n3_canonical.replay_windows(mine, setup, out / b)
-        v5 = n3_canonical.summary(n3_canonical.verdicts(n3, windows))
         every_published += published
         every_declared |= declared
         claims = check_records(published, declared, dc.cadence)
@@ -488,7 +481,7 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
                                 "advice_bits": sum(x.bits for x in claims if isinstance(x, Carried)),
                                 "account": charge(dc, verifier, claims, b)},
                  "records_are_run_shapers": c["records_are_run_shapers"], "wire_is_the_records": c["wire_is_the_records"],
-                 "released_not_the_programs": c["released_not_the_programs"], "n3_v5": v5,
+                 "released_not_the_programs": c["released_not_the_programs"],
                  "slack_ms": a["timing"]["slack_ms"],
                  "tick_late_ms_max": {k: v.get("max") for k, v in a["timing"]["tick_late_ms"].items()},
                  "ticks_over_slack": {k: v["over_slack"] for k, v in a["timing"]["tick_late_ms"].items()},
@@ -516,8 +509,6 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
                      f"REFUSED ({'; '.join(refused)})") + f", {describe(entry['datacenter']['account'])}")
         else:
             line += "; datacenter records " + ("ACCEPTED" if not refused else f"REFUSED ({'; '.join(refused)})")
-        line += (f"; N3 v5 {'ACCEPTED' if not v5['refused'] else 'REFUSED (' + ', '.join(v5['refused']) + ')'} "
-                 f"on {v5['accepted']} of {v5['windows']} windows")
         if "against_honest" in entry:
             line += f"; wire is {honest}'s: {entry['against_honest']['wire_is_honests']}"
         if salt:

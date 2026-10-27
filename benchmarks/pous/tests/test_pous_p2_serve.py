@@ -1,6 +1,6 @@
 """The toy served from its P2 store under the remote bandwidth audit (`p2_v1/serve.py`): the decode-then-matmul engine
-gives the plaintext model's tokens, its receipts from the blocks' partials are the reference's, an honest session is
-accepted with each window's openings answered before the next step, a step that skips a block's read is caught, and
+gives the plaintext model's tokens, its receipts from the labels' partials are the reference's, an honest session is
+accepted with each window's openings answered before the next step, a step that skips a label's read is caught, and
 the kernel fixture keeps its pinned bytes and checks by hand."""
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def test_an_honest_served_session_is_accepted(p2_store) -> None:
 
 
 def test_a_step_that_skips_a_blocks_read_is_caught(p2_store) -> None:
-    """Block 13's partial from zeros, as a server that never read it would have it, in window 1's second step: that
+    """Label 13's partial from zeros, as a server that never read it would have it, in window 1's second step: that
     unit's receipt is wrong, and every receipt is opened."""
 
     def step(e: V.Engine, token: int, sk: p2.Sketcher):
@@ -93,7 +93,7 @@ def test_the_kernel_fixture_keeps_its_bytes(kernel_fixture) -> None:
 
 
 def test_the_kernel_fixture_checks_by_hand(kernel_fixture) -> None:
-    """Each block's partial from the fixture's own sign rows and `C*`'s bytes, each unit's σ the sum of its four,
+    """Each label's partial from the fixture's own sign rows and `C*`'s bytes, each unit's σ the sum of its four,
     y the hash of σ, and the passes chained."""
     doc = json.loads(kernel_fixture)
     assert hashlib.sha512(C_STAR).hexdigest() == doc["store"]["c_star_sha512"] and doc["store"]["unaudited"] == [32]

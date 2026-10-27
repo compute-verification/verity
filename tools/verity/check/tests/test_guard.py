@@ -148,7 +148,7 @@ def _owner(*owners: tuple[int, int], sessions=(), boot: str = "boot-a", ns: str 
 
 
 def test_a_basetemp_another_namespace_or_boot_owns_is_never_swept_while_anything_in_it_changes(tmp_path, monkeypatch):
-    """INF-95: a sweep that can't see a basetemp's owner (another pid namespace, another boot, a /proc that hides it) never takes
+    """A sweep that can't see a basetemp's owner (another pid namespace, another boot, a /proc that hides it) never takes
     it as gone, whatever the owner's pid is here; it waits until nothing in it changed for a day."""
     S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
     (tmp := tmp_path / "tmp").mkdir()

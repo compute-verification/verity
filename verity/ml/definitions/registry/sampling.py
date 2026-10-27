@@ -1,4 +1,4 @@
-"""[X-06] Stochastic token selection of vLLM d9105ea80's batch-invariant sampler with the per-request SEED, the POSITION and the
+"""Stochastic token selection of vLLM d9105ea80's batch-invariant sampler with the per-request SEED, the POSITION and the
 TEMPERATURE as OPERANDS (bound inputs of the Program) — seeds are inputs, not structure.
 
 The launched chain for a request with temperature T (`vllm/v1/worker/gpu/sample/sampler.py::Sampler.sample`, no top-k/top-p,
@@ -27,11 +27,13 @@ RTX 4090 by the static-seed composites below, 64/64 G4 cases):
   * `GumbelArgmaxBf16_v1{V, SEED, POS}(logits: Array<V, bf16>) -> i32` and `GumbelArgmaxTempBf16_v1{V, SEED, POS, T}` (steps
     `GumbelArgmaxStep_v1`, `GumbelArgmaxTempStep_v1{T}`) — the same selection at temperature 1 and at a T not in {0, 1}, with
     seed, position and T as STATICS: the forms checked bit-exact against vLLM's kernels on the RTX 4090, which the sampled-row
-    profiles bind (`engine/profiles/gen_ov_sampling_patterns.py`).  They came from the quarantine lane `ov-sampling`
-    (`SEMANTIC_ID` "ov-sampling/GumbelArgmaxBf16@v1") with their bodies verbatim, so their ids are the lane's.
+    profiles bind (`verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py`).  Their bodies are the ones first checked,
+    verbatim, so their ids are unchanged.
+  * `TopPMask_v1{V}` (step `TopPMaskStep_v1`) and `GumbelTopPTokenSelect_v1{V}` — vLLM's p-only split top-p pipeline
+    (`_apply_topp_split`, a sampler batch of at most 64 without top-k) and the token select over its masked row.
 
-NOT defined here (fail-closed in Bet A's `SAMPLERS_BOUND`): top-p / top-k masking (`_topp_sb_{stats,step,mask}_kernel`,
-`_topk_topp_kernel`) — see the lane's failure record F-dense-02 for what an exact model needs.
+NOT defined here, and refused by the vLLM integration's builder: top-k masking and vLLM's other top-p kernels
+(`_topp_sb_{stats,step,mask}_kernel`, `_topk_topp_kernel`).
 """
 from __future__ import annotations
 
@@ -74,7 +76,7 @@ ONE_BITS = 0x3F800000
 #: whose NaN is pinned here rather than left to the host's default NaN (x86 and aarch64 differ in the sign)
 LOG_INVALID_NAN = 0xFFC00000
 #: every NaN result of the `_v2` logs (`nv_logf_gpu`, `nv_log1pf_gpu`): the GPU's canonical NaN, for an input outside the domain and a
-#: NaN input alike, no payload or sign kept (the L40S / H100 probe art:e5dd6ce9..., every build); the `_v1` logs keep `LOG_INVALID_NAN`
+#: NaN input alike, no payload or sign kept (measured on the L40S and the H100, every build); the `_v1` logs keep `LOG_INVALID_NAN`
 #: and a NaN input's payload
 LOG_NAN = 0x7FFFFFFF
 
@@ -389,17 +391,17 @@ def GumbelTokenSelect(B, S, logits, seed, pos, temp):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [R15 stoch] top-p: `apply_top_k_top_p_triton` split pipeline (`_topp_sb_{stats,step,mask}_kernel`, batch <= 64, no top-k)
+# top-p: `apply_top_k_top_p_triton` split pipeline (`_topp_sb_{stats,step,mask}_kernel`, batch <= 64, no top-k)
 # ---------------------------------------------------------------------------------------------------------
 #
 # The pipeline masks a row IN PLACE to -inf outside the nucleus; its keep predicate per lane is a function of the whole fp32 row,
 # p, and S (the split count = f(sampler batch size, SM count), `topp_geometry.splits_for`).  A primitive returns exactly one Value and
 # a per-lane Array-input primitive would cost V^2 operand references, so the row-level result is ONE `Value<V>` keep word
-# (`TopPMaskWordx{V}`, reference = `topp_split.topp_keep_row`, bit-exact on 63 captured + 368 random rows over 11 V and on the R16 GPU
+# (`TopPMaskWordx{V}`, reference = `topp_split.topp_keep_row`, bit-exact on 63 captured + 368 random rows over 11 V and on the GPU
 # fixture at every S) and `TopPMask_v1{V}` applies it lane by lane (`SelectF32(BitAt(keep, i), x, -inf)`) so the masked row IS an
 # Array Program value the Gumbel select composes into.
 #
-# [R16 stoch, coord M-0169 / global M-0189 (1)] S is an OPERAND (i32), not a static: the split count is the launch geometry
+# S is an OPERAND (i32), not a static: the split count is the launch geometry
 # S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_geometry.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
 # from its request-owned `splits` Input per sampling event, the fold carries the split kernels' constexpr S as a `Const32[S]` operand,
 # and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The keep word is TOTAL over the i32 operand:

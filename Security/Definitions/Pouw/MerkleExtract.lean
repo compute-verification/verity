@@ -4,7 +4,7 @@ import Mathlib
 # Merkle commitments over an oracle, and their extractor (trusted)
 
 The vocabulary of `Extract`, the commit-and-open premise of the no-fold design (every committed word is a SHA-512 Merkle
-leaf), and of its discharge from SHA-512 as a random oracle (R-ACCEL-3; ABSORB-THM, CMP-132).
+leaf), and of its discharge from SHA-512 as a random oracle.
 
 * `Enc`: the tree's leaf and node encodings into the oracle's domain, injective with disjoint images (frame-v3-sha512's
   domain separation, a protocol-code fact).

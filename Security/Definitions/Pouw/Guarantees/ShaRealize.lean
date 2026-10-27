@@ -17,7 +17,7 @@ namespace Pouw.Guarantees.ShaRealize
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
-/-- **Commit-and-open costs what computing costs, from SHA-512 as a random oracle** (CMP-132). For every accelerator
+/-- **Commit-and-open costs what computing costs, from SHA-512 as a random oracle**. For every accelerator
 model `G`, no-fold protocol `nf`, number of sampling blocks `k`, registrable instances `Reg` and selection `sel`,
 every oracle that is a uniform
 table `eo : nf.Orc ≃ (X → D)` with tree encodings `E`, and every reading of roots `rD`, paths `pl` and cell positions
@@ -33,7 +33,7 @@ its commit phases' and work's, and each selected answer's), the walk's use `ξw`
   for SHA-512.
 
 The event `ExtractAdv` bounds reads the verifier's opening check of the checked cells under the prover's root
-(RT-LEAN-2 L37): an accepted block's answer opens those cells, so where the check passes on the walk's words at the
+(condition 2): an accepted block's answer opens those cells, so where the check passes on the walk's words at the
 block's committed instance they open too, and the event is the check's failure on the walk's words. No prover is excluded: one that makes more queries has
 a larger `q A`, so a larger `ξ_A` and `κ_x(A)`. -/
 def ExtractOfRealize : Prop :=

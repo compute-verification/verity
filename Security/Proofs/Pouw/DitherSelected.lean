@@ -3,10 +3,9 @@ import Proofs.Pouw.SakLb
 /-!
 # The served Dither sampling block, selected or not: SAK(matmul) from its residual at the selection's rate
 
-SAK-LB's F2 (CMP-167, CMP-154). `Definitions.Pouw.Dither.ditherSelected` is the served design: the check coin carries
-a selection coin beside the cells' coin, and a block its selection coin doesn't pick passes with no cell checked.
-`Proofs.Pouw.SakLb` proves the sampling half of SAK(matmul) for `noFoldRound`, whose check runs on every coin; this
-file proves it for the selected block:
+`Definitions.Pouw.Dither.ditherSelected` is the served design: the check coin carries a selection coin beside the cells'
+coin, and a block its selection coin doesn't pick passes with no cell checked. `Proofs.Pouw.SakLb` proves the sampling
+half of SAK(matmul) for `noFoldRound`, whose check runs on every coin; this file proves it for the selected block:
 
 * `ok_selected_iff`: the check passes exactly where the block isn't picked or every checked cell is right;
 * `prob_imp_eq`, `prob_imp_le`: a check picked with probability `π` that then passes with probability `ρ` passes with

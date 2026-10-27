@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplFoldClass
 
 /-!
-# A class's fold is its copies' reference value (PRF-133, part 3, stage 2)
+# A class's fold is its copies' reference value
 
 `refVal`: the slot-`s` value of one copy of a Definition, its own column `y` at `A + B · posIn y` and its inputs at
 `ip`, summed over its rows and, copy by copy, its calls' (each read at the position it reads, `readAt`).
