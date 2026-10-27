@@ -21,7 +21,7 @@
 #      TAG=rb-<run id> (85's data/$TAG, removed at the end unless KEEP_DATA=1; a later job's STEPS=oprove,... takes it with
 #      TAG=... KEEP_DATA=1)  FLOCK_WORK=/workspace/jobs/rec-bench
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
-#      CUDA_TK, WARM_FROM: as 85 takes them (default: proofs' rec-reprice unpack and cargo tree where present, read only)
+#      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 # 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
@@ -33,12 +33,10 @@ export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}; FORGE=${FORGE:-}
 MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
-# OPROVE_GPU=0 (the default under the firewall): V*'s statements proved by 85's CPU prover, no lease. Node 1's lease pool
-# stops a lease at about 10 min while its GPU computes nothing (three firewalled L0 tries, 74 min non-preemptible leases,
-# exit 143 at 10m18s each: r20261024-075309-69be), and a firewalled session's GPU waits on the Lean session loop for minutes
+# OPROVE_GPU=0 (the default under the firewall): V*'s statements proved by 85's CPU prover, no lease. A lease pool stops a
+# lease whose GPU computes nothing for about 10 min, and a firewalled session's GPU waits on the Lean session loop for minutes
 [[ ,$MODES, == *,firewall,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
-# V*'s statements one at a time, as the firewall proves outer proofs: 85 proves 4 at once by default (bdaf3a016e), and
-# r20261025-094601-4794 timed its sessions so
+# V*'s statements one at a time, as the firewall proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \

@@ -39,9 +39,8 @@ E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
-# Each V* statement's firewalled session at K = 4096, N = 2, end to end (s): r20261024-094937-6572, the CPU prover, one at a
-# time. No one ratio to the dev session fits (L0 626x, L1-L3 190-315x, alg-p0 62x), so each statement has its own. A
-# session's time is the Lean session loop's; L3 took 519 s with the GPU prover (r20261024-071656-66cb) against 469 s here.
+# Each V* statement's firewalled session at K = 4096, N = 2, end to end (s), on the CPU prover, one at a time. No one
+# ratio to the dev session fits, so each statement has its own. A session's time is the Lean session loop's.
 # A lease or a run holds MARGIN times its statements' sessions.
 FW_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 847,
         "cap": 63, "cap-L1": 86, "cap-L2": 74, "cap-L3": 51}
@@ -131,7 +130,7 @@ def on(a) -> str:
 
 def mem_gb(a) -> int:
     """The job's --mem-gb, which a queued node makes its MemoryMax: under the firewall the Lean session loop and the
-    prover together peak at 99 GB on L0 (57 GB and 31 GB, r20261024-094937-6572), else 64."""
+    prover together peak near 100 GB on L0, else 64."""
     return a.mem_gb or (128 if "firewall" in a.modes.split(",") and "oprove" in steps(a.steps) else 64)
 
 
@@ -144,7 +143,7 @@ def steps(arg: str) -> list[str]:
 
 
 def preset(a: argparse.Namespace) -> argparse.Namespace:
-    """``--e2e``: one pass, as RECBENCH's draft ran it: the steps one recursive session needs and its negative, each once,
+    """``--e2e``: one pass: the steps one recursive session needs and its negative, each once,
     one session per prove and no warm one."""
     if a.e2e:
         a.steps, a.repeat, a.oprove_runs, a.oprove_warm = ",".join(E2E), 1, 1, 0

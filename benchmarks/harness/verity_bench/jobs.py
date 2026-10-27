@@ -275,7 +275,7 @@ def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> N
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU (g0-g7, since 24 Oct 18:00Z) in GPU_SLOTS
+#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU (g0-g7) in GPU_SLOTS
 DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 

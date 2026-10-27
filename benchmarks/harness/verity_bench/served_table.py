@@ -1,6 +1,6 @@
 """One table of every protocol's served overhead on Llama-3.1-8B, rendered from the evidence store.
 
-PoUW's run of record is kernels' live rows (`LIVE`): each a timed in-process vLLM run whose arm and control the run's own
+PoUW's run of record is its live rows (`LIVE`): each a timed in-process vLLM run whose arm and control the run's own
 `summary.json` and `stop.json` report, standing only when every gate it records passed and its coins were off-node.
 
 Each served row (`PROTOCOLS`) is either a protocol's run of record (`Protocol.record`: run ids, or an art id whose `runs`
@@ -68,7 +68,7 @@ class Protocol:
 @dataclass(frozen=True)
 class Live:
     """A live PoUW row: `arm`'s decode step over `control`'s, timed in run `run` on `device`, read from the
-    `summary.json` and `stop.json` under `out` in the run's record (kernels' `hb_sbench.py`/`sbench.sh` layout)."""
+    `summary.json` and `stop.json` under `out` in the run's record (`hb_sbench.py`/`sbench.sh`'s layout)."""
 
     device: str
     run: str
@@ -78,23 +78,22 @@ class Live:
 
 
 PROTOCOLS = (
-    Protocol("Pearl-C served (cross-check; #3410, #3459)",
+    Protocol("Pearl-C served (cross-check)",
              ("llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"),
              "pouw:pearl-c-sm120-v1-h3", "stock-fp8"),
     Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8",
              record=("art:271004b42aaab49fe04df9b65a831cc7592fc21997c29c3acf1c8ca6082c33db",)),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
-    Protocol("PoUS bandwidth audit (#3847)", (), "bandwidth-audit", None,
+    Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None,
              record=("art:953934e2c78a694c2156e8547fd3c4487f2ca77cec6ff006463bff8cdac67290",)),
-    # art:33b8cc62's three results (#3817); its meta names no runs.
-    Protocol("Commit (#3817)", (), "commit@compiled", None,
+    Protocol("Commit", (), "commit@compiled", None,
              record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe")),
-    # art:a94655c4's quiet runs at 595cce6dda (#3939): the served spec's b8 and b32, then the H1 spec's.
+    # The served spec's b8 and b32, then the H1 spec's.
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record=("r20261025-113633-fd71", "r20261025-113621-0c4a", "r20261025-113639-775f",
                      "r20261025-113628-088d")),
 )
-# The factor that restates a ratio over batch-invariant eager stock as one over stock as served (#3409's factor table).
+# The factor that restates a ratio over batch-invariant eager stock as one over stock as served.
 FACTORS = Protocol("conversion factor", (), SERVED, "stock-fp8",
                    record=("art:837392ce4529748dd033843d048ed97d176d7640aa31a90281ccd7c2dd4e77b6",))
 
@@ -117,7 +116,7 @@ class Breakdown:
 
 
 BREAKDOWNS = (
-    Breakdown("PoUS bandwidth audit (#3847)",
+    Breakdown("PoUS bandwidth audit",
               ("art:b95a662684a8d62181a763e2bcd6fd39003cfd8dd2b40b8d2733f3df45a4f5ed",)),
 )
 
@@ -430,7 +429,7 @@ def build(*, store: Any = None, root: Path | None = None, local_only: bool = Fal
           added: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None,
           protocols: Sequence[Protocol] | None = None, factors: Protocol | None = None,
           live: Sequence[Live] | None = None, breakdowns: Sequence[Breakdown] | None = None) -> dict[str, Any]:
-    """`collect` after pulling the remote's attempts started since the oldest spec without a record was added (#3406's
+    """`collect` after pulling the remote's attempts started since the oldest spec without a record was added (`check`'s
     pull), unless `local_only`. A run of record is read by id, from the remote where this machine lacks it."""
 
     protocols = PROTOCOLS if protocols is None else protocols
@@ -521,7 +520,7 @@ def render(table: Mapping[str, Any]) -> str:
     lines = [
         "# Served overhead on Llama-3.1-8B",
         "",
-        "## PoUW: run of record (kernels' live rows)",
+        "## PoUW: run of record (live rows)",
         "",
         "Each row is one in-process vLLM run on one GPU: Llama-3.1-8B int8 (the verity-int8 pin), every engine on "
         "vLLM's defaults (torch.compile, CUDA graphs), prefix caching off, decode at batch B with max_num_batched_tokens "

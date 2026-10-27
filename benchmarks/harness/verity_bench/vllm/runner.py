@@ -37,7 +37,7 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8:
 # run's trailing device work is too large to attribute, and the decode metric is dropped.
 DECODE_TAIL_SHARE = 0.01
 # Past a spec's `warmups`, an engine warms until two consecutive runs' wall times differ by at most this share. On a host
-# at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
+# at load 600-900 a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
 # seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
 WARMUP_AGREEMENT = 0.05
 # `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
@@ -297,7 +297,7 @@ def _record(
 def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, max_warmups: int, schedule: list[dict[str, Any]],
           entry: Mapping[str, Any]) -> None:
     """`warmups` discarded runs, then more, up to `max_warmups` in all, until the last two runs' wall times agree within
-    WARMUP_AGREEMENT. An engine whose first runs stall (18 Oct: the bandwidth arms' first prefill step, by seconds,
+    WARMUP_AGREEMENT. An engine whose first runs stall (the bandwidth arms' first prefill step, by seconds,
     for one to three runs after the engine starts) is timed only once it runs as it will keep running. An engine that
     reaches `max_warmups` without settling says so in its last warm-up's schedule entry (`settled: false`)."""
 
@@ -331,7 +331,7 @@ def decode_time_per_token(
     device work left after the last step (`device_tail_s`) exceeds DECODE_TAIL_SHARE of the decode time, which shows
     device work the host step times didn't see. Also None when the steps' decode tokens add up to more than the run
     `generated`: a decode token is one generated token, so a larger total means the counts misclassify prompt tokens
-    as decode (18 Oct: `arrivals.scheduled_tokens` looked prompt lengths up by the submitted request id, which this vLLM
+    as decode (once, `arrivals.scheduled_tokens` looked prompt lengths up by the submitted request id, which this vLLM
     pin renames, so every prompt token counted as decode)."""
 
     if generated is not None and sum(int(s.get("decode_tokens") or 0) for s in steps) > generated:
@@ -1122,7 +1122,7 @@ class _ProcessEngine:
 
     def _death_report(self, doing: str) -> str:
         """The engine process died under ``doing``: its own last error when it managed to send one, else its exit code,
-        so a kill during a gate surfaces as what it was instead of a connection error (re-baseline bug list, 14 Oct)."""
+        so a kill during a gate surfaces as what it was instead of a connection error."""
         final = None
         try:
             if self.conn.poll(0):
