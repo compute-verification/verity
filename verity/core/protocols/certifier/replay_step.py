@@ -6,8 +6,8 @@
 The precommitted compiler (PRF-143: committed Programs = compile(advice) under the advice's hiding root, total, refusing
 every ill-formed advice up to the cap ℓ) need not read the schedule from the advice: ENC-REPLAY replays vLLM's
 scheduler step for step from the certified I/O and a residual of a few bits per certifier window
-(`benchmarks/network_e2e/encodings/replay.py`). This Definition is one step of that replay, `reference` its
-specification in Python, and the replay's own steps are its difftest (`benchmarks/network_e2e/encodings/replay_vectors.py`).
+(`examples/network_vllm/encodings/replay.py`). This Definition is one step of that replay, `reference` its
+specification in Python, and the replay's own steps are its difftest (`examples/network_vllm/encodings/replay_vectors.py`).
 
 **What it models.** vLLM v1's `Scheduler.schedule` and `update_from_output` (the pinned 0.28.1rc1.dev472) under
 synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._Sched` runs them with `decide`:

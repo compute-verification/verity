@@ -4,7 +4,7 @@ A verifier of record's time against the size of the description it reads and aga
 description unrolls to. The rule it measures (AGENTS.md "Design rules", Daniel, 18 Oct): a verifier's cost is
 O(circuit description), never O(unrolled circuit).
 
-The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladder of configs up to B0 (`Config.b0()`,
+The workload is Serve_v1 (`examples/network_sim/workload/served.py`) at a ladder of configs up to B0 (`Config.b0()`,
 30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 

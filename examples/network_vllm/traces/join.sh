@@ -2,11 +2,11 @@
 # run.sh's join on a CPU node, for a GPU run made with JOIN=0, from the shipped tree's root, in a slot of network's cpu-1 pool:
 #   research run --on vy-nebius-cpu-1 --project verity --campaign glm-e2e-demo --cwd source --store-read -- \
 #     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/network_e2e/traces/join.sh art:RUN_RECORD [art:CORPUS[:TRACE,...]...]
+#     bash examples/network_vllm/traces/join.sh art:RUN_RECORD [art:CORPUS[:TRACE,...]...]
 # art:RUN_RECORD is the GPU run's record (`research data custody RUN --json`): each of its out/corpus/* is summarized into
 # OUT/corpus/ (a warden trace's `warden_serve.py check` first), and compared request by request into OUT/compare/ with each
 # art:CORPUS, a summarized vllm-trace-corpus/v1 (of the same plan and sampling), on the traces named. With ENC-REPLAY's
-# benchmarks/network_e2e/encodings/replay.py in the tree, OUT/replay/ has its table over every trace and warden view
+# examples/network_vllm/encodings/replay.py in the tree, OUT/replay/ has its table over every trace and warden view
 # (`summary.warden_views`), outputs released at their engine step and at the client's read (table-engine.json,
 # table-client.json, table.md). OUT/corpus/<model>-<variant> goes in as vllm-trace-corpus/v1 and OUT/replay as
 # advice-encoding/v1.
@@ -28,7 +28,7 @@ for dir in "$OUT"/corpus/*/; do
   [ -f "$dir/meta.json" ] || continue
   rm -rf "$dir/.site"
   echo "join: summarizing $dir at $(date -u +%H:%M:%SZ)"
-  "$PY" benchmarks/network_e2e/traces/corpus.py summarize "$dir" || rc=1
+  "$PY" examples/network_vllm/traces/corpus.py summarize "$dir" || rc=1
   corpora+=("$dir")
 done
 if [ $# -gt 0 ]; then
@@ -40,9 +40,9 @@ if [ $# -gt 0 ]; then
     [ -n "$root" ] || { echo "join: art:$id has no summary.json"; rc=1; continue; }
     specs+=("$root${traces:+:$traces}")
   done
-  "$PY" benchmarks/network_e2e/traces/corpus.py compare --out "$OUT/compare" "${specs[@]}" || rc=1
+  "$PY" examples/network_vllm/traces/corpus.py compare --out "$OUT/compare" "${specs[@]}" || rc=1
 fi
-REPLAY=benchmarks/network_e2e/encodings/replay.py
+REPLAY=examples/network_vllm/encodings/replay.py
 if [ -f "$REPLAY" ]; then
   mkdir -p "$OUT/replay"
   mapfile -t traces < <(find "$OUT/corpus" -name steps.jsonl -printf '%h\n' | sort)

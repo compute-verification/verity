@@ -19,7 +19,7 @@ On a node, proving, from a rehearsal you already have (a directory, a tarball of
 ~~~text
 research run --pool research --as LANE --pool-wait 3600 --timeout 5h --project verity --source . --cwd clone \
   --env E2E_MEM_GB=32 --send planned-40.tgz -- \
-  bash -c 'bash benchmarks/network_e2e/run.sh --from "$RESEARCH_RUN_DIR/inputs/planned-40.tgz"'
+  bash -c 'bash examples/network_vllm/run.sh --from "$RESEARCH_RUN_DIR/inputs/planned-40.tgz"'
 ~~~
 
 `run.sh` is what `verity bench network_e2e` runs. It builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean

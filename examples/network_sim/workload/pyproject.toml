@@ -16,7 +16,7 @@ verity-vllm = { workspace = true }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # `workload` is imported as a package from the directory above it, and `datacenter` (not an installed package) by path.
-pythonpath = ["..", "../../datacenter"]
+pythonpath = ["..", "../../../benchmarks/datacenter"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]

@@ -21,5 +21,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test_n3_canonical.py check the replays with the workload's N3Window_v5 (`workload.n3_canonical`); none of these
 # directories is an installed package, so all are imported by path. The tests pin the declared tensor-core rates to the
 # census.
-inputs = ["benchmarks/datacenter", "benchmarks/network_traces", "benchmarks/network_sim/workload",
+inputs = ["benchmarks/datacenter", "benchmarks/network_traces", "examples/network_sim/workload",
           "benchmarks/census/hardware.json"]

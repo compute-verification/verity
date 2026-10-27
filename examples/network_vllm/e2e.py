@@ -6,11 +6,11 @@ the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json
 the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and NEG's negatives, and what is
 still stubbed.
 
-    python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
+    python examples/network_vllm/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
                                          --endpoint-run DIR] [--ids FILE] [--prove-path DIR ...
                                          [--prove-path-registered FILE]] [--no-negatives]
-    python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
+    python examples/network_vllm/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
 `run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,

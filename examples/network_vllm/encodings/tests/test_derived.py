@@ -377,7 +377,7 @@ def _corpus_with(tmp_path, change):
 
 
 def test_a_trace_corpus_trace_rebuilds_from_the_runners_batch_order(tmp_path) -> None:
-    """TRACE-CORPUS's format from its own hook (`benchmarks/network_e2e/traces/vllm_trace_plugin.py`) and join
+    """TRACE-CORPUS's format from its own hook (`examples/network_vllm/traces/vllm_trace_plugin.py`) and join
     (`summary.join_trace`) on vLLM d9105ea8's scheduler laid out as for Model Runner V2 (resumed requests among the new),
     driven by `sched_trace.py` (4 s at 12/s, 100 blocks, a 256-token budget), each step's batch put decodes first as V2's
     runner does; `server.log` is vLLM's capacity line for those 100 blocks. Decodes first is vLLM's scheduling order here

@@ -1510,6 +1510,12 @@
         "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
         "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_e2e/": "examples/network_vllm/",
+        "benchmarks/network_sim/": "examples/network_sim/"
+      }
     }
   ]
 }

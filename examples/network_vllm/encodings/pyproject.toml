@@ -5,7 +5,7 @@
 # calls against `_KV` over whole traces; `arith_vectors.py`: the certifier's arithmetic
 # encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own scheduler, which the tests read
 # as fixtures (it needs vLLM). Not a package: the modules load by path (the directory's name shadows the stdlib's
-# `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
+# `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py examples/network_vllm/encodings`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
