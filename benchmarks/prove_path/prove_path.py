@@ -1013,7 +1013,7 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 
 
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
-    """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
+    """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
     (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
     (``location_bits``, `consumers.location_bits`); β_δ, the faulty proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
