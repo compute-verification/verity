@@ -26,7 +26,7 @@ both. The request ids and kinds are not the Program's to show: ``IoTieRequest`` 
 certified request's prompt ids at those positions, and the egress tie each decode slot's input to the request's last
 sample.
 
-**Positions.** The tie reads the Program's positions, not the Commit's: on vllm's eager path no Program reads a committed
+**Positions.** The tie reads the Program's positions, not the Commit's: on vLLM's eager path no Program reads a committed
 position. The compiled path's RoPE reads ``c00.input/positions``, a committed value (`verity_vllm.program.predict.compiled`); there
 the committed positions are what the compute read, and `served_tie`'s routed form holds the served rows to them.
 

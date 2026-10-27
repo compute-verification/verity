@@ -4,7 +4,7 @@ import Proofs.Accounting.TS.Session.Assumptions
 # A checked unit's proof layer through its C-Flock sessions
 
 The proof layer a checked record (`Accounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
-round `w` on the path `x` is the C-Flock session `sess x w i` (#2909's `RowsSession`) with outcome `out x w i`:
+round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome `out x w i`:
 
 * `accepted`: flock-verify `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof service's rule
   (`Accounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
