@@ -386,16 +386,16 @@ theorem segment_reads : segmentParams.k ≤ WipeProtocol.MAX_READS := by
 on-chip state. -/
 theorem segment_foreign_le :
     (WipeProtocol.certify segmentParams 0).foreignBits + segmentDevice.chip ≤ segmentDevice.mem := by
-  have hr : WipeProtocol.ratio segmentParams.k = 24 := by first | decide +kernel | rfl
-  have hm : WipeProtocol.memoryBits segmentParams = 2 ^ 28 := by
-    first | decide +kernel | simp [WipeProtocol.memoryBits, segmentParams] | rfl
+  have hr : WipeProtocol.ratio segmentParams.k = 24 := by decide +kernel
+  have hm : WipeProtocol.memoryBits segmentParams = 2 ^ 28 := by decide +kernel
   have hl : Nat.log2 2152 < 12 := (Nat.log2_lt (by norm_num)).2 (by norm_num)
   rw [certify_zero segment_reads]
   simp only [WipeProtocol.foreignBits, WipeProtocol.outsideBits, WipeProtocol.fillBits, hr, hm]
   show 64 * 8 * ((2 ^ 19 + 24 - 1) / 24 - 1) + 2 ^ 19 + Nat.log2 2152 + 130 + (2 ^ 28 - 2 ^ 19 * 64 * 8) + 0 ≤
     2 ^ 19 * 512
   generalize Nat.log2 2152 = l at hl ⊢
-  norm_num <;> omega
+  norm_num
+  omega
 
 /-- The segment's published `eps` is below 1. -/
 theorem segment_eps_lt :
