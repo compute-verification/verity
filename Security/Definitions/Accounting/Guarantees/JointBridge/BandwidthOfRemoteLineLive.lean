@@ -11,8 +11,8 @@ strategy `s` PoUB accepts while the bandwidth account read fewer than `Q` bits w
 conclusion is `PeriodLive.Sound`'s event at `.poub`, at any error that is a function of the strategy, so
 `PeriodLive.error`'s `δ + loss(Pr[B^s finds a collision])` among them.
 
-The session's bound is to be `Properties.RemoteAudit.Line.LineHeld`'s bits-read form (MEM-97 item 4):
-`δs + δ + Σ_c s/2^64 + bind` at `LineHeldAtComponent`'s premises (#4786), the binding term a SHA-512 collision on the
+The session's bound is to be `Properties.RemoteAudit.Line.LineHeld`'s bits-read form:
+`δs + δ + Σ_c s/2^64 + bind` at `LineHeldAtComponent`'s premises, the binding term a SHA-512 collision on the
 session's receipts, charged at the finder built from the strategy.
 
 It replaces the bridge from the bandwidth audit v0's `Bandwidth.Guarantees.AuditRO`, which is in the random-oracle

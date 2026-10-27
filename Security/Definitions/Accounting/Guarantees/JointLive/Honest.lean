@@ -6,7 +6,7 @@ import Definitions.Accounting.JointLive.Honest
 # The honest and nontrivial lemmas of `JointHorizonBlocksLive` and `Bridge.BandwidthOfRemoteLineLive` (trusted)
 
 Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial one
-(its conclusion fails for a verifier that accepts everything); failing either, it says nothing (#4825). These are
+(its conclusion fails for a verifier that accepts everything); failing either, it says nothing. These are
 `JointHorizonBlocksLive`'s and `Bridge.BandwidthOfRemoteLineLive`'s, at `Accounting.Honest`'s instances: the honest
 deployed horizon on one H200 of `vy-dc-h200-2` and the honest remote bandwidth session, and an idle node under verdicts
 that accept everything. Each instance is one in any causal game, since neither node's world reads the strategy or the

@@ -6,8 +6,8 @@ import Definitions.Accounting.JointLive
 PoUB's per-period guarantee over the causal game is `Accounting.PeriodLive.Sound` at `.poub`: at every strategy, the
 probability over the coins the game draws that PoUB accepts while the bandwidth account read fewer than `Q` bits over
 the period's window is at most its error at that strategy. The remote bandwidth audit's per-session statement is
-`Properties.RemoteAudit.Line.LineHeld` (and `LineHeldAtComponent`, at the bandwidth component's acceptance, #4786),
-over the session's openings coins, drawn live, with no random oracle. Its bits-read form (MEM-97 item 4) is to bound, at
+`Properties.RemoteAudit.Line.LineHeld` (and `LineHeldAtComponent`, at the bandwidth component's acceptance), over the
+session's openings coins, drawn live, with no random oracle. Its bits-read form is to bound, at
 every strategy of the game the session is played in, the probability that the Lean verifier accepts the session while
 the bits its line credits as read exceed the bits the node read from its registered store.
 

@@ -120,8 +120,8 @@ suppose, over `G` at every strategy `s`:
 * each subprotocol `a` of block `b` has its per-period guarantee at certificates `c b` and error `err b a`;
 * the wipe that opens block `b` is accepted while more than the foreign bits its verdict publishes plus the unfilled
   state survive beyond the committed carried state with probability at most `ε_wipe b s` (the streamed wipe's bound,
-  `Pous.Guarantees.StreamedWipe` at what `verity/wipe/v0` publishes: `StreamedWipeMeetsFamily`, #4490, and
-  `StreamedWipeMeetsReads`, #4707, through `Verity.Wipe.SurvivorBound`);
+  `Pous.Guarantees.StreamedWipe` at what `verity/wipe/v0` publishes: `StreamedWipeMeetsFamily` and
+  `StreamedWipeMeetsReads`, through `Verity.Wipe.SurvivorBound`);
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
   `0.07 · U + S_chip + c` with probability at most `δ_PoUS b s`.
 
