@@ -185,6 +185,7 @@ BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}"   # a cloud agent's (or its short form)
                          r"|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")                 # a desktop agent's, a bare UUID
+WORKER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")      # `linear comment --worker NAME`: shows as LANE/NAME
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
@@ -1816,8 +1817,10 @@ def render_audit(found: list[dict], counts: dict[str, dict[str, int]]) -> str:
 
 
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
-    """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]`,
-    `audit [TEAM ...] [--lane HANDLE]` (exit 1 on any finding) and `place ISSUE PROJECT [--milestone M]`."""
+    """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE` (or `--worker NAME`, a
+    lane's worker, which holds no handle: as LANE/NAME, ringing no one), `list TEAM [--state S]`, `audit [TEAM ...]
+    [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped), `place ISSUE PROJECT
+    [--milestone M]` and `edit ISSUE [--title T] [--due D|none] [--file BRIEF.md] [--parent ID]`."""
     from . import linear  # noqa: PLC0415
 
     def need(value: str | None, what: str) -> str:
@@ -1825,6 +1828,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             raise SlackError(f"linear {ns.verb}: give {what}")
         return value
     value = " ".join(ns.value) or None
+    if ns.worker and (ns.verb != "comment" or ns.handle):
+        raise SlackError("--worker goes with `comment` alone, never with --as: --as HANDLE is for the handle's holder, "
+                         "--worker NAME for a lane's worker, which holds no handle")
+    if ns.worker and not WORKER_RE.fullmatch(ns.worker):
+        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
     try:
         lin = linear.Linear()
         if ns.verb == "check":
@@ -1839,11 +1847,18 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verb == "audit":
             keys = {h["handle"]: h["linear"] for h in reg["handles"] if h.get("linear")}
             teams = [keys.get(t.lstrip("@"), t) for t in ([ns.target] if ns.target else []) + ns.value]
-            found = lin.audit(linear.owners(reg), teams or None, None if ns.now is None else float(ns.now))
+            unread = lin.unread(teams or sorted(set(linear.owners(reg))))
+            readable = [t for t in teams if t not in unread]
+            if unread:
+                print(f"linear audit: the app can't read team(s) {', '.join(unread)}, so their issues aren't audited",
+                      file=sys.stderr)
+            found = [] if teams and not readable else lin.audit(linear.owners(reg), readable or None,
+                                                                None if ns.now is None else float(ns.now))
             if ns.lane:
                 found = [f for f in found if f["lane"] == ns.lane.lstrip("@")]
             counts = linear.tally(found)
-            print(json.dumps({"findings": found, "counts": counts}, indent=2) if ns.json else render_audit(found, counts))
+            print(json.dumps({"findings": found, "counts": counts, "unread": unread}, indent=2) if ns.json
+                  else render_audit(found, counts))
             return 1 if found else 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "state":
@@ -1853,10 +1868,33 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             p = lin.place(issue, need(value, "the PROJECT (a prefix of its name)"), ns.milestone)
             print(f"{issue} placed in {p['project']}" + (f" / {p['milestone']}" if p["milestone"] else ""))
             return 0
-        author, text = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender"))["handle"], need(value, "the TEXT")
-        warn_unrouted(text, reg, author)
+        if ns.verb == "edit":
+            try:
+                brief = Path(ns.file).read_text() if ns.file else None
+            except OSError as e:
+                raise SlackError(f"--file {ns.file}: {e.strerror or e}") from None
+            i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
+            shown = {k: (f"{len(v)} characters" if k == "description" else v) for k, v in i.items()}
+            print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + ", ".join(f"{k} {v}" for k, v in shown.items()))
+            return 0
+        text = need(value, "the TEXT")
+        if not ns.worker:
+            author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
+            warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
+        if ns.worker:
+            lane = linear.owners(reg).get(info["team"]["key"])
+            if not lane:
+                raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
+                                 "no lane to comment as")
+            author = f"{lane}/{ns.worker}"
         lin.comment(info["id"], author, text)
+        if ns.worker:
+            print(f"{issue} commented as {author}")
+            if names := lead_names(text, reg):
+                print(f"route: a worker's comment rings no one, so {', '.join('@' + n for n in names)} won't hear of it "
+                      "from here: ask your lead to", file=sys.stderr)
+            return 0
         print(f"{issue} commented")
         ring_comment(ns, reg, author, info, text)
         return 0
@@ -4022,17 +4060,26 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     issue_flags(p)
     card_flags(p)
     p.set_defaults(verb=None, id=None, link=None, wait=False, every=WAIT_EVERY_S, json=False)
-    p = cmd("linear", "Linear issues: `check` (what the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` "
-                      "(by name; " + LINEAR_STATES + "), `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]` (open by default), "
-                      "`audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, with its fix; exit 1 on any), "
-                      "`place ISSUE PROJECT [--milestone M]` (by name prefixes)")
-    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place"))
-    p.add_argument("target", nargs="?", help="state, comment, place: the issue (INF-12); list, audit: the team (a handle or its key)")
+    p = cmd("linear", "Linear issues, through the app (never the Linear MCP connector, which acts as Daniel): `check` (what "
+                      "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
+                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
+                      "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, with its fix; exit "
+                      "1 on any), `place ISSUE PROJECT [--milestone M]` (by name prefixes), `edit ISSUE [--title T] "
+                      "[--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID]`")
+    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit"))
+    p.add_argument("target", nargs="?", help="state, comment, place, edit: the issue (INF-12); list, audit: the team (a handle or its key)")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
-                   help="comment: its sender (required); check: the test issue's sender (default comms)")
+                   help="comment: its sender, a handle you hold (or --worker); check: the test issue's sender (default comms)")
+    p.add_argument("--worker", default=None, metavar="NAME",
+                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
+                        "LANE the handle of the issue's team, and rings no one")
+    p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
+    p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
+    p.add_argument("--file", default=None, metavar="BRIEF.md", help="edit: replace its description with this file (markdown)")
+    p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92)")
     p.add_argument("--lane", default=None, metavar="HANDLE", help="audit: only this lane's findings (`-`: those with no lane)")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
     p.add_argument("--json", action="store_true", help="audit: the findings and counts as JSON")

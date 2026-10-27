@@ -79,6 +79,8 @@ research msg read --thread <ts>                                                #
   `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner. Taking an issue out of the backlog
   is the sign it was seen; Done is the owner's move (merging a PR doesn't close it). Comment with `research msg linear
   comment ISSUE 'TEXT' --as ME`, which rings the team's handle and the names it starts with; other comments ring no one.
+  A lane's worker, which holds no handle, comments with `--worker NAME` (as LANE/NAME, ringing no one), and `linear edit
+  ISSUE --title|--due|--file|--parent` changes an issue through the app (the Linear MCP connector acts as Daniel).
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 - **Retract** a post sent by mistake: `research msg retract --as NAME --ts TS [--thread ROOT] [--why W]` (needs
   `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy).

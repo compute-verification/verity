@@ -9,7 +9,8 @@ after filing it and after each comment (a comment subscribes its author again), 
 is never assigned or delegated: an issue assigned to the Cursor app starts a new agent instead of waking the lead.
 
 `audit` reads every open issue once and names what keeps it off its board or stale (AUDIT_KINDS); `research msg linear audit`
-prints it and top's hourly sweep rings each lane with its findings. Stdlib only."""
+prints it and top's hourly sweep rings each lane with its findings.  `edit` changes an issue's title, due date, description
+or parent through the app, so nobody edits through the Linear MCP connector, which acts as Daniel. Stdlib only."""
 from __future__ import annotations
 
 import base64
@@ -34,8 +35,9 @@ TITLE_MAX = 80
 OPEN_TYPES = ("triage", "unstarted", "started")                  # the audit's issues: Backlog is parked, not open work
 TAKEN = ("Todo", "In Progress", "In Review")                     # taken up: it belongs on a board, with a date
 QUIET_H = 24                                                     # In Progress with no comment and no start for this long
-STALE_D = 7                                                      # Todo not updated for this long
+STALE_D = 7                                                      # Todo not updated or commented on for this long
 AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
+AUDIT_CHILDREN = 50                                              # a parent's most recently updated children the audit reads
 LANE_LABEL = "lane:"                                             # a handle with no team of its own marks its issues so
 NO_LANE = "-"
 AUDIT_KINDS = ("orphan", "milestone", "undated", "overdue", "quiet", "stale", "title", "landed", "lane")
@@ -44,6 +46,7 @@ RING_TAGS_RE = re.compile(r"(?:(?:<!subteam\^[A-Z0-9]+(?:\|[^>]*)?>|<@[A-Z0-9]+(
 PAREN = r"(?:\s*\([^()\n]{1,30}\))?"                              # `(URGENT)`, `(sent 01:48Z)`
 SIGNED_RE = re.compile(rf"[a-z][a-z0-9._-]*{PAREN}[\s,:;]+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}}Z{PAREN}[\s,:;]*")
 LOWER_WORD_RE = re.compile(r"[a-z][a-z'\u2019-]*(?![\w./`@])")   # `a`, `can't`; never `vLLM`, `hm96` or `tools/research`
+DUE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 Transport = Callable[[str, bytes, dict], dict]
 
@@ -80,16 +83,21 @@ def first_line(body: str) -> str:
     return _capped(next((s.strip() for s in body.splitlines() if s.strip()), "(no text)"))
 
 
-def title(body: str) -> str:
-    """An issue's title from a Slack post's body: its first line without the leading ring tags and the sender's signature
-    (`@infra memory-accounting, 12:15Z, an ask…` is `An ask…`), capitalized and capped; the first line as it is when nothing
-    else is left."""
-    text = body.lstrip()
+def unsigned(text: str) -> str:
+    """`text` without its leading ring tags and the sender's signature (`@infra memory-accounting, 12:15Z, `)."""
+    text = text.lstrip()
     if m := RING_TAGS_RE.match(text):
         text = text[m.end():]
     if m := SIGNED_RE.match(text):
         text = text[m.end():]
-    line = next((s.strip() for s in text.splitlines() if s.strip()), "")
+    return text
+
+
+def title(body: str) -> str:
+    """An issue's title from a Slack post's body: its first line without the leading ring tags and the sender's signature
+    (`@infra memory-accounting, 12:15Z, an ask…` is `An ask…`), capitalized and capped; the first line as it is when nothing
+    else is left."""
+    line = next((s.strip() for s in unsigned(body).splitlines() if s.strip()), "")
     if not line:
         return first_line(body)
     return _capped(line[0].upper() + line[1:] if LOWER_WORD_RE.match(line) else line)
@@ -253,17 +261,62 @@ class Linear:
                  {"id": self.issue_id(issue), "i": i})
         return {"issue": issue, "project": p["name"], "milestone": m["name"] if m else None}
 
+    def edit(self, issue: str, title: str | None = None, due: str | None = None, description: str | None = None,
+             parent: str | None = None, send: bool = True) -> dict:
+        """Change the issue's title, due date (YYYY-MM-DD, or `none` to clear it), description (replaced whole, as markdown) or
+        parent (an identifier), at least one, through these credentials rather than a person's (the MCP connector acts as
+        Daniel): the IssueUpdateInput it sends, which `send=False` only builds."""
+        i: dict = {}
+        if title is not None:
+            if not title.strip():
+                raise LinearError("--title: give the new title")
+            i["title"] = title.strip()
+        if due is not None:
+            if due.lower() == "none":
+                i["dueDate"] = None
+            else:
+                try:
+                    ok = bool(DUE_RE.fullmatch(due) and datetime.strptime(due, "%Y-%m-%d"))
+                except ValueError:
+                    ok = False
+                if not ok:
+                    raise LinearError(f"--due {due!r}: give a date as YYYY-MM-DD, or `none` to clear it")
+                i["dueDate"] = due
+        if description is not None:
+            if not description.strip():
+                raise LinearError("--file: the brief is empty")
+            i["description"] = description
+        if parent is not None:
+            i["parentId"] = self.issue_id(parent) if send else parent
+        if not i:
+            raise LinearError("give at least one of --title, --due, --file and --parent")
+        if send:
+            self.gql("mutation($id: String!, $i: IssueUpdateInput!) { issueUpdate(id: $id, input: $i) { success } }",
+                     {"id": self.issue_id(issue), "i": i})
+        return i
+
+    def unread(self, teams: list[str]) -> list[str]:
+        """Those of `teams` (keys or names, any case) these credentials can't see, which the audit skips: Linear answers a
+        filter on such a team with no issues, not an error."""
+        nodes = self.gql("{ teams(first: 100) { nodes { key name } } }")["teams"]["nodes"]
+        seen = {x.lower() for t in nodes for x in (t["key"], t["name"])}
+        return [t for t in teams if t.lower() not in seen]
+
     def audit(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None) -> list[dict]:
         """One pass over the open issues (OPEN_TYPES), of `teams` (names or keys) or every team: each finding
         {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS):
         - orphan: Todo, In Progress or In Review, in no project.  milestone: in a project with milestones, with none set.
         - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (UTC).
         - quiet: In Progress with no comment and no start for QUIET_H (the last comment's and the start's times, not updatedAt,
-          which bulk edits move).  stale: Todo not updated for STALE_D days.
-        - title: `title` would change it, or it ends in "…": a Slack post's first line, not a deliverable.
+          which bulk edits move).  stale: Todo neither updated nor commented on for STALE_D days (a comment leaves
+          updatedAt as it was).  A parent counts its children's (AUDIT_CHILDREN of them) as its own: each one's updatedAt,
+          which its start and state changes move, and its last comment.
+        - title: it starts with ring tags or a sender's signature (`unsigned` would change it), or ends in "…": a Slack
+          post's first line, not a deliverable.  An area prefix (`pous: …`) and a long title are fine.
         - landed: In Progress or In Review with GitHub PRs attached, every one merged or closed.
         - lane: its team has no handle (`owners`, team key to handle) and it has no `lane:<handle>` label.
-        `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE."""
+        `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE.  A team these credentials can't see
+        (`unread`) has no issues here, so it adds no finding and no error."""
         now, owners = self.now() if now is None else now, owners or {}
         today = datetime.fromtimestamp(now, timezone.utc).date().isoformat()
         f: dict = {"state": {"type": {"in": list(OPEN_TYPES)}}}
@@ -272,7 +325,9 @@ class Linear:
         q = ("query($f: IssueFilter!, $after: String) { issues(filter: $f, first: " + str(AUDIT_PAGE) + ", after: $after) { "
              "pageInfo { hasNextPage endCursor } nodes { identifier title url dueDate startedAt updatedAt createdAt "
              "state { name } team { key } project { id name } projectMilestone { id } labels { nodes { name } } "
-             "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } attachments { nodes { url sourceType metadata } } } } }")
+             "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } attachments { nodes { url sourceType metadata } } "
+             f"children(first: {AUDIT_CHILDREN}, orderBy: updatedAt) {{ nodes {{ updatedAt "
+             "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } } } } } } }")
         issues, after = [], None
         while True:
             page = self.gql(q, {"f": f, "after": after})["issues"]
@@ -289,8 +344,11 @@ class Linear:
             prs = [a["metadata"] for a in i["attachments"]["nodes"]
                    if a.get("sourceType") == "github" and "/pull/" in (a.get("url") or "") and (a.get("metadata") or {}).get("status")]
             last = max((t for t in (_epoch(c["createdAt"]) for c in i["comments"]["nodes"]) if t), default=None)
-            heard = max((t for t in (last, _epoch(i.get("startedAt"))) if t), default=_epoch(i["createdAt"]))
-            idle_d = (now - _epoch(i["updatedAt"])) / 86400
+            kids = [_epoch(s) for c in (i.get("children") or {}).get("nodes", [])
+                    for s in (c.get("updatedAt"), *(x["createdAt"] for x in c["comments"]["nodes"]))]
+            kid = max((t for t in kids if t), default=None)
+            heard = max((t for t in (last, _epoch(i.get("startedAt")), kid) if t), default=_epoch(i["createdAt"]))
+            idle_d = (now - max(t for t in (_epoch(i["updatedAt"]), last, kid) if t)) / 86400
             nums = ", ".join(f"#{p.get('number')}" for p in prs[:5]) + (", ..." if len(prs) > 5 else "")
             found = {
                 "orphan": state in TAKEN and not project
@@ -299,16 +357,19 @@ class Linear:
                 "milestone": project and staged.get(project["id"]) and not i.get("projectMilestone")
                 and f"set the milestone it serves (`research msg linear place {ident} \"{project['name']}\" --milestone M`)",
                 "undated": state in TAKEN and not i.get("dueDate")
-                and "set the date it lands (its milestone's at the latest), or move it to Backlog",
+                and f"set the date it lands, its milestone's at the latest (`research msg linear edit {ident} --due YYYY-MM-DD`), "
+                    "or move it to Backlog",
                 "overdue": i.get("dueDate") and i["dueDate"] < today
-                and f"due {i['dueDate']}: land it, or set the date it will land and comment why it moved",
+                and f"due {i['dueDate']}: land it, or set the date it will land (`research msg linear edit {ident} --due "
+                    "YYYY-MM-DD`) and comment why it moved",
                 "quiet": state == "In Progress" and now - heard > QUIET_H * 3600
                 and f"no comment or start for {(now - heard) / 3600:.0f} h: comment one line (what changed, the next step and "
                     "its date), or move it back to Todo",
                 "stale": state == "Todo" and idle_d > STALE_D
-                and f"not updated for {idle_d:.0f} days: plan it (a date and milestone) or cancel it with a one-line reason",
-                "title": (_title(i["title"]) != i["title"] or i["title"].endswith("\u2026"))
-                and f"retitle it to the deliverable, a noun phrase under {TITLE_MAX} characters",
+                and f"not updated or commented on for {idle_d:.0f} days: plan it (a date and milestone) or cancel it with a one-line reason",
+                "title": (unsigned(i["title"]) != i["title"].lstrip() or i["title"].rstrip().endswith("\u2026"))
+                and "retitle it to the deliverable, with no handle, sender, time or trailing \u2026 "
+                    f"(`research msg linear edit {ident} --title T`)",
                 "landed": state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
                 and f"every attached PR is merged or closed ({nums}): move it to Done if its done-condition holds, else to "
                     "In Progress naming the piece left",

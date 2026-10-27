@@ -32,7 +32,7 @@ seen.
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
    lists them (findings with no lane: @top); once a day after 15:00Z, @top with the totals and their change from the line
-   24 h earlier.
+   24 h earlier, and the registry's teams the app can't read (`unread`), which the audit skips.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -366,10 +366,11 @@ def _change(n: int, then) -> str:
     return f" ({n - then:+d})" if isinstance(then, int) else ""
 
 
-def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Callable[[], dict], log_path: Path | None) -> None:
+def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Callable[[], dict], log_path: Path | None,
+                 unread: Callable[[], list[str]] = list) -> None:
     """The audit's line appended to `log_path` (None: a dry run, which appends nothing), each lane's ring and @top's daily one.
-    A volume that can't be read leaves the line's `volume` null."""
-    found = audit()
+    A volume that can't be read leaves the line's `volume` null; `unread`, the teams the audit can't see, goes in both."""
+    found, blind = audit(), unread()
     counts = linear.tally(found)
     kinds = {k: sum(c.get(k, 0) for c in counts.values()) for k in linear.AUDIT_KINDS}
     try:
@@ -388,8 +389,8 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
             if str(x.get("t", "")) <= iso(now - DAY_BEFORE_S):
                 earlier = x
         with log_path.open("a") as f:
-            f.write(json.dumps({"t": iso(now), "findings": len(found), "kinds": kinds, "lanes": counts, "volume": vol},
-                               sort_keys=True) + "\n")
+            f.write(json.dumps({"t": iso(now), "findings": len(found), "kinds": kinds, "lanes": counts, "volume": vol,
+                                "unread": blind}, sort_keys=True) + "\n")
     bucket = int(now // LANE_RING_S)
     for lane, c in counts.items():
         name, whose = ("top", "issues with no lane") if lane == linear.NO_LANE else (lane, "your open issues")
@@ -412,6 +413,8 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
             f"{vol[k]} {what}{_change(vol[k], then('volume', k))}"
             for k, what in (("posts", "posts"), ("words", "words"), ("over", f"over {slack.VOLUME_WORDS} words")))
     body += f"; changes from {earlier['t']}" if earlier else "; no line 24 h earlier yet"
+    if blind:
+        body += f"; not audited, the app can't read team(s) {', '.join(blind)}"
     if counts:
         body += "; by lane: " + ", ".join(
             f"{lane} {sum(c.values())}" for lane, c in sorted(counts.items(), key=lambda kv: -sum(kv[1].values())))
@@ -440,6 +443,11 @@ def traffic_json() -> dict:
     if r.returncode != 0:
         raise RuntimeError(f"research msg traffic exited {r.returncode}: {r.stderr.strip()[-300:]}")
     return json.loads(r.stdout)
+
+
+def linear_check(state, ring, reg, now, log_path: Path | None) -> None:
+    lin, owners = linear.Linear(), linear.owners(reg)
+    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now), volume_json, log_path, lambda: lin.unread(sorted(owners)))
 
 
 def volume_json() -> dict:
@@ -488,8 +496,7 @@ def main(argv: list[str] | None = None) -> int:
                     "rules thread": lambda: rules_thread(state, ring, api, reg, now),
                     "main": lambda: main_stalled(state, ring, now),
                     "h200": lambda: h200s(state, ring, now, fleet_samples),
-                    "linear": lambda: linear_audit(state, ring, now, lambda: linear.Linear().audit(linear.owners(reg), now=now),
-                                                   volume_json, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
+                    "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
                 prune(state, now)
             if not ns.dry_run:
                 tmp = state_path.with_suffix(".tmp")

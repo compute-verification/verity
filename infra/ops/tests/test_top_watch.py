@@ -297,12 +297,20 @@ def test_each_audit_pass_appends_its_line_with_the_volume_null_when_unread_and_a
         raise RuntimeError("no Slack token")
 
     T.linear_audit({}, Ring(), at(19, 20), lambda: FOUND, lambda: VOLUME, log)
-    T.linear_audit({}, Ring(), at(19, 21), lambda: FOUND[:1], unread, log)
+    T.linear_audit({}, Ring(), at(19, 21), lambda: FOUND[:1], unread, log, lambda: ["HASH", "TRN"])
     T.linear_audit({}, Ring(), at(19, 22), lambda: FOUND, lambda: VOLUME, None)
     first, second = [T.json.loads(x) for x in log.read_text().splitlines()]
     assert first == {"t": "2026-10-19T20:00:00Z", "findings": 5,
                      "kinds": {"orphan": 1, "milestone": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0, "title": 0,
                                "landed": 0, "lane": 1},
                      "lanes": {"-": {"lane": 1}, "infra": {"orphan": 1, "quiet": 2}, "proofs": {"undated": 1}},
-                     "volume": {"posts": 1758, "words": 197955, "over": 997}}
+                     "volume": {"posts": 1758, "words": 197955, "over": 997}, "unread": []}
     assert second["findings"] == 1 and second["lanes"] == {"infra": {"orphan": 1}} and second["volume"] is None
+    assert second["unread"] == ["HASH", "TRN"]
+
+
+def test_tops_daily_line_names_the_teams_the_audit_cant_read(tmp_path):
+    ring = Ring()
+    T.linear_audit({}, ring, at(19, 20), lambda: [], lambda: VOLUME, tmp_path / T.AUDIT_LOG, lambda: ["HASH", "TRN"])
+    (to, body, _), = ring.rings
+    assert to == "top" and body.endswith("; no line 24 h earlier yet; not audited, the app can't read team(s) HASH, TRN")
