@@ -15,15 +15,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
+import torch
 
-torch = pytest.importorskip("torch")
+from verity_vllm.acquire.sources import int8_source as I8
+from verity_vllm.commit.committer import native_host as nh
+from verity_vllm.engine import int8_ops
 
-from verity_vllm.acquire.sources import int8_source as I8  # noqa: E402
-from verity_vllm.commit.committer import native_host as nh  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-
-from tests.commit import test_native_collect_plan_cache as PC  # noqa: E402
+from tests.commit import test_native_collect_plan_cache as PC
 
 LIN = "model.layers.0.mlp.down_proj"
 K = 512                                         # a lone request's x_q outgrows the chunk padding the worker compares at
