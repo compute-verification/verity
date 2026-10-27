@@ -12,6 +12,12 @@ side), its hashing (`coins`, the SHA-512 coin streams, and `commit`, the leaves 
 (`form` and `wrap`). The residual is 1 - W / (step θ), W the step's MACs and θ the H200's sheet rate (4,096 MACs an SM a
 clock, 132 SMs, 1,830 MHz; #4940).
 
+`v31 fill-bench`'s lines (Dither's no-fold call, `"fill": true`) give a step per (L', L, ROW, served or filler, variant).
+Its arm of record is the one a call of the protocol runs: a served call's seeds are per call (`dither.seeds(coin, receipt,
+call)`), so `ovl_w`, the weight side every call; a filler's is `ovl_pad`, its pad and every coin a call. Its split is a
+serial call's parts with those seeds: tensor `gemm` (served: cuBLASLt's O, then the protocol GEMM over k < (S - 1) L),
+hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a` and `form_b`.
+
     python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06]
 """
 from __future__ import annotations
@@ -27,15 +33,42 @@ MODELS = {"mqa16k52": CALLS, "8b": {(6144, 4096): 32, (4096, 4096): 32, (28672, 
 WGMMA = {"mqa16k52": 3.06}
 THETA = 4096 * 132 * 1.83e9
 ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
+FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "call", "ovl", "ovl_w", "ovl_pad")
 
 
 def rows(paths: list[str]) -> list[dict]:
-    """Each bench line, with its variant: the file's name past `bench-` (run.sh writes a variant's lines to one file)."""
+    """Each bench line, with its variant: the file's name past `bench-` or `fill-bench-` (run.sh writes a variant's lines
+    to one file)."""
     out = []
     for p in paths:
         for line in Path(p).read_text().splitlines():
             if line.startswith("{") and '"gamma_ovl"' in line:
-                out.append(json.loads(line) | {"variant": Path(p).stem.removeprefix("bench-")})
+                out.append(json.loads(line) | {"variant": Path(p).stem.removeprefix("fill-").removeprefix("bench-")})
+    return out
+
+
+def fill_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] = CALLS
+               ) -> dict[tuple[int, int, int, bool, str], dict]:
+    """Per (L', L, ROW, served, variant) of fill-bench's lines: each arm's seconds a step (None where a call lacks the
+    arm), the arm of record's, the split's and the step's MACs, for groups that timed every call."""
+    groups: dict[tuple[int, int, int, bool, str], dict[tuple[int, int], dict]] = {}
+    for r in lines:
+        if r.get("fill") and r["m"] == m and (r["n"], r["k"]) in calls:
+            key = (r["lp"], r["L"], r["row"], bool(r.get("o")), r.get("variant", ""))
+            groups.setdefault(key, {})[(r["n"], r["k"])] = r
+    out = {}
+    for key, by in sorted(groups.items()):
+        if set(by) != set(calls):
+            continue
+        ms = {a: [by[nk]["arms"].get(a, {}).get("ms") for nk in calls] for a in FILL_ARMS}
+        sec = {a: None if None in v else sum(calls[nk] * x for nk, x in zip(calls, v)) / 1e3 for a, v in ms.items()}
+        part = lambda *arms: sum(sec[a] or 0.0 for a in arms)  # noqa: E731
+        rec = "ovl_w" if key[3] else "ovl_pad"
+        mhz = [by[nk]["arms"][rec]["mhz"] for nk in calls if by[nk]["arms"].get(rec, {}).get("mhz")]
+        out[key] = {"s": sec, "record": rec, "step": sec[rec], "tensor": part("gemm"),
+                    "hashing": part("coins", "coins_w", "pad", "commit"), "other": part("form_a", "form_b"),
+                    "macs": sum(calls[nk] * m * nk[0] * nk[1] for nk in calls),
+                    "mhz": (min(mhz), max(mhz)) if mhz else None}
     return out
 
 
@@ -44,7 +77,7 @@ def steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] =
     """Per (L', t, ROW, variant): each arm's seconds a step and the step's MACs, for groups that timed every call."""
     groups: dict[tuple[int, int, int, str], dict[tuple[int, int], dict]] = {}
     for r in lines:
-        if r["m"] == m and (r["n"], r["k"]) in calls:
+        if not r.get("fill") and r["m"] == m and (r["n"], r["k"]) in calls:
             groups.setdefault((r["lp"], r["t"], r["row"], r.get("variant", "")), {})[(r["n"], r["k"])] = r
     out = {}
     for key, by in sorted(groups.items()):
@@ -84,6 +117,32 @@ def main() -> int:
             print(f"summary: {model} L {lp * t} row {row} {var}: step {s['ovl']:.3f} s overlapped, {vs}gamma_lt "
                   f"{s['ovl'] / s['lt']:.3f} against cuBLASLt's {s['lt']:.3f} s; serial {s['call']:.3f} s; gemm "
                   f"{s['gemm']:.3f}, hashing {s['coins'] + s['commit']:.3f}, other {s['form'] + s['wrap']:.3f} s")
+    for model, calls in MODELS.items():
+        st = fill_steps(lines, calls=calls)
+        if not st:
+            continue
+        found, ref = True, wg.get(model)
+        print(f"\n{model}, Dither's no-fold call\n\n| L' | L | ROW | unit | variant | step s | arm | gamma_u | gamma_lt | "
+              "ovl s | ovl_w s | ovl_pad s | call s | tensor s | hashing s | other s | hashing share | cuBLASLt s | "
+              "residual | SM MHz |")
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        f = lambda x: "-" if x is None else f"{x:.3f}"  # noqa: E731
+        for (lp, L, row, o, var), v in st.items():
+            s, step = v["s"], v["step"]
+            mhz = f"{v['mhz'][0]:.0f}-{v['mhz'][1]:.0f}" if v["mhz"] else "-"
+            gu = f"{step / ref:.3f}" if ref and step else "-"
+            split = v["tensor"] + v["hashing"] + v["other"]
+            print(f"| {lp} | {L} | {row} | {'served' if o else 'filler'} | {var} | {f(step)} | {v['record']} | {gu} | "
+                  f"{f(step / s['lt'] if step else None)} | {f(s['ovl'])} | {f(s['ovl_w'])} | {f(s['ovl_pad'])} | "
+                  f"{f(s['call'])} | {v['tensor']:.3f} | {v['hashing']:.3f} | {v['other']:.3f} | "
+                  f"{v['hashing'] / split:.1%} | {s['lt']:.3f} | {f(1 - v['macs'] / (step * THETA) if step else None)} | "
+                  f"{mhz} |")
+        for (lp, L, row, o, var), v in st.items():
+            step, lt = v["step"], v["s"]["lt"]
+            vs = f"gamma_u {step / ref:.3f} against wgmma's {ref} s, " if ref and step else ""
+            print(f"summary: {model} no-fold {'served' if o else 'filler'} L {L} L' {lp} row {row} {var}: step "
+                  f"{f(step)} s ({v['record']}), {vs}gamma_lt {f(step / lt if step else None)} against cuBLASLt's "
+                  f"{lt:.3f} s; tensor {v['tensor']:.3f}, hashing {v['hashing']:.3f}, other {v['other']:.3f} s serial")
     if not found:
         print("summary: no complete step (a bench shape is missing)")
     return 0 if found else 1

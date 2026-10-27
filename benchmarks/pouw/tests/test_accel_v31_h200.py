@@ -57,6 +57,37 @@ def test_a_missing_call_or_another_m_gives_no_step(tmp_path, capsys, monkeypatch
     assert "summary: no complete step" in capsys.readouterr().out
 
 
+def _fill_line(n: int, k: int, served: bool, L: int = 4096, m: int = 16384) -> str:
+    ms = {"lt": 1.0, "coins": 0.1, "coins_w": 0.05, "form_a": 0.02, "form_b": 0.03, "gemm": 1.5, "commit": 0.5, "call": 2.2,
+          "ovl": 2.0, "ovl_w": 3.0} | ({} if served else {"pad": 0.2, "ovl_pad": 4.0})
+    arms = {a: {"ms": x, "mhz": 1900} for a, x in ms.items()}
+    return json.dumps({"fill": True, "shape": f"s-{n}-{k}", "m": m, "n": n, "k": k, "lp": 256, "L": L, "row": 16384,
+                       "o": served, "arms": arms, "gamma_ovl": 2.0})
+
+
+def test_the_no_fold_step_takes_a_served_calls_per_call_weight_side_and_a_fillers_pad(tmp_path, capsys, monkeypatch):
+    """fill-bench's lines: a served call's step is its ovl_w (seeds per call, so the weight side every call), a filler's
+    its ovl_pad; the split is a serial call's tensor (gemm), hashing (coins, coins_w, pad, commit) and other (form)."""
+    f = tmp_path / "fill-bench-row16384-served1-L4096.jsonl"
+    f.write_text("\n".join(_fill_line(n, k, True) for n, k in h200_step.CALLS) + "\n")
+    g = tmp_path / "fill-bench-row16384-L4096.jsonl"
+    g.write_text("\n".join(_fill_line(n, k, False) for n, k in h200_step.CALLS) + "\n")
+    st = h200_step.fill_steps(h200_step.rows([str(f), str(g)]))
+    served, filler = st[(256, 4096, 16384, True, "row16384-served1-L4096")], st[(256, 4096, 16384, False, "row16384-L4096")]
+    assert (served["record"], filler["record"]) == ("ovl_w", "ovl_pad")
+    assert served["step"] == pytest.approx(261 * 3e-3) and filler["step"] == pytest.approx(261 * 4e-3)
+    assert served["s"]["pad"] is None
+    assert served["tensor"] == pytest.approx(261 * 1.5e-3)
+    assert served["hashing"] == pytest.approx(261 * 0.65e-3) and filler["hashing"] == pytest.approx(261 * 0.85e-3)
+    assert served["other"] == pytest.approx(261 * 0.05e-3)
+    assert h200_step.steps(h200_step.rows([str(f)])) == {}
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
+    assert h200_step.main() == 0
+    out = capsys.readouterr().out
+    assert ("summary: mqa16k52 no-fold served L 4096 L' 256 row 16384 row16384-served1-L4096: step 0.783 s (ovl_w), "
+            "gamma_u 0.256 against wgmma's 3.06 s, gamma_lt 3.000 against cuBLASLt's 0.261 s") in out
+
+
 def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):
     """h200_pipes.py: a pipe's busy time is its share of peak over the kernel's elapsed cycles (active / elapsed scales
     it) times the kernel's duration (in ncu's unit, refused when it's none it knows), the larger of its issue and
