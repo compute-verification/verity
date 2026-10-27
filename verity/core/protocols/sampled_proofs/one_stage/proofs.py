@@ -22,7 +22,7 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+`verify`'s under ``challenger`` (session ``i``'s coins the window's withheld challenger's at slot ``i``).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -128,7 +128,8 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
-           registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
+           registered: Mapping[str, Any] | None = None,
+           challenger: bool = False) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
@@ -142,7 +143,10 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     `RegisteredInput` as demanding them, so a prover that commits such a port's rows afresh and names none would be
     checked against no registered root. A run input that only the caller's registered file reads registered (the
     served RoPE statement's ``cs``) is the caller's to state: without the file, Lean holds it a run input, and refuses a
-    session whose public file names its reads or whose tables share its registered rows."""
+    session whose public file names its reads or whose tables share its registered rows.
+
+    Under `challenger` session ``i``'s coins are the window's withheld challenger's at slot ``i`` (v2's), one run of
+    the verifier a session (``--challenger-slot i``)."""
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
@@ -164,14 +168,18 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
-                            "--public", str(proof.public), "--partition", str(files["partition"]),
-                            "--program", str(files["program"]), *reads,
-                            "--session", *map(str, proof.sessions)], capture_output=True, text=True)
-    lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
+        base = [str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
+                "--public", str(proof.public), "--partition", str(files["partition"]), "--program", str(files["program"]),
+                *reads]
+        runs = ([[*base, "--challenger-slot", str(i), "--session", str(s)] for i, s in enumerate(proof.sessions)]
+                if challenger else [[*base, "--session", *map(str, proof.sessions)]])
+        lines, tail = [], ""
+        for cmd in runs:
+            p = subprocess.run(cmd, capture_output=True, text=True)
+            lines += [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
+            tail = f"(exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}"
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:
-        return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
-                               f"{(p.stderr or p.stdout)[-400:]}")
+        return None, ("proof", f"the verifier answered no verdict for each session in order {tail}")
     want = partition.get("program")
     out = []
     for s, v in zip(proof.sessions, lines):
@@ -229,7 +237,8 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
                 registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, str | None]:
-    """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
+    """`verify` under ``challenger`` (session ``i`` at slot ``i``), by the v2 audit's own run of the verifier on `proof`'s
+    files as blobs
     (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
     or None and Lean's refusal. `program` is the descriptor as JSON."""
     pr, blobs = evidence_v2(proof)

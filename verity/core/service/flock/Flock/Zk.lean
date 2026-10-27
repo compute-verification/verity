@@ -334,6 +334,53 @@ def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs :
     let c1 ← verifyRep spec st sch tPad sess i 1 proofs[2 * i + 1]!
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
+/-- The coin source of a session on the window's withheld challenger (live PROTOCOL.md §9): its link points are the
+challenger's release for `slot/<i>/session` after the SHA-512 of its tables' root_B digests, each round's coins its release
+for `slot/<i>/<stream>` after the round's SHA-512. -/
+def CHALLENGER_SCHEME : String := "challenger-withheld/v1"
+
+/-- `Hello`'s `coins` on the window's challenger as session `slot`. -/
+def challengerCoins (slot : Nat) : Json :=
+  Json.mkObj [("scheme", Json.str CHALLENGER_SCHEME), ("slot", Lean.toJson slot)]
+
+/-- The slot a `Hello` names on the window's challenger, when its `coins` is `CHALLENGER_SCHEME`'s. -/
+def challengerSlotOf (hello : String) : Option Nat := do
+  let c ← (Json.parse hello).toOption.bind (·.getObjVal? "coins" |>.toOption)
+  if (c.getObjValAs? String "scheme").toOption != some CHALLENGER_SCHEME then none
+  (c.getObjValAs? Nat "slot").toOption
+
+/-- `spec` as session `slot` on the window's challenger: its `Hello`, set up on `os` coins (which name no `coins`), with
+`coins` the challenger's (`challengerCoins`). -/
+def onChallenger (spec : SessionSpec) (slot : Nat) : V SessionSpec := do
+  let .ok j := Json.parse spec.hello | throw "challenger: the verifier's Hello is not JSON"
+  if (j.getObjVal? "coins").toOption.isSome then throw "challenger: the session's Hello already names its coins"
+  if spec.coinTree.isSome then throw "challenger: the session has a coin tree"
+  return { spec with hello := ← canon (j.setObjVal! "coins" (challengerCoins slot)) }
+
+/-- The verdict on a `--zk` session on the window's withheld challenger (`onChallenger`): `verify`'s checks, with no
+coin tree, so S2 holds the record's `hello` to the statement's byte for byte; that its coins are the challenger's releases,
+each once, is the audit's check of the record against the challenger's log. `verify`'s theorems cover the keyed coin tree
+only, so this form is outside them until they are instantiated at the challenger's coins. -/
+def verifyChallenger (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) : V Unit := do
+  if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
+  if spec.coinTree.isSome || (challengerSlotOf spec.hello).isNone then
+    throw "zk: the session's coins are not the window's challenger"
+  let sess ← Record.decode spec record
+  for (st, p) in tabs.zip sess.publics do st.publics p
+  let schs ← tabs.mapM fun st => schedule st.m
+  let want := spec.repStreams
+  if proofs.size != want.size then throw s!"{want.size} proofs expected"
+  if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
+    throw s!"S17: proof_{spec.dk} does not list exactly the tables' rep streams"
+  for ((_, _, w), b) in want.zip proofs do
+    if (sess.proofSha.find? (·.1 == w)).map (·.2) != some (hexOf (spec.dg b)) then
+      throw s!"S17: {w}: the proof is not the one the server received"
+  for i in [0:tabs.size] do
+    let (st, (sch, tPad)) := (tabs[i]!, schs[i]!)
+    let c0 ← verifyRep spec st sch tPad sess i 0 proofs[2 * i]!
+    let c1 ← verifyRep spec st sch tPad sess i 1 proofs[2 * i + 1]!
+    if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
 /-- **The statement avoids the mask range `r`** (D12): no pair of Δ (`da`, `db`) has a row or a column in `r`'s words, and
 every region, at each of `r`'s words, fixes an in-block word bit (`i + 7 < k_log`, not free) that the word's index does not
 have. The mask slot's uniform words hide every non-region `ŝ_v` (live PROTOCOL.md §6), so the zero-knowledge proof needs
@@ -378,6 +425,10 @@ def maskLogOf (circuit : ByteArray) : Nat :=
 
 private def s (x : String) : Json := Json.str x
 
+/-- The identity's `verifier_coins` on the window's withheld challenger (upstream's `CHALLENGER_COINS`). -/
+def CHALLENGER_COINS : String :=
+  "the window's withheld challenger's (challenger-withheld/v1): the link points its release for slot/<i>/session after the sha512 of the tables' root_b digests, each round's coins its release for slot/<i>/<stream> after the round's sha512, each asked once; nothing committed at hello, and the audit holds the record's coins to the challenger's log"
+
 /-- The identity's `hooks` for a `--zk` statement (upstream's `zk_identity`): what is masked, and how; `tables` for a session
 of several tables; `os` when the prover's every random value is the OS's bytes (`Tags.osMasks`), else its pads and every
 table's draws are ChaCha20 streams of its seed. -/
@@ -403,6 +454,11 @@ def hooks (maskLog : Nat) (tables : Bool) (os : Bool := false) : Json :=
 randomness as `t.osMasks` says); its `proof_class` stays upstream's (`NON_ZK_PROOF`). -/
 def tags (t : Tags) (maskLog count : Nat) : Tags :=
   { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1) t.osMasks) }
+
+/-- `tags` on the window's withheld challenger: the hooks' `verifier_coins` is `CHALLENGER_COINS`. -/
+def tagsChallenger (t : Tags) (maskLog count : Nat) : Tags :=
+  let h := (hooks maskLog (count > 1) t.osMasks).setObjVal! "verifier_coins" (Json.str CHALLENGER_COINS)
+  { t with identity := t.identity.setObjVal! "hooks" h }
 
 /-- M2's committed coin schedule for a session's tables (upstream's `coin_spec_of`): the session's stream, then every table's
 two reps, 512 rounds of at most 512 coins each. -/

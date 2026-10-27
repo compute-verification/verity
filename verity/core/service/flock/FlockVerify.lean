@@ -757,7 +757,7 @@ verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.p
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form] [--challenger-slot I]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
@@ -782,14 +782,24 @@ def verifyCmd (args : List String) : IO UInt32 := do
   if zk && tags.plainLeaves then
     IO.eprintln s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves"
     return 2
-  let coins := if zk then Coins.tree (Zk.coinSpec (tags.tableNames count))
-    else if argOf args "--coins" == some "os" then Coins.os else Coins.seed
-  let tags := tags.withCoins coins
+  let slot ← match argOf args "--challenger-slot" with
+    | none => pure none
+    | some i => match i.toNat? with
+      | some i => pure (some i)
+      | none => IO.eprintln "verify: --challenger-slot I: I is the session's index in the window"; return 2
+  if slot.isSome && !(zk && dirs.length == 1) then
+    IO.eprintln "verify --challenger-slot: one --zk session, the window's session I on its challenger"; return 2
+  let coins := match zk, slot with
+    | true, some _ => Coins.os
+    | true, none => Coins.tree (Zk.coinSpec (tags.tableNames count))
+    | false, _ => if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let tags := if slot.isSome then tags else tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  let tags := if zk then Zk.tags tags (Zk.maskLogOf circuitB) count else tags
+  let tags := if !zk then tags else if slot.isSome then Zk.tagsChallenger tags (Zk.maskLogOf circuitB) count
+    else Zk.tags tags (Zk.maskLogOf circuitB) count
   let partition ← match ← partitionInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
@@ -868,6 +878,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
         RecBudget.statements recInner
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
+        let r ← match slot with
+          | some i => pure (← Zk.onChallenger r.1 i, r.2)
+          | none => pure r
         if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
         r.2.forM fun (st : Stmt) => Registered.checkCover st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
@@ -927,7 +940,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
-      if zk then Zk.verify spec tabs record proofs
+      if zk then
+        if slot.isSome then Zk.verifyChallenger spec tabs record proofs else Zk.verify spec tabs record proofs
       else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
       else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its

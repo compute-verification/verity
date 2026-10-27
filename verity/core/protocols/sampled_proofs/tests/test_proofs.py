@@ -85,12 +85,13 @@ def fx(tmp_path_factory) -> Path:
     return root
 
 
-def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+            challenger: bool = False):
     st = fx / "stage"
     return PF.verify(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                      program=(st / "program.json").read_bytes(),
                      partition=json.loads((st / "partition.json").read_text()),
-                     registered=json.loads((st / "registered.json").read_text()) if own else None)
+                     registered=json.loads((st / "registered.json").read_text()) if own else None, challenger=challenger)
 
 
 @lean
@@ -200,20 +201,22 @@ def _same(v1, v2):
 @lean
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
-    """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted, proving the drawn units), a session whose proof bytes were
-    tampered with (record kept or rehashed), and the honest session without the verifier's registered file, its finding
-    is `verify`'s, reason and units included."""
+    """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk --challenger-slot i`'s one-stage path
+    inside its own Lean, on the files as blobs: on the pinned session, a session whose proof bytes were tampered with
+    (record kept or rehashed), and the pinned session without the verifier's registered file, its finding is
+    `verify`'s under ``challenger``, reason and units included. The pinned session's coins are the keyed coin tree's, so
+    with the registered file both refuse its Hello (S2), as the window's challenger names none of its coins; that a
+    session on the challenger is accepted is the one-stage audit's end to end run (`benchmarks/one_stage/a5.py`)."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
                          (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
-        got, why = _verify(fx, session, own=own)
+        got, why = _verify(fx, session, own=own, challenger=True)
         assert why is None, why
         mine, refused = _v2(fx, session, own=own)
         assert refused is None, refused
         _same(got, mine)
-        if own and session == fx / "session":
+        if own:
             (f,) = mine
-            assert f.accepted is True and f.units == DRAWN, f
+            assert f.accepted is False and f.why.startswith("S2/R7") and f.units == (), f
 
 
 @lean
