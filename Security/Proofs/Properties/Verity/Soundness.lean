@@ -26,27 +26,43 @@ namespace Verity
 open Accounting Core
 open scoped ENNReal
 
-theorem component_mem (a : Audit) : component a ∈ Onsite.components := by
-  cases a <;> simp [component, Onsite.components]
-
-/-- **What the verifier of record accepts, NCI accepted on the registration sampled proofs committed to.** -/
-theorem accepts_registered {s : Sent} (h : Accepts s) : RegistrationAccepts s := by
+/-- **What a deployment's verifier of record accepts, NCI accepted on the registration sampled proofs committed
+to.** -/
+theorem accepts_registered_at {D : Deployment} {s : Sent} (h : AcceptsAt D s) : RegistrationAcceptsAt D s := by
   obtain ⟨⟨n, ps⟩, ⟨b, d⟩, ⟨k, ev⟩, hp, hc, he, pub, prof, hch⟩ :=
-    Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
+    Properties.Composition.answerAccepts (D.protocol.on s.blobs) s.params s.commitment s.evidence h
   exact ⟨n, ps, b, d, k, ev, ⟨hp, hc, he⟩, pub, prof,
-    Properties.Composition.acceptRegistration "verity/onsite/v0" NciCheck.Protocol.protocol
-      SampledProofs.OneStageZk.protocol.id s.components n ps b d k ev pub prof hch⟩
+    Properties.Composition.acceptRegistration D.id NciCheck.Protocol.protocol
+      SampledProofs.OneStageZk.protocol.id (s.componentsAt D) n ps b d k ev pub prof hch⟩
 
-/-- **What the verifier of record accepts, every component accepts on its own case.** -/
-theorem accepts_components {s : Sent} (h : Accepts s) (a : Audit) : ComponentAccepts a s := by
-  obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered h
+/-- **What a deployment's verifier of record accepts, each of its components accepts on its own case.** -/
+theorem accepts_case_at {D : Deployment} {s : Sent} (h : AcceptsAt D s) {P : BlobProtocol}
+    (hP : P ∈ D.components) : CaseAcceptsAt D P s := by
+  obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered_at h
   obtain ⟨-, -, -, -, -, -, ⟨-, -, hfst, -⟩, hcases, -⟩ := hreg
-  have hm : (component a).onBlobs (Blobs.ofArray s.blobs) ∈
-      (Properties.Composition.triples s.components ps ev).map (·.1) := by
+  have hm : P.onBlobs (Blobs.ofArray s.blobs) ∈
+      (Properties.Composition.triples (s.componentsAt D) ps ev).map (·.1) := by
     rw [hfst]
-    exact List.mem_map.2 ⟨_, component_mem a, rfl⟩
+    exact List.mem_map.2 ⟨_, hP, rfl⟩
   obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
   exact ⟨n, ps, b, d, k, ev, hdec, x, hx, hx1, hcases x hx⟩
+
+/-- **What a deployment's verifier of record accepts, the component deciding each claim it decides accepts.** -/
+theorem accepts_component_at {D : Deployment} {s : Sent} (h : AcceptsAt D s) {a : Audit} (ha : D.Decides a) :
+    ComponentAcceptsAt D a s := by
+  unfold ComponentAcceptsAt
+  split
+  · rename_i P hc
+    exact accepts_case_at h (D.comp_mem a P hc)
+  · rename_i hc
+    simp [Deployment.Decides, hc] at ha
+
+/-- **What the verifier of record accepts, NCI accepted on the registration sampled proofs committed to.** -/
+theorem accepts_registered {s : Sent} (h : Accepts s) : RegistrationAccepts s := accepts_registered_at h
+
+/-- **What the verifier of record accepts, every component accepts on its own case.** -/
+theorem accepts_components {s : Sent} (h : Accepts s) (a : Audit) : ComponentAccepts a s :=
+  accepts_case_at h (component_mem a)
 
 /-- The union bound over a finite family of events, for one strategy. -/
 theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → Prop) (g : Game β)
@@ -65,10 +81,44 @@ theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → 
         _ ≤ Game.prob (p j) g σ + Game.prob (fun b => ∃ i ∈ S, p i b) g σ := Game.prob_or_le _ _ g σ
         _ ≤ Game.prob (p j) g σ + ∑ i ∈ S, Game.prob (p i) g σ := add_le_add le_rfl ih
 
+/-- A deployment's period reads the claims as onsite's does: only its verdicts are the deployment's. -/
+theorem holds_liveAt {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) (D : Deployment) (θ F c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c)) (a : Audit) (o : Outcome) :
+    (V.liveAt D θ F c).Holds (V.certOf θ) σ a o ↔ V.Holds θ F c σ a o := by
+  cases a <;> exact Iff.rfl
+
+/-- **A claim the deployment doesn't decide meets its target at no error**: its verdict there is false. -/
+theorem sound_of_not_decides {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) {D : Deployment} {a : Audit}
+    (ha : D.comp a = none) (θ F c : ByteArray) : (V.liveAt D θ F c).Sound (V.certOf θ) a (fun _ => 0) := by
+  intro s
+  refine (Game.prob_mono (q := fun _ => False) (fun o ho => ?_) _ s).trans (Game.prob_false _ _).le
+  obtain ⟨-, -, hcomp⟩ := ho.1
+  simp [ComponentAcceptsAt, ha] at hcomp
+
+theorem soundness_at : SoundnessAt := by
+  intro ι α _ d V D hT θ F c σ
+  have hS : ∀ a, (V.liveAt D θ F c).Sound (V.certOf θ) a
+      (fun σ => D.restrict (fun b => V.error b θ F c σ) a) := by
+    intro a
+    unfold Deployment.restrict
+    cases hc : D.comp a with
+    | some P => exact hT a (by simp [Deployment.Decides, hc]) θ F c
+    | none => exact V.sound_of_not_decides hc θ F c
+  calc Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
+          ∃ a, D.Decides a ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ
+      ≤ Game.prob (fun o => ∃ a, (V.liveAt D θ F c).accepts a o ∧ ¬ (V.liveAt D θ F c).Holds (V.certOf θ) σ a o)
+          (V.game θ F c) σ :=
+        Game.prob_mono (fun o ⟨hacc, hreg, a, ha, hfail⟩ =>
+          ⟨a, (⟨hreg, accepts_registered_at hacc, accepts_component_at hacc ha⟩ : V.VerdictAt D a o),
+            fun h => hfail ((V.holds_liveAt D θ F c σ a o).1 h)⟩) _ σ
+    _ ≤ ∑ a, D.restrict (fun b => V.error b θ F c σ) a :=
+        Accounting.SecurityProofs.JointPeriodLive ι α d (V.circuitOf F) Outcome (V.game θ F c) (V.liveAt D θ F c)
+          (V.certOf θ) (fun a σ => D.restrict (fun b => V.error b θ F c σ) a) hS σ
+
 theorem soundness_of_subprotocols : Soundness := by
   intro ι α _ d V hS hW hP hB hN θ F c σ
-  have hT : ∀ a, V.Target a := by
-    intro a
+  have hT : ∀ a, onsite.Decides a → V.TargetAt onsite a := by
+    intro a _
     cases a with
     | sampled => exact hS
     | pouw => exact hW
@@ -77,13 +127,11 @@ theorem soundness_of_subprotocols : Soundness := by
     | network => exact hN
   calc Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
           (V.game θ F c) σ
-      ≤ Game.prob (fun o => ∃ a, (V.live θ F c).accepts a o ∧ ¬ (V.live θ F c).Holds (V.certOf θ) σ a o)
-          (V.game θ F c) σ :=
-        Game.prob_mono (fun o ⟨hacc, hreg, a, hfail⟩ =>
-          ⟨a, (⟨hreg, accepts_registered hacc, accepts_components hacc a⟩ : V.Verdict a o), hfail⟩) _ σ
-    _ ≤ ∑ a, V.error a θ F c σ :=
-        Accounting.SecurityProofs.JointPeriodLive ι α d (V.circuitOf F) Outcome (V.game θ F c) (V.live θ F c)
-          (V.certOf θ) (fun a => V.error a θ F c) (fun a => hT a θ F c) σ
+      ≤ Game.prob (fun o => AcceptsAt onsite o.sent ∧ V.Registered o.params o.file ∧
+          ∃ a, onsite.Decides a ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
+        Game.prob_mono (fun o ⟨hacc, hreg, a, hfail⟩ => ⟨hacc, hreg, a, rfl, hfail⟩) _ σ
+    _ ≤ ∑ a, onsite.restrict (fun b => V.error b θ F c σ) a := soundness_at ι α d V onsite hT θ F c σ
+    _ = ∑ a, V.error a θ F c σ := Finset.sum_congr rfl fun _ _ => rfl
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
 theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
@@ -156,6 +204,48 @@ theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d :
           Game.prob_mono (fun o ho => by
             by_cases hr : V.Registered o.params o.file
             · exact Or.inl ⟨trivial, hr, a, ho⟩
+            · exact Or.inr hr) _ σ
+      _ ≤ _ := Game.prob_or_le _ _ _ σ
+      _ = _ := by rw [hz, add_zero]
+  exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
+
+/-- **`soundness_at`'s event has probability `0` at the honest deployment**: at registered files, where the honest
+lemma of each claim the deployment decides holds, the deployment's honest prover makes the theorem's event null. -/
+theorem soundness_at_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) (D : Deployment)
+    (h : ∀ a, D.Decides a → V.HonestHolds a) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+    Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
+        ∃ a, D.Decides a ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0 := by
+  classical
+  refine le_antisymm ?_ zero_le
+  calc Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
+          ∃ a, D.Decides a ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
+      ≤ Game.prob (fun o => ∃ a ∈ Finset.univ.filter D.Decides, ¬ V.Holds θ F c (V.honest θ F c) a o)
+          (V.game θ F c) (V.honest θ F c) :=
+        Game.prob_mono (fun o ⟨_, _, a, ha, hf⟩ => ⟨a, Finset.mem_filter.2 ⟨Finset.mem_univ a, ha⟩, hf⟩) _ _
+    _ ≤ ∑ a ∈ Finset.univ.filter D.Decides,
+          Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) :=
+        prob_exists_finset_le _ _ _ _
+    _ = 0 := Finset.sum_eq_zero fun a ha => h a (Finset.mem_filter.1 ha).2 θ F c hreg
+
+/-- **One decided claim's failing instance is the deployment's theorem's**: `soundness_of_subprotocols_nontrivial_of`
+at the deployment `D`, for a claim `a` that `D` decides. -/
+theorem soundness_at_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) (D : Deployment)
+    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F) (a : Audit) (ha : D.Decides a)
+    (hlt : ∑ b, D.restrict (fun b => V.error b θ F c σ) b <
+      Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ) :
+    ¬ V.SoundnessAtFor D fun _ => True := by
+  intro h
+  have hz : Game.prob (fun o => ¬ V.Registered o.params o.file) (V.game θ F c) σ = 0 :=
+    prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ hn => hn hreg) σ
+  have hle : Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤
+      Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧
+        ∃ a, D.Decides a ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
+    calc Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ
+        ≤ Game.prob (fun o => ((fun _ => True) o.sent ∧ V.Registered o.params o.file ∧
+            ∃ a, D.Decides a ∧ ¬ V.Holds θ F c σ a o) ∨ ¬ V.Registered o.params o.file) (V.game θ F c) σ :=
+          Game.prob_mono (fun o ho => by
+            by_cases hr : V.Registered o.params o.file
+            · exact Or.inl ⟨trivial, hr, a, ha, ho⟩
             · exact Or.inr hr) _ σ
       _ ≤ _ := Game.prob_or_le _ _ _ σ
       _ = _ := by rw [hz, add_zero]

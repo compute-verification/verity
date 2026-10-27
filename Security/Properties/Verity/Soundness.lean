@@ -39,4 +39,14 @@ def Soundness : Prop :=
     V.SampledProofsSound → V.PouwSound → V.PousSound → V.BandwidthAuditSound → V.NetworkCertifierSound →
       V.Soundness
 
+/-- **Soundness at any deployment's verifier of record, from the targets of the claims it decides.** For any
+composition `D` of components over NCI's registration check (`Deployment`: onsite, `onsite`, is one; a deployment
+that decides only some claims, such as sampled proofs and the network certifier, is another), if each claim `D` decides
+meets its target in `D`, then at all parameters, committed files and commitments and for every strategy, the
+probability that `D`'s compiled verifier accepts files that passed the commit phase's check while one of the claims
+`D` decides fails is at most those claims' errors at that strategy summed. -/
+def SoundnessAt : Prop :=
+  ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (D : Deployment),
+    (∀ a, D.Decides a → V.TargetAt D a) → V.SoundnessAt D
+
 end Verity

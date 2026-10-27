@@ -62,6 +62,13 @@ Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `PousSound`, `Band
 `NetworkCertifierSound`) is `Target a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s verdict accepts
 while its claim fails is at most its error there. `Verity.Soundness` (`Properties.Verity.Soundness`) composes them.
 
+**Any component list (`Deployment`).** A deployment is a composition `registeredB D.id` of a list of components over
+NCI's registration check, with the component (if any) that decides each `Audit` (`comp`, each in the list). Onsite
+(`onsite`) decides every claim. A deployment that decides only some, such as sampled proofs and the network certifier,
+decides the rest by no verdict: its period's `accepts` is false there. Every `…At D` name is the onsite name's
+reading at `D`, and the onsite name is it at `onsite` by definition. `Verity.SoundnessAt` composes the targets of the
+claims a deployment decides.
+
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the blob, ONE-3b), `place`,
 `programDigest` and `registered` (ONE-7), `rounds` and `coinsRead` (ONE-4), `extract` and the finders (ONE-8 and each
 target's), `computed` (ONE-16), `world` (the runs PoUS, the bandwidth audit and the network certifier realize: ONE-10,
@@ -82,20 +89,66 @@ def component : Audit → BlobProtocol
   | .poub => RemoteAudit.Protocol.protocol
   | .network => NetworkCheck.Period.protocol
 
-/-- What the prover sends onsite's verifier of record: the parameters, the commitment and the evidence, as bytes, and
-the blobs its components read. -/
+theorem component_mem (a : Audit) : component a ∈ Onsite.components := by
+  cases a <;> simp [component, Onsite.components]
+
+/-- **A deployment's verifier of record, as a composition**: NCI's registration check, on the registration sampled
+proofs' one-stage audit commits to, and then the components `components` over the blobs the prover sent
+(`Core.Composition.registeredB` under the id `id`). `comp a` is the component that decides `Audit` `a`'s claim, if
+the deployment composes one; a component that decides no claim here (onsite's wipe) still has to accept. -/
+structure Deployment where
+  id : String
+  components : List BlobProtocol
+  comp : Audit → Option BlobProtocol
+  comp_mem : ∀ a P, comp a = some P → P ∈ components
+
+namespace Deployment
+
+variable (D : Deployment)
+
+/-- The deployment's compiled verifier. -/
+def protocol : BlobProtocol :=
+  registeredB D.id NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id D.components
+
+/-- The deployment composes a component that decides `Audit` `a`'s claim. -/
+def Decides (a : Audit) : Prop := (D.comp a).isSome = true
+
+/-- `e` at the claims the deployment decides, and `0` at the others. -/
+def restrict (e : Audit → ℝ≥0∞) (a : Audit) : ℝ≥0∞ :=
+  match D.comp a with
+  | some _ => e a
+  | none => 0
+
+end Deployment
+
+/-- **Onsite** (`Core.Onsite.protocol`): its six components, and one per `Audit` (`component`). -/
+def onsite : Deployment where
+  id := "verity/onsite/v0"
+  components := Onsite.components
+  comp a := some (component a)
+  comp_mem a P h := by cases h; exact component_mem a
+
+/-- What the prover sends a deployment's verifier of record: the parameters, the commitment and the evidence, as
+bytes, and the blobs its components read. -/
 structure Sent where
   params : ByteArray
   commitment : ByteArray
   evidence : ByteArray
   blobs : Array ByteArray
 
-/-- Onsite's components on the blobs the prover sent. -/
-def Sent.components (s : Sent) : List Protocol := Onsite.components.map (·.onBlobs (Blobs.ofArray s.blobs))
+/-- The deployment's components on the blobs the prover sent. -/
+def Sent.componentsAt (D : Deployment) (s : Sent) : List Protocol :=
+  D.components.map (·.onBlobs (Blobs.ofArray s.blobs))
 
-/-- **The verifier of record accepts what the prover sent.** -/
-def Accepts (s : Sent) : Prop :=
-  (Onsite.protocol.answer s.params s.commitment s.evidence s.blobs).verdict = .accept
+/-- Onsite's components on the blobs the prover sent. -/
+def Sent.components (s : Sent) : List Protocol := s.componentsAt onsite
+
+/-- **The deployment's verifier of record accepts what the prover sent.** -/
+def AcceptsAt (D : Deployment) (s : Sent) : Prop :=
+  (D.protocol.answer s.params s.commitment s.evidence s.blobs).verdict = .accept
+
+/-- **Onsite's verifier of record accepts what the prover sent.** -/
+def Accepts (s : Sent) : Prop := AcceptsAt onsite s
 
 /-- Onsite's three byte strings decode under its registered composition's formats: the registration's entry `n` and
 the components' `ps`, the components' binding `b` and the registration's digest `d`, the registration's case `k` and the
@@ -106,26 +159,39 @@ def Decoded (s : Sent) (n : Composition.Named) (ps : List Composition.Named) (b 
     Composition.decodeRegisteredCommitment s.commitment = .ok (b, d) ∧
       Composition.decodeRegisteredEvidence s.evidence = .ok (k, ev)
 
-/-- The protocol `P` accepts its own case in what the prover sent: onsite's three byte strings decode, and one of the
-components' cases is `P`'s, as one of onsite's components, which decodes under the parameters onsite names for it, and
-`P`'s check accepts it. -/
-def CaseAccepts (P : BlobProtocol) (s : Sent) : Prop :=
+/-- The protocol `P` accepts its own case in what the prover sent: the three byte strings decode, and one of the
+components' cases is `P`'s, as one of the deployment's components, which decodes under the parameters the
+deployment names for it, and `P`'s check accepts it. -/
+def CaseAcceptsAt (D : Deployment) (P : BlobProtocol) (s : Sent) : Prop :=
   ∃ n ps b d k ev, Decoded s n ps b d k ev ∧
-    ∃ x ∈ Properties.Composition.triples s.components ps ev, x.1 = P.onBlobs (Blobs.ofArray s.blobs) ∧
+    ∃ x ∈ Properties.Composition.triples (s.componentsAt D) ps ev, x.1 = P.onBlobs (Blobs.ofArray s.blobs) ∧
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
-/-- `Audit` `a`'s component accepts its own case in what the prover sent. -/
+/-- `CaseAcceptsAt` at onsite. -/
+def CaseAccepts (P : BlobProtocol) (s : Sent) : Prop := CaseAcceptsAt onsite P s
+
+/-- The component that decides `Audit` `a`'s claim in the deployment accepts its own case in what the prover sent;
+false where the deployment decides no such claim. -/
+def ComponentAcceptsAt (D : Deployment) (a : Audit) (s : Sent) : Prop :=
+  match D.comp a with
+  | some P => CaseAcceptsAt D P s
+  | none => False
+
+/-- `Audit` `a`'s component accepts its own case in what the prover sent to onsite. -/
 def ComponentAccepts (a : Audit) (s : Sent) : Prop := CaseAccepts (component a) s
 
-/-- **NCI accepted the registration sampled proofs committed to**: onsite's three byte strings decode, and what they
-decode to is `Properties.Composition.RegisteredAccepted` at onsite (its registration check NCI's, its committing
-component sampled proofs' one-stage audit v2, its components on the blobs sent): NCI's check accepts the registration's case, its digest is the one the
-commitment ends in and the one sampled proofs' case commits to, and the components' cases are an accepted
-composition. -/
-def RegistrationAccepts (s : Sent) : Prop :=
+/-- **NCI accepted the registration sampled proofs committed to**: the three byte strings decode, and what they
+decode to is `Properties.Composition.RegisteredAccepted` at the deployment (its registration check NCI's, its
+committing component sampled proofs' one-stage audit v2, its components on the blobs sent): NCI's check accepts the
+registration's case, its digest is the one the commitment ends in and the one sampled proofs' case commits to, and
+the components' cases are an accepted composition. -/
+def RegistrationAcceptsAt (D : Deployment) (s : Sent) : Prop :=
   ∃ n ps b d k ev, Decoded s n ps b d k ev ∧ ∃ pub prof,
-    Properties.Composition.RegisteredAccepted "verity/onsite/v0" NciCheck.Protocol.protocol
-      SampledProofs.OneStageZk.protocol.id s.components n ps b d k ev pub prof
+    Properties.Composition.RegisteredAccepted D.id NciCheck.Protocol.protocol
+      SampledProofs.OneStageZk.protocol.id (s.componentsAt D) n ps b d k ev pub prof
+
+/-- `RegistrationAcceptsAt` at onsite. -/
+def RegistrationAccepts (s : Sent) : Prop := RegistrationAcceptsAt onsite s
 
 /-- One release of the challenger device: the bytes it answers, and the coins it released after them. -/
 structure Release where
@@ -282,9 +348,15 @@ sampled proofs committed to, and `a`'s compiled component accepts its own case i
 def Verdict (a : Audit) (o : Outcome) : Prop :=
   V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ ComponentAccepts a o.sent
 
-/-- **The period after `θ`, `F` and `c`, as the one vocabulary's `Accounting.PeriodLive`**: the committed files'
-units, the commitment's openings, the extractor, the finders, the gates computed, the world and the verdicts. -/
-noncomputable def live (θ F c : ByteArray) : PeriodLive d α (V.circuitOf F) (V.game θ F c) where
+/-- **Subprotocol `a`'s verdict in the deployment `D`**: `Verdict` with `D`'s registration and `D`'s component for
+`a`; false where `D` decides no claim of `a`'s. -/
+def VerdictAt (D : Deployment) (a : Audit) (o : Outcome) : Prop :=
+  V.Registered o.params o.file ∧ RegistrationAcceptsAt D o.sent ∧ ComponentAcceptsAt D a o.sent
+
+/-- **The period after `θ`, `F` and `c` in the deployment `D`, as the one vocabulary's `Accounting.PeriodLive`**: the
+committed files' units, the commitment's openings, the extractor, the finders, the gates computed, the world and `D`'s
+verdicts. -/
+noncomputable def liveAt (D : Deployment) (θ F c : ByteArray) : PeriodLive d α (V.circuitOf F) (V.game θ F c) where
   units := V.units F
   parts := V.partsOf F
   opens := V.Opens θ F c
@@ -292,7 +364,10 @@ noncomputable def live (θ F c : ByteArray) : PeriodLive d α (V.circuitOf F) (V
   finder a σ := V.finder a θ F c σ
   computed := V.computed θ F c
   world := V.world θ F c
-  accepts := V.Verdict
+  accepts := V.VerdictAt D
+
+/-- **The period after `θ`, `F` and `c`**, at onsite. -/
+noncomputable def live (θ F c : ByteArray) : PeriodLive d α (V.circuitOf F) (V.game θ F c) := V.liveAt onsite θ F c
 
 /-- **The claim subprotocol `a` certifies** in the play of `σ` that ended with `o`: `Accounting.PeriodLive.Holds` at the
 period and the published certificates. Sampled proofs' on the extractor's transcript at `σ` (at most an `ε` share of
@@ -342,11 +417,25 @@ def SoundnessFor (acc : Sent → Prop) : Prop :=
 /-- **Soundness at onsite's compiled verifier** (`Accepts`). -/
 def Soundness : Prop := V.SoundnessFor Accepts
 
-/-- **Subprotocol `a`'s target**: at all `θ`, `F` and `c`, its per-period guarantee over the period
-(`Accounting.PeriodLive.Sound` at `live`): for every strategy, the probability that `a`'s verdict accepts while its
-claim fails is at most its error at that strategy. -/
-def Target (a : Audit) : Prop :=
-  ∀ θ F c : ByteArray, (V.live θ F c).Sound (V.certOf θ) a (V.error a θ F c)
+/-- **Soundness in the deployment `D` for the acceptance `acc`**: `SoundnessFor` over the claims `D` decides, with
+their errors summed (`Deployment.restrict`). -/
+def SoundnessAtFor (D : Deployment) (acc : Sent → Prop) : Prop :=
+  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+    Game.prob (fun o => acc o.sent ∧ V.Registered o.params o.file ∧ ∃ a, D.Decides a ∧ ¬ V.Holds θ F c σ a o)
+        (V.game θ F c) σ ≤
+      ∑ a, D.restrict (fun b => V.error b θ F c σ) a
+
+/-- **Soundness at the deployment's compiled verifier** (`AcceptsAt D`). -/
+def SoundnessAt (D : Deployment) : Prop := V.SoundnessAtFor D (AcceptsAt D)
+
+/-- **Subprotocol `a`'s target in the deployment `D`**: at all `θ`, `F` and `c`, its per-period guarantee over `D`'s
+period (`Accounting.PeriodLive.Sound` at `liveAt D`): for every strategy, the probability that `a`'s verdict in `D`
+accepts while its claim fails is at most its error at that strategy. -/
+def TargetAt (D : Deployment) (a : Audit) : Prop :=
+  ∀ θ F c : ByteArray, (V.liveAt D θ F c).Sound (V.certOf θ) a (V.error a θ F c)
+
+/-- **Subprotocol `a`'s target**, at onsite. -/
+def Target (a : Audit) : Prop := V.TargetAt onsite a
 
 /-- **Sampled proofs' target (ONE-8)**: at most an `ε` share of the units unbound in the extractor's transcript. -/
 def SampledProofsSound : Prop := V.Target .sampled
