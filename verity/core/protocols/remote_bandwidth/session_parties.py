@@ -3,8 +3,9 @@ verifier and its challenger (`Verifier`), on a machine the prover doesn't contro
 
 ~~~text
 prover   -> verifier   Register {blocks} + payload root; per pass Root {t, i} + root; per window Openings {t} + openings
-verifier -> prover     Hold {registration, commitment}; per pass Run {t, i, challenge} + the root before; per window
-                       Open {t} + draws (u32be pass ‖ u64be position each); End
+verifier -> prover     Hold {registration}; per pass Run {t, i, challenge} + the root before (the challenge a
+                       `coins.Released`); per window Open {t} + draws (u32be pass ‖ u64be position each); End + the
+                       session's coins disclosed once it has its outcome ({commitment, openings}, `audit.Session.disclose`)
 ~~~
 
 The verifier's session is `period.session`'s, so its case is one `RemoteAudit.Protocol` replays. Its coins source gives
@@ -22,11 +23,13 @@ The verifier finishes with `{"answer", "case"}` (private: the case holds the ope
 (`period.answer`, as `RemoteAudit.Protocol.check` gives it): after the last window's verdict, or at the first rejection,
 with the case of the events so far. A prover that leaves, a frame the wire refuses or one out of phase ends it refused
 by name, with the answer as it stands. The prover's machine gives it its store (`capabilities["store"]`, a
-`period.Prover`: `period.Local` is the reference).
+`period.Prover`: `period.Local` is the reference); it finishes on `End`, refused `coins` when a challenge it was sent
+doesn't open against the coins disclosed (`period.Prover.end`).
 """
 
 from __future__ import annotations
 
+import json
 import struct
 from collections.abc import Callable
 from typing import Any
@@ -35,6 +38,7 @@ from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Int, Json, Message, Phase, Refused, Schema
+from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, receipts
 from . import coins as C
@@ -48,6 +52,7 @@ SECRET_BYTES = 64
 """The period's live secret, which the registration's codec seed and the challenger's coins are drawn from."""
 DRAW = struct.Struct(">IQ")
 MAX_DRAWS = 1 << 20
+MAX_DISCLOSED = 1 << 24
 ROOT = Body(size=receipts.DIGEST_BYTES, max=receipts.DIGEST_BYTES)
 MANIFEST = Manifest(
     ID, VERSION, "verity.core.protocols.remote_bandwidth.session_parties:request_of",
@@ -55,12 +60,12 @@ MANIFEST = Manifest(
     channels=(Channel(VERIFIER, PROVER, ("Hold", "Run", "Open", "End"), carries_coins=True),
               Channel(PROVER, VERIFIER, ("Register", "Root", "Openings"))),
     messages=(Schema("Register", 1, "commitment", {"blocks": Int(1)}, ROOT),
-              Schema("Hold", 1, "coins", {"registration": Json(), "commitment": Json()}),
+              Schema("Hold", 1, "coins", {"registration": Json()}),
               Schema("Run", 1, "coins", {"t": Int(), "i": Int(), "challenge": Json(1 << 14)}, ROOT),
               Schema("Root", 1, "commitment", {"t": Int(), "i": Int()}, ROOT),
               Schema("Open", 1, "coins", {"t": Int()}, Body(max=MAX_DRAWS * DRAW.size, unit=DRAW.size)),
               Schema("Openings", 1, "private", {"t": Int()}, Body(max=(1 << 32) - 1)),
-              Schema("End", 1, "structure")))
+              Schema("End", 1, "coins", body=Body(max=MAX_DISCLOSED))))
 
 
 def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
@@ -143,8 +148,7 @@ class Verifier:
         self.s = P.opened(reg, self.coins, self.held, not_before=at, windows=q["windows"], passes=q["passes"],
                           samples=q["samples"], window_ns=q["window_ns"], deadline_ns=q["deadline_ns"])
         self.previous = reg.digest
-        hold = Message("Hold", {"registration": P.registration_json(reg), "commitment": self.s.commitment.to_json()})
-        return [Send(PROVER, hold), *self._read(self._start)]
+        return [Send(PROVER, Message("Hold", {"registration": P.registration_json(reg)})), *self._read(self._start)]
 
     def _start(self, now: int) -> list[Any]:
         self._event({"kind": "start"}, now)
@@ -158,7 +162,8 @@ class Verifier:
             return []
         t, i = self.in_flight = (self.window, self.asked)
         self.asked += 1
-        return [Send(PROVER, Message("Run", {"t": t, "i": i, "challenge": self.challenge.to_json()}, self.previous))]
+        challenge = C.Released.of(self.challenge).to_json()
+        return [Send(PROVER, Message("Run", {"t": t, "i": i, "challenge": challenge}, self.previous))]
 
     def _receive(self, t: int, i: int, root: bytes, now: int) -> list[Any]:
         self.in_flight, self.previous, self.step = None, root, self.step + 1
@@ -209,7 +214,15 @@ class Verifier:
         answer = P.answer(self.s)
         out = [Record(answer, "output"), Finish({"answer": answer, "case": P.case_of(self.s, self.events)}, refused,
                                                 kind="private")]
-        return out if refused is not None else [Send(PROVER, Message("End")), *out]
+        return out if refused is not None else [Send(PROVER, Message("End", body=self.disclosed())), *out]
+
+    def disclosed(self) -> bytes:
+        """`End`'s body: the session's coin commitment and every released coin's opening once it has its outcome
+        (`audit.Session.disclose`), as canonical JSON; empty for a session left undecided."""
+        if self.s.outcome is None:
+            return b""
+        commitment, openings = self.s.disclose()
+        return canonical_json_bytes({"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]})
 
 
 class Prover:
@@ -231,17 +244,27 @@ class Prover:
             return [Finish({"passes": self.passes}, e.name)]
         self.phase.expect("Run", "Open", "End")
         if m.type == "Hold":
-            self.store.hold(P.registration_of(m.fields["registration"]),
-                            C.LiveCommitment.from_json(m.fields["commitment"]))
+            self.store.hold(P.registration_of(m.fields["registration"]))
             return []
         t = m.fields.get("t")
         if m.type == "Run":
-            root = self.store.run(C.LiveOpening.from_json(m.fields["challenge"]), t, m.fields["i"], m.body)
+            try:
+                challenge = C.Released.from_json(m.fields["challenge"])
+            except ValueError:
+                return [Finish({"passes": self.passes}, "coins")]
+            root = self.store.run(challenge, t, m.fields["i"], m.body)
             self.passes += 1
             return [Send(VERIFIER, Message("Root", {"t": t, "i": m.fields["i"]}, root))]
         if m.type == "Open":
             draws = [DRAW.unpack_from(m.body, k) for k in range(0, len(m.body), DRAW.size)]
             return [Send(VERIFIER, Message("Openings", {"t": t}, W.encode_openings(self.store.open(t, draws))))]
+        if m.body:
+            try:
+                doc = json.loads(m.body)
+                self.store.end(C.LiveCommitment.from_json(doc["commitment"]),
+                               [C.LiveOpening.from_json(o) for o in doc["openings"]])
+            except (ValueError, KeyError, TypeError):
+                return [Finish({"passes": self.passes}, "coins")]
         return [Finish({"passes": self.passes})]
 
 

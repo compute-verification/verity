@@ -21,9 +21,9 @@ BOTH = [SP.VERIFIER, SP.PROVER]
 MS = 1_000_000
 
 
-def simulated(state, request=None, cheat=None, prover=SP.Prover, **kw):
+def simulated(state, request=None, cheat=None, prover=SP.Prover, verifier=SP.Verifier, **kw):
     store = P.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts"))
-    proto = ProtocolDef(SP.MANIFEST, {SP.VERIFIER: SP.Verifier, SP.PROVER: prover})
+    proto = ProtocolDef(SP.MANIFEST, {SP.VERIFIER: verifier, SP.PROVER: prover})
     return run({"protocol": SP.ID, "params": request or SP.request_of("n0")}, BOTH, "simulated", state,
                protocols={SP.ID: proto}, seed=SEED, authenticate=False, capabilities={SP.PROVER: {"store": store}}, **kw)
 
@@ -103,6 +103,20 @@ class Twice(SP.Prover):
     def on(self, r):
         out = super().on(r)
         return out + out if r.message.type == "Run" else out
+
+
+class Withholding(SP.Verifier):
+    """Discloses the session's coin commitment at its end, but none of the coins it released."""
+
+    def disclosed(self) -> bytes:
+        doc = json.loads(super().disclosed())
+        return json.dumps({"commitment": doc["commitment"], "openings": []}).encode()
+
+
+def test_the_prover_checks_each_challenge_against_the_coins_disclosed_at_the_end(tmp_path) -> None:
+    r = simulated(tmp_path, verifier=Withholding)
+    assert r.outcomes[SP.VERIFIER]["outcome"]["answer"]["verdict"] == "accept"
+    assert r.outcomes[SP.PROVER] == {"outcome": {"passes": 2}, "refused": "coins"}
 
 
 def test_a_root_it_did_not_ask_for_ends_the_session_out_of_phase(tmp_path) -> None:
