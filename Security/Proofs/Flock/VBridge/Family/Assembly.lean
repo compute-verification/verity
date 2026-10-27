@@ -19,9 +19,9 @@ import Proofs.Flock.VBridge.Family.Structure
 the runs come first.
 
 `vbridgeRead_of_lanes` is `VBridgeRead` at any family whose fields satisfy the defining equations, its obligations
-discharged by the lanes' theorems; `vbridgeRead_assembled` is `VBridgeRead` at `assembled` and the decoder `decOf`,
-every defining equation by `rfl` and `hmsg` by `msgsAre_assembled`. Their hypotheses are the lanes' named facts, each a
-`Prop` whose docstring names the check or lane that establishes it.
+discharged by their theorems; `vbridgeRead_assembled` is `VBridgeRead` at `assembled` and the decoder `decOf`,
+every defining equation by `rfl` and `hmsg` by `msgsAre_assembled`. Their hypotheses are named facts, each a `Prop`
+whose docstring names the check or lemma that establishes it.
 -/
 
 namespace FlockVBridge.Family
