@@ -5,7 +5,8 @@ import CoreProtocol.Protocol
 # The NCI check, a core protocol: `verity/nci/v1`
 
 `NciCheck.Baseline.evaluate`, the NCI check of record (the policy check at the size of the description, then θ's
-provenance), as a `Core.Protocol`, so that onsite composes it (`Core.Onsite.components`). Its case splits the check's
+provenance), as a `Core.Protocol`, so that onsite checks its registration with it (`Core.Onsite.protocol`, a
+`Core.Composition.registeredB`). Its case splits the check's
 instance and trusted input as sampled proofs' one-stage audit splits its own (`SampledProofs.OneStage`):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `alpha` (`α` as `[num, den]`), `gamma`
