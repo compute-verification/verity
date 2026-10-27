@@ -33,7 +33,7 @@ with `q · n i ≤ k i` in every window,
   `(1 - q)^F + Σ_i ε i`;
 * `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` wrong units pass the whole horizon except with
   probability `δ + Σ_i ε i`. -/
-def HorizonWrongUnitsLe : Prop :=
+def PooledWrongUnitsLe : Prop :=
   ∀ {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ) (draw : (i : Fin m) → Ω → Finset (Fin (n i)))
     (hcard : ∀ i x, (draw i x).card = k i)
     (hunif : ∀ i (S : Finset (Fin (n i))), S.card = k i →

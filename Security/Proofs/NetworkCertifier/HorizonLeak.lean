@@ -265,10 +265,10 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
 
 /-! ### The monitoring period -/
 
-/-- **The leak through the network certifier over a monitoring period**: `Guarantees.HorizonLeakAccepted`, from
+/-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
 `pr_adaptive_add_le` at the conditional escape, a union bound over the leak relations, and `encard_horizonGood_le` at
 each draw of the coins. -/
-theorem horizonLeak : Guarantees.HorizonLeakAccepted := by
+theorem horizonLeak : Guarantees.PooledLeakAccepted := by
   intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
     schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_horizonGood_le lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss

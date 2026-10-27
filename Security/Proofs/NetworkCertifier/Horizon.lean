@@ -219,8 +219,8 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
 
 /-! ### The horizon -/
 
-/-- **The wrong units over a horizon**: `Guarantees.HorizonWrongUnitsLe`. -/
-theorem horizonWrongUnits : Guarantees.HorizonWrongUnitsLe := by
+/-- **The wrong units over a horizon**: `Guarantees.PooledWrongUnitsLe`. -/
+theorem horizonWrongUnits : Guarantees.PooledWrongUnitsLe := by
   intro m Ω _ _ n k draw hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩
   · classical

@@ -5,7 +5,7 @@ import Definitions.NetworkCertifier.HorizonLeak
 # The leak through the network certifier over a monitoring period of sampled audits
 
 A monitoring period is `m` windows, each audited on its own live coins (the period's coins are `Fin m → Ω`, window
-`i`'s at `ω i`) at a statement registered as `sw i`. `HorizonLeakAccepted` is the count `K_horizon`: what a covert
+`i`'s at `ω i`) at a statement registered as `sw i`. `PooledLeakAccepted` is the count `K_horizon`: what a covert
 sender in the server moves through the network certifier over the whole monitoring period, with the faulty units paid
 for once over the period rather than at `δ` in every window. At each window the witness computed from the
 registration, before the window's draw, has a faulty set `W i` (it reads only the earlier windows' coins), and the
@@ -18,7 +18,7 @@ statement takes two inputs per window:
   certifier's record are not accepted with the faulty set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
 From them, every audit accepts while the faulty sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
-relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `HorizonWrongUnitsLe`'s
+relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledWrongUnitsLe`'s
 argument with the escape as the input); and the secrets whose every window meets its relation, with the faulty sets
 under `Fmax` (`HorizonGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
@@ -66,7 +66,7 @@ for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
   `δ + Σ e + Σ e'`;
 * at every draw of the coins, the secrets that meet the good event number at most
   `#Ss · ∏_c (cap c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n i`. -/
-def HorizonLeakAccepted : Prop :=
+def PooledLeakAccepted : Prop :=
   ∀ {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ) (reg : Stmt → Finset ℕ) (Dj : ℕ) {m : ℕ}
     (sw : Fin m → Stmt) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
     (n : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)

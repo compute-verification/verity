@@ -31,7 +31,7 @@ weights `|W_t|` and `ρ = 1 − kd/N`.
 network-accounting composes `horizon_escape_log` with the per-period D1 into
 `K_horizon = (ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per
 window, so the second term grows with the number of windows in the horizon. That composition is
-`HorizonLeakAccepted`'s, not this file's.
+`PooledLeakAccepted`'s, not this file's.
 -/
 
 namespace FlockSoundness.Audit
