@@ -129,7 +129,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     (served_wipe.sh refused) stays missing with its issue, and one whose answer rejects makes the record reject with no
     block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir: _accepted())
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
     wipe.mkdir(parents=True)
     if case == "refused":
