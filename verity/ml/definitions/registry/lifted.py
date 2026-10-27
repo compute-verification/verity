@@ -1458,8 +1458,8 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
            conformance="protocol-defined")
 def LServe(B, S, prompt, weights):
     """The ⊥-lifted padded serving Program (§5) for one request, **guard on the input** (`GUARD = "in"`, DP-pad-01
-    option (a), padrev's recommendation — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with
-    its own §4.3/§6/§7 at step `a_r`; the choice is a labelled candidate, not a ruling):
+    option (a) — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with its own §4.3/§6/§7 at
+    step `a_r`; the choice is a labelled candidate, not a settled rule):
     `Lifted[Prefill_v1]` emits `out[0]` unguarded (event 0 unconditionally live); for each of the `STEPS`
     structurally present decode steps `s ≥ 1` (`STEPS = cap − 1` under the Build's convention, as `Serve_v2{STEPS}`; the event
     population is `STEPS + 1 = cap = D_MAX_r`: the static is named for what it counts)
@@ -1609,7 +1609,7 @@ W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (LIFTING-SPEC v0.5.1 B1: w_max_lift
                        "parameter's existence is AGREED, A4.3; B1's condition met on the first real-row lifted use document -- OLMoE B2 "
                        "r17_1653 r0, out/gen/sweep/evidence/pad/olmoe-1b-7b__…b2…/r17_1653_lane9c1e1f79f_mech_lifted/use_document_r0: "
                        "w_max_lifted 64, max_seen 33, n_out histogram (exact walk 50,000 sets = 1; structural bound complete over "
-                       "7,004,686,199 sets <= 1); coord ruling on the constant pending)")
+                       "7,004,686,199 sets <= 1); the constant's value itself is proposed, its confirmation pending)")
 
 
 def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int = W_MAX_LIFTED) -> dict:
