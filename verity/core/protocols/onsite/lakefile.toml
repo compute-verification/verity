@@ -36,6 +36,11 @@ path = "../pouw/lean/check"
 name = "network_check"
 path = "../network/lean"
 
+# The registration check onsite runs before composing: NCI's check of record (`NciCheck.Protocol`, `verity/nci/v1`).
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
+
 # Space: PoUS's check of a run, on the memory challenger's Lean.
 [[require]]
 name = "pous_check"
