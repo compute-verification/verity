@@ -94,7 +94,7 @@ def test_each_members_statement_is_read_as_the_member_says(at):
 
 
 def test_the_blocks_are_the_circuits_server_and_its_transfers(at):
-    b = tz.BK.check(at.doc, at.blocks, tz.layouts(at.doc))
+    b = tz.BK.check(at.doc, tz.layouts(at.doc))
     w, sw = (at.block.values[p][0] for p in ("wrow", "sw"))
     load_rows = (4096, 64) if at.block is tz.H200 else (UNITS, UNITS)
     assert [(t.value, t.kind, t.direction.value, t.window, t.words, t.rows) for t in b.transfers] == [

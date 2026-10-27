@@ -111,7 +111,7 @@ def test_members_are_cut_where_a_servers_units_begin_or_end():
     template's units, or servers without units, are refused; that the servers partition the units, and run each inference
     block on one, is network accounting's check."""
     net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
-           "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
+           "server_time": {"window": 0, "steps": TI.STEPS}, "transfers": []}
     plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
     assert [(m.base, m.n) for m in plain.window.members] == [(0, 2), (2, 2), (4, 4)]
     assert [(m.base, m.n) for m in split.window.members] == [(0, 2), (2, 1), (3, 1), (4, 4)]
@@ -129,8 +129,9 @@ def test_members_are_cut_where_a_servers_units_begin_or_end():
                         ([{"name": "a"}], "objects with their units"), ([], "at least one")]:
         with pytest.raises(ValueError, match=why):
             blocked(chain_blocks(network={**net, "server": server}))
-    with pytest.raises(ValueError, match="are lists"):
-        chain_blocks(network={**net, "transfers": {}})
+    for bad in ({**net, "transfers": {}}, {**net, "server_time": []}):
+        with pytest.raises(ValueError, match="are lists and its server_time an object"):
+            chain_blocks(network=bad)
     with pytest.raises(ValueError, match="all of them"):
         chain_blocks(network={"server": net["server"]})
 
@@ -228,7 +229,7 @@ def cmp92(servers: int) -> I.Circuit:
         transfers += [transfer("s0", "out", "wire", "x1"), transfer("s1", "in", "wire", "x1"),
                       transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
     network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
-               "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
+               "server_time": {"window": 0, "steps": T}, "transfers": transfers}
     return I.Circuit(f"cmp92-{servers}", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
                                           (OUT, LAYERS * H * T * S), (HEAD, O * S)),
                      external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires), cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}},
@@ -261,11 +262,11 @@ def test_cmp92s_split_across_two_servers_is_refused(circuits):
     keys alone."""
     docs = {n: {**c.description(), "blocks": c.blocks_record()} for n, c in circuits.items()}
     lays = {t: lay for t, (lay, _n) in circuits[1].layouts.items()}
-    assert [s.name for s in BK.server_blocks(docs[1], docs[1]["blocks"]["server"], lays)] == ["s0"]
+    assert [s.name for s in BK.server_blocks(docs[1], lays)] == ["s0"]
     with pytest.raises(ValueError, match=re.escape(f"inference block (slot 0, step 0): units of {KID} on server s0 and of {KID} "
                                                    "on server s1; an inference block runs on one server, the one that may "
                                                    "read its inputs")):
-        BK.server_blocks(docs[2], docs[2]["blocks"]["server"], lays)
+        BK.server_blocks(docs[2], lays)
     r1, r2 = docs[1]["blocks"], docs[2]["blocks"]
     assert {k: v for k, v in r1.items() if k not in I.NETWORK} == {k: v for k, v in r2.items() if k not in I.NETWORK}
 

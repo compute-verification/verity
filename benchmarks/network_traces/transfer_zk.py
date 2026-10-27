@@ -18,9 +18,10 @@ through the one-stage audit as warden_zk.py's.
   token's s8 row and ``sx`` its scale (the request's rows, external ports), ``wrow`` its channel's s8 weights and ``sw``
   its scale (the weights' load), ``o0`` the coordinate (the response's rows, an external port). Every input row is a
   registered read of its value (`Block.values`), at the rows `attestation`'s ``reads`` name.
-* **The server block** (`blocks`, `verity/blocks/v1`): one server on uplink `UPLINK`, its server-time block window
-  `WINDOW` of n steps, unit i's rows at step i; the two load values (ingress, the server session's window 0), the
-  request's ``request`` and ``request_scale`` (ingress) and the ``response`` (egress, every unit's ``o0``).
+* **The server block** (`network`, in the record's ``blocks``): one server on uplink `UPLINK`, its server-time block window
+  `WINDOW` of n steps, unit i's rows at step i (its inference entry: one slot, unit i at step i); the two load values
+  (ingress, the server session's window 0), the request's ``request`` and ``request_scale`` (ingress) and the
+  ``response`` (egress, every unit's ``o0``).
 * **The network certifier**, in process here: its own LMS key (the deployed N = 64, W = 1, on 2^6 leaves) in its own
   session. It commits each value as it crosses (`transfer_rows.attest`) under its own salts, which it hands the prover
   alone, and publishes the registrations (`transfer_rows.registration`).
@@ -173,10 +174,11 @@ def circuit(block: Block, n: int, load: dict) -> IF.Circuit:
     rows = {p: len(load[p][0]) if p in load else n for p in INS}
     reads = tuple(IF.Read(tid, p, block.values[p][0], 0, (n,), 0, (stride[p] * lay[p],)) for p in INS)
     return IF.Circuit(f"transfer-zk-{block.name}", ((block.coord, n),), external=(f"{tid}/x", f"{tid}/sx", f"{tid}/o0"),
-                      registered=IF.Registered({block.values[p][0]: rows[p] * lay[p] for p in INS}, reads=reads))
+                      registered=IF.Registered({block.values[p][0]: rows[p] * lay[p] for p in INS}, reads=reads),
+                      blocks=IF.Blocks(1, n, (IF.InferenceEntry(tid, 0, (n, 1), ("step", "slot"), 0),), network(block, n)))
 
 
-def blocks(block: Block, n: int) -> dict:
+def network(block: Block, n: int) -> dict:
     steps = {"base": 0, "radix": [n], "step": [1]}
 
     def transfer(p: str, d: str) -> dict:
@@ -186,7 +188,7 @@ def blocks(block: Block, n: int) -> dict:
 
     out = {**transfer("o0", "out"), "leaves": n,
            "writes": [{"writer": block.tid, "out": "o0", "at": 0, "radix": [n], "base": 0, "step": [1]}]}
-    return {"format": BK.FORMAT, "server": [{"name": "s0", "uplink": UPLINK, "units": "all"}],
+    return {"server": [{"name": "s0", "uplink": UPLINK, "units": "all"}],
             "server_time": {"window": WINDOW, "steps": n}, "transfers": [*(transfer(p, "in") for p in INS), out]}
 
 
@@ -264,7 +266,7 @@ def attestation(n: int, out: Path, block: Block = TINY, seed: bytes = TEST_SEED)
                              [list(map(int, r)) for r in words["o0"]])
     changes = {name: changed(block, words, p) for name, p in CHANGED.items()}
     reads = {p: [i * (load[p][1] if p in load else 1) for i in range(n)] for p in PORTS}
-    return SimpleNamespace(n=n, block=block, circuit=c, doc=doc, blocks=blocks(block, n), load=load, words=words,
+    return SimpleNamespace(n=n, block=block, circuit=c, doc=doc, load=load, words=words,
                            reads=reads, cert=cert, transfers=tr, registrations=regs, forged=forged,
                            forged_registration=forged_reg, own=own,
                            changed={name: w for name, (w, _k) in changes.items()},
@@ -287,8 +289,8 @@ def verifier(at: SimpleNamespace, regs: list[dict]) -> SimpleNamespace:
     certificate alone (`blocks.certified`), the pins, the free inputs with and without them (the window's roots its
     registrations', `interface.input_count`), and its own port of each value at the certified root."""
     certifiers = {UPLINK: (at.cert.key, at.cert.session)}
-    heads = BK.certified(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
-    pins = BK.pins(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
+    heads = BK.certified(at.doc, layouts(at.doc), regs, certifiers)
+    pins = BK.pins(at.doc, layouts(at.doc), regs, certifiers)
     ports = {p: TR.port(head(heads, at.block, p), at.reads[p]) for p in PORTS}
     roots = {r["value"]: r["root"] for r in regs}
     return SimpleNamespace(heads=heads, pins=pins, ports=ports, free=IF.input_count(at.doc, pins=pins, roots=roots)["free"],
@@ -539,7 +541,7 @@ def prove(a) -> int:
     at = attestation(a.units, out, block, DEMO_SEED if block is H200 else TEST_SEED)
     v = verifier(at, presented("honest", at))
     summary: dict = {"block": block.name, "template": block.tid, "units": at.n, "uplink": UPLINK, "window": WINDOW,
-                     "blocks": at.blocks, "circuit": at.doc, "registrations": at.registrations,
+                     "circuit": at.doc, "registrations": at.registrations,
                      "forged_registration": at.forged_registration, "pins": v.pins, "free": v.free,
                      "free_unpinned": v.free_unpinned, "refusals": refusals(at), "reads": at.reads,
                      "changed": {name: {"port": CHANGED[name], "unit": 0, "code": k} for name, k in at.changed_code.items()}}

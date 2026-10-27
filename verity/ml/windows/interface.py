@@ -67,7 +67,7 @@ The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) a
 unit: ``proof``, the partition into proof units (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
 the entries tile each template's units exactly once, a slot digit's radix is the class's S and every step is below its T);
-and network accounting's ``server``, ``server_time`` and ``transfers``, carried as given for its own check. Of those the
+and network accounting's ``server``, ``server_time`` and ``transfers``, which its check reads from the record. Of those the
 members read only the servers' unit ranges: a template's units are cut where a server's begin or end, so each statement's
 units sit on one server. Blocks name units, ports, steps and row patterns, never a value.
 
@@ -872,8 +872,8 @@ class Blocks:
             if not isinstance(self.network, Mapping) or set(self.network) != set(NETWORK):
                 raise ValueError(f"network accounting's blocks are {list(NETWORK)}, all of them, not {self.network!r}")
             net = json.loads(json.dumps(dict(self.network)))
-            if not all(isinstance(net[k], list) for k in NETWORK):
-                raise ValueError(f"network accounting's {list(NETWORK)} are lists")
+            if not (isinstance(net["server"], list) and isinstance(net["server_time"], dict) and isinstance(net["transfers"], list)):
+                raise ValueError("network accounting's server and transfers are lists and its server_time an object")
             object.__setattr__(self, "network", net)
 
     def check(self, units: Mapping[str, int]) -> dict[str, tuple[int, ...]]:

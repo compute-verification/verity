@@ -4,12 +4,10 @@ certifier on that server's uplink committed and signed (`transfer_rows`). The ve
 that certificate alone (`pins`), so with every other input row wired, the circuit's free inputs (the window interface's
 `input_count` under those pins) are 0.
 
-The schema, `verity/blocks/v1` (`FORMAT`), is kept here, in network accounting's module, until circuits' window interface
-(`verity.ml.windows.interface`) carries it in ``circuit.json`` beside the circuit's other declarations, as it carries
-circuits' proof and inference blocks (the record's ``blocks``); until then a check takes it beside the circuit record:
+They are three keys of the circuit record's ``blocks`` (``circuit.json``, the window interface's ``verity/blocks/v1``,
+beside its proof and inference blocks), which a check reads from the record as the verifier parses it:
 
-    {"format": "verity/blocks/v1",
-     "server": [{"name": S, "uplink": LINK, "units": "all" | [[tid, at, n], ...]}, ...],
+    {"server": [{"name": S, "uplink": LINK, "units": "all" | [[tid, at, n], ...]}, ...],
      "server_time": {"window": W, "steps": T},
      "transfers": [{"server": S, "dir": "in" | "out", "kind": "load" | "request" | "response" | "wire", "value": V,
                     "window": w, "t": null | {"base": b, "radix": [...], "step": [...]}}, ...]}
@@ -76,11 +74,11 @@ from typing import Any
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Direction, PublicKey
 
-FORMAT = "verity/blocks/v1"
 DIRS = {"in": Direction.INGRESS, "out": Direction.EGRESS}
 #: the kinds whose rows are the circuit's external ports, the system's I/O; a load's and a wire's never are
 EXTERNAL = ("request", "response")
-_KEYS = ("format", "server", "server_time", "transfers")
+#: network accounting's keys of the record's ``blocks``
+_NETWORK = ("server", "server_time", "transfers")
 _TRANSFER = ("server", "dir", "kind", "value", "window", "t")
 _OUT = ("leaves", "writes")
 _READ = ("reader", "port", "param", "at", "radix", "base", "step")
@@ -330,12 +328,13 @@ def _one_server(doc: Mapping[str, Any], tpl: Mapping[str, tuple[Any, Any, int]],
         live.append(r)
 
 
-def server_blocks(doc: Mapping[str, Any], server: Any, layouts: Mapping[str, Any]) -> tuple[Server, ...]:
-    """The servers ``server`` (a blocks object's, or the record's ``blocks.server``) of the circuit record ``doc`` against
-    ``layouts`` (as `check` takes them), refused (ValueError, naming the rule) unless each is a new name on a new uplink,
-    together they partition every template's units, and each inference block of the record's runs on one of them."""
+def server_blocks(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> tuple[Server, ...]:
+    """The servers of the circuit record ``doc`` (its ``blocks.server``) against ``layouts`` (as `check` takes them),
+    refused (ValueError, naming the rule) unless each is a new name on a new uplink, together they partition every
+    template's units, and each inference block of the record's runs on one of them."""
     tpl = _templates(doc, layouts)
-    servers, runs = _servers(server, tpl)
+    blocks = doc.get("blocks")
+    servers, runs = _servers(blocks.get("server") if isinstance(blocks, Mapping) else None, tpl)
     _one_server(doc, tpl, runs, servers)
     return servers
 
@@ -401,16 +400,18 @@ def _cut(doc: Mapping[str, Any], tid: str, port: str) -> int:
     return k
 
 
-def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Blocks:
-    """Refuse (ValueError, naming the rule) a circuit's blocks that break the module docstring's rules, against its stated
-    circuit record ``doc`` (``circuit.json``: its templates, wires, external ports, cuts, registered reads and ingress,
-    which the window interface's own checks have held well-formed, `check_inputs`, and its inference block, each unit's
-    (slot, step), which puts each inference block on one server, `server_blocks`) and ``layouts``, each template's bit rows
-    by descriptor id (the interface's `layout`: its ``rows`` and ``outs``, each ``(name, words)``), the verifier's own from
-    its catalog. The work is per declaration, never per unit."""
+def check(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> Blocks:
+    """Refuse (ValueError, naming the rule) a circuit's network blocks that break the module docstring's rules, from its
+    stated circuit record ``doc`` (``circuit.json``: its templates, wires, external ports, cuts, registered reads and
+    ingress, which the window interface's own checks have held well-formed, `check_inputs`, and its ``blocks``: the
+    inference block, each unit's (slot, step), which puts each inference block on one server, `server_blocks`, and the
+    servers, server time and transfers) and ``layouts``, each template's bit rows by descriptor id (the interface's
+    `layout`: its ``rows`` and ``outs``, each ``(name, words)``), the verifier's own from its catalog. The work is per
+    declaration, never per unit."""
     tpl = _templates(doc, layouts)
-    if not isinstance(blocks, Mapping) or blocks.get("format") != FORMAT or set(blocks) != set(_KEYS):
-        raise ValueError(f"a circuit's blocks are a {FORMAT} object of {list(_KEYS)}")
+    blocks = doc.get("blocks")
+    if not isinstance(blocks, Mapping) or not set(_NETWORK) <= set(blocks):
+        raise ValueError(f"a circuit record's blocks state network accounting's {list(_NETWORK)}")
     servers, runs = _servers(blocks["server"], tpl)
     _one_server(doc, tpl, runs, servers)
     by_name = {s.name: s for s in servers}
@@ -572,7 +573,7 @@ def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Bl
     return Blocks(servers, st["window"], st["steps"], tuple(transfers))
 
 
-def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], registrations: Iterable[Any],
+def certified(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations: Iterable[Any],
               certifiers: Mapping[str, tuple[PublicKey, bytes]],
               formats: Mapping[str, tuple[int, str]] | None = None) -> dict[tuple[str, Direction], TR.TransferHead]:
     """Each transfer's head, by value and direction, from its registration (`transfer_rows.check_registration`, for the
@@ -582,7 +583,7 @@ def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], r
     its port's row format), a row of ``words`` u16 words then ``words · 16 / word_bits`` leaves. Refused (ValueError)
     when the blocks break `check`, a transfer has no registration or its registration fails, a registration names no
     transfer, or a wire's in root isn't its out root."""
-    b = check(doc, blocks, layouts)
+    b = check(doc, layouts)
     formats = dict(formats or {})
     if extra := sorted(set(formats) - {t.value for t in b.transfers}):
         raise ValueError(f"formats of {extra}, which no transfer names")
@@ -625,11 +626,11 @@ def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], r
     return heads
 
 
-def pins(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], registrations: Iterable[Any],
+def pins(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations: Iterable[Any],
          certifiers: Mapping[str, tuple[PublicKey, bytes]],
          formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, str]:
     """The verifier's pins, ``{parameter: root}``: every ``in`` transfer's value at its certified root (`certified`), the
     roots ``registration.check`` holds a pinned value to and the parameters the interface's ``input_count`` counts as
     registered."""
-    return {v: h.root.hex() for (v, d), h in certified(doc, blocks, layouts, registrations, certifiers, formats).items()
+    return {v: h.root.hex() for (v, d), h in certified(doc, layouts, registrations, certifiers, formats).items()
             if d is Direction.INGRESS}
