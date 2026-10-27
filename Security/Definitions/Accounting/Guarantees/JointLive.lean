@@ -1,4 +1,5 @@
 import Definitions.Accounting.JointLive
+import Definitions.Core.Blocks
 
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
@@ -21,8 +22,9 @@ the probability that some subprotocol accepts while its claim fails is at most t
 * `JointPeriodLiveECR`: the same in Daniel's form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
 * `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
-* `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block and each
-  block's memory term (`Accounting.BlocksRun`'s wipes and memory terms, on the run).
+* `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with each block's memory term on the run,
+  and the wipe that opens each block (`Verity.Wipe`) with its survivor bound, which is its own game's and stands beside
+  the run's bound.
 
 Two statements say the bound is not vacuous: an honest prover meets every claim on every run
 (`JointPeriodLive_honest`), and some prover fails a claim with positive probability at an accepting verdict
@@ -114,35 +116,49 @@ def JointHorizonLive : Prop :=
         ∑ j, ∑ a, err j a s
 
 /-- **The joint guarantee over a horizon of `B` server-time blocks and the wipes that open them, played as one causal
-game.** On any device and any `B` blocks read off the run of one causal game `G`, block `b` over the circuit `C b`,
-suppose, over `G` at every strategy `s`:
+game.** On any device and any `B` blocks read off the run of one causal game `G`, block `b` over the circuit `C b`, with
+`W b` the wipe that opens block `b`, at boundary `b` of a schedule of server-time blocks (`Verity.Wipe`), suppose:
 
-* each subprotocol `a` of block `b` has its per-period guarantee at certificates `c b` and error `err b a`;
-* the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
-  state survive beyond the committed carried state with probability at most `ε_wipe b s`;
-* block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
-  `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with probability at
-  most `δ_PoUS b s`.
+* over `G` at every strategy `s`, each subprotocol `a` of block `b` has its per-period guarantee at certificates `c b`
+  and error `err b a`;
+* the wipe that opens block `b` meets its survivor bound (`Verity.Wipe.SurvivorBound`) at the pair its verdict
+  publishes, `foreignBits b` and `ε_Wipe,b`: for every way of holding foreign content of at least `foreignBits b` bits
+  plus the state the fill leaves out and every way of reading it back, the wipe accepts and the content is read back
+  with probability at most `ε_Wipe,b` at those moves. This is what the streamed-label wipe's guarantee supplies for
+  every prover strategy (`MemoryChallenger.Properties.WipeSurvivorBound`, from `Pous.Guarantees.StreamedWipeMeetsReads`
+  and `StreamedWipeMeetsFamily`);
+* over `G` at every strategy `s`, block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory
+  exceeds `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with
+  probability at most `δ_PoUS b s`.
 
-Then at every strategy `s` the probability that some block's accepted subprotocol's claim fails, some accepted wipe's
-survivor bound fails, or some block's memory term fails while its PoUS accepted is at most
-$$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{wipe},b}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s).$$
-**Gap (PRF-167):** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
-it) is outside the integrity bound. -/
+Then at every strategy `s` the probability that some block's accepted subprotocol's claim fails, or some block's
+memory term fails while its PoUS accepted, is at most
+$$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s),$$
+and each wipe meets its survivor bound. A survivor bound is a bound in the wipe's own game, over a uniform foreign
+content, the seed and the spot reads, not an event of the run, so `ε_Wipe,b` stands beside the run's bound rather than
+in its sum. Read as the bits a strategy gives back, it is the survivor bound at a fraction `f`, at most `f · fill + 2λ`
+bits plus the unfilled state, wherever `foreignBits b ≤ f · fill + 2λ`
+(`Accounting.SecurityProofs.Live.survives_of_survivorBound`).
+**Gap:** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after it) is
+outside the integrity bound. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
-    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (fw : ℝ) (σ : Fin B → ℝ)
-    (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (εWipe δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞),
+    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (σ : Fin B → ℝ)
+    (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞)
+    (D : Verity.Circuit) (sched : Verity.Blocks D B) (Ω Ch : Fin B → Type) [∀ b, Fintype (Ω b)]
+    [∀ b, Nonempty (Ω b)] [∀ b, Fintype (Ch b)] [∀ b, Nonempty (Ch b)]
+    (W : (b : Fin B) → Verity.Wipe d sched b (Ω b) (Ch b)) (foreignBits : Fin B → ℕ)
+    (εWipe : (b : Fin B) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Verity.Device.State d) →
+      (Verity.Device.State d → (Fin (W b).egress → Bool) → Ch b → Fin S_φ → Bool) → ℝ≥0∞),
     (∀ b a, (S.block b).Sound (c b) a (err b a)) →
-    (∀ b (s : Verity.Game.Strategy G),
-      Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ εWipe b s) →
+    (∀ b, (W b).SurvivorBound (foreignBits b) (εWipe b)) →
     (∀ b (s : Verity.Game.Strategy G),
       Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o) G s ≤ δPous b s) →
-    ∀ s : Verity.Game.Strategy G,
+    (∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o =>
           (∃ b a, (S.block b).accepts a o ∧ ¬ (S.block b).Holds (c b) s a o) ∨
-          (∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) ∨
           (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o)) G s ≤
-        ∑ b, ∑ a, err b a s + ∑ b, εWipe b s + ∑ b, δPous b s
+        ∑ b, ∑ a, err b a s + ∑ b, δPous b s) ∧
+      ∀ b, (W b).SurvivorBound (foreignBits b) (εWipe b)
 
 end Accounting.Guarantees

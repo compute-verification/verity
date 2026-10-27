@@ -164,7 +164,9 @@ store the fill doesn't reach), every way `hold` that the device's state at the b
 `S_φ` bits, and every way `keep` of reading it back from the device's state when the fill ends, the egress and the spot
 reads, the probability over a uniform `z`, a uniform seed and uniform spot reads that the memory challenger accepts and
 `keep` gives back `z` is at most `ε S_φ hold keep`. The probability is the value of a draw with no prover move
-(`Game.value` on `Game.draw`). At `foreignBits = f · fill + 2λ` the threshold is `Accounting.BlockWipe.Survives`'s.
+(`Game.value` on `Game.draw`). At `foreignBits ≤ f · fill + 2λ` it bounds, with what the block keeps read as the bits
+it gives back, the wipe's acceptance while more than `f · fill + 2λ` bits plus the unfilled state survive
+(`Accounting.SecurityProofs.Live.survives_of_survivorBound`).
 
 `z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
 block `b` starts from is a function of, besides the carried value, which, once bound to the committed trace, is
