@@ -14,7 +14,8 @@ with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protoco
 (`decide`). Outer proofs go through the firewall one at a time, one firewalled session on the run whichever window it
 belongs to, so the windows are audited one after another and each audit's drawn members' proof sessions too (``--jobs``
 and ``--session-jobs`` take only 1); only what never goes through the firewall, the next window's loop, overlaps an
-audit. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/reports.jsonl``:
+audit. ``period.json``'s ``nci`` is the toy's NCI declaration of the window (`nci.declaration`), which onsite's
+registration check reads. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/reports.jsonl``:
 
     {"format": "verity/all-protocols-window/v1", "window": W, "node": NAME, "run": RUN, "loop": {...},
      "protocols": {NAME: ROW, ...}, "composed": {...}, "seconds": {...}}
@@ -96,7 +97,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from . import compose as C, monitoring as M, tie as T
+from . import compose as C, monitoring as M, nci as NCI, tie as T
 from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-window/v1"
@@ -237,7 +238,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
         "tools": a.tools,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
-        "mode": getattr(a, "mode", None),
+        "mode": getattr(a, "mode", None), "nci": NCI.declaration(window, a.law),
         **({"challenger": a.challenger} if getattr(a, "challenger", None) else {}),
         **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
     kept = out / "window"

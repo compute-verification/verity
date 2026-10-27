@@ -14,7 +14,8 @@
 * under ``--pouw h1`` PoUW's audit of the H1 window runs before the legs, on the window's own PoUW circuit;
 * the network certifier's K over a week, a month and a year with the faulty proof blocks paid for once
   (`HorizonLeakAccepted`), each window's K beside it;
-* the loop's window keeps only its public files, and its circuit is the one registered before it ran (slow).
+* the loop's window keeps only its public files, its circuit is the one registered before it ran, and ``period.json``
+  carries its NCI declaration (slow).
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import registration as SP
-from verity_all_protocols import compose as C, runner as RN, table as T
+from verity_all_protocols import compose as C, nci as ND, runner as RN, table as T
 
 COMPOSITION_TESTS = C.ROOT / "verity" / "core" / "protocols" / "composition" / "tests"
 
@@ -465,4 +466,5 @@ def test_the_loop_window_keeps_only_public_files(tmp_path):
     assert p["run_root"] == loop["run"] and p["tools"] == {"x": "y"} and p["node"] == "test-node"
     assert p["prover_env"] == {"FC_ZK_SELF_CHECK": "skip"} and p["window"] == 0 and p["delta"] == "1/100"
     assert p["periods"] == 1 and "registered" not in p
+    assert p["nci"] == ND.declaration(d, a.law)
     assert loop["mismatched"]
