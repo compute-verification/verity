@@ -29,9 +29,9 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   `Links`, ingress and egress are at most `β_X` a tick; compute rate at a pricing of at least one per gate bounds the
   gates; the state is its part in a set of gates plus its part outside.
 * `Actual/Windows.lean`: `WindowsAt`, the capacity form at any cuts and with no memory constraint: the windows divide
-  the developer's region into IUs of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at most the state's
-  part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and `G = univ`, IUs of at
-  most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
+  the developer's region into isolation blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
+  most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
+  `G = univ`, isolation blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
