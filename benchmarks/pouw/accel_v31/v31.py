@@ -973,15 +973,16 @@ def cmd_contend_table(a: argparse.Namespace) -> int:
     """`v31 contend`'s JSON lines: cuBLASLt's GEMM beside a filler kernel (cpb 128-thread CTAs an SM of one instruction
     mix), each one's slowdown over its time alone (s_g, s_f) and share = 1/s_g + 1/s_f: 1 when the two time-share the
     SM, 2 when each runs as if alone. carveout: the filler's preferred shared-memory carveout (-1: the driver's)."""
-    print("| shape | m x N x K | filler | CTAs an SM | regs | carveout | GEMM alone ms | GEMM beside ms | s_g | "
+    print("| shape | m x N x K | GEMM | filler | CTAs an SM | regs | carveout | GEMM alone ms | GEMM beside ms | s_g | "
           "filler alone ms | filler beside ms | s_f | share | valid |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if not (line.startswith("{") and '"contend": true' in line):
                 continue
             r = json.loads(line)
-            print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['mode']} | {r['cpb']} | {r['regs']} | "
+            gemm = {"lt": "cuBLASLt"}.get(r.get("gemm", "lt"), r.get("gemm", "").removeprefix("cutlass2x_int8_"))
+            print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {gemm} | {r['mode']} | {r['cpb']} | {r['regs']} | "
                   f"{r.get('carve', -1)} | {r['g0']:.3f} | {r['g1']:.3f} | {r['s_g']:.3f} | {r['f0']:.2f} | {r['f1']:.2f} | {r['s_f']:.3f} | "
                   f"{r['share']:.3f} | {'yes' if r['valid'] else 'no'} |")
     return 0

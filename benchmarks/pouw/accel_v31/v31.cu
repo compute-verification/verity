@@ -1464,7 +1464,9 @@ struct Cut {
   std::string name = "none";
   int ncand = 0;
 };
-static void cut_setup(Cut& C, int m, int n, int k, const int8_t* A, const int8_t* B, int* D, cudaStream_t st) {
+// only: that entry alone (by name)
+static void cut_setup(Cut& C, int m, int n, int k, const int8_t* A, const int8_t* B, int* D, cudaStream_t st,
+                      const char* only = nullptr) {
 #ifdef V31_CUTLASS
   int count = 0;
   const phc_entry* tab = phc_table_2x(&count);
@@ -1472,7 +1474,7 @@ static void cut_setup(Cut& C, int m, int n, int k, const int8_t* A, const int8_t
   CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
   float best = 1e30f;
   for (int i = 0; i < count; i++) {
-    if (tab[i].kind != 7 || !tab[i].query) continue;
+    if (tab[i].kind != 7 || !tab[i].query || (only && strcmp(tab[i].name, only))) continue;
     const phc_args a{m, n, k, A, B, nullptr, nullptr, D};
     size_t ws = 0, sfa = 0, sfb = 0;
     if (tab[i].query(&a, &ws, &sfa, &sfb)) continue;
@@ -1501,11 +1503,16 @@ static void cut_setup(Cut& C, int m, int n, int k, const int8_t* A, const int8_t
   CK(cudaGetLastError());
   CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
 #else
-  (void)C; (void)m; (void)n; (void)k; (void)A; (void)B; (void)D; (void)st;
+  (void)C; (void)m; (void)n; (void)k; (void)A; (void)B; (void)D; (void)st; (void)only;
 #endif
 }
 static void cut_run(Cut& C, cudaStream_t st) {
   if (C.best->launch(st)) { fprintf(stderr, "CUTLASS's %s didn't launch\n", C.name.c_str()); exit(3); }
+}
+static void cut_free(Cut& C) {
+  delete C.best;
+  if (C.ws) CK(cudaFree(C.ws));
+  C = Cut{};
 }
 __global__ void ne_kernel(const int* a, const int* b, size_t n, unsigned long long* out) {
   unsigned long long c = 0;
@@ -3026,6 +3033,8 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB) filler_kernel(u64 i
 // time-share the SM, 2 when each runs as if alone. Medians over REPS; valid is false when a run's outlasting failed.
 // V31_CARVE (default 100, as Knobs) is the fillers' preferred shared-memory carveout, < 0 the driver's choice: an SM
 // runs one carveout at a time, so a filler under a smaller one than the GEMM's 100 KiB keeps the GEMM's CTAs off it.
+// V31_CGEMMS (default lt): the GEMMs, each in turn: lt (cuBLASLt's pick) or a CUTLASS entry's name (cutlass_2x.cu's,
+// under -DV31_CUTLASS); V31_CMODES (default "sha alu fma sleep"): the fillers.
 static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
   cudaDeviceProp prop;
   CK(cudaGetDeviceProperties(&prop, 0));
@@ -3051,6 +3060,17 @@ static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
   const int carve = env_int("V31_CARVE", 100);
   if (carve >= 0)
     for (FK k : fk) CK(cudaFuncSetAttribute((const void*)k, cudaFuncAttributePreferredSharedMemoryCarveout, carve));
+  auto words = [](const std::string& s) {
+    std::vector<std::string> v;
+    std::string w;
+    for (char ch : s + " ") {
+      if (ch == ' ' || ch == ',') { if (!w.empty()) v.push_back(w); w.clear(); }
+      else w += ch;
+    }
+    return v;
+  };
+  const std::vector<std::string> gemm_names = words(env_str("V31_CGEMMS", "lt"));
+  const std::vector<std::string> modes = words(env_str("V31_CMODES", "sha alu fma sleep"));
   for (const std::string& sh : shapes) {
     char name[64];
     int m, n, k;
@@ -3064,60 +3084,77 @@ static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
     gen_kernel<<<n, 256, 0, sg>>>(B, k, 2u, false);
     Lt lt{};
     lt_setup(lt, m, n, k, A, B, D, sg);
-    auto gemms = [&](int r) {
-      CK(cudaEventRecord(g0e, sg));
-      for (int i = 0; i < r; i++) lt_run(lt, A, B, D, sg);
-      CK(cudaEventRecord(g1e, sg));
-    };
-    auto fill = [&](int f, int cpb, u64 iters) {
-      CK(cudaEventRecord(f0e, sf));
-      fk[f]<<<nsm * cpb, SMALL_THREADS, 0, sf>>>(iters, sink);
-      CK(cudaEventRecord(f1e, sf));
-    };
-    gemms(3);
-    CK(cudaDeviceSynchronize());
-    std::vector<double> gv;
-    for (int r = 0; r < reps; r++) {
-      gemms(4);
-      CK(cudaDeviceSynchronize());
-      gv.push_back(ms(g0e, g1e) / 4);
-    }
-    const double g0 = gk::median(gv);
-    const int R = std::max(2, (int)std::ceil(20.0 / g0));
-    for (int f = 0; f < 4; f++) {
-      cudaFuncAttributes fa;
-      CK(cudaFuncGetAttributes(&fa, (const void*)fk[f]));
-      for (int cpb = 1; cpb <= 3; cpb++) {
-        fill(f, cpb, it0[f]);
-        CK(cudaDeviceSynchronize());
-        const u64 iters = std::max<u64>(1, (u64)((double)it0[f] * 3.0 * R * g0 / std::max(ms(f0e, f1e), 1e-3)));
-        std::vector<double> f0v, g1v, f1v;
-        bool valid = true;
-        for (int r = 0; r < reps; r++) {
-          fill(f, cpb, iters);
-          CK(cudaDeviceSynchronize());
-          f0v.push_back(ms(f0e, f1e));
-          fill(f, cpb, iters);
-          gemms(R);
-          CK(cudaDeviceSynchronize());
-          g1v.push_back(ms(g0e, g1e) / R);
-          valid = valid && ms(g1e, f1e) > 0;
-          const double fa_ms = f0v.back();
-          gemms(std::max(2, (int)std::ceil(4.0 * fa_ms / g0)));
-          fill(f, cpb, iters);
-          CK(cudaDeviceSynchronize());
-          f1v.push_back(ms(f0e, f1e));
-          valid = valid && ms(f1e, g1e) > 0;
-        }
-        const double f0 = gk::median(f0v), g1 = gk::median(g1v), f1 = gk::median(f1v), sg_ = g1 / g0, sf_ = f1 / f0;
-        printf("{\"contend\": true, \"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"gpu\": \"%s\", \"sms\": %d, "
-               "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d}, \"mode\": \"%s\", \"cpb\": %d, \"regs\": %d, "
-               "\"carve\": %d, \"iters\": %llu, \"R\": %d, \"g0\": %.6f, \"g1\": %.6f, \"f0\": %.6f, \"f1\": %.6f, "
-               "\"s_g\": %.4f, \"s_f\": %.4f, \"share\": %.4f, \"valid\": %s}\n",
-               name, m, n, k, prop.name, nsm, lt.algo_id, lt.tile, lt.stages, fname[f], cpb, fa.numRegs, carve,
-               (unsigned long long)iters, R, g0, g1, f0, f1, sg_, sf_, 1 / sg_ + 1 / sf_, valid ? "true" : "false");
-        fflush(stdout);
+    for (const std::string& gn : gemm_names) {
+      Cut cut;
+      if (gn != "lt") {
+        cut_setup(cut, m, n, k, A, B, D, sg, gn.c_str());
+        if (!cut.best) { fprintf(stderr, "%s: no CUTLASS %s for it\n", name, gn.c_str()); continue; }
       }
+      auto gemms = [&](int r) {
+        CK(cudaEventRecord(g0e, sg));
+        for (int i = 0; i < r; i++) {
+          if (cut.best) cut_run(cut, sg);
+          else lt_run(lt, A, B, D, sg);
+        }
+        CK(cudaEventRecord(g1e, sg));
+      };
+      auto fill = [&](int f, int cpb, u64 iters) {
+        CK(cudaEventRecord(f0e, sf));
+        fk[f]<<<nsm * cpb, SMALL_THREADS, 0, sf>>>(iters, sink);
+        CK(cudaEventRecord(f1e, sf));
+      };
+      gemms(3);
+      CK(cudaDeviceSynchronize());
+      std::vector<double> gv;
+      for (int r = 0; r < reps; r++) {
+        gemms(4);
+        CK(cudaDeviceSynchronize());
+        gv.push_back(ms(g0e, g1e) / 4);
+      }
+      const double g0 = gk::median(gv);
+      const int R = std::max(2, (int)std::ceil(20.0 / g0));
+      for (int f = 0; f < 4; f++) {
+        if (std::find(modes.begin(), modes.end(), fname[f]) == modes.end()) continue;
+        cudaFuncAttributes fa;
+        CK(cudaFuncGetAttributes(&fa, (const void*)fk[f]));
+        for (int cpb = 1; cpb <= 3; cpb++) {
+          // the filler alone at about 6 R g0 (twice: the first guess's time is mostly launch), so it outlasts R GEMMs
+          // slowed up to 6x; f1's GEMMs alone take 6 f0, so they outlast a filler slowed up to 6x
+          u64 iters = it0[f];
+          for (int pass = 0; pass < 2; pass++) {
+            fill(f, cpb, iters);
+            CK(cudaDeviceSynchronize());
+            iters = std::max<u64>(1, (u64)((double)iters * 6.0 * R * g0 / std::max(ms(f0e, f1e), 1e-3)));
+          }
+          std::vector<double> f0v, g1v, f1v;
+          bool valid = true;
+          for (int r = 0; r < reps; r++) {
+            fill(f, cpb, iters);
+            CK(cudaDeviceSynchronize());
+            f0v.push_back(ms(f0e, f1e));
+            fill(f, cpb, iters);
+            gemms(R);
+            CK(cudaDeviceSynchronize());
+            g1v.push_back(ms(g0e, g1e) / R);
+            valid = valid && ms(g1e, f1e) > 0;
+            gemms(std::max(2, (int)std::ceil(6.0 * f0v.back() / g0)));
+            fill(f, cpb, iters);
+            CK(cudaDeviceSynchronize());
+            f1v.push_back(ms(f0e, f1e));
+            valid = valid && ms(f1e, g1e) > 0;
+          }
+          const double f0 = gk::median(f0v), g1 = gk::median(g1v), f1 = gk::median(f1v), sg_ = g1 / g0, sf_ = f1 / f0;
+          printf("{\"contend\": true, \"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"gpu\": \"%s\", \"sms\": %d, "
+                 "\"gemm\": \"%s\", \"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d}, \"mode\": \"%s\", \"cpb\": %d, "
+                 "\"regs\": %d, \"carve\": %d, \"iters\": %llu, \"R\": %d, \"g0\": %.6f, \"g1\": %.6f, \"f0\": %.6f, "
+                 "\"f1\": %.6f, \"s_g\": %.4f, \"s_f\": %.4f, \"share\": %.4f, \"valid\": %s}\n",
+                 name, m, n, k, prop.name, nsm, gn.c_str(), lt.algo_id, lt.tile, lt.stages, fname[f], cpb, fa.numRegs,
+                 carve, (unsigned long long)iters, R, g0, g1, f0, f1, sg_, sf_, 1 / sg_ + 1 / sf_,
+                 valid ? "true" : "false");
+          fflush(stdout);
+        }
+      }
+      cut_free(cut);
     }
     lt_free(lt);
     CK(cudaFree(A));

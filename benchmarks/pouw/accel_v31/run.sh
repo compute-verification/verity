@@ -35,7 +35,8 @@
 # MODE=contend: no gates; `v31 contend` (cuBLASLt's GEMM beside a filler kernel issuing SHA-512 on registers, integer ALU,
 # FP32 FMA or nothing, at 1 to 3 CTAs an SM: what each costs the other) over CONTEND_SHAPES (default 8B O, 8B gate-up and
 # 70B O at m 16384), REPS each, once per CONTEND_CARVE (the fillers' V31_CARVE; default "-1 100": the driver's carveout,
-# then the GEMM's); out/contend.jsonl and `v31.py contend-table`'s table.md.
+# then the GEMM's); CONTEND_GEMMS (default lt: cuBLASLt's pick; else CUTLASS entry names too) and CONTEND_MODES (default
+# "sha alu fma sleep") choose the GEMMs and fillers; out/contend.jsonl and `v31.py contend-table`'s table.md.
 # FILL_PROF=1 adds, before the bench, Nsight Compute (--set full) on `v31 fill-once`'s serial call for each variant, L and
 # shape: the first PROF_COUNT (default 3) launches matching PROF_KERNELS (default cuBLASLt's GEMM, salt_persist and
 # leaf_persist), each alone: out/ncu-TAG-L-SHAPE.ncu-rep and its details and raw pages as CSV (pipes, issue, stalls).
@@ -238,7 +239,7 @@ if [ "$MODE" = fill ]; then
 fi
 if [ "$MODE" = contend ]; then
   export SHAPES=${CONTEND_SHAPES:-"8B-o:16384:4096:4096 8B-up:16384:28672:4096 70B-o:16384:8192:8192"} REPS
-  export CONTEND_CARVE=${CONTEND_CARVE:-"-1 100"}
+  export CONTEND_CARVE=${CONTEND_CARVE:-"-1 100"} V31_CGEMMS=${CONTEND_GEMMS:-lt} V31_CMODES=${CONTEND_MODES:-"sha alu fma sleep"}
   # shellcheck disable=SC2016,SC2086
   $LEASE bash -c '
     for c in $CONTEND_CARVE; do
