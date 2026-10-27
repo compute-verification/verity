@@ -1,5 +1,4 @@
 import Definitions.Accounting.Guarantees.Additive
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.BigOperators.Intervals
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Ring.NNRat
