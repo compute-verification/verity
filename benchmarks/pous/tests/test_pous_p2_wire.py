@@ -1,5 +1,5 @@
 """`p2-audit-wire/v4` (`benchmarks/pous/p2_v1/wire.py`) against its pinned vectors: every negative transcript gives its pinned
-FINAL, the small end-to-end audit is accepted and rebuilt byte for byte, every hash the spec's §7 pins is the files', and the
+FINAL, the small end-to-end audit is accepted and rebuilt byte for byte, every hash `reference.py` pins is the files', and the
 package's copy of the keys is `vectors.json`'s."""
 from __future__ import annotations
 
@@ -77,12 +77,14 @@ def test_frame_sizes_at_the_deployment_point():
     assert (Wi.OPEN_BYTES, Wi.CHALLENGE_BYTES, Wi.SETUP_ROOT_BYTES, Wi.RECORD_BYTES) == (124, 138, 169, 147)
 
 
-def test_every_spec_pin_is_the_files_and_the_package_keys_are_the_vectors():
+def test_every_reference_pin_is_the_files_and_the_package_keys_are_the_vectors():
+    """`reference.py` pins each file and each width's `vectors.json` entry; the frames' hashes are in the files."""
     maps, audit, negative = (_load(p) for p in (R.VECTORS, R.AUDIT_VECTORS, R.NEGATIVE_VECTORS))
     files = {p.name: p.read_bytes() for p in (R.VECTORS, R.AUDIT_VECTORS, R.NEGATIVE_VECTORS)}
-    spec = V.SPEC.read_text()
-    for name, value in V.pins(maps, audit, negative, files).items():
-        assert value in spec, name
+    pins = V.pins(maps, audit, negative, files)
+    assert [pins[p.name] for p in (R.VECTORS, R.AUDIT_VECTORS, R.NEGATIVE_VECTORS)] == [
+        R.VECTORS_SHA512, R.AUDIT_VECTORS_SHA512, R.NEGATIVE_VECTORS_SHA512]
+    assert {v["w"]: pins[f"entry/{v['id']}"] for v in maps["vectors"]} == R.ENTRY_SHA512
     assert _load(V.KEYS_FIXTURE) == V.keys_fixture(maps, R.VECTORS_SHA512)
 
 
