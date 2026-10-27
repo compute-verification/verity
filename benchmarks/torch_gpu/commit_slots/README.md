@@ -142,7 +142,7 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
   units, the order a plan drops added tables in, and (with a GPU) the device against the host twin, at a near-full HBM
   no allocator retry while the side stream lags its reads, and a freed table's memory back at its read.
-- `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
+- `overlap.py`: the commit beside `../../../examples/h200/`'s served step on one GPU: serving alone, the commit alone, today's
   loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
   commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
   SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the forward's host waiting on

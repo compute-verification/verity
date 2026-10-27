@@ -29,9 +29,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import probe as P  # noqa: E402  (first: it puts verity on the path)
-import k32  # noqa: E402
-from verity.ml.circuits.silicon import models as M  # noqa: E402
+import probe as P
+import k32
+from verity.ml.circuits.silicon import models as M
 
 INSTRUCTIONS = ("nvf4", "f8f6f4")
 SCHEMA = "pouw-rtxpro/tc-recheck-fp4/v1"

@@ -103,6 +103,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -627,8 +628,10 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
     """Yield (name, A (n,M,K), Bt (n,8,K), C (n,M,8), meta) -- the nine families of the Ada validation (unchanged for BF16: the
     same draws in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
 
-    cast = lambda x: fmt.from_f32(x.astype(np.float32))
-    zeros_acc = lambda n: np.zeros((n, M, N), np.uint32)
+    def cast(x):
+        return fmt.from_f32(x.astype(np.float32))
+    def zeros_acc(n):
+        return np.zeros((n, M, N), np.uint32)
     fp8 = fmt.bits == 8
 
     # 1. Hawkeye-style: standard normal operands, zero accumulator.
@@ -735,7 +738,8 @@ def probe_families(rng, fmt: Format, M: int, K: int):
     classes and Hawkeye's adder-width probe.  The accumulator families are format-independent by construction (products are
     zero); the specials table and the adder-width exponents come from the format (``SPECIAL_OPERANDS``, ``adder_width_parameters``)."""
 
-    zero_ops = lambda n: (np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype))
+    def zero_ops(n):
+        return (np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype))
 
     # 11. all products zero, random finite accumulators over the whole range: the Ada quirk is that the accumulator comes back
     # truncated to the adder's 14 bits even though nothing was added (0x3f800001 -> 0x3f800000).  Half of the tiles have zero
@@ -843,7 +847,7 @@ def adder_width_parameters(fmt: Format) -> tuple[tuple[int, ...], list[int]]:
     -30..-3 to bracket both boundaries with margin; pa in {-55, 0, 32, 63} keeps every 2^pe, 2^(pe+ratio) a finite FP32 (pe <= 126,
     pe + ratio >= -140, i.e. down into the subnormals, where a survived residual comes back as an exact subnormal word)."""
 
-    lo, hi = fmt.min_pow2_exp, fmt.max_pow2_exp
+    hi = fmt.max_pow2_exp
     if fmt.bits == 8:
         return (0, (hi + 1) // 2, hi), list(range(-26, -4))
     return (-55, 0, 32, 63), list(range(-30, -2))
