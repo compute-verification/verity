@@ -584,8 +584,8 @@ WGD void pp_hash(const Args& p, const H& h, uint32_t* ctl, int& cur, int ntile, 
 // RP 5 and 6 (above): 128 x 128 tiles, the CTA's i-th (static schedule) warpgroup i % 2's, the ring's k-tiles in the
 // tiles' order (k-tile g = i KT + k is stage g % STAGES's (g / STAGES)-th fill, its empty barrier one warpgroup's 4 warps).
 // ctl[3 + w]: the k-tiles warpgroup w has issued (g + 1), so a consumer whose next tile starts at g0 hashes until the two
-// have issued g0 - ppm (with no tile left, the CTA's last: the tensor pipe is never kept waiting past a chunk), and RP 6's
-// hash warps until both mainloops end. H NoHash: the ping-pong GEMM alone.
+// have issued g0 - ppm and starts its mainloop at g0 (with no tile left, the CTA's last: the tensor pipe is never kept
+// waiting past a chunk), and RP 6's hash warps until both mainloops end. H NoHash: the ping-pong GEMM alone.
 template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
   static_assert(RP == 5 || RP == 6, "the ping-pong plans");
   using T = Tile<128>;
@@ -644,6 +644,10 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
     if constexpr (HASH)
       pp_hash(p, h, ctl, cur, ntile, tiles_m, tiles_n, [&]() { return issued() + (uint32_t)p.ppm >= g0; }, i >= ntile);
     if (i >= ntile) break;
+    // the mainloops take turns (CUTLASS's order barrier): until the other warpgroup has issued k-tile g0 - 1, this tile's
+    // first stages' full barriers can sit a phase behind, and a parity wait passes on the other tile's fill
+    while (issued() < g0) {}
+    __syncwarp();
     int tm, tn;
     raster((int)blockIdx.x + i * (int)gridDim.x, tiles_m, tiles_n, p.group, tm, tn);
     int s = (int)(g0 % STAGES), pend = -1;
