@@ -31,7 +31,9 @@ and two premises: the window's statement registered as `sw i` (`WindowRegistersA
 checks), and the network certifier's record covering the horizon (`RecordCovers`, network-accounting, open). For the
 rows format that is two facts per bucket (`recordCovers_of_rows`); for one-stage v2's clock form it is the window's
 statuses alone (`recordCovers_of_clock`), which N2's head check gives only off its soundness error and up to a forgery
-under the device's key (`ClockStatusComplete`).
+under the device's key (`ClockStatusComplete`). With the device certifying only complete records (B), the period's
+in-the-clear certificate check gives it off the forger's event (`recordCoversOff_of_certified`), and the bound gains
+that event's probability (`windowLeOff`).
 
 The realization's fields the steps read beyond `RealizesCommOfPeriodLeakAccepted`'s are `WindowRuns`', in ONE-8's
 `SampledSession` form: each a property of the deployed run, which the named steps tie to the compiled component.
@@ -247,8 +249,8 @@ the link-window in the clear and signs the head's salted record digest (`certifi
 signs a head of any status (`Issuer.certify`), and `trusted-host` doesn't keep its key secret. So acceptance gives this
 only off N2's soundness error (S3–S5 take accepted sessions to an accepting sampled run, not to a witness the head check
 holds on), up to a SHA-512 collision between the committed head and the device's, and up to a forgery under the
-device's key: a deterministic premise only once `window_le`'s bound charges those, or the device refuses to certify an
-incomplete status, which leaves the forgery alone. -/
+device's key. Once the device refuses to certify an incomplete status (B), it holds off the forger's event alone
+(`recordCoversOff_of_certified`, `windowLeOff`). -/
 def ClockStatusComplete (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (F : ClockFormat R.Conn R.Cell L Kₒ S) :
     Prop :=
   ∀ ξ (i : Fin n), ComponentAccepts .network (s ξ) → ∀ c, F.status (W.sched ξ) (R.arr (W.srv ξ)) i.val c = .complete
@@ -262,31 +264,103 @@ theorem recordCovers_of_clock (W : WindowRuns R) (s : ((i : I) → Ω i) → Sen
   simp only [WindowRuns.record, hF.record]
   exact F.record_covers i (hF.horizon i) (hst ξ i hca) hF.jitter
 
-/-- **S8: what onsite's network component accepting gives of window `i`'s good event past the leak relation.** At
-`ξ` where the component accepts and the realization's witness is in the leak relation, window `i` is good: in scope
-(`R.scope`), registered as `sw i` (S1's program check through `WindowRegistersAs`, at S2's v2 and S6's window count),
-the trace holding `ρ i` (`WindowValuesRegistered`), and the record, the device's code's under `trusted-host`, covering
-the horizon (`RecordCovers`). -/
-theorem windowGood_of_accepts (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s)
+/-! ## B: the device certifies only a complete record
+
+With the device refusing to certify an incomplete status (`Issuer.certify`), the statuses follow from the period's
+in-the-clear certificate check and the device's log of what it certified, off one event: the period accepted a
+certificate the device never certified (`CertForged`). The per-window bound then gains that event's probability
+(`windowLeOff`), which `euf-cma/lms-sha512-n64` and `ecr/sha-512` bound outside the theorem, each on its own fixed
+finder. -/
+
+/-- **The network audit's certificates at the coins `ξ`**: `accepted ξ i c x`, the period accepted the certificate `x`
+as window `i`'s of boundary link `c` (`NetworkCheck.Period.certifies`: its fields name that link, its end and the window,
+and it verifies under LMS over `certificate_message` under the parameters' key in their session); `signed ξ x`, the
+network certifier device certified `x` in its run (its log of the certificates `Issuer.certify` issued). -/
+structure CertRuns (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n) (Cert : Type) where
+  accepted : ((i : I) → Ω i) → Fin n → Fin Kₒ → Cert → Prop
+  signed : ((i : I) → Ω i) → Cert → Prop
+
+/-- **The period checks each window's certificates in the clear** (S1 at one-stage v2's period, with D:
+`Period.windowCheck` refuses a link-window unless both its certificates, egress then ingress, are the parameters'
+key's, name the link, their end and the window, and verify in the session). Where onsite's network component accepts
+at `ξ`, the period accepted a certificate of every boundary link of every window. -/
+def CertifiedOnAccept (s : ((i : I) → Ω i) → Sent) {Cert : Type} (C : CertRuns R Cert) : Prop :=
+  ∀ ξ (i : Fin n) c, ComponentAccepts .network (s ξ) → ∃ x, C.accepted ξ i c x
+
+/-- **B: the device certifies only a complete record, under `trusted-host`** (network-accounting: `Issuer.certify`
+lists an incomplete record's link-window in `refused` and signs nothing for it). Where the period accepted `x` as window
+`i`'s certificate of boundary link `c` and the device certified `x`, the device certified its record of that
+link-window, so that link's status in its record of window `i` is complete. -/
+def SignedComplete (W : WindowRuns R) (F : ClockFormat R.Conn R.Cell L Kₒ S) {Cert : Type} (C : CertRuns R Cert) :
+    Prop :=
+  ∀ ξ (i : Fin n) c x, C.accepted ξ i c x → C.signed ξ x →
+    F.status (W.sched ξ) (R.arr (W.srv ξ)) i.val c = .complete
+
+/-- **The forger's event** at `ξ`: the period accepted a certificate the device never certified. Its fixed finder
+outputs the first such certificate: an LMS forgery under the device's key over its message (`euf-cma/lms-sha512-n64`),
+or, where the device signed that message for another certificate's fields, two `certificate_message` inputs with one
+SHA-512 digest (`ecr/sha-512`). Both claims apply outside the theorem, each to its own fixed finder (Daniel, 26 Oct). -/
+def CertForged {Cert : Type} (C : CertRuns R Cert) (ξ : (i : I) → Ω i) : Prop :=
+  ∃ (i : Fin n) (c : Fin Kₒ) (x : Cert), C.accepted ξ i c x ∧ ¬ C.signed ξ x
+
+/-- **S8's coverage premise off an event `Brk`**: `RecordCovers` where `Brk` doesn't hold at `ξ`. -/
+def RecordCoversOff (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (Brk : ((i : I) → Ω i) → Prop) : Prop :=
+  ∀ ξ i, ComponentAccepts .network (s ξ) → ¬ Brk ξ →
+    Covered (k (R.sw i)) (W.record ξ i) ∧ (W.record ξ i).length = k (R.sw i) ∧ ∀ y ∈ W.record ξ i, y.jitter < Dj
+
+/-- **Under B the clock form's record covers the horizon off the forger's event**: the format (`RecordsClock`), the
+period's certificate check (`CertifiedOnAccept`) and the device certifying only complete records (`SignedComplete`). -/
+theorem recordCoversOff_of_certified (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent)
+    (F : ClockFormat R.Conn R.Cell L Kₒ S) {Cert : Type} (C : CertRuns R Cert) (hF : RecordsClock R F)
+    (hacc : CertifiedOnAccept s C) (hB : SignedComplete W F C) : RecordCoversOff W s (CertForged C) := by
+  intro ξ i hca hnb
+  simp only [WindowRuns.record, hF.record]
+  refine F.record_covers i (hF.horizon i) (fun c => ?_) hF.jitter
+  obtain ⟨x, hx⟩ := hacc ξ i c hca
+  exact hB ξ i c x hx (not_not.1 fun hns => hnb ⟨i, c, x, hx, hns⟩)
+
+/-- **S8 at one `ξ`**: where the component accepts, the realization's witness is in the leak relation and window `i`'s
+record covers the horizon, window `i` is good: in scope (`R.scope`), registered as `sw i` (S1's program check through
+`WindowRegistersAs`, at S2's v2 and S6's window count), the trace holding `ρ i` (`WindowValuesRegistered`), and the
+record the device's code's under `trusted-host`. -/
+theorem windowGood_of_covers (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s)
     (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
-    (hcov : RecordCovers W s) {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .network (s ξ))
+    {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .network (s ξ))
+    (hcov : Covered (k (R.sw i)) (W.record ξ i) ∧ (W.record ξ i).length = k (R.sw i) ∧
+      ∀ y ∈ W.record ξ i, y.jitter < Dj)
     (hw : Rlt R (R.stmt ξ i) (R.wit ξ i)) :
     WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt ξ i) (R.wit ξ i) (R.obs ξ i) := by
   obtain ⟨_, st, hst, _⟩ := R.scope ξ i
   obtain ⟨p, c, e, hnp, hacc⟩ := componentAccepts_network_windows periodAcceptMeans hca
   obtain ⟨rg, hrg, hprog⟩ := windowProgram_of_accepted hacc (lt_of_lt_of_le i.isLt (h6.windows ξ p c e hnp))
   have hsame := hreg ξ i p c e rg st (h2 ξ i hca) hnp hrg hprog hst
-  obtain ⟨hcv, hlen, hj⟩ := hcov ξ i hca
+  obtain ⟨hcv, hlen, hj⟩ := hcov
   rw [obs_eq_record W h6.obs]
   refine ⟨hw, R.scope ξ i, st, hst, hsame, hρ ξ i st hca hst hw, ?_, ?_, hj⟩
   · rw [hsame.2.2.2.1]; exact hcv
   · rw [hsame.2.2.2.1]; exact hlen
+
+/-- **S8: what onsite's network component accepting gives of window `i`'s good event past the leak relation.** At
+`ξ` where the component accepts and the realization's witness is in the leak relation, window `i` is good
+(`windowGood_of_covers`), its record covering the horizon (`RecordCovers`). -/
+theorem windowGood_of_accepts (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s)
+    (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
+    (hcov : RecordCovers W s) {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .network (s ξ))
+    (hw : Rlt R (R.stmt ξ i) (R.wit ξ i)) :
+    WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt ξ i) (R.wit ξ i) (R.obs ξ i) :=
+  windowGood_of_covers W h2 h6 hρ hreg hca (hcov ξ i hca) hw
 
 /-! ## The per-window bound -/
 
 theorem exists_of_ext {W : Type} {Q : Rel W} {x : Msg} : ∀ {o : Option W}, Q.ext x o → ∃ w, Q x w
   | some w, h => ⟨w, h⟩
   | none, h => h.elim
+
+/-- An event is no likelier than its part off `B` plus `B`. -/
+theorem pr_le_add_off {α : Type} [Fintype α] {A B : α → Prop} {b : ℝ} (h : Pouw.pr (fun x => A x ∧ ¬ B x) ≤ b) :
+    Pouw.pr A ≤ b + Pouw.pr B :=
+  (Pouw.pr_mono fun x hx => (em (B x)).elim Or.inr fun hb => Or.inl ⟨hx, hb⟩).trans
+    ((Pouw.pr_or_le (fun x => A x ∧ ¬ B x) B).trans (add_le_add h le_rfl))
 
 /-- **NET-85: the network certifier's per-window bound at its compiled component**
 (`Verity.Subprotocol.NetworkWindowLe`, unfolded, at the component's acceptance), from S2–S6, the ρ gap and S8's two
@@ -308,5 +382,26 @@ theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : Peri
     rw [h6.stmt]
     exact exists_of_ext hx
   exact hbad (windowGood_of_accepts W h2 h6 hρ hreg hcov hca (h6.wit _ i hex))
+
+/-- **`windowLe` with S8's coverage off an event `Brk`** (`RecordCoversOff`): the bound gains `Brk`'s probability over
+the network audit's own coin. Under B, `Brk` is the forger's event (`CertForged`, `recordCoversOff_of_certified`). -/
+theorem windowLeOff (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W)
+    (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
+    (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) {Brk : ((i : I) → Ω i) → Prop}
+    (hcov : RecordCoversOff W s Brk) :
+    ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
+      ComponentAccepts .network (s (Function.update ξ (r.own .network) x)) ∧
+        ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt (Function.update ξ (r.own .network) x) i)
+          (R.wit (Function.update ξ (r.own .network) x) i) (R.obs (Function.update ξ (r.own .network) x) i)) ≤
+    PrBad H D.V (Rlt R) (E D decode) (R.stmt ξ i) (R.prover ξ i) +
+      Pouw.pr (fun x : Ω (r.own .network) => Brk (Function.update ξ (r.own .network) x)) := by
+  intro ξ i
+  refine pr_le_add_off ?_
+  refine pr_le_of_coins (W.coins ξ i) (h4 ξ i) fun x ⟨⟨hca, hbad⟩, hnb⟩ c =>
+    ⟨h5 ξ i x (h3 _ i (h2 _ i hca)), fun hx => ?_⟩
+  have hex : ∃ w, Rlt R (R.stmt (Function.update ξ (r.own .network) x) i) w := by
+    rw [h6.stmt]
+    exact exists_of_ext hx
+  exact hbad (windowGood_of_covers W h2 h6 hρ hreg hca (hcov _ i hca hnb) (h6.wit _ i hex))
 
 end Verity.Network
