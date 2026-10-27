@@ -23,7 +23,7 @@ Commit window and writes ``summary.json``.
   finishes at its first EOS id (``--eos``) or at ``max_tokens``. Each step's rows are written in the runner's batch
   order, the scheduling order sorted stably by scheduled tokens (Model Runner V2's).
 * **The engine** (`Engine`: each sampling row's known tokens to its next token) is ``hash`` (a token from a SHA-512 of
-  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: CMP-95's seeded weights of `verity_torch_loop.weights`'s
+  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: CMP-95's seeded weights of `e2e_h200.served_weights`'s
   SHAPE, ``tiny`` or ``phase1``, through this module's own W8A8 forward on CPU, not the H200 loop's kernels), or
   ``MODULE:FACTORY``, a factory the serving loop provides, called with ``seed`` and returning an `Engine`.
 * **The records**, in serve-openai's formats under ``--out``: ``serve.json`` (the engine, its context as
@@ -92,14 +92,14 @@ def _bf16(words: np.ndarray) -> np.ndarray:
 
 
 class SeededDecoder:
-    """CMP-95's seeded weights (`verity_torch_loop.weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
+    """CMP-95's seeded weights (`e2e_h200.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
     numpy: embeddings and positions added, per layer RMSNorm, the query, key and value projections (``kv_heads`` KV heads),
     causal softmax attention, the output projection and the residual, RMSNorm, the ReLU MLP and the residual, then the
     final norm and the head, greedy. A W8A8 linear quantizes its input row to s8 codes at max|x|/127 and scales the s8 dot by
     that and its output channel's scale. The whole sequence is recomputed each step (the context is at most 32)."""
 
     def __init__(self, shape: str, seed: int = 0) -> None:
-        from verity_torch_loop import weights as W
+        from e2e_h200 import served_weights as W
 
         self.shape = s = W.ALIASES.get(shape) or W.SHAPES[shape]
         self.vocab, self.context, self.name = s.vocab, s.context, f"demo-endpoint/seeded-{s.name}"

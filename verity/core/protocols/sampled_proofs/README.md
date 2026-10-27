@@ -107,8 +107,20 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   to `verify`'s. Onsite, remote and composition still read v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
-  machine only through that machine's certifier coin link; the premises this rests on, `CoinsConfidential` and
-  `OneClock`, are stated in `benchmarks/live_challenger/auditor.py` (the coins' path).
+  machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
+  The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
+  name:
+  - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
+    (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
+    boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
+    allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
+    auditor host, vy-challenger-1, runs both, and a window's coins leave it only on the peer's certifier coin link,
+    which the gate refuses to open without (`auditor.coin_ports`). In the Lean it is the Prop
+    `Pouw.Assumptions.CoinsConfidential`: a replica's prover is the same function whatever the other replicas' coins,
+    the form ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` takes as a hypothesis.
+  - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
+    ingress and receipt times are read on one clock. Deployed, that is vy-challenger-1's. A challenger on a device of its own would have to keep its clock within
+    1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
@@ -120,6 +132,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   samplers and `draw_first` under each sampling design against the Lean verifier's (`drawOn`) on raw bytes, and
   `tests/test_one_stage.py` the work sizes against the ones C-Flock's
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's draw against `one_stage.draw`.
+- **The parties.** `parties` holds the challenger, the firewall, the workers and the verifier as parties of the
+  deployment layer (`verity.core.deploy`), with their manifest and table (`PROTOCOL`), each machine's work a
+  capability it is given. `verity run CONFIG --party ROLE` runs them; on the toy the capabilities are
+  `benchmarks/all_protocols/verity_all_protocols/parties.py`'s (`examples/toy_network`).
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn proof blocks. The vLLM integration
@@ -184,6 +200,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
+- `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
+  `params_of`, and `IDS`, the configuration's component names and their protocol ids.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's

@@ -403,7 +403,7 @@ def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_cr
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
     """Under a served window's open root, `table_reads_file` gives the call's A and z tables the domains that bind it, the
-    window's own rows (PRF-127), and the weights' b/32 the one that binds none: the domains credit gives them
+    window's own rows, and the weights' b/32 the one that binds none: the domains credit gives them
     (`credit.domain_of`), and the same reads as with no window."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
@@ -704,8 +704,8 @@ def test_a_unit_that_doesnt_prove_its_record_against_its_scaled_rows_is_refused(
 
 
 def test_a_window_whose_receipts_padding_spills_into_another_block_is_staged():
-    """The H1 tile's receipt is an output row of 8 (KS + m) bytes, and the Lean verifier takes a v2 row of any length
-    (#3148): a window of the real tile unit at K = 384, 416, 896 and 928, whose receipts end past byte 111 of a block, is
+    """The H1 tile's receipt is an output row of 8 (KS + m) bytes, and the Lean verifier takes a v2 row of any length:
+    a window of the real tile unit at K = 384, 416, 896 and 928, whose receipts end past byte 111 of a block, is
     staged."""
     ks = (384, 416, 896, 928)
     assert [HW.tile_unit(k, TILE).signature()[1].fields[0][1].leaves // 8 for k in ks] == [112, 120, 240, 248]

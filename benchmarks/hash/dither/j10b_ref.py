@@ -1,5 +1,5 @@
 """A CPU model of J10's banded noise as the kernels read SharedNoise.lean (CA's §6 shape, a band of g column tiles a row
-block). CA's own reference is out (#2866 at `CA_SHA`: verity/core/protocols/pouw/circuit/banded.py, banded_reference) and
+block). CA's own reference is out (at `CA_SHA`: verity/core/protocols/pouw/circuit/banded.py, banded_reference) and
 this model equals it on its pinned vectors and on leader and non-leader receipts; a banded gate holds the kernels to
 CA's code itself (`ca_reference`, j10ca_ref.py under the tree `ca_tree` finds) and is labelled `CA_LABEL`, and a run
 without that tree is labelled `LABEL`.
@@ -31,7 +31,9 @@ import j10r_ca as J10
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
+from verity_config.settings import of
 
+settings = of(__file__)
 LABEL = "noise=j10-banded (kernels' reading of SharedNoise.lean; not CA's reference)"
 NOISE = "j10-banded/kernels-reading"
 CA_SHA = "1a4d1de024"
@@ -41,11 +43,11 @@ _CA: dict = {}
 
 
 def ca_tree() -> str | None:
-    """The tree of CA's banded reference (#2866 at CA_SHA): $J10_CA_TREE, else the run's inputs/banded-CA_SHA.tar.gz
+    """The tree of CA's banded reference (at CA_SHA): $J10_CA_TREE, else the run's inputs/banded-CA_SHA.tar.gz
     (`git archive CA_SHA verity | gzip`, sent with `research run --send`) extracted once a process; None without either."""
     if "tree" not in _CA:
-        tree = os.environ.get("J10_CA_TREE")
-        arc = Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "inputs" / f"banded-{CA_SHA}.tar.gz"
+        tree = settings.J10_CA_TREE
+        arc = Path(settings.RESEARCH_RUN_DIR or ".") / "inputs" / f"banded-{CA_SHA}.tar.gz"
         if not tree and arc.is_file():
             tree = tempfile.mkdtemp(prefix="j10ca-")
             with tarfile.open(arc) as t:
@@ -74,7 +76,7 @@ def ca_reference(units: list[dict], workers: int = 8) -> dict:
 
 
 def leader(u: int, ncb: int, g: int) -> int:
-    """Unit u's band leader: the first unit of its row block's band of g column tiles."""
+    """Unit u's band leader: the first unit of its row tile's band of g column tiles."""
     ri, cj = divmod(u, ncb)
     return ri * ncb + (cj // g) * g
 
@@ -132,7 +134,7 @@ def reference(a: np.ndarray, b: np.ndarray, salt: bytes, base: int, roots: tuple
 
 
 def row_block(seed_l: bytes, i: int, c: int, k: int) -> list[int]:
-    """Row i's c-th noise block from the leader's seed_j, as 16 big-endian halves (seeds.halves): what the kernels'
+    """Row i's c-th noise chunk from the leader's seed_j, as 16 big-endian halves (seeds.halves): what the kernels'
     band workspace holds at (row i, chunk c)."""
     return SD.halves(SD.noise_block(seed_l, HT.Layout(32, 32, k).row(i) + c))
 

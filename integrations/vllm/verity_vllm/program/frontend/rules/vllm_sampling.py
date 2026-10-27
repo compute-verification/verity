@@ -119,7 +119,7 @@ class GumbelTopPTokenSelectRule(OpRule):
         x = ctx.coll(logits)
         rows, lead = rows_of(x)
         V = rows[0].type.n
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports the rule modules)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports the rule modules
         # a constant split count (the registered S): the select specialised on it, its keep word as word gates, the same
         # six operands (the Const32[S] still read, in operand order)
         fn = ctx.kind("token_select_stochastic", node, V=V, CONSTRUCTION=active_target_profile().effective_sampler_construction()) \
