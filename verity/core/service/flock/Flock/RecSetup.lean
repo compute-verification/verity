@@ -8,6 +8,7 @@ its whole population (`oneFull`). `verify` also refuses, last in each verdict, a
 the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
 an inner session whose record holds no draw (`innerDrawn`).
 -/
+import Flock.RecBudget
 import Flock.RecCoins
 import Flock.RecRecord
 import Flock.Witness
@@ -165,8 +166,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; and the inner statement is set up as its files set
-it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
+`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"
@@ -175,6 +176,7 @@ def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : 
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}, claims {i.claims}) " ++
       s!"is not the inner statement's (m {st.m}, k_log {st.c.kLog}, regions {st.regions.size}, claims {claims}), " ++
       "which its files (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition) set up")
+  RecBudget.innerRows st
   checkForm f.form st
 
 /-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
