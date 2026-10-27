@@ -308,7 +308,7 @@ def test_verdict_b2_requires_a_live_oracle_compare():
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "root-compare-vs-independent-run", "result": True}}
     # the C2 of record is the sampled replay + boundary linkage at EVERY B; a row record without it is
-    # FAIL named (at B=1 too: a root-compare alone was F-cb-02's unsound PASS), and a complete oracle attribution no longer substitutes
+    # FAIL named (at B=1 too: a root-compare alone was an unsound PASS), and a complete oracle attribution no longer substitutes
     ok, why = commit_verdict({**base, "binding": _bnd(2)}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established") and "no --program-dir" in why
     ok, why = commit_verdict({**base, "binding": _bnd(1)}, True, min_openings=64)
@@ -431,7 +431,7 @@ def _biased_linear_match(tmp: str):
 
 def test_biased_linear_member_is_read_at_the_bias_add_producer_not_the_gemm(tmp_path):
     """The manifest's producer for a biased linear's member "0" must be the BiasAdd row.  Required at the Gemm (the
-    pre-int-5 rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
+    earlier rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
     tensor -- exactly the Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
     collector bound the GEMM alloc; at the BiasAdd it is the same tensor and the compare is a check (swapped committed bytes still fail)."""
     d, bmap, committed, op, pre = _biased_linear_match(str(tmp_path))
@@ -729,7 +729,7 @@ def test_revb_n_2_14_1_no_oracle_families_are_said_per_query_family_in_identitie
 
 
 def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unverified_attribution_nor_missing_range(tmp_path):
-    """The first #3 pod run (1be14d8e5) graded the oracle compare 'partial: request attribution unverified
+    """The first pod run of workload 3 graded the oracle compare 'partial: request attribution unverified
     at 21 (step, request) pairs ... identity without a byte range x7665' -- every one of them a PADDING entry (r0's steps 11..31, lifted dtype,
     no execution to compare against).  A bot-by-enablement entry is counted apart per Q(P) family, its (step, request) is not an attribution
     pair, its step is not 'not snapshotted'; the verdict reads the EXECUTED entries alone -- here complete."""

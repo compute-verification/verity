@@ -12,7 +12,7 @@ Rules it pins: "different logical producer/version -> never merged solely becaus
     against two oracle instances (a per-layer oracle that differs then MISMATCHES by name -- never 'equal by collapse');
   * an alias entry that points an invocation at ANOTHER module's path (a different logical producer) is never a match: the oracle has
     no rotary instance there, the invocation is NOT compared, by name;
-  * a shared invocation the table does not name is NOT compared (F-moe-r17-06/-07), never compared against layer 0's oracle.
+  * a shared invocation the table does not name is NOT compared, never compared against layer 0's oracle.
 Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest tests), not this
 fixture's: the binding map carries no spec.
 

@@ -198,7 +198,7 @@ def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_
     assert "!= the workload's model" in WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})["why"]
     assert "revision" in WR.check(rec, live, checkpoint_of_record={"repo": "test/tiny", "revision": "0123456789ab"})["why"]
     assert "!= Program of record" in WR.check(rec, live, program_digests_of_record={"e" * 128})["why"]
-    # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned (MAN-09)'
+    # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned'
     bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 8}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
@@ -209,7 +209,7 @@ def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_
         v, why = commit_verdict({**base, "weights_pin": bad}, True, min_openings=64)
         assert not v and why.startswith("weights of record: ") and bad["why"] in why, why
     v, why = commit_verdict({**base, "weights_pin": {"result": None, "why": "weights of record not derived: no checkpoint dir"}}, True, min_openings=64)
-    assert not v and why.startswith("weights unpinned (MAN-09)") and "not derived" in why
+    assert not v and why.startswith("weights unpinned: ") and "not derived" in why
 
 
 def test_substituted_weight_input_is_named_whether_in_memory_or_on_disk(checkpoint, tmp_path):

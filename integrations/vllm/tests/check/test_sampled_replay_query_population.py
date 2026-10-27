@@ -310,7 +310,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     ne = pop["not_executed_by_rule"]
     assert ne["applied"] is True and ne["rule"] == POP.EXECUTED_PREFIX_RULE and ne["scope"] == POP.NOT_EXECUTED_SCOPE
     assert "active-reference implementation classification only" in ne["rule"] and "tau(e) = bot" in ne["rule"]   # verbatim, on the rule
-    # exactly r0's identities at request-relative step cap-1 left the pool, by name: its ROWS and [moe F-moe-r17-05] its named input
+    # exactly r0's identities at request-relative step cap-1 left the pool, by name: its ROWS and its named input
     # (`input_token_ids` at that step) -- the rule names identities of a request past its stop whatever their family; `weights` (step '*')
     # and r1 are untouched
     r0_last = [i for i in man["identities"] if i.get("request_id") == "r0" and i.get("step") == cap - 1]
@@ -388,8 +388,8 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     # (a)(b)(c) + the served-length rule, each a fault BY NAME; an unasserted fact is a fault, never a default
     f = lambda **kw: POP.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
     assert f() == []
-    assert any("not linked to the served output" in x for x in f(linked=None)) and any("(R17-27 a)" in x for x in f(linked=False))
-    assert any("LAG rule not attested" in x for x in f(lag_attested=None)) and any("(R17-27 b)" in x for x in f(lag_attested=False))
+    assert any("not linked to the served output" in x for x in f(linked=None)) and any("(condition (a))" in x for x in f(linked=False))
+    assert any("LAG rule not attested" in x for x in f(lag_attested=None)) and any("(condition (b))" in x for x in f(lag_attested=False))
     assert any("execution past the stop: 3 committed row(s)" in x for x in f(rows_past_stop=3))
     assert any(f"Commit served length {cap - 3} != record a_r {cap - 2}" in x for x in f(served_len_commit=cap - 3)) and any("!= record a_r" in x for x in f(served_len_commit=None))
     assert POP.executed_prefix_of_record("r1", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)["faults"] == []            # LAG 0 profile, cap stop

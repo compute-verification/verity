@@ -481,7 +481,7 @@ def rule_binding_context(commit: dict, ctx: dict) -> CheckResult:
 def rule_identity_coverage(commit: dict, ctx: dict) -> CheckResult:
     """binding_check (2): identity coverage of the expected population (error -> refusal; missing; ambiguous)."""
     b = _binding_of(commit)
-    claim = "Every identity of the required-value population has exactly one committed binding (a duplicate never covers a missing one; BIND-01 (2) / MAN-02)."
+    claim = "Every identity of the required-value population has exactly one committed binding (a duplicate never covers a missing one)."
     compat = ["binding.coverage.ok", "binding.coverage.error", "binding.coverage.missing_n", "binding.coverage.ambiguous_n", "binding.coverage.expected_n", "binding.coverage.bound_n"]
     name, rule = "required_value_coverage/identity_coverage", "BIND-01 (2) / MAN-02"
     if b is None or b.coverage is None:
@@ -557,7 +557,7 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
     """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL`."""
     ex = _d(commit.get("extra"))
     cov = ex.get("coverage") or commit.get("coverage")
-    claim = "Every identity the required-value manifest names (Program x query, per request / step / member / element range) was committed with its full extent (MAN-01)."
+    claim = "Every identity the required-value manifest names (Program x query, per request / step / member / element range) was committed with its full extent."
     compat = ["coverage.ok", "coverage.missing_n", "coverage.missing_by_family", "coverage.families_missing_entirely", "coverage.error", "coverage.manifest_digest", "commit_summary.coverage"]
     name, rule = "required_value_coverage/manifest_coverage", "MAN-01"
     if not isinstance(cov, dict):
@@ -648,7 +648,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
 def rule_manifest_verified(commit: dict, ctx: dict) -> CheckResult:
     """row_pod.sh: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
     mv = ctx.get("manifest_verify")
-    claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload (EXEC-05 / MAN-05)."
+    claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload."
     compat = ["manifest_verify.ok", "manifest_verify.used_digest", "manifest_verify.rebuilt_digest", "stages.txt manifest_verify="]
     name, rule = "required_value_coverage/manifest_of_record_verified", "EXEC-05 / MAN-05"
     if not isinstance(mv, dict):

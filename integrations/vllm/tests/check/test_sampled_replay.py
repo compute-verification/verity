@@ -58,7 +58,7 @@ ABN = 16                                 # attn=True: the attention rows' key bl
 def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: bool = False, registered: bool = False):
     """One request Program: per token row Embedding -> RMSNormTriton -> Gemm(gate_up) -> SiluMul -> Gemm(down) -> RMSNormFused(norm) ;
     per step Gemm(logits, tied embed) -> TokenSelect.  Names / args in the Build's instance-sequence schema.
-    `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape, MAN-07): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
+    `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
     `rope`: the token row also runs Gemm(qkv) -> RoPE_v1 query[k] (member `query`, NHEADS=NH) / key[k] (member `key`,
     NHEADS=KVH) exactly as the real Programs name them (`rotary_emb/rotary_embedding_{s}/query[k]`), arg 1 = ONE row of the `weights`
     field `...rotary_emb.cos_sin_cache` at the token's position (the Program's slice names the position); the rotated heads are leaves
@@ -478,7 +478,7 @@ def _bnd(n_req):
 
 def test_verdict_c2_of_record_replay_plus_linkage_replaces_the_oracle_gate_at_b2():
     """At B>=2 a complete sampled replay + linked boundaries PASS without any Match oracle; a replay mismatch or
-    an unlinked boundary is a named FAIL at any B; a partial replay alone does not attribute (F-cb-23 stays closed)."""
+    an unlinked boundary is a named FAIL at any B; a partial replay alone does not attribute."""
     from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}}
@@ -534,7 +534,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
            "why": "no evaluator for RMSNormFusedCuda_v2{N=2048} variant (statics outside the registered relation)", "why_class": "no-evaluator"},
           {"spec": 'BiasAdd_v1{N=2048}', "request_id": "r0", "step": 1, "op_path": "model.layers.1.self_attn.qkv_proj", "row": 0,
            "why": "fed by interior producer(s) without an evaluator (Gemm_v2 (model.layers.1.self_attn.qkv_proj)): composition not possible in this replay (MAN-06g, v2)", "why_class": "interior-composed-v2"}]
-    # an older version of this test used a PLANE-FED (MAN-06f) second stratum and expected form (B) to cover it;
+    # an older version of this test used a PLANE-FED second stratum and expected form (B) to cover it;
     # form (B) has no oracle family for the moe/ planes those VUs commit (oracle_compare.NO_ORACLE_FAMILY_PREFIXES), so that PASS overclaimed
     # -- the second stratum is now an interior-composed one (Qwen2.5 BiasAdd: its instance output IS compared) and the plane-fed case FAILs below
     ne_plane = {"spec": 'SiluMul_v1{N=1024}', "request_id": "r0", "step": 1, "op_path": "model.layers.1.mlp.experts", "row": 0,
@@ -557,7 +557,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
         # a PLANE-FED stratum beside them: FAIL by name even with the same complete form (B) -- neither form checks the planes
         p3 = {**part, "strata_unevaluated": [K1, K2, K3], "unevaluated_strata": us + [us_plane], "not_evaluated": ne + [ne_plane]}
         ok, why = commit_verdict({**base, "binding": _bnd(b), "sampled_replay": p3, "oracle_compare": oc_ok}, True, min_openings=64)
-        assert not ok and why.startswith("C2 of record not established: 1 plane-fed strata (2 VUs; MAN-06f) have committed moe/ plane members value-checked by NEITHER form") \
+        assert not ok and why.startswith("C2 of record not established: 1 plane-fed strata (2 VUs) have committed moe/ plane members value-checked by NEITHER form") \
             and "no oracle family for moe/ planes" in why and "SiluMul_v1" in why and "moe_block_stream" in why and "3 strata named not evaluated" in why, why
         # the oracle under value_correspondence.oracle_compare is read too
         vc = {**base["value_correspondence"], "oracle_compare": oc_ok}
@@ -718,7 +718,7 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
 
 
 def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_name_hopper_m0748(biased_world, monkeypatch):
-    """A biased linear whose INTERIOR pre-bias Gemm has no registered evaluator: BiasAdd_v1 is the producer of record (MAN-07), its input
+    """A biased linear whose INTERIOR pre-bias Gemm has no registered evaluator: BiasAdd_v1 is the producer of record, its input
     is interior, and the BiasAdd VU cannot compose.  It is counted BY NAME as not evaluable (population), never sampled as a stratum that
     stays 'not evaluated' (partial = FAIL closed on every biased-linear row).  Over Gemm_v1 (Ada) the composition is unchanged: the
     BiasAdd rows are VUs and replay exact.  Gemm_v2 (the Hopper GEMM this finding was measured on) now HAS an evaluator -- see the Hopper
@@ -877,7 +877,7 @@ def test_hopper_honest_program_replays_bit_exactly_gemm_v2_in_the_population(hop
 
 
 def test_hopper_biased_linear_composes_the_interior_gemm_v2(hopper_worlds):
-    """The MAN-06g gap of record (32,228 'BiasAdd_v1 fed by interior Gemm_v2' VUs on the Qwen2.5 H100 row) closes:
+    """The interior-composed gap of record (32,228 'BiasAdd_v1 fed by interior Gemm_v2' VUs on the Qwen2.5 H100 row) closes:
     with the Gemm_v2 evaluator the BiasAdd VU composes the interior wgmma GEMM from ITS committed inputs and replays exact."""
     _plain, biased = hopper_worlds
     pi = IX.ProgramIndex(biased.inst)
@@ -1702,7 +1702,7 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
 
 
 def test_moe_evaluators_equal_the_registered_definitions():
-    """[MAN-06f v3 unit 2] the numpy / scalar-primitive evaluators of the MoE families are the registered `verity.ml.definitions.registry.moe`
+    """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity.ml.definitions.registry.moe`
     Definitions (the bodies moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
     from verity.ml.circuits.defs import bind
@@ -1865,7 +1865,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
                                "compared_by_family": {"instance_outputs": 2, "input_token_ids": 1}, "not_compared_by_family": {},
                                "attribution": {"complete": True, "pairs": 3, "unverified_n": 0, "ambiguous_steps": []}}}
     ok, why = commit_verdict({**base, "binding": _bnd(2), "sampled_replay": rep}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why
+    assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why
     # the honest replay of the same world is still complete
     rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=64, seed=1)
     assert rep_ok["result"] is True and rep_ok["grade"] == "complete" and rep_ok["sample"]["not_evaluated_n"] == 0

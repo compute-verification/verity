@@ -463,7 +463,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     else:
         if not eff:
             c.fail("the record does not attest its engine conditions (no enforce_eager / enable_prefix_caching at RunHeader.profile.engine_kwargs, "
-                   "RunHeader.engine_kwargs or capture/versions.json engine_kwargs): applicability cannot be checked, fail closed (M-0261)")
+                   "RunHeader.engine_kwargs or capture/versions.json engine_kwargs): applicability cannot be checked, fail closed")
         # async_scheduling joins the compared keys only when the Program declares it (one source, two readers)
         for k in ("enforce_eager", "enable_prefix_caching") + (("async_scheduling",) if app["engine"].get("async_scheduling") is not None else ()):
             # EACH declared key must be attested -- a record that omits one knob (prefix caching: vLLM V1 default ON)
@@ -571,7 +571,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 continue
             same = (str(mv) == str(hv)) if k == "variant" else (abs(float(mv) - float(hv)) <= 1e-9)
             if not same:
-                c.fail(f"manifest of record declares sampling {k}={mv!r} but the run header records {k}={hv!r} [M-0570]")
+                c.fail(f"manifest of record declares sampling {k}={mv!r} but the run header records {k}={hv!r}")
         # a request pinning ANOTHER variant (vllm_adapter): its table entry vs the header's per-request fields
         for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))
@@ -580,7 +580,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 continue
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
             for conf in (r_s.get("conflict") or []) if rv is not None else []:
-                c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf} [M-0667 N5]")
+                c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf}")
             # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed
             if rv is not None and all(h.get(k) is None for k in ("variant", "temperature", "top_p", "top_k")):

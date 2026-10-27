@@ -127,5 +127,5 @@ def test_the_plane_fed_fail_still_leads():
     k_06f = "fed by moe_block_stream planes (SiluMul_v1@experts): row -> plane mapping not in this replay (MAN-06f, v2)"
     sr = {**SR_HOPPER, "population": {**SR_HOPPER["population"], "not_evaluable": {K_ROPE: 9184, k_06f: 64, K_GEMM2: 3616}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": sr, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f)"), why
+    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs"), why
     assert "the other 3616 VUs not evaluable by name (no-evaluator) are covered by the complete form (B)" in why, why

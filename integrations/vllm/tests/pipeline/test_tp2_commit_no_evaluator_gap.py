@@ -92,7 +92,7 @@ def test_the_rule_reads_the_population_codes_the_replay_stamps():
 def test_a_plane_fed_producer_fails_by_name_and_a_family_without_identity_is_no_gap():
     plane = {"MoeRouterTopK_v1 (moe_block_stream plane producer: no evaluator)": 512}
     ok, why, _ = _gates(_sr(plane))
-    assert ok is False and "plane-fed VUs (MAN-06f)" in why and "MoeRouterTopK_v1" in why
+    assert ok is False and "plane-fed VUs" in why and "MoeRouterTopK_v1" in why
     inert = {"Const32_v1 (structure / interior: no identity)": 9, "Gemm_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)": 4}
     assert _gates(_sr(inert))[:2] == (True, None)
 

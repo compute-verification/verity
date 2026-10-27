@@ -318,7 +318,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
 
 
 def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_only(tmp_path):
-    """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
+    """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
     in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
     eos_declared from the stop rule, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""

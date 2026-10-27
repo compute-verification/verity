@@ -789,7 +789,7 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     assert TGM._check(res_f, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_f["lag"]["agree"] is False
     TGM._set_async_scheduling(oracle, None)
     res_n = gm.check(gpd, oracle)
-    assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name (R17-1)" in p for p in TGM._check(res_n, "G6")["problems"])
+    assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name" in p for p in TGM._check(res_n, "G6")["problems"])
     assert TGM._check(res_n, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_n["lag"]["record_attests"] is None
     # the S the declared-to-cap schedule would prescribe never enters: at step 3 (declared live 1) there is no row to check
     declared = gp.declared_live_counts([{"arrive_step": g["arrive_step"], "cap": g["max_tokens"]} for g in gpd["requests"]])

@@ -38,12 +38,12 @@ GUARD_PREFIXES = ("LStepLive", "LSelect", "LBot", "LIsEOS", "LEmitNext")
 #: population itself is the manifest's (Q(P)); this names, per family, what covers it when no evaluator can -- a required family with no
 #: entry here is reported `class: unstated` (fail closed on the record; never silently "covered").
 QUERY_FAMILY_MECHANISM: dict[str, str] = {
-    "weights": "registered inputs: MAN-09 weights pin (served parameters == the checkpoint of record, by digest) + C1 coverage / C3 openings",
+    "weights": "registered inputs: the weights pin (served parameters == the checkpoint of record, by digest) + C1 coverage / C3 openings",
     "input_token_ids": "prescribed input: boundary linkage (the committed ids at the arrival step == the declared prompt; sampled id[s-1] -> id[s]) + C1 / C3",
     # the sampler families name what CONSUMES them, as input_token_ids' entry does: the committed seed / splits are the
     # inputs of the sampler VU (GumbelTopPTokenSelect_v1) whose exact replay in form (A) reads them by binding, and of stoch_recompute's
     # attribution (the served token re-derived from the committed logits + seed + splits) -- not only a linkage check on their values
-    "sampler_seed": ("prescribed input: prescribed_input_linkage (committed seed == the declared SamplingParams.seed, ruling 36) + C1 / C3; "
+    "sampler_seed": ("prescribed input: prescribed_input_linkage (committed seed == the declared SamplingParams.seed) + C1 / C3; "
                      "CONSUMED BY the sampler VU GumbelTopPTokenSelect_v1's exact replay, which reads the committed seed as its Philox key "
                      "(seed, pos) -- the committed sampled id is reproducible from the committed logits only with it (form (A) per pick; the "
                      "seed is a bound input of every sampled stratum) -- and by stoch_recompute's attribution (served token re-derived "
@@ -309,8 +309,8 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     mech_of_class = {
         "state-linked": "C1 coverage + C3 openings + form (B) where present; the exact VU (K/V history from committed qkv outputs) is an engineering gap, not a domain",
         "no-evaluator": "C1 coverage + C3 openings + form (B) where present; a registered evaluator is the engineering gap (form (A) required)",
-        "plane-fed": "the plane is read as its consumers' committed input; the producer's own relation awaits MAN-06f v3 unit 2 (form (B) required meanwhile)",
-        "interior-composed-v2": "C1 / C3 + form (B) required (MAN-06g composed evaluator is the v2 follow-up)",
+        "plane-fed": "the plane is read as its consumers' committed input; the producer's own relation has no evaluator yet (form (B) required meanwhile)",
+        "interior-composed-v2": "C1 / C3 + form (B) required (no composed evaluator yet)",
         "mixed": "rows of two classes under one identity: named, resolve before any claim",
     }
     uncovered = []
@@ -375,7 +375,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                 manifest_cut.append({"request_id": str(r), "manifest_last_step": req_max_step.get(str(r)), "cap_last_step": last,
                                      "n_exec": int(e["n_exec"]), "identities_at_not_executed_steps": int(not_exec_req.get(str(r), 0)),
                                      "why": "Q(P) carries no identity at the request's not-executed steps: the manifest was restricted before the "
-                                            "population (R17-26: the manifest of record stays cap-length; the class is the exclusion)"})
+                                            "population (the manifest of record stays cap-length; the class is the exclusion)"})
     # an identity at invocation >= 1 is addressed ONLY through `op_path_aliases` (a shared module's k-th call, at the
     # first layer's path); one that is the image of no alias entry is unreachable from every Program row -- the 960 + 960 on the TP2 B1 row
     # of record were this (the rank merge had dropped the table).  The CAUSE named beside the two symptom counts, fails the reconciliation.
@@ -438,7 +438,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     elif man is not None:
         guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
     # the query of record BY ID on the scope line (a manifest predating the id: named as such, never assumed)
-    qid = (_header(man, "query_id") or "Q_module (pre-R17-10 header, no query_id)") if man is not None else "Q"
+    qid = (_header(man, "query_id") or "Q_module (older header, no query_id)") if man is not None else "Q"
     if total:
         scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam_total.items()))}; {guard_line}); exact replay reaches {n_reached} "
                  f"({100.0 * n_reached / total:.1f}%), under an evaluated module {n_evald}")

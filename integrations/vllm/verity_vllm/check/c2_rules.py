@@ -18,14 +18,14 @@ from verity_vllm.records.query_checks import QueryChecks
 
 QUERY_CHECKS = "the sampled replay's population.query_checks"
 
-_POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves
+_POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the population's by-name classes
 # which by-name classes form (B) CAN cover: form (B) compares the Match record's dispatcher-level
-# module outputs (`instance_outputs`), so an interior-composed VU (MAN-06g: its module's returned tensor IS an instance output) is covered by a
+# module outputs (`instance_outputs`), so an interior-composed VU (its module's returned tensor IS an instance output) is covered by a
 # complete (B); a PLANE-FED VU is not -- its committed members are the moe/ block-stream planes, and oracle_compare has NO oracle
 # family for `moe/` (NO_ORACLE_FAMILY_PREFIXES: counted 'no oracle family', excluded from compared).  Neither form value-checks those planes
 # (form (A) has no row->plane mapping in this replay), so a plane-fed gap FAILs by name whatever form (B) says; C1 + C3 still hold on them.
 _PLANE_FED_NEITHER_FORM = ("have committed moe/ plane members value-checked by NEITHER form (form (B) has no oracle family for moe/ planes "
-                           "[oracle_compare.NO_ORACLE_FAMILY_PREFIXES]; form (A) has no row->plane mapping in this replay [MAN-06f, v2])")
+                           "[oracle_compare.NO_ORACLE_FAMILY_PREFIXES]; form (A) has no row->plane mapping in this replay)")
 
 
 def _form_b_complete_over_values(oc: dict | None) -> str | None:
@@ -168,7 +168,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
         return None, ("C2 population does not reconcile with Q(P): the replay's enumeration of the Program rows and the required manifest "
                       f"disagree on what the Program produces -- {'; '.join(parts) or 'see population.query_checks'}")
     scope = str(pop.get("scope") or "")
-    qid = qt.get("query_id") or "Q_module (pre-R17-10 header)"                   # the query of record, by id, on every PASS
+    qid = qt.get("query_id") or "Q_module (older header)"                   # the query of record, by id, on every PASS
     if c.ok is None:
         return f"C2 population scope: {scope} -- NOT reconciled against Q(P) (no required manifest supplied to the replay); the reach is the replay's own count", None
     return f"C2 population scope (query of record {qid}): {scope}", None
@@ -250,8 +250,8 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
         if rest:
             tail = (f"; the other {sum(rest.values())} VUs not evaluable by name ({', '.join(sorted({cls_of(k) for k in rest}))}) "
                     + ("are covered by the complete form (B)" if missing is None else f"are not covered either: {missing}"))
-        return None, (f"C2 of record not established: {n_p} plane-fed VUs (MAN-06f) {_PLANE_FED_NEITHER_FORM} -- {reasons_p}{tail}; "
-                      "C1 + C3 hold on those planes, C2 needs form (A) over the planes (MAN-06f v3 row->plane mapping) or a bit-exact plane xcheck on record")
+        return None, (f"C2 of record not established: {n_p} plane-fed VUs {_PLANE_FED_NEITHER_FORM} -- {reasons_p}{tail}; "
+                      "C1 + C3 hold on those planes, C2 needs form (A) over the planes (a row->plane mapping) or a bit-exact plane xcheck on record")
     # selector outputs with no evaluator: form (B) must value-check every sampled id (family-targeted), else FAIL
     sel_note = None
     if sel:
@@ -354,9 +354,9 @@ def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | N
         n_p = sum(int(by[k].get("n") or 0) for k in plane)
         fams_p = sorted({str(by[k].get("spec") or "").split("{", 1)[0] for k in plane})
         whys_p = sorted({str(by[k].get("why") or "").split(" [", 1)[0][:90] for k in plane})[:3]
-        return None, (f"C2 of record not established: {len(plane)} plane-fed strata ({n_p} VUs; MAN-06f) {_PLANE_FED_NEITHER_FORM}: "
+        return None, (f"C2 of record not established: {len(plane)} plane-fed strata ({n_p} VUs) {_PLANE_FED_NEITHER_FORM}: "
                       f"{', '.join(fams_p)} -- {' | '.join(whys_p)}; sampled replay partial [{samp.get('evaluated')} evaluated, 0 mismatch, "
-                      f"{len(unev)} strata named not evaluated]; C1 + C3 hold on those planes, C2 needs form (A) over the planes (MAN-06f v3) "
+                      f"{len(unev)} strata named not evaluated]; C1 + C3 hold on those planes, C2 needs form (A) over the planes "
                       "or a bit-exact plane xcheck on record")
     if _form_b_complete_over_values(oc) is not None:
         return None, None
@@ -500,7 +500,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             if sok is False:
                 missing_b = _form_b_complete_over_values(_oc)
                 if missing_b is not None:
-                    put(C_SEED, FAIL, reason=f"C2 of record not established (F-r16-23): {swhy}; and form (B) does not stand in: {missing_b}", inputs=sr_inputs,
+                    put(C_SEED, FAIL, reason=f"C2 of record not established: {swhy}; and form (B) does not stand in: {missing_b}", inputs=sr_inputs,
                         differences=[{"name": "seed_not_post_commitment", "why": swhy, "form_b": missing_b}])
                 else:
                     gap0, fail0 = _complete_replay_population_gap(sr, _oc) if sr.get("result") is True else _partial_replay_named_gap(sr, _oc)
@@ -508,7 +508,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
                         put(C_GAP, FAIL, reason=fail0, differences=[{"name": "population_gap_uncovered", "why": fail0[:400]}])
                     elif sr.get("result") is not True and gap0 is None:
                         sr_why = sr.get("why") or sr.get("grade")
-                        put(C_SR, FAIL, reason=(f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade')} -- {sr_why}; "
+                        put(C_SR, FAIL, reason=(f"C2 of record not established: sampled replay {sr.get('grade')} -- {sr_why}; "
                                                f"the row's Commit is C1 + C3 only (whatever seeded the replay: {swhy})"), scope=sr_scope, inputs=sr_inputs, notes=sr_notes,
                             differences=[{"name": "replay_partial_unnamed_gap", "grade": sr.get("grade"), "why": str(sr_why)[:300]}])
                     else:
@@ -530,11 +530,11 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             elif gap is None:
                 if "local_replay/sampled_replay" not in out:            # (a result-False replay was named above)
                     if not isinstance(sr, dict):
-                        put(C_SR, INSUFFICIENT, reason="C2 of record not established (DECISIONS-2 §4): sampled replay None -- not run (no --program-dir / --programs-root); the row's Commit is C1 + C3 only",
+                        put(C_SR, INSUFFICIENT, reason="C2 of record not established: sampled replay None -- not run (no --program-dir / --programs-root); the row's Commit is C1 + C3 only",
                             notes=sr_notes, differences=[{"name": "replay_not_run"}])
                     else:
                         sr_why = sr.get("why") or sr.get("grade")
-                        put(C_SR, FAIL, reason=f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade')} -- {sr_why}; the row's Commit is C1 + C3 only",
+                        put(C_SR, FAIL, reason=f"C2 of record not established: sampled replay {sr.get('grade')} -- {sr_why}; the row's Commit is C1 + C3 only",
                             scope=sr_scope, inputs=sr_inputs, notes=sr_notes, differences=[{"name": "replay_partial_unnamed_gap", "grade": sr.get("grade"), "why": str(sr_why)[:300]}])
             else:
                 put(C_GAP, PASS, notes=[gap])
@@ -549,11 +549,11 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         if not (isinstance(lk, dict) and lk.get("result") is True) and "boundary_linkage/ordered_linkage" not in out:
             lk_why = lk.get("why") if isinstance(lk, dict) else "not run"
             put(C_LK, INSUFFICIENT if not isinstance(lk, dict) else FAIL,
-                reason=f"C2 of record not established (DECISIONS-2 §4): boundary linkage {lk.get('result') if isinstance(lk, dict) else None} -- {lk_why}", scope=lk_scope,
+                reason=f"C2 of record not established: boundary linkage {lk.get('result') if isinstance(lk, dict) else None} -- {lk_why}", scope=lk_scope,
                 differences=[{"name": "linkage_not_run" if not isinstance(lk, dict) else "linkage_not_established", "why": lk_why}])
         if not (isinstance(wp, dict) and wp.get("result") is True) and "checkpoint_binding/weights_of_record" not in out:
             wp_why = wp.get("why") if isinstance(wp, dict) else "not run (no --weights-of-record / --checkpoint-dir)"
-            put(C_WP, INSUFFICIENT, reason=(f"weights unpinned (MAN-09): the served weights were not compared with the checkpoint of record -- {wp_why}; "
+            put(C_WP, INSUFFICIENT, reason=(f"weights unpinned: the served weights were not compared with the checkpoint of record -- {wp_why}; "
                                             "the committed weights root is self-consistency, not authentication"), scope=wp_scope, inputs=wp_inputs, notes=wp_notes,
                 differences=[{"name": "weights_unpinned", "why": wp_why}])
         n_req = _requests_n(commit)

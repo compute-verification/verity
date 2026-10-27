@@ -297,7 +297,7 @@ class ProgramIndex:
             # `part_rank<r>` (tp_rank_partials, TP-04/TP-06: the all-reduce input) AND the MOE-01 plane `moe/L<k>/sum` (moe_block_stream,
             # staged by MoeBlockSource on the rank exactly as at TP1).  The manifest requires both (TP-06); the
             # replay addressed the row at the partial only, so the reconciliation read every `moe/L<k>/sum` identity as
-            # `identities_without_rows` (OLMoE TP2 B8 int-6: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
+            # `identities_without_rows` (OLMoE TP2 B8: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
             # output: recorded in the population under the plane identity AND read back and compared against the same evaluated words
             # (two committed copies, one relation, both checked).  The plane mapping is the checked one (_describe_plane: geometry,
             # ordinal, dataflow); a mapping failure is NAMED here and the plane identity stays without rows -- fail closed, never aliased.

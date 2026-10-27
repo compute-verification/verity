@@ -80,7 +80,7 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
     2I == H (OLMoE) that is the whole plane; when the widths differ the alias would still show as identical leading bytes (one base pointer,
     two row strides), so a prefix test catches it on every geometry.  Result: True = every compared pair differs; False = an identical pair
     (named: request, step, layer, bytes) -- the up plane is the down plane's alias; None = no MoE layer with both planes committed (dense
-    model, or the planes not bound).  A FACT beside the replay (the MAN-06f v3 GEMM relation already fails an aliased plane by name);
+    model, or the planes not bound).  A FACT beside the replay (the plane GEMM relation already fails an aliased plane by name);
     the known-good root re-pin of the OLMoE reference stands on this line, not on the run reproducing itself."""
     layers: dict[tuple[str, int, int], dict[str, tuple[int, int]]] = {}
     for (rid, step, op, mem), es in store.idx.items():
@@ -288,7 +288,7 @@ NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementatio
                       "there is no not-required-because-not-executed category.")
 
 #: the executed prefix of a request, as the C2 population CLASSIFIES it (never as it shrinks by it).
-EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
+EXECUTED_PREFIX_RULE = ("a request that served a_r < cap tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
                         "executed exactly n_exec = min(a_r + LAG, cap) request-relative steps; a request served to its cap executed cap "
                         "(a length stop: no post-EOS row even if the cap token is an EOS). RequiredValues(P, Q_module_v1) stays the "
                         "cap-length manifest of record (fixed population across stopping points; digest unchanged): its identities "
@@ -317,13 +317,13 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     `lag_attested` (declared == record_attests == tokens.json), `eos_declared` (served token a_r-1 is a declared EOS id), `rows_past_stop`
     (committed rows of the request at steps >= arrival + n_exec, from the Commit's coverage) -- this function only fixes the arithmetic and
     NAMES the faults: `faults` non-empty means the class is NOT applicable to this request and the record fails by name (conditions (a)(b)(c)
-    of `check.executed_prefix`, F-pm-24).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
-    `a_r_source` is REQUIRED and names WHERE a_r was read (the Match record file + digest, as moe's executed_prefix_facts passes it); it has
+    of `check.executed_prefix`).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
+    `a_r_source` is REQUIRED and names WHERE a_r was read (the Match record file + digest, as executed_prefix_facts passes it); it has
     no default, so a caller passing the Commit's own count cannot put 'match record' on the record by omission -- an own count must be
     labelled as such by the caller, and (a) then faults on `linked`.  [ONE mechanism] with `served` (the request's served token ids of
     record) and `eos_ids` (the Program's declared EOS ids) the class is DERIVED FROM r_t: `rule` (default Continuation_v1's
     `executed_prefix_by_rule`) runs the recurrence over the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, cap)`
-    is demoted to a CHECK (a disagreement is a fault by name); the rule's own problems (served past the first EOS, F-pm-24, over the cap) are
+    is demoted to a CHECK (a disagreement is a fault by name); the rule's own problems (served past the first EOS, a last served token that is no declared EOS, over the cap) are
     faults.  Without `served` the arithmetic is the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
     a_r, lag, cap, arrive = int(a_r), int(lag), int(cap), int(arrive)
     faults: list[str] = []
@@ -360,17 +360,17 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
             mechanism = MECH_RECURRENCE
     if a_r < cap and eos_declared is not True:
         faults.append(f"a_r {a_r} < cap {cap} but served token a_r-1 is not asserted a declared EOS id (eos_declared={eos_declared}): "
-                      "an early stop the Program's stop rule does not explain -- not-executed(R17-1) is NOT applicable, FAIL by name")
+                      "an early stop the Program's stop rule does not explain -- the not-executed class is NOT applicable, FAIL by name")
     if linked is not True:                                                       # (a)
         faults.append(f"a_r is not linked to the served output and the Match account (linked={linked}): C2 boundary linkage + tokens_equal + G6 "
-                      "must agree before the committer's stop counts (R17-27 a)")
+                      "must agree before the committer's stop counts (condition (a))")
     if served_len_commit is None or int(served_len_commit) != a_r:
         faults.append(f"Commit served length {served_len_commit} != record a_r {a_r} (a Commit that stops earlier or later than the record fails by "
                       "name; it does not shrink or grow its required population)")
     if lag_attested is not True:                                                 # (b)
-        faults.append(f"LAG rule not attested (declared == record_attests == tokens.json required; lag_attested={lag_attested}) (R17-27 b)")
+        faults.append(f"LAG rule not attested (declared == record_attests == tokens.json required; lag_attested={lag_attested}) (condition (b))")
     if int(rows_past_stop) > 0:                                                  # (c)
-        faults.append(f"execution past the stop: {int(rows_past_stop)} committed row(s) of the request at steps >= arrival {arrive} + n_exec {n_exec} (R17-27 c)")
+        faults.append(f"execution past the stop: {int(rows_past_stop)} committed row(s) of the request at steps >= arrival {arrive} + n_exec {n_exec} (condition (c))")
     return {"request_id": str(rid), "a_r": a_r, "a_r_source": a_r_source, "lag": lag, "cap": cap, "arrive": arrive, "n_exec": int(n_exec),
             "executed_prefix": int(n_exec), "steps_not_executed": [int(n_exec), cap] if n_exec < cap else None, "eos_declared": eos_declared,
             "served_len_commit": served_len_commit, "linked": linked, "lag_attested": lag_attested, "rows_past_stop": int(rows_past_stop),

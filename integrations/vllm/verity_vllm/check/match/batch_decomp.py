@@ -72,7 +72,7 @@ from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling
 from verity_vllm.check.match.dag_form import dag_multiset  # noqa: F401
 
 
-# the within-step criterion of record from r15-int-2: `dag` accepts a request whose projection
+# the within-step criterion of record: `dag` accepts a request whose projection
 # is the same live-cone DAG multiset as its Program although the fold's emission SEQUENCE differs (a co-scheduled prefill displaced
 # by a running decode, M-ARRIVAL-ORDER); `sequence` is the r14-v1 criterion (dag accepted for a chunked prefill only). Both facts are
 # recorded per request either way (`sequence_equal`, `dag_multiset_equal`); the global checker (GM-01) applies the per-step form and gates.
