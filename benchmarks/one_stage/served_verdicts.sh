@@ -8,17 +8,19 @@
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
-#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
-#     closed window's advice under PROVE-PATH's registered compiler, then this window's request Programs
-#     (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES (`prove_path.py window-circuit --pin PIN`,
-#     default `weights`; #4317 with #4757; `record` is the class of record); then the window audited from its records alone
+#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): the
+#     committer's weights registration ($D/weights-registration.json, `prove_path.py weights-registration`, once a serve dir:
+#     each weight of the pinned checkpoint committed under the committer's key $D/private/committer.key), every closed
+#     window's advice under PROVE-PATH's registered compiler recording its roots (`--weights-of-record`), then this window's
+#     request Programs (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES (`prove_path.py
+#     window-circuit --pins` the registration; `record` is the class of record); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's. V3c (VLLM-125) proves the window circuit's own units at
 #     V3C_CLASS (default 4,32,4, which CLASSES must hold): `prove_path.py window-commit` commits the window as that class
-#     circuit's units, the weights under the committer's key ($D/private/committer.key) and pinned in the window's
-#     pins.json; its circuit.json less its run fields is held to the verifier's own window-circuit record at the class; then
-#     `records_audit.py audit --circuit --registered` (V3C_LAW, default subset:1) draws and proves its members.
+#     circuit's units, the weights it serves under the committer's key, so each served as registered has the registration's
+#     root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the class; then
+#     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) draws and proves its members.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
@@ -70,13 +72,28 @@ count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 
 V3C=${V3C_CLASS:-4,32,4} v3c_ok=0; vtag=${V3C//,/-}
+REG=$D/weights-registration.json
+register() {  # the committer's weights registration under its key, once a serve dir, before any window's draw: the verifier's pins
+  [ -f "$REG" ] && return 0
+  local ck
+  ck=$("$PY" -c 'import sys; from verity_vllm.config import checkpoint_dir; print(checkpoint_dir(*sys.argv[1:4]) or "")' \
+    "$REPO" "$REV" "$HF_HOME")
+  [ -d "$ck" ] || { say "WEIGHTS-REGISTRATION: no checkpoint dir of $REPO@$REV under $HF_HOME"; return 1; }
+  # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
+  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" \
+    --checkpoint-dir "$ck" --key "$D/private/committer.key" --out "$REG") \
+    > "$OUT/weights-registration.json" 2> "$OUT/weights-registration.err" \
+    || { say "WEIGHTS-REGISTRATION refused: $(grep -v '^ ' "$OUT/weights-registration.err" | tail -1 | cut -c1-800)"; return 1; }
+  say "WEIGHTS-REGISTRATION: $(cut -c1-1500 "$OUT/weights-registration.json")"
+  cp "$REG" "$OUT/weights-registration.record.json"
+}
 v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
   VW=$D/v3c-w$K-$vtag
   [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
-  # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
+  [ -f "$REG" ] || { say "WINDOW-COMMIT class $V3C: no weights registration"; return 1; }
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout "${V3C_TIMEOUT:-120m}" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/committer.key" --pins "$VW/pins.json" --out "$VW/window") \
+    --key "$D/private/committer.key" --registration "$REG" --out "$VW/window") \
     > "$OUT/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
   local rc=$?
   if [ "$rc" != 0 ]; then
@@ -84,7 +101,6 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
     return 1
   fi
   say "WINDOW-COMMIT class $V3C: $(cut -c1-1500 "$OUT/window-commit-$vtag.json")"
-  cp "$VW/pins.json" "$OUT/v3c-pins-$vtag.json"
   "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | tee -a "$OUT/verdicts.txt"
 import json, sys
 from verity.ml.windows import interface as IF
@@ -105,7 +121,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   mkdir -p "$OUT/v3c-audit"
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout "${V3C_AUDIT_TIMEOUT:-180m}" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$VW/pins.json" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$REG" \
     --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
@@ -186,10 +202,11 @@ BUILD=$!
 
 if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its advice written (step 3); V3c alone
   [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
+  register || exit 13
   # the verifier's record at the class from this tree, whatever an earlier run left in D
   CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
     --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$D/window-circuit-w$K-$vtag.json" \
-    --pin "${PIN:-weights}" --class "$V3C" > "$OUT/window-circuit-$vtag.json" 2> "$OUT/window-circuit-$vtag.err" \
+    --pins "$REG" --class "$V3C" > "$OUT/window-circuit-$vtag.json" 2> "$OUT/window-circuit-$vtag.err" \
     || { say "WINDOW-CIRCUIT class $V3C refused: $(tail -1 "$OUT/window-circuit-$vtag.err" | cut -c1-600)"; exit 12; }
   say "WINDOW-CIRCUIT class $V3C: $(cat "$OUT/window-circuit-$vtag.json")"
   v3c_commit
@@ -269,6 +286,7 @@ CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-ru
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
 [ -n "$CA" ] || stop compiler 13
 echo "registered compiler: $CA" > "$OUT/compiler.txt"
+pins=(); register && pins=(--pins "$REG") && CA="$CA --weights-of-record $REG"
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
   # shellcheck disable=SC2086
   vv advice "$D" --window "$k" --cap "$CAP" $CA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1
@@ -291,7 +309,7 @@ for c in $CLASSES; do
   cls=(); tag=record; [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
   f=$D/window-circuit-w$K-$tag.json
   timeout "${WC_TIMEOUT:-30m}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
-    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" --pin "${PIN:-weights}" "${cls[@]}" \
+    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${pins[@]}" "${cls[@]}" \
     > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
   rc=$?
   if [ "$rc" = 0 ]; then

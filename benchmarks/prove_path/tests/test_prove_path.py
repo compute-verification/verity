@@ -973,7 +973,8 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
     file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
-    advice --weights-of-record` records and ``window-circuit --pins`` takes, and what the verifier holds to its own weights
+    advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
+    rows), and what the verifier holds to its own weights
     record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
     file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
     one the manifest pins, is refused by name, nothing registered."""
@@ -1004,7 +1005,8 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
     assert key.read_bytes().hex() not in out.read_text()
     pins = ADV.registered_weights(reg, serve)
-    assert said["roots"] == len(pins) == 15 and PP.pins_of((), [str(out)]) == pins
+    assert said["roots"] == len(pins) == 16 and PP.pins_of((), [str(out)]) == pins
+    assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
     assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
@@ -1211,8 +1213,8 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
     """`committer_key`: 32 bytes made mode 0600 where the file doesn't exist, the same bytes read back every window after;
     a file of another size is refused."""
     p = tmp_path / "private" / "committer.key"
-    k = PP.committer_key(str(p))
-    assert len(k) == 32 and (p.stat().st_mode & 0o777) == 0o600 and PP.committer_key(str(p)) == k
+    k = PP.committer_key(p)
+    assert len(k) == 32 and (p.stat().st_mode & 0o777) == 0o600 and PP.committer_key(p) == k
     p.write_bytes(bytes(31))
     with pytest.raises(ValueError, match="32 bytes, not 31"):
-        PP.committer_key(str(p))
+        PP.committer_key(p)
