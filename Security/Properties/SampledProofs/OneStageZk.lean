@@ -31,7 +31,7 @@ of the types its decoders produce. It takes no premise.
 
 Nothing here says where the draw came from: the sessions set up at their records' draws, which their proved units tie
 to the evidence's `proved_units` and v1's `UnitsProved` to `Draw.proved` of the evidence's draw. That the draw is the
-challenger's live coins is ONE-4's (`answerAt`).
+challenger's live coins is not stated here.
 -/
 
 open Lean (Json)
