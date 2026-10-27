@@ -55,8 +55,11 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "benchmarks/network_e2e/tests/data/**",
            "integrations/vllm/tools/migrate/superseded_quarantine.py",
            "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+# The certifier's slice fixtures are rewritten: each names its trace by path in `source`, which nothing pins and
+# `encodings/tests/test_served_window.py` regenerates and compares.
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
-           "integrations/vllm/manifests/definitions.json"]
+           "integrations/vllm/manifests/definitions.json",
+           "verity/core/protocols/certifier/tests/fixtures/compile_slice_*.json"]
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`); none of these directories is a package, so they rename only
