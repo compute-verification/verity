@@ -52,7 +52,8 @@
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.Overhead"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -586,6 +587,17 @@
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
    "except": [],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+  },
+  "Properties.Verity.Overhead": {
+   "imports": [
+    "Properties.Verity.Soundness",
+    "Definitions.Nci.Ldl",
+    "Definitions.Accounting.Confidence",
+    "Mathlib.Algebra.Order.Floor.Defs"
+   ],
+   "except": [],
+   "why": "the overhead guarantee is stated over the one theorem's vocabulary and game (`Properties.Verity.Soundness`), the actual run (`Definitions.Accounting.Confidence`) and the counted products (`Definitions.Nci.Ldl`), never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
@@ -2427,6 +2439,12 @@
    "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  },
+  "Verity.overhead": {
+   "owner": "@training"
+  },
+  "Verity.overhead_nontrivial": {
+   "owner": "@training"
   }
  },
  "shape": {
@@ -3580,7 +3598,10 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's."
+   "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
+   "Verity.overhead": "frozen (premise): the end-to-end overhead bound in one experiment (the task's coin, then the server-windows verified in order, each Verity.Vocab.game at the strategy the prover commits to), a corollary of Verity.Vocab.Soundness; its event's probability is the experiment's (Verity.Overhead.prob), not under shape.events, and its premises (WipeSound, ServingCap, DarkShare, Materialization, and the physical premises Phys until LEAN-70 names them) are in no shape.premises module",
+   "Verity.overhead_nontrivial": "frozen (premise): rule 3's nontrivial lemma for Verity.overhead: wherever a claim fails above the summed errors (Verity.soundness_of_subprotocols_nontrivial_of's hypotheses), soundness for the verifier that accepts everything fails and OverheadFor's conclusion fails at a one-window deployment; a statement about every vocabulary, not a property of one function",
+   "Verity.Overhead_honest": "unstated: rule 3's honest lemma for Verity.overhead, proved at the toy deployment once soundness's instance of Verity.Vocab exists (soundness is staffing it)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
