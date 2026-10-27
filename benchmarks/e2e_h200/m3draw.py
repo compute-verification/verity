@@ -35,15 +35,15 @@ from typing import Any, Callable
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import run as RUN  # noqa: E402
-from e2e_h200.commit import Committer, fixture_secrets  # noqa: E402
-from e2e_h200.driver import Driver, Params  # noqa: E402
-from e2e_h200.opening import Openings, replay_slot  # noqa: E402
-from e2e_h200.plan import Map  # noqa: E402
-from e2e_h200.shape import SHAPES  # noqa: E402
-from e2e_h200.units import Replayer  # noqa: E402
-from e2e_h200.weights import Weights  # noqa: E402
-from e2e_h200 import served_weights as SW  # noqa: E402
+import run as RUN
+from e2e_h200.commit import Committer, fixture_secrets
+from e2e_h200.driver import Driver, Params
+from e2e_h200.opening import Openings, replay_slot
+from e2e_h200.plan import Map
+from e2e_h200.shape import SHAPES
+from e2e_h200.units import Replayer
+from e2e_h200.weights import Weights
+from e2e_h200 import served_weights as SW
 
 ROOTS = "verity/e2e-h200/m3-roots/v1"
 DRAWN = "verity/e2e-h200/m3-drawn/v1"

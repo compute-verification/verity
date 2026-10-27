@@ -20,21 +20,20 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sys
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import m3coin as COIN  # noqa: E402
-import m3reg as REG  # noqa: E402
-from e2e_h200 import units as UN  # noqa: E402
-from e2e_h200.commit import Committer, fixture_secrets  # noqa: E402
-from e2e_h200.plan import Map  # noqa: E402
-from e2e_h200.shape import SHAPES  # noqa: E402
-from e2e_h200.weights import Weights  # noqa: E402
-from e2e_h200 import served_weights as SW  # noqa: E402
+import m3coin as COIN
+import m3reg as REG
+from e2e_h200 import units as UN
+from e2e_h200.commit import Committer, fixture_secrets
+from e2e_h200.plan import Map
+from e2e_h200.shape import SHAPES
+from e2e_h200.weights import Weights
+from e2e_h200 import served_weights as SW
 
 
 def arr(pay: bytes, d: dict) -> np.ndarray:

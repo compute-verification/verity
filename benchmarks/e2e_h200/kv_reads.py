@@ -36,8 +36,8 @@ from typing import Any
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(HERE.parent / "e2e_demo")]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "e2e_demo"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run as RUN
 from e2e_h200.commit import Committer, StepTables, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver, Params
