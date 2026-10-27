@@ -61,9 +61,10 @@ their sources' premises, block by block:
   most `K / b_unit` units outsourced (`Accounting.Assumptions.HelpWithinCertifier`), under
   `Properties.Pouw.Period.H1CheckedCreditPeriod`'s premises at the block's windows, openings, salts, live tiles, play
   and folded words;
-* PoUS: block `b`'s PoUS audit is the capacity audit of a joint run on a ring-model server
-  (`Accounting.RealizesSpaceOfPeriodHeld`, `Pous.Period.RingDevice`), under `Pous.Period.PeriodHeld`'s premises, with a
-  space certificate within the ring game's state bound;
+* PoUS: block `b`'s PoUS audit is the capacity audit of a joint run (`Accounting.RealizesSpaceOfPeriodHeld`), its
+  device running any prover strategy under the device model and the instantiation (`Pous.Period.DeviceModel`,
+  `Pous.Period.Instantiates`), under `Pous.Period.PeriodHeld`'s premises, with a space certificate within the ring
+  game's state bound;
 * PoUB: block `b`'s PoUB audit is the bandwidth audit's game (`Accounting.RealizesBandwidthOfAuditPerRunPeriod`), with
   a bandwidth certificate of at most `k·b − S_chip − c − G·b − λ` bits;
 * the network certifier: block `b`'s network audit is the network certifier's period of `n_c` sampled audits
@@ -182,9 +183,11 @@ def JointHorizonBlocksDeployed : Prop :=
     ∀ (ΩW ΩQ : Fin B → Type)
       (run : (b : Fin B) → Run d α (ΩW b) (ΩQ b)
         ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × Pous.EndToEnd.HmCoins × Pous.EndToEnd.Streams))
-      (P : (b : Fin B) → Pous.Period.Audits (ΩW b) (ΩQ b)) (round : Fin B → ℕ),
+      (P : (b : Fin B) → Pous.Period.Audits (ΩW b) (ΩQ b)) (τ : (b : Fin B) → Pous.Period.Strategy (ΩW b) (ΩQ b))
+      (round : Fin B → ℕ),
     ∀ RS : (b : Fin B) → RealizesSpaceOfPeriodHeld (s.block b) (run b) (fun ω => (P b).Accepts ω ∧ ¬ (P b).Break ω),
-    (∀ b, Pous.Period.RingDevice (run b) (P b) Dr Qr Lr (round b)) →
+    (∀ b, Pous.Period.DeviceModel (run b) (P b) (τ b) Dr Qr Lr (round b)) →
+    (∀ b, Pous.Period.Instantiates (P b) (τ b)) →
     (∀ b, (c b).S * ((run b).win .capacity).len + d.chip + ((∑ i, d.cap i * round b : ℕ) : ℝ) ≤ Pous.EndToEnd.S) →
     -- PoUB: the bandwidth audit's game
     ∀ (N bits h sB G k lam : ℕ), 0 < N →
