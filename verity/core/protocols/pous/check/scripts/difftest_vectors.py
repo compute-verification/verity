@@ -583,12 +583,12 @@ def _full_audit(py, rng: random.Random, name: str) -> dict:
 
 
 def _vector_audits(py) -> list[dict]:
-    """The spec's audit vectors (§7): the 31 negative and boundary transcripts and the two-round end-to-end one, and a
+    """The spec's audit vectors: the 31 negative and boundary transcripts and the two-round end-to-end one, and a
     deployment-width session around `full_width_response` (its encoded block, decoded on flag bit 0)."""
     R, Wi = py[0], py[1]
     for path, pin in ((R.AUDIT_VECTORS, R.AUDIT_VECTORS_SHA512), (R.NEGATIVE_VECTORS, R.NEGATIVE_VECTORS_SHA512)):
         if hashlib.sha512(path.read_bytes()).hexdigest() != pin:
-            raise SystemExit(f"{path.name} is not the file the spec pins")
+            raise SystemExit(f"{path.name} is not the file `reference.py` pins")
     out = []
     for case in json.loads(R.NEGATIVE_VECTORS.read_bytes())["cases"]:
         frames = [bytes.fromhex(f) for f in case["frames"]]

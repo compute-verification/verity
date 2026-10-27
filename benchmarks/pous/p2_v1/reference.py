@@ -1,4 +1,4 @@
-"""P2 v4 on the CPU, as `verity/core/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
+"""P2 v4 on the CPU, the scheme's reference (`verity/core/protocols/pous/README.md`, "P2", outlines it): the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
 (`vectors.py`) are built on.
 
@@ -10,9 +10,9 @@ W commitment, the verification tree, the epoch id and the keys, which are counte
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
   and the store's shape (blocks per segment, segments).
-- `setup_salt`, `expand_prefix`, `stream`, `keys`: §4's post-commitment salt and per-block `K` and `t` (counter-mode SHA-512
+- `setup_salt`, `expand_prefix`, `stream`, `keys`: the post-commitment salt and per-block `K` and `t` (counter-mode SHA-512
   over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
-- `d`, `rho`, `sigma`, `encode`, `decode`: §3's maps, `E_j(m) = ρ(σ_K(ρ(m + t)))` and `D_j(c) = d(σ_K(d(c))) − t`.
+- `d`, `rho`, `sigma`, `encode`, `decode`: the maps, `E_j(m) = ρ(σ_K(ρ(m + t)))` and `D_j(c) = d(σ_K(d(c))) − t`.
 - `manifest`, `w_commitment`, `row_digest`, `leaf`, `node`, `root`, `epoch_id`, `audit_key`, `round_key`: the setup
   commitment, the RFC 6962 verification tree over 0x00-tagged leaves of each block's `sha512/row/v2` digest, and the
   audit's challenge derivation (mode 0 and mode 1).
@@ -55,10 +55,10 @@ W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v2"
 DIGEST_BYTES = 64
 SALT_BYTES = 32
 K_AUDIT = 105
-"""The deployment audit's challenges (spec §5, F6)."""
+"""The deployment audit's challenges."""
 DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 354_000
-"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, so
+"""Δ and the most round-trip allowance the operating point permits: the cap, so
 that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
 (`verity.core.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
@@ -204,7 +204,7 @@ def decode(params: Params, c: int, k: int, t: int) -> int:
 
 
 def w_commitment(params: Params, w: bytes) -> bytes:
-    """The commitment to `W` (spec §4's `w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
+    """The commitment to `W` (`w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
     (`verity.ml.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
     manifest = canonical_json_bytes(params.manifest())
     h = hashlib.sha512(TAGGED_SHA512 + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
@@ -214,7 +214,7 @@ def w_commitment(params: Params, w: bytes) -> bytes:
 
 
 def pack_payloads(payloads: list[int], bits: int) -> bytes:
-    """`W` from its payloads (spec §4): packed continuously, the first payload and the most significant bit first,
+    """`W` from its payloads: packed continuously, the first payload and the most significant bit first,
     zero-padded; at a whole number of bytes per payload, their concatenation."""
     packed = 0
     for value in payloads:
