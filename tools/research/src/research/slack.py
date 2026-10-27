@@ -49,8 +49,7 @@ for Daniel database; `traffic` reads that record's state for whether, and `--lat
 
 `announce` and `reply` are the older spellings of `send`, kept while callers move.
 
-#ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API; a route
-that refuses the card's fields (HTTP 400) gets the old Approve/Deny shape `{title, text, link, requested_by}` instead. Each card
+#ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API. Each card
 links its ask's page in the registry's Notion database (the ask-daniel channel's `pages`), where Daniel reads, comments and
 decides; `--page` and `pages` reach it through Notion's API with $NOTION_API_KEY, and $RESEARCH_NOTION_URL points them at
 another server (the tests' fake).
@@ -198,7 +197,6 @@ HISTORY_S = 86400                                                # how far back 
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
-OLD_FOOTER_RE = re.compile(r"\n*_posted by <[^>\n]*>((?: \u00b7 [^\u00b7_\n]+)*)_\s*$")   # before 1 Oct 11:40 PDT
 LINK_RE = re.compile(r"<((?:https?|mailto):[^|>\s]+)(?:\|([^>]*))?>")
 FLAGS = ("urgent", QUIET)
 SLACK_USER_RE = re.compile(r"^[UW][A-Z0-9]{2,}$")
@@ -886,7 +884,7 @@ def stamp_time(text: str, now: datetime) -> str:
 
 def plain(text: str) -> str:
     """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes)."""
-    text = OLD_FOOTER_RE.sub("", FOOTER_RE.sub("", text or ""))
+    text = FOOTER_RE.sub("", text or "")
     text = SUBTEAM_RE.sub(lambda m: "@" + (m[2] or m[1]).lstrip("@"), text)
     text = DATE_TOKEN_RE.sub(r"\1", text)
     text = LINK_RE.sub(lambda m: m[1] if not m[2] or m[2] == m[1] else f"{m[2]} ({m[1]})", text)
@@ -1218,13 +1216,13 @@ def is_quiet(text: str) -> bool:
     """Whether a post carries the quiet marker: as a footer tag, or as `(quiet)` ending its text before any footer.
     `(quiet)` elsewhere is prose."""
     text = text or ""
-    body = FOOTER_RE.sub("", OLD_FOOTER_RE.sub("", text)).rstrip()
+    body = FOOTER_RE.sub("", text).rstrip()
     return QUIET in tags_of(text) or body.endswith(QUIET)
 
 
 def tags_of(text: str) -> list[str]:
-    """The tags a post's footer carries: `_ask · urgent_` (or, before 1 Oct, `_posted by <url|@x's agent> · ask · urgent_`)."""
-    m = FOOTER_RE.search(text or "") or OLD_FOOTER_RE.search(text or "")
+    """The tags a post's footer carries: `_ask · urgent_`."""
+    m = FOOTER_RE.search(text or "")
     return [t.strip() for t in m.group(1).split(TAG_SEP.strip()) if t.strip()] if m else []
 
 
@@ -3596,22 +3594,6 @@ def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
     return 0
 
 
-def fallback(body: dict) -> dict:
-    """The card in the route's old shape (`{title, text, link, requested_by}`, an Approve/Deny card), for a route that refuses
-    the new fields: the question is the title, and the text carries the rest, its times in Pacific."""
-    labels = {o["value"]: o["label"] for o in body["options"]}
-    rec = next(o["value"] for o in body["options"] if o.get("recommended"))
-    dflt = body["default"]
-    lines = [f"*{body['kind'].upper()}*", f"*Why:* {body['why']}", "*Options:*",
-             *(f"\u2022 `{o['value']}`: {o['label']}" + (" (recommended)" if o.get("recommended") else "") for o in body["options"]),
-             f"*Default:* {labels[dflt]} (`{dflt}`)" + (", which applies at the deadline unless you object" if body["kind"] == "default"
-                                                         else "; this card waits for your answer"),
-             f"*Deadline:* {pacific(datetime.fromisoformat(body['deadline']))}",
-             f"Approve takes the recommendation ({labels[rec]}) and Deny declines it; to choose another option, reply in the thread.",
-             f"_asked by <{body['agent_url']}|@{body['requested_by']}'s agent>_"]
-    return {"title": body["question"], "text": "\n".join(lines), "link": body["link"], "requested_by": body["requested_by"]}
-
-
 class RouteError(SlackError):
     def __init__(self, message: str, status: int):
         super().__init__(message)
@@ -3815,21 +3797,12 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError("Notion's answer has no page url or id")
             body["link"] = made["url"]
             print(f"page {made['url']}", file=sys.stderr)
-    old = fallback(body)
     if ns.dry_run:
         print(f"dry-run: POST {ASK_DANIEL} {json.dumps(body, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
-        print(f"dry-run: on HTTP 400, the old shape: POST {ASK_DANIEL} {json.dumps(old, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
         return 0
     route = AskDaniel()
-    fell_back = False
     try:
-        try:
-            out = route.call("POST", "", body)
-        except RouteError as e:
-            if e.status != 400:
-                raise
-            print(f"research msg: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
-            out, fell_back = route.call("POST", "", old), True
+        out = route.call("POST", "", body)
         cid, ts = out.get("id"), out.get("ts")
         if not cid or not ts:
             raise SlackError("the route's answer has no id or ts")
@@ -3854,11 +3827,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
     except SlackError as e:
         print(f"the card is up, but the mention didn't post ({e}): mention Daniel on it yourself", file=sys.stderr)
-    shape = "the old shape (the route predates the card's fields)" if fell_back else "the card's fields"
-    print(f"posted as {shape}; now subscribe_slack_thread(channelId={ch}, threadTs={ts}, expiresInSeconds={EXPIRES_S})", file=sys.stderr)
-    if fell_back and body["kind"] == "default":
-        print(f"the old shape never applies a default: if Daniel hasn't answered by {pacific(datetime.fromisoformat(body['deadline']))}, "
-              f"`{body['default']}` applies, and you record it", file=sys.stderr)
+    print(f"posted; now subscribe_slack_thread(channelId={ch}, threadTs={ts}, expiresInSeconds={EXPIRES_S})", file=sys.stderr)
     if not ns.wait:
         return 0
     polls = math.ceil((datetime.fromisoformat(body["deadline"]) - now + WAIT_GRACE).total_seconds() / ns.every)

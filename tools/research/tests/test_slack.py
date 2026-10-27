@@ -1641,11 +1641,10 @@ ASK = "C0C5UCA0S0Z"
 
 
 class FakeRoute:
-    """The site's /api/agent-approvals: `fields` (the card's fields are deployed) or `old` (only {title, text, link, requested_by},
-    and a 400 for anything without a title); `resolve` is deployed or answers 404. `statuses` are what successive GETs return."""
+    """The site's /api/agent-approvals; `resolve` is deployed or answers 404. `statuses` are what successive GETs return."""
 
     def __init__(self):
-        self.mode, self.resolve, self.requests, self.statuses, self.answer = "fields", False, [], [], None
+        self.resolve, self.requests, self.statuses, self.answer = False, [], [], None
         self.auths, self.valid = [], OIDC
 
     def handle(self, method: str, path: str, body: dict | None, auth: str) -> tuple[int, dict]:
@@ -1656,9 +1655,7 @@ class FakeRoute:
         if auth != f"Bearer {self.valid}":
             return 401, {"error": "invalid_identity"}
         if method == "POST" and path == "/api/agent-approvals":
-            if self.mode == "old" and not body.get("title"):
-                return 400, {"error": "title_required"}
-            return 200, {"id": "42", "ts": "1790800000.000100", **({"channel": ASK} if self.mode == "fields" else {})}
+            return 200, {"id": "42", "ts": "1790800000.000100", "channel": ASK}
         if method == "POST" and path.endswith("/resolve"):
             return (200, {"status": "decided", "choice": body["choice"], "source": "thread"}) if self.resolve else (404, {"error": "not_found"})
         if method == "GET":
@@ -1717,7 +1714,7 @@ def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, regis
                     "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": PAGE_URL, "requested_by": "infra",
                     "agent_url": "https://cursor.com/agents/bc-test"}
     assert route.identity["seen"][0] == ("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})
-    assert "the card's fields" in err and f"threadTs=1790800000.000100" in err and OIDC not in out + err
+    assert "threadTs=1790800000.000100" in err and OIDC not in out + err
 
 
 def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, registry, capsys):
@@ -1736,20 +1733,6 @@ def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, cap
     assert run(capsys, "send", "--as", "daniel", "--to", "@infra", "--text", "x")[0] == 2
 
 
-def test_a_route_without_the_fields_gets_the_old_shape_with_the_card_in_its_text(route, registry, capsys):
-    route.mode = "old"
-    rc, out, err = run(capsys, *card_argv())
-    assert rc == 0 and out.split()[:2] == ["42", "1790800000.000100"] and ASK in out            # the registry's channel id
-    assert [r[2].get("title") for r in route.requests] == [None, "Test: does the #ask-daniel card render correctly?"]
-    old = route.requests[1][2]
-    assert set(old) == {"title", "text", "link", "requested_by"} and old["requested_by"] == "infra"
-    assert old["text"].splitlines()[:5] == ["*DEFAULT*", "*Why:* First live card; checks the format.", "*Options:*",
-                                            "\u2022 `yes`: Looks right (recommended)", "\u2022 `no`: Needs changes"]
-    assert "*Default:* Looks right (`yes`), which applies at the deadline" in old["text"]
-    assert "*Deadline:* 3:00 PM PDT, Wed 30 Sep" in old["text"] and "reply in the thread" in old["text"]
-    assert "HTTP 400 title_required" in err and "the old shape" in err and "`yes` applies, and you record it" in err
-
-
 def test_a_card_polled_past_its_identitys_life_gets_a_new_one(route, monkeypatch):
     issued = iter(["t1", "t2"])
     monkeypatch.setattr(slack, "oidc_token", lambda aud: next(issued))
@@ -1761,10 +1744,14 @@ def test_a_card_polled_past_its_identitys_life_gets_a_new_one(route, monkeypatch
     assert route.auths == ["Bearer t1", "Bearer t1", "Bearer t2"]
 
 
-def test_only_a_400_falls_back(route, registry, capsys):
-    route.answer = (401, {"error": "invalid_identity"})
+@pytest.mark.parametrize("answer, says", [
+    ((400, {"error": "invalid_request"}), "the route answered HTTP 400 invalid_request"),
+    ((401, {"error": "invalid_identity"}), "rejected this agent's Cursor identity (HTTP 401 invalid_identity)"),
+])
+def test_a_refused_card_is_one_request_and_says_why(route, registry, capsys, answer, says):
+    route.answer = answer
     rc, _, err = run(capsys, *card_argv())
-    assert rc == 2 and "rejected this agent's Cursor identity (HTTP 401 invalid_identity)" in err and len(route.requests) == 1
+    assert rc == 2 and says in err and len(route.requests) == 1
 
 
 @pytest.mark.parametrize("change, says", [
@@ -1913,11 +1900,11 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 2 and "only a card's own asker" in err
 
 
-def test_ask_daniels_dry_run_prints_both_shapes_and_sends_nothing(route, registry, capsys):
+def test_ask_daniels_dry_run_prints_the_card_and_sends_nothing(route, registry, capsys):
     rc, out, err = run(capsys, *card_argv("--dry-run"))
     assert rc == 0 and not out and not route.requests and not route.identity["seen"]
-    new, old = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
-    assert new["kind"] == "default" and old["title"] == new["question"]
+    (card,) = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
+    assert card["kind"] == "default" and card["question"] == "Test: does the #ask-daniel card render correctly?"
 
 
 class FakeNotion:
@@ -2332,9 +2319,6 @@ def test_a_doorbell_carries_the_post_so_its_reader_needs_no_second_read(fake, re
     head = f"from infra, thread {root['ts']}, reply {reply['ts']}: node 2 is free <from 3 PM>, see the plan (https://x/y) and https://x/z\n\naaa"
     assert bell["text"].startswith(head) and bell["text"].endswith(f"\u2026 (the rest: `research msg read --thread {root['ts']}`)")
     assert len(bell["text"]) < len(head) + slack.DOORBELL_MAX
-    old = "from infra: https://x/p1700000001000001 @circuits hi\n\n_posted by <https://cursor.com/agents/bc-x|@infra's agent> \u00b7 ask_"
-    assert slack.tags_of(old) == ["ask"]
-    assert slack.plain(old) == "from infra: https://x/p1700000001000001 @circuits hi"
     rc, out, _ = run(capsys, "read", "--as", "circuits")
     assert rc == 0 and out.split("\n", 1)[1].strip() == "- " + re.sub(r"\n(?=.)", "\n  ", slack.plain(bell["text"]))
 
