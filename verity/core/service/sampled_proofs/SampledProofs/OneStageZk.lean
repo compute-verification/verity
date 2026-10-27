@@ -347,8 +347,8 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
       if sha.length != 128 then throw s!"record: a round of {name}'s msg_sha512 is not 64 bytes of hex"
       let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
       chain := Flock.Sha512.hash (chain ++ (← Flock.unhex sha))
-      out := out ++ [({ label := Hello.slotStream slot name, after := Flock.Sha512.hash (roundRequest name chain cs.size),
-        coins := (cs.size + 3) / 4 }, cs)]
+      let after := Flock.Sha512.hash (roundRequest name chain cs.size)
+      out := out ++ [({ label := Hello.slotStream slot name, after := after, coins := (cs.size + 3) / 4 }, cs)]
   return out
 
 /-- Why the coins `ξ` don't begin with the F128s `want` (record hex, `{hi:016x}{lo:016x}`, 16 bytes each); none when
