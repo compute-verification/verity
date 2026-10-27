@@ -13,6 +13,7 @@ import Proofs.Flock.Bridge.KSLive
 import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.PublicWitnesses
+import Proofs.Flock.Bridge.RefusedWitnesses
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -26,7 +27,8 @@ verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lo
 `Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
 parameters. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
-(false at the verifier that accepts everything). -/
+(false at the verifier that accepts everything). `RefusedWitnesses`: `SampledKSLiveV2`'s and `SampledKSLiveV3`'s
+nontrivial lemmas, at `SampledKSLivePub`'s failing instance through `SampledKSLiveV2`'s error at most `deltaPub`. -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
