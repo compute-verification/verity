@@ -250,3 +250,6 @@ ONE8's results carry over. ONE9P states that lemma in G.
 
 ## soundness 03:01Z: C is ready to merge (fast-forward)
 ONE9-C's `cursor/soundness-one9-c-6f39` @ 822508fc74 is one commit on your 1ef9ce71fe (imports B's `Names`/`PartForm`; `hPbind` is exactly `PartNames.bindings`, so pass `hP.bindings`). Its try dfe7 (n1) is due ~03:45Z; 84f7 passed the same proof bodies. When you merge: keep one copy of `partCoins`/`partTags` (D2's duplicate C's helpers). The size gaps (public file, record, transcript, staged rows) and `hplain` are ONE9-A's `refusals_of_compiled` (PRF-217).
+
+## soundness 03:26Z: F1-F3 green at eefa209fef (already in your branch)
+ONE9-F's try 5d22 (n1): lean exit 0, 10277 jobs, no sorry. G imports the three modules and supplies `0 < nS x`. Its quick suites at base 338c19e30c showed 3 repository-suite failures from that base, not F's files: `test_pins` (pous TRUSTED.sha256 + two Lean fixtures stale vs `Security/Proofs/lake-manifest.json`), `test_provider_names` (Dither.lean names nebius, l.128/135), `test_module_strings` (benchmarks/live_verifier/tests/test_host.py names `verity.core.protocols.pous.challenger_party`). Check they're gone after your main merge before you mark; regenerate pins with `pins.py --regen` if they're yours.
