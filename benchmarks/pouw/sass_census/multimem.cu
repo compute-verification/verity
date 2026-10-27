@@ -49,7 +49,11 @@ static int child(bool reduce_load) {
 static int run_child(bool reduce_load) {
   fflush(stdout);
   const pid_t pid = fork();
-  if (pid == 0) _exit(child(reduce_load));
+  if (pid == 0) {
+    const int rc = child(reduce_load);
+    fflush(stdout);
+    _exit(rc);
+  }
   int st = 0;
   waitpid(pid, &st, 0);
   return WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st);
