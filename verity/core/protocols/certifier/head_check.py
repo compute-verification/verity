@@ -129,7 +129,9 @@ def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Calla
 
     d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
     d.traced = traced  # type: ignore[attr-defined]
-    d.build = build  # type: ignore[attr-defined]  # C-Flock lowers an activation by it, not gate by gate
+    # C-Flock lowers an activation by it, not gate by gate, and passes the statics only to a Definition that has some
+    # (`ir_lower._boolean_activation`)
+    d.build = build if statics else (lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
     return d
 
 
