@@ -104,7 +104,7 @@
       "lineage": [
         "bc-8f4b652b"
       ],
-      "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
+      "remit": "Proofs: Lean, red team, C-Flock, proof-system sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
@@ -602,7 +602,7 @@
     {
       "handle": "benchmarks",
       "holder": "the benchmarks coordinator (bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9)",
-      "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
+      "remit": "Benchmarks: the overhead and throughput measurements across proof systems, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
