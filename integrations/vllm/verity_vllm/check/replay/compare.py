@@ -93,5 +93,5 @@ def lifted_compare(have: np.ndarray, payload: np.ndarray, active: bool, dtype: s
     kind = ("bot word under an Active enable" if (active and hv == bot) else
             "value word under a disabled enable" if (not active and not (hv & bot)) else
             "bot with a nonzero payload / INV" if (not active and (hv & bot) and hv != bot) else
-            "INV word (bot bit + nonzero payload) under an Active enable" if (active and (hv & bot)) else "payload differs")   # revb n-52-2
+            "INV word (bot bit + nonzero payload) under an Active enable" if (active and (hv & bot)) else "payload differs")
     return False, nd, first, verdict + f" -- FAIL: {kind}"

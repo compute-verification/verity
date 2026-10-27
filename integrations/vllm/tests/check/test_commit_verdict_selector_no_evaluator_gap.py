@@ -37,7 +37,7 @@ K_ROPE = "no derived_rows evaluator for RoPE_v1 yet (v2)"
 K_ATTN = "consumes the request's K/V history across steps (state-linked replay, v2)"
 K_SEL = "no registered evaluator for GumbelTopPTokenSelect_v1"
 
-# the first stochastic row of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95 on r16-int-2, cp-dev1):
+# the first stochastic row of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95):
 # the NOT_YET domain (RoPE 9184, Attention 4592) + the 32 selector outputs (one per step) with no evaluator; the Const* structure rows are
 # counted by family only (no identity) and are not in not_evaluable
 SR_STOCH = {"result": True, "grade": "complete", "why": None,
@@ -45,7 +45,7 @@ SR_STOCH = {"result": True, "grade": "complete", "why": None,
             "strata_unevaluated": [], "unevaluated_strata": [],
             "population": {"vus": 32750, "not_evaluable": {K_ROPE: 9184, K_ATTN: 4592, K_SEL: 32},
                            "not_evaluable_by_family": {"RoPE_v1": 9184, "Attention_v3": 4592, "GumbelTopPTokenSelect_v1": 32}}}
-# a greedy dense row (phi3 B8 256/32 on r16-int-2, cp-r3): the NOT_YET domain only -- TokenSelect_v1 has an evaluator
+# a greedy dense row (phi3 B8 256/32): the NOT_YET domain only -- TokenSelect_v1 has an evaluator
 SR_GREEDY = {**SR_STOCH, "population": {"vus": 242048, "not_evaluable": {K_ROPE: 68480, K_ATTN: 34240}, "not_evaluable_by_family": {"RoPE_v1": 68480, "Attention_v3": 34240}}}
 
 # the same row's oracle_compare (runs.jsonl commit/oracle_compare): result None / grade attribution-complete -- value-partial on
