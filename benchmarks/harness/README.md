@@ -67,7 +67,7 @@ unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execut
 experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
 Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
 `llama31-8b-fp8-1gpu-bandwidth-ablation` times where PoUS's bandwidth audit's time goes: the two credited arms beside
-memory accounting's spans arms (`benchmarks/vllm_encoded/README.md`) and the spans arms with the top-up off
+the bandwidth audit's spans arms (`benchmarks/vllm_encoded/README.md`) and the spans arms with the top-up off
 (`verity_bench.vllm.bandwidth_ablation`, `BandwidthArm(..., spans=True, topup=False)`), each token-controlled by
 `bandwidth-plain`; `verity-bench breakdown` renders it.
 
@@ -174,8 +174,7 @@ same way, allowing only `config.point_identity`.
 ## Dispatch and resume
 
 `verity-bench run` queues each missing point, as below. `verity-bench run SPEC --direct NODE` launches each missing point
-on NODE itself instead, for a node whose launcher takes a run only through a slot: vy-nebius-2 has refused every queued GPU
-point since about 11:50Z on 24 Oct (INF-217 tracks the queue-side fix). Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
+on NODE itself instead, for a node whose launcher takes a run only through a slot. Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
 find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
@@ -213,7 +212,7 @@ baseline.
 `verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B from
 the store, never from numbers in code. It has four sections.
 
-- **PoUW's run of record** is kernels' live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
+- **PoUW's run of record** is its live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
   `summary.json` and `stop.json` in the run's record: the arm's median decode step at batch 32 over its control's
   (the int8-exact engine without PoUW) in the same run. That ratio is per step, so it sits in its own section, apart
   from the per-token ratios over stock FP8. A row stands only when every gate the run records passed: the device gate,
@@ -233,7 +232,7 @@ the store, never from numbers in code. It has four sections.
   same way.
 - **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and a record, as above) is the bandwidth
   breakdown's rows (below) at each point of the record's runs, in ms an output token and not a ratio, beside the
-  protocol's row of record.
+  protocol's run of record.
 
 The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
 read through from the remote (and a live run's `row` label).
@@ -252,4 +251,4 @@ the audit's cost (the marks are in the spans arms' time). Then each spans arm's 
 ## Out of scope here
 
 Kernel-level timing, meaning whether a timed CUDA loop measures what it claims (opcodes in the loop, bank conflicts, live
-sinks), is compute accounting's GPU timing kit in `benchmarks/pouw/`, not this harness.
+sinks), is the GPU timing kit in `benchmarks/pouw/`, not this harness.

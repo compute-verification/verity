@@ -590,7 +590,7 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
 
 @pytest.mark.parametrize("resident_failure", [None, "candidate"])
 def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
-    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms (18 Oct, r20261018-215203-b81a):
+    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms:
     the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
     own summary stays in the schedule."""
 
@@ -751,7 +751,7 @@ def test_a_failed_token_gate_records_the_first_divergent_token():
 
 
 def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
-    """MEM-15: at b128-p8192 the audit arm's engine got a smaller KV pool than its plain twin's (its encoded store and
+    """At b128-p8192 the audit arm's engine got a smaller KV pool than its plain twin's (its encoded store and
     scratch shrink what vLLM's profiling leaves), vLLM scheduled the two arms differently once the point overran the
     pool, and the greedy tokens diverged. Equal pools are a precondition of the token gate, so unequal pools must fail
     loudly on their own, before any timing."""
@@ -943,7 +943,7 @@ def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_
 
 
 def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
-    """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
+    """`pouw:pearl-c-sm120-v1-h3` was refused before any engine started: the harness
     gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
@@ -1753,7 +1753,7 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
 
 
 def test_the_readme_states_the_contract_the_code_keeps():
-    """The README is the harness's contract (BENCH-3): every metric, gate kind, mode, schema and kind it names is the
+    """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
     code's, and the code has none it doesn't name."""
 
     from verity_bench.vllm import result as result_format
@@ -1778,7 +1778,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
 
 def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):
     """The setup's TERM trap runs under `set -e`: a `kill` of an nvcc that already exited returns nonzero, and without a
-    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache (memory accounting, 19 Oct)."""
+    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache."""
 
     root = Path(__file__).resolve().parents[3]
     script = (root / "benchmarks/harness/setup/vllm_encoded.sh").read_text()
