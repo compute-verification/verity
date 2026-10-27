@@ -1,4 +1,4 @@
-"""`ncp-v2` as a Program: NCP-INT's noised GEMM with the two-level key, cut into its proof units.
+"""`ncp-v2` as a Program: NCP-INT's noised GEMM with the two-level key, cut into its proof blocks.
 
 A weight's Y strips and c₀ depend only on B, the salt, the weight id and the column ids, so they are formed once per run
 and weight, by `NcpWeight{K,N,PERM}`, whose root body holds only `NcpFormY` instances.  One linear call ``A·Bᵀ`` (A: m × k

@@ -240,8 +240,10 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
-                                                       "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+                                                           "!PROTOCOL.md"]
+    assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
+    assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "verity" / "ml" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -598,6 +600,9 @@ def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     (scope.parent / "memory.max").write_text(str(560 << 30))
     (scope.parent / "memory.current").write_text(str(400 << 30))
     assert CHECK.memory_gb(tmp_path) == 160, "the slice leaves 160 of its 560 GB"
+    (scope.parent / "memory.current").write_text(str(555 << 30))
+    (scope.parent / "memory.stat").write_text(f"anon {255 << 30}\nactive_file {100 << 30}\ninactive_file {200 << 30}\n")
+    assert CHECK.memory_gb(tmp_path) == 230, "the slice's 300 GB of page cache is reclaimed at its limit, so it is left"
     (scope.parent / "memory.max").write_text("max")
     assert CHECK.memory_gb(tmp_path) == 230
     pod = tmp_path / "pod"

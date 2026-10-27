@@ -24,8 +24,10 @@
   "Flock.Test.MsgNames",
   "Flock.Test.Parsed",
   "Flock.Test.Part",
+  "Flock.Test.Holo",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
+  "Flock.Test.RecCompose",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
@@ -60,6 +62,7 @@
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.RequireLink",
   "VStar"
  ],
  "exempt": {

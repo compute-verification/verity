@@ -82,7 +82,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
-clear here, as the specification of what each zero-knowledge proof unit proves on the deployed path (`PROTOCOL.md` §8).
+clear here, as the specification of what each zero-knowledge proof block proves on the deployed path (`PROTOCOL.md` §8).
 """
 
 from __future__ import annotations
@@ -1092,7 +1092,7 @@ class Session:
         and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
         that joined a window `Params.lifetime` or more before `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
-        plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
+        plan's proof block checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
         most k roots, and a later one is out of turn (`order`), as is, at one window in flight (`Pace.in_flight`), a
         root that passes every other check after its window's boundary.  The root's arrival, the clock now, goes in
@@ -1515,7 +1515,7 @@ class RequirementLink(Protocol):
     reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
     (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
     blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
-    the proof units have shown, for every pass, that its plan holds every complete block the circuit reads at the
+    the proof blocks have shown, for every pass, that its plan holds every complete block the circuit reads at the
     pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
     map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a

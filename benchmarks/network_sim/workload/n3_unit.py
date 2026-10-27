@@ -1,6 +1,6 @@
-"""N3's proof unit for one port-window, zero-knowledge: the frames a certifier recorded on one link direction in one
+"""N3's proof block for one port-window, zero-knowledge: the frames a certifier recorded on one link direction in one
 window are the committed crossing values, framed as the layout committed before the run says. A Boolean Definition,
-which a proof unit of the proof service runs; its one output is the ok bit.
+which a proof block of the proof service runs; its one output is the ok bit.
 
     N3Window_v3{FMT, N, G, SALTED, REC}
         (layout, layout_domain: Digest, at: Array<DL>, record, record_domain: Digest, direction: Array<1>,
@@ -65,7 +65,7 @@ the row of the run's first byte, so a frame reads it as one segment, one row.
 under the binding SHA-512(`OUTBOX_LABEL` || program || unit). Its domain id makes its row count public, 2^depth with
 depth = bitlen(k - 1): that is all it discloses of the unit's crossing bytes. That the outbox holds the bytes of the
 unit's committed values and its framing, each byte the same in every row that holds it, is not proved here; it needs a
-proof unit of its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
+proof block of its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
 per (port, frame index) at port * CAP + index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement
 root). The record commitment is N2's, which the firewall registers (`LinkWindows.commit`, `registration`): its root
 alone is public, and the heads, certificates and salts stay behind the firewall. Here `Certifier` stands in for the
