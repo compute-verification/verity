@@ -23,10 +23,12 @@ when:
 
 * in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct).  A change to a counted
-  lint's module (``COUNTED``) may raise its list's counts for files the change doesn't touch: that is code already there,
-  which the retuned rule counts, so the list takes it at landing and only shrinks after (27 Oct 05:10Z, VLLM-134); a rise
-  in a file the change touches is held as before;
+  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct).  A repository list
+  (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
+  change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
+  so a list behind its tree catches up, while growth past the base's own findings is held as before (the vLLM
+  coordinator, 27 Oct 06:20Z, CI-198: PRs on `next` before each repository lint landed left `main` with findings no list
+  held);
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
@@ -130,6 +132,8 @@ REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 #: module's function that lists a source's sites, what it counts).  One with ``is_registry`` exempts the files it marks.
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
            ("repo_silent_excepts", "handlers", "silent except handler"))    # S4: recorded outcomes
+#: the repository's lists whose keys may rise to what the change's base holds (``held``)
+CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
 FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
@@ -376,11 +380,11 @@ def counted_kinds(s: str, entries: list) -> set:
 
 
 def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str],
-           retuned: frozenset[str] = frozenset(), touched: frozenset[str] = frozenset()) -> tuple[list[str], list[str], list[str]]:
+           held: dict[str, Counter] | None = None) -> tuple[list[str], list[str], list[str]]:
     """(each grown ratchet, count and pooled kind; the entries that grew it, or the keys that moved in a grown kind; each
-    kind a key rose in whose total didn't grow, and each retuned list's rise): what the change adds, against its base.  A
-    counted lint in ``retuned``, whose module the change changes, may count more in a file the change doesn't touch (not in
-    ``touched``): that is code already there, which its new rule counts, so its list takes it at landing."""
+    kind a key rose in whose total didn't grow, and each list that caught up): what the change adds, against its base.  A
+    key of a list in ``held`` may rise up to what ``held`` says its base holds there, which adds no finding."""
+    held = held or {}
     grown, fix, pooled = [], [], []
     for s in sorted(before):
         was_all, now = [e for e in before[s] if not is_mark(e)], [e for e in after.get(s, []) if not is_mark(e)]
@@ -399,24 +403,23 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
             if count(e) > was.get(key(e), count(e)):
                 grown.append(f"{paths[s]} count {was[key(e)]} -> {count(e)} for {key(e)}")
         for pool in sorted(kinds, key=str):
-            lo, hi, files = Counter(), Counter(), {}
+            lo, hi, base = Counter(), Counter(), held.get(s, Counter())
             for side, entries in ((lo, was_all), (hi, now)):
                 for e in entries:
                     if in_pool(e) and kind(e) == pool:
                         side[key(e)] += count(e)
-                        files[key(e)] = e.get("file")
-            risen = {k: hi[k] - lo[k] for k in hi if s in retuned and hi[k] > lo[k] and files[k] not in touched}
-            moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] != hi[k] and k not in risen),
+            caught = {k: n for k in hi if (n := min(hi[k], base[k]) - lo[k]) > 0}
+            moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] + caught.get(k, 0) != hi[k]),
                            key=lambda k: (lo[k] - hi[k], k))
             total = f"{paths[s]}{'' if pool is None else f' {pool}'} {sum(lo.values())} -> {sum(hi.values())} in total"
-            if sum(hi.values()) - sum(risen.values()) > sum(lo.values()):
+            if sum(hi.values()) - sum(caught.values()) > sum(lo.values()):
                 grown.append(total)
                 fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
                 continue
-            if risen:
-                pooled.append(f"{total}, {sum(risen.values())} of it in {len(risen)} file(s) the change doesn't touch, which "
-                              f"its changed {counted_paths(s)[0]} now counts (a retuned lint's list takes them)")
-            if any(hi[k] > lo[k] for k in moved):
+            if caught:
+                pooled.append(f"{total}, {sum(caught.values())} of it in {len(caught)} key(s) catching up to what its lint "
+                              f"finds in the base's tree (a list that records its base's findings adds none)")
+            if any(hi[k] > lo[k] + caught.get(k, 0) for k in moved):
                 pooled.append(f"{total} over {len(moved)} moved key(s)")
     return grown, fix, pooled
 
@@ -730,6 +733,49 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     return out
 
 
+def tree_files(rev: str, paths: set[str]) -> dict[str, bytes]:
+    """Each of ``paths`` that ``rev``'s tree holds as a file, with its bytes."""
+    shas = {}
+    for row in git("ls-tree", "-r", "-z", rev, "--", *sorted(paths)).split("\0") if paths else []:
+        meta, _, path = row.partition("\t")
+        if path in paths and meta.split()[0] in FILE_MODES:
+            shas[path] = meta.split()[2]
+    data = blobs(set(shas.values()))
+    return {p: data[sha] for p, sha in shas.items()}
+
+
+def findings_at(rev: str, s: str, files: set[str]) -> Counter:
+    """Repository list ``s``'s lint (``CATCH_UP``), as ``rev`` has it, on ``files`` in ``rev``'s tree, per key of that list:
+    ruff under ``rev``'s root ``ruff.toml`` and pin per (file, rule), a counted lint's sites per file (none without it)."""
+    if s == REPO_RUFF_LINT:
+        if (left := left_out(rev)) is None:
+            return Counter()
+        ruff = [*python_for(ruff_pin(rev), [REPO_RUFF_LINT]), "-m", "ruff"]
+        found = ruff_findings(ruff, git("show", f"{rev}:{REPO_RUFF_CONFIG}"),
+                              tree_files(rev, {f for f in files if not f.startswith(left)}))
+        return Counter(key({"file": f, "rule": rule}) for f, rule, *_ in found)
+    _, sites, noun = next(c for c in COUNTED if c[0] == s)
+    if (lint := counted_lint_at(rev, s, sites, noun)) is None:
+        return Counter()
+    data = tree_files(rev, {f for f in files if not f.startswith(tuple(lint.LEFT_OUT))})
+    return Counter({key({"file": f}): len(getattr(lint, sites)(b.decode("utf-8", errors="replace"))) for f, b in data.items()})
+
+
+def held(c: Change, before: dict[str, list], after: dict[str, list]) -> dict[str, Counter]:
+    """For each repository list (``CATCH_UP``) whose keys the change raises, what its lint, as the change's base has it, finds
+    in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none."""
+    out = {}
+    for s in CATCH_UP:
+        lo, hi = Counter(), Counter()
+        for side, entries in ((lo, before.get(s, [])), (hi, after.get(s, []))):
+            for e in entries:
+                if isinstance(e, dict) and "count" in e and isinstance(e.get("file"), str):
+                    side[key(e)] += count(e)
+        if files := {json.loads(k)["file"] for k in hi if hi[k] > lo[k]}:
+            out[s] = findings_at(c.lo, s, files)
+    return out
+
+
 def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
     """The slugs of the lints in the directory ``lint`` to run, or None for all of them (its shared lint code changed)."""
     code = [f for f in touched if is_lint_code(f) and f.startswith(f"{lint}/")]
@@ -814,9 +860,7 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        changed = frozenset(f for f in diff if f)
-        retuned = frozenset(s for s, *_ in COUNTED if counted_paths(s)[0] in changed)
-        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, retuned, changed)
+        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, held(c, before, after))
     noqa_grows = c.noqa_added > c.noqa_removed
     if c.touched and not (grown or bad or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
@@ -840,7 +884,8 @@ def judge(c: Change, base: str) -> None:
     elif grown:
         c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count, past what the same "
                  f"kind's other counts lose (fix the new code; an entry may move with the violation it allows, within its "
-                 f"ratchet, and a count with its findings, within its kind)")
+                 f"ratchet, and a count with its findings, within its kind; a repository list's key may rise to what its lint "
+                 f"finds in the base's tree)")
         c.fix = added[:CHEAPEST] + ([f"... and {len(added) - CHEAPEST} more"] if len(added) > CHEAPEST else [])
     elif noqa_grows:
         c.why = (f"adds {c.noqa_added} `# noqa` line(s) under {INTEGRATION}/ and removes {c.noqa_removed}: a noqa is an "
