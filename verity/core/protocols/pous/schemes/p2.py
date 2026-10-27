@@ -1,5 +1,5 @@
-"""P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
-`internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
+"""P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (its spec is
+the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
 v1, amended to v1.1 (the RTT cap) and to v4 (one hash, SHA-512) in `../p2/PROTOCOL.md`, which this
 module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
 in how a block's keys are expanded:
