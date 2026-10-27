@@ -1,8 +1,8 @@
-"""P2-FF r9's two receipt folds in pfill (note:20261016T1117Z-draft-fullfloor-s-r9): NC 4 built with -DPFILL_LI
+"""P2-FF r9's two receipt folds in pfill: NC 4 built with -DPFILL_LI
 (LOP3+IMAD) or -DPFILL_XIN13 (XOR-in with rotations 13, 19). pfill_ref.py's receipts are held to pfill.cuh's host
 `dfill_ref` built with g++ and each flag, the reference dgate holds the GPU to, in each integer tile kind; pfill_ref's step
 to P2-FF's reference twins; and the key path to P2-FF's `key_ok_r9`, the reference functions below copied verbatim from
-its receipt_folds_r9.py (art:91c156a1)."""
+its receipt_folds_r9.py."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ extern "C" void r9_keys(const uint64_t* st, uint32_t* k) {
 }
 """
 
-# ---------------------------------------------------------------- P2-FF's receipt_folds_r9.py (art:91c156a1), verbatim
+# ---------------------------------------------------------------- P2-FF's receipt_folds_r9.py, verbatim
 M32 = 0xFFFFFFFF
 
 

@@ -5,7 +5,7 @@ pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or an
 bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
 unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is computed, receipt-checked and credited (RT4-LOGIC-4, RT4-LOGIC-20), a tile's admit bits open from the admit tree and a flipped one is refused, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
 empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
-A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
+A' = -b is refused.  A linear's B table is the same format over its weight rows, under the weights' root; the
 scheduler's record gives the request queue and its commitment.  A window's live coins (`served_h1/coins.py`) come from a
 challenger session off the node over its stream (a fake auditor host on loopback, its ledger and the challenger's record
 and close signed with a test key), which refuses a session of another layout; the session is reserved at infra's gate
@@ -179,7 +179,8 @@ def test_a_tiles_admit_input_opens_from_the_admit_tree_and_a_flipped_bit_is_refu
 
 
 def test_a_opens_against_the_step_root_and_refuses_neg_b():
-    """CMP-38 on PoUW's side: a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
+    """The re-commitment rule on PoUW's side: a call's A table is AROW's row table (`row_table.commit` over `s8_row`s
+    gives the root `leaf` and
     `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused
     against the committed root, and re-committing A' moves both roots."""
     from verity.ml.commitments import row_table as RT
@@ -267,7 +268,7 @@ def test_junk_row_in_an_unassigned_slot_is_refused_and_credits_nothing():
 
 
 def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing():
-    """RT-ALGO-4 (note:20261019T0618Z-draft-rt-algo-r2): a block whose 32 slots the queue selects but whose rows are all the
+    """RT-ALGO-4: a block whose 32 slots the queue selects but whose rows are all the
     canonical empty row is dead to the tile, which zeroes its receipt.  The admit unit admits none of its slots, so the
     block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A
     selected row of zero bytes under a nonzero scale is admitted (`scale_only`: the admit unit reads no byte), and a

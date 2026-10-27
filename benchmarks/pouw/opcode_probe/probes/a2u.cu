@@ -1,4 +1,4 @@
-// A2u at saturated issue (note:20261019T0456Z-draft-rt-machine, RT-MACHINE-4): does a uniform-datapath instruction take
+// A2u at saturated issue (RT-MACHINE-4): does a uniform-datapath instruction take
 // an SMSP issue slot when the lanes already issue at nearly one warp instruction a cycle? uniform.cu's fixed streams
 // never got there (their tensor and ALU pipes bind at 0.6-0.9 issue), so its K = 128 points can't tell an issue slot
 // from interference. Here the vector stream spreads over four pipes so that issue binds, each a loop:

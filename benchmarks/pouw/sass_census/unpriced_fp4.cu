@@ -1,4 +1,4 @@
-// The B200's fp4 tensor kinds alone, against kind::i8 in the same block (note:20261019T0520Z-draft-rt-isa G3):
+// The B200's fp4 tensor kinds alone, against kind::i8 in the same block:
 // tcgen05 kind::mxf4 (UTCOMMA, E2M1 with UE8M0 block scales a 32-vector) and kind::mxf4nvf4 (UE4M3 a 16-vector), which
 // sm_100's DS_tensor row prices nowhere (RT-ISA-4), and kind::f8f6f4 at E2M1 beside E4M3: does FP4 in an 8-bit container
 // run at FP8's rate or FP4's (MM-ISA F16)?

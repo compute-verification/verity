@@ -5,7 +5,7 @@
 middle with 2^(2n) half-round maps a side (REFEREE's `fold_kernel.c` enumerates all 2^(4n) words). This checks:
   (1) at n = 6 it finds exactly what fold_kernel.c finds, at every (key, R), over every odd key pair (--quick: a sample)
       and two words, apart from the near-±1 keys where Φ^R is so structured that the join is cut (it says so);
-  (2) it reproduces REFEREE's three counterexamples (note:20261017T0642Z-draft-referee, F1(b));
+  (2) it reproduces REFEREE's three counterexamples (F1(b));
   (3) `fold_root_sweep.kj_scaled` read at n = 32 with r2 = 19 is receipt_folds.kj19, the 32-bit rule of record, and
       `kj_last` is egemm_depthr_check.key_ok_r11_32's KJ19 clause;
   (4) at n = 8 over every odd key pair (--quick: a sample), one random word each, every pair where K_R = K_1 = P/X/N fails

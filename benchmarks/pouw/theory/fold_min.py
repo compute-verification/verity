@@ -1,5 +1,5 @@
 """FOLD-MIN: the cheapest bit-exact receipt fold at each device's certificate, sm_120 (fx1), the H200 (li) and the B200
-(li heavy), and whether FOLD-OPT's stated cost holds there (note:20261019T0740Z-draft-rt-fold, FOLD-MIN).
+(li heavy), and whether FOLD-OPT's stated cost holds there (FOLD-MIN).
 
 `fold_routes.py` takes the brief's six routes one and two instructions deep. What decides FOLD-OPT is how a
 certificate prices the pipes. Every certificate but one prices an ALU, an IMAD, an FFMA and a SHFL instruction alike on

@@ -118,7 +118,7 @@ def kj19(a: int) -> bool:
 
 
 def key_ok_r11(a: int) -> bool:
-    """P2-FF r11's rule (note:20261016T1549Z-draft-fullfloor-s-r11, 16:06Z): `key_ok_r9` and `kj19`, the premise of its
+    """P2-FF r11's rule (16:06Z): `key_ok_r9` and `kj19`, the premise of its
     Theorem 1 (XOR-in-13's one-MMA kernel is exactly the group). No implementation enforces it yet."""
     return key_ok_r9(a) and kj19(a)
 

@@ -2,7 +2,7 @@
 menu allows (RT-ISA, the compute-accounting red team).
 
 A committed word is a fresh s32: the running sum of 32 int8 products of noised operands (32 MACs a word; FOLD-BW), or an
-input to the receipt fold (which is itself such a word). The MODEL's menu for it (note:20261017T1723Z-draft-ledger, rows
+input to the receipt fold (which is itself such a word). The MODEL's menu for it (rows
 (I2)/(I4) WordsWritten, (I3) ScalarRoute, (I5) SideUnits/NoSum) is exactly five routes:
   - an MMA form's writer, at most omega_t committed words an instruction (the tensor pipe, priced per form, decision 81);
   - the CUDA lane vector route, q* lane instructions a word (q* >= 1.22 with tables, 2.03 without; QSTAR);
@@ -34,8 +34,8 @@ asynchronous wgmma (sm_90) or tcgen05.mma (sm_100), which the census priced besi
 (decision 88) -- is recorded as a WATCH, with the issue-ceiling argument (decision 84) that bounds it and the `eps`
 reading (the uniform route is already ~0% of the headline eps on the H200/B200) that shows it cannot move a headline.
 
-The B200 (sm_100, 5th-gen tensor core) adds a distinctive word ISA this script also closes (RT-BLACKWELL,
-note:20261019T0501Z): tcgen05.mma writes its 32768-word accumulator into TENSOR MEMORY (not registers) and a CTA pair
+The B200 (sm_100, 5th-gen tensor core) adds a distinctive word ISA this script also closes (RT-BLACKWELL):
+tcgen05.mma writes its 32768-word accumulator into TENSOR MEMORY (not registers) and a CTA pair
 (cta_group::2) can share one MMA, but that writer is the honest, priced tensor route; the TMEM movers it comes with
 (tcgen05.cp/shift/ld/st) only copy or shift words that already exist (MOVER); the block-scaled low-precision forms
 (mxf8f6f4 for FP6 E2M3/E3M2, mxf4/mxf4nvf4 for FP4) carry one shared exponent a block, not a per-element mantissa, so
@@ -302,7 +302,7 @@ CANDIDATES = [
                   "group, issue 0.87, each uniform instruction 1.08-1.19 SMSP-cycles)",
     },
     # -- sm_100 (B200) only: the 5th-gen tensor core's TMEM movers, block-scaled low-precision forms, and the
-    # decompression engine (RT-BLACKWELL, note:20261019T0501Z). The writer tcgen05.mma IS the honest priced route; the
+    # decompression engine (RT-BLACKWELL). The writer tcgen05.mma IS the honest priced route; the
     # instructions below are the Blackwell-distinctive ones a cheater would reach for beyond it.
     {
         "name": "tcgen05.cp (shared -> tensor-memory copy)", "device": "sm_100", "cls": "MOVER", "D": None,

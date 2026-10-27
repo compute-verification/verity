@@ -3,7 +3,7 @@
 FOLD-OPT (decision 94) and FILL-OPT are the named complexity assumptions behind every EPS1 headline: no program computes
 the receipts of N committed words in fewer lane instructions than N times honest's per-word fold, and the same for the
 verified filler's fold. Honest's per-word cost is duo >= 3 (LOP3, IMAD, LEA.HI), fx1 = 4 (duo + one keyed IMAD), li = 1
-(one LOP3 + one IMAD a pair), and the filler's pump is the same XIN13/duo. ISA-FANIN (#2355) and MULT-LB (#2355's sibling)
+(one LOP3 + one IMAD a pair), and the filler's pump is the same XIN13/duo. ISA-FANIN and MULT-LB (#2355's sibling)
 prove only the fan-in floor, 1/(f-1) a word (1/2 at f = 3), far below honest; everything between the fan-in floor and honest
 is complexity-type and, like a hash's no-shortcut assumption, can only be tested by attack. This script is that attack.
 
@@ -21,13 +21,14 @@ It is a battery of concrete break attempts, each bit-exact over Z/2^32, plus a r
   F. A randomised superopt hunt: short straight-line programs over the real sm_120 opcode menu (LOP3, IADD3, IMAD,
      IMAD.WIDE (two output words), SHF funnels, LEA, PRMT byte selects, IDP.4A and the uniform-datapath ops) are evaluated
      on random 32-bit inputs for the 2- and 3-word runs; any that reproduces a fold receipt below honest's length is
-     verified exactly on 10^4 points. The hunt reports the program count it covered. `fold_hunt_pod.py` ran it at scale (art:f0b36e66…).
+     verified exactly on 10^4 points. The hunt reports the program count it covered. `fold_hunt_pod.py` ran it at scale.
   H. Amortization across chains and lanes (RT-FOLD round 2): the public keys and rotations are shared by all 8 chains and
      all 32 lanes, so a cheater may pay a once-per-window setup to make the per-word step cheaper (amortized = setup/W +
      step). Even given an arbitrarily rich key-only precompute, a table-amortized multiply, a repeated key schedule and
      cross-lane sharing, the per-word step stays >= honest, so the amortized cost a word -> honest as W -> inf, never below.
 
-A companion z3 CEGIS sweep (`fold_cegis.py`, art:f0b36e66…) proved small-width lower bounds: no program below honest's length computes a
+A companion z3 CEGIS sweep (`fold_cegis.py`) proved small-width lower bounds: no program below honest's length computes
+a
 2- or 3-word duo/fx1/li receipt at widths 4/6/8/12 (UNSAT per cell, or timeout), the exhaustive counterpart to this file's
 randomised hunt.
 

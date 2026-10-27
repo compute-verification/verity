@@ -46,12 +46,11 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
   every run of more than 2·4^n words has a kernel, by counting (`Pouw.SecurityProofs.Receipt.DuoLongRunKernel`), so
   the deployed schedules' first kernel lies between five words and 2·4^32 + 1. Still open: five or more words for the
   deployed keys, and the served receipt's form (equal up to one constant) at any length.
-- **(RT) and (G₃).** RS-E-REF Part IX (note:20261015T1931Z-draft-theorem-e-referee) says (RT) is open and that no lemma
+- **(RT) and (G₃).** RS-E-REF Part IX says (RT) is open and that no lemma
   removes it, and that (G₃) suffices for (G₄).
-- **r11's results.** P2-FF r11 (note:20261016T1549Z-draft-fullfloor-s-r11) finds that pricing can't replace (RT). It
+- **r11's results.** P2-FF r11 finds that pricing can't replace (RT). It
   proves (G₃) at one MMA under key_ok_r11 (its Theorem 1), and for chains apart from runs of two or more non-XOR δ.
-- **(HO), li's extra premise.** No hand-off joins two words whose rows or columns are equal or complementary
-  (note:20261016T1117Z-draft-fullfloor-s-r9 §2).
+- **(HO), li's extra premise.** No hand-off joins two words whose rows or columns are equal or complementary.
 - **li with pinned openings and a checkpoint a segment.** When every absorbed word is recomputed from committed operands
   and a pinned start, and each segment commits the XOR of the chains' states, li needs none of (RT), (G₃), (HO) or a key
   rule beyond odd multipliers. A half step is a bijection of the state, a checkpoint is injective in each word any chain
@@ -59,7 +58,7 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
   every width (Lean: `Pouw.SecurityProofs.Receipt.LiHalfBijective`, `Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective`,
   `Pouw.SecurityProofs.Receipt.LiCheckpointLowBit`). So a skipped value that lands on one word of a segment is always
   caught. One receipt word a window is not enough: li is a T-function, so a persistent skip's copies all differ first at
-  the same bit, and an even number of them can cancel there (note:20261017T1848Z-draft-li-alt).
+  the same bit, and an even number of them can cancel there.
 
 The key rules:
 

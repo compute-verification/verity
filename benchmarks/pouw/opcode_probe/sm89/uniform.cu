@@ -1,4 +1,4 @@
-// sm_89 (L40S) uniform-datapath and IMAD-form probes (EPS1 ADA r2, note:20261017T0605Z-draft-eps1-ada): what a program
+// sm_89 (L40S) uniform-datapath and IMAD-form probes (EPS1 ADA r2): what a program
 // gains by moving the fold's work onto a unit the honest step leaves idle. Built as FACET-BREAK's uniform_up.cu is
 // (16 warps, 4 a SMSP, one block a SM; the chains loop-carried from a parameter into the sink), with the honest step at
 // L = 16 (8 IMMA.16816 and duo on each accumulator). ptxas 13.0.88 keeps a warp-uniform chain on the uniform datapath

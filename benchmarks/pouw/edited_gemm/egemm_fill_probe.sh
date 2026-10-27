@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SAT-120 (note:20261017T0842Z-draft-sat-120): the cost of mandatory per-word lane work at H's schedule, the measured γ of
+# SAT-120: the cost of mandatory per-word lane work at H's schedule, the measured γ of
 # the scalar-saturated designs on VF3q-16. duo on fx<x>'s dependent IMAD/LOP3 chains (x = 0.5, 1, 1.5, 2, 3, 4.5 ops a
 # word folded into duo, so a word costs x + 3 ops) beside e_l7qs (H, x = 0), e_plains and cuBLASLt (plain), at e_l7qs's
 # schedule. One build, then in one gpu-lease: `egemm gate` at a 2-atom and a 3-atom shape (every kernel's Y against

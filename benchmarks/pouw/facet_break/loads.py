@@ -1,6 +1,6 @@
 """FACET-BREAK: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
 
-The standing adversary for the sm_120 data sheet (note:20261017T0524Z-draft-eps1-facet-break). A facet is a row of the
+The standing adversary for the sm_120 data sheet. A facet is a row of the
 machine model (`../machine_model/data/`): row r holds Σ_k c_kr·x_k SMSP-cycles for a program that issues x_k warp
 instructions of census class k a SMSP-cycle, and the facet is the ceiling a_r·x ≤ 1. A program's **load** on r is
 Σ_k c_kr·x_k (dimensionless): a measured program with load > 1 beats the facet, since the rows fitted from rates carry the

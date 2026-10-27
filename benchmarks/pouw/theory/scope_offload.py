@@ -48,7 +48,7 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
-Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); the headline eps at both
+Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); device memory 96 / 141 / 192 GB; H1's smallest tile
@@ -77,7 +77,7 @@ M32 = 0xFFFFFFFF
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
-# Per device: s8 dense MACs a SM clock, SMs, f_max (Hz). Sheet constants, note:20261017T1818Z-draft-axioms sec 2.1.
+# Per device: s8 dense MACs a SM clock, SMs, f_max (Hz). Sheet constants.
 DEVICES = {
     "sm_120 RTX PRO 6000": (1024, 188, 2430e6),
     "H200 sm_90": (4096, 132, 1980e6),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Referee check of QSTAR's ISA-CAP (note:20261017T0344Z-draft-eps1-qstar, the packed case): incidences one instruction
+"""Referee check of QSTAR's ISA-CAP (the packed case): incidences one instruction
 creates.
 
 ISA-CAP: every sm_120 ALU instruction creates ≤ 32/7 ≈ 4.57 incidences, with "IMAD ≤ 3 by Kronecker packing". Outer

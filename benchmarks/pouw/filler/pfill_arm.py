@@ -1,5 +1,5 @@
 """HC-PROVED's arms (approach pouw/filler-proved): pfill, a DRAM-free filler in Theorem E's own setting, so its floor is
-proved without CH (note:20261016T0456Z-draft-hc-proved). Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
+proved without CH. Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
 from the round's coins and the tile id (A_M = B_M = 0), each MMA's output is a whole prefix sum (k32 on IMMA, k64 on the
 e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-k's noise is {0,1} bits instead of ±1,
 and pfill-bu's is bits on A and {±1, ..., ±64} on B (FILL-SEC). The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
@@ -116,7 +116,7 @@ class PFillE2m1Ram(PFillRam):
 class PFillK(PFillPowerSplit):
     """pfill-power-split's tile on {0,1} bits (-DPFILL_BITS): every A and B entry its SHA-512 bit as the s8 byte 0 or 1,
     the same s8 IMMA m16n8k32 with C = 0, each s32 word popcount(a & b) folded unscaled into the same ram receipt.
-    Theorem K's setting (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6): {0,1} data with targets Σ_k a b at coefficient 1
+    Theorem K's setting: {0,1} data with targets Σ_k a b at coefficient 1
     in the bits, integer operands affine in the bits, s32 reads unscaled; the noise-only case (x = 0) of round 6's
     dither ⌊x/s⌋ + b. Theorem E's c = ½ covers {0,1} as it does ±1."""
 
@@ -404,11 +404,11 @@ class PFillBUDuoFPhase3(PFillBUDuoFPhase):
 
 @dataclass
 class PFillBU(PFillPowerSplit):
-    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU, note:20261016T0710Z-draft-filler-floor-r2 §5): A's entries
+    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU): A's entries
     their SHA-512 bits as s8 0 or 1, B's U = (t & 0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on
     {±1, ..., ±64}), 512 blocks a tile, on the same s8 IMMA m16n8k32 with C = 0, each s32 word in [-2048, 2048] folded
-    unscaled into the same ram receipt at K = L = 32. Theorem K's setting as RS-E-REF r4 refereed it
-    (note:20261015T1931Z-draft-theorem-e-referee Part IV): straight-line, cell-pure, int MMAs, unscaled s32 reads,
+    unscaled into the same ram receipt at K = L = 32. Theorem K's setting as its referee read it:
+    straight-line, cell-pure, int MMAs, unscaled s32 reads,
     operands affine in their bits (U's weights 1, 2, ..., 32, 65 on the odd parity bits t_0, t_6), every prefix word
     committed. dgate adds the uniformity check of U and A; -mpopcnt is for the host reference's seven popcounts a word."""
 
@@ -434,8 +434,7 @@ def _fold_lineage(parent: str, noise_tag: str, receipt: str, hypothesis: str) ->
 class PFillBUDuo(PFillBU):
     """pfill-bU with duo receipts (NC 2, three ops a word): a fold proved to have no all-state kernel at one, two or
     three words (four at key_ok keys, DuoQuadNoKernel; longer runs open), so the receipt reads every word, where ram's
-    reads a pair only through Q = a0 d0 + d1
-    (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+    reads a pair only through Q = a0 d0 + d1."""
 
     name: str = "pfill-bu-duo"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
@@ -447,8 +446,8 @@ class PFillBUDuo(PFillBU):
 @dataclass
 class PFillBULi(PFillBU):
     """pfill-bU with P2-FF r9's LOP3+IMAD receipts (NC 4 built with -DPFILL_LI, two ops a pair as ram's:
-    y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3, keys under key_ok_r9;
-    note:20261016T1117Z-draft-fullfloor-s-r9). It reads every word given (HO), no hand-off sharing a row or column,
+    y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3, keys under key_ok_r9). It reads every word given (HO), no
+    hand-off sharing a row or column,
     which bU's hashed rows give (pfill_ref.ho_ok). Provisional while RS-E-REF r7 referees r9 (`fold_status`)."""
 
     name: str = "pfill-bu-li"
@@ -484,8 +483,7 @@ class PFillKDuo(PFillK):
 
 def fold_share(lineage: dict) -> float:
     """The share of committed words the arm's receipt certifies: ½ for ram (it reads a pair only through Q = a0 d0 +
-    d1), 1 for duo, LOP3+IMAD and XOR-in (13, 19) (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2,
-    note:20261016T1117Z-draft-fullfloor-s-r9)."""
+    d1), 1 for duo, LOP3+IMAD and XOR-in (13, 19)."""
     mech = lineage.get("mechanism") or []
     return 0.5 if any(t.startswith("receipt:ram") for t in mech) else 1.0
 

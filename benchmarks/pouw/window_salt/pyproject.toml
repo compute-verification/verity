@@ -1,4 +1,4 @@
-# A live H1 window's salt from the auditor's challenger (`window_salt.py`, CMP-90). Not a package: the tests run here as a
+# A live H1 window's salt from the auditor's challenger (`window_salt.py`). Not a package: the tests run here as a
 # suite (`uv run tools/verity/check/suites.py benchmarks/pouw/window_salt`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]

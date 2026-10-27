@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FILLER (note:20261017T0652Z-draft-filler): the whole decode step co-resident with a 1-block pump on every SM, its
+# FILLER: the whole decode step co-resident with a 1-block pump on every SM, its
 # linears through flin's FLIN_FIT tiles (a CTA fits beside the pump block: ≤ 32 K registers, ≤ 41 KB of shared memory)
 # and lm_head too (FLIN_LM=1), attention dcap's (it already fits, capfill_fit_probe.sh). Gates: dgate on the fit build,
 # fgate (every fitted tile bit for bit, every row) on the CP_FGATE builds. Then flin alone at each fitted M (CP_FLIN

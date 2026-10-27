@@ -293,7 +293,7 @@ def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
 def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_path, attr, base, nc, flag, noise):
     """pfill-bU's and pfill-k's duo (NC 2) arms and pfill-bU's r9 arms (NC 4 built with -DPFILL_LI or -DPFILL_XIN13) are
     their ram arm with only the fold changed; ram's receipt certifies word pairs (Q = a0 d0 + d1), so its count readings
-    are half theirs: E 0.1125 against 0.225, K 0.45 against 0.9 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2). The r9
+    are half theirs: E 0.1125 against 0.225, K 0.45 against 0.9. The r9
     folds' readings are marked provisional while RS-E-REF r7 referees them."""
     A, S = _module("arms"), _module("scoring")
     P = _load_file("pfill_proved")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Referee check of CHECKED-STRIP's priced zero-instance routes (note:20261017T0030Z-draft-checked-strip, check H and P7).
+"""Referee check of CHECKED-STRIP's priced zero-instance routes (check H and P7).
 
 `checked_strip.py` prices every zero-instance route as bit-sliced binary products at x warp instructions per 32 × 128
 bit products (T increments at 8x an IMMA, D_d and W at 7x, O′'s c·b at x·k/32), and treats x = 12 as conservative because
@@ -26,7 +26,7 @@ import checked_strip as cs
 from exact_kit.checks import Checks
 
 #: Warp instructions an IMMA's 128 words cost when each word is 8 IDP.4A, and when it is QSTAR's measured dp4a word (10.59
-#: issue units a word, note:20261017T0344Z-draft-eps1-qstar).
+#: issue units a word).
 IDP4A, DP4A_QSTAR = 128 * 8 / 32, 128 * 10.59 / 32
 
 

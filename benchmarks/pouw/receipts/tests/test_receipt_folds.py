@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 import receipt_conform as C  # noqa: E402
 import receipt_folds as F  # noqa: E402
 
-#: P2-FF r9's reference twin, art:91c156a1829cb853157df217691fb08bd4764a631eb362c0b733361d3e3724b5's receipt_folds_r9.py
+#: P2-FF r9's reference twin, the recorded receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
 
 
@@ -30,7 +30,7 @@ def test_the_reference_meets_every_vector():
 
 
 def test_xin13_matches_fill_sec_r5s_drop_in_values():
-    """The chains FILL-SEC r5 checked pfill's -DPFILL_XIN13 build against P2-FF's twin with (note:20261016T1200Z-draft-pfill-r9-folds)."""
+    """The chains FILL-SEC r5 checked pfill's -DPFILL_XIN13 build against P2-FF's twin with."""
     want = {0: (0x0F64F41C, 0xD07F70C5, 0x965BAAEA), 5: (0x961AD57B, 0xA920F01A, 0x713A93F6),
             1023: (0xB6EE0819, 0x4D1BAFF2, 0x8751D122)}
     words = [tuple(w & F.M32 for w in d) for d in C.R5_WORDS]
@@ -90,9 +90,9 @@ def test_kj19s_exhaustive_count_is_the_combinatorial_one():
 
 
 def test_the_soundness_status_is_the_ruling():
-    """Daniel's statement of the task (16 Oct, 17:02Z): XOR-in-13 and LI need (RT) and (G3); ram binds pairs only. It had
+    """The task's statement: XOR-in-13 and LI need (RT) and (G3); ram binds pairs only. It had
     duo proved; duo is proved for runs of one, two and three words, and four at the deployed keys, and needs (D) past
-    them (FOLD-R r2, 17 Oct)."""
+    them."""
     status = {f: (d["status"], d["needs"]) for f, d in F.FOLDS.items()}
     assert status == {"duo": ("open", ("D",)), "xin13": ("open", ("RT", "G3")), "li": ("open", ("RT", "G3", "HO")),
                       "ram": ("pairs-only", ()), "xin7": ("retired", ())}

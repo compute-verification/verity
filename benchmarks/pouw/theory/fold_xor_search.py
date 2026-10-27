@@ -1,5 +1,5 @@
 """FOLD-XOR's search: no program of k instructions drawn from DS-100's IMAD- and FP-pipe forms on sm_100a computes
-z = x ⊕ y ⊕ K on full 32-bit words, for any constant K (note:20261019T0740Z-draft-rt-fold, FOLD-XOR).
+z = x ⊕ y ⊕ K on full 32-bit words, for any constant K (FOLD-XOR).
 
 The premise it checks. Priced at k + 1 IMAD-pipe instructions a LOP3, the B200 sheet's headline is under 1% for every
 k ≥ 3 (`fold_xor.py`'s curve: 0.9425% at 4). So "ε < 1%" rests on "li's XOR has no IMAD- or FP-pipe program of 3 or

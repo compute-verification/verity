@@ -718,7 +718,7 @@ XIN = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0x7, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c,
        "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
 DUO = [IMMA4] + [x for w in (28, 29, 30, 31) for x in (f"LOP3.LUT R9, R9, R{w}, R22, 0x96, !PT", "IMAD R9, R9, R20, R10",
                                                      "IADD3 R10, R9, R11, RZ")] + ["EXIT"]
-#: P2-FF r9's folds (note:20261016T1117Z-draft-fullfloor-s-r9) as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
+#: P2-FF r9's folds as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
 #: c259a89b5's pfill.cuh compile them: XOR-in at rotations 13 and 19; LOP3+IMAD's y ^ d0 ^ k0 in one LOP3, no shift
 XIN13 = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0xd, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c, !PT", "IMAD R9, R9, R20, R29",
          "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]

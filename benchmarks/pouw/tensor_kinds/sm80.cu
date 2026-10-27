@@ -1,6 +1,6 @@
 // M1 of EPS1 TENSOR on sm_80 (A100): every native mma.sync form alone and beside a scalar lane, the scalar pipes' rates
 // alone, in pairs and beside saturated IMMA, the duo fold beside IMMA, and a layout-free check of which forms leave the
-// exact s32 word (note:20261017T0700Z-draft-eps1-ampere).
+// exact s32 word.
 //
 // The timed kernels are tensor_kinds.cu's (k_alone, k_spec, k_mixu, k_opalone) with sm_80's forms and lanes; k_duo is
 // honest's inner loop (an MMA, then duo on each of its accumulator words). Every case prints one JSON line naming its
@@ -811,7 +811,7 @@ static void beside() {
   spec<F, 64, lane2(OP_LOP3I, OP_FFMA)>(); spec<F, 64, lane2(OP_IADD3, OP_IMAD)>();
 }
 
-// M1c on sm_80 (the search's second extension, after FACET-BREAK beat sm_120's joint rows with an f16 MMA, #2244): each
+// M1c on sm_80 (the search's second extension, after FACET-BREAK beat sm_120's joint rows with an f16 MMA): each
 // form that sets a joint coefficient, beside the lane mixes M1 left out (other pipes, register reads, the operand loads),
 // interleaved at three densities and 4, 6 and 8 warps a SMSP, and warp-specialized; M1's IADD3+FFMA least as control.
 template <class F, int X>

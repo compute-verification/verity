@@ -2,8 +2,8 @@
 
 `rt_algo/rt_algo_check.py` checks, bit-exact against `h1tile.reference`, that the served AB cannot be reused (the
 credited words are the running prefix partials, not the final product), that U's linear structure is already the digit
-words, and that the fold is non-additive. It would fail if a change made a credited word peelable from the served output
-(note:20261019T0520Z-draft-rt-algo)."""
+words, and that the fold is non-additive. It would fail if a change made a credited word peelable from the served
+output."""
 from __future__ import annotations
 
 import importlib.util

@@ -1,4 +1,4 @@
-"""RT-ALGO round 2: bit-exact checks of the credited-word algebra of three targets (note:20261019T0618Z-draft-rt-algo-r2).
+"""RT-ALGO round 2: bit-exact checks of the credited-word algebra of three targets.
 
 - (c) The prefix barrier in the compiled unit. The unit's receipt is 2 (KS + m) words over KS + m sets; T_0 .. T_(KS-2)
   are running partials, while T_(KS-1), O' and D_1 .. D_(m-1) are final-only (invariant under a reordering of the
@@ -310,7 +310,7 @@ def _prop_q_pair(c1, c2, M, v):
 
 
 def check_design_a_prop_q():
-    """Proposition Q's halving (note:20261016T0208Z-draft-fullfloor-s-r4 §1), generalized to design A: two entries with
+    """Proposition Q's halving, generalized to design A: two entries with
     coin pairs (β_k, b_k), (β_k, b′_k) of coefficient c_k and no b b′ pair are one product N = (s1 − s2)(s1 + s2),
     s1 = β1 + q1 (b1 + b1′), s2 = β2 − q2 (b2 + b2′), q_k = c_k 2^(v−1): (N − affine) >> v is their bilinear part mod 2^M
     once v >= M + 1 − 2 v₂(c), the b b′ terms landing on 2^M. At e4m3i's c = 2^5 and M = 32, v = 23 and N fits s64; on a

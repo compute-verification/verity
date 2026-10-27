@@ -1,6 +1,6 @@
 """FOLD-OPT on sm_120, the H200 and the B200, against every route the RT-FOLD brief names: does any program write a
 device's receipt fold bit-exactly in fewer priced slots than that device's certificate charges? (RT-FOLD, the
-compute-accounting red team, note:20261019T0740Z-draft-rt-fold.)
+compute-accounting red team.)
 
 FOLD-OPT is the premise that carries the headline's floor (RT-LOGIC-3: about 94% of sm_120's; RT-HOPPER-2: the H200's
 sheet has 12.6% of slack on it). On sm_80 it is false (RT-LOGIC-10): duo's rotate-add `rotl(u, r) + y` runs as

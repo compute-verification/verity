@@ -282,7 +282,7 @@ UNOWNED = "none yet: compute-accounting's coordinator"
 #: headline FOLD-OPT until its owner lands the class (a `loads.CLASS_RULES` rule and its census lines on π*'s rows) or a
 #: catch-all priced on them. The witnesses are census_cover_sass.json's runs: cpw_routes r20261019-192718-5d46 (RTX PRO
 #: 6000), rt3_dc r20261019-183610-89bd (H200) and r20261019-192247-8771 (B200), and red_generic r20261020-001850-def6
-#: (its H200 and B200 SASS, art:9463456f9f).
+#: (its H200 and B200 SASS).
 CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     # sm_120, unclassed. On DS-120, #2791's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the measured
     # reading (VF3r-16 at JI3s_0, #2791's VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.

@@ -1,4 +1,4 @@
-// Dither-C's linear (co32c: note:20261017T0030Z-draft-checked-strip, `checked_strip.co32c_words`) on sm_120a, on the
+// Dither-C's linear (co32c, `checked_strip.co32c_words`) on sm_120a, on the
 // honest Dither-1S kernel's mainloop (egemm.cu's e_l7qs: duo every 32 steps, absorbs 7 MMAs behind, consumers asleep on
 // the stage barrier).
 //

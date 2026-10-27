@@ -13,7 +13,7 @@ family, with every other resource converted at its price. Its parts:
   each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO 6000 workers,
   so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
 
-ε is the headline's sum, core plus sampling (NOTATION's ε[Π], note:20261018T0206Z-draft-notation, with luck in the core
+ε is the headline's sum, core plus sampling (NOTATION's ε[Π], with luck in the core
 by decision 92(a)). Core is ε_skip (less the share that checking P·V's served output removes) and ε_machine (route +
 cert), the machine model's under the floor credit at q* = 1.22 with operands free (decision 89), and ε_luck at the
 protocol's rule. Sampling is OPT2's ε_sample, the units a plan's draws leave unproved. With a seed a matmul (decision
@@ -49,7 +49,7 @@ ROUNDS = 48_000                   # S: one week of 12.6 s rounds (Theorem S; SPE
 P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit coins (Theorem S)
 DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)   # d̄: full checking's deficit; the machine model's luck = σ_w·d̄
 
-#: cost-model/v1 (art:551e804f4585f234f9c64b7e12655788e7af0fbe2eb75977fe1e913b8f2f22f2) is GPU-seconds of an RTX PRO
+#: cost-model/v1 is GPU-seconds of an RTX PRO
 #: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (vy-nebius-1/2, measured price; that
 #: the provers are RTX PRO 6000 workers is assumed)
 PROVER_USD_H = 1.80
@@ -61,7 +61,7 @@ REGIMES = {"plain": (1.0, 1.0), "sessions/256": (1.0, 1 / 256), "prefix, session
 ALLOCATED = ("plain", "sessions/256")
 #: the sweep's spends B_s, a fraction of an RTX PRO 6000's week, 8 a decade
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
-#: today's draws: 2 a round over a week (SAMPLING, note:20261017T0608Z-draft-eps1-sampling, after PRF-57)
+#: today's draws: 2 a round over a week (SAMPLING, at C-Flock's measured session cost)
 TODAY_DRAWS = 2 * ROUNDS
 #: a drawn unit's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word
@@ -109,7 +109,7 @@ class Family:
     #: ε_skip's piece only P·V's served output needs (its served epilogue and the tail's 4th IMMA, `eps_budget.floor_skip`
     #: served free against checked, 8B 2K, the binding cell on every family), a fraction of ε_skip
     served: float
-    #: --operands floor: ε_machine's route term that φ_del closes (a new named assumption, decision 89: Daniel's)
+    #: --operands floor: ε_machine's route term that φ_del closes (a new named assumption)
     route: float
     #: P·V uncredited: ε_skip's most over the cells without P·V, and P·V's share of ♭ at the binding cell (eps_budget)
     skip_no_pv: float
@@ -210,7 +210,7 @@ def _cut_label(cut: dict) -> str:
 
 def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     """Regenerate `budget_sampling.json` from OPT2's planner on `tree`, a checkout with
-    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total (ASK-25), run with `scheme=None` so a spend
+    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
     is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
     each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
     draws a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the

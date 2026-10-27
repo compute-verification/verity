@@ -1,7 +1,7 @@
 """FOLD-XOR: the cheapest bit-exact IMAD- and FP-pipe program for z = x ⊕ y on the B200 sheet (DS-100), against the
-narrowed FOLD-OPT premise the design of record states (note:20261019T0740Z-draft-rt-fold, FOLD-XOR).
+narrowed FOLD-OPT premise the design of record states (FOLD-XOR).
 
-The B200's design of record is `dither-2s-licpw-redux-ldtm0-l32` (#2706): plain li, whose half step is
+The B200's design of record is `dither-2s-licpw-redux-ldtm0-l32`: plain li, whose half step is
 y ← (y ⊕ d0 ⊕ k)·a + d1, so its LOP3 is an XOR of two data words. DS-100 prices a LOP3 on DS_issue and DS_alu and an
 IMAD or FFMA on DS_issue alone at the cheater's certificate, so FOLD-OPT there narrows to a pipe premise. The design's
 `[mand.fold]` states it as "li's XOR of two words has no IMAD- or FP-pipe program under 93 instructions (the bit-serial
@@ -93,7 +93,7 @@ XOR_SHARE = 0.5                 # li's XOR LOP3s a word: two half steps a chain,
 HEAVY = "dither-2s-licpw-redux-heavy-l32"
 LDTM0 = "dither-2s-licpw-redux-ldtm0-l32"
 LI_FOLD = {"ALU": 0.53125, "IMAD": 0.5, "SHFL": 0.0234375}
-#: ldtm0's [skip.served] at DS-100 (#2706, RT-HB-HEAD r20261019-083808-1f18); its mand is 0
+#: ldtm0's [skip.served] at DS-100 (RT-HB-HEAD r20261019-083808-1f18); its mand is 0
 LDTM0_SKIP_DS100 = 0.006849
 SASS = {"IMAD": "IMAD", "IMAD.HI": "IMAD.HI.U32"}
 #: u ⊕ κ on a 2-bit u is σ·u + c (mod 4)

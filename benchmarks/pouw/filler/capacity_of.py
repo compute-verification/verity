@@ -2,7 +2,7 @@
 
 Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
 it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no
-placement), is read by machine_model's `capacity` (note:20261017T0652Z-draft-filler §3): filler MMAs with their fold's
+placement), is read by machine_model's `capacity`: filler MMAs with their fold's
 lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max (decision 74) and at the run clock.
 
 With --lfill it reads dcap's lfill lines instead (capfill_fold_probe.sh): each one's window beside the pump alone and

@@ -189,7 +189,7 @@ def test_only_imma16832_takes_the_generic_mma_lines(census):
 
 
 def test_interleaved_imma_ffma_beats_r1_and_kffma0(tmp_path, census, capsys):
-    """V1 and V2 of note:20261017T0524Z-draft-eps1-facet-break: the axes hold, the interleaved point beats both rows."""
+    """FACET-BREAK's V1 and V2: the axes hold, the interleaved point beats both rows."""
     c, cu = census
     path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
     by = {p["probe"].split(":")[0]: loads.program(p, c, cu) for p in loads.load_rows([path])}

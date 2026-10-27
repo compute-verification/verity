@@ -37,7 +37,7 @@ class FusedStep:
     ST: int = 0
 
 
-#: (B, L) -> (split SMs, fused step): FILL's round-2 picks (note:20261016T0420Z-draft-filler-in-decode §0), each at
+#: (B, L) -> (split SMs, fused step): FILL's round-2 picks, each at
 #: slowdown <= 1.04 over runs 8-16 and 20-22 and holdouts 1-3 against the whole-GPU cuBLASLt step, then holdout 4
 #: r20261016-072512-ea9f (every pick <= 1.040, fresh coins); suite points between them take `point_lookup`'s row
 TABLE = {
@@ -239,7 +239,7 @@ def _bu_lineage(receipt: str, hypothesis: str) -> dict:
 class FusedPumpBUXin13(FusedPumpBU):
     """FusedPumpBU with P2-FF r9's XOR-in (13, 19) for duo (FILL-SEC's drop-in, NC 4 built with -DPFILL_XIN13, three ops
     a pair, keys under pf_key_ok_r9): every word read with no layout premise. It replaces XOR-in (7, 19), whose step
-    boundary's ±128 is an int8 ratio (note:20261016T1117Z-draft-fullfloor-s-r9). Provisional while RS-E-REF r7 referees
+    boundary's ±128 is an int8 ratio. Provisional while RS-E-REF r7 referees
     r9."""
 
     name: str = "fill-fused-pump-bu-xin13"

@@ -14,8 +14,8 @@ lease, and records each timed loop's opcode counts. `analyze` reports no number 
 Per SMSP, over the timed window of T cycles: a case's MMAs are its MMA warps a SMSP x iterations x PTX MMAs an
 iteration, its other instructions every non-MMA SASS instruction its loops issue. On the issue facet a.#MMA + #other <=
 T, each case bounds a <= (T - #other)/#MMA; a form's coefficient `a` is the least bound over every program that holds
-its MMA, whatever runs beside it, since a facet holds on every program (TENSOR's M1, note:20261017T0321Z-draft-eps1-tensor
-§2.1). `a_mix` and `a_iadd3` are the least over the IADD3+FFMA and the IADD3 programs. The IADD3 lane binds on its pipe
+its MMA, whatever runs beside it, since a facet holds on every program (TENSOR's
+M1). `a_mix` and `a_iadd3` are the least over the IADD3+FFMA and the IADD3 programs. The IADD3 lane binds on its pipe
 (half the issue rate on sm_80), so its programs also bound the pipe facet a' + #IADD3/x_IADD3 <= T, x_IADD3 its rate
 alone.
 """

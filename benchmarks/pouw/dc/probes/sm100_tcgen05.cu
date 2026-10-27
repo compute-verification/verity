@@ -1,4 +1,4 @@
-// EPS1 DC on datacenter Blackwell (sm_100a, B200): TENSOR's M4 (note:20261017T0321Z-draft-eps1-tensor §5) as opcode probes.
+// EPS1 DC on datacenter Blackwell (sm_100a, B200): TENSOR's M4 as opcode probes.
 // Build with ../opcode_probe/probe.py build --arch sm_100a; gated and poisoned as every opcode probe (probe.cuh).
 // tcgen05.mma (cta_group::1) is issued by one thread into tensor memory (TMEM, 512 columns allocated a CTA) from one
 // shared-memory tile (no-swizzle K-major descriptors, dc.cuh); its completion is one mbarrier phase after the loop.
@@ -539,7 +539,7 @@ DC_DEV void sync_until_mma(const OpArgs& a) {
   OP_SINK(v ^ threadIdx.x)
 }
 
-// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate (fpx.cu's call and descriptor, art:f0b36e66) ------------
+// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate (fpx.cu's call and descriptor) ------------
 // The operand tile's 32 bytes a row are 64 packed E2M1 (every code valid). UE8M0 scales of 1 (0x7F) fill columns 256-383
 // (uniform, so their layout doesn't matter), so the MMAs write D0 only.
 DC_DEV void umma_mxf4(uint32_t d, uint64_t da, uint64_t db, uint32_t idesc, uint32_t sfa, uint32_t sfb, uint32_t acc) {

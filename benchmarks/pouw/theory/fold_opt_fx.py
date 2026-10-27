@@ -2,7 +2,7 @@
 fewer than 4 (resp. 5) issue slots, nor more cheaply on the design's binding row. Builds on ASSUME #2240, which made the
 plain duo fold a mechanical fact (>= 3 instructions a word).
 
-SAT-120's sm_120 design (note:20261017T0842Z-draft-sat-120, PR #2273) is H1 + fx1: one keyed IMAD a word chained in front
+SAT-120's sm_120 design is H1 + fx1: one keyed IMAD a word chained in front
 of duo, so f = 4. The chain is egemm.cu's `fx_chain` (commit b2e177f63): a word w gets n ops, each `t = t * key_mul(1,c)`
 (IMAD, key_mul is odd) or `t = t ^ key_xor(1,c)` (LOP3), alternating and **ending on an IMAD** (op I fires a multiply iff
 (n - I) is odd, and the last op I = n - 1 has n - I = 1), after which duo folds the result d' = fx_chain(w):
@@ -13,7 +13,7 @@ of duo, so f = 4. The chain is egemm.cu's `fx_chain` (commit b2e177f63): a word 
     z' = rotl(u, r) + y'      # one LEA.HI
 
 so fx1 is 4 instructions a word, fx2 is 5. The keys and the a_i are per-call constants (the prover knows them before the
-run), so the search gives the cheater all of them. SPEC r4 (note:20261017T0324Z-draft-eps1-spec §2.8) wants FOLD-OPT in a
+run), so the search gives the cheater all of them. SPEC r4 wants FOLD-OPT in a
 price form: ε_mand = [mu_f*N_w*phi* + mu_x*chi*]/B(H) is 0 under FOLD-OPT, where phi* = min over the fold route menu of
 the per-word price at a certificate pi, and the assumption is mu_f = 0 (honest's fold phi_H is optimal). On a design that
 binds a joint-issue row it must hold **per facet**: honest's fold has no cheaper IMAD / uniform / b1-MMA form on r*.

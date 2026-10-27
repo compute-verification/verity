@@ -1,5 +1,5 @@
 """H1 + fx1 receipts beside vLLM's GEMM, not useful-work credit: a padded H1 + fx1 window (`eps1-sm120-h1fx1`) on vLLM's
-int8-exact row, one process on one GPU, in the static form (Daniel, 20:52Z): the window's tiles, rows and positions are a
+int8-exact row, one process on one GPU, in the static form: the window's tiles, rows and positions are a
 fixed function of public parameters alone.
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
@@ -44,8 +44,8 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own (compute accounting, 21 Oct): the gated served window of record is vllm's
-  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds the salt, round-0 request
-  table, open root R, session S and requests_root rules (#2950, PRF-132), so ``--gate USER@HOST`` (or
+  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
+  table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
   ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
   opened before the run, for development and timing only: its salt coin opens after the registration root, so a gate
@@ -81,7 +81,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words opened from the call's admit tree (receipt) and the
             served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
             a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
-            (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
+            (the tile's B rows negated) refused there, its re-commitment moving both roots, root(B) rebuilt, the
             tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
             dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
             and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, the tile's admit

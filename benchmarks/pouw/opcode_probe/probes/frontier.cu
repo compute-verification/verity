@@ -1,5 +1,5 @@
 // The MMA + X joint frontiers that rows.csv's R2 (IMAD), R3 (HFMA2), R4 (ALU) and SHFL rows assumed, re-measured as mix
-// points (EPS1, note:20261017T0310Z-report-eps1-program). Each probe but the alone ones is a joint point: rows.jsonl
+// points (EPS1). Each probe but the alone ones is a joint point: rows.jsonl
 // holds both classes' rates, and eps1.py turns the points into facets with the 2% noise margin.
 //   imma_ref        16 warps, 8 independent IMMA an iteration
 //   alone_<x>       16 warps, 16 ops of x an iteration on 8 chains (x's own rate)

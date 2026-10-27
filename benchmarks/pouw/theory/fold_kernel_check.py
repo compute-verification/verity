@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Referee check of FOLD's depth-R binding (note:20261017T0320Z-draft-eps1-fold §8) over the whole word space.
+"""Referee check of FOLD's depth-R binding over the whole word space.
 
-FOLD's check (`benchmarks/pouw/edited_gemm/egemm_depthr_check.py`, PR #2215) tests a family of 5n + 2 perturbations of the
+FOLD's check (`benchmarks/pouw/edited_gemm/egemm_depthr_check.py`) tests a family of 5n + 2 perturbations of the
 committed word's four limbs. This one enumerates every one of the 2^(4n) words at width n (`fold_kernel.c`), so it finds
 the whole all-state kernel K_R of the same-word R-fold, R = 1..5, at each key pair it is given.
 

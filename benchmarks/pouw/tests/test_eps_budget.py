@@ -49,7 +49,7 @@ def test_dither_1s_skips_its_peels_and_the_clean_lm_head_but_not_forming():
 
 
 def test_two_sided_meets_the_target_everywhere():
-    """The program's target, ε < 1% (note:20261017T0013Z-report-epsilon-program), as `design_skip` quotes it."""
+    """The program's target, ε < 1%, as `design_skip` quotes it."""
     for m, c, ph in CELLS:
         s = E.summary(m, c, ph, design("dither-2s"), credit="floor")
         assert s.eps_mac < 1e-2 and s.eps_time < 1e-2, (m, c, ph)
@@ -147,7 +147,7 @@ def test_every_family_keeps_a_design_under_one_percent_and_vfold_takes_the_b200_
     """Under D3 every device has a design whose ε_skip is under 1%; Dither-1S is above it everywhere (QKᵀ's one-sided
     strip). The B200's LI Dither-2S was at it with vsum's sums, 1.005% at 8B 2K with its served output free, its sums
     and tail each about half; vfold's (decision 91) take it to 0.839% (0.666% checked), the tail 0.446% and the sums
-    0.331% (note:20261017T0320Z-draft-eps1-calc Round 10)."""
+    0.331%."""
     for dev in devices():
         data = device(dev)
         skips = {n: E.design_skip(design(n, data), data=data).eps_time for n in designs(data)}
@@ -164,9 +164,9 @@ def test_the_b200s_filled_li_design_is_under_one_percent_with_the_operands_free(
     """Decision 89's reading (operands free, q* = 1.22, D3's ε_skip): the free-operand cheater skips LI's 8
     tcgen05.ld.x128 a MMA, 8 of ♭'s 1033 issue cycles at every q* (the lane and uniform routes write no word), beside
     its ε_skip of 0.839% with vfold's sums (decision 91; 1.005% with vsum's): core 1.61%. ¾ verified lane instruction a
-    word adds 768 to ♭ and to the cheater, diluting both terms over one B_♭, and vfold's sums (#2300) cost 0.7265 an
+    word adds 768 to ♭ and to the cheater, diluting both terms over one B_♭, and vfold's sums cost 0.7265 an
     entry against vsum's 35/32: core 0.927% at γ 3.90 (EPS1 DC r6), 0.952% with its ε_luck (Corollary D3; the filler at
-    p = 0, #2392). Re-sized with ε_luck and each size's own ε_skip, 0.661 a word is the least that reaches 1.000%
+    p = 0). Re-sized with ε_luck and each size's own ε_skip, 0.661 a word is the least that reaches 1.000%
     (γ 3.72), and 0.755 gets to 0.950% (γ 3.91) (CALC r11)."""
     sm100 = device("sm_100")
     pi = machine("", sm100)
@@ -188,7 +188,7 @@ def test_the_b200s_filled_li_design_is_under_one_percent_with_the_operands_free(
 
 
 def test_h1_under_the_floor_credit_is_specs_table(monkeypatch):
-    """SPEC §2.9's H1 table (note:20261017T0324Z-draft-eps1-spec): Corollary D3's ε_skip, prefill, served free (served
+    """SPEC §2.9's H1 table: Corollary D3's ε_skip, prefill, served free (served
     checked), each piece at its model price over B_♭, on VF3q-16 with co32c's and cohalf's vector work at TS_EPS of ♭'s
     component (SPEC's reading), its sums by vsum as SPEC prices them. Its "line 209 alone" row, vsum at its issue rate
     over honest's measured time, understates it. At the TS model's own gap (TS_CHEAT, the larger) 8B 2K is 0.411%, and

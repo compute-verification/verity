@@ -1,5 +1,5 @@
 """The certified filler's scorer (SCORER, cmp-13), locked: changes go to its owner, compute-accounting, never into an arm's
-PR. The spec, its desiderata, metrics and gates: note:20261016T0435Z-report-filler-spec. The arithmetic: `scoring.py`;
+PR. The arithmetic: `scoring.py`;
 the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
@@ -629,8 +629,8 @@ def _text(p: Path) -> str | None:
 
 def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: str | None,
               facts_from: str | None = None) -> dict:
-    """SCORE-TP (filler-scorer/v5): tpcomm.sh's out dirs (HC-COMM's TP suite, note:20261016T0748Z-draft-hc-comm
-    round 2), read together. The filler is read at v5's entry (`scoring.filler_entry_v5`) from the TP build's program
+    """SCORE-TP (filler-scorer/v5): tpcomm.sh's out dirs (HC-COMM's TP suite),
+    read together. The filler is read at v5's entry (`scoring.filler_entry_v5`) from the TP build's program
     and fold facts at `scoring.TP_FILLER` (`listings`: the tpcomm binary's nvdisasm; None reads the filler at the
     floor), with the declared noise and fold; each (TP, B, L) at `scoring.tp_entry`; the gates are `scoring.tp_gates`,
     each out dir's DRAM (ncu, `scoring.TP_NCU_KERNEL`) and clocks (application clocks at their default, every rep's

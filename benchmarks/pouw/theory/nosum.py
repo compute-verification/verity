@@ -1,16 +1,16 @@
 """NOSUM, mechanically: no fixed-function unit on sm_120 (RTX PRO 6000) can write a fresh committed sum-of-products word.
 
 A committed word is a fresh s32: the running sum of 32 int8 products of noised operands (FOLD-BW, 32 MACs a word), and
-"fresh" means not equal to another committed word or a constant and not a cheap function of other values
-(note:20261017T0310Z-report-eps1-program §1). The honest route is the tensor pipe (priced by the tensor theorem, TENSOR)
+"fresh" means not equal to another committed word or a constant and not a cheap function of other values. The honest
+route is the tensor pipe (priced by the tensor theorem, TENSOR)
 and the SM's scalar issue slots (priced by q*, QSTAR). NOSUM is the claim that no OTHER unit -- the ones that compute
 outside the issue slots -- can make such a word more cheaply, so the ε_machine LP need not give the cheater a side route
 for the committed words themselves.
 
-Daniel, decision 75: replace the assumption by a measured cap or a mechanical check wherever the hardware allows. This
+The standing rule: replace an assumption by a measured cap or a mechanical check wherever the hardware allows. This
 script does both. For every non-issue unit it records (1) the arithmetic it can do, (2) whether that arithmetic can yield
 an exact fresh committed s32 sum-of-products (precision, range, rounding, freshness), and (3) its measured rate beside a
-saturated honest kernel (DATASHEET, note:20261017T0332Z-draft-eps1-datasheet; machine_model rows.csv). The checkable
+saturated honest kernel (DATASHEET; machine_model rows.csv). The checkable
 physics is verified here; the measured caps are cited; and the machine model's floors (floors.csv: every root-write ≥ 32
 MACs a word, every copy/load ≥ 16) are cross-checked to confirm no side unit is priced below honest's per-word cost.
 

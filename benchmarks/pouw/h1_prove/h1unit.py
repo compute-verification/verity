@@ -33,7 +33,7 @@ prover and the verifier of `run.py` share.
   after call; and ``receipt`` over the window's tiles. The tables and ``b/<K>`` are registered values (`tables`,
   `register`: `registered.Registered.commit` under the window Program's digest, ``row/v2`` rows of 16-bit leaves,
   `value_words` a row; each table's domain, and ``ok``'s, binds the window's open root, `open_root`, and b/<K>'s none, as
-  it is held across windows: PRF-127, `credit.domain_of`), so the Lean verifier opens every row a statement reads
+  it is held across windows: `credit.domain_of`), so the Lean verifier opens every row a statement reads
   against their roots; ``receipt`` is the
   window's own tree (`domain`), opened outside the proof. Every unit's ``roots`` input is (the A tables' digest, root(b))
   (`window_roots`). `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
@@ -124,7 +124,7 @@ def layout() -> str | None:
     netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
     (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
     layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier refuses a templated
-    statement, after every other check, until its proof lands (`Tags.templated`, PRF-133), so it stays opt-in."""
+    statement, after every other check, until its proof lands (`Tags.templated`), so it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT
@@ -226,7 +226,7 @@ def registered_of(com: dict) -> dict[str, tuple[int, str]]:
 
 def open_root(window: str, weights_root: bytes) -> str:
     """The window's open root (`pouw.salt.window_open_root`, hex), which every per-window registered value's domain binds
-    (PRF-127, `credit.domain_of`): of the weights' root, root(b/<K>), a STAND-IN for the round-0 request table's root
+    (`credit.domain_of`): of the weights' root, root(b/<K>), a STAND-IN for the round-0 request table's root
     (SHA-512 of the window's name under `STAND_IN_REQUESTS_TAG`: this harness serves no requests) and the window's name as
     its session. A served window's is the auditor's ledger's, which opens the challenger's session on it; this harness has
     no ledger, so anyone computes it from the window's name and its b/<K> root, and the commitment that records it is
@@ -289,7 +289,7 @@ def value_words(name: str, tile: tuple[int, int] = TILE) -> int:
 
 def bound_root(name: str, window_root: str) -> str | None:
     """The window root the registered value ``name``'s domain binds: none for the weights' b/<K>, held across windows
-    (`credit.is_held`), and ``window_root``, the window's open root (`open_root`), for every other value (PRF-127)."""
+    (`credit.is_held`), and ``window_root``, the window's open root (`open_root`), for every other value."""
     return None if CR.is_held(name) else window_root
 
 

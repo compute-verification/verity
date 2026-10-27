@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-E2E = {"o_proj": 2.40}   # note:20261016T0713Z-draft-e2e-slice r4: edited:w_l3qm_s16 and its commitments, pipelined
+E2E = {"o_proj": 2.40}   # the e2e slice's edited:w_l3qm_s16 and its commitments, pipelined
 
 
 def jl(p: Path) -> list[dict]:

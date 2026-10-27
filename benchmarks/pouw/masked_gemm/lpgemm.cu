@@ -1,4 +1,4 @@
-// One-side-peeled noise (RS-D2F, note:20261016T0001Z-draft-rs-d2-attention-lowrank-peel) on sm_120a. For Y = A B^T
+// One-side-peeled noise (RS-D2F) on sm_120a. For Y = A B^T
 // (A m x k, B n x k, problems stacked in rows as fgemm.cu's Args batch): A' = A + U W^T with U (m x 32, {±1..±8}, shared by
 // the batch) and W stacked identities, so A'_ik = A_ik + U_{i, k mod 32}; B' = B + F with F fresh ±1 (sha_noise.cuh's pm1,
 // B's tag); the prover commits the stride-32 prefix sums of A' B'^T and serves A B'^T = A' B'^T - U S^T, S = W^T B'^T

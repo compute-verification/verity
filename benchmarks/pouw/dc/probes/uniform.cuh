@@ -1,5 +1,5 @@
 // EPS1 DC r4: the uniform datapath on sm_90a and sm_100a, built as opcode_probe's uniform.cu and uniform_up.cu are
-// (FACET-BREAK, note:20261017T0524Z-draft-eps1-facet-break): 16 warps (4 a SMSP, one block a SM), K uniform instructions
+// (FACET-BREAK): 16 warps (4 a SMSP, one block a SM), K uniform instructions
 // an iteration on eight warp-uniform chains seeded from a parameter and carried around the loop, and every vector setting
 // inside the honest step (8 IMMA m16n8k32, duo on each accumulator), the one place ptxas 13.0 keeps a chain on the uniform
 // datapath. sm90_uniform.cu and sm100_uniform.cu pin each loop's counts exactly, so a chain that lands on lanes refuses.

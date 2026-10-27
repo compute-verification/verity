@@ -1,17 +1,17 @@
 """SCALAR-ROUTE's class P: can a program outside class P make a fresh Dither word in fewer than 2.03 issue slots without
 tables?
 
-QSTAR (note:20261017T0344Z-draft-eps1-qstar) proved class P (radix-packed programs) costs >= 1 + 28/27 ~ 2.04 issue slots
+QSTAR proved class P (radix-packed programs) costs >= 1 + 28/27 ~ 2.04 issue slots
 a word (Theorem C), and named four shapes that escape the proof: count-coefficient fields, joint (non-radix) encodings,
 vertical bit-sliced words, and first-mixed hashing. The joint-encoding count permits as little as 1.875 < 2.03, so the
-proof alone does not exclude a sub-2.03 word. SCALAR-ROUTE (the coordinator's named assumption, Daniel's call) is that no
-such word exists without tables; QSTAR r3 (bc-98e285b9, branch cursor/isa-cap-ea24) checks the per-opcode premise ISA-CAP.
+proof alone does not exclude a sub-2.03 word. SCALAR-ROUTE (a named assumption) is that no
+such word exists without tables; QSTAR r3 checks the per-opcode premise ISA-CAP.
 
 This script is the complementary half: a constructive search over the escape shapes, asking whether any *realizable* sm_120
 program in them makes a fresh committed Dither word below 2.03 issue slots without tables. The committed Dither word is a
 fresh s32: at the zero instance the bit product popc(R_l[i] & C_l[j]) over a 32-step prefix (two-sided dither), at a
 general instance a dot product sum_p R[i,p]*U[j,p] with U in [-63, 62] (7 bits). Freshness forbids a copy, a constant or a
-cheap function of other values (note:20261017T0310Z-report-eps1-program §1), and the verifier recomputes the word, so the
+cheap function of other values, and the verifier recomputes the word, so the
 program must produce it exactly.
 
 Findings (checks below), per escape shape:

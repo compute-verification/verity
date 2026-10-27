@@ -21,7 +21,7 @@ The fold is a parameter (``FOLD``, `FOLDS`):
   z = mix32(y + 0x9E3779B9) (NW = KS / S windows). Chain 4 (t % 2) + e absorbs entry 4 t + e at position t:
   u = y ^ p ^ kx_t, y = u a_t + z, z = rotl(u, r_t) + y (mod 2^32, a_t odd, fgemm.cu's lane-0 keys); R = xor_i (y_i ^
   rotl(z_i, 16)).
-- ``xin`` (P2-FF r9's XOR-in with rotations (13, 19), note:20261016T1117Z-draft-fullfloor-s-r9; provisional): state y (8
+- ``xin`` (P2-FF r9's XOR-in with rotations (13, 19); provisional): state y (8
   chains, duo's y keys), chain t absorbing entries 4 t .. 4 t + 3 as d0 .. d3: y = (rotl(y, 13) ^ d0) a0_t + d1, then
   y = (rotl(y, 19) ^ d2) a1_t + d3, the multipliers odd and outside Lambda8 (`key_ok`); R = xor_t y_t.
 

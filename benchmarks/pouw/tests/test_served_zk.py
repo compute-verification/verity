@@ -253,7 +253,8 @@ UNFIXED = {"eos-keyed-row": {**SERVED, "ignore_eos": False},
 
 
 def test_rows_of_record_serve_a_public_fixed_length(served):
-    """Daniel, 19 Oct (ASK-39): the window registers its rows' fixed length, the verifier's max_tokens per slot served under
+    """The fixed-length rule: the window registers its rows' fixed length, the verifier's max_tokens per slot served
+    under
     ignore_eos, so its useful work is public.  A fixed-length window registers; a row served until EOS, a served length
     other than max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and a window with no
     length item (registered before the rule) is refused as not of record.  The committer's max_tokens is the served
@@ -323,7 +324,7 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 
 
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
-    """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
+    """The serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
     instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
     it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
@@ -500,7 +501,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
 def test_a_pass_registered_again_on_another_stream_is_refused(served):
     """Windows credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
     registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused
-    (``repeated-call``) and not held, while the first stays (CMP-84)."""
+    (``repeated-call``) and not held, while the first stays."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)

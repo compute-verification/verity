@@ -1,4 +1,4 @@
-"""The filler scorer's suite and arithmetic (locked; owner compute-accounting; note:20261016T0435Z-report-filler-spec).
+"""The filler scorer's suite and arithmetic (locked; owner compute-accounting).
 Stdlib only: it runs on the node after the lease and in the pouw suite's CPU test. `score.py` measures; this module turns
 the driver's rows (`dscore.cu`) and the gates' outputs into SCORE, the per-entry minimum, the gates and the secondary
 metrics.
@@ -103,7 +103,7 @@ FILLER_ENTRIES = {
 UNDER_CH = {"fraction": 0.99, "status": "under CH (withdrawn, decision 27)",
             "source": "CH: a straight-line program that gets a filler tile's receipt right more often than chance pays at "
                       "least (1 − ε) of its int8 MMAs, 0.99 at 2,759 checks a window (note:20261016T0418Z-draft-filler-floor)"}
-#: VF's honest MAC price over a MAC's tensor-peak time: τ = 0.2447 at 1.18 u (note:20261015T1814Z-draft-rs-machine-model §12)
+#: VF's honest MAC price over a MAC's tensor-peak time: τ = 0.2447 at 1.18 u
 A_VF = 0.2447 * 1.18 / (300.08 / 256)
 
 DECODE = [(1, 2048), (1, 8192), (1, 32768), (32, 2048), (32, 8192), (32, 24576), (128, 2048), (128, 6144), (256, 2048),
@@ -1210,11 +1210,11 @@ SERVED_V5 = {"fraction": 0.9, "status": "proved (modelled served component)",
              "source": "decision 29 (Theorem K, c = 1 at φ = 0.9, the dither X = ⌊x/s⌋ + b) and decision 36 (decode's "
                        "deferred edit at T = 4096, prefill's per-stage live coins)"}
 #: the edited GEMM ÷ plain cuBLASLt int8: edited:e_l2q 0.640 ms at o_proj (m 8192, n = k = 4096), duo receipts at L = 32
-#: (r20261016-104404-700b, note:20261016T0857Z-draft-egemm); 1.478-1.50x with the quantizer on both sides
+#: (r20261016-104404-700b); 1.478-1.50x with the quantizer on both sides
 EGEMM = 1.570
 #: decode's deferred noised pass (decision 36, at T = DEFER_T tokens a sub-round): the model's unit of pass time is its
 #: served MACs at DEFER_OF_PEAK of the int8 peak, the compute-bound plateau of 0.97 µs a token-layer
-#: (r20261016-100833-1b7c, note:20261016T0846Z-draft-stage-cost), and the edited pass takes EGEMM of those. A share s
+#: (r20261016-100833-1b7c), and the edited pass takes EGEMM of those. A share s
 #: of the pass's time shows as step time, and each ms of the rest displaces u·C filler MACs: s and u are measured
 #: against that unit (`defer_measured`), so the model at EGEMM = 1 gives back each measured point within its fit
 DEFER_T, DEFER_OF_PEAK, DEFER_US_TOKEN_LAYER = 4096, 0.71, 0.97
@@ -1222,9 +1222,9 @@ DEFER_T, DEFER_OF_PEAK, DEFER_US_TOKEN_LAYER = 4096, 0.71, 0.97
 #: step's slowdown (no forming) and the pass's µs a token-layer alone. B 32 is the one batch measured
 DEFER_STEP_MS, DEFER_B = 12.14, 32
 DEFER_1GPU = {1024: (0.074, 1.54), 2048: (0.056, 1.18), 4096: (0.053, 1.09), 16384: (0.048, 0.97), 32768: (0.041, 0.95)}
-#: TP (HC-COMM r3 at T = 1024 and 4096, note:20261016T0948Z-draft-hc-comm-r3; r4 at 8192 and 16384, TP 2 alone, its
-#: TP 4 run having failed its filler gate, note:20261016T1216Z-draft-hc-comm-r4): each arm's step over the slowest rank
-#: (`_slowest`), beside HC-COMM r2's filler-only phase arm at the same point (note:20261016T0846Z-draft-hc-comm-r2), per
+#: TP (HC-COMM r3 at T = 1024 and 4096; r4 at 8192 and 16384, TP 2 alone, its
+#: TP 4 run having failed its filler gate): each arm's step over the slowest rank
+#: (`_slowest`), beside HC-COMM r2's filler-only phase arm at the same point, per
 #: GPU; r4 ran no dalone arm (None)
 DEFER_TP_RUNS = {"r3": {2: "r20261016-112405-267e@88c35d347", 4: "r20261016-112756-b2a5@cbc89fb16"},
                  "r4": {2: "r20261016-121907-6830@c286d4f81"},
@@ -1269,7 +1269,7 @@ DEFER_TP = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
     (16384, 2, 64, 8192, 71.7421, 79.2344, None, 2092, 2.567652e+12, 2.576298e+12, 1.01809, 3.028382e+12),
     (16384, 2, 128, 2048, 66.4212, 79.0456, None, 2089, 4.619908e+12, 4.353902e+12, 1.01812, 5.069118e+12),
     (16384, 2, 256, 2048, 100.1074, 123.2141, None, 2055, 9.239817e+12, 7.506000e+12, 1.01282, 9.252450e+12))]
-#: HC-COMM r6's deferred pass (note:20261016T1432Z-draft-hc-comm-r6, d6d0e4e57): the duo fold's put-split filler at
+#: HC-COMM r6's deferred pass (d6d0e4e57): the duo fold's put-split filler at
 #: T = 4096 and TPC_DMAXC 1 (r3's), its base, phase, defer and dalone arms in one set, over the slowest rank; its fill
 #: counters are d6d0e4e57's (76c68bcf2's, HC-COMM r5's, kept each collective's last count, 22-35x low)
 DEFER_TP_RUNS["r6"] = {2: "r20261016-142613-eff2@d6d0e4e57, r20261016-143248-9563@d6d0e4e57",
@@ -1402,7 +1402,7 @@ def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: di
         return {"s": s, "u": u, "d": u * (1 - s), "B": b, "L": l}
     return {"s": min(1.0, defer_at(fit_tp, "s", tp, b, l)), "d": defer_at(fit_tp, "d", tp, b, l), "B": b, "L": l}
 #: prefill's per-stage live coins over its GEMMs at 32K tokens a draw (commit then GEMM a stage: +13%,
-#: r20261016-101324-cab4, note:20261016T0846Z-draft-stage-cost; STAGE-OVL and STAGE-COST r2 may lower it): a parameter
+#: r20261016-101324-cab4; STAGE-OVL and STAGE-COST r2 may lower it): a parameter
 PREFILL_COINS = 0.13
 
 
@@ -1515,7 +1515,7 @@ def score_v5(stats: dict, filler_fraction: float, coins: float = PREFILL_COINS) 
 
 # ---- filler-scorer/v5: SCORE-TP ----------------------------------------------------------------------------------------------
 
-#: HC-COMM's TP suite (note:20261016T0846Z-draft-hc-comm-r2, round 2): Llama-3.1-70B decode under tensor parallelism on
+#: HC-COMM's TP suite (round 2): Llama-3.1-70B decode under tensor parallelism on
 #: GPUs of one NUMA node, at (TP, B, L); TP 2 can't hold B 128 at 8K (its KV wraps)
 TP_SUITE = [(4, 32, 2048), (4, 64, 2048), (4, 128, 2048), (4, 256, 2048), (4, 32, 8192), (4, 128, 8192),
             (2, 32, 2048), (2, 64, 2048), (2, 128, 2048), (2, 256, 2048), (2, 32, 8192), (2, 64, 8192)]
