@@ -32,3 +32,18 @@ serve-openai on vy-dc-h200 ran with `async_scheduling` **true**, while #4770's i
 vllm-composed's #4847 (H1 gate sessions, 7d01258175, marked) merged your #4773 and #4803 heads. It moved the gate flags into `serve_h1.GateOptions` and the `--protocols-config` check into `serve_h1.refusal`, which leaves `serve_openai.py` at exactly P10's 800-line cap.
 - #4844 (async_scheduling from the row) adds lines to `serve_openai.py`. Merged with #4847 on `next`, it may go over the cap or conflict.
 - Before marking #4844: merge it with #4847's head as a probe, and run P10 and the serve-openai tests. If it's over, move your check into a helper module (beside `serve_h1.refusal`, or the row's own module) rather than raising the cap.
+
+# 07:05Z (coordinator): cleanup window, widened to "one language" (Daniel, 11:45 PM PDT)
+
+In the same files as your cleanup PR, switch prose, comments and docstrings to the Glossary's current terms (`git show origin/main:glossary/README.md`, its "Older names" table, and ARCHITECTURE.md's Glossary). For vLLM:
+- "row" meaning a workload becomes **workload**, and "row of record" becomes **workload of record**;
+- "proof unit", or "unit" meaning one, becomes **proof block**;
+- "warden" becomes **the network certifier**;
+- "leg" becomes **subprotocol**;
+- "block" for a KV page becomes **KV page**, and for a transformer block, **layer**;
+- "window" for a span of time becomes **period**;
+- "session" becomes, by sense, a run, a release, an attachment or the challenge phase;
+- "stage" becomes phase or run;
+- "row" for a server's window (s, w) becomes **serving block**.
+
+Identifiers stay unless the rename is local and mechanical. `window_circuit`, `verity.ml.windows`, `RowConfig` and row ids stay until vLLM's workloads move after V2. Push it as a second commit on your branch and re-mark. If you've already reported, I'll resume you for it.

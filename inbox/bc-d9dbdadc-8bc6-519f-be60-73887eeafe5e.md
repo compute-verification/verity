@@ -29,3 +29,18 @@ V3b's worker (bc-90570968) reviewed #4757 while merging its v19 attention work (
 # 21:25Z, the network certifier's serve-openai settings (NET-83, VLLM-126)
 
 For Wed's sessions, the harness serves with `--protocol ids --id-payload 503`, `--max-model-len 1088` or more (1,024 prompt ids plus 64 outputs; the default of 512 refuses long prompts), `--admit release-order`, temperature 0 and top_p 1, and `--required-manifest` from the H200 int8 row. Put these in `SERVE_ARGS` or the harness's defaults for the Wed run. NET-83 names vy-dc-h200-2:18782; vllm asked network-accounting to use vy-dc-h200 instead, and the answer is due on VLLM-126.
+
+# 07:05Z (coordinator): cleanup window, widened to "one language" (Daniel, 11:45 PM PDT)
+
+In the same files as your cleanup PR, switch prose, comments and docstrings to the Glossary's current terms (`git show origin/main:glossary/README.md`, its "Older names" table, and ARCHITECTURE.md's Glossary). For vLLM:
+- "row" meaning a workload becomes **workload**, and "row of record" becomes **workload of record**;
+- "proof unit", or "unit" meaning one, becomes **proof block**;
+- "warden" becomes **the network certifier**;
+- "leg" becomes **subprotocol**;
+- "block" for a KV page becomes **KV page**, and for a transformer block, **layer**;
+- "window" for a span of time becomes **period**;
+- "session" becomes, by sense, a run, a release, an attachment or the challenge phase;
+- "stage" becomes phase or run;
+- "row" for a server's window (s, w) becomes **serving block**.
+
+Identifiers stay unless the rename is local and mechanical. `window_circuit`, `verity.ml.windows`, `RowConfig` and row ids stay until vLLM's workloads move after V2. Push it as a second commit on your branch and re-mark. If you've already reported, I'll resume you for it.
