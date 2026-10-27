@@ -67,3 +67,6 @@ STOP the refusal batches (3c71, b624's rounds/sizes, the RecordDrawn refusals): 
 
 ## 23:10Z: NCI retires (Daniel 3:46 PM PDT)
 NCI retires entirely. Drop the NciCheck.Baseline switch from cursor/soundness-reg-digest-7827: revert that file and its lock change, and keep PoUW and the network check. Commit, push, and, if the records runs already started, rerun only what the gate asks for at the new head.
+
+## 23:15Z URGENT CORRECTION (Daniel 3:53 PM PDT): NCI's NAMING retires, not its machinery
+Daniel corrected at 3:53 PM PDT: NCI's naming retires, not its machinery. Keep #5665 as it is (PoUW and network, at 46f21c6e57) so its runs aren't wasted. REG-ADV takes NciCheck.Baseline's switch to Flock.WindowRecord as a follow-up.
