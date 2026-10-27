@@ -152,6 +152,66 @@ theorem unbound_le_of {V : Vocab d α} (θ F c : ByteArray) (σ : Game.Strategy 
   exact Flock.Bridge.card_unbound_le_faulty A.P A.κ kd desc q A.roots Claims.Sampling.sha512Msg A.Cd
     (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) O hopen hconst
 
+/-- A parse's transcript: `T` at the parse, the empty transcript at none. -/
+noncomputable def transcriptAt : (o : Option Flock.Bridge.Parsed) →
+    (∀ r, o = some r → (Flock.Bridge.circuitOf r.D r.hU r.n).Transcript) → (Flock.Bridge.Parsed.circuit o).Transcript
+  | some r, T => T r rfl
+  | none, _ => fun _ => 0
+
+theorem transcriptAt_heq {o : Option Flock.Bridge.Parsed}
+    (T : ∀ r, o = some r → (Flock.Bridge.circuitOf r.D r.hU r.n).Transcript) {r : Flock.Bridge.Parsed}
+    (h : o = some r) : HEq (transcriptAt o T) (T r h) := by
+  subst h
+  rfl
+
+/-- **The deployment's extractor** (ONE-8's `extract`), from the vocabulary's reading of the files (`read`), its rounds
+and its `ε`, and C-Flock's session at each parse (`A`, `τOf`, `q`, as `SampledDeploy` holds them): at files that parse
+to `r`, the transcript of the values the session's extractor opens at the strategy the play induces (`LiveAt.valE` at
+`τOf σ`); the empty transcript at files that don't parse. Its type is `Vocab.extract`'s, so a vocabulary can take it as
+its extractor. -/
+noncomputable def extractDep (read : ByteArray → FileRead) (rounds : ByteArray → List ℕ) (εOf : ByteArray → ℝ)
+    (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg) (q : ByteArray → Claims.Sampling.Query)
+    (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (play (rounds θ) θ F c)) (r : Flock.Bridge.Parsed),
+      Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile = some r →
+      Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊εOf θ * r.n⌋₊ + 1) (desc θ))
+    (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) θ F c)) (r : Flock.Bridge.Parsed)
+      (hr : Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile = some r),
+      FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
+    (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) θ F c)) : (read F).circuit.Transcript :=
+  transcriptAt (Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile)
+    fun r hr => Flock.Bridge.transcriptOf r.D r.hU r.n (A θ F c σ r hr).κ
+      ((A θ F c σ r hr).valE (q θ) (τOf θ F c σ r hr))
+
+/-- **`unbound_le` at the deployment's extractor.** Where the vocabulary's extractor is `extractDep` at the session
+(`hext`) and its openings are openings `O` of the parse's circuit that hold wherever the session's witness opens a
+value other than a constant and at the constants (`place`'s openings bridge, ONE-7's: `hO`, `hopen`, `hconst`), the
+unbound units are at most the session's faulty ones: `SampledDeploy.unbound_le`, with `extract`'s half proved. -/
+theorem unbound_le_of_extract {V : Vocab d α} (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
+    (q : ByteArray → Claims.Sampling.Query)
+    (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
+      Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
+    (τOf : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
+      (hr : V.parsed F = some r), FlockSoundness.Game.Strategy (A θ F c σ r hr).G)
+    (hext : V.extract = extractDep V.read V.rounds (fun θ => (V.certOf θ).ε) kd desc q A τOf)
+    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r)
+    (O : (g : Fin (Flock.Bridge.circuitOf r.D r.hU r.n).N) → BitVec ((Flock.Bridge.circuitOf r.D r.hU r.n).w g) → Prop)
+    (hO : HEq (V.Opens θ F c) O)
+    (hopen : ∀ (g : Fin (A θ F c σ r hr).Cc.N) (b : Bool),
+      (∀ b', (Flock.Bridge.progOf (A θ F c σ r hr).Cc (A θ F c σ r hr).κ).gates[Flock.Bridge.posOf
+        (A θ F c σ r hr).Cc g]? ≠ some (.const b')) →
+      (A θ F c σ r hr).valE (q θ) (τOf θ F c σ r hr) (Flock.Bridge.posOf (A θ F c σ r hr).Cc g) = some b →
+      O g (BitVec.ofBool b))
+    (hconst : ∀ (g : Fin (A θ F c σ r hr).Cc.N) (b : Bool),
+      (Flock.Bridge.progOf (A θ F c σ r hr).Cc (A θ F c σ r hr).κ).gates[Flock.Bridge.posOf
+        (A θ F c σ r hr).Cc g]? = some (.const b) →
+      O g (Flock.Bridge.transcriptOf r.D r.hU r.n (A θ F c σ r hr).κ
+        ((A θ F c σ r hr).valE (q θ) (τOf θ F c σ r hr)) g)) :
+    (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤
+      ((A θ F c σ r hr).faultyE (q θ) (τOf θ F c σ r hr)).card := by
+  refine unbound_le_of θ F c σ hr (A θ F c σ r hr) (q θ) (τOf θ F c σ r hr) ?_ O hO hopen hconst
+  rw [hext]
+  exact transcriptAt_heq _ hr
+
 /-- **Sampled proofs at the deployment.** At files that parse to `r` (`Vocab.parsed`), every `θ`, `c` and strategy
 `σ`: C-Flock's live session at the parse (`A`, `K₀ = ⌊ε n⌋ + 1`, its cost `t'` the strategy's), the session's
 strategy the play induces (`τOf`), the play's collision event (`Brk`) at the forger `Fg`, and the facts relating them (`accept_le`, `break_le`,
