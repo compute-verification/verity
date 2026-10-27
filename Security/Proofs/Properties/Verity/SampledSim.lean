@@ -42,7 +42,7 @@ reads the releases, and those refusals), and gives the strategy `Drive.τ` and t
 `accept_le_of_drives` is `SampledDeploy.accept_le` at `τOf := (Dr …).τ`.
 
 What the reduction reads off a release is its request's (`tagOfRequest`, `bytesOfRequest`, over
-`PlayDevice.requestParts`; a round's coin count its message's squeeze header, `coinCountOf`, so `tagOfPlay`), where the
+`PlayDevice.requestParts`; a round's coin count the count its request carries, `coinCountOf`, so `tagOfPlay`), where the
 play's device serves it after the requests before it (`tagOfServed`), and a
 release's 512 bits read as the record reads its coin's bytes (`splitDraw`, `splitPoints`, `splitRounds`: bytes LSB
 first, each F128 `{hi:016x}{lo:016x}`). The break is the play's: `Vocab.colAt` and `Vocab.forgerAt` read the challenger's finder's
@@ -690,8 +690,8 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
   exact hpr hacc
 
 /-- **The reduction at a live session `A`**, against its hash-first audit (`LiveAt.GH`): the coupling's transcript of
-the play (`proj`: off the break, where sampled proofs' verdict accepts, a session's transcript of v2's evidence at
-`A`'s inputs, `covers`), the registration it sends the live audit (`R₀`), and how it reads the device's releases: their
+the play (`proj`: off the break, where sampled proofs' verdict accepts, one flock-verify `--zk` accepts at `A`'s
+inputs, `covers`), the registration it sends the live audit (`R₀`), and how it reads the device's releases: their
 bits (`m`), their tags, the chunks of the draw, the link points and the rounds, the hash the link points' request
 carries (`hOf`), the rounds' bytes the releases answer, and the roots and proof files the evidence holds (`pfOf`).
 `canon` is the device's refusals and v2's coins, read in the play: the coupling's transcript a record of the live
@@ -702,9 +702,7 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
     {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg}
     (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc) where
   proj : Outcome → Exec.Transcript
-  covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
-    _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
-    SessionInputs p e o.sent.blobs A.I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o)
+  covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ZkExec.AcceptsZK A.I (proj o)
   R₀ : A.Reg
   m : ℕ
   tagOf : Game.LiveDrive.Req ByteArray → Option Game.LiveDrive.Tag
@@ -782,8 +780,9 @@ theorem accept_le_of_drives {V : Vocab d α} (kd : ByteArray → ℕ) (desc : By
 
 A release answers a request (`PlayDevice.requestParts`): a family's label, then the bytes the coin is released after.
 v2's families are the draw's (the registration's challenger label), session `i`'s link points
-(`slot/i/session`, after the SHA-512 of its `root_B` digests, `OneStageZk.pointsAfter`) and its streams' rounds (`slot/i/<stream>`, after the round's
-message). Only session 0's are tagged. -/
+(`slot/i/session`, after the SHA-512 of its `root_B` digests, `OneStageZk.pointsAfter`) and its streams' rounds
+(`slot/i/<stream>`, after the SHA-512 of the round's request, `OneStageZk.roundRequest`: the stream, its chain at the
+round and the round's coin count). Only session 0's are tagged. -/
 
 /-- **What a release is to the reduction, from its request**: the draw's family `draw`, session 0's link points, or a
 round of one of session 0's streams, as `round` reads the round's label and bytes (its table, rep and coin count);
@@ -797,26 +796,29 @@ def tagOfRequest (draw : String) (round : String → ByteArray → Option (ℕ �
     else if l = _root_.SampledProofs.Hello.slotStream 0 _root_.SampledProofs.OneStageZk.POINTS then some .points
     else (round l x).map fun (t, r, n) => Game.LiveDrive.Tag.round t r n
 
-/-- The bytes a release's request holds: the round's message a round's coins are released after, or the hash of the
-`root_B` digests the link points are released after. -/
+/-- The bytes a release's request holds, whose SHA-512 its coin is released after: a round's request
+(`OneStageZk.roundRequest`), or the `root_B` digests the link points are released after. -/
 def bytesOfRequest (b : ByteArray) : ByteArray :=
   ((PlayDevice.requestParts b).map (·.2)).getD .empty
 
-/-- **A round message's coin count**: the count its squeeze header frames last (`Flock.Transcript.framed`: op `4`, the
-coin's kind, six zero bytes, then the count in eight bytes little-endian). The verifier asks a round for exactly that
-many coins after exactly those bytes (`Flock.Transcript.squeeze`), and the device serves one coin a request with no
-count of its own (`PlayDevice.served`), so the count is the message's: a record round whose message has the request's
-digest carries it, or the two messages are a collision. It is the count v2 refuses a record round without
-(`OneStageZk.squeezeCount`, `OneStageZk.roundsOk`). -/
-def coinCountOf (x : ByteArray) : Option ℕ := SampledProofs.OneStageZk.squeezeCount x
+/-- **A round request's coin count**: the count it carries last, eight bytes little-endian, after its stream's name
+(two bytes big-endian of its length, then the name) and the stream's chain (64 bytes), as `OneStageZk.roundRequest`
+writes it; none for bytes of any other length. v2 releases a round's coins after the request at the record round's own
+count, so a release after a request of another count is no use of the record's (`OneStageZk.usesOf`). -/
+def coinCountOf (x : ByteArray) : Option ℕ :=
+  if x.size < 2 then none
+  else if x.size ≠ 2 + ((x.get! 0).toNat * 256 + (x.get! 1).toNat) + 72 then none
+  else some ((List.range 8).foldl (fun acc i => acc + (x.get! (x.size - 8 + i)).toNat * 256 ^ i) 0)
 
-/-- A round request's table, rep and coin count: its stream's (`streamOf`, from the label `slot/0/<stream>`) and its
-message's (`coinCountOf`). -/
+#guard coinCountOf (_root_.SampledProofs.OneStageZk.roundRequest "t/é" (ByteArray.mk (Array.replicate 64 7)) 261) == some 261
+
+/-- A round request's table, rep and coin count: its stream's (`streamOf`, from the label `slot/0/<stream>`) and the
+count it carries (`coinCountOf`). -/
 def roundOfRequest (streamOf : String → Option (ℕ × Fin 2)) (l : String) (x : ByteArray) : Option (ℕ × Fin 2 × ℕ) :=
   (streamOf l).bind fun (t, r) => (coinCountOf x).map fun n => (t, r, n)
 
 /-- **What a release of the play is to the reduction**: `tagOfRequest` at the registration's challenger label `draw`
-and session 0's streams `streamOf`, each round's coin count its message's. -/
+and session 0's streams `streamOf`, each round's coin count its request's. -/
 def tagOfPlay (draw : String) (streamOf : String → Option (ℕ × Fin 2)) : ByteArray → Option Game.LiveDrive.Tag :=
   tagOfRequest draw (roundOfRequest streamOf)
 
