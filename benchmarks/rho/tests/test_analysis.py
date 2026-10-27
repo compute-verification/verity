@@ -181,10 +181,13 @@ def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_
 
     monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
     monkeypatch.setenv("OUT", str(tmp_path))
-    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
+    # nothing credited (residual 1) keeps remote below the comparator whatever the other inputs are
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200",
+                                      "--set", "regime.remote.residual=1"])
     run.main()
     text = capsys.readouterr().out
-    assert "| reference-remote-h200 | [2.35 (vacuous), 5.87] | 2.5 |" in text
+    row = next(line for line in text.splitlines() if line.startswith("| reference-remote-h200 |"))
+    assert "(vacuous)" in row and "| 2.5 |" in row
     assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
