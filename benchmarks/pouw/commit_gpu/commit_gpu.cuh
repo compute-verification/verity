@@ -48,6 +48,9 @@ using u32 = uint32_t;
 #ifndef DEV
 #define DEV __device__ __forceinline__
 #endif
+#ifndef HD
+#define HD __host__ __device__ __forceinline__
+#endif
 
 #ifndef CK
 #define CK(x)                                                                                   \
