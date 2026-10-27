@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lane B200-FP8: the B200's (sm_100a) kind::mxf4nvf4 .scale_vec::2X (UE8M0) adder floor.  probe.py scores the pinned model
+# The B200's (sm_100a) kind::mxf4nvf4 .scale_vec::2X (UE8M0) adder floor.  probe.py scores the pinned model
 # (grid_floor -174) beside floors -170, -173, -175 and -178 on the families whose sums sit below the subnormal grid; nvf4's UE4M3
 # unit weights are >= 2^-20, so its floor never binds and is not probed.  The build runs outside the lease (probe.py's nvcc
 # line), the capture and its scoring under one gpu-lease.
