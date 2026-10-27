@@ -3,31 +3,31 @@
 The Verity x vLLM integration: the Torch/vLLM-derived Programs (`verity.ml.definitions.registry`, `verity_vllm.program.frontend`), the
 runtime capture and Match/Commit machinery (`verity_vllm`), and the qualification sweep (`verity_vllm/ops`,
 `workloads/`).  Promoted from `veritor@0903f60d6` (release `r18-int-3`) as one working closure; see the Notion page
-"Veritor → Verity migration" for the decisions and the evidence index.
+"Veritor → Verity migration" for the decisions and the evidence index.  The served example is `examples/vllm/`.
 
 ## Layout
 
 One distribution (`verity-vllm`), one package (`verity_vllm`), one subpackage per job; `tests/` mirrors the package.  Naming
 (Draft 3.1): core Verity nouns get the shortest names (`program`, `query`, `commit`), integration concepts carry their
 qualifier (`runtime` correspondence, `weights_of_record`), implementation artefacts have descriptive compound names
-(`native_collect`, `poc_*` for v1 leftovers).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
-Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocol_options` > `observe` | `commit` >
+(`native_collect`).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
+Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocols` > `observe` | `commit` >
 `engine` > `query` | `correspondence` > `program` > `collectives` > `config` (lint P9).
 
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py static_schedule.py served_seed.py rank_worker.py profiles/
-  program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
-  query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
+  engine/             the vLLM engine    build.py run_facts.py code_identity.py kernel_identity.py vllm_adapter.py engine_driver.py engine_profile.py handle.py arrivals.py chunks.py static_schedule.py served_seed.py profiles/
+  program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py
+  query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
-  observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
+  observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py capture.py pinned.py kernel_trace.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
-  protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
+  protocols/          protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
   commit/             commitment         merkle.py hashing.py identity.py binding.py padding_steps.py hidden_*.py committer/
-  check/              checks -> verdicts match/ replay/ executed_prefix.py verdict.py gates.py weights_of_record.py root_policy.py ...
+  check/              checks -> verdicts match/ replay/ executed_prefix.py verdict.py gates.py weights_of_record.py fold_compare.py ...
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
-  collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
+  collectives/        collectives        collective_record.py collective_sites.py
   config.py target_family.py             run-definition locations; the target-family preflight
   settings.py                            every environment variable, declared once (role, type, doc); the run's record of them
   pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
@@ -40,20 +40,24 @@ workloads/ manifests/ fixtures/ data/ docs/    records of the qualification tabl
 **`pipeline/`** holds the stage drivers (Build / Match / Commit): `build.py`, `match.py`, `commit.py`, `hot.py`, `report.py`,
 `global_program.py` (the rooted workload Program of a Build), `m1_capture.py`, `layout.py` (Build / run directory layout),
 `cli.py` (the one CLI, `verity-vllm`), `row.py` / `row_*.py` (`verity-vllm row`: a sweep row's
-stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py` / `admission_planner.py`,
+stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py`,
 `research_outputs.py` / `research_result.py`, `commit_arb.py` (`verity-vllm commit-arb`: the served Commit under seeded
 varied traffic, its records held to the streamed I/O), `source_identity.py`, `release_json.py`, `workload.py` /
 `coverage_workloads.py`, `experiment.py`, `research_tools.py` (the `vllm.build` / `vllm.match` / `vllm.commit` Tools of
-`tools/research`), and `tp/` (the rank-aware capture, commit, match and fold-match drivers).  Entrypoints:
+`tools/research`), and `tp/` (the rank-aware capture, commit, match and fold-match drivers, and `rank_worker.py`, the TP rank worker
+extension they hand vLLM).  Entrypoints:
 `verity-vllm <command>` (`python -m verity_vllm.pipeline.cli <command>`) and `verity_vllm.LLM`.  Never: Verity semantics -- a check that
 lives here is misfiled.
 
-**`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
-step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
+**`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `run_facts.py` (profile
+manifest, versions), `code_identity.py` (executed code objects; `kernel_identity.py` the generated kernels' sources and binaries),
+`chunks.py` (chunk attribution, the run loop's `on_step`),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
+`handle.py` (a built engine's scheduler and model runner),
 `engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
-decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
-constructor + a facts table).  Never: commit, decide what is required.
+decides), `served_seed.py` (the public default seed a served request without one is sampled under), and `profiles/` (the model
+facts: the families' facts table, HF configs, devices and workload JSON; the adapter's fixed cases, `cases.py`).  Never: commit,
+decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
 primitive families through `verity.ml.circuits.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
@@ -61,19 +65,19 @@ primitive families through `verity.ml.circuits.codec.register_lazy_family`), low
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `verity/ml/kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
-proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
+proof-block policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
 binds were promoted into `registry/`).
 `registry/fa3_check_inf.py` is FA3's
 per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut
-into proof units of bounded committed width, on core's `verity.ml.circuits.cut`; `verity/partition/v1` names the partition; its unit rules are
+into proof blocks of bounded committed width, on core's `verity.ml.circuits.cut`; `verity/partition/v1` names the partition; its unit rules are
 shared across processes and runs through `manifest build --unit-rule-cache DIR`, env `VERITY_UNIT_RULE_CACHE`), `module_body.py`
 (Q_module_body_v1, for A/B), `cross_call.py` (the opt-in cross-Call recompute check, `manifest build --cross-call-check`),
 `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
-`query_artifact.py` (query artifact identities), `compare.py` (a v2 manifest against a v1 one), `required.py` (v1
-`IDENTITY_KEY` rows).  Boundary values, proof-unit partitions and dead gates are core's `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`
+`query_artifact.py` (query artifact identities), `required.py` (v1
+`IDENTITY_KEY` rows).  Boundary values, proof-block partitions and dead gates are core's `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`
 and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
@@ -81,9 +85,11 @@ and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, a
 verification policy, commitment positions, requiredness, verdicts.
 
 **`observe/`** implements *value observation* (the Match-side capture): `observer.py` (the TorchDispatchMode), `events.py` /
-`log.py` / `storage.py`, `contract.py` (the one observation contract), `triton_adapter.py`, `runtime_tree.py`, `chunks.py`
-(chunk attribution), and `fold/` (raw log -> Program: `fold.py`, `tree.py`, `memory.py`, `views.py`, `resolver.py`,
-`patterns/` (one module per kernel family, the TP collectives included), `patterns_prefix.py`).  Never: commit, decide what is
+`log.py` / `storage.py`, `contract.py` (the one observation contract), `triton_adapter.py`, `runtime_tree.py`, `capture.py`
+(the step observer and run header; `pinned.py` its host buffers), `kernel_trace.py` (a Kineto trace's device kernels, which the
+census and each TP rank read), and `fold/` (raw log -> Program: `fold.py`, `tree.py`, `memory.py`, `views.py`, `resolver.py`,
+`patterns/` (one module per kernel family, the TP collectives included), `patterns_prefix.py`, and `profiles/`, the κ profiles a
+Match folds with: one generic constructor over the model facts, and the pinned base modules).  Never: commit, decide what is
 required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
@@ -111,18 +117,18 @@ runtime metadata in the identity tuple.
 
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,
 `batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
-`stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
-`verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
-`fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
-`root_policy.py`), and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
-pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
+`stoch_recompute.py`, `compiled_kernel_check.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
+`verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`,
+`fold_compare.py` (the folded log and its evidence), input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`),
+and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
+pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates).  Never: acquire or commit anything.
 
 **`properties/`** holds the property harnesses: `noninterference.py`, `census.py` + `kernel_allowlist.py`, `golden.py` +
-`golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`, `protected.py`,
+`golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`,
 `fa_tap_exactness.py`, `norm_tap_exactness.py`, `router_tap_exactness.py`, `vocab_range_exactness.py`.  Never: a per-run check.
 
-**`collectives/`** holds the collective record (`collective_record.py`), the communicator hook sites (`collective_sites.py`)
-and the embedding shard layout (`embedding_shard.py`).
+**`collectives/`** holds the collective record (`collective_record.py`) and the communicator hook sites (`collective_sites.py`).
+The embedding shard's fold pattern is `EmbeddingShardCuda` in `observe/fold/patterns/collectives.py`.
 
 **`records/`** holds the typed stage records, one frozen dataclass per record kind one stage writes and another reads, whose `load`
 refuses a missing required field by file and field name (`fields.py`): `required_manifest.py` (the required-value manifest, as the
@@ -139,7 +145,7 @@ replace.
 Never: an import of anything else in `verity_vllm`.
 
 **`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
-`*_negative*.sh` runs, `cov_pod.sh`, the gates (`pod_gate.sh`, `verify_lane.sh`), `known_roots.json`.  Never: Python that a layer
+`*_negative*.sh` runs, `cov_pod.sh`, the gate (`pod_gate.sh`), `known_roots.json`.  Never: Python that a layer
 above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
@@ -158,7 +164,7 @@ Core (Verity semantics, `verity`):
 - **Call** — one application of a Definition inside a Program (retires "Program row", "instance" in prose; `instances.json.gz` stores Calls).
 - **Value** — an input or output of a Call (retires "Member" in prose; the serialized `member` / `output_member` field keeps its name).
 - **Program** — the sequence of Calls with its dataflow; `program_digest` covers the dataflow only.
-- **verification query** — Q: which sets of Calls are **proof units** (`VU` / `vu_*` in serialized and code names); `Q_module_v1` is called **Q_module_body_v1** in prose
+- **verification query** — Q: which sets of Calls are **proof blocks** (`VU` / `vu_*` in serialized and code names); `Q_module_v1` is called **Q_module_body_v1** in prose
   (units = module bodies, submodule calls excluded; the serialized id stays until a labelled decision).
 - **boundary values** — `⋃_{V∈Q(P)} (in(V) ∪ out(V))`; **required values** = boundary values ∪ prescribed inputs (weights, prompt ids)
   ∪ protocol-required values (sampled ids); **commitment** — the position-identified Merkle roots over the required values;
@@ -196,11 +202,11 @@ Layers and where they live (Draft 3 §12.1):
 | layer | responsibility | today |
 | --- | --- | --- |
 | Program | Definitions, Calls, dataflow, `program_digest` | `verity/ml/definitions/registry`, `verity_vllm/program/frontend` (lowering rules) |
-| query | Q(P), proof units, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record), `verity_vllm/check/poc_required_interface.py` |
+| query | Q(P), proof blocks, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record) |
 | runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/program/lifting`, `verity_vllm/correspondence/reader_for_query.py`, `verity_vllm/correspondence/runtime.py` |
 | acquisition | acquisition plan, taps, hooks, collector | `verity_vllm/acquire` (`plan.py` ROUTE_OF_FAMILY, `install.py`, `stage.py`); hazard / analytic owners in `commit/committer/native_collect.py`, `commit/committer/native_host.py`, `commit/committer/hidden_gpu_src/` |
 | observation + resolution | capture log, fold, occurrence resolution | `pipeline/m1_capture.py`, `observe/fold/fold.py`, `check/match/batch_decomp.py` |
-| input provenance | weights of record, prompt ids, checkpoint pin | `check/weights_of_record.py`, `check/root_policy.py`, `manifests/checkpoints.json` |
+| input provenance | weights of record, prompt ids, checkpoint pin | `check/weights_of_record.py`, `manifests/checkpoints.json` |
 | commitment | position-identified roots, openings, binding map | `commit/binding.py`, `commit/scheme.py`, `commit/committer/leafhash.py` |
 | checks → verdicts | the seven checks above, one verdict of record per row | `check/match/global_match.py`, `check/replay/driver.py` (`sampled_replay`), `check/executed_prefix.py`, `query/manifest/verify.py`, `check/verdict.py` (`verdict.json`) |
 
@@ -210,6 +216,9 @@ regression: the current tree's checks against the frozen v1 records (`expected/<
 `fixtures.toml` are the recorded reasons the two differ).
 
 ## Python API
+
+Outside code imports only `verity_vllm`, `verity_vllm.engine.spec` and `verity_vllm.engine.handle`, each only its `__all__`
+(`tests/test_vllm_public_api.py`).
 
 `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
 
@@ -242,6 +251,7 @@ Supported keyword options:
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
 | `enable_chunked_prefill` | vLLM's, on | False holds a prefill that doesn't fit a step instead of cutting it into chunks |
 | `enable_prefix_caching` | off | True lets a request read the KV blocks another computed for the same prefix |
+| `async_scheduling` | vLLM's, on | False schedules each step once the previous step's output is in (LAG 0) |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |
@@ -261,7 +271,7 @@ parameters, prompt and generated token ids per request) to `llm.records`; `llm.p
 reports, the protocol composition record).  `llm.vllm` is the wrapped `vllm.LLM` (for driving its engine step by step) and
 `llm.model` the served model in this process, the object protocol options install on.
 
-A protocol option's settings that come from the engine are filled from the built one (`protocol_options.from_engine`),
+A protocol option's settings that come from the engine are filled from the built one (`protocols.from_engine`),
 and one that can't be filled there is refused by name.  PoUW's H1 needs only its public parameters: on an int8 pin, with
 the int8_exact parts registered (`engine.int8_ranks.register(("linears", "attention"))`),
 `LLM(model, revision=..., quantization="verity_int8", attention_backend="CUSTOM", max_num_batched_tokens=T,
@@ -282,16 +292,16 @@ else replaces an attribute on a vLLM, torch or Triton object.
 
 **What an add-on registers.**  Two kinds:
 
-- *A protocol option* is one adapter module in `protocol_options/` with `NAME`, `schemes()`, `refusals(scheme, ctx)` and
+- *A protocol option* is one adapter module in `verity_vllm/protocols/` with `NAME`, `schemes()`, `refusals(scheme, ctx)` and
   `install(scheme, target) -> Installed`, plus the optional `requires_build`, `EXECUTES`, `keeps_weight_copy` and
-  `commit_weights` (the contract is `protocol_options/interface.py`).  It finds its sites by type, never by module name,
+  `commit_weights` (the contract is `verity_vllm/protocols/interface.py`).  It finds its sites by type, never by module name,
   and patches only through `target.hooks(entry)`.  Its protocol logic stays in its `verity.core.protocols` package.
 - *A benchmark arm or experiment* patches only through a `Hooks` tagged by its id (`bench:<arm>`).  The harness
   (`verity_bench.vllm.runner`, benchmarks') calls its `install` before the engine is built, its `ready` once
   `llm.vllm` and `llm.model` exist, and its `begin_run` and `end_run` around every run; it refuses an arm whose
   `install` added a live entry outside its tag, and uninstalls the arm's hooks when the engine closes.
 
-**Order.**  At each site the nesting is `protocol_options.SITES`, outermost first: at `LinearBase.quant_method.apply`,
+**Order.**  At each site the nesting is `protocols.SITES`, outermost first: at `LinearBase.quant_method.apply`,
 POUS wraps PoUW, which executes (a site has at most one executor, `EXECUTES`).  Sampled proofs commits at module
 boundaries, outside every site.  A composition runs in two phases: every option first commits to the plaintext weights
 (`commit_weights`, model untouched), then each installs in `config.PROTOCOLS` order, innermost first.  Uninstall is the
@@ -302,7 +312,7 @@ installed before the engine is built; how they nest with a protocol option at a 
 an arm patches a site of its own or runs without protocol options.
 
 **Multi-GPU.**  Under `tensor_parallel_size > 1` the model, its weights and every kernel live in the rank worker processes,
-so a hook installed in the driver sees nothing.  The seam is vLLM's `worker_extension_cls`: `engine/rank_worker.py` mixes
+so a hook installed in the driver sees nothing.  The seam is vLLM's `worker_extension_cls`: `pipeline/tp/rank_worker.py` mixes
 methods into every rank's worker, and the driver runs them on each rank with `LLM.collective_rpc`.  The TP capture and
 Commit drivers (`pipeline/tp/`) install per-rank observers and committers this way, and `collectives/collective_sites.py`
 is the one finder of the collective sites they hook.  Protocol options do not compose across ranks yet: `refusals`
@@ -322,22 +332,22 @@ refuses any set at TP > 1.  The planned shape is the same seam: one `install` pe
 
 The durations are host time around `step()`, and include device time only where vLLM synchronizes inside the step.  A
 caller that needs device time synchronizes around the run itself, as the harness does.  `clock` is injectable, so tests
-measure on a stub clock.  The capture's timing-only mode (`engine.capture.Capture`, its `step_times` with `forward_s` and
+measure on a stub clock.  The capture's timing-only mode (`observe.capture.Capture`, its `step_times` with `forward_s` and
 `sample_s`) times an observed run, not a served one.
 
 ## Protocol options
 
-PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocol_options/`), each enabled on its own and any of them
+PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocols/`), each enabled on its own and any of them
 in one run.  A set is `name:scheme` entries, one per protocol (`config.parse_protocols`), off by default: `LLM(protocols=...)`
 installs PoUW and POUS on a serving engine; a row takes its set from `verity-vllm row --protocols` (`PROTOCOLS`) or its
 row file's `engine.target`, every stage reads it as the target's `protocols` (`TargetProfile.protocols`; unset is sampled proofs
 alone, the Commit as it has always run), `run_row` refuses a set it cannot run before any stage, and the Commit installs
 the others once its committers registered the weights of record (the replay reads live weights through what an option
-released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
+released: `protocols.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity.core.protocols.pouw`, `verity.core.protocols.pous` and `verity.core.protocols.sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
-bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
+bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocols.CIRCUITS` and
 `traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
@@ -354,6 +364,11 @@ and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
+POUS (`pous:p2-16448/v4`) holds the linears' registered weights only as `C* = P2-Enc(W, salt)` at P2's registered point
+(`benchmarks/pous/p2_v1/store.py`'s layout, scales outside `W`) and decodes each at use (`benchmarks/torch_gpu/p2_stage`).
+Settings: `salt_source` (the auditor's coin, drawn after the commitment), `p2_lib`, `experimental`. A period's audit is
+`leg(period_dir, node, out)`, via `challenger_party`. Wiring and GPU timings (`tests/protocols/pous_gpu.sh`):
+note:20261026T1739Z-report-vllm-pous.
 
 **PoUW is not auditable yet.**
 
@@ -381,7 +396,7 @@ A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/wo
 checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
 `vllm` commit, the engine `args`, the `env` that selects kernels, the declared `target`, and `reasons`: why the row sets a served
 switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
-(`engine.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
+(`observe.fold.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
 file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.  Every Commit reads back,
 on every rank, the switches that select its kernels (`engine/served.py`: batch invariance, DeepGEMM, the shared-experts stream,
 the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and

@@ -236,8 +236,8 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
     elif name == "normalizer" or name.endswith(".normalizer"):
         # Gemma-2's embedding normalizer (dense M-0619 preflight on the real Gemma-2-2B Program: the ONE unresolved field of 316): a
         # non-persistent 0-d buffer `torch.tensor(hidden_size ** 0.5)` created at the served dtype in vLLM's Gemma2Model.__init__ -- no
-        # checkpoint tensor, a function of config.json's hidden_size alone.  The frozen root policy already classifies it with the
-        # rotary table (root_policy.ANALYTIC_TABLES["normalizer"]) and pins its value EXACTLY: the Python float sqrt(H) rounded once
+        # checkpoint tensor, a function of config.json's hidden_size alone.  It is an analytic table like the rotary table
+        # (`acquire.plan.analytic_table_of_buffer`), and its value is pinned EXACTLY: the Python float sqrt(H) rounded once
         # (nearest-even) to bf16 (analytic.normalizer_word).  Composed here from config.json, so the served buffer is compared like a
         # weight, not left unpinned; any other declared width / shape has no rule -> unresolved (fail closed).
         if bits != 16 or list(shape) not in ([], [1]):
@@ -342,8 +342,8 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
       * attention kv-cache scales `attn._{k,v,q,prob}_scale`: without kv-cache quantization (kv_cache_dtype auto) vLLM creates them as
         f32 1.0 -- pinned EXACTLY (digest of the f32 word); any other kv_cache_dtype has its scales in the checkpoint (then `compose`
         finds them) or is left unpinned BY NAME with the dtype in the why (never assumed).
-      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: the frozen root policy's analytic table (root_policy
-        ANALYTIC_TABLES['cos_sin'] = analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
+      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: an analytic table (`acquire.plan.analytic_table_of_buffer`,
+        checked by analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
         pipeline's error bound of the analytic function of config.json (theta, D/ROT, MAX_POS, rope_scaling); there is no byte digest
         (CUDA libm != numpy libm at the last bf16 ulp), so the field is pinned 'analytic' and `check` runs the bound on the served
         words.  A rope_scaling type without an analytic table stays unpinned by name.

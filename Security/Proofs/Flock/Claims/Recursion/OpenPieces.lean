@@ -130,7 +130,7 @@ theorem openPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
               (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2))
     (htie : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p → L.Agrees cmt x s w xO ms →
-      (∀ e ∈ L.calls x s w, H e.1 = e.2) → (Claims.findColl (L.calls x s w)).isSome = false →
+      (∀ e ∈ L.calls x s w, H e.1 = e.2) → (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
       showsTr untr s x xO c →
       ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s → ∀ ht : q.key.1 < p.sts.size,
         ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →

@@ -11,7 +11,7 @@
 * space pools to a count (#4418's ``pooledShort``): at p = 1% + 2^-128 a machine-week of 60 s windows certifies at least
   9,948 of its 10,080 at δ = 1% and 1,000 machine-years 520,337,076 of 5.256·10⁸, memory's published figures;
 * bandwidth fails over a period with probability ``T · eps``, not ``eps``;
-* communication pays each window's own terms every window and the faulty units once (#4367).
+* communication pays each window's own terms every window and the faulty proof blocks once (#4367).
 """
 from __future__ import annotations
 

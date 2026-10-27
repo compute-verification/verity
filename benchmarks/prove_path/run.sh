@@ -54,6 +54,11 @@
 #     reading them as registered values (--registered) and each audit holding them to the pin (records_audit.py
 #     --registered), plus an arm serving other weights under the registered salts (--tamper-weights), which Lean's
 #     registered reads must refuse.
+#     PP_TORCH_LOOP_WIRED=1: the wired circuit (serve.py --wired: each linear one ScaledMmS8_v1{K=128,N=128} unit and each
+#     ReLU and quantize one QuantRowS8_v1{N=128,RELU}, each tie a registered read of the writer's output and the reader's
+#     input, so only each request's own row is free), in members of one unit
+#     (PP_TORCH_LOOP_CAP default 1) under stratified:3 (a unit of every template), with its weights one row a linear, plus
+#     an arm whose quantize units' codes are tampered (--tamper-activations), which the drawn quantize unit must refuse.
 #   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer
 #     transformer, its four templates' units), honest and tampered, against the circuit registered before it ran, in members
 #     of PP_TORCH_LOOP_CAP units (default 16), committed by PP_TORCH_DECODER_WORKERS processes (default 8);
@@ -239,12 +244,12 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     case $SR in art:*) SR=$W/serve-run; R data fetch $PP_SERVE_RUN --to $SR >> $O/fetch.log 2>&1 || { tail -20 $O/fetch.log; exit 8; };; esac
     served served $SR ${PP_WINDOW:-0} || rc=1
   else
-    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload integrations/vllm/workloads/$LROW.json"
+    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload examples/vllm/workloads/$LROW.json"
     if [ -n "${PP_SERVE_STANDIN:-}" ]; then
       $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
       served llama-served $W/serve-run 0 || rc=1
     else
-      $PP advice --workload integrations/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+      $PP advice --workload examples/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
@@ -287,14 +292,15 @@ elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
     frozen torch-frozen-tampered --tamper ${TT:+--tags $TT} || rc=1
   fi
 elif [ -n "${PP_TORCH_LOOP:-}" ]; then
-  TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}
-  TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
+  WIRED=${PP_TORCH_LOOP_WIRED:+--wired}
+  TLAW=${PP_LAW:-${WIRED:+stratified:3}} TLAW=${TLAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-${WIRED:+1}} TCAP=${TCAP:-8}
+  TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP $WIRED ${PP_TORCH_LOOP_SHAPE:-}"
   export PYTHONPATH=$REPO/integrations/torch_loop
-  REGC= REGA=()
+  REGC=$WIRED REGA=()
   if [ -n "${PP_TORCH_LOOP_REGISTERED:-}" ]; then   # the weights committed once, before any run: the opening is the prover's, the pin the verifier's
-    $PY -m verity_torch_loop.serve --commit-weights $W/weights-opening.json --pin $O/torch-loop-weights-pin.json \
+    $PY -m verity_torch_loop.serve --commit-weights $W/weights-opening.json --pin $O/torch-loop-weights-pin.json $WIRED \
       | tee $O/torch-loop-weights.json || exit 8
-    TL="$TL --registered --weights $W/weights-opening.json" REGC=--registered REGA=(--registered $O/torch-loop-weights-pin.json)
+    TL="$TL --registered --weights $W/weights-opening.json" REGC="--registered $WIRED" REGA=(--registered $O/torch-loop-weights-pin.json)
   fi
   # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
   # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
@@ -308,6 +314,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
       case $x in
         --tamper) forged=--forged; serve+=(--tamper);;
         --tamper-weights) forged=--forged; serve+=(--tamper-weights);;
+        --tamper-activations) forged=--forged; serve+=(--tamper-activations);;
         --compiled) serve+=(--opening $W/$name-opening.json)
                     held=(--opening $W/$name-opening.json --compilers $O/torch-loop-compilers.json);;
       esac
@@ -332,6 +339,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   loop torch-loop || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-tampered --tamper || rc=1
   [ "${PP_ONLY:-}" = honest ] || [ -z "${PP_TORCH_LOOP_REGISTERED:-}" ] || loop torch-loop-other-weights --tamper-weights || rc=1
+  [ "${PP_ONLY:-}" = honest ] || [ -z "$WIRED" ] || loop torch-loop-tampered-activations --tamper-activations || rc=1
   loop torch-loop-compiled --compiled || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
 elif [ -n "${PP_TORCH_DECODER:-}" ]; then

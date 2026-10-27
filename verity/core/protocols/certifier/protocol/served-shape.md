@@ -25,7 +25,7 @@ once a window.
   ran rows (`by_unit`).
 
 **vLLM run r20261024-141912-8eb1** (Llama-3.2-1B under vLLM's AsyncScheduler: max_num_seqs 8, max_num_batched_tokens
-2048, max_model_len 512, chunked prefill, no prefix caching, 101,626 KV blocks) served 480 requests in 6,169 steps and
+2048, max_model_len 512, chunked prefill, no prefix caching, 101,626 KV pages) served 480 requests in 6,169 steps and
 339 windows. Its records are `benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/`: the scheduler trace, and
 windows 212's and 1's seals.
 - The async replay reproduces all 6,169 steps (6,624 decisions, 466 requests arrived on an ask).
@@ -106,7 +106,7 @@ cost with it.
 - *Async heavy* is TRACE-CORPUS's heavy trace under async scheduling
   (art:e86ec6d2d6b50e1469013dea2376897af1fcc329f8661c8efc06504f8ce99d3a, from run r20261024-064542-ae66): 1,000
   requests at 300 per second, 256 sequences, max_num_batched_tokens 8192, whole prefills, prefix caching, 172,615 KV
-  blocks. Its corpus window is the whole trace. The replay reproduces its 649 steps in 651 units, every unit in class
+  pages. Its corpus window is the whole trace. The replay reproduces its 649 steps in 651 units, every unit in class
   (256, 1, 35).
 - Async scheduling adds 3–8% to a step, and the walk entries 5–15% more. At R = 256 about half the step is
   compacting the running list (341,241 of the heavy step's 647,330 ANDs).

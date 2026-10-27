@@ -7,20 +7,22 @@ step at batch 4,096 and micro-batch 1,024) is J10-R's call: its units are the 32
 ``PouwH1Tile_v6`` (`h1tile.j10r_reference`), unit u = ri (N / 32) + cj at position ``base + u``, the step's units numbered
 in serving order from ``(step + 1) << 40``. Per call:
 
-* **receipts**, every unit's: kernels' sm_90a build (``kraq``, `benchmarks/torch_gpu/j10r_sm90/units.py`'s `H1uCall`, the
-  served launch on every SM) on CUDA, or `h1tile.j10r_reference` on the host (``python``, small shapes);
+* **receipts**, every unit's: one of kernels' sm_90a builds (``kraqwxsc``, the fastest exact one, or ``kraq``;
+  `benchmarks/torch_gpu/j10r_sm90/units.py`'s `H1uCall`, the served launch on every SM) on CUDA, or
+  `h1tile.j10r_reference` on the host (``python``, small shapes);
 * **z held to the served accumulators**: a unit's z is the served call's s32 sums, not recomputed. They're committed as
   served, and ``samples`` units a call (a FIXTURE coin) go through the exact fallback (`RefCall`, j10r_ref.so, or
-  `j10r_reference` on the host), whose z must equal the served tile and whose receipt the kraq unit's;
+  `j10r_reference` on the host), whose z must equal the served tile and whose receipt the CUDA unit's;
 * **commitments**, under the step's salt key (sha512_rows' engine, the commit call's): each unit's receipt one
   hm96-sha512 row leaf (salt nonce its position), each row of z one leaf per 256 columns (nonce its row), a tree of each
   per call, and the step's PoUW root over the calls' (receipts, z) roots, all frame-v3-sha512.
 
-Credit is not computed here, and not reported as zero: the three blockers stay named in `CREDIT` (h1zy's J10-R lane
-Definitions, Credit.window reading the tile stratum, the sm_90a pin), and the stand-ins in `STANDS_IN`.
+Credit is not computed here, and not reported as zero: the two blockers stay named in `CREDIT` (h1zy's J10-R lane
+Definitions, Credit.window reading the tile stratum), and the stand-ins in `STANDS_IN`.
 
-``--subcircuit e2e_h200.percall:kraq`` reads ``PERCALL_H1U`` (the h1u build, default kernels' kraq ``h1u_kraq.so``),
-``PERCALL_REF`` (j10r_ref.so) and ``PERCALL_SAMPLES`` (2); ``e2e_h200.percall:python`` is the host twin.
+``--subcircuit e2e_h200.percall:kraqwxsc`` (or ``:kraq``) reads ``PERCALL_H1U`` (the h1u build, default
+``h1u_<backend>.so``), ``PERCALL_REF`` (j10r_ref.so) and ``PERCALL_SAMPLES`` (2); ``e2e_h200.percall:python`` is the
+host twin.
 """
 from __future__ import annotations
 
@@ -46,6 +48,8 @@ T = 32
 Z_COLUMNS = 256
 #: the step's first unit position is (step + 1) << POS_SHIFT
 POS_SHIFT = 40
+#: kernels' sm_90a h1u builds (`benchmarks/torch_gpu/j10r_sm90/job.sh`'s arms), each a CUDA backend
+BUILDS = ("kraqwxsc", "kraq")
 TEMPLATE = "PouwH1Tile_v6{R=32, C=32, K} (J10-R, whole K a unit)"
 J10R_SM90 = Path(__file__).resolve().parents[2] / "torch_gpu" / "j10r_sm90"
 
@@ -53,12 +57,11 @@ CREDIT = {
     "status": "blocked",
     "eps": None,
     "blockers": [
-        {"id": "h1zy-j10r-lanes", "what": "J10-R's lane Definitions in h1zy are pending: a drawn unit has no registered "
-                                          "lane statement for C-Flock to prove at the served K (16,384 and 65,536)"},
+        {"id": "h1zy-j10r-lanes", "what": "J10-R's lane Definitions in h1zy are pending (#4654): a drawn unit has no "
+                                          "registered lane statement for C-Flock to prove at the served K (16,384 and "
+                                          "65,536)"},
         {"id": "CMP-127 TileDrawIsCoin", "what": "PouwCheck.Credit.window does not yet read the tile stratum of the single "
                                                  "stratified draw, so no unit here is credited"},
-        {"id": "sm90a-sass-pin", "what": "the 13.0.1-sm_90a SASS-gate pin (cursor/sm90-sass-pin-1de3) is not on main: "
-                                         "kraq's sm_90a build is gated as ptxas-unpinned"},
     ],
 }
 STANDS_IN = {
@@ -98,19 +101,19 @@ class Call:
 
 
 class PerCall:
-    """The subcircuit (`units.Subcircuit`): ``backend`` "kraq" (CUDA, `H1uCall` on ``h1u``, checked by `RefCall` on ``ref``)
-    or "python" (the host, `h1tile.j10r_reference`)."""
+    """The subcircuit (`units.Subcircuit`): ``backend`` one of `BUILDS` (CUDA, `H1uCall` on ``h1u``, that build, checked by
+    `RefCall` on ``ref``) or "python" (the host, `h1tile.j10r_reference`)."""
 
     name = "pouw-percall"
 
     def __init__(self, shape: Shape, weights: Any = None, run_id: str = "e2e-h200-fixture", backend: str = "python",
                  h1u: str | None = None, ref: str | None = None, samples: int = 2) -> None:
-        if backend not in ("kraq", "python"):
-            raise ValueError(f"the backend is kraq or python, not {backend!r}")
+        if backend not in (*BUILDS, "python"):
+            raise ValueError(f"the backend is one of {', '.join(BUILDS)} or python, not {backend!r}")
         self.shape, self.run_id, self.backend, self.samples = shape, run_id, backend, samples
         _, G = _slots()
         self.E = G.E
-        self.cuda = backend == "kraq"
+        self.cuda = backend in BUILDS
         self.eng = self.E.Engine("cuda" if self.cuda else "host")
         self.libs: dict[str, Any] = {}
         if self.cuda:
@@ -171,7 +174,7 @@ class PerCall:
         rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
         c.picks = sorted({int(u) for u in rng.integers(0, units, size=min(self.samples, units))})
         if self.cuda:
-            self._kraq(c, codes, w, acc, ra, rb)
+            self._cuda(c, codes, w, acc, ra, rb)
         else:
             self._python(c, codes, w, acc, ra, rb)
         self.calls.append(c)
@@ -192,7 +195,7 @@ class PerCall:
         ri, cj = divmod(u, n // T)
         return acc[T * ri:T * ri + T, T * cj:T * cj + T]
 
-    def _kraq(self, c: Call, codes: torch.Tensor, w: torch.Tensor, acc: torch.Tensor, ra: bytes, rb: bytes) -> None:
+    def _cuda(self, c: Call, codes: torch.Tensor, w: torch.Tensor, acc: torch.Tensor, ra: bytes, rb: bytes) -> None:
         ev = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
         ev[0].record()
         kc = self.UN.H1uCall(self.h1u, codes, w, self.salt, (ra, rb), c.base)
@@ -283,15 +286,23 @@ class PerCall:
 
     def manifest(self) -> dict:
         return {"template": TEMPLATE, "issue": "CMP-126", "coverage": "f = 1: every served linear call, every unit",
-                "backend": "kraq (h1u sm_90a, the served launch) checked by j10r_ref" if self.cuda
+                "backend": f"{self.backend} (h1u sm_90a, the served launch) checked by j10r_ref" if self.cuda
                 else "h1tile.j10r_reference on the host", "libs_sha256": self.libs, "samples_a_call": self.samples,
                 "z": "the served call's s32 sums (z held to the served accumulators)", "credit": CREDIT,
                 "stands_in": STANDS_IN, "steps": self.steps}
 
 
-def kraq(shape: Shape, weights: Any = None, run_id: str = "e2e-h200-fixture") -> PerCall:
-    return PerCall(shape, weights, run_id, "kraq", os.environ.get("PERCALL_H1U", "h1u_kraq.so"),
+def _build(backend: str, shape: Shape, weights: Any, run_id: str) -> PerCall:
+    return PerCall(shape, weights, run_id, backend, os.environ.get("PERCALL_H1U", f"h1u_{backend}.so"),
                    os.environ.get("PERCALL_REF", "j10r_ref.so"), int(os.environ.get("PERCALL_SAMPLES", "2")))
+
+
+def kraqwxsc(shape: Shape, weights: Any = None, run_id: str = "e2e-h200-fixture") -> PerCall:
+    return _build("kraqwxsc", shape, weights, run_id)
+
+
+def kraq(shape: Shape, weights: Any = None, run_id: str = "e2e-h200-fixture") -> PerCall:
+    return _build("kraq", shape, weights, run_id)
 
 
 def python(shape: Shape, weights: Any = None, run_id: str = "e2e-h200-fixture") -> PerCall:
