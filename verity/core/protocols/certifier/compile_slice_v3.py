@@ -66,7 +66,7 @@ CompileSlice_v2's 83,092 and 91,785: dropping the witness checks saves more than
 and holding ``srv`` and ``cout`` to the computed rows is 543 and 572 of them. On corpus-smallkv's first seven steps
 (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12, DA 7) the computing part is 12,477,467 ANDs against
 CompileSlice_v2's 7,984,682, and is its reference on the honest advice (its served rows the fixture's), one step fewer
-and each decision flipped (run r20261025-081855-e60d, with ``srv`` and ``cout`` outputs). There a step makes W + A = 3
+and each decision flipped (with ``srv`` and ``cout`` outputs). There a step makes W + A = 3
 read-only lookups of KL = 25 units (168,368 ANDs each) and as many computes with a KC = 16-unit window (227,862 each,
 masked by admission), where CompileSlice_v2's witness named the R admitted rows, and R + W + A threshold searches
 (1,440 each).

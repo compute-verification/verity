@@ -149,7 +149,7 @@ def _pattern(d: Any, keys: Sequence[str], what: str, cut: bool = False) -> Patte
 
 @dataclass(frozen=True)
 class Server:
-    """A server block: proof units ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
+    """A server block: proof blocks ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
     watches."""
 
     name: str

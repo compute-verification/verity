@@ -42,9 +42,9 @@ def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None
         lp_of = {r["request_id"]: len(r.get("prompt_token_ids") or ()) for r in reqs}
         log_state = "capture log read (RunHeader + StepStart)"
     else:
-        # the capture log is not beside the record (archived: `capture.MOVED.txt`, F-r19-int-14): the request table is the fold's own
+        # the capture log is not beside the record (archived: `capture.MOVED.txt`): the request table is the fold's own
         # header line (index = prompt parameter, prompt_len); the rows channel and the meta-vs-rows cross-check are then unavailable and
-        # SAID so -- every row of an R19 record is stamped (meta), so attribution itself does not read the log
+        # SAID so -- every row of a current record is stamped (meta), so attribution itself does not read the log
         header, steps = None, None
         reqs = [{"request_id": str(r["request_id"]), "index": int(r["index"])} for r in sorted(hdr.requests, key=lambda r: int(r["index"]))]
         param_of = {r["request_id"]: r["index"] for r in reqs}

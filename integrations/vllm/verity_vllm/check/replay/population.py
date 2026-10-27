@@ -19,7 +19,7 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 
 
-#: [R17 dense, ruling R17-11] the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units (R17-10 (3))
+#: the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units
 ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4", "Attention_v5", "Attention_v18", "AttentionSoftcap_v2")
 
 
@@ -43,7 +43,7 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
     cap_last = int(pi_n_steps) - 1
     if ep and not ep.get("faults") and int(ep["n_exec"]) < int(ep["cap"]):
         n_exec, lag = int(ep["n_exec"]), int(ep.get("lag") or 0)
-        # [revb n-39-2] under LAG 0 the last executed step is the EOS step, not a lag step -- the text says which
+        # under LAG 0 the last executed step is the EOS step, not a lag step -- the text says which
         last_is = "the lag step" if lag > 0 else "the EOS step (LAG 0: no lag step)"
         return {"last_step": n_exec - 1, "anchor": "n_exec - 1", "cap_last_step": cap_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if lag > 0 else None),
@@ -51,8 +51,8 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
                         f"(R17-1); its last EXECUTED step {n_exec - 1} is {last_is} -- the `last` stratum is anchored there, not at the cap "
                         f"(F-r17b-39)")}
     if ep and not ep.get("faults"):
-        # [revb NIT n-39-1] an EOS stop at a_r = cap - LAG under LAG > 0 has n_exec == cap: the cap anchors, AND its last step IS a lag
-        # step (F-r17b-35's boundary) -- the flag follows the STOP (a_r < cap and LAG > 0), not n_exec < cap.
+        # an EOS stop at a_r = cap - LAG under LAG > 0 has n_exec == cap: the cap anchors, AND its last step IS a lag
+        # step -- the flag follows the STOP (a_r < cap and LAG > 0), not n_exec < cap.
         n_exec, a_r, lag = int(ep["n_exec"]), int(ep.get("a_r") if ep.get("a_r") is not None else ep["cap"]), int(ep.get("lag") or 0)
         eos_stop_lag = a_r < int(ep["cap"]) and lag > 0
         return {"last_step": cap_last, "anchor": "cap - 1", "cap_last_step": cap_last, "n_exec": n_exec,
@@ -254,13 +254,13 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             _not_ev(f"unmodelled family {fam}", "mapping", fam)
             not_ev_fam[fam] += 1
             continue
-        if not d["members"]:                                                     # [MAN-07 / R15 dense] an evaluable family whose row has no
+        if not d["members"]:                                                     # an evaluable family whose row has no
             not_ev_fam[f"{fam} (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)"] += 1
             continue                                                             # committed member of its own: the pre-bias Gemm under a BiasAdd,
                                                                                  # the pre-cap logits Gemm -- interior, no VU, counted by name
         ife = _interior_feeders_without_evaluator(pi, r)
         if ife:
-            # [MAN-06g, hopper M-0748 / exec M-0749 / rev-cb M-0751 (b)] the VU's input is an INTERIOR (uncommitted) value of a fused producer
+            # the VU's input is an INTERIOR (uncommitted) value of a fused producer
             # this replay cannot compose (the pre-bias Gemm_v2 under Qwen2.5's biased qkv_proj: BiasAdd_v1 is the producer of record, its
             # input is interior, Gemm_v2 has no evaluator): counted BY NAME as not evaluable -- the same shape as the MoE planes -- never
             # sampled as a stratum that stays 'not evaluated' (partial = FAIL closed on every biased-linear row).  The values ARE required
@@ -288,8 +288,7 @@ NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementatio
                       "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
                       "there is no not-required-because-not-executed category.")
 
-#: [COORD R17-26 (1), R17-27 (a)(b)(c); rev M-0308 (1)-(6) / reqval] the R17-1 executed prefix of a request, as the C2 population
-#: CLASSIFIES it (never as it shrinks by it).
+#: the executed prefix of a request, as the C2 population CLASSIFIES it (never as it shrinks by it).
 EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
                         "executed exactly n_exec = min(a_r + LAG, cap) request-relative steps; a request served to its cap executed cap "
                         "(a length stop: no post-EOS row even if the cap token is an EOS). RequiredValues(P, Q_module_v1) stays the "
@@ -320,19 +319,18 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     (committed rows of the request at steps >= arrival + n_exec, from the Commit's coverage) -- this function only fixes the arithmetic and
     NAMES the faults: `faults` non-empty means the class is NOT applicable to this request and the record fails by name (conditions (a)(b)(c)
     of `check.executed_prefix`, F-pm-24).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
-    [revb S-r17b-09 n1] `a_r_source` is REQUIRED and names WHERE a_r was read (the Match record file + digest, as moe's executed_prefix_facts
-    passes it); it has no default, so a caller passing the Commit's own count cannot put 'match record' on the record by omission -- an own
-    count must be labelled as such by the caller, and (a) then faults on `linked`.
-    [ONE mechanism] with `served` (the request's served token ids of record) and `eos_ids` (the Program's
-    declared EOS ids) the class is DERIVED FROM r_t: `rule` (default Continuation_v1's `executed_prefix_by_rule`) runs the recurrence over
-    the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, cap)` is demoted to a CHECK (a disagreement is a fault
-    by name); the rule's own problems (served past the first EOS, F-pm-24, over the cap) are faults.  Without `served` the arithmetic is
-    the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
+    `a_r_source` is REQUIRED and names WHERE a_r was read (the Match record file + digest, as moe's executed_prefix_facts passes it); it has
+    no default, so a caller passing the Commit's own count cannot put 'match record' on the record by omission -- an own count must be
+    labelled as such by the caller, and (a) then faults on `linked`.  [ONE mechanism] with `served` (the request's served token ids of
+    record) and `eos_ids` (the Program's declared EOS ids) the class is DERIVED FROM r_t: `rule` (default Continuation_v1's
+    `executed_prefix_by_rule`) runs the recurrence over the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, cap)`
+    is demoted to a CHECK (a disagreement is a fault by name); the rule's own problems (served past the first EOS, F-pm-24, over the cap) are
+    faults.  Without `served` the arithmetic is the mechanism and is NAMED as such in `mechanism` (never silently the same thing)."""
     a_r, lag, cap, arrive = int(a_r), int(lag), int(cap), int(arrive)
     faults: list[str] = []
     if account_missing:
-        # [r19-int-21, F-r19-int-19] FIRST, so the verdict names the cause: a Match account leg the link needs is not beside the Commit
-        # (#39: match/capture/ moved to /vault under a queued Commit, F-r19-int-14).  Still fail-closed -- (a) and (b) below fault too --
+        # FIRST, so the verdict names the cause: a Match account leg the link needs is not beside the Commit
+        # (e.g. match/capture/ moved to /vault under a queued Commit).  Still fail-closed -- (a) and (b) below fault too --
         # but an operator reads 'input missing: restore tokens.json' and not 'the Program's executed prefix is wrong'.
         faults.append(f"Match account leg(s) missing beside the Commit: {', '.join(str(x) for x in account_missing)} -- the link cannot hold on a "
                       "missing input (restore the Match record's file(s) and re-run the Commit; not a verdict on the Program) (R17-27 a/b)")
@@ -364,21 +362,21 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     if a_r < cap and eos_declared is not True:
         faults.append(f"a_r {a_r} < cap {cap} but served token a_r-1 is not asserted a declared EOS id (eos_declared={eos_declared}): "
                       "an early stop the Program's stop rule does not explain -- not-executed(R17-1) is NOT applicable, FAIL by name")
-    if linked is not True:                                                       # R17-27 (a)
+    if linked is not True:                                                       # (a)
         faults.append(f"a_r is not linked to the served output and the Match account (linked={linked}): C2 boundary linkage + tokens_equal + G6 "
                       "must agree before the committer's stop counts (R17-27 a)")
-    if served_len_commit is None or int(served_len_commit) != a_r:               # rev M-0308 (2)
+    if served_len_commit is None or int(served_len_commit) != a_r:
         faults.append(f"Commit served length {served_len_commit} != record a_r {a_r} (a Commit that stops earlier or later than the record fails by "
                       "name; it does not shrink or grow its required population)")
-    if lag_attested is not True:                                                 # R17-27 (b)
+    if lag_attested is not True:                                                 # (b)
         faults.append(f"LAG rule not attested (declared == record_attests == tokens.json required; lag_attested={lag_attested}) (R17-27 b)")
-    if int(rows_past_stop) > 0:                                                  # R17-27 (c)
+    if int(rows_past_stop) > 0:                                                  # (c)
         faults.append(f"execution past the stop: {int(rows_past_stop)} committed row(s) of the request at steps >= arrival {arrive} + n_exec {n_exec} (R17-27 c)")
     return {"request_id": str(rid), "a_r": a_r, "a_r_source": a_r_source, "lag": lag, "cap": cap, "arrive": arrive, "n_exec": int(n_exec),
             "executed_prefix": int(n_exec), "steps_not_executed": [int(n_exec), cap] if n_exec < cap else None, "eos_declared": eos_declared,
             "served_len_commit": served_len_commit, "linked": linked, "lag_attested": lag_attested, "rows_past_stop": int(rows_past_stop),
             "account_missing": [str(x) for x in (account_missing or ())],
-            # [revb M-0589 n-r3-1] a faulted request produced NO class: the mechanism is 'not classified', never 'recurrence' beside a fault
+            # a faulted request produced NO class: the mechanism is 'not classified', never 'recurrence' beside a fault
             "mechanism": (mechanism if not faults else f"not classified: {len(faults)} fault(s) -- the class is not applicable to this request"),
             "r3_one_mechanism": (by_rule is not None and not faults), "by_rule": by_rule, "faults": faults}
 
