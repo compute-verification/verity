@@ -24,8 +24,8 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span.
 
-The verifier of record is the Lean (Daniel, 26 Oct: the trusted base is the compiled Lean verifier, which parses bytes
-of untrusted provenance, so Python is never trusted): the process `remote-audit-verifier` (`p2_lean.py`,
+The verifier of record is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
+untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
 `RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
 on the registered vk root, and its answer is the session's. The Python's books (`Books`, `p2.Session`) take every
@@ -33,11 +33,11 @@ event beside it and can only veto (`Twin`): an event, a held store or an answer 
 Lean answers with an error, rejects the session `disagreement` at that window, and no event follows it. What the
 Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
 
-`python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT
-[--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side (`main`), each session with
-fresh coins, the Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built
-one, or, without `lake` on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints
-`{"listening": port}` and then each session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
+`python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT [--sessions
+N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side (`main`), each session with fresh coins, the
+Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
+on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
+session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`benchmarks/live_verifier/host.py`'s party verbs). `prove(reader, writer, prover)` is the prover's: it answers each
 message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns.
 """

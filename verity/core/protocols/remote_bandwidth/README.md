@@ -54,14 +54,14 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 <tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
-A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too (Daniel, 26 Oct: the trusted base is the
-compiled Lean verifier, which parses bytes of untrusted provenance, so Python is never trusted): the verifier's
-process holds the registration file's bytes, recomputes the registration's digest from its fields, reads the
-prover's request and every root and openings line as sent, and checks each opened unit's four blocks on the
-registered vk root (`lean/RemoteAudit/P2Session.lean`); C* is too large to read whole, and an opening is what is
-checked of it. `p2.Session` keeps the books beside it and can only veto: an event, a held store or an answer on which
-the two differ rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the coins
-the challenger releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
+A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too, since the trusted base is the compiled Lean
+verifier, which parses bytes of untrusted provenance, and Python is never trusted: the verifier's process holds the
+registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request and every
+root and openings line as sent, and checks each opened unit's four blocks on the registered vk root
+(`lean/RemoteAudit/P2Session.lean`); C* is too large to read whole, and an opening is what is checked of it.
+`p2.Session` keeps the books beside it and can only veto: an event, a held store or an answer on which the two differ
+rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the coins the challenger
+releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
 
 The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
 `recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
