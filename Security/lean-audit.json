@@ -1828,13 +1828,7 @@
    "owner": "@compute-accounting",
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e"
   },
-  "RecDeploy.HonestHalf.HonestRunAccepted": {
-   "owner": "@proofs"
-  },
-  "RecDeploy.HonestHalf.NoCollAt": {
-   "owner": "@proofs"
-  },
-  "RecDeploy.HonestWitSatisfies": {
+  "RecDeploy.HonestFixture": {
    "owner": "@proofs"
   },
   "RecDeploy.KSFixture": {
@@ -1847,9 +1841,6 @@
   "RecDeploy.PlainLeavesAdmitted": {
    "owner": "@proofs",
    "digest": "02a62fd9050f10a758a7928b9204be37274944e6df17d66a85b08f62dc6528bb"
-  },
-  "RecDeploy.VStarBuild.IrShaped": {
-   "owner": "@proofs"
   },
   "Verity.Advice.Framing.Separated": {
    "owner": "@proofs",
@@ -2234,7 +2225,7 @@
  },
  "witnesses": {
   "Flock.SecurityProofs.RecursiveKS": {
-   "honest": ["RecDeploy.HonestHalfTops.honest_half_tops"],
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   }
  },
@@ -10374,7 +10365,7 @@
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
   },
-  "RecDeploy.HonestHalfTops.honest_half_tops": {
+  "RecDeploy.HonestHalfFixture.honest_half_fixture": {
    "owner": "@proofs"
   },
   "RecDeploy.lamLin2_deployed_ge": {
