@@ -11972,7 +11972,7 @@
    ]
   },
   "Properties.Pous.WipeSigned": {
-   "digest": "bdf3dac06bc5cd332ae6076a77d3f857f18a5184ab606335817683f19e423e2c",
+   "digest": "d5420fe9e086845bce755b1f72424f1826fa781457ccd294f606a8dbdd1b750f",
    "definitions": {
     "MemoryChallenger.Properties.Challenger": "5f708c1c3a71fff23d5aea2cd0c788a3c91f738a80b480bb9b10d9d043e15fe5",
     "MemoryChallenger.Properties.Challenger.Signed": "2d1541e78ffc46d4f1c32f5b5f140d2a6ff31a4b8fcba37c1777c315b2cc4226",
@@ -11983,7 +11983,7 @@
     "MemoryChallenger.Properties.MEASURED_FILL_START_NS": "b4c262a91e14db7b20e357778d21dd11022324bc6bd81742e065f12a9b8778bf",
     "MemoryChallenger.Properties.MEASURED_FIRST_SEND_NS": "a578a66cb2737d348661fae1e12046a80c0af0e07579e851127b183a63e3f27c",
     "MemoryChallenger.Properties.MEASURED_MAX_READ_NS": "980c1c7051d80d220a667b694d9415868c74f88c3afbe3f11c88f491f65757cc",
-    "MemoryChallenger.Properties.MEASURED_SERVER": "487bcce6dd90e538ce2a5a4b3063f6f9e00540e4b3ac5855cc9fe6e3379f4ba1",
+    "MemoryChallenger.Properties.MEASURED_SERVER": "a4722fd9956aa6d1af68e3913982ea5b8e114c17c849448d95fa37b6f31e678f",
     "MemoryChallenger.Properties.MEASURED_SESSION": "4b716c186e14731ecd312b05a27f89cd65930dad8cfb42d0385b6179677aa7c6",
     "MemoryChallenger.Properties.WIPE_LABEL_TAG": "c659a85525b66e6f2552fb11e122fd990ac036c3bbb4bcbb01c7fbe2de66be98",
     "MemoryChallenger.Properties.WIPE_WRONG": "b1cb06614b24df31f9fedb54f3eb49179a167ba5e253ebdaffea19fe9b536432",
