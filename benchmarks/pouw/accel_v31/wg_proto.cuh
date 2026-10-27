@@ -82,7 +82,7 @@ template <int BN> struct Tile {
 struct alignas(128) Args {
   CUtensorMap a, b, pa, pb;   // X or A (boxes of 128 rows), W' or B (BN rows), P_A (128 rows), P_B (BN rows)
   CUtensorMap q;              // KQ > 0: -2 w_W (BN rows), whose KQ k-tiles against X's add 256 X w_W^T into O
-  CUtensorMap so, sw;         // TST: O's store map (s32, boxes of 64 rows by 32 cells) and words' (u16 rows of 128, a prefix-sum
+  CUtensorMap tso, tsw;       // TST: O's store map (s32, boxes of 64 rows by 32 cells) and words' (u16 rows of 128, a prefix-sum
                               // tile's row a row, boxes of 64 by 64), SWIZZLE_128B
   uint16_t* words;
   const int* dO;
@@ -282,8 +282,8 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
 // 8 posts its consumer warps would.
 template <int BN>
 WGD void store_tiles(const Args& p, uint32_t stg, uint32_t sbar, uint32_t* posted, int tiles_m, int tiles_n, int nseg) {
-  if (p.O) tma_prefetch(&p.so);
-  if (nseg) tma_prefetch(&p.sw);
+  if (p.O) tma_prefetch(&p.tso);
+  if (nseg) tma_prefetch(&p.tsw);
   const int items = nseg + (p.O ? 1 : 0);
   unsigned n = 0;   // the boxes each warpgroup has filled
   int prev = -1;    // the slot of the last store issued, while it's held
@@ -298,10 +298,10 @@ WGD void store_tiles(const Args& p, uint32_t stg, uint32_t sbar, uint32_t* poste
           mbar_wait(sbar + 8 * sl, (n >> 1) & 1);
           const uint32_t src = stg + sl * TSLOT;
           if (o) {
-            tma_store(&p.so, src, tn * BN + 32 * b, tm * TM + 64 * g);
+            tma_store(&p.tso, src, tn * BN + 32 * b, tm * TM + 64 * g);
           } else {
             const unsigned ps = (unsigned)tm * (p.N / TW) + (unsigned)tn * (BN / TW) + b / 2;
-            tma_store(&p.sw, src, 64 * (b % 2), (int)((ps * p.S + it) * TW) + 64 * g);
+            tma_store(&p.tsw, src, 64 * (b % 2), (int)((ps * p.S + it) * TW) + 64 * g);
           }
           bulk_commit();
           bulk_wait_read<1>();

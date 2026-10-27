@@ -2400,11 +2400,11 @@ struct Fill {
   // hashes its O rows in the GEMM's producer warpgroup (5: and a hash warpgroup, its registers r5h), digests to xd[copy]
   // flagged with the launch's epoch xep[copy]; wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM
   // too, in place of gemm_kernel<true>, with RP 5's hash warps unless r5w (V31_R5W) is 0; tst (V31_TST): RP 5's stores
-  // through shared memory with TMA, on the store maps wso[copy] (D) and wsw[copy] (words)
+  // through shared memory with TMA, on the store maps tso[copy] (D) and tsw[copy] (words)
   bool wg = false, wgw = false, r5w = false, tst = false;
   int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0;
 #ifdef V31_WG
-  CUtensorMap wso[2]{}, wsw[2]{};
+  CUtensorMap tso[2]{}, tsw[2]{};
 #endif
   u64* xd[2] = {nullptr, nullptr};
   u32* xf[2] = {nullptr, nullptr};
@@ -2596,8 +2596,8 @@ struct Fill {
     }
     if (tst)
       for (int b = 0; b < 2; b++) {
-        if (D[b]) wso[b] = tmap_st(D[b], CU_TENSOR_MAP_DATA_TYPE_INT32, 4, (u64)n, (u64)m);
-        if (r5w && words[b]) wsw[b] = tmap_st(words[b], CU_TENSOR_MAP_DATA_TYPE_UINT16, 2, wgp::TW, (u64)tiles * Wn * wgp::TW);
+        if (D[b]) tso[b] = tmap_st(D[b], CU_TENSOR_MAP_DATA_TYPE_INT32, 4, (u64)n, (u64)m);
+        if (r5w && words[b]) tsw[b] = tmap_st(words[b], CU_TENSOR_MAP_DATA_TYPE_UINT16, 2, wgp::TW, (u64)tiles * Wn * wgp::TW);
       }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
     if (wg && (kn.rp == 4 || kn.rp == 5))
@@ -2678,7 +2678,7 @@ struct Fill {
     if (o && wg) {
       wgp::Args g = wa_plain;
       g.O = D[b];
-      if (tst) g.so = wso[b];
+      if (tst) g.tso = tso[b];
       if (kn.rp == 4 || kn.rp == 5) {
         xep[b] = epoch(st);
         const FusedLeaves h = fused_leaves(b);
@@ -2695,7 +2695,7 @@ struct Fill {
       wgp::Args g = wa_words;
       g.words = words[b];
       if (o && r5w) {
-        if (tst) g.sw = wsw[b];
+        if (tst) g.tsw = tsw[b];
         const FusedLeaves h = fused_leaves(b, true);
         wg_run(st, g, &h);
       } else {
