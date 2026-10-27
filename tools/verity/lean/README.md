@@ -21,8 +21,7 @@ code and runs outside it.
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)
 python tools/verity/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
-python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first; without
-                                                  it, a build older than its sources is refused, naming the modules)
+python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first; else a stale build is refused)
 python tools/verity/lean/check.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
                                                   each record goes beside its reports, which a recorded run publishes;
                                                   refused in a tree `research run --on` shipped: use --cwd clone)
@@ -463,11 +462,11 @@ A hit is a theorem whose statement mentions every constant under `mentions`. The
   the pinned revision. It matches the constants' last components as words in each theorem's statement (comments aside),
   and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
   with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
-  that brings a proof about a watched statement fails the audit until the proof is acknowledged. It takes a few seconds.
+  that brings a proof about a watched statement fails the audit until the proof is acknowledged.
 - **Exact.** `upstream.py PKG --lean` builds `imports` and runs `Upstream.lean`. That matches the constants in the
   elaborated types of everything imported, and walks each hit's proof for its axioms. It covers packages without a
-  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump. The first build of all of ArkLib
-  takes a while; after that the pass takes about half a minute.
+  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump; after ArkLib's first build it
+  takes about half a minute.
 
 A proved hit not under its entry's `ack` is new, and the exit code is 1. Someone checks whether it discharges the
 assumption or replaces the hand proof, then records it with `--ack`: the list says what has been looked at, not what was
