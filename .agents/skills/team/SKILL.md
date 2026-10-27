@@ -130,8 +130,11 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   fails: fix it at the source, or take it to its owner that day with its numbers (minutes a wait, waits a day). Push
   back the same way, through your coordinator, on a rule that costs velocity, Daniel's included. A slow loop's owner
   fixes it ahead of other work.
-- **Make every decision yourself except keys and claims.** Access, keys, and what a guarantee says or rests on go to
-  Daniel through your coordinator, with your recommendation; spend is its lead's call. A change that crosses owners goes
+- **Make every decision yourself except claims and Daniel's own clicks.** What a guarantee says or rests on, and what
+  only an account he holds can do (the GitHub organization's admin, billing, the Nebius and Cloudflare consoles), go to
+  Daniel through your coordinator, with your recommendation. Keys and access between our own machines and accounts are
+  the lanes' call, set up with the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is
+  its lead's call. A change that crosses owners goes
   to the other owner, and the coordinator settles a disagreement. Fix what's in your way at the source when the fix is
   yours, and record each ruling you get (the friction skill).
 - **Each lead owns its areas' size.** top's hourly consolidation reading tracks `main`'s size. A PR that adds code says
