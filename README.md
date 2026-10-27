@@ -42,6 +42,25 @@ every component accepts its own case, and the commitment binds all of theirs.
 
 The wipe, the bandwidth audit over PoUS's store and NCI are not components of either yet.
 
+## The vLLM integration
+
+[`integrations/vllm`](integrations/vllm/README.md) attaches Verity to vLLM. It builds each served workload's circuit
+from vLLM's own code and the model's checkpoint, matches it against what vLLM computes, and commits the values while
+serving through an OpenAI-compatible endpoint. Verity itself knows nothing of models: the integration hands it a
+circuit, its values and their commitments ([ARCHITECTURE.md](ARCHITECTURE.md), "Integrations").
+
+Its workloads of record pin each workload's circuit, every rank's circuit digests
+([`manifests/records.json`](integrations/vllm/manifests/records.json)), and `verity-vllm neutrality WORKLOAD` rebuilds
+one and compares:
+
+| Model | Precision | Hardware |
+| --- | --- | --- |
+| GLM-5.3 | FP8 | 8 × H200, tensor-parallel; batches of 1, 8 and 32, greedy and sampled decoding |
+| DeepSeek-V4-Pro | FP8 | 8 × H200, tensor-parallel |
+| Qwen3-14B | BF16 | 2 × RTX PRO 6000, tensor-parallel |
+| Qwen3-0.6B | BF16 | RTX PRO 6000 |
+| Llama-3.2-1B | BF16 | H200 |
+
 ## Where to start
 
 - **The sampled proof system**: `verity/core/protocols/sampled_proofs`, its guarantees in
