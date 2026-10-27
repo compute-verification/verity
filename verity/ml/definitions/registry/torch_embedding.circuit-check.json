@@ -124,6 +124,10 @@
    "and": 10202,
    "type": "254191f3a56f7474d5ab63bee3e11258332c8a13940ee8082b6b6b7c0f5267d3c17e5740c13ce52cddb00c2716ebd8c119344183d662ce8f406b558580b520b1"
   },
+  "EmbeddingBackwardSegmentRun_v1{N=12,V=9,NP=4,FEATURE=0}": {
+   "and": 433,
+   "type": "2ae8d08e173279029dd85fc672d6e7ff5fe9562f56e489e48388393a6860719c3a0ccd944103fd9849dc96ea2742bc06748d0f4a02b7b11aaf257d12d3a9512e"
+  },
   "EmbeddingBackwardSegmentRun_v1{N=40,V=9,NP=6,FEATURE=1}": {
    "and": 921,
    "type": "75c8cbda1dc61cecd463225d19f74ca23b8747913808f35251f43146c15a29cacc1d8f5fbc05a0ee317c4364a3d5926820751ba9ccd1981d29c3409839459648"
@@ -131,6 +135,10 @@
   "EmbeddingBackwardSegmentStep_v1{V=2,NP=12,FEATURE=0}": {
    "and": 35,
    "type": "6455215991c85504667f66cadadb5b8b0e57c5852645e6a524502ca771789a4447501802b0833e7679c7b423694db3224986cf7ac84d9a4df852ea8416b16877"
+  },
+  "EmbeddingBackwardSegmentStep_v1{V=9,NP=4,FEATURE=0}": {
+   "and": 37,
+   "type": "3cf9a6f4952a60a9c7de835eca90722486ebfadc24783128c77af98cff7fddf07cf7f48d309db3f8e09d97449731aefd5ae3ff1823d64bd4b4e3459fb41cc00c"
   },
   "EmbeddingBackwardSegmentStep_v1{V=9,NP=6,FEATURE=1}": {
    "and": 24,
@@ -159,6 +167,10 @@
   "EmbeddingBackwardSort_v1{M=40,V=9,H=3}": {
    "and": 20628,
    "type": "cb681c98b7964b6f8cc686f3e9ebcdde3bbfdb50c6dc703adb6d18702858fad58706b1f881bcb7afb6b6d6f8e02a7e0307454223b1bbeb737d8ab10dbf4252e7"
+  },
+  "EmbeddingBackwardSortedRun_v1{N=12,FEATURE=0}": {
+   "and": 21876,
+   "type": "b73cba7756788eb1a70ee2ecc55e1de7725d6fb421a44b5eafa060469cd0074d95cb976b7cbccd55b1b1843cb7a6ceaeabd82c055408320254a41c4843f3066f"
   },
   "EmbeddingBackwardSortedStep_v1{FEATURE=0}": {
    "and": 1823,
