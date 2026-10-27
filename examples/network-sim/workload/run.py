@@ -7,7 +7,7 @@
     python -m workload.run --out /tmp/netsim-run --workload served --devices 1 --frame-bytes 1024
                                                                         # verity_vllm's serving Program, a stage a block
 
-(run from `benchmarks/network_sim/`, or with it on `PYTHONPATH`). The prover's side commits the placement (`statement`),
+(run from `examples/network-sim/`, or with it on `PYTHONPATH`). The prover's side commits the placement (`statement`),
 the units serve and commit their values, and the check reads what `run` writes to `--out`: `public.json` (the statement:
 the Program's digest, the hardware, B, the placement's and units' roots, the occupancy profile), `witness.json` (the
 placement's and units' rows and salts), `records.json` (each certified link direction's frames) and `n3.json` (the

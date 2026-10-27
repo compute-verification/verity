@@ -4,7 +4,7 @@ then the certifier's audit, N3 (`lab.check`), N2's served verdict on each link-w
 
     python -m workload.lab_run run --out DIR [--layers 4] [--tamper b1:flip-bit --expect refused] [--local]
 
-Run it from `benchmarks/network_sim/`, or with it on `PYTHONPATH`, in a Python with torch. The workload is placed on the
+Run it from `examples/network-sim/`, or with it on `PYTHONPATH`, in a Python with torch. The workload is placed on the
 lab's declaration as `mockdc.lab` builds it, at the certifiers' cadence (`hardware`): its blocks are the units, their
 GPUs compute and the outside host is the client. It needs mockdc's lab up in that shape (`mockdc.py up`; by default mockdc's own,
 `--blocks 4 --leaves 2 --spines 1`) and idle: a lab whose namespaces run any process is refused, since `mockdc.py down`,
