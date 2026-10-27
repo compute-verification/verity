@@ -133,7 +133,7 @@ from types import SimpleNamespace
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "one_stage"))
+sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "one_stage"))
 
 from records_audit import PORTS, REFUSED, free_ports  # noqa: E402, F401
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402

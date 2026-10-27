@@ -19,7 +19,7 @@ from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-for _p in (str(HERE), str(HERE.parent / "network_traces")):
+for _p in (str(HERE), str(HERE.parents[1] / "benchmarks" / "network_traces")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

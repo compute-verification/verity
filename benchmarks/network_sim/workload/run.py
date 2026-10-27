@@ -32,7 +32,7 @@ from .block import TAMPERS, Context, MemoryNet
 from .hardware import OUTSIDE, Hardware
 
 HERE = Path(__file__).resolve().parent
-DATACENTER = str(HERE.parents[1] / "datacenter")
+DATACENTER = str(HERE.parents[2] / "benchmarks" / "datacenter")
 
 
 def declaration(spec: str):
