@@ -10,8 +10,7 @@ gate-signed request table under the window-open root. Round `s`'s request table 
 tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
 (`verity/core/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
-`rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`. Its
-interface is note:compute-accounting/20261024T0212Z-draft-liveunit-interface.
+`rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`.
 
 * `liveOk`: **the unit on words** (`circuit.live.live_ok`) at round `s`. `m ≤ T`; the entries (prompt length ≠ 0) are a
   prefix, each at its own index; every slot below `m` names an entry (`1 ≤ slot ≤ N`, `N` the entries' count), and every

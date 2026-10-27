@@ -6,20 +6,19 @@ import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
 
 /-!
-# The machine 𝓜: an honest semantics, the rate bound, and the coverage premise's refusal
+# The machine 𝓜: an honest semantics, the rate bound, and the card premise's refutations
 
 * `s8Open`: a semantics with one MMA opcode, `s8` by `s8` into 32-bit accumulators, computing `C + Σ a·b` exactly
   (`intDot`), the deployed kernels' `wgmma`. It meets (P1) on every card (`s8Open_exact`) and (P2)
   (`s8Open_productForm`), so the headline's hypotheses on the semantics are met.
 * `units_le_of_fits`: a run meeting the model uses each resource at most at its rate over its seconds, and so at most
   the device model's limits summed over a window of ticks (`fits_toDevice`, at `Card.toDevice`).
-* `cardWithinAccel_fails` (the nontrivial lemma): the coverage premise refuses a card that changes its memory in no
-  time. Every instruction uses part of an issue slot (`use_issue_pos`), so a run of zero seconds runs none and leaves
-  the memory as it was (`run_mem_of_issue_zero`).
-* `cardWithinAccel_fails_rate` (the nontrivial lemma at a rate): it refuses a card that, in `T` seconds, changes more
-  words of shared memory, L2 or device memory than the store's resource carries in `T` seconds. Each word an
-  instruction writes there is a unit of that resource (`outTo_le_use`), so a run changes at most its units
-  (`changed_run`).
+* `cardWithinAccel_fails`: the card premise is false for a card that changes its memory in no time. Every instruction
+  uses part of an issue slot (`use_issue_pos`), so a run of zero seconds runs none and leaves the memory as it was
+  (`run_mem_of_issue_zero`).
+* `cardWithinAccel_fails_rate`: it is false for a card that, in `T` seconds, changes more words of shared memory, L2 or
+  device memory than the store's resource carries in `T` seconds. Each word an instruction writes there is a unit of
+  that resource (`outTo_le_use`), so a run changes at most its units (`changed_run`).
 -/
 
 open scoped NNRat
@@ -309,7 +308,7 @@ theorem changed_run {Θ : Type} [DecidableEq Θ] (t : Store) (r : Res) (h : port
 
 end Machine
 
-/-- **The nontrivial lemma: the coverage premise refuses a card that computes in no time.** If `can` says the card
+/-- **The card premise is false for a card that computes in no time.** If `can` says the card
 takes some memory `M` in `D` to `f M ≠ M` in zero seconds, `CardWithinAccel c can` is false: a run of zero seconds
 uses no issue slot (G2), so it runs no instruction and leaves `M` as it was. -/
 theorem cardWithinAccel_fails (c : Card) (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop)
@@ -322,7 +321,7 @@ theorem cardWithinAccel_fails (c : Card) (can : (c.Mem → c.Mem) → ℚ≥0 �
     le_antisymm ((Machine.units_le_of_fits P _ sched 0 hfits .issue).trans (by simp)) zero_le
   exact hf (hmem.symm.trans (Machine.run_mem_of_issue_zero P _ sched h0))
 
-/-- **The nontrivial lemma at a rate: the coverage premise refuses a card that writes faster than its table.** If
+/-- **The card premise is false for a card that writes faster than its table.** If
 `can` says the card takes some memory `M` in `D` to an `f M` differing from `M` in more words of shared memory, L2 or
 device memory than the store's resource carries in `T` seconds (`ρ_r T`, `port t r = 1`), `CardWithinAccel c can` is
 false: a run changes at most its units of `r` in `t` (`Machine.changed_run`), and a run of `T` seconds uses at most

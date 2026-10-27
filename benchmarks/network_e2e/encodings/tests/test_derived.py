@@ -419,7 +419,7 @@ def _v2(s):
 
 
 def test_prefills_by_size_take_the_budget_in_arrival_order(tmp_path) -> None:
-    """Model Runner V2's batch on the GPU (TRACE-CORPUS's smoke, r20261024-045656-4c66): decodes first, then the prefill
+    """Model Runner V2's batch on the GPU (the trace corpus's): decodes first, then the prefill
     rows by size, so a step's new requests leave arrival order. vLLM admits them in arrival order, the certified ingress
     order, so the walk takes them so, only the last arrival is cut short, and their I1 numbers follow from their n, at no
     cost. A trace whose new requests of a step arrived the other way round is refused."""

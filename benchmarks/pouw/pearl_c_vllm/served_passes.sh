@@ -23,7 +23,7 @@ case "$MODE" in
     PASSES=${PASSES_ROOT:-$WORK/pouw/served-passes}/${RESEARCH_RUN_ID:?}
     mkdir -p "$PASSES"
     "$VENV/bin/python" -m research keep "$PASSES" --owner @compute-accounting --priority normal \
-      --expires "$(date -u -d "+${KEEP_DAYS:-14} days" +%F)" --why "every retained pass of served run $RESEARCH_RUN_ID (CMP-70)" \
+      --expires "$(date -u -d "+${KEEP_DAYS:-14} days" +%F)" --why "every retained pass of served run $RESEARCH_RUN_ID" \
       > "$OUT/keep.json"
     "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py serve --passes "$PASSES" --out "$OUT/served.json" "$@" ;;
   verify)

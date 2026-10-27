@@ -12,8 +12,8 @@ its docstring. This module is W1 as a definition: a machine, its instructions, t
 `w1 dv P salt : CostModel Q R S`, the cost of a program as W1 charges it. It states no assumption and changes no
 statement; a restatement of TT_OUT over it is the proofs lane's.
 
-**What W1 is** (the problem statement §3.1, `note:20261004T2202Z-report-relay-docs-pouw-problem-statement`; decided
-28 Sep, amended by H5):
+**What W1 is** (the problem statement §3.1,
+amended by H5):
 - an instruction is priced by its class at the measured rate, per 32-bit lane result, and a tensor-core instruction by
   its whole fragment, however few of its outputs a program uses (`w1-complete/sm120`);
 - oblivious whole-word moves are free, at any memory level;
@@ -103,7 +103,7 @@ element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm
 - program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
   data (every operand is an address).
 
-**The text bound** (`Prog.bounded`; W1RT-1's fix F2, `note:compute-accounting/20261024T1730Z-report-w1-redteam`). At
+**The text bound** (`Prog.bounded`; W1RT-1's fix F2). At
 every layout a program has at most `2^64` code nodes (`Code.size`) and `2^64` constants. W1 charges only the path a run
 takes, so with unbounded text a tree of `ite`s on the salt's 256 bits holds one leaf per salt. That is a table of the
 reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions (W1RT-1). Under the bound
@@ -631,7 +631,7 @@ the run's device-memory read as the bandwidth account counts it, in 32-bit words
 def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : ℕ :=
   (final dv salt pr U act σ).fetched.dedup.length
 
-/-- **W1 priced, with no refund** (Daniel, item 9): a run's compute, the instructions' prices (`final`'s `cost`), plus
+/-- **W1 priced, with no refund**: a run's compute, the instructions' prices (`final`'s `cost`), plus
 `fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
 γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
 noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where

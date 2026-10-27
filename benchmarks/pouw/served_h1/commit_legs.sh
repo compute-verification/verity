@@ -48,7 +48,7 @@ for leg in ${LEGS:-v1}; do
                                  --period "${PERIOD:-commit-$(date -u +%Y%m%dT%H%M%SZ)-$leg}" --circuits "${CIRCUITS:?}") ;; esac
   echo "[legs] leg $leg start $(date -u +%FT%TZ)"
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-commit-legs} gpu-lease 1 --wait --max-min 120 --mem-gb 96 -- \
-    env PYTHONPATH="$PWD/../..:$PWD" HF_HOME=/workspace/hf "${PY:-/workspace/jobs/venv312/bin/python}" -m tests.protocols.pouw_h1_gpu \
+    env PYTHONPATH="$PWD/../..:$PWD/../../tools/config:$PWD" HF_HOME=/workspace/hf "${PY:-/workspace/jobs/venv312/bin/python}" -m tests.protocols.pouw_h1_gpu \
     --workload fill --served --commit --negatives --receipts "$S/h1u_hbc.so" "${extra[@]}" --credit \
     --live-dump "$OUT/$leg/live" --declare 32,3,32,4 --out "$OUT/$leg" --at 2026-10-21T00:00:00Z --by "${BY:-commit-legs}" \
     > "$OUT/$leg/stdout.log" 2> "$OUT/$leg/stderr.log"

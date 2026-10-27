@@ -3,13 +3,13 @@ import Definitions.Accounting.Sheets.H200
 import Mathlib.Tactic.NormNum
 
 /-!
-# The H200's tensor rates against its data sheet (RT-MODEL M9, M14)
+# The H200's tensor rates against its data sheet
 
 The H200's table, held to the sheet's dense peaks (`Accounting.TS.Sheets.H200`, A3), format by format.
 
 * `tensor_sheet`: the table's MACs a second in each format (`ρ tensor` over the format's `weight`) are at least the
   sheet's figure a second at the clock the sheet quotes it at (1830 MHz for s8, FP8, f16, bf16 and tf32, 1980 MHz for
-  f64). So no format's rate in the table is under the sheet's (θ at or above the sheet, M14).
+  f64). So no format's rate in the table is under the sheet's (θ at or above the sheet).
 * `tensor_sheet_clock`: at the table's clock they are the sheet's per-SM-clock peaks times its SMs, both ways.
 -/
 

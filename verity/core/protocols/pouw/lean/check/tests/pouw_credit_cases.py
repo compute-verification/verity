@@ -176,7 +176,7 @@ def _draw_root(d: dict) -> str:
 #: (``a-call-off``), one missing a call (``a-call-missing``, the Commit's too), one round's ids table one row other
 #: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice;
 #: on a MoE window (`expert_layout`), a Commit record lacking a round's A table of the experts' downs
-#: (``commit-missing-expert``, VLLM-80: their K is the experts' alone, so its calls are expert calls only)
+#: (``commit-missing-expert``: their K is the experts' alone, so its calls are expert calls only)
 AROW_NAMES = ["a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off", "ids-missing", "commit-missing",
               "commit-twice", "commit-missing-expert"]
 #: the `AROW_NAMES` that need a round's A table of two calls or more
@@ -1639,7 +1639,7 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
 #: each way a window's registered weights are not the ones its period's open signed and its open root binds
 WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-model", "weights-no-period", "weights-requests",
                         "weights-no-requests", "weights-leaves"]
-#: each way a window does not serve its period's fixed length (ASK-39): its period's open commits none (absent or null),
+#: each way a window does not serve its period's fixed length: its period's open commits none (absent or null),
 #: an EOS-keyed stop mode or a malformed one; a request ran past its public max_tokens (``length-past``: the open's
 #: max_tokens of a request served two rounds or more is one less) or stopped before it (``length-early``: one more);
 #: and more requests than the window's slots

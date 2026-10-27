@@ -4,7 +4,7 @@ with `lake` on first use) and returns its `Verdict`, the reasons the Python's wo
 stays the reference: `tests/test_verdict.py` holds this to it, and `benchmarks/pous/memory_challenger/live.py`'s `judge`
 runs both on every session, records both, and rejects a session they disagree on.
 
-The record goes as `to_json` writes its parts.  `expected` is read only at the blocks the rounds name, so C's whole table
+The record goes as `to_json` writes its parts.  `expected` is read only at the labels the rounds name, so C's whole table
 never crosses; `schemes` goes by id, each one the port verifies (`MemoryChallenger.KNOWN_SCHEMES`: `memory_challenger.LMS`
 and the test signers' ids).  Where the Lean refuses the record (a scheme id it doesn't verify, a field `to_json` can't
 have written, such as a negative integer), this raises `ValueError`: it fails closed, never to the Python."""
@@ -27,7 +27,7 @@ EXE = "memory-challenger-verdict"
 def record(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening],
            expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
            schemes: Mapping[str, Any] = mc.SCHEMES) -> dict[str, Any]:
-    """The Lean verdict's input: `verdict`'s arguments as JSON, `expected` at the in-range blocks the rounds name."""
+    """The Lean verdict's input: `verdict`'s arguments as JSON, `expected` at the in-range labels the rounds name."""
     digests = {}
     for r in signed.rounds:
         if 0 <= r.index < commitment.blocks and str(r.index) not in digests:

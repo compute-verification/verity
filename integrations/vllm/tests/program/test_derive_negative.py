@@ -29,7 +29,7 @@ torch = pytest.importorskip("torch")
 
 from verity.ml.circuits import Program, bind, program_digest  # noqa: E402
 from verity_vllm.correspondence.capture_identities import LazyTranscript, Segments, check_call  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluation import evaluate_region  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402

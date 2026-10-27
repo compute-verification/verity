@@ -10,7 +10,7 @@ import Definitions.Pouw.PearlC.W1
 `TTOut` (`Definitions.Pouw.Assumptions.PearlC.TTOut`) is stated over any `CostModel`, and which one it is believed at (W1 at
 the device's measured prices) is prose in its docstring. Here that cost model is a term: TT_OUT's game with
 `CM := W1.w1Priced dv salt`, the W1 machine on the device `dv` with the salt's bytes `salt`, priced with no refund
-(Daniel, item 9). A strategy's cost is W1's cost, so an attack on these assumptions is a W1 program.
+(by ruling). A strategy's cost is W1's cost, so an attack on these assumptions is a W1 program.
 
 **What W1 charges** (`W1.w1Priced`): every instruction a program executes at its class price (a tensor-core instruction
 by its whole fragment, a SHA-512 compression at `sha`), the taint rule's INT32 per word, and `fetch` per distinct
@@ -21,7 +21,7 @@ and `CM.Queries` holds (`Proofs.Pouw.PearlC.TTOutW1.w1Priced_queries`); `TTOutW1
 **What is credited** is the protocol's credit, unchanged: `creditDev` (rev1: without the first promotion of each word)
 minus the replayed debit. The weight side (B̃'s forming, B̃·F_A, P_B) depends on the salt, so a program runs it after
 the salt; W1 charges it and the credit counts none of it, nor `qa·m·k` (in `W_ref` only), the SHA-512 work or any fetch.
-The bound on guessing whole output words (lean's red team of CMP-77, r20261024-105022-6a76) rests on exactly that.
+The bound on guessing whole output words (lean's red team of the TT_OUT forms) rests on exactly that.
 
 **Why `w1Priced`.** It charges at least what `w1` (with the operand refund) charges, so TT_OUT at `w1` implies it here:
 it is the weaker assumption. It is the cost model the compute audit reads (`GγPerCoin (w1Priced dv salt)`), and it does

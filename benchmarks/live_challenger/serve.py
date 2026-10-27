@@ -20,16 +20,18 @@ log signed when the session ends.
   its window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
   `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
   `releases.jsonl` to `--out` (`remote.open_session`), makes `hellos.jsonl` (empty), and only then listens on
-  127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it then opens
-  `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for its
-  verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the first client whose hello it accepts
-  (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
+  127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  A window's session (`--root`)
+  opens no tunnel: PORT is one of its peer's certifier coin link, which carries it to the peer (`auditor.py`, the coins'
+  path), and `--peer` with `--root` is refused (`CoinsConfidential`).  Only a development session (`run.sh`) takes
+  `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
+  `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
+  serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
   "reason"}`, fsynced) and the next connection is taken, each hello read within 10 s; once one is accepted it stops
   listening, so every later connection is refused.  However the session ends, a tunnel that ends first included, it
   signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor host
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
-  `.../salt`) opens only after that root (RT4-INT-24), and any other is refused, which ends the session.
+  `.../salt`) opens only after that root, and any other is refused, which ends the session.
 - **Signing.**  The key's leaf state is opened only for each signature (the session id's start with the record's, then
   the close's), under `--sign-lock` when given (the auditor host's `sign.lock`, which every signer of the key takes), so
   the host's other sessions and the ledger sign between them.
@@ -184,6 +186,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.root is not None and not re.fullmatch(r"[0-9a-f]{128}", args.root):
         print("--root: the window's Commit root, 128 lowercase hex digits", file=sys.stderr)
+        return 2
+    if args.root is not None and args.peer is not None:
+        print("the challenger refused to start: a window's session (--root) reaches its peer through the peer's "
+              "certifier coin link, never its own ssh -R (--peer; CoinsConfidential)", file=sys.stderr)
         return 2
     try:
         secret = read_secret(args.secret_file)

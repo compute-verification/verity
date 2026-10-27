@@ -9,7 +9,7 @@ import Proofs.Core.Accel.Model
 * `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open
   parameter: an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's
   verdict, with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`.
-  The sampling blocks' work fits the period from the clocks (CMP-154): `RootAfterCoin` puts block `b`'s work inside
+  The sampling blocks' work fits the period from the clocks: `RootAfterCoin` puts block `b`'s work inside
   its window, from its coins at `t b` to its root's arrival, G2 bounds its use by `ρ_r` times that window, and the
   challenger's order (block `b + 1`'s coins after block `b`'s roots) makes the windows disjoint inside `[0, T]`
   (`sum_windows_le_T`). No count of sampling blocks or of selected ones is read.
@@ -18,10 +18,10 @@ import Proofs.Core.Accel.Model
   `Proofs.Pouw.Dither.WorkSound`. None reads a premise beyond `WorkSound`'s and the statement's.
 * `h200_semantics`, `sm120_semantics`: the exact `s8` semantics (`Verity.Accel.s8Open`) meets (P1) and (P2) on each
   card, so `WorkSoundAt`'s hypotheses on `x` are not empty.
-* `h200_onCard`, `sm120_onCard` (rule I): at that semantics, on any period's devices, `cardAccel` (programs as runs
-  within the devices' rates, no oracle calls, its call step at a public compression) is the devices under the identity
-  match (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the hypotheses on `G` are not empty either.
-  `cardAccel` is a witness, not the canonical card accelerator RT-LEAN L31 asks for: its programs are any runs within
+* `h200_onCard`, `sm120_onCard`: at that semantics, on any period's devices, `cardAccel` (programs as runs within the
+  devices' rates, no oracle calls, its call step at a public compression) is the devices under the identity match
+  (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the hypotheses on `G` are not empty either. `cardAccel` is
+  a witness, not the canonical card accelerator, whose programs are exactly the card's: its programs are any runs within
   the rates, so `SAKMatmul` is false at it.
 -/
 
@@ -198,7 +198,7 @@ noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D :
   P2 := Verity.Assumptions.AccelProductForm x
 
 open Classical in
-/-- **`OnCard` is met, with G1, G2 and G3** (rule I): at positive card rates, positive other rates and their memory,
+/-- **`OnCard` is met, with G1, G2 and G3**: at positive card rates, positive other rates and their memory,
 `cardAccel` is the period's devices at `x` under the identity match, meeting (G1), (G2) and (G3). -/
 theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits)
     (P : RoundProto) (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r)
@@ -251,13 +251,13 @@ theorem h200_rates_pos : ∀ r, 0 < Verity.Accel.H200.card.ρ r := by
 theorem sm120_rates_pos : ∀ r, 0 < Verity.Accel.Sm120.card.ρ r := by
   intro r; cases r <;> norm_num [Verity.Accel.Sm120.card, Verity.Accel.Sm120.clock]
 
-/-- **An oracle call at a public compression** (rule I): with its call step at the units of one of `pb`'s SHA-512
+/-- **An oracle call at a public compression**: with its call step at the units of one of `pb`'s SHA-512
 schedules, `cardAccel` meets `CallsAtPub` under the identity match. -/
 theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D : Devices c) (pb : PubBest c)
     {u : ResUnits} (hu : u ∈ pb.sha) : CallsAtPub (cardAccel c x D u) (Equiv.refl _) pb :=
   ⟨u, hu, fun _ => rfl, fun _ => rfl⟩
 
-/-- **`WorkSoundH200`'s hypotheses on the card are met** (rule I): at the exact `s8` semantics (P1, P2), on any
+/-- **`WorkSoundH200`'s hypotheses on the card are met**: at the exact `s8` semantics (P1, P2), on any
 period's devices with positive other rates, some accelerator is the devices under some match, meets (G1), (G2) and
 (G3), and has its oracle calls at a public compression. -/
 theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
@@ -269,7 +269,7 @@ theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
     cardAccel_onCard _ _ D (shaUnits 3400 152 (3608 / 32)) P L h200_rates_pos hoth hmem
   exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub Verity.Accel.s8Open D pubBestH200 (List.Mem.head _)⟩
 
-/-- **`WorkSoundSm120`'s hypotheses on the card are met** (rule I), as on the H200. -/
+/-- **`WorkSoundSm120`'s hypotheses on the card are met**, as on the H200. -/
 theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto)
     (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
@@ -279,7 +279,7 @@ theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto)
     cardAccel_onCard _ _ D (shaUnits 3415 0 (3415 / 32)) P L sm120_rates_pos hoth hmem
   exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub Verity.Accel.s8Open D pubBestSm120 (List.Mem.head _)⟩
 
-/-- **The hosts are counted at devices whose other devices are the row's hosts** (rule I): with `h200_onCard` and
+/-- **The hosts are counted at devices whose other devices are the row's hosts**: with `h200_onCard` and
 `sm120_onCard` at such devices, `OnCard` and `HostsCounted` hold together. -/
 theorem hostsCounted_others {c : Verity.Accel.Card} (h : HostRow) (n : ℕ) (hn : 0 < n) (mem : ℝ) :
     HostsCounted (⟨n, hn, h.others n mem⟩ : Devices c) h :=

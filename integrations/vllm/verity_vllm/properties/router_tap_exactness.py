@@ -1,5 +1,5 @@
 """Router-tap exactness: the tapped `topk_softmax` the router-softmax source launches computes exactly the installed op's outputs, and
-each row's words are the ordered router's committed values in the IR.
+each row's words are the ordered router's committed values in the circuit.
 
 `acquire.sources.router_softmax_source` launches, in place of vLLM's `_moe_C.topk_softmax`, the tapped op
 `verity_router_tap.topk_softmax_tap` (`ops/pod_router_tap.sh`).  One GPU process checks, per configuration (`CONFIGS`: OLMoE's E = 64
@@ -10,14 +10,14 @@ one block):
   (a) the outputs (weights, ids, token_expert_indices) are bit-identical to the installed op's and to the same build with the tap off;
   (b) every word of every row is written: two tapped launches over tap buffers filled with `FILLS` agree on every word;
   (c) every word equals the ordered router's committed value (`MoeRouterTopKOrdered_v1` / `MoeRouterTopKOrderedNorm_v1`, the gate
-      `query.router_softmax.slots` names for it) in the IR's own evaluation (`ir_row`: the gate's value in the
-      `verity.ml.circuits.evaluate.evaluate_call` transcript), and the IR's outputs equal the op's, on every row;
+      `query.router_softmax.slots` names for it) in the circuit's own evaluation (`ir_row`: the gate's value in the
+      `verity.ml.circuits.evaluation.evaluate_call` trace), and the circuit's outputs equal the op's, on every row;
   (d) the source (`router_softmax_source`) on vLLM's routing path -- `fused_topk` in a module the source knows as an MoE layer --
       leaves the outputs bit-identical, acquires nothing outside a committed step, acquires one `moe/L<k>/router_softmax` per launch
       inside one, equal to the op's words, refuses a launch of another geometry, and restores the patched op;
   (e) live: vLLM engines (eager, batch invariant) serving tiny random-weight models of both served router shapes -- OLMoE's (E = 64,
       top-8) and Qwen3-MoE's (E = 128, top-8, renormalized), vLLM's own MoE layers -- generating with the source installed commit every
-      MoE layer's softmax at every step; each committed row equals the IR's words over the logits the router received, and the generated
+      MoE layer's softmax at every step; each committed row equals the circuit's words over the logits the router received, and the generated
       tokens equal the same engine's without the source.
 
 This module is the property and its record `router_tap_exactness.json` (environment, the build's sha256, per-configuration results,
@@ -42,15 +42,15 @@ FILLS = (0x7FA00001, 0x7FA00002)
 RANDOM, QUICK_RANDOM = 1000, 40
 
 
-# ------------------------------------------------------------------------------------------------------------------------ the IR
+# ------------------------------------------------------------------------------------------------------------------------ the circuit
 _CALLS: dict[tuple, Any] = {}
 
 
 def ir_row(E: int, TOPK: int, VPT: int, renormalize: bool, logits: list[int]) -> tuple[list[int], list[int], list[int]]:
-    """(tap words, weights, ids) of one row in the IR: evaluate the ordered router as a standalone Call and read its committed interior
-    gates (`query.router_softmax.slots`) from the transcript."""
+    """(tap words, weights, ids) of one row in the circuit: evaluate the ordered router as a standalone Call and read its committed interior
+    gates (`query.router_softmax.slots`) from the trace."""
     from verity.ml.circuits.evaluation.reference import standalone_call
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
 
     key = (E, TOPK, VPT, renormalize)
     if key not in _CALLS:

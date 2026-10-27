@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds libpouw_harness.so for sm_120a (no GPU needed): the harness's device side, cuBLASLt, the CUTLASS baselines, and the
-# plain NVFP4 and FP8 GEMMs of ../../nvfp4_sm120/nvf4_plain.cu (#543, #570; no CUTLASS).
+# plain NVFP4 and FP8 GEMMs of ../../nvfp4_sm120/nvf4_plain.cu (no CUTLASS).
 #
 #   export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh [OUT_DIR])"
 #       env: POUW_HARNESS_BUILD (the build cache, default native/build), CUDA_HOME, CUTLASS_DIR, JOBS, PH_NO_CUTLASS=1,

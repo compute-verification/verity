@@ -62,7 +62,7 @@ def parse_artifacts(hg: str, tp: str, nc: str, tp3: str = "") -> dict:
         raise ValueError(f"native collector line malformed: {nc!r}")
     arts = {"hidden_gpu_tree.so": {"sha256": hg_f[1], "path": hg_f[2], "arch": hg_f[3] if len(hg_f) > 3 else None},
             "verity_fa2_matReq.so": {"sha256": tp_f[1], "path": tp_f[2], **dict(kv.split("=", 1) for kv in tp_f[3:] if "=" in kv)},
-            # [R17 rel M-0803] source_digest = the key of the JIT dir the .so was built in (native_jit); bindings = the pybind names checked
+            # source_digest = the key of the JIT dir the .so was built in (native_jit); bindings = the pybind names checked
             "verity_native_collect.so": {"sha256": nc_f[0], "path": nc_f[1], **dict(kv.split("=", 1) for kv in nc_f[2:] if "=" in kv)}}
     if tp3:
         f3 = tp3.split()
@@ -131,7 +131,7 @@ def check_installed(tree: str, tag: str, commit: str, pod_path: str = POD_RELEAS
             problems.append(f"{label} {p}: unreadable ({e})")
             continue
         if not release_names_tree(rel, t):
-            problems.append(f"{label} {p}: tree {rel.get('tree')!r} != installed tree {t} (M-0477 class)")
+            problems.append(f"{label} {p}: tree {rel.get('tree')!r} != installed tree {t} (the record names another tree)")
         if rel.get("tag") != tag:
             problems.append(f"{label} {p}: tag {rel.get('tag')!r} != {tag}")
         rc = str(rel.get("commit") or "")
@@ -168,9 +168,9 @@ def release_line(tree: str, export_path: str | None = None, pod_path: str = POD_
 
 
 def _env_identity() -> tuple[dict, dict, str]:
-    import torch  # noqa: PLC0415  (pod only)
+    import torch  # pod only
     try:
-        import vllm  # noqa: PLC0415
+        import vllm
         vllm_v = vllm.__version__
     except Exception as e:  # noqa: BLE001
         vllm_v = f"unavailable: {e}"

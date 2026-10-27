@@ -12,12 +12,12 @@ The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMm
 block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one function, one signature.
 
 Both registered Definitions (`verity.ml.definitions.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
-`_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the blockwise CUTLASS kernel's
+`_QUANT_CONF` / `_BLOCK_CONF` conformance notes).  The GEMM Definition is the blockwise CUTLASS kernel's
 arithmetic (k32 steps, `s = FMUL(sfa, sfb)`, FFMA promotion per K-tile in ascending order) over the record target's e4m3 step
 (`frontend.targets.scaled_mm_fp8_block_spec`: the v1 forms on hopper, the version 3 forms over `GemmTarget.fp8_block_dot` elsewhere).
 A record whose GEMM target has no blockwise step is refused here fail-closed -- another GPU runs another kernel (Marlin /
 torch._scaled_mm on Ada, DeepGEMM, its own blockwise CUTLASS kernel), which has no registered Definition; nothing is approximated by a
-looser comparison (COORD 6).
+looser comparison.
 
 Everything the kernels take as a knob that changes VALUES is pinned (`group_size == G`, `eps == 1e-10`, `fp8_min/max == -+448`,
 no bias), except `scale_ue8m0`, which selects the quant Definition (`Fp8GroupQuantUe8m0_v1` under power-of-two scales, the
@@ -106,7 +106,7 @@ class PerTokenGroupFp8Quant:
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
         if bool(ue8m0):
-            from verity.ml.definitions.registry import deepgemm  # noqa: PLC0415  (loaded only on the ue8m0 branch)
+            from verity.ml.definitions.registry import deepgemm  # loaded only on the ue8m0 branch
             spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
         else:
             spec = bind(fp8.Fp8GroupQuant, K=K, G=G)

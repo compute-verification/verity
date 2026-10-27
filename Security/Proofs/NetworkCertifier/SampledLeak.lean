@@ -142,7 +142,7 @@ section Deploy
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 /-- **The leak bound under a sampled audit**, at any deployment `D` of the sampled verifier where `KS` holds, given
-`SampledAuditAccepted` (PRF-144). Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
+`SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
 lists every trace within Flock's radius, and for each statement and values `ρ` inputs besides the ingress `As s ρ`, at
 most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible faulty set's committed
 bits (`faultyBits`). On the statements in scope:

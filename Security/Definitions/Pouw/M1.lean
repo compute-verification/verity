@@ -107,7 +107,7 @@ def rowShare (work mu rows : ℕ) : ℕ := (work * mu + rows - 1) / rows
   (`20·k·n`) per (epoch, weight);
 * `576·m`: the int8 limb split of `X1` (entries up to about `2^23`), and `u`'s share of the limb split of its group's
   `G_g` (`576·n` per (epoch, weight, group)). Red-team P7-4: the split was free only under the old byte-move rule;
-  Daniel's 03:35Z rule prices sub-word extraction like PRMT.
+  A ruling prices sub-word extraction like PRMT.
 Per unit this is red-team B3's count `mkn + 2mkr + 6mrn + 20mk + 32mn`, plus P7-4's `576·m`.
 Shares are rounded up, so the units of a group or of a weight together cover its work (`Sanity.rowShare_covers`). -/
 def m1Wref (L : Layout) (u : ℕ) : ℕ :=

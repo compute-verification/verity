@@ -66,7 +66,7 @@ def test_compress_is_sha512s():
 
 @pytest.mark.slow
 def test_answer_opens_is_the_leaf():
-    """An honest answer opens; flipping one bit of the digest, the commit string, the block or the salt does not.
+    """An honest answer opens; flipping one bit of the digest, the commit string, the label or the salt does not.
     Slow: hm96's 1,536 matrix rows take about a minute to trace."""
     N = 136
     cases, want = [], []

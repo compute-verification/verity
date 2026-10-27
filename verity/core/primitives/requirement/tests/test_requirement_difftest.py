@@ -153,8 +153,11 @@ def requirement(i) -> dict:
 Window = tuple[frozenset[int], frozenset[int], int, int, int, int]
 
 
+NO_PLACEMENT = R.Placement({}, {})
+
+
 def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits: int, steps: int,
-           placement: R.Placement = R.Placement({}, {}), price=None, windows: list[Window] = ()) -> dict:
+           placement: R.Placement = NO_PLACEMENT, price=None, windows: list[Window] = ()) -> dict:
     """The instance `requirement` takes: `ex`'s values `0 … n - 1` (a value it has no width for is 0 bits, one with no
     device on device 0, one with no price priced 0, and those `layout` doesn't place share a block past every one the
     layout and the store name, so that no block they name is incomplete for them), the first encoded reads up to the
@@ -609,10 +612,13 @@ def toy_decoder() -> tuple[Program, R.Schedule, dict[int, int]]:
             outs.append(tok)
         return array_of(outs)
 
-    sig = lambda _S: ((("tok0", I32), ("emb", Array(TOY_D, Array(TOY_V, F32))), ("wk", Array(TOY_D, F32))),
-                      Array(TOY_S, I32))
+    def sig(_S):
+        return ((("tok0", I32), ("emb", Array(TOY_D, Array(TOY_V, F32))), ("wk", Array(TOY_D, F32))),
+                Array(TOY_S, I32))
     program = Program(CompositeDefinition("TestDecoder", 1, (), sig, body, register=False), registered=("emb", "wk"))
-    f = lambda x: fp32.bits_of(np.float32(x))
+
+    def f(x):
+        return fp32.bits_of(np.float32(x))
     inputs = {0: 1, **{1 + i: f(0.5 + i) for i in range(TOY_D * TOY_V)}, 9: f(1.5), 10: f(-0.25)}
     return program, R.Schedule.by_calls(program, starts), inputs
 
@@ -652,7 +658,8 @@ def test_the_toy_decoders_dishonest_stores_and_plans(server):
     payload = list(s["payload"])
     payload[6] = format(int(payload[6], 16) ^ 1, "x")
     forged = {**value, "store": {**s, "payload": payload}}
-    verdict = lambda v, k: [st[k] for st in _lean(v, server)["steps"]]
+    def verdict(v, k):
+        return [st[k] for st in _lean(v, server)["steps"]]
     assert verdict(extra, "store_matches") == [True, True, True]
     assert verdict(early, "store_matches") == [True, True, False]
     assert verdict(more, "plan_matches") == [True, True, True]
