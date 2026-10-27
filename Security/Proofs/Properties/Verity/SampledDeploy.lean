@@ -1,7 +1,7 @@
 import Proofs.Properties.Verity.SampledProofs
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Unopened
-import Proofs.Core.Game.Tape
+import Proofs.Properties.Verity.PlayFinder
 
 /-!
 # Sampled proofs' target at the deployment, with no hypothesis on the strategy
@@ -75,32 +75,21 @@ theorem card_unbound_congr {C C' : Verity.Circuit} (hC : C = C') {n n' : ℕ} (h
   obtain rfl := eq_of_heq hT
   rfl
 
-/-- `Claims.Pr` is the uniform `prCoin`, in `ℝ≥0∞`. -/
-theorem ofReal_Pr_eq_prCoin {β : Type} [Fintype β] [Nonempty β] (p : β → Prop) :
-    ENNReal.ofReal (Claims.Pr p) = Game.prCoin p := by
-  classical
-  unfold Claims.Pr
-  rw [Game.prCoin_eq_card, ENNReal.ofReal_div_of_pos (by exact_mod_cast Fintype.card_pos), ENNReal.ofReal_natCast,
-    ENNReal.ofReal_natCast]
-
 /-- **The replay finder**: on a uniform tape of the play, it plays `σ` and outputs what `col` reads off the outcome,
-at the declared cost `k`. -/
+at the declared cost `k` (`Game.tapeFinder` at the play). -/
 noncomputable def Vocab.replayFinder (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
-    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ) : Claims.Finder where
-  S := Game.Tape (V.game θ F c) σ
-  out t := col (Game.Tape.run _ σ t)
-  cost _ := k
+    (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ) : Claims.Finder :=
+  Game.tapeFinder (V.game θ F c) σ col fun _ => k
 
 /-- **The collision `col` reads off the outcome.** -/
 def ColEvent (col : Outcome → Option (Claims.Msg × Claims.Msg)) (o : Outcome) : Prop :=
   ∃ u v, col o = some (u, v) ∧ Claims.Collision sha512Msg u v
 
-/-- **The play's collision event has the replay finder's probability** (`Game.prob_eq_prCoin_tape`). -/
+/-- **The play's collision event has the replay finder's probability** (`Game.prob_eq_ofReal_Pr`). -/
 theorem prob_colEvent_eq (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (col : Outcome → Option (Claims.Msg × Claims.Msg)) (k : ℕ) :
-    Game.prob (ColEvent col) (V.game θ F c) σ = ENNReal.ofReal ((V.replayFinder θ F c σ col k).Pr sha512Msg) := by
-  rw [Game.prob_eq_prCoin_tape, Claims.Finder.Pr, ofReal_Pr_eq_prCoin]
-  rfl
+    Game.prob (ColEvent col) (V.game θ F c) σ = ENNReal.ofReal ((V.replayFinder θ F c σ col k).Pr sha512Msg) :=
+  Game.prob_eq_ofReal_Pr sha512Msg (V.game θ F c) σ col fun _ => k
 
 /-- **`break_le` from the vocabulary's finder.** Where the vocabulary's sampled-proofs finder at `σ` outputs a collision
 at least as often as the replay finder of `col` (`hF`; the vocabulary's finder is that finder, or a combined finder
