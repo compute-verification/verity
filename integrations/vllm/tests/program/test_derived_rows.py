@@ -1,6 +1,6 @@
 """`verity.ml.definitions.numerics.derived_rows` — vectorized derived-boundary evaluators equal the registered gate
 semantics, gate for gate: the scalar kernels match the primitives on random + adversarial words, and the
-row evaluators match `evaluate_call` transcripts of the composites on small shapes, **including the interior
+row evaluators match `evaluate_call` traces of the composites on small shapes, **including the interior
 gates** a derived boundary would select (norm `inv`/`s`, per-block attention (m, l, o), silu `mid`).
 
 Needs the numerics lane's MUFU tables (`verity.ml.definitions.numerics`, prebuilt .so probes not required —
@@ -115,7 +115,7 @@ def _ex2_exact(w: int, T: np.ndarray) -> int:
 
 def test_ex2_every_exponent_class_equals_the_exact_rule():
     """`MufuEx2Ftz` on every exponent class of both signs (edge and seeded mantissas; NaN and inf at 255): the compiled rule
-    (`fa2_model.mufu_ex2`), the IR reference (`verity.ml.circuits.evaluation.evaluate`) and the numpy twin equal the rule evaluated
+    (`fa2_model.mufu_ex2`), the reference evaluator (`verity.ml.circuits.evaluation.evaluate`) and the numpy twin equal the rule evaluated
     exactly, and every 0 < |x| < 2^-23 gives T[0] = 1.0.  That includes |x| < 2^-63, where the C shift count reached 64 or
     more (undefined; x86-64 took it mod 64: ex2(6.5e-22) was 1.0083, ex2(2^-64) 2.0 and ex2(-2^-64) 0.5)."""
     D = _derived()

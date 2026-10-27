@@ -7,7 +7,7 @@ correspondence's Build-side half.
 The rule modules import `..derive` (for `Ctx`, `refuse`, ...), and `derive` imports `rules.base`; the concrete
 rule sets are therefore resolved lazily (PEP 562) to keep the package import acyclic.
 
-PROTOCOL SUMMARY (Build stage: the lowering rules that turn vLLM's exported ATen graph into a Program over registered primitives)
+PROTOCOL SUMMARY (Build phase: the lowering rules that turn vLLM's exported ATen graph into a Program over registered primitives)
   Purpose: `DEFAULT_RULES` is the versioned rule set `verity_vllm.program.frontend.derive` applies node by node to the `torch.export(strict=False)`
     graph of the vLLM model class: ViewRules (reference rearrangements, no gates), reference-mode and profile-mode OpRules / InPlaceRules /
     StateRules (each emits a Call of a REGISTERED Definition, e.g. rules/vllm_bindings/ for the Triton / unified-attention custom ops),

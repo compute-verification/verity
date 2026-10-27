@@ -1,5 +1,5 @@
 """GPU run of the router-tap exactness property (`verity_vllm.properties.router_tap_exactness`): check the tap build on this GPU against
-the installed `_moe_C.topk_softmax` and the IR's ordered router, the router-softmax source on vLLM's routing path, and live on vLLM
+the installed `_moe_C.topk_softmax` and the circuit's ordered router, the router-softmax source on vLLM's routing path, and live on vLLM
 engines serving tiny random-weight models of the two served router shapes (OLMoE's, Qwen3-MoE's); write the sealed record `<out>/router_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's
 digest and verdict without a GPU.
 
@@ -412,7 +412,7 @@ def _guarded(fn, base: dict[str, Any], *args) -> dict[str, Any]:
 
 def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, Any]:
     """Check the tap build at `so` on this GPU and write the sealed record to `<out>/router_tap_exactness.json`."""
-    pool = mp.get_context("fork").Pool(max(2, min(32, (os.cpu_count() or 4) - 2)))   # before CUDA: the IR evaluation needs none
+    pool = mp.get_context("fork").Pool(max(2, min(32, (os.cpu_count() or 4) - 2)))   # before CUDA: the circuit evaluation needs none
     from verity_vllm.engine import engine_profile as prof
 
     env_flags = prof.apply_env()                               # the engine's pins (batch invariance, in-process core, no FlashInfer sampler)

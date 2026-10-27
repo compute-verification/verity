@@ -8,7 +8,7 @@ residual output (layer 0: the embedding), `w` = the checkpoint norm weight (fixt
 `fixtures/verity-ir/rmsnorm-fused-b0/smollm2_norm_weights.npz`, sha256-checked against the store's weights index).
 
 Two candidate trees, as vectorised numpy twins of the registered composites (`rmsnorm_fused`, checked against the
-gate-by-gate IR evaluation in `tests/program/test_rmsnorm_fused.py`):
+gate-by-gate circuit evaluation in `tests/program/test_rmsnorm_fused.py`):
 
 * `v1` — `RMSNormFusedCuda_v1`: `fused_add_rms_norm_kernel<bf16, 8>` (N/8 threads x one 8-vector, pairs summed
   sequentially); this kernel is guarded by `!batch_invariant_launch` in `csrc/layernorm_kernels.cu` and is not

@@ -1,6 +1,6 @@
 """Correspondence between capture-format-v2 identities and the canonical B1 circuit.
 
-Two namespaces (IR §C.5), kept separate in every record this tool emits:
+Two namespaces, kept separate in every record this tool emits:
 
   * `value_identity`  -- the *logical* namespace: which `FunctionCall` of the canonical circuit produced the
     value(s), i.e. the gate indices of `call.returns` (or, for prescribed inputs, the `Input` gates).
@@ -13,7 +13,7 @@ Two namespaces (IR §C.5), kept separate in every record this tool emits:
     of gate outputs.
 
 Checks performed per located call: (i) shape/type consistency between the captured tensor and the call's
-return type, (ii) bit-for-bit comparison of the captured words with the IR's own gate-by-gate evaluation of
+return type, (ii) bit-for-bit comparison of the captured words with the circuit's own gate-by-gate evaluation of
 that call, where the call's *argument* values are read from other captured leaves (production values) and
 from the registered checkpoint (the values of the weight `Input` gates). A prescribed-input record states
 that the committed weight leaf words *are* the outputs of the `Input` gates (one scalar per gate) and gives
@@ -240,7 +240,7 @@ class LazyTranscript(dict):
 # weights: the checkpoint gives the values of the weight Input gates; the weights leaf authenticates them
 # ---------------------------------------------------------------------------------------------------------
 
-_WEIGHT_FIELDS = {  # IR weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
+_WEIGHT_FIELDS = {  # circuit weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
     "embed": ("w=embed_tokens.weight", ["model.embed_tokens.weight"]),
     "norm": ("w=norm.weight", ["model.norm.weight"]),
     "cos_sin": ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None),

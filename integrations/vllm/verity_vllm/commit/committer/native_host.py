@@ -450,7 +450,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
       kept    = raw - hidden                               retain=host with the hidden family excluded: what stays on host (0 for retain=none)
       learn   = learn budget                               the learning steps' transient host windows; the pool keeps their capacity
       replay  = levels + learn + picks x chunk             openings-after-release runs on a FRESH pool that grows like the run's; picks =
-                                                           3 x openings + 64 (after-release + both in-run stages' deferred picks), 256 B each
+                                                           3 x openings + 64 (after-release + both in-run phases' deferred picks), 256 B each
       slack   = engine growth after admission              measured +3,539 MiB (RSS 2,218 -> 5,757 MiB, B1) + pool rounding -> 6 GiB
       pairs   = levels + kept + learn once, for pairs >= 2   a second pair allocates its frozen pool while torch's pinned-host cache still
                                                            holds the first pair's frozen + replay blocks: B1 PAIRS=3 bounded-x (in-process

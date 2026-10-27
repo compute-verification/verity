@@ -147,7 +147,7 @@ class TargetProfile:
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
-    ir                  -> the IR the Program is written in (a Program static, declared-and-bound, never attested).  None = word
+    ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
                            each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
@@ -206,7 +206,7 @@ class TargetProfile:
     fp8_scale_construction: str | None = None
     #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
-    #: the IR the Program is written in (None = word; see the doc); declared, never attested
+    #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
     #: the Program's values as registered inputs (None = constants; see the doc); declared, never attested
     registered_values: bool | None = None

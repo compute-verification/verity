@@ -1,4 +1,4 @@
-"""The top-p keep word as word gates (`registry.topp_words`): `TopPKeepWord_v1{V,S}` is `topp_keep(x, p, S)` on every row, as the IR's
+"""The top-p keep word as word gates (`registry.topp_words`): `TopPKeepWord_v1{V,S}` is `topp_keep(x, p, S)` on every row, as the circuit's
 evaluator computes it from its word gates, including the constructed rows whose warp halves disagree on stopping;
 `GumbelTopPTokenSelect_v2{V,S}` is v1 wherever `splits` is S; the program codec round-trips them; `Q_word` cuts the keep word into
 word-sized units with no recomputed value; the new word gates are exact."""

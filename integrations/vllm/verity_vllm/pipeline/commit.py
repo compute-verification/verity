@@ -23,7 +23,7 @@ versions.json.  Every number is MEASURED unless the key says otherwise.
     PYTHONPATH=. verity-vllm commit \
         --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
 
-PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
+PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-03 verdict)
   Purpose: run the row's workload on ONE engine in interleaved (control, instrumented) pairs; the instrumented arm commits every
     required value through the committer (row_pod: native_collect_v2b + the FA2/FA3 M1 tap); the verdict is then computed from the
     committed bytes -- the checks: required-value coverage (`coverage`), openings, local replay (`C2`: oracle compare vs the Match
@@ -891,7 +891,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            "deferred_n": len(deferred), "deferred_received_n": len(handed), "deferred_verified": sum(ok[n_sf:]),
            "deferred_families": sorted({value_family(o.identity.get("name", "")) for o in ops[n_sf:]}),
            # [rev F-r17b-13] the received POSITIONS (every one is in `picks`, opened + verified above); the verdict compares the union of the
-           # in-run stages' deferred positions with these, not the counts
+           # in-run phases' deferred positions with these, not the counts
            "deferred_received_positions": [list(p) for p in handed], "deferred_received_digest": _positions_digest(handed),
            "steps_opened": steps_opened, "source": source, "freed": freed, "retained_device_after": retained_after,
            "replay_run_root": replay_root, "replay_root_equal": (replay_root == rc.run_root.hex()) if replay_root else None,
@@ -928,7 +928,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             _st = {l.split(":")[0]: int(l.split()[1]) for l in f if l.startswith(("VmRSS:", "VmHWM:"))}
         res["host_rss_gb_after"] = round(_st["VmRSS"] / 1e6, 2)
         # [R17 fp8, R17-16 (i)] the process's kernel high-water mark AFTER the replay -- the in-process peak the bounded HOST BOUND must
-        # cover (the replay stage is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
+        # cover (the replay phase is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
         res["host_rss_hwm_gb"] = round(_st["VmHWM"] / 1e6, 2)
     except (OSError, StopIteration, KeyError):
         pass
@@ -1721,7 +1721,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     decl = None
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
-    replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
+    replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit phase only)
     deferred: dict[int, dict[str, Any]] = {}          # --replay-deferred: pair -> its replay bundle's context
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
@@ -2128,7 +2128,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     row["commit"]["value_correspondence"].update(_sc2["value_correspondence"])
                 if getattr(args, "match_dir", None):
-                    # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match stage's
+                    # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match phase's
                     # value record of the SAME attempt (separate process + acquisition path); any mismatch fails the verdict naming the identity.
                     # [rev-cb M-0301 R3] the oracle must be THIS workload's Match record: request ids / prompt lengths / caps are checked by name
                     # before any value compare (a foreign oracle = FAIL 'foreign oracle', never a value mismatch that happens to point the right way).

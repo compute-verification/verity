@@ -24,7 +24,7 @@ tensor (format v1 leaves, and the range opening of a v2 tensor).
   committed value at position ``t`` (unique per request, position, op, port — the format's identity
   rule); with ``x=<step>`` it names a value computed at ``t`` during step ``<step>``'s speculation that
   the step did not commit — a rejected verification slot's target value, or the draft model's
-  proposal-row value — kept as a first-class leaf of that step's replay unit and never confused with
+  proposal-row value — kept as a first-class leaf of that step's replay block and never confused with
   the committed value at the same position (which a later step produces under the unqualified id).
 - ``param``: ``[A-Za-z0-9_.]+`` (the safetensors / ``named_parameters`` name).
 - ``field`` (boundary tree leaves; a POC choice, the contract leaves them open): one of

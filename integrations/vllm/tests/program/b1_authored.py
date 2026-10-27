@@ -461,7 +461,7 @@ def ServeV4(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
 
 def _callable(f):
     """A static-valued function as a frontend callable: a `Prim`/`Bound`/`Function` as is; a registered primitive or a
-    complete registered specialisation wrapped (`_ir_static` maps both back to the same IR definition)."""
+    complete registered specialisation wrapped (`_ir_static` maps both back to the same circuit Definition)."""
     if hasattr(f, "_resolve"):
         return f
     if isinstance(f, PrimitiveDefinition):

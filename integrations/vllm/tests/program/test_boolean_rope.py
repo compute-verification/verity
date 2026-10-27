@@ -1,9 +1,9 @@
 """`registry.boolean_rope`: the Boolean NeoX rotation agrees with its word Definitions (`trace.word_of`) on every quadruple of
 special bf16 words and on 90k random and structured quadruples per half, on random heads of each served head width against
-`RoPEHead_v1` through the IR reference, on 16k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
+`RoPEHead_v1` through the reference evaluator, on 16k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
 random heads of every `RoPE_v1` binding the served workload Programs call (`SERVED`); carries exactly its builders' live ANDs;
 is pinned by gate count and program digest; and cuts under `Q_word` v1 into one 16-bit unit per output element, as the word
-Program does. The interleaved (GPT-J) versions agree with `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` through the IR reference at
+Program does. The interleaved (GPT-J) versions agree with `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` through the reference evaluator at
 DeepSeek-V2 MLA's q_pe and k_pe shapes and reproduce the words vLLM's `rotary_embedding(is_neox=False)` wrote on sm_120 where
 `RoPEHeadGptJ_v1` does not."""
 from __future__ import annotations
@@ -208,7 +208,7 @@ def _heads(rng, n: int, nheads: int, D: int) -> tuple[np.ndarray, np.ndarray]:
 
 @pytest.mark.parametrize("head", HEADS.values(), ids=lambda t: t.id)
 def test_the_head_agrees_with_rope_head_v1(head) -> None:
-    """Against `RoPEHead_v1{D}` evaluated primitive by primitive (the IR reference) on 96k words, so the halves' wiring is
+    """Against `RoPEHead_v1{D}` evaluated primitive by primitive (the reference evaluator) on 96k words, so the halves' wiring is
     checked without any kernel."""
     D = head.bindings["D"]
     x, cs = _heads(np.random.default_rng(D), 96_000 // D, 1, D)
@@ -225,7 +225,7 @@ def _random_heads(target, heads: int) -> tuple[np.ndarray, np.ndarray]:
 @pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.bindings['D'] == 256 else t for t in ROPES], ids=lambda t: t.id)
 def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     """1,024 random heads of each binding the served Programs call against `RoPE_v1`'s registered kernel (`twins.RoPETwin`,
-    self-checked against the IR reference by the kernel registry): `RoPE_v2`'s batch over the heads and its shared cos/sin row
+    self-checked against the reference evaluator by the kernel registry): `RoPE_v2`'s batch over the heads and its shared cos/sin row
     at each served NHEADS."""
     _agree(target, list(_random_heads(target, 1024)))
 
@@ -242,7 +242,7 @@ def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None
 
 @pytest.mark.parametrize("target", [GPTJ_HEAD, *GPTJ], ids=lambda t: t.id)
 def test_gptj_agrees_with_its_word_definition(target) -> None:
-    """Against `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` evaluated primitive by primitive (the IR reference): 96k words of the head
+    """Against `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` evaluated primitive by primitive (the reference evaluator): 96k words of the head
     and 1,024 heads of each multi-head binding, a quarter of them wide words whose products leave f32's range, where the
     odd half's operand order shows."""
     if target is GPTJ_HEAD:

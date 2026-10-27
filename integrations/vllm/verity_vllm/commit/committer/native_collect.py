@@ -1694,7 +1694,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._win_hfirst_steps = 0
         self._win_leaf_folds = 0
         self._win_relayouts = 0
-        self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
+        self._oar_deferred = []         # picks the in-run phases could not open from host (excluded families) -> openings_after_release
         for src in self.sources:
             fn = getattr(src, "begin_run", None)
             if fn is not None:

@@ -77,7 +77,7 @@ def dense_fields():
 
 
 def reference(doc, prompt, fields, field_order):
-    """Every Call's output leaves, row by row through `verity.ml.circuits.evaluation.evaluate` (the IR's plain-integer reference)."""
+    """Every Call's output leaves, row by row through `verity.ml.circuits.evaluation.evaluate` (the circuit's plain-integer reference)."""
     weights = [int(w) for n in field_order for w in fields[n]]
     vals: dict[int, list[int]] = {}
     for r in doc["rows"]:
@@ -439,7 +439,7 @@ def _drive_pair(pair, com, src, order, rows_of=lambda e, rows: rows):
 
 def test_a_global_manifest_commits_every_requests_rows_packed_as_the_binding_map_splits_them(pair):
     """The runtime runs r1's rows first: every target is one packed tensor per engine step, and the binding map over the committed
-    layouts and `step_rows` binds each request's identity to its own rows (a step-shared target's one row to each) -- the IR's words of
+    layouts and `step_rows` binds each request's identity to its own rows (a step-shared target's one row to each) -- the circuit's words of
     that request's Program."""
     ids = CB.manifest_sites(pair.man)
     com, src = _dense_source(pair, pair.man, pair.root)
@@ -518,7 +518,7 @@ def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_l
 
 def test_the_warm_up_commits_zero_words_of_the_records_layout_and_evaluates_nothing(pair, monkeypatch):
     """The Commit's warm-up instrumented run is never a record (`taps.warmup`): every target, packed, per request or step-shared, is zero
-    words of the name, shape and dtype the record commits, and no template is evaluated.  Off again, the same source commits the IR's
+    words of the name, shape and dtype the record commits, and no template is evaluated.  Off again, the same source commits the circuit's
     words, and a bounded committer's `learn_only` follows the same switch."""
     com, src = _dense_source(pair, pair.man, pair.root)
     _drive_pair(pair, com, src, ["r1", "r0"])
