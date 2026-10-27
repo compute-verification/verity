@@ -154,8 +154,8 @@ Landing:
 Protocols and claims:
 
 - (26 Oct 6:42 PM PDT) `WitnessPathPrivate c` is the per-channel premise, beside the per-party `Faithful p`, `Secret p`
-  and `Confined p` and the site's `Covered` (`Security/Definitions/Core/Transport.lean`); a keyed channel takes
-  `ChannelHides` in its place.
+  and `Confined p` and the site's `Covered` (`Security/Definitions/Core/Assumptions/Transport.lean`); a keyed channel
+  takes `ChannelHides` in its place.
 - (26 Oct 6:42 PM PDT) ML-KEM-1024 is the one-hash rule's transport exception, under AGENTS.md's conditions: a remote
   party's chain key comes from provisioning, and no session runs on a KEM secret alone (`transport.session` refuses it).
 - (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run

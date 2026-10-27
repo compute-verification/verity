@@ -35,9 +35,10 @@ H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x
 structure (the frame's declared size class), never a private value's length.
 
 Every key is an HMAC-SHA512 output under a uniform key, so a PRF under ``prf/sha-512`` (Bellare 2006), and a KEM's
-shared secret enters only as an HMAC key. Standard library only. The premises are named in
-``Security/Definitions/Core/Transport.lean``: ``WitnessPathPrivate c`` for a channel without keys, and ``ImprintPathPrivate
-c`` for the cable during the imprint.
+shared secret enters only as an HMAC key. Standard library only. The premises are named Props in
+``Security/Definitions/Core/Assumptions/Transport.lean``: ``WitnessPathPrivate`` for a channel without keys,
+``ImprintPathPrivate`` for the cable during the imprint, and ``ChannelHides`` and ``ChannelAuthentic`` for what this
+module gives; ``Verity.Guarantees.TransportPassiveZk`` takes the first or the third.
 """
 from __future__ import annotations
 

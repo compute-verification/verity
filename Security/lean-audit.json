@@ -11073,6 +11073,9 @@
    "assumptions": [],
    "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
   },
+  "Verity.SecurityProofs.ImprintRootHidden": {
+   "owner": "@memory-accounting"
+  },
   "Verity.SecurityProofs.IsZeroGadget": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.IsZeroGadget : Verity.Guarantees.IsZeroGadget"],
@@ -11162,6 +11165,12 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
+  },
+  "Verity.SecurityProofs.TransportDelivers": {
+   "owner": "@memory-accounting"
+  },
+  "Verity.SecurityProofs.TransportPassiveZk": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -12289,7 +12298,10 @@
    "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
+   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
