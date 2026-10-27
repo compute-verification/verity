@@ -6,8 +6,9 @@ revealing their models or data, since every proof is zero-knowledge, and for the
 two composite protocols: onsite, for an auditor with devices at the datacenter, and remote, for an auditor with none.
 Start with the remote protocol in `verity/core/protocols/remote/`, then [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- [ARCHITECTURE.md](ARCHITECTURE.md): what Verity bounds and how, the design's layers and the Glossary.
-- [GLOSSARY.md](GLOSSARY.md): the notation every guarantee is stated in, and the older names it replaces.
+- [ARCHITECTURE.md](ARCHITECTURE.md): what Verity bounds and how, and the design's layers.
+- [GLOSSARY.md](GLOSSARY.md): the one glossary: the terms, the notation every guarantee is stated in, and the older names
+  they replace.
 - `Security/`: the guarantees, in Lean. `Security/Definitions/` states them and their named assumptions,
   `Security/Proofs/` proves them, and a guarantee whose proof isn't there is open.
 - [AGENTS.md](AGENTS.md): the code's layout and rules, for contributors and their agents.
@@ -15,32 +16,18 @@ Start with the remote protocol in `verity/core/protocols/remote/`, then [ARCHITE
 ## Subprotocols
 
 Each subprotocol proves one kind of claim about what the developer's hardware did. Its Lean is its definition; where a Python
-verifier still decides, a difftest holds it to the Lean until the Lean replaces it.
-
-| Subprotocol | What an accepted run establishes | Where |
-| --- | --- | --- |
-| Sampled proofs | The auditor draws proof blocks of a committed circuit with live coins, and C-Flock proves each drawn block's values in the committed trace right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
-| Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
-| Proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
-| The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
-| Proof of useful bandwidth (PoUB) | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
-| Network certification | An auditor-trusted device on each node's uplink, the network certifier, certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
-| Memory wipes | A registered server's life is cut into server blocks, each opened by a certified memory wipe, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
-| The inference-only policy | Inference rather than training: the declared circuit divides into inference blocks of c gates, each reading at most k bits of fresh input. A protocol with no rounds, which the verifier checks from the declared circuit and the registered information alone. | [`verity/core/protocols/network/nci`](verity/core/protocols/network/nci/README.md) |
+verifier still decides, a difftest holds it to the Lean until the Lean replaces it. The
+[composition README](verity/core/protocols/composition/README.md#subprotocols) is the one list of them, with what an
+accepted run of each establishes and the composites that include it.
 
 ## The two composite protocols
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every subprotocol accepts its own case, and the commitment binds all of theirs.
-
-- **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, PoUB and network certification.
-- **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
-  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
-
-The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
-policy is not yet a subprotocol of the composites.
+every subprotocol accepts its own case, and the commitment binds all of theirs. **Onsite**
+(`verity/core/protocols/onsite`) is for an auditor with devices at the datacenter, and **remote**
+([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)) for an auditor with none; start
+there for its lifecycle, guarantee, assumptions and demo.
 
 ## The vLLM integration
 
@@ -86,7 +73,7 @@ Not yet:
 - GLM-5.3 and DeepSeek-V4-Pro through sampled proofs and the Lean verifier.
 - Coverage counted in AND gates, as a share of the served computation.
 - The whole served run's circuit committed and proved, and the weights tied to a checkpoint in zero knowledge.
-- PoUW, PoUS, the bandwidth audit, PoUB and network certification composed on one served engine.
+- PoUW, PoUS, PoUB and network certification composed on one served engine.
 
 ## Where to start
 
@@ -99,7 +86,7 @@ Not yet:
 - **PoUW under the ACCEL model**: Dither's [protocol](verity/core/protocols/pouw/dither/PROTOCOL.md) and the Lean's
   `Pouw.Dither`.
 - **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), the
-  feasible set, the admissible set and the overhead lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
+  feasible set, the admissible set and the slowdown lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
   [`benchmarks/rho`](benchmarks/rho/README.md).
 
 ## Demos

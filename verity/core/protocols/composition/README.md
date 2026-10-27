@@ -49,6 +49,20 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 ## Subprotocols
 
+The one list of the subprotocols, with what an accepted run of each establishes and the composites that include it:
+
+| subprotocol | what an accepted run establishes | onsite | remote | where |
+| --- | --- | --- | --- | --- |
+| sampled proofs | The auditor's live coins pick proof blocks of a committed circuit, and C-Flock proves each sampled block's values in the committed trace right. The result bounds how many proof blocks are faulty. | yes | yes | [`sampled_proofs`](../sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](../../../ml/flock/README.md) |
+| proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | yes | yes | [`pouw`](../pouw/README.md), [Dither](../pouw/dither/PROTOCOL.md) |
+| proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | yes | | [`pous`](../pous/README.md) |
+| proof of useful bandwidth (PoUB) | A lower bound on the bits read from a node's registered store, applying the bandwidth audit's guarantee (`AuditRO`, [`bandwidth`](../bandwidth/PROTOCOL.md)) per pass. It is the one bandwidth subprotocol, onsite only for now. | yes | | [`remote_bandwidth`](../remote_bandwidth/README.md) |
+| network certification | An auditor-trusted device on each node's uplink, the network certifier, certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | yes | | [`certifier`](../certifier/README.md) |
+| memory wipes | A registered server's life is cut into server blocks, each opened by a certified memory wipe, so state crosses a boundary only as a committed value. | not yet | not yet | `verity/core/devices/memory_challenger/lean` |
+| the inference-only policy | Inference rather than training: each execution block divides into inference blocks of c gates, each reading at most k bits of fresh input. A policy with no rounds, which the verifier checks in validation from the declared circuit and the registered information alone. | not yet | not yet | [`network/nci`](../network/nci/README.md) |
+
+Each one's port, the `Core.Protocol` a composite runs:
+
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
@@ -85,7 +99,7 @@ Lean to:
   `../remote_bandwidth/lean/tests/test_protocol.py`).
 
 Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
+(one case in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
 composition's inputs or the case itself are often broken. `test_a_reference_without_reject_dominance_is_caught` shows the
 difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a case where
 one subprotocol rejects and another is undecided.

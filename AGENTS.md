@@ -1,20 +1,21 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose
-terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings say what
-it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
+compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the
+one glossary, whose terms code, docs and output use. This file states what holds on `main` now; each package's README
+and docstrings say what it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
-    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
-    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
-    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
-    release side, and `difftest` the Python held to each Lean.
+    package per subprotocol (`verity/core/protocols/composition/README.md` lists them): sampled proofs, PoUW, proof of
+    useful space (PoUS), proof of useful bandwidth (PoUB, with the bandwidth audit it applies in `bandwidth/`) and
+    network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only
+    policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids, `service/flock/` C-Flock's Lean
+    verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the
+    Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
@@ -71,7 +72,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **One proof service** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the service owns commitments, live coins, the record, the selection, proving, verifying and the
-  integrity profile. A protocol carries no policy parameter: it surfaces what its draw established (ε at δ), and the
+  integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
   model's size is public.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
@@ -114,9 +115,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
-  before any coin; and on a draw, the drawn units' openings, to the prover behind the firewall.
+  before any coin; and for a sample, the sampled proof blocks' openings, to the prover behind the firewall.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
-  period (Glossary), not the window, the run or the demo. Every result, in a report, a
+  period (`GLOSSARY.md`), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
   all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
   one. The datacenter's size (from `benchmarks/census/`) and the window's length are stated parameters, and a figure
