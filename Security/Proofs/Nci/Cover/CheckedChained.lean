@@ -17,8 +17,8 @@ namespace NciCheck.Properties.SecurityProofs
 open Lean (Json)
 open Flock.Program (Prog)
 
-/-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the baseline
-`theta` names, containing a reference training circuit `c` with its baseline registered (`BaselineRegistered`), pays the
+/-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the θ
+`theta` names, containing a reference training circuit `c` with its θ registered (`ThetaRegistered`), pays the
 covering bound's two-cost factor on the multiplication blocks of `c`'s bits chained at `(D, c_a)`, at `Γ = gamma` and
 `α = num / den` (`Nci.Cover.Guarantees.CoverTrainingChained`'s conclusion, under its premises on `bitDecl c`). -/
 def CoverTrainedChained (j out : Json) : Prop :=
@@ -28,7 +28,7 @@ def CoverTrainedChained (j out : Json) : Prop :=
     let α : ℝ := (i.num : ℝ) / i.den
     ∀ (c : Verity.Declaration) (M : Verity.Containment c.D d.D)
       (B : Nci.Covering.MulBlocks (Nci.Cover.bitDecl c)) (s D w₀ : ℕ) (cw ca : ℝ),
-      Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
       Nci.Assumptions.ParameterHardAt (Nci.Cover.bitDecl c) B s cw → α * i.gamma < cw * D → 0 < ca →
       (∀ g, c.D.w g ≤ w₀) → w₀ * i.gamma + α * i.gamma + c.D.width c.θ ≤ s →
         cw * ca * (Nci.Assumptions.chainedBlocksAt (Nci.Cover.bitDecl c) B D ca).card ≤

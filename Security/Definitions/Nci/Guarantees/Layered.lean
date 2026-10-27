@@ -28,7 +28,7 @@ def ThreadedOfLayered : Prop :=
 def LayeredTraining : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c dcl : Declaration) (T : Threading c) (d e eLk b E : ℕ) (M : Containment c.D dcl.D),
     Layered T d e eLk b → 0 ≤ α → 0 < b_w → 0 < b_a → E < d → Complies Γ α dcl →
-    Assumptions.BaselineRegistered c dcl (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered c dcl (PartialContainment.ofContainment M) →
     α * Γ < ((E + 1) * b : ℕ) → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
       κ * b_a * c.D.size c.D.computed ≤
@@ -46,7 +46,7 @@ whose IUs read at most `αΓ ≤ 2·10⁷` bits, with `ReferenceThreaded`'s `(d,
 def ReferenceTraining : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c dcl : Declaration) (T : Threading c) (M : Containment c.D dcl.D),
     Assumptions.ReferenceLayered c T → 0 ≤ α → 0 < b_w → 0 < b_a → Complies Γ α dcl →
-    Assumptions.BaselineRegistered c dcl (PartialContainment.ofContainment M) →
+    Assumptions.ThetaRegistered c dcl (PartialContainment.ofContainment M) →
     α * Γ ≤ 2 * 10 ^ 7 → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
       κ * b_a * c.D.size c.D.computed ≤ 2 * α * T.bound (α * Γ) b_w 10 2328 * dcl.D.size dcl.D.computed

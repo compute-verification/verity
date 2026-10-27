@@ -36,8 +36,8 @@ certified products.
 namespace Nci.Cover.Guarantees
 
 /-- **Training through a compliant declaration pays the covering bound's two-cost factor on its chained multiplication
-blocks**: a declaration `d` that contains a reference training circuit `c` and complies at `(Γ, α)`, with its baseline
-registered (`BaselineRegistered`), has `c_w c_a |𝓜*| ≤ (α² Γ + c_w c_a α) size(d)`, where `𝓜*` is the set of
+blocks**: a declaration `d` that contains a reference training circuit `c` and complies at `(Γ, α)`, with its θ
+registered (`ThetaRegistered`), has `c_w c_a |𝓜*| ≤ (α² Γ + c_w c_a α) size(d)`, where `𝓜*` is the set of
 multiplication blocks of `c`'s bits chained at `(D, c_a)` (`Nci.Assumptions.chainedBlocksAt (bitDecl c)`), under
 parameter-hardness at `(s, c_w)` on `c`'s bits (`ParameterHardAt (bitDecl c)`) at the block size
 `s ≥ w₀ Γ + α Γ + width(θ)` (no gate of `c` wider than `w₀`), with `α Γ < c_w D` and `c_a > 0`. Equivalently its
@@ -47,7 +47,7 @@ def CoverTrainingChained : Prop :=
   ∀ (Γ : ℕ) (α : ℝ) (c d : Verity.Declaration) (M : Verity.Containment c.D d.D)
     (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ) (cw ca : ℝ),
     0 ≤ α → Nci.Complies Γ α d →
-    Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M) →
+    Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
     Nci.Assumptions.ParameterHardAt (bitDecl c) B s cw → α * Γ < cw * D → 0 < ca →
     (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
       cw * ca * (Nci.Assumptions.chainedBlocksAt (bitDecl c) B D ca).card ≤

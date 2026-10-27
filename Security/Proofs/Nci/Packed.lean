@@ -211,7 +211,7 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
     (hw : 0 < b_w) (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
     (hd : ∀ ℓ, dd ≤ ch.d ℓ) (he : ∀ ℓ, ch.e ℓ ≤ emax)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hB : Assumptions.BaselineRegistered c d M) (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
+    (hB : Assumptions.ThetaRegistered c d M) (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
         b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤ ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
