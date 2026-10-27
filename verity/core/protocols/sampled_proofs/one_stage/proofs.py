@@ -251,6 +251,73 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
                     tuple(v["units"])) for v in got["verdicts"]], None
 
 
+def _hexes(x: Any, what: str) -> list[str]:
+    if type(x) is not list or any(type(s) is not str for s in x):
+        raise ValueError(f"{what} is not a list of hex strings")
+    return list(x)
+
+
+def _unhex(h: str) -> bytes:
+    """Lean `Flock.unhex`, on an even-length string."""
+    if re.fullmatch(r"(?:[0-9a-f]{2})*", h) is None:
+        raise ValueError("not lowercase hex")
+    return bytes.fromhex(h)
+
+
+def session_uses(slot: int, record: str) -> list[tuple[str, bytes, int, list[str]]]:
+    """Lean `OneStageZk.sessionUses`: session `slot`'s uses of the challenger's coins as `(label, after, coins, want)`,
+    `want` the record's F128 hex its coins' bytes must begin with: its link points, of family `slot/<slot>/session`
+    after the SHA-512 of its tables' `link.root_b_sha512` digests in key order, then each stream's rounds in the
+    record's order, of family `slot/<slot>/<stream>` after the round's ``msg_sha512``; ceil(n/4) coins of 64 bytes for
+    n F128s. A prover asks the challenger for each use's coins after its `after`, once (`coins.round_coins`). Raises
+    ValueError with Lean's reason."""
+    j = json.loads(record)
+    link = j.get("link") if isinstance(j, dict) else None
+    pts_j = link.get("points") if isinstance(link, dict) else None
+    if type(pts_j) is not list:
+        raise ValueError("record: link.points is not a list")
+    pts = [h for p in pts_j for h in _hexes(p, "a link point")]
+    rbs = link.get("root_b_sha512")
+    if not isinstance(rbs, dict):
+        raise ValueError("record: link.root_b_sha512 is not an object")
+    ds = b""
+    for t in sorted(rbs):
+        d = rbs[t]
+        if type(d) is not str or len(d) != 128:
+            raise ValueError(f"record: link.root_b_sha512.{t} is not 64 bytes of hex")
+        ds += _unhex(d)
+    out = [(f"slot/{slot}/session", hashlib.sha512(ds).digest(), (len(pts) + 3) // 4, pts)]
+    streams = j.get("streams")
+    if type(streams) is not list:
+        raise ValueError("record: streams is not a list")
+    for s in streams:
+        name = s.get("stream") if isinstance(s, dict) else None
+        if type(name) is not str:
+            raise ValueError("record: a stream's name is not a string")
+        rounds = s.get("rounds")
+        if type(rounds) is not list:
+            raise ValueError(f"record: {name}'s rounds are not a list")
+        for r in rounds:
+            sha = r.get("msg_sha512") if isinstance(r, dict) else None
+            if type(sha) is not str:
+                raise ValueError(f"record: a round of {name} has no msg_sha512")
+            if len(sha) != 128:
+                raise ValueError(f"record: a round of {name}'s msg_sha512 is not 64 bytes of hex")
+            cs = _hexes(r.get("coins"), f"the coins of a round of {name}")
+            out.append((f"slot/{slot}/{name}", _unhex(sha), (len(cs) + 3) // 4, cs))
+    return out
+
+
+def uses_v2(slot: int, record: Path) -> dict:
+    """`session_uses` by the v2 audit's Lean (`sampled-proofs-one-stage-zk uses`): its line, `{"uses": [...]}` or
+    `{"refused": why}`."""
+    p = subprocess.run([str(v2_executable()), "uses", str(slot), str(record)], capture_output=True, text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} uses answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+
+
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, registered: Mapping[str, Any] | None) -> dict:
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
@@ -273,4 +340,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
-           "executable", "file_sha512", "proved_units", "reads_registered", "v2_executable", "verdicts_v2", "verify"]
+           "executable", "file_sha512", "proved_units", "reads_registered", "session_uses", "uses_v2", "v2_executable",
+           "verdicts_v2", "verify"]

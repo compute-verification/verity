@@ -427,7 +427,9 @@ def protocol : Core.BlobProtocol where
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
-difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). -/
+difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). `uses SLOT RECORD`: the session record's
+uses of the challenger's coins at slot `SLOT` (`sessionUses`), one line `{"uses": [{after, coins, label, want}, ...]}`
+or `{"refused": why}`, which `one_stage.proofs.session_uses` is held to. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -439,6 +441,18 @@ def main (args : List String) : IO UInt32 := do
       verdicts (← ownOfJson (← Core.canonicalJson ownB)) pub sessions none (Core.Blobs.ofArray bs)
     let line := match r with
       | .ok vs => Json.mkObj [("verdicts", Json.arr (vs.map (·.2)))]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
+  | ["uses", slot, record] =>
+    let text ← IO.FS.readFile record
+    let r : V (List (Challenger.Use × Array String)) := do
+      let some i := slot.toNat? | throw "the slot is not a natural number"
+      sessionUses i text
+    let line := match r with
+      | .ok us => Json.mkObj [("uses", Json.arr (us.toArray.map fun (u, hs) => Json.mkObj [("after",
+          Json.str (Flock.hexOf u.after)), ("coins", Lean.toJson u.coins), ("label", Json.str u.label),
+          ("want", Json.arr (hs.map Json.str))]))]
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
@@ -457,5 +471,11 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
+#guard ((sessionUses 1 ("{\"link\":{\"points\":[[\"" ++ "aa".pushn 'a' 30 ++ "\"]],\"root_b_sha512\":{\"t\":\"" ++
+    "".pushn '0' 128 ++ "\"}},\"streams\":[{\"stream\":\"t/rep0\",\"rounds\":[{\"msg_sha512\":\"" ++ "".pushn '1' 128 ++
+    "\",\"coins\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}]}]}")).toOption.map
+    (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/1/session", 1, 1), ("slot/1/t/rep0", 2, 5)]
+#guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
+#guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 
 end SampledProofs.OneStageZk

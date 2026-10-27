@@ -223,3 +223,85 @@ def test_the_v2_audit_refuses_a_circuit_no_blob_holds(fx):
     refusal before any session is set up."""
     got, why = _v2(fx, fx / "session", circuit="ab" * 64)
     assert got is None and why.startswith("circuit: no blob has the SHA-512"), why
+
+
+def _record(**over) -> dict:
+    """A session record with what `session_uses` reads: two tables' root_B digests, out of key order, five link points
+    and a stream of two rounds beside one of none."""
+    r = {"link": {"points": [["0" * 32, "1" * 32, "2" * 32], ["3" * 32, "4" * 32]],
+                  "root_b_sha512": {"b": "bb" * 64, "a": "aa" * 64}},
+         "streams": [{"stream": "t/rep0", "rounds": [{"msg_sha512": "01" * 64, "coins": ["5" * 32] * 5},
+                                                     {"msg_sha512": "02" * 64, "coins": ["6" * 32] * 4}]},
+                     {"stream": "u", "rounds": []}]}
+    for path, v in over.items():
+        *ks, last = path.split(".")
+        at = r
+        for k in ks:
+            at = at[int(k)] if isinstance(at, list) else at[k]
+        if isinstance(at, list):
+            at[int(last)] = v
+        else:
+            at[last] = v
+    return r
+
+
+#: records `session_uses` refuses, each by one field (`_record`'s dotted path) or as a whole
+REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex strings": _record(**{"link.points.1": [3]}),
+           "no root_B digests": _record(**{"link.root_b_sha512": []}),
+           "a short root_B digest": _record(**{"link.root_b_sha512.a": "aa" * 63}),
+           "a root_B digest not hex": _record(**{"link.root_b_sha512.a": "zz" * 64}),
+           "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
+           "rounds not a list": _record(**{"streams.1.rounds": None}),
+           "a round without its digest": _record(**{"streams.0.rounds.0": {"coins": []}}),
+           "a short round digest": _record(**{"streams.0.rounds.1.msg_sha512": "02" * 63}),
+           "an uppercase round digest": _record(**{"streams.0.rounds.1.msg_sha512": "AB" * 64}),
+           "coins not a list": _record(**{"streams.0.rounds.0.coins": "5" * 32}),
+           "a record not an object": [], "not JSON": "{"}
+
+
+def _uses(slot: int, text: str) -> dict:
+    try:
+        return {"uses": [{"after": a.hex(), "coins": n, "label": lab, "want": w} for lab, a, n, w in
+                         PF.session_uses(slot, text)]}
+    except ValueError as refused:
+        return {"refused": str(refused)}
+
+
+def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_digest():
+    """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
+    SHA-512 of the tables' root_B digests in key order, then each round after its own digest, a 64-byte coin for each
+    four F128s, under the session's slot."""
+    pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
+    assert PF.session_uses(3, json.dumps(_record())) == [
+        ("slot/3/session", hashlib.sha512(b"\xaa" * 64 + b"\xbb" * 64).digest(), 2, pts),
+        ("slot/3/t/rep0", b"\x01" * 64, 2, ["5" * 32] * 5), ("slot/3/t/rep0", b"\x02" * 64, 1, ["6" * 32] * 4)]
+    for name, r in REFUSED.items():
+        assert "refused" in _uses(0, r if isinstance(r, str) else json.dumps(r)), name
+
+
+@lean
+@pytest.mark.slow
+def test_session_uses_is_the_v2_audits_own(tmp_path):
+    """`session_uses` against `sampled-proofs-one-stage-zk uses` (Lean `sessionUses`, which `roundsWhy` reads): the
+    same uses on a well-formed record, and the same refusal, reason included, on each malformed one (a malformed JSON
+    text only refused by both). Slow for the v2 executable's build, which the v2 tests above share."""
+    for name, r in {"well formed": _record(), **REFUSED}.items():
+        text = r if isinstance(r, str) else json.dumps(r)
+        (tmp_path / "record.json").write_text(text)
+        mine, lean_ = _uses(2, text), PF.uses_v2(2, tmp_path / "record.json")
+        if name == "not JSON":
+            assert "refused" in mine and "refused" in lean_, (mine, lean_)
+        else:
+            assert mine == lean_, (name, mine, lean_)
+
+
+@lean
+@pytest.mark.slow
+def test_session_uses_of_the_fixtures_record_is_the_v2_audits_own(fx):
+    """On the pinned session's own record (C-Flock's, not a synthetic one), `session_uses` is Lean's, and every round
+    of it is a use."""
+    rec = fx / "session" / "session.json"
+    mine = _uses(0, rec.read_text())
+    assert mine == PF.uses_v2(0, rec), mine
+    rounds = sum(len(s["rounds"]) for s in json.loads(rec.read_text())["streams"])
+    assert len(mine["uses"]) == 1 + rounds, mine

@@ -72,14 +72,14 @@ def roundCoins (key : ChallengerKey) (window : String) (us : List Use) (coins : 
 /-- `{"coins", "key", "uses", "window"}` to `round_coins`'s: `uses` a list of `{after, coins, label}`. -/
 def roundsPiece (j : Json) : V Json := do
   unless keys? j == some #["coins", "key", "uses", "window"] do throw "a request's keys are coins, key, uses, window"
-  let key ← ChallengerKey.ofJson (getD j "key")
   let .str window := getD j "window" | throw "window is not a string"
   let .arr us := getD j "uses" | throw "uses is not a list"
   let uses ← us.toList.mapM fun u => do
+    unless keys? u == some #["after", "coins", "label"] do throw "a use is {after, coins, label}"
     let (.str label, .str after, some n) := (getD u "label", getD u "after", nat? (getD u "coins"))
       | throw "a use is {after, coins, label}"
     pure ({ label, after := ← Flock.unhex after, coins := n } : Use)
-  return match roundCoins key window uses (getD j "coins") with
+  return match (do roundCoins (← ChallengerKey.ofJson (getD j "key")) window uses (getD j "coins")) with
     | .ok xs => Json.mkObj [("coins", Json.arr (xs.toArray.map fun x => Json.str (Flock.hexOf x)))]
     | .error why => Json.mkObj [("refused", Json.str why)]
 
