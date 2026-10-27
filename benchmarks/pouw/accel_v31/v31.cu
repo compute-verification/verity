@@ -159,9 +159,15 @@ struct FormArgs {
   int rows, K, lp, nt, kb64, dz, dy, cap, TL;
   int* off;               // B side: row j's wraps of noise tile tau are its list's [off[j (nt + 1) + tau], ... + tau + 1)
 };
+// A row's entry k of A + d_A (or B + d_B), through the read-only path: FormArgs' pointers may alias, so a noise tile's 16
+// rows are loaded this way before any of them is stored, or each load would wait for the stores before it
+DEV int dithered(const FormArgs& f, size_t i, int k) {
+  return (int)__ldg(f.Q + i * f.K + k) + ((__ldg(f.bits + i * f.kb64 + (k >> 3)) >> (k & 7)) & 1);
+}
 // A side: a CTA of L' threads takes 16 rows; thread c the column c of every noise tile. Z_X[i, pi_tau(c)] += A~[i, tau L' + c]
-// through shared atomics; X^T in 16-byte columns of the 16 rows.
-__global__ void form_a_kernel(FormArgs f) {
+// through shared atomics; X^T in 16-byte columns of the 16 rows. 80 registers: three CTAs an SM at L' 256 (the rows' 16
+// loads in flight take it to 96 uncapped).
+__global__ void __maxnreg__(80) form_a_kernel(FormArgs f) {
   extern __shared__ int zs[];   // [16][L']
   __shared__ int scnt[16];
   const int c = threadIdx.x, lp = f.lp;
@@ -172,12 +178,15 @@ __global__ void form_a_kernel(FormArgs f) {
   if (c < 16) scnt[c] = 0;
   __syncthreads();
   for (int tau = 0; tau < f.nt; ++tau) {
-    const int k = tau * lp + c, pc = f.perm[(size_t)tau * lp + c];
+    const int k = tau * lp + c, pc = __ldg(f.perm + (size_t)tau * lp + c);
+    int ad[16];
+#pragma unroll
+    for (int r = 0; r < 16; ++r) ad[r] = dithered(f, i0 + r, k);
     u32 xp[4] = {0, 0, 0, 0};
 #pragma unroll
     for (int r = 0; r < 16; ++r) {
       const size_t i = i0 + r;
-      const int at = (int)f.Q[i * f.K + k] + ((f.bits[i * f.kb64 + (k >> 3)] >> (k & 7)) & 1) + v[r];
+      const int at = ad[r] + v[r];
       const int x = ((at + 128) & 255) - 128, w = (at - x) >> 8;
       f.X[i * f.K + k] = (int8_t)x;
       xp[r >> 2] |= (u32)(x & 255) << (8 * (r & 3));
@@ -221,12 +230,15 @@ __global__ void form_b_kernel(FormArgs f, int8_t* __restrict__ ww) {
       if (c < 16) f.off[(j0 + c) * (f.nt + 1) + tau] = min(scnt[c], f.cap);
       __syncthreads();
     }
-    const int k = tau * lp + c, pc = f.perm[(size_t)tau * lp + c];
+    const int k = tau * lp + c, pc = __ldg(f.perm + (size_t)tau * lp + c);
+    int bds[16];
+#pragma unroll
+    for (int r = 0; r < 16; ++r) bds[r] = dithered(f, j0 + r, k);
     u32 bp[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 #pragma unroll
     for (int r = 0; r < 16; ++r) {
       const size_t j = j0 + r;
-      const int bd = (int)f.Q[j * f.K + k] + ((f.bits[j * f.kb64 + (k >> 3)] >> (k & 7)) & 1), bt = bd + us[r * lp + pc];
+      const int bd = bds[r], bt = bd + us[r * lp + pc];
       const int x = ((bt + 128) & 255) - 128, w = (bt - x) >> 8;
       f.X[j * f.K + k] = (int8_t)x;
       if (WRAP5) ww[j * f.K + k] = (int8_t)w;
@@ -860,17 +872,26 @@ struct Ring {
   }
 };
 
-// T_s's low 16 bits, a pair of columns a 32-bit store
+// T_s's low 16 bits. Lane q of a quad holds a row's columns 8 ni + 2 q, + 1 (ni < 4) of the warp's 32; two butterfly rounds
+// transpose the quad's 4 x 4 words, so lane q stores columns 8 q .. 8 q + 7 as one 16-byte store and a warp's store
+// writes whole sectors (eight rows of 64 bytes, not of four 16-byte pieces)
 DEV void store_words(const int (&acc)[4][4][4], uint16_t* words, size_t tile, int S, int s, int wm, int wn, int g, int q) {
-  u32* w = reinterpret_cast<u32*>(words + (tile * S + (size_t)(s - 1)) * (TILE * TILE));
-  const int r0 = wm * 64 + g, c0 = wn * 32 + 2 * q;
+  constexpr u32 ALL = 0xFFFFFFFFu;
+  uint4* w = reinterpret_cast<uint4*>(words + (tile * S + (size_t)(s - 1)) * (TILE * TILE));
+  const bool o1 = q & 1, o2 = q & 2;
 #pragma unroll
   for (int mi = 0; mi < 4; mi++)
 #pragma unroll
-    for (int ni = 0; ni < 4; ni++) {
-      const int p = (r0 + 16 * mi) * TILE + c0 + 8 * ni;
-      w[p >> 1] = __byte_perm((u32)acc[mi][ni][0], (u32)acc[mi][ni][1], 0x5410);
-      w[(p + 8 * TILE) >> 1] = __byte_perm((u32)acc[mi][ni][2], (u32)acc[mi][ni][3], 0x5410);
+    for (int h = 0; h < 2; h++) {
+      u32 a[4];
+#pragma unroll
+      for (int ni = 0; ni < 4; ni++) a[ni] = __byte_perm((u32)acc[mi][ni][2 * h], (u32)acc[mi][ni][2 * h + 1], 0x5410);
+      u32 x0 = __shfl_xor_sync(ALL, o1 ? a[0] : a[1], 1), x1 = __shfl_xor_sync(ALL, o1 ? a[2] : a[3], 1);
+      if (o1) { a[0] = x0; a[2] = x1; } else { a[1] = x0; a[3] = x1; }
+      x0 = __shfl_xor_sync(ALL, o2 ? a[0] : a[2], 2);
+      x1 = __shfl_xor_sync(ALL, o2 ? a[1] : a[3], 2);
+      if (o2) { a[0] = x0; a[1] = x1; } else { a[2] = x0; a[3] = x1; }
+      w[((wm * 64 + g + 16 * mi + 8 * h) * TILE + wn * 32 + 8 * q) >> 3] = make_uint4(a[0], a[1], a[2], a[3]);
     }
 }
 
