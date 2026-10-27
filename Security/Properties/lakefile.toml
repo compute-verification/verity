@@ -98,6 +98,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.SampledProofs.OneStageZk", "Properties.Composed",
-  "Properties.Onsite", "Properties.Remote", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
-  "Properties.Composition", "Properties.Verity.Soundness", "Properties.Verity.Game"]
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Challenger",
+  "Properties.SampledProofs.OneStageZk", "Properties.Composed", "Properties.Onsite", "Properties.Remote",
+  "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Composition", "Properties.Verity.Soundness",
+  "Properties.Verity.Game"]
