@@ -3,13 +3,13 @@
 # manifest of record, read in place from sweep-b3) Committed once more with the verifier's SiluMul_v2 partition
 # (glm53_silu_mul_v2_tp8.json) committed as served windows, one per rank (SERVING_ROWS, REPLAY_DEFERRED=1), one pair, into its
 # own sweep dir (sweep-a5): the Commit of record's commit/ is never written.
-#   research run --on vy-glm53-eu2 --project verity --source TREE --cwd source --timeout 43200 --custody-ttl 24h \
-#     --declared-output 'out/**' -- bash benchmarks/one_stage/a5_glm53_commit.sh
+#   bash benchmarks/one_stage/a5_glm53_commit.sh
+#   (a job run from the source tree, up to 12 h, keeping out/**)
 # Needs on the node: the row of record at $SRC/$ROW (manifest.json, build/, match/capture/tokens.json), the checkpoint's verified
 # local copy at /workspace/cp/glm53-ckpt/$REV (bound over its pinned path /workspace/fs/glm53/$REV, created if absent),
-# /workspace/cp/venv312 and /workspace/cp/hf. The windows' private bodies (m*-private.bin: rows and salts) leave the run dir for
-# HANDOFF before the job ends, so custody never uploads them; $OUT keeps the public files, the TP Commit's record and
-# handoff.txt (HANDOFF's path), which a5_glm53_cpu.sh copies to the CPU machine.
+# /workspace/cp/venv312 and /workspace/cp/hf. The windows' private bodies (m*-private.bin, v*-private.bin: rows and salts)
+# leave the run dir for HANDOFF before the job ends, so custody never uploads them; $OUT keeps the public files, the TP
+# Commit's record and handoff.txt (HANDOFF's path), which a5_glm53_cpu.sh copies to the CPU machine.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 SRC=/workspace/fs/glm53-failfast/sweep-b3
