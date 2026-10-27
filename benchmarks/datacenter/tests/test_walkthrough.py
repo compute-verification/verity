@@ -66,7 +66,8 @@ def gpu(name):
                   rate={"mac:bf16": Assumption(f"{name}.bf16", 1e9, "MAC/s"),
                         "cuda:gate": Assumption(f"{name}.gates", 1e10, "gate/s")},
                   memory=Assumption(f"{name}.hbm", 96 * GB, "bits"),
-                  residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"))
+                  residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"),
+                  write=Assumption(f"{name}.write", 4e14, "bit/s"))
 
 
 def section_4():

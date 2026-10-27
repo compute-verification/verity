@@ -36,7 +36,8 @@ HBM, RESIDUAL = 6.4e10, 8e6
 def node(n: str) -> Block:
     gpu = Device(f"{n}.gpu", "gpu", rate={"mac:bf16": Assumption(f"{n}.gpu.bf16", 1e6, "MAC/s"),
                                           "cuda:gate": Assumption(f"{n}.gpu.gates", 1e7, "gate/s")},
-                 memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"))
+                 memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"),
+                 write=Assumption(f"{n}.gpu.write", 1e14, "bit/s"))
     return Block(n, [gpu])
 
 

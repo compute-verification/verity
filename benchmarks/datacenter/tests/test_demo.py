@@ -2,6 +2,8 @@
 own reason, the refused windows are charged at line rate, and a KV store read from host DRAM certifies no local reads."""
 from __future__ import annotations
 
+import pytest
+
 from datacenter import Deviation, Port
 from datacenter.demo import night
 from datacenter.models import words
@@ -14,7 +16,8 @@ def test_an_honest_night_on_a_rack_is_sound_and_located():
     assert acc.input_bits == {"x": 512, "temperature": 16} and acc.advice_bits == 3
     n0, n1 = acc.blocks
     assert n0.credited == n1.credited == 1024 + 5728 + 32 + 179 and n1.reads > 0   # a linear and a noised product each
-    assert n0.carried < n1.carried            # n0's DPU and BMC were wiped
+    # n0's DPU and BMC state no write ceiling, so their wipes fill what the links into them carry in 0.2 ms
+    assert n1.carried - n0.carried == pytest.approx((400e9 + 400e9 + 1e9 + 1e9) * 2e-4)
 
 
 def test_under_salt_custody_each_nodes_noised_product_is_pinned_to_it():

@@ -48,7 +48,7 @@ nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BM
 their certifiers on a leaf-spine fabric), `rack` (the demo's) and `two_sites` (a `Fleet` of two leaf-spines joined by
 a WAN between their spines). A link between datacenters is fabric, as a switch is: coverage is per block, every block's
 boundary is certified already, and the outside world is everything off every block. `benchmarks/network_sim/graph.py`
-exports them as a network, a netns plan or a GML graph, and its tests pin their values against `verity` and the census.
+exports them as a network, a netns plan or a GML graph, and its tests pin their tensor-core rates to the census.
 `models` builds the demo's and the tests' small Programs from registered Boolean Definitions (`Gemm_v3`, the BF16
 tensor-core step on bits, which `Gemm_v2`'s kernel evaluates through the word view).
 
@@ -70,7 +70,8 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 up") section by section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
 verity_vllm's serving Program the same way.
 
-The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, `Block` is `Hardware.SpatialUnit`
-with `Covered`, `Placement` is `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the census's
-grain, a `Store` is `Accounting.Requirement.Store`, and an `Interval` is `Accounting.Window`. Design:
-`note:network-accounting/20261018T0615Z-draft-datacenter-network-simulation`.
+The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `Device` is `Accounting.Device`
+(the node's constants are its one Python mirror's, `verity.core.protocols.remote_bandwidth.timing`), `Block` is
+`Hardware.SpatialUnit` with `Covered`, `Placement` is `Accounting.Placed` (and `Accounting.Requirement.Placement`, in
+#2399) at the census's grain, a `Store` is `Accounting.Requirement.Store`, and an `Interval` is `Accounting.Window`.
+Design: `note:network-accounting/20261018T0615Z-draft-datacenter-network-simulation`.

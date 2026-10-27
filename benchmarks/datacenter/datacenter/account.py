@@ -20,7 +20,8 @@ concludes:
 - `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and the
   part no path into the registered device (a boundary link, or host DRAM over PCIe) can have carried in;
 - `carried`: the bits that could have been carried into the epoch: each device's memory, less what a wipe's labels
-  filled, and never less than its residual. For a block out for maintenance, only a wipe after it counts.
+  filled (at most its `fill_rate` over the wipe), and never less than its residual. For a block out for maintenance,
+  only a wipe after it counts.
 
 For the whole datacenter it gives where each held store could have been (`located`: the devices that could have
 answered its sample by the deadline, and none when the prover could rebuild the sample in time), the covert budget (the profile's
@@ -50,7 +51,7 @@ from dataclasses import dataclass, field
 
 from .binding import Profile
 from .claims import Carried, Claim, Computed, Entered, Held, Read, Refused, Scheduled
-from .memory import answer_time, regen_time
+from .memory import answer_time, fill_rate, into, regen_time
 from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
@@ -205,14 +206,9 @@ def _sample(profile: Profile, c: Held) -> float:
     return next((a for a in asks if a is not None), c.bits)
 
 
-def _into(dc: Datacenter, device: str) -> float:
-    """Bits a second every path into `device` from the rest of the datacenter carries: the links that end at it."""
-    return sum(float(l.capacity) for l in dc.links if device in (l.a, l.b))
-
-
 def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...] = ()) -> Account:
-    """Read `claims` against `profile`: credit by the profile's weights, and the time it takes at the devices' declared
-    rates for each kind of work, under the named premises in `assume`."""
+    """Read `claims` against `profile`: credit their ANDs, and the time the work takes at the devices' declared rates for
+    each kind of it, under the named premises in `assume`."""
     dc, epoch = profile.datacenter, profile.plan.epoch
     seconds = dc.cadence.seconds(epoch.length)
     inside = lambda c: getattr(c, "during", epoch) in epoch  # noqa: E731
@@ -238,7 +234,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                 and answer_time(dc, c.by, s.device, d.name, bits) <= deadline]
             rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
             if s.content == "labels" and located[c.store] == [s.device] and rejoined:
-                filled[s.device] = max(filled[s.device], s.bits)
+                filled[s.device] = max(filled[s.device], min(s.bits, fill_rate(dc, s.device) * deadline))
 
     reads, reads_local = defaultdict(float), defaultdict(float)
     for c in claims:
@@ -246,7 +242,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             device = profile.stores[c.store].device
             if (b := dc.block_of(device)) is not None:
                 reads[b.name] += c.bits
-                reads_local[b.name] += max(c.bits - _into(dc, device) * dc.cadence.seconds(c.during.length), 0.0)
+                reads_local[b.name] += max(c.bits - into(dc, device) * dc.cadence.seconds(c.during.length), 0.0)
 
     premises = {a.name for a in assume}
     ports = {repr(p): p for p in dc.ports}
