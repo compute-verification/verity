@@ -148,4 +148,33 @@ def PeriodAcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     protocol.check p c e = .accept pub prof → PeriodWindowsAccepted p c e
 
+/-- Every link-window's answer is at `δ`: the integrity profile it carries has `δ`. -/
+def PeriodWindowsAt (δ : Core.Ratio) (e : Evidence) : Prop :=
+  ∀ (i : Nat) (x : Window) (prof : Json) (it : Core.Integrity), e.windows[i]? = some x →
+    x.answer.profile = some prof → Core.Integrity.ofJson prof = .ok it → it.delta = δ
+
+/-- In the rows form every link-window's scan is at one `δ`, as the check asks (`PeriodLeakAccepted`'s); the clock
+form asks nothing. -/
+def PeriodScansOneDelta (p : Params) (e : Evidence) : Prop :=
+  match p.form with
+  | .clock _ => True
+  | .rows _ _ _ => ∃ δ, PeriodWindowsAt δ e
+
+/-- Compute audit `a`, registered as `reg`, was proved: its registration names its Program, and its answer `x` is
+one-stage's for the registration's digest and accepted, with a public output holding a `bound` and a profile of one
+level of its Program's units drawn `subset:k` or stratified. -/
+def PeriodAuditProved (a : Audit) (reg : Registration) (x : Core.Answer) : Prop :=
+  (reg.record.getObjValD "program" == .str a.program) = true ∧
+    x.protocol = oneStage ∧ (x.digest == some reg.digest) = true ∧ x.verdict = .accept ∧
+    ∃ pub prof i l b, x.published = some pub ∧ x.profile = some prof ∧ Core.Integrity.ofJson prof = .ok i ∧
+      i.levels = #[l] ∧ l.size = a.units ∧ ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) ∧
+      Flock.J.nat pub "bound" "public" = .ok b
+
+/-- The commitment registers and the evidence answers exactly the parameters' compute audits, and every one was
+proved. -/
+def PeriodAuditsProved (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+  c.audits.size = p.audits.size ∧ e.audits.size = p.audits.size ∧
+    ∀ (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer), p.audits[i]? = some a → c.audits[i]? = some reg →
+      e.audits[i]? = some x → PeriodAuditProved a reg x
+
 end Properties.NetworkCertifier
