@@ -43,6 +43,8 @@ the other's argument. Fold semantics belong to FILL-SEC's receipt-fold module. M
   - Words: `word`, `const`, `add_words`, `xor_words`, `mul_const`, `equal`, `differ` and `value`.
   - Cardinality: `at_most`, `at_least` and `exactly`.
   - Solving: `solve`, `models(over, limit)` and `count`.
+- `exact_kit.settings`: the environment variables the kit reads (`research run`'s `OUT`, `RESEARCH_RUN_DIR`,
+  `RESEARCH_RUN_ID` and `RESEARCH_SOURCE_SHA`), declared once; `checks` reads them there.
 
 Every primitive is cross-checked in `tests/`, against brute force on small cases and against sympy's linear algebra over
 GF(p). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv

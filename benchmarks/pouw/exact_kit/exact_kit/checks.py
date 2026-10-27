@@ -23,6 +23,8 @@ import os
 import sys
 from pathlib import Path
 
+from exact_kit import settings
+
 SCHEMA = "exact-kit/verdict/v1"
 
 
@@ -114,8 +116,8 @@ class Checks:
         self._print(f"\n{self.summary()}")
         doc = self.verdict()
         path = self.verdict_path
-        if path is None and os.environ.get("OUT"):
-            path = os.path.join(os.environ["OUT"], f"{Path(self.script).stem}.verdict.json")
+        if path is None and settings.OUT:
+            path = os.path.join(settings.OUT, f"{Path(self.script).stem}.verdict.json")
         if path:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             Path(path).write_text(dumps(doc), encoding="utf-8")
@@ -131,7 +133,7 @@ def dumps(doc: dict) -> str:
 def _result(doc: dict, verdict_path: str | None, detail: str) -> None:
     """The run's ``research/result/v0.1`` document (tools/research/src/research/result.py), written without importing
     `research`, as benchmarks/pouw/run_result.py does."""
-    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    run_dir, run_id = settings.RESEARCH_RUN_DIR, settings.RESEARCH_RUN_ID
     if not run_dir or not run_id:
         return
     rel = None
@@ -142,7 +144,7 @@ def _result(doc: dict, verdict_path: str | None, detail: str) -> None:
             rel = None
     out = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"script": doc["script"], "args": doc["args"], "mutations_run": doc["mutations_run"],
-                                    "source_sha": os.environ.get("RESEARCH_SOURCE_SHA")},
+                                    "source_sha": settings.RESEARCH_SOURCE_SHA},
            "validation": {"status": "passed" if doc["ok"] else "failed", "checker": "exact_kit.checks", "detail": detail,
                           "evidence": [rel] if rel else []},
            "measurements": [{"name": k, "value": float(v), "unit": "count"} for k, v in doc["counts"].items()],
