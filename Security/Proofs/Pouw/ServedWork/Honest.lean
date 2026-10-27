@@ -151,6 +151,7 @@ theorem served_meets (n : ℕ) :
           ((), saltCoin (hr1 _) x w) = fun _ => saltCoin (hr1 _) x w := rfl
       rw [e, rightWords_hon]
       exact sum_tileWords _
+    show (n : ℝ) * (tileCount σ sT : ℝ) ≤ _
     refine le_of_eq (Eq.symm ((Finset.sum_congr rfl fun w _ => h w).trans ?_))
     simp
 
