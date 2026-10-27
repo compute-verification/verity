@@ -17,7 +17,7 @@ import pytest
 import research.queue as Q
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
-from research.queue import QueueError, StoreLabels, label_target, lean_change
+from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
@@ -495,6 +495,19 @@ def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_c
     h.q.sync()
     assert {m.pr: lean_change(h.d.repo, m.commit) for m in h.q.chain()} == {1: True, 2: False, 3: True}
     assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
+
+
+def test_a_two_demos_lean_change_lands_on_its_verdict_and_another_waits(world, monkeypatch):
+    """A PR whose title says "two demos" lands on its land verdict with no Lean check first (its records passed at its
+    ready mark, and the after-landing lean-audit checks it); any other lock change still waits for one."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.prs[1] = PR(1, head, "Two demos: the lock", "Lane `lane-1`.")
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{\n}"}, base=head))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert h.launched and h.launched[0][0] != head, world.logs              # #2's own check, never #1's
 
 
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):

@@ -37,7 +37,7 @@ DOC_TERMS = {
     "physical block": "server-time block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the remote bandwidth audit, the network certifier, the wipe), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification, memory wipes), or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -76,7 +76,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#4721 adds lines",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
-    "verity/core/protocols/sampled_proofs/README.md": "#4637 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
 }
