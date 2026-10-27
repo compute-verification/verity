@@ -137,7 +137,7 @@ theorem setupTables_retainHP (hh : tags.hiddenOutputs = true)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact congrArg Tags.retainRounds (Hidden.setupHidden_tagsP (by assumption))
+  · exact congrArg Tags.retainRounds (Hidden.setupHidden_tagsP (FlockSoundness.Discharge.Exec.ok_of_refuse (by assumption)))
   all_goals rfl
 
 /-- The session's two link points have every table's length, under hidden outputs at `own`
