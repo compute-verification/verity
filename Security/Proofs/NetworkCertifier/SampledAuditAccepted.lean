@@ -16,7 +16,7 @@ the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mo
   holds the trace's value at every egress gate (`valOver_out`). A gate of a unit that isn't faulty computes what its
   proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
   correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: the reading
-  gate's own replay unit's, a held gate's or another correct unit's boundary value, each the trace's. An input reads
+  gate's own replay block's, a held gate's or another correct unit's boundary value, each the trace's. An input reads
   the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
   later step's ingress (`Good`).
 -/
@@ -35,24 +35,24 @@ theorem idx_eq_of_mem_flatten {α : Type} {L : List (List α)} (h : L.flatten.No
   · exact hij
   · exact (hp j i hj hi hij a hb a ha rfl).elim
 
-theorem gates_eq (P : Partition) : P.gates = (P.rus.map RU.gates).flatten := by
+theorem gates_eq (P : Partition) : P.gates = (P.replayBlocks.map ReplayBlock.gates).flatten := by
   rw [Partition.gates, List.flatten_flatten]
   rfl
 
-theorem mem_rus {P : Partition} {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) :
-    RU.gates r ∈ P.rus.map RU.gates :=
+theorem mem_replayBlocks {P : Partition} {v : ℕ} {r : ReplayBlock} (hr : P.replayBlocks[v]? = some r) :
+    ReplayBlock.gates r ∈ P.replayBlocks.map ReplayBlock.gates :=
   List.mem_map.2 ⟨r, List.mem_of_getElem? hr, rfl⟩
 
-theorem mem_ru_gates {r : RU} {u : List ℕ} (hu : u ∈ r) {g : ℕ} (hg : g ∈ u) : g ∈ RU.gates r :=
+theorem mem_ru_gates {r : ReplayBlock} {u : List ℕ} (hu : u ∈ r) {g : ℕ} (hg : g ∈ u) : g ∈ ReplayBlock.gates r :=
   List.mem_flatten.2 ⟨u, hu, hg⟩
 
-theorem mem_gates {P : Partition} {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) {u : List ℕ} (hu : u ∈ r) {g : ℕ}
+theorem mem_gates {P : Partition} {v : ℕ} {r : ReplayBlock} (hr : P.replayBlocks[v]? = some r) {u : List ℕ} (hu : u ∈ r) {g : ℕ}
     (hg : g ∈ u) : g ∈ P.gates := by
   rw [gates_eq]
-  exact List.mem_flatten.2 ⟨_, mem_rus hr, mem_ru_gates hu hg⟩
+  exact List.mem_flatten.2 ⟨_, mem_replayBlocks hr, mem_ru_gates hu hg⟩
 
 theorem exists_of_mem_gates {P : Partition} {g : ℕ} (h : g ∈ P.gates) :
-    ∃ (v : ℕ) (r : RU) (u : List ℕ), P.rus[v]? = some r ∧ u ∈ r ∧ g ∈ u := by
+    ∃ (v : ℕ) (r : ReplayBlock) (u : List ℕ), P.replayBlocks[v]? = some r ∧ u ∈ r ∧ g ∈ u := by
   rw [gates_eq] at h
   obtain ⟨l, hl, hg⟩ := List.mem_flatten.1 h
   obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hl
@@ -60,28 +60,28 @@ theorem exists_of_mem_gates {P : Partition} {g : ℕ} (h : g ∈ P.gates) :
   obtain ⟨v, hv, rfl⟩ := List.getElem_of_mem hr
   exact ⟨v, _, u, List.getElem?_eq_getElem hv, hu, hgu⟩
 
-/-- **A gate is in one replay unit**: two slots whose replay units hold it are one. -/
-theorem slot_unique {P : Partition} (hN : P.gates.Nodup) {v v' : ℕ} {r r' : RU} (hr : P.rus[v]? = some r)
-    (hr' : P.rus[v']? = some r') {g : ℕ} (hg : g ∈ RU.gates r) (hg' : g ∈ RU.gates r') : v = v' := by
+/-- **A gate is in one replay block**: two slots whose replay blocks hold it are one. -/
+theorem slot_unique {P : Partition} (hN : P.gates.Nodup) {v v' : ℕ} {r r' : ReplayBlock} (hr : P.replayBlocks[v]? = some r)
+    (hr' : P.replayBlocks[v']? = some r') {g : ℕ} (hg : g ∈ ReplayBlock.gates r) (hg' : g ∈ ReplayBlock.gates r') : v = v' := by
   rw [gates_eq] at hN
   obtain ⟨hv, rfl⟩ := List.getElem?_eq_some_iff.1 hr
   obtain ⟨hv', rfl⟩ := List.getElem?_eq_some_iff.1 hr'
-  have h1 : v < (P.rus.map RU.gates).length := by simpa using hv
-  have h2 : v' < (P.rus.map RU.gates).length := by simpa using hv'
+  have h1 : v < (P.replayBlocks.map ReplayBlock.gates).length := by simpa using hv
+  have h2 : v' < (P.replayBlocks.map ReplayBlock.gates).length := by simpa using hv'
   exact idx_eq_of_mem_flatten hN h1 h2 (by simpa using hg) (by simpa using hg')
 
-/-- **A gate is in one proof unit of its replay unit.** -/
-theorem unit_unique {P : Partition} (hN : P.gates.Nodup) {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) {u u' : List ℕ}
+/-- **A gate is in one proof unit of its replay block.** -/
+theorem unit_unique {P : Partition} (hN : P.gates.Nodup) {v : ℕ} {r : ReplayBlock} (hr : P.replayBlocks[v]? = some r) {u u' : List ℕ}
     (hu : u ∈ r) (hu' : u' ∈ r) {g : ℕ} (hg : g ∈ u) (hg' : g ∈ u') : u = u' := by
   rw [gates_eq] at hN
-  have hrN : r.flatten.Nodup := (List.pairwise_flatten.1 hN).1 _ (mem_rus hr)
+  have hrN : r.flatten.Nodup := (List.pairwise_flatten.1 hN).1 _ (mem_replayBlocks hr)
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hu
   obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hu'
   have := idx_eq_of_mem_flatten hrN hi hj hg hg'
   subst this
   rfl
 
-/-! ## Boundaries, reads and the replay unit's values -/
+/-! ## Boundaries, reads and the replay block's values -/
 
 theorem boundary_of_read {C : Prog} {u : List ℕ} {g' i : ℕ} {x : BGate} (hx : C.gates[g']? = some x)
     (hi : i ∈ x.reads) (hg' : g' ∉ u) : C.Boundary u i = true := by
@@ -110,16 +110,16 @@ theorem read_of_not_const {C : Prog} {ref : ℕ → Option Bool} {i : ℕ} (h : 
     exact absurd hb (h b)
   · rfl
 
-theorem ref_of_boundary {C : Prog} {r : RU} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ}
-    (h : C.Boundary (RU.gates r) g = true) : RU.ref C r ref ι g = ref g := by
-  simp [RU.ref, h]
+theorem ref_of_boundary {C : Prog} {r : ReplayBlock} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ}
+    (h : C.Boundary (ReplayBlock.gates r) g = true) : ReplayBlock.ref C r ref ι g = ref g := by
+  simp [ReplayBlock.ref, h]
 
-theorem ref_of_not_mem {C : Prog} {r : RU} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ} (h : g ∉ RU.gates r) :
-    RU.ref C r ref ι g = ref g := by
-  simp [RU.ref, h]
+theorem ref_of_not_mem {C : Prog} {r : ReplayBlock} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ} (h : g ∉ ReplayBlock.gates r) :
+    ReplayBlock.ref C r ref ι g = ref g := by
+  simp [ReplayBlock.ref, h]
 
-theorem read_ref_of_not_mem {C : Prog} {r : RU} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {i : ℕ}
-    (h : i ∉ RU.gates r) : C.read (RU.ref C r ref ι) i = C.read ref i := by
+theorem read_ref_of_not_mem {C : Prog} {r : ReplayBlock} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {i : ℕ}
+    (h : i ∉ ReplayBlock.gates r) : C.read (ReplayBlock.ref C r ref ι) i = C.read ref i := by
   unfold Prog.read
   split
   · rfl
@@ -221,16 +221,16 @@ section Run
 
 variable {C : Prog} {P : Partition} {ref : ℕ → Option Bool} {F : Finset ℕ} {inp : ℕ → Bool}
   (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
-  (hι : ∀ v r, P.rus[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (RU.ref C r ref (ι v)) u)
+  (hι : ∀ v r, P.replayBlocks[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (ReplayBlock.ref C r ref (ι v)) u)
   (Good : ℕ → Prop) (hgood : ∀ g x, C.gates[g]? = some x → Good g → ∀ i ∈ x.reads, Good i)
   (hinp : ∀ g, C.gates[g]? = some .input → Good g → inp g = traceVal C ref g)
 include hT hP hι hgood hinp
 
 /-- **A unit that isn't faulty computes what its proof unit does**: at a gate whose inputs read the trace, `C` run with
-the faulty units' gates held has the value the gate's proof unit computes on its replay unit's committed values and
+the faulty units' gates held has the value the gate's proof unit computes on its replay block's committed values and
 interior. -/
-theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉ F → u ∈ r → g ∈ u →
-    valOver C inp (heldAdv C P F ref) g = (C.runIn (RU.ref C r ref (ι v)) u g).getD false := by
+theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.replayBlocks[v]? = some r → v ∉ F → u ∈ r → g ∈ u →
+    valOver C inp (heldAdv C P F ref) g = (C.runIn (ReplayBlock.ref C r ref (ι v)) u g).getD false := by
   intro g
   induction g using Nat.strong_induction_on with
   | _ g ih =>
@@ -267,7 +267,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
   by_cases hfi : FaultyGate C P F i
   · rw [valOver_held (heldAdv_of hfi)]
     obtain ⟨v', hv', r', hr', hi', -⟩ := hfi
-    have hnot : i ∉ RU.gates r := fun hir => by
+    have hnot : i ∉ ReplayBlock.gates r := fun hir => by
       rw [slot_unique hN hr hr' hir hi'] at hv
       exact hv hv'
     rw [traceVal, ← read_ref_of_not_mem (ι := ι v) hnot, hc]
@@ -291,9 +291,9 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
     rw [ih i hlt hgi v' r u' hr hv hu' hiu', hrun]
     rw [hb] at hc
     exact Option.some.inj hc
-  · have hnot : i ∉ RU.gates r := fun hir => hvv (slot_unique hN hr' hr (mem_ru_gates hu' hiu') hir)
-    have hgr' : g ∉ RU.gates r' := fun hgr => hvv (slot_unique hN hr hr' (mem_ru_gates hu hg) hgr).symm
-    have hbd : C.Boundary (RU.gates r') i = true := boundary_of_read hx hi hgr'
+  · have hnot : i ∉ ReplayBlock.gates r := fun hir => hvv (slot_unique hN hr' hr (mem_ru_gates hu' hiu') hir)
+    have hgr' : g ∉ ReplayBlock.gates r' := fun hgr => hvv (slot_unique hN hr hr' (mem_ru_gates hu hg) hgr).symm
+    have hbd : C.Boundary (ReplayBlock.gates r') i = true := boundary_of_read hx hi hgr'
     have hv' : v' ∉ F := fun hv' => hfi ⟨v', hv', r', hr', mem_ru_gates hu' hiu', hbd⟩
     have hgu' : g ∉ u' := fun hgu' => hgr' (mem_ru_gates hu' hgu')
     obtain ⟨b, hb, hrun⟩ := (hι v' r' hr' hv' u' hu' i hiu').2 (boundary_of_read hx hi hgu')
@@ -364,7 +364,7 @@ theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Op
 /-! ## No faulty unit is drawn `all` -/
 
 /-- **A set that meets a class drawn `all` has acceptance probability `0`**: that class's factor is `0`. -/
-theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List RU))) (o : ℕ) (B : Finset ℕ),
+theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List ReplayBlock))) (o : ℕ) (B : Finset ℕ),
     ¬ Disjoint B (allSlotsFrom rs cs o) → classesPa rs cs o B = 0
   | [], _, _, _, h => by simp [allSlotsFrom] at h
   | _ :: _, [], _, _, h => by simp [allSlotsFrom] at h
@@ -384,7 +384,7 @@ theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List RU))) (o
             exact ⟨v, ⟨hvB, Finset.mem_Ico.1 hvI⟩, rfl⟩
           rw [he] at hm
           simp at hm
-        have h0 : Rule.Pa ⟨.all, check⟩ (strataSizes c) (ruSizes c) (window o c.flatten.length B) = 0 := by
+        have h0 : Rule.Pa ⟨.all, check⟩ (strataSizes c) (replayBlockSizes c) (window o c.flatten.length B) = 0 := by
           cases check <;> simpa [Rule.Pa, OneStage.Pa] using hw
         rw [h0, zero_mul]
       all_goals exact absurd ⟨Finset.disjoint_empty_right B, h2⟩ h
@@ -403,14 +403,14 @@ theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset �
 open Classical in
 /-- **Every unit that isn't faulty has interior values making its proof units correct.** -/
 theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) :
-    ∃ ι : ℕ → ℕ → Bool, ∀ v r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
-      ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) (ι v)) u := by
-  have : ∀ v, ∃ ι : ℕ → Bool, ∀ r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
-      ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u := by
+    ∃ ι : ℕ → ℕ → Bool, ∀ v r, P.replayBlocks[v]? = some r → v ∉ faulty H Cm s P w →
+      ∀ u ∈ r, s.prog.Correct (ReplayBlock.ref s.prog r (w.val H Cm s) (ι v)) u := by
+  have : ∀ v, ∃ ι : ℕ → Bool, ∀ r, P.replayBlocks[v]? = some r → v ∉ faulty H Cm s P w →
+      ∀ u ∈ r, s.prog.Correct (ReplayBlock.ref s.prog r (w.val H Cm s) ι) u := by
     intro v
-    by_cases h : ∃ r, P.rus[v]? = some r ∧ v ∉ faulty H Cm s P w
+    by_cases h : ∃ r, P.replayBlocks[v]? = some r ∧ v ∉ faulty H Cm s P w
     · obtain ⟨r, hr, hv⟩ := h
-      have hlt : v < P.rus.length := (List.getElem?_eq_some_iff.1 hr).1
+      have hlt : v < P.replayBlocks.length := (List.getElem?_eq_some_iff.1 hr).1
       have hnf : ¬ Faulty H Cm s P w v := fun hf => hv (by
         unfold faulty
         exact Finset.mem_filter.2 ⟨Finset.mem_range.2 hlt, hf⟩)
@@ -428,7 +428,7 @@ committed gates at the trace's values and the other inputs at the trace's makes 
 and operator the trace carries with every status complete. -/
 theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} {k : ℕ} (hT : C.Topological)
     (hP : P.Partitions C) (hfit : lay.Fits C k) {ref : ℕ → Option Bool} {F : Finset ℕ} (ι : ℕ → ℕ → Bool)
-    (hι : ∀ v r, P.rus[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (RU.ref C r ref (ι v)) u)
+    (hι : ∀ v r, P.replayBlocks[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (ReplayBlock.ref C r ref (ι v)) u)
     {op : ℕ → List (Obs L K S) → List Bool} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o)
     (hcov : Covered k o) : Accepted (circuitProgram C lay k) op k o (traceVal C ref, heldAdv C P F ref) := by
   intro t ht

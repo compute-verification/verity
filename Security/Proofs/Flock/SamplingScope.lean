@@ -28,7 +28,7 @@ def toyProg : Prog := ⟨[.input, .input], [0, 1]⟩
 /-- A query; the deployments here evaluate it to `toyPart`. -/
 def toyQuery : Query := ⟨"", 0, []⟩
 
-/-- One class of one stratum of two replay units, the proof units `{0}` and `{1}`. -/
+/-- One class of one stratum of two replay blocks, the proof units `{0}` and `{1}`. -/
 def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
@@ -37,7 +37,7 @@ def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, [
 /-- The program, drawn `subset 3` from two units: out of scope. -/
 def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
 
-theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
+theorem toyPart_replayBlocks : toyPart.replayBlocks = [[[0]], [[1]]] := rfl
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
 theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ) : OneStage.Pa ns (.subset K) B = 0 := by
@@ -124,7 +124,7 @@ theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) :
     simp only [Deploy.part]
     rw [h.partition]
     rfl
-  simp only [Deploy.k, nRU, nPU, h.parse, hp]
+  simp only [Deploy.k, nReplayBlocks, nPU, h.parse, hp]
   rfl
 
 /-- `e^{−a/8} ≤ 8/(a + 8)`, from `1 + y ≤ e^y`. -/

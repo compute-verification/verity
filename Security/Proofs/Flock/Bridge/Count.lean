@@ -5,9 +5,9 @@ import Proofs.Flock.Claims.Sampling.EndToEndDraw
 /-!
 # The bridge's slot count, `P_a`, count lemma and scope
 
-`partOf P` is two classes: the population's `n` replay units, then one per input gate (`partOf_classes`,
-`rus_length_partOf`). `designOf kd` draws the population `subset kd` and the input class at rate `0`, so its `P_a` is
-the population's subset miss at the population slots (`pa_partOf_window`). From them: `PartRusTarget`, `PaTarget`
+`partOf P` is two classes: the population's `n` replay blocks, then one per input gate (`partOf_classes`,
+`replayBlocks_length_partOf`). `designOf kd` draws the population `subset kd` and the input class at rate `0`, so its `P_a` is
+the population's subset miss at the population slots (`pa_partOf_window`). From them: `PartReplayBlocksTarget`, `PaTarget`
 (`P_a(B) = C(n − |B|, kd)/C(n, kd)` for `B` of population slots), and `CountTarget`: a witness outside `RelS` at
 `δ = C(n − K₀, kd)/C(n, kd)` has at least `min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly
 increasing from `kd` on (`choose_lt_of_lt`). A faulty input slot is outside this bound: the deployed verifier checks
@@ -30,11 +30,11 @@ theorem designOf_rules (kd : ℕ) :
 theorem partOf_classes (P : FlockSoundness.Audit.Partition C n) :
     (partOf P).classes = [[(List.finRange n).map fun u => [unitGates P u]], inputClassOf C] := rfl
 
-theorem rus_length_partOf (P : FlockSoundness.Audit.Partition C n) :
-    (partOf P).rus.length = n + (inputsOf C).length := by
-  simp [rus_partOf]
+theorem replayBlocks_length_partOf (P : FlockSoundness.Audit.Partition C n) :
+    (partOf P).replayBlocks.length = n + (inputsOf C).length := by
+  simp [replayBlocks_partOf]
 
-theorem partRus : PartRusTarget := fun P => rus_length_partOf P
+theorem partReplayBlocks : PartReplayBlocksTarget := fun P => replayBlocks_length_partOf P
 
 theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0 n B = B.filter (· < n) := by
   ext v
@@ -102,7 +102,7 @@ theorem mem_gates_partOf (P : FlockSoundness.Audit.Partition C n) {i : ℕ} (hi 
     i ∈ (partOf P).gates := by
   obtain ⟨g, j, hj, rfl, -⟩ := exists_block (List.getElem?_eq_getElem hi)
   unfold Claims.Sampling.Partition.gates
-  rw [rus_partOf]
+  rw [replayBlocks_partOf]
   cases hu : P.unit g with
   | none =>
     have hin : C.op g = .input := by

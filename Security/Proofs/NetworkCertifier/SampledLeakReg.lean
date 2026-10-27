@@ -39,10 +39,10 @@ theorem val_some_of_input {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P
   obtain ⟨v, r, u, hr, hu, hgu⟩ := exists_of_mem_gates hmem
   have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, r, hr, mem_ru_gates hu hgu, boundary_of_input hg⟩
   obtain ⟨b, hb, -⟩ := (hι v r hr hv u hu g hgu).2 (boundary_of_input hg)
-  have hc : ¬ (g ∈ RU.gates r ∧ s.prog.Boundary (RU.gates r) g = false) := fun h => by
+  have hc : ¬ (g ∈ ReplayBlock.gates r ∧ s.prog.Boundary (ReplayBlock.gates r) g = false) := fun h => by
     rw [boundary_of_input hg] at h
     exact Bool.noConfusion h.2
-  unfold RU.ref at hb
+  unfold ReplayBlock.ref at hb
   rw [ite_eq_right hc] at hb
   exact ⟨b, hb⟩
 

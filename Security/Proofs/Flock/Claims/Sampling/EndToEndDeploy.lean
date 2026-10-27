@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 /-!
 # `EndToEndDraw`'s facts as equalities, and the deployed design's shape
 
-At a `SubsetDesign` over one class of `n` replay units (`EndToEndDraw`'s hypotheses):
+At a `SubsetDesign` over one class of `n` replay blocks (`EndToEndDraw`'s hypotheses):
 
 * `Pa_subset_of_range`, `miss_subset`, `missAt_subset`: `P_a(B)`, `miss(t)` and `missAt D t x` are the hypergeometric
   `C(n − |B|, kd)/C(n, kd)` and `C(n − t, kd)/C(n, kd)`, for `B ⊆ [0, n)` and `t ≤ n`.
@@ -70,32 +70,32 @@ theorem ratio_le_iff {n kd K₀ a : ℕ} (hkd : 1 ≤ kd) (hkn : kd ≤ n) :
 
 section OneClass
 
-variable {d : Design} {kd : ℕ} {P : Partition} {c : List (List RU)} {n : ℕ}
+variable {d : Design} {kd : ℕ} {P : Partition} {c : List (List ReplayBlock)} {n : ℕ}
 
-theorem Pa_subset_of_range (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.rus.length = n)
+theorem Pa_subset_of_range (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.replayBlocks.length = n)
     {B : Finset ℕ} (hB : B ⊆ Finset.range n) :
     d.Pa P B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
   rw [Pa_subset hd hP, hn, Claims.Sampling.EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
 
 /-- **The miss is the hypergeometric tail**: `miss(t) = C(n − t, kd)/C(n, kd)` for `t ≤ n`. -/
-theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.rus.length = n) {t : ℕ}
+theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.replayBlocks.length = n) {t : ℕ}
     (ht : t ≤ n) : d.miss P t = ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
-  have hle : ∀ B : {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card},
+  have hle : ∀ B : {B : Finset ℕ // B ⊆ Finset.range P.replayBlocks.length ∧ t ≤ B.card},
       d.Pa P B.1 ≤ ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
     rintro ⟨B, hB, hc⟩
     rw [hn] at hB
     rw [Pa_subset_of_range hd hP hn hB]
     exact choose_div_anti hc
-  have hB₀ : Finset.range t ⊆ Finset.range P.rus.length := fun v hv =>
+  have hB₀ : Finset.range t ⊆ Finset.range P.replayBlocks.length := fun v hv =>
     Finset.mem_range.2 (by rw [hn]; exact lt_of_lt_of_le (Finset.mem_range.1 hv) ht)
-  have : Nonempty {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card} := ⟨⟨_, hB₀, by simp⟩⟩
+  have : Nonempty {B : Finset ℕ // B ⊆ Finset.range P.replayBlocks.length ∧ t ≤ B.card} := ⟨⟨_, hB₀, by simp⟩⟩
   unfold Design.miss
   refine le_antisymm (ciSup_le hle) (le_ciSup_of_le ⟨_, Set.forall_mem_range.2 hle⟩ ⟨_, hB₀, by simp⟩ ?_)
   rw [Pa_subset_of_range hd hP hn (hn ▸ hB₀), Finset.card_range]
 
 /-- **`missAt` is the hypergeometric tail** at a statement of one class drawn `subset kd`. -/
 theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : Stmt) (hs : D.parse x = some s)
-    (hd : SubsetDesign s.design kd) (hP : (D.part s).classes = [c]) (hn : (D.part s).rus.length = n) {t : ℕ}
+    (hd : SubsetDesign s.design kd) (hP : (D.part s).classes = [c]) (hn : (D.part s).replayBlocks.length = n) {t : ℕ}
     (ht : t ≤ n) : missAt D t x = ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
   unfold missAt
   rw [hs]
@@ -105,7 +105,7 @@ theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s :
 
 /-- **`M_δ` is a count threshold**: at every `δ`, some `K₀ ≤ n + 1` has `C(n − K₀, kd)/C(n, kd) ≤ δ` (when `K₀ ≤ n`)
 and puts a set of slots outside `M_δ` exactly when it has `K₀` or more. -/
-theorem notMem_M_iff (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.rus.length = n) (δ : ℝ) :
+theorem notMem_M_iff (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.replayBlocks.length = n) (δ : ℝ) :
     ∃ K₀ ≤ n + 1, (K₀ ≤ n → ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) ≤ δ) ∧
       ∀ B ⊆ Finset.range n, (B ∉ d.M P δ ↔ K₀ ≤ B.card) := by
   classical
@@ -127,7 +127,7 @@ theorem notMem_M_iff (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.rus
 
 /-- **At the claims' `δ`**, `C(n − K₀, kd)/C(n, kd)` with `1 ≤ kd ≤ n`: a set of slots is outside `M_δ` exactly when
 it has at least `min K₀ (n − kd + 1)`. -/
-theorem notMem_M_iff_count (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.rus.length = n)
+theorem notMem_M_iff_count (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.replayBlocks.length = n)
     (hkd : 1 ≤ kd) (hkn : kd ≤ n) (K₀ : ℕ) {B : Finset ℕ} (hB : B ⊆ Finset.range n) :
     B ∉ d.M P (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) ↔ min K₀ (n - kd + 1) ≤ B.card := by
   simp only [Design.M, Set.mem_ofPred_eq, not_lt]
@@ -173,7 +173,7 @@ theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _
   · exact Or.inl rfl
   · exact Or.inr ⟨_, rfl⟩
 
-theorem slotPartition_classes {l : _root_.SampledProofs.Slots.Layout} {pop ins : Array (Array _root_.SampledProofs.Slots.RU)}
+theorem slotPartition_classes {l : _root_.SampledProofs.Slots.Layout} {pop ins : Array (Array _root_.SampledProofs.Slots.ReplayBlock)}
     (h : l.classes = #[pop, ins]) (hins : ins = #[] ∨ ∃ st, ins = #[st]) :
     ∃ c ic, (_root_.Properties.SampledProofs.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by
   unfold _root_.Properties.SampledProofs.slotPartition
@@ -215,7 +215,7 @@ theorem deployOf_not_subsetDesign (hreg : SamplingDeploy.RegMatches c reg) {x : 
 theorem deployOf_not_oneClass (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : Stmt} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
     (hp : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).partition s = some Pt)
-    (c₁ : List (List RU)) : Pt.classes ≠ [c₁] := by
+    (c₁ : List (List ReplayBlock)) : Pt.classes ≠ [c₁] := by
   obtain ⟨_, _, _, -, hc, -⟩ := deployOf_shape F c reg L bytes sr sess hreg hx hp
   rw [hc]
   simp
@@ -233,9 +233,9 @@ theorem all_Pa_of_empty {ns : List ℕ} {W : Finset ℕ} (h : W = ∅) : OneStag
 theorem all_Pa_of_ne {ns : List ℕ} {W : Finset ℕ} (h : W ≠ ∅) : OneStage.Pa ns .all W = 0 := by
   simp [OneStage.Pa, h]
 
-theorem rus_length_two {P : Partition} {c ic : List (List RU)} (hP : P.classes = [c, ic]) :
-    P.rus.length = c.flatten.length + ic.flatten.length := by
-  simp [Partition.rus, hP]
+theorem replayBlocks_length_two {P : Partition} {c ic : List (List ReplayBlock)} (hP : P.classes = [c, ic]) :
+    P.replayBlocks.length = c.flatten.length + ic.flatten.length := by
+  simp [Partition.replayBlocks, hP]
 
 /-- A set of slots below `N + M` that misses `[N, N + M)` is below `N`. -/
 theorem subset_range_of_window {N M : ℕ} {B : Finset ℕ} (hB : B ⊆ Finset.range (N + M)) (h : window N M B = ∅) :
@@ -257,7 +257,7 @@ theorem window_range_of_le {N M t : ℕ} (ht : t ≤ N) : window N M (Finset.ran
   omega
 
 theorem Pa_subsetInputs {d : Design} {kd : ℕ} (hd : SubsetInputsDesign d kd) {P : Partition}
-    {c ic : List (List RU)} (hP : P.classes = [c, ic]) (B : Finset ℕ) :
+    {c ic : List (List ReplayBlock)} (hP : P.classes = [c, ic]) (B : Finset ℕ) :
     d.Pa P B = ((c.flatten.length - (window 0 c.flatten.length B).card).choose kd : ℝ) /
       (c.flatten.length.choose kd : ℝ) * OneStage.Pa (strataSizes ic) .all (window c.flatten.length ic.flatten.length B) := by
   have h1 : d.Pa P B = OneStage.Pa (strataSizes c) (.subset kd) (window 0 c.flatten.length B) *
@@ -272,7 +272,7 @@ theorem Pa_subsetInputs {d : Design} {kd : ℕ} (hd : SubsetInputsDesign d kd) {
 
 section SubsetInputs
 
-variable {d : Design} {kd : ℕ} {P : Partition} {c ic : List (List RU)}
+variable {d : Design} {kd : ℕ} {P : Partition} {c ic : List (List ReplayBlock)}
 
 /-- On a set that misses the input class, `P_a` is the population's hypergeometric miss. -/
 theorem Pa_subsetInputs_of_window (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, ic]) {B : Finset ℕ}
@@ -288,8 +288,8 @@ population's `N` slots. -/
 theorem miss_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, ic]) {t : ℕ}
     (ht : t ≤ c.flatten.length) :
     d.miss P t = ((c.flatten.length - t).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ) := by
-  have hlen := rus_length_two hP
-  have hle : ∀ B : {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card},
+  have hlen := replayBlocks_length_two hP
+  have hle : ∀ B : {B : Finset ℕ // B ⊆ Finset.range P.replayBlocks.length ∧ t ≤ B.card},
       d.Pa P B.1 ≤ ((c.flatten.length - t).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ) := by
     rintro ⟨B, hB, hc⟩
     rw [hlen] at hB
@@ -298,9 +298,9 @@ theorem miss_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, i
       exact choose_div_anti hc
     · rw [Pa_subsetInputs hd hP, all_Pa_of_ne hw, mul_zero]
       positivity
-  have hB₀ : Finset.range t ⊆ Finset.range P.rus.length := fun v hv =>
+  have hB₀ : Finset.range t ⊆ Finset.range P.replayBlocks.length := fun v hv =>
     Finset.mem_range.2 (by rw [hlen]; have := Finset.mem_range.1 hv; omega)
-  have : Nonempty {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card} := ⟨⟨_, hB₀, by simp⟩⟩
+  have : Nonempty {B : Finset ℕ // B ⊆ Finset.range P.replayBlocks.length ∧ t ≤ B.card} := ⟨⟨_, hB₀, by simp⟩⟩
   unfold Design.miss
   refine le_antisymm (ciSup_le hle) (le_ciSup_of_le ⟨_, Set.forall_mem_range.2 hle⟩ ⟨_, hB₀, by simp⟩ ?_)
   rw [Pa_subsetInputs_of_window hd hP (hlen ▸ hB₀) (window_range_of_le ht), Finset.card_range]
@@ -318,10 +318,10 @@ theorem missAt_subsetInputs {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg
 /-- **The deployed threshold**: at `δ = C(N − K₀, kd)/C(N, kd)` (`1 ≤ kd ≤ N`), a set of slots is outside `M_δ` exactly
 when it meets the input class or has at least `min K₀ (N − kd + 1)` slots. -/
 theorem notMem_M_iff_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, ic]) (hkd : 1 ≤ kd)
-    (hkn : kd ≤ c.flatten.length) (K₀ : ℕ) {B : Finset ℕ} (hB : B ⊆ Finset.range P.rus.length) :
+    (hkn : kd ≤ c.flatten.length) (K₀ : ℕ) {B : Finset ℕ} (hB : B ⊆ Finset.range P.replayBlocks.length) :
     B ∉ d.M P (((c.flatten.length - K₀).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ)) ↔
       (window c.flatten.length ic.flatten.length B).Nonempty ∨ min K₀ (c.flatten.length - kd + 1) ≤ B.card := by
-  rw [rus_length_two hP] at hB
+  rw [replayBlocks_length_two hP] at hB
   simp only [Design.M, Set.mem_ofPred_eq, not_lt]
   by_cases hw : window c.flatten.length ic.flatten.length B = ∅
   · rw [Pa_subsetInputs_of_window hd hP hB hw, ratio_le_iff hkd hkn, hw]

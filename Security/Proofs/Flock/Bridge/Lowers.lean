@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Audit.Circuit
 `lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) [unitGates P u] φ Xv`, at any
 `φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
 evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads
-it at `r u := [unitGates P u]`, slot `u` of `partOf P` (`rus_partOf_getElem?`).
+it at `r u := [unitGates P u]`, slot `u` of `partOf P` (`replayBlocks_partOf_getElem?`).
 
 * Where the lowered gates sit: wire `g`'s `gateSize` gates are at `off C g` onward (`gates_off`), every gate of
   `progOf C` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`).
@@ -474,7 +474,7 @@ theorem posOf_injective : Function.Injective (posOf C) := by
   exact (block_inj (by omega) (by omega) h).1
 
 open FlockSoundness.Discharge.ZkLink in
-/-- **`Lowers` for every circuit**: unit `u`'s replay unit of `partOf P`, the one proof unit `unitGates P u`, is
+/-- **`Lowers` for every circuit**: unit `u`'s replay block of `partOf P`, the one proof unit `unitGates P u`, is
 correct in `progOf C κ` on every committed values that carry `C`'s evaluation at the wires `φ` maps the positions it reads
 or computes to, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads evaluates to its
 constant. -/
@@ -485,7 +485,7 @@ theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) 
   intro ref href pu hpu
   rw [List.mem_singleton] at hpu
   subst hpu
-  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
+  have hgates : ReplayBlock.gates [unitGates P u] = unitGates P u := by simp [ReplayBlock.gates]
   have hneed : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ i ∈ x.reads,
       (progOf C κ).read ref i = some (C.eval Xv (φ i)) := by
     intro p hp x hx i hi
@@ -535,14 +535,14 @@ theorem inputClassOf_flatten : (inputClassOf C).flatten = (inputsOf C).map fun g
   unfold inputClassOf
   split <;> simp_all
 
-theorem rus_partOf {n : ℕ} (P : Partition C n) :
-    (partOf P).rus = ((List.finRange n).map fun u => [unitGates P u]) ++ (inputsOf C).map fun g => [[posOf C g]] := by
-  simp [partOf, Claims.Sampling.Partition.rus, inputClassOf_flatten]
+theorem replayBlocks_partOf {n : ℕ} (P : Partition C n) :
+    (partOf P).replayBlocks = ((List.finRange n).map fun u => [unitGates P u]) ++ (inputsOf C).map fun g => [[posOf C g]] := by
+  simp [partOf, Claims.Sampling.Partition.replayBlocks, inputClassOf_flatten]
 
-/-- Slot `u` of `partOf P` is unit `u`'s replay unit. -/
-theorem rus_partOf_getElem? {n : ℕ} (P : Partition C n) (u : Fin n) :
-    (partOf P).rus[u.val]? = some [unitGates P u] := by
-  rw [rus_partOf, List.getElem?_append_left (by simp)]
+/-- Slot `u` of `partOf P` is unit `u`'s replay block. -/
+theorem replayBlocks_partOf_getElem? {n : ℕ} (P : Partition C n) (u : Fin n) :
+    (partOf P).replayBlocks[u.val]? = some [unitGates P u] := by
+  rw [replayBlocks_partOf, List.getElem?_append_left (by simp)]
   simp
 
 end Flock.Bridge

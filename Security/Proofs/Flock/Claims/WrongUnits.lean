@@ -42,7 +42,7 @@ def GatesAgree (C : Circuit) (p : _root_.Claims.Sampling.Prog) : Prop :=
 
 /-- **The one-stage partition `Q` is `P`**: one slot per unit, slot `u` one proof unit holding the gates of unit `u`. -/
 def UnitsAgree {C : Circuit} {n : ℕ} (P : Partition C n) (Q : _root_.Claims.Sampling.Partition) : Prop :=
-  Q.rus.length = n ∧ ∀ u : Fin n, ∃ l : List ℕ, Q.rus[u.val]? = some [l] ∧
+  Q.replayBlocks.length = n ∧ ∀ u : Fin n, ∃ l : List ℕ, Q.replayBlocks[u.val]? = some [l] ∧
     ∀ g, g ∈ l ↔ ∃ h : g < C.N, P.unit ⟨g, h⟩ = some u
 
 /-- **The openings `val` carry the transcript `Xt`** on every committed wire of `P`. -/
@@ -135,11 +135,11 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
   intro u' hu'
   rw [List.mem_singleton] at hu'
   subst u'
-  have hgates : _root_.Claims.Sampling.RU.gates [l] = l := by simp [_root_.Claims.Sampling.RU.gates]
+  have hgates : _root_.Claims.Sampling.ReplayBlock.gates [l] = l := by simp [_root_.Claims.Sampling.ReplayBlock.gates]
   have href : ∀ i, i ∉ l →
-      _root_.Claims.Sampling.RU.ref s.prog [l] (w.val H Cm s) (fun _ => false) i = w.val H Cm s i := by
+      _root_.Claims.Sampling.ReplayBlock.ref s.prog [l] (w.val H Cm s) (fun _ => false) i = w.val H Cm s i := by
     intro i hi
-    simp [_root_.Claims.Sampling.RU.ref, hgates, hi]
+    simp [_root_.Claims.Sampling.ReplayBlock.ref, hgates, hi]
   intro g hg
   obtain ⟨hgN, hgu⟩ := (hl g).1 hg
   refine ⟨fun x hx i hi hil => ?_, fun hb => ?_⟩
@@ -168,8 +168,8 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
         refine Or.inr (Or.inr ⟨⟨g', hg'N⟩, ha, ?_⟩)
         rw [hgu]
         exact fun h => hg'l ((hl g').2 ⟨hg'N, h⟩)
-    have hrefg : _root_.Claims.Sampling.RU.ref s.prog [l] (w.val H Cm s) (fun _ => false) g = w.val H Cm s g := by
-      simp [_root_.Claims.Sampling.RU.ref, hgates, hb]
+    have hrefg : _root_.Claims.Sampling.ReplayBlock.ref s.prog [l] (w.val H Cm s) (fun _ => false) g = w.val H Cm s g := by
+      simp [_root_.Claims.Sampling.ReplayBlock.ref, hgates, hb]
     refine ⟨Xt ⟨g, hgN⟩, by rw [hrefg]; exact hO _ hgc, ?_⟩
     rw [runIn_localEval hG hO hl href g ⟨g, hgN⟩ rfl hgu, hc _ hgc hgu]
 

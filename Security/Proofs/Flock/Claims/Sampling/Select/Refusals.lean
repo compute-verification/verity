@@ -15,7 +15,7 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 * `RefusesWide`: every proof unit's committed values (the claims' `committed`, on its own gates) fit its public size
   class (`unitClass`).
 
-On partitions of the shape of the verifier's own layouts (`DrawSlots`), whose replay units are one proof unit each
+On partitions of the shape of the verifier's own layouts (`DrawSlots`), whose replay blocks are one proof unit each
 (`slotPartition_single`, `Partition.single_of_shape`), the
 five give `ProgramScope` (`programScope_of_refusals`), and so `ScopeMatches` (`scopeMatches_of_refusals`) and, with
 `ChecksScope`, `Refuses` (`refuses_of_refusals`). Each is needed: `ScopeMatches` at such a scope check gives all five
@@ -37,15 +37,15 @@ def Partition.Covers (P : Partition) (C : Prog) : Prop :=
 /-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, which cover `C` but its constants, each with
 a gate, and each committing values that fit its public size class. -/
 def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
-  P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.rus.flatten, u ≠ []) ∧
-    ∀ u ∈ P.rus.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+  P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.replayBlocks.flatten, u ≠ []) ∧
+    ∀ u ∈ P.replayBlocks.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
 
 /-- A partition of `C` cuts it into proof units. -/
 theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
   ⟨h.1, ⟨h.2.1, h.2.2.1⟩, h.2.2.2.2.1, h.2.2.2.2.2⟩
 
-/-- **A partition whose replay units are one proof unit each partitions `C` exactly when it cuts it.** -/
-theorem partitions_iff_cuts (P : Partition) (C : Prog) (h1 : ∀ r ∈ P.rus, r.length = 1) :
+/-- **A partition whose replay blocks are one proof unit each partitions `C` exactly when it cuts it.** -/
+theorem partitions_iff_cuts (P : Partition) (C : Prog) (h1 : ∀ r ∈ P.replayBlocks, r.length = 1) :
     P.Partitions C ↔ P.Cuts C :=
   ⟨Partition.Partitions.cuts, fun ⟨hnd, ⟨hin, hcov⟩, hne, hw⟩ =>
     ⟨hnd, hin, hcov, fun r hr h => by simpa [h] using h1 r hr, hne, hw⟩⟩
@@ -59,16 +59,16 @@ theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
     · obtain ⟨a', ha', h'⟩ := forall₂_mem_right h b hb
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
-/-- **The verifier's replay units are one proof unit each**: every replay unit of a layout `Slots.layout` gives, a
+/-- **The verifier's replay blocks are one proof unit each**: every replay block of a layout `Slots.layout` gives, a
 population unit's or an input gate's, has one proof unit (`layout_ok`). -/
 theorem slotPartition_single (d : Program) (query : Lean.Json) (l : Slots.Layout) (h : Slots.layout d query = .ok l) :
-    ∀ r ∈ (slotPartition l).rus, r.length = 1 := by
+    ∀ r ∈ (slotPartition l).replayBlocks, r.length = 1 := by
   obtain ⟨rs, -, pop, rfl, hpop⟩ := layout_ok d query l h
-  have hone : ∀ c ∈ [pop, inputClass d], ∀ s ∈ c.toList, ∀ ru ∈ s.toList, ru.pus.size = 1 := by
-    intro c hc s hs ru hru
+  have hone : ∀ c ∈ [pop, inputClass d], ∀ s ∈ c.toList, ∀ rb ∈ s.toList, rb.proofBlocks.size = 1 := by
+    intro c hc s hs rb hrb
     rcases List.mem_cons.1 hc with rfl | hc
     · obtain ⟨p, -, hp⟩ := forall₂_mem_right hpop s hs
-      exact hp.2 ru hru
+      exact hp.2 rb hrb
     · rw [List.mem_singleton.1 hc] at hs
       unfold inputClass at hs
       dsimp only at hs
@@ -76,15 +76,15 @@ theorem slotPartition_single (d : Program) (query : Lean.Json) (l : Slots.Layout
       · simp at hs
       · simp only [List.mem_singleton] at hs
         subst hs
-        simp only [Array.toList_map, List.mem_map] at hru
-        obtain ⟨g, -, rfl⟩ := hru
+        simp only [Array.toList_map, List.mem_map] at hrb
+        obtain ⟨g, -, rfl⟩ := hrb
         rfl
   intro r hr
-  simp only [Partition.rus, slotPartition, List.mem_flatten, List.mem_map] at hr
+  simp only [Partition.replayBlocks, slotPartition, List.mem_flatten, List.mem_map] at hr
   obtain ⟨_, ⟨_, ⟨c, hc, rfl⟩, hl⟩, hr⟩ := hr
   obtain ⟨s, hs, rfl⟩ := List.mem_map.1 hl
-  obtain ⟨ru, hru, rfl⟩ := List.mem_map.1 hr
-  simpa using hone c (by simpa using hc) s hs ru hru
+  obtain ⟨rb, hrb, rfl⟩ := List.mem_map.1 hr
+  simpa using hone c (by simpa using hc) s hs rb hrb
 
 /-- **The scope check is the verifier's evaluation**: it takes a statement exactly when the statement parses and its
 query evaluates. -/
@@ -106,12 +106,12 @@ gate but a constant is among them (a constant, public, may be left out). -/
 def RefusesUncovered (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => P.Covers C
 
 /-- **The verifier refuses an empty proof unit**: every proof unit of a partition it evaluates has a gate. -/
-def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.rus.flatten, u ≠ []
+def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.replayBlocks.flatten, u ≠ []
 
 /-- **The verifier refuses a proof unit wider than its size class**: every proof unit of a partition it evaluates has a
 public size class that holds its committed values (`unitClass`; `committed`, `Prog.Boundary` on the unit's own gates). -/
 def RefusesWide (D : Deploy Coin Col T) : Prop :=
-  Evaluated D fun C P => ∀ u ∈ P.rus.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+  Evaluated D fun C P => ∀ u ∈ P.replayBlocks.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
 
 /-- **The program part from the five refusals**: on the verifier's own partitions (`DrawSlots`) and where the scope check
 is its evaluation (`QueryCheck`), the scope check is the readable scope's program part. -/

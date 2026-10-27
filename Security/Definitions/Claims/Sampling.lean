@@ -12,13 +12,13 @@ the code side's.
    the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
    committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
    descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant in
-   exactly one, input gates included; a constant is public and in one or in none), the replay units, the strata and the
-   classes, and so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it
+   exactly one, input gates included; a constant is public and in one or in none), the replay blocks, the strata and the
+   classes, and so every replay block's size `n_v`. `x` is the canonical bytes of what the verifier reads before it
    draws, and `parse` is its own.
 2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
 3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
-   inputs, or a value it reads or writes is unopened. Under two-stage sampling the units are the replay units, whose
+   inputs, or a value it reads or writes is unopened. Under two-stage sampling the units are the replay blocks, whose
    interiors are committed after the first draw: one is faulty unless some interior makes every proof unit of it correct,
    which on a topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`); `P_a` is
    then its effective form `P̄_a`.
@@ -167,34 +167,35 @@ def Prog.Correct (C : Prog) (ref : ℕ → Option Bool) (u : List ℕ) : Prop :=
     (∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → C.read ref i ≠ none) ∧
       (C.Boundary u g = true → ∃ b, ref g = some b ∧ C.runIn ref u g = some b)
 
-/-- **A replay unit**: its proof units, each a set of gates in layout order. Under one-stage sampling it is one proof
+/-- **A replay block**: its proof units, each a set of gates in layout order. Under one-stage sampling it is one proof
 unit. -/
-abbrev RU := List (List ℕ)
+abbrev ReplayBlock := List (List ℕ)
 
-/-- A replay unit's gates: its proof units'. -/
-def RU.gates (r : RU) : List ℕ := r.flatten
+/-- A replay block's gates: its proof units'. -/
+def ReplayBlock.gates (r : ReplayBlock) : List ℕ := r.flatten
 
-/-- **The values a replay unit's proof units read and write**: a gate of `r` whose value `r`'s boundary doesn't commit
+/-- **The values a replay block's proof units read and write**: a gate of `r` whose value `r`'s boundary doesn't commit
 has its interior value `ι`, committed after the first draw; every other, its committed value `val`. -/
-def RU.ref (C : Prog) (r : RU) (val : ℕ → Option Bool) (ι : ℕ → Bool) (g : ℕ) : Option Bool :=
-  if g ∈ RU.gates r ∧ C.Boundary (RU.gates r) g = false then some (ι g) else val g
+def ReplayBlock.ref (C : Prog) (r : ReplayBlock) (val : ℕ → Option Bool) (ι : ℕ → Bool) (g : ℕ) :
+    Option Bool :=
+  if g ∈ ReplayBlock.gates r ∧ C.Boundary (ReplayBlock.gates r) g = false then some (ι g) else val g
 
 /-- The values proof unit `u` of `C` commits: its gates that `C.Boundary` commits. -/
 def committed (C : Prog) (u : List ℕ) : ℕ := (u.filter fun g => C.Boundary u g).length
 
-/-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its replay units, in
+/-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its replay blocks, in
 population order. -/
 structure Partition where
-  classes : List (List (List RU))
+  classes : List (List (List ReplayBlock))
 
-/-- The replay units, slot by slot. -/
-def Partition.rus (P : Partition) : List RU := P.classes.flatten.flatten
+/-- The replay blocks, slot by slot. -/
+def Partition.replayBlocks (P : Partition) : List ReplayBlock := P.classes.flatten.flatten
 
-/-- Each replay unit's count of proof units, `n_v`, slot by slot. -/
-def Partition.sizes (P : Partition) : List ℕ := P.rus.map List.length
+/-- Each replay block's count of proof units, `n_v`, slot by slot. -/
+def Partition.sizes (P : Partition) : List ℕ := P.replayBlocks.map List.length
 
 /-- The gates of all of `P`'s proof units. -/
-def Partition.gates (P : Partition) : List ℕ := P.rus.flatten.flatten
+def Partition.gates (P : Partition) : List ℕ := P.replayBlocks.flatten.flatten
 
 /-- **The widest public size class** of a proof unit's outputs, in bits: 262,144 under ASK-61 (Daniel, 19 Oct 2:59 PM
 PDT, provisional). Setting it to `16` makes `unitClasses` `[16]`, the former literal limit. -/
@@ -209,15 +210,15 @@ function of the program and the unit, both public; `none` when no class does. -/
 def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
 
 /-- **`P` partitions `C`**: no gate is in two proof units, and every gate of `C` but a constant is in one, input gates
-included (a constant, public, may be in one or in none); every replay unit has a proof unit, and every proof unit a gate
-of `C`; and each proof unit `u` has a public size class `c(u)` whose width holds the values it commits, its gates that
-`Boundary` commits: `|out(u)| ≤ w_{c(u)}`. A proof unit is a set of gates, so a unit's gates may interleave with
+included (a constant, public, may be in one or in none); every replay block has a proof unit, and every proof unit a
+gate of `C`; and each proof unit `u` has a public size class `c(u)` whose width holds the values it commits, its gates
+that `Boundary` commits: `|out(u)| ≤ w_{c(u)}`. A proof unit is a set of gates, so a unit's gates may interleave with
 another's. -/
 def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ (∀ g ∈ P.gates, g < C.gates.length) ∧
     (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ P.gates) ∧
-    (∀ r ∈ P.rus, r ≠ []) ∧ (∀ u ∈ P.rus.flatten, u ≠ []) ∧
-    ∀ u ∈ P.rus.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+    (∀ r ∈ P.replayBlocks, r ≠ []) ∧ (∀ u ∈ P.replayBlocks.flatten, u ≠ []) ∧
+    ∀ u ∈ P.replayBlocks.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
 
 /-! ## Proof units and the universal unit -/
 
@@ -294,24 +295,24 @@ noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     strataPa ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W)))) 0 B
 
-/-- **A class's sampling rule**: the first stage's design over the class's replay units, and how many proof units of
-each drawn replay unit are checked (`none`: all of them). One-stage sampling is a class whose replay units are each one
-proof unit; the input stratum is a class drawn `all`. -/
+/-- **A class's sampling rule**: the first stage's design over the class's replay blocks, and how many proof units of
+each drawn replay block are checked (`none`: all of them). One-stage sampling is a class whose replay blocks are each
+one proof unit; the input stratum is a class drawn `all`. -/
 structure Rule where
   first : OneStage
   check : Option ℕ
 
-/-- A class's strata sizes, in replay units. -/
-def strataSizes (c : List (List RU)) : List ℕ := c.map List.length
+/-- A class's strata sizes, in replay blocks. -/
+def strataSizes (c : List (List ReplayBlock)) : List ℕ := c.map List.length
 
-/-- A class's replay units' sizes, in proof units. -/
-def ruSizes (c : List (List RU)) : List ℕ := c.flatten.map List.length
+/-- A class's replay blocks' sizes, in proof units. -/
+def replayBlockSizes (c : List (List ReplayBlock)) : List ℕ := c.flatten.map List.length
 
-/-- **The effective acceptance probability** `P̄_a(B)` of a class with strata of sizes `ns` and replay units of sizes
-`sz`, over a set `B` of its replay units (`effEscape`). A faulty replay unit has a faulty proof unit under every
+/-- **The effective acceptance probability** `P̄_a(B)` of a class with strata of sizes `ns` and replay blocks of sizes
+`sz`, over a set `B` of its replay blocks (`effEscape`). A faulty replay block has a faulty proof unit under every
 interior the prover commits after the first draw, so a drawn one escapes when no faulty proof unit is checked: under a
-Bernoulli first stage at rate `p` checking `k` of a replay unit's `n_v`, `∏_{v ∈ B} (1 − p·min(k, n_v)/n_v)`
-(`nested_escape`); when every proof unit of a drawn replay unit is checked, the first stage's `P_a(B)`
+Bernoulli first stage at rate `p` checking `k` of a replay block's `n_v`, `∏_{v ∈ B} (1 − p·min(k, n_v)/n_v)`
+(`nested_escape`); when every proof unit of a drawn replay block is checked, the first stage's `P_a(B)`
 (`effEscape_full`). -/
 noncomputable def Rule.Pa (r : Rule) (ns sz : List ℕ) (B : Finset ℕ) : ℝ :=
   match r.first, r.check with
@@ -324,13 +325,14 @@ structure Design where
   rules : List Rule
 
 /-- The classes' effective acceptance probabilities, from slot `o`, multiplied. -/
-noncomputable def classesPa : List Rule → List (List (List RU)) → ℕ → Finset ℕ → ℝ
+noncomputable def classesPa : List Rule → List (List (List ReplayBlock)) → ℕ → Finset ℕ → ℝ
   | r :: rs, c :: cs, o, B =>
-    r.Pa (strataSizes c) (ruSizes c) (window o c.flatten.length B) * classesPa rs cs (o + c.flatten.length) B
+    r.Pa (strataSizes c) (replayBlockSizes c) (window o c.flatten.length B) *
+      classesPa rs cs (o + c.flatten.length) B
   | _, _, _, _ => 1
 
-/-- **The acceptance probability** `P_a(B)` of the design on the partition `P`, over a set `B` of replay-unit slots; under
-two-stage sampling its effective form `P̄_a`. -/
+/-- **The acceptance probability** `P_a(B)` of the design on the partition `P`, over a set `B` of replay-block slots;
+under two-stage sampling its effective form `P̄_a`. -/
 noncomputable def Design.Pa (d : Design) (P : Partition) (B : Finset ℕ) : ℝ := classesPa d.rules P.classes 0 B
 
 /-- **The confidence set** `M_δ`: every set `B` with `P_a(B) > δ`. -/
@@ -338,7 +340,7 @@ def Design.M (d : Design) (P : Partition) (δ : ℝ) : Set (Finset ℕ) := {B | 
 
 /-- **The miss at `t`**: the largest acceptance probability of `t` or more of the units. -/
 noncomputable def Design.miss (d : Design) (P : Partition) (t : ℕ) : ℝ :=
-  ⨆ B : {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card}, d.Pa P B.1
+  ⨆ B : {B : Finset ℕ // B ⊆ Finset.range P.replayBlocks.length ∧ t ≤ B.card}, d.Pa P B.1
 
 /-! ## 1. Statement -/
 
@@ -372,20 +374,21 @@ def Wit.val (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (w : Wit) (g : �
   (w.vals.find? fun o => o.pos == g && Cm.Opens H s.roots o).map (·.val)
 
 /-- **A faulty unit** at slot `v` of the partition `P` under `w`: unless some interior values make every proof unit of
-the replay unit there correct on its committed values. For a proof unit (one-stage) that is its committed outputs
+the replay block there correct on its committed values. For a proof unit (one-stage) that is its committed outputs
 differing from its gates applied to its committed inputs, or a value it reads or writes unopened. -/
 def Faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
-  ¬ ∃ r, P.rus[v]? = some r ∧ ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u
+  ¬ ∃ r, P.replayBlocks[v]? = some r ∧
+    ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (ReplayBlock.ref s.prog r (w.val H Cm s) ι) u
 
-/-- **A faulty unit, on the boundary trace** (the glossary's form): the replay unit's committed boundary outputs differ
+/-- **A faulty unit, on the boundary trace** (the glossary's form): the replay block's committed boundary outputs differ
 from its gates applied to its committed boundary inputs. -/
 def BoundaryFaulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
-  ¬ ∃ r, P.rus[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (RU.gates r)
+  ¬ ∃ r, P.replayBlocks[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (ReplayBlock.gates r)
 
 open Classical in
 /-- **The faulty set** of the trace `w`'s openings define. -/
 noncomputable def faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) : Finset ℕ :=
-  (Finset.range P.rus.length).filter (Faulty H Cm s P w)
+  (Finset.range P.replayBlocks.length).filter (Faulty H Cm s P w)
 
 /-- **The sampling relation** at `δ`, on a parsed statement and its partition: the faulty set is in `M_δ`. -/
 def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : Stmt) (P : Partition) (w : Wit) : Prop :=
@@ -420,7 +423,7 @@ def OneStage.WellFormed (ns : List ℕ) : OneStage → Prop
 
 /-- A rule is well formed on its class: a well-formed first stage over the class's strata, and a check of `k ≥ 1` proof
 units only under a Bernoulli first stage. -/
-def Rule.WellFormed (r : Rule) (c : List (List RU)) : Prop :=
+def Rule.WellFormed (r : Rule) (c : List (List ReplayBlock)) : Prop :=
   r.first.WellFormed (strataSizes c) ∧ ∀ k, r.check = some k → 1 ≤ k ∧ ∃ num den, r.first = .bernoulli num den
 
 /-- The design is well formed on the partition: one well-formed rule per class. -/
@@ -447,7 +450,7 @@ witness.
 
 The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the first stage (the proof units'
 draw under two-stage sampling, and the sessions), so runs that keep the other rounds make the same first draw and see the
-same interior commitments; `checked` is the proof units the run checks, each as its replay unit's slot and its index
+same interior commitments; `checked` is the proof units the run checks, each as its replay block's slot and its index
 there; `rounds` is each one's session's rounds; `session` is its Flock statement and what its session showed; `reveal`
 is what its Flock witness reveals: committed values, each with the roots it is committed under (the statement's, or the
 interior roots the run showed).
@@ -527,10 +530,10 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- The session's `E^rep` waits for `k′ = ⌈4·N₀/e⌉` accepted reruns. -/
 noncomputable def Deploy.innerK (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.innerN₀ x / Real.exp 1⌉₊
 
-/-- The replay units at `x`, `0` on a statement that doesn't parse. -/
-def nRU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
+/-- The replay blocks at `x`, `0` on a statement that doesn't parse. -/
+def nReplayBlocks (D : Deploy Coin Col T) (x : Msg) : ℕ :=
   match D.parse x with
-  | some s => (D.part s).rus.length
+  | some s => (D.part s).replayBlocks.length
   | none => 0
 
 /-- The proof units at `x`, `0` on a statement that doesn't parse. -/
@@ -543,7 +546,7 @@ def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
 complement of `M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`; this `k`
 makes it at most `2^{2^{−40}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only through
 `log₂ k`. -/
-def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 40 * (nRU D x + nPU D x + 1)
+def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 40 * (nReplayBlocks D x + nPU D x + 1)
 
 /-- The waits give up after `K = 2^128·k` reruns. -/
 def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
@@ -753,7 +756,7 @@ in scope (`InScope`). `KS`, `KSCount`, `Bits` and `Complete` hold on it. It excl
 draw's miss probability (`Design.WellFormed`): `subset K` with `K > N` (`P_a = 0` at every set, so no witness is in `R`),
 a Bernoulli rule with `den = 0` or `num > den`, a stratified rule outside `1 ≤ K ≤ N` or with an empty stratum, a work
 rule whose weights or floors don't match its strata, with a zero floor or with no work, and a check of part of a replay
-unit under any but a Bernoulli first stage. That the verifier refuses what is out of it is `ScopeMatches`. -/
+block under any but a Bernoulli first stage. That the verifier refuses what is out of it is `ScopeMatches`. -/
 def Scope (D : Deploy Coin Col T) (x : Msg) : Prop :=
   ∃ s P, D.parse x = some s ∧ D.partition s = some P ∧ InScope P s
 
@@ -783,12 +786,13 @@ def Universal (D : Deploy Coin Col T) : Prop :=
   ∀ (c : SizeClass) (n : Netlist) (x : List Bool), n.Fits c → x.length = c.nIn →
     (D.universal c).eval (n.args c ++ x) = n.eval x
 
-/-- **Sampling: the faulty set is the boundary form's**: on a topologically ordered program, a replay unit whose proof
+/-- **Sampling: the faulty set is the boundary form's**: on a topologically ordered program, a replay block whose proof
 units are disjoint sets of its gates is faulty exactly when its committed boundary outputs differ from its gates applied
 to its committed boundary inputs. -/
 def FaultyBoundary : Prop :=
-  ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
-    s.prog.Topological → P.rus[v]? = some r → (RU.gates r).Nodup → (∀ g ∈ RU.gates r, g < s.prog.gates.length) →
+  ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) (r : ReplayBlock),
+    s.prog.Topological → P.replayBlocks[v]? = some r → (ReplayBlock.gates r).Nodup →
+    (∀ g ∈ ReplayBlock.gates r, g < s.prog.gates.length) →
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before

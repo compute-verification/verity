@@ -86,7 +86,7 @@ theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n
     ∃ a ∈ P.io u, i = posOf C a := by
   by_cases hin : i ∈ unitGates P u
   · exact posOf_of_boundary hin (hB.resolve_left (not_not.2 hin))
-  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
+  have hgates : ReplayBlock.gates [unitGates P u] = unitGates P u := by simp [ReplayBlock.gates]
   simp only [FlockSoundness.Discharge.ZkLink.WrongSet.need, hgates, List.mem_append, List.mem_flatMap] at hi
   rcases hi with hi | ⟨p, hp, hrd⟩
   · exact absurd hi hin
@@ -167,14 +167,14 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
   apply hmem.2
   by_cases hN : Nonempty (Fin C.N)
   · obtain ⟨d⟩ := hN
-    refine ⟨[unitGates P u], rus_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i),
+    refine ⟨[unitGates P u], replayBlocks_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i),
       lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ fun i hi hc => ?_⟩
-    change RU.ref (progOf C κ) [unitGates P u] ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
+    change ReplayBlock.ref (progOf C κ) [unitGates P u] ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
       (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
-    unfold RU.ref
+    unfold ReplayBlock.ref
     split_ifs with hin
     · rfl
-    · have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
+    · have hgates : ReplayBlock.gates [unitGates P u] = unitGates P u := by simp [ReplayBlock.gates]
       rw [hgates] at hin
       have hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true := by
         by_cases h1 : i ∈ unitGates P u
@@ -188,7 +188,7 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
           exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
       rw [wireAt_posOf]
       exact hval a ha hnone
-  · refine ⟨[unitGates P u], rus_partOf_getElem? P u, fun _ => false, ?_⟩
+  · refine ⟨[unitGates P u], replayBlocks_partOf_getElem? P u, fun _ => false, ?_⟩
     intro pu hpu g hg
     rw [List.mem_singleton] at hpu
     subst hpu

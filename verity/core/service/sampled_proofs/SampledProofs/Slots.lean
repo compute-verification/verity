@@ -1,19 +1,20 @@
 /-
 The claims' slots over the verifier's partition (`Claims.Sampling.Partition` and `Deploy.checked`): the partition the
-verifier evaluates, as the claims read it, and the proof units a draw checks, each as its replay unit's slot and its index
-there.
+verifier evaluates, as the claims read it, and the proof blocks a draw checks, each as its replay block's slot and its
+index there.
 
 * **Classes.** Two, the population and then the inputs. The population's strata are the query's (`Partition.strata`:
-  one per template or Definition, in the order of its first unit), each stratum's replay units its units in ascending
-  order, each unit one proof unit, its gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the
+  one per template or Definition, in the order of its first unit), each stratum's replay blocks its units in ascending
+  order, each unit one proof block, its gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the
   span of the gates a `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none
-  when the root has no input) of every gate of the root's input nodes, in gate order, each a replay unit of one proof
-  unit; it is drawn `all`, as `partition_object`'s input unit is always checked and never drawn.
-* **Slots.** A replay unit's slot is its index in class, stratum and replay-unit order (`Partition.rus`). Where no two
-  strata's units interleave, unit `i`'s slot is `i`.
-* **Checked.** `checked` lists the proof units of every replay unit the draw proves (`Select.select`'s proved units: its
-  units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The rules a stream
-  runs make every replay unit one proof unit, so each index is `0`.
+  when the root has no input) of every gate of the root's input nodes, in gate order, each a replay block of one proof
+  block; it is drawn `all`, as `partition_object`'s input unit is always checked and never drawn.
+* **Slots.** A replay block's slot is its index in class, stratum and replay-block order (`Partition.replayBlocks`).
+  Where no two strata's units interleave, unit `i`'s slot is `i`.
+* **Checked.** `checked` lists the proof blocks of every replay block the draw proves (`Select.select`'s proved units:
+  its units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The rules a
+  stream runs make every replay block one proof block, so each index is `0`.
+* **JSON.** A replay block's keys are `unit` and `pus`, its proof blocks, until a format version.
 -/
 import SampledProofs.Select
 
@@ -23,22 +24,23 @@ open Lean (Json)
 open Flock (V)
 open Flock.TemplateQuery (Desc)
 
-/-- A replay unit: the population's unit it is (`none` for an input gate), and its proof units' gates, each `[lo, hi)`. -/
-structure RU where
+/-- A replay block: the population's unit it is (`none` for an input gate), and its proof blocks' gates, each
+`[lo, hi)`. -/
+structure ReplayBlock where
   unit : Option Nat
-  pus : Array (Nat × Nat)
+  proofBlocks : Array (Nat × Nat)
   deriving BEq, Inhabited, Repr
 
-/-- The claims' partition over the verifier's: its classes, each its strata, each its replay units, in slot order. -/
+/-- The claims' partition over the verifier's: its classes, each its strata, each its replay blocks, in slot order. -/
 structure Layout where
-  classes : Array (Array (Array RU))
+  classes : Array (Array (Array ReplayBlock))
   deriving BEq, Inhabited, Repr
 
-/-- The replay units, slot by slot. -/
-def Layout.rus (l : Layout) : Array RU := l.classes.flatten.flatten
+/-- The replay blocks, slot by slot. -/
+def Layout.replayBlocks (l : Layout) : Array ReplayBlock := l.classes.flatten.flatten
 
-/-- Unit `u`'s slot: the replay unit that is it. -/
-def Layout.slotOf (l : Layout) (u : Nat) : Option Nat := l.rus.findIdx? (·.unit == some u)
+/-- Unit `u`'s slot: the replay block that is it. -/
+def Layout.slotOf (l : Layout) (u : Nat) : Option Nat := l.replayBlocks.findIdx? (·.unit == some u)
 
 /-- The gates of the root's input nodes (`TemplateQuery.isInput`), in gate order. -/
 def inputGates (d : Desc) : Array Nat := Id.run do
@@ -61,28 +63,28 @@ def layout (p : Program) (query : Json) : V Layout := do
   let pop ← strata.mapM fun (_, ranges) =>
     (ranges.flatMap fun (lo, hi) => (Array.range (hi - lo)).map (lo + ·)).mapM fun u => do
       let some g := gs[u]? | throw s!"unit {u} has no gates"
-      pure ({ unit := some u, pus := #[g] } : RU)
-  let inputs := (inputGates p.desc).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : RU)
+      pure ({ unit := some u, proofBlocks := #[g] } : ReplayBlock)
+  let inputs := (inputGates p.desc).map fun g => ({ unit := none, proofBlocks := #[(g, g + 1)] } : ReplayBlock)
   return { classes := #[pop, if inputs.isEmpty then #[] else #[inputs]] }
 
-/-- A layout's population: its first class's replay units, in slot order. -/
-def popOf (l : Layout) : List RU := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
+/-- A layout's population: its first class's replay blocks, in slot order. -/
+def popOf (l : Layout) : List ReplayBlock := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
 /-- **The population is the registration's `n` units, in order**: the layout of `p` under `query` is defined, and its
-population is `n` replay units with slot `u` unit `u`. The run refuses a registration whose program and query fail it
+population is `n` replay blocks with slot `u` unit `u`. The run refuses a registration whose program and query fail it
 (`Run.run`, `population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's unit `u`. -/
 def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
   match layout p query with
   | .error _ => false
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
-/-- **The checked proof units** (`Deploy.checked`) of a draw that proves the units `proved`: each proof unit of every
-replay unit among them and of every input slot, as `(slot, index)`, in slot order. -/
+/-- **The checked proof blocks** (`Deploy.checked`) of a draw that proves the units `proved`: each proof block of every
+replay block among them and of every input slot, as `(slot, index)`, in slot order. -/
 def checked (l : Layout) (proved : Array Nat) : Array (Nat × Nat) :=
-  (l.rus.zipIdx.filter fun (r, _) => r.unit.all proved.contains).flatMap fun (r, v) =>
-    (Array.range r.pus.size).map (v, ·)
+  (l.replayBlocks.zipIdx.filter fun (r, _) => r.unit.all proved.contains).flatMap fun (r, v) =>
+    (Array.range r.proofBlocks.size).map (v, ·)
 
-/-- **The challenger's draw in the claims' slots**: the layout of `p` under `query`, and the proof units of the units
+/-- **The challenger's draw in the claims' slots**: the layout of `p` under `query`, and the proof blocks of the units
 `Select.select`'s draw on the coins `src` proves. An error where either is. -/
 def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Layout × Array (Nat × Nat)) := do
@@ -90,9 +92,9 @@ def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Jso
   let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
 
-def RU.toJson (r : RU) : Json :=
+def ReplayBlock.toJson (r : ReplayBlock) : Json :=
   Json.mkObj [("unit", (r.unit.map Lean.toJson).getD .null),
-    ("pus", Json.arr (r.pus.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi]))]
+    ("pus", Json.arr (r.proofBlocks.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi]))]
 
 def Layout.toJson (l : Layout) : Json := Json.arr (l.classes.map fun c => Json.arr (c.map fun s => Json.arr (s.map (·.toJson))))
 

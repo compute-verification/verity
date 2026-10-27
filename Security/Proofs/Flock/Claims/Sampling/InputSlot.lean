@@ -3,10 +3,10 @@ import Proofs.Flock.SamplingBoundary
 /-!
 # Input slots
 
-The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate replay unit
+The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate replay block
 per input gate, in gate order, and it checks every input slot on every run (`Slots.checked`).
 
-* `faulty_input_iff`: at a slot whose replay unit is the one proof unit `[p]` of an input gate `p`, the slot is faulty
+* `faulty_input_iff`: at a slot whose replay block is the one proof unit `[p]` of an input gate `p`, the slot is faulty
   exactly when the witness opens no value at `p`. An input's computed value is its committed value, so an opened input
   is correct under every interior, and an unopened one under none.
 * `withInputs P C`: `P`'s classes, then the input class of `C` (`inputClass`). `P`'s slots keep their indices
@@ -23,13 +23,13 @@ open Claims.Sampling
 
 /-- **An input slot is faulty exactly when its value is unopened.** -/
 theorem faulty_input_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit} {v p : ℕ}
-    (hv : P.rus[v]? = some [[p]]) (hp : s.prog.gates[p]? = some .input) :
+    (hv : P.replayBlocks[v]? = some [[p]]) (hp : s.prog.gates[p]? = some .input) :
     Faulty H Cm s P w v ↔ w.val H Cm s p = none := by
   have hcorr : ∀ ι : ℕ → Bool,
-      s.prog.Correct (RU.ref s.prog [[p]] (w.val H Cm s) ι) [p] ↔ w.val H Cm s p ≠ none := by
+      s.prog.Correct (ReplayBlock.ref s.prog [[p]] (w.val H Cm s) ι) [p] ↔ w.val H Cm s p ≠ none := by
     intro ι
-    have href : RU.ref s.prog [[p]] (w.val H Cm s) ι p = w.val H Cm s p := Boundary.ref_input s.prog hp
-    have hrun : s.prog.runIn (RU.ref s.prog [[p]] (w.val H Cm s) ι) [p] p = w.val H Cm s p := by
+    have href : ReplayBlock.ref s.prog [[p]] (w.val H Cm s) ι p = w.val H Cm s p := Boundary.ref_input s.prog hp
+    have hrun : s.prog.runIn (ReplayBlock.ref s.prog [[p]] (w.val H Cm s) ι) [p] p = w.val H Cm s p := by
       rw [Boundary.runIn_eq, hp]
       simpa [BGate.val] using href
     constructor
@@ -61,9 +61,9 @@ theorem faulty_input_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P 
 /-- The input gates of `C`, in gate order. -/
 def inputsAt (C : Prog) : List ℕ := (List.range C.gates.length).filter fun g => decide (C.gates[g]? = some .input)
 
-/-- **The input class**, as the deployed verifier lays it: one stratum of a one-gate replay unit per input gate; no
+/-- **The input class**, as the deployed verifier lays it: one stratum of a one-gate replay block per input gate; no
 stratum when there is no input gate. -/
-def inputClass (C : Prog) : List (List RU) := if inputsAt C = [] then [] else [(inputsAt C).map fun g => [[g]]]
+def inputClass (C : Prog) : List (List ReplayBlock) := if inputsAt C = [] then [] else [(inputsAt C).map fun g => [[g]]]
 
 /-- `P`'s classes, then `C`'s input class. -/
 def withInputs (P : Partition) (C : Prog) : Partition := ⟨P.classes ++ [inputClass C]⟩
@@ -76,32 +76,32 @@ theorem inputClass_flatten (C : Prog) : (inputClass C).flatten = (inputsAt C).ma
   unfold inputClass
   split <;> simp_all
 
-theorem rus_withInputs (P : Partition) (C : Prog) :
-    (withInputs P C).rus = P.rus ++ (inputsAt C).map fun g => [[g]] := by
-  simp [withInputs, Partition.rus, inputClass_flatten]
+theorem replayBlocks_withInputs (P : Partition) (C : Prog) :
+    (withInputs P C).replayBlocks = P.replayBlocks ++ (inputsAt C).map fun g => [[g]] := by
+  simp [withInputs, Partition.replayBlocks, inputClass_flatten]
 
 /-- `P`'s slots keep their indices. -/
-theorem withInputs_getElem?_of_lt (P : Partition) (C : Prog) {v : ℕ} (hv : v < P.rus.length) :
-    (withInputs P C).rus[v]? = P.rus[v]? := by
-  rw [rus_withInputs, List.getElem?_append_left hv]
+theorem withInputs_getElem?_of_lt (P : Partition) (C : Prog) {v : ℕ} (hv : v < P.replayBlocks.length) :
+    (withInputs P C).replayBlocks[v]? = P.replayBlocks[v]? := by
+  rw [replayBlocks_withInputs, List.getElem?_append_left hv]
 
 /-- Slot `|P| + i` is the `i`th input gate's. -/
 theorem withInputs_getElem?_input (P : Partition) (C : Prog) {i g : ℕ} (hi : (inputsAt C)[i]? = some g) :
-    (withInputs P C).rus[P.rus.length + i]? = some [[g]] := by
-  rw [rus_withInputs, List.getElem?_append_right (by omega)]
+    (withInputs P C).replayBlocks[P.replayBlocks.length + i]? = some [[g]] := by
+  rw [replayBlocks_withInputs, List.getElem?_append_right (by omega)]
   simp [hi]
 
 /-- **An input slot of `withInputs P s.prog` is faulty exactly when its gate's value is unopened.** -/
 theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit} {i g : ℕ}
     (hi : (inputsAt s.prog)[i]? = some g) :
-    Faulty H Cm s (withInputs P s.prog) w (P.rus.length + i) ↔ w.val H Cm s g = none :=
+    Faulty H Cm s (withInputs P s.prog) w (P.replayBlocks.length + i) ↔ w.val H Cm s g = none :=
   faulty_input_iff (withInputs_getElem?_input P s.prog hi) (mem_inputsAt.1 (List.mem_of_getElem? hi))
 
 /-- **`InScope`'s input clause**: every input gate of `C` is in a proof unit of `withInputs P C`. -/
 theorem input_mem_withInputs (P : Partition) {C : Prog} {g : ℕ} (hg : C.gates[g]? = some .input) :
     g ∈ (withInputs P C).gates := by
   unfold Partition.gates
-  rw [rus_withInputs]
+  rw [replayBlocks_withInputs]
   exact List.mem_flatten.2 ⟨[g], List.mem_flatten.2 ⟨[[g]],
     List.mem_append_right _ (List.mem_map.2 ⟨g, mem_inputsAt.2 hg, rfl⟩), List.mem_singleton_self _⟩,
     List.mem_singleton_self _⟩
@@ -116,7 +116,7 @@ theorem covers_withInputs (P : Partition) (C : Prog)
   · exact input_mem_withInputs P hin
   · have hP := h g hg hc hin
     unfold Partition.gates at hP ⊢
-    rw [rus_withInputs, List.flatten_append, List.flatten_append]
+    rw [replayBlocks_withInputs, List.flatten_append, List.flatten_append]
     exact List.mem_append_left _ hP
 
 end Claims.Sampling.InputSlot

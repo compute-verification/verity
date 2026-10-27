@@ -12,9 +12,9 @@ The C-Flock session's units, read as the sampling claims' statement, partition, 
   `κ` fix to `b` is the constant `.const b`, public circuit structure, which a proof unit reads with no opening. Wire
   `g` sits at `posOf C g`, its last gate.
 * `partOf P`: two classes, as the deployed verifier's `Slots.layout` lays them. The population: one stratum, a replay
-  unit of one proof unit per C-Flock unit, slot `u` unit `u`'s lowered gates (`unitGates`). Then the input class: one
-  stratum (none when there is no input gate) of a one-gate replay unit per input gate, in gate order (`inputClassOf`).
-* `designOf kd`: the population drawn `subset kd`, checking every proof unit of a drawn replay unit, and the input
+  block of one proof unit per C-Flock unit, slot `u` unit `u`'s lowered gates (`unitGates`). Then the input class: one
+  stratum (none when there is no input gate) of a one-gate replay block per input gate, in gate order (`inputClassOf`).
+* `designOf kd`: the population drawn `subset kd`, checking every proof unit of a drawn replay block, and the input
   class drawn at rate `0` (`bernoulli 0 1`), whose `P_a` factor is `1`. **Inputs are outside this bound**: the deployed
   verifier checks every input slot on every run (`Slots.checked`), but C-Flock's game checks no input unit, so this
   design reads an input slot as never drawn.
@@ -68,17 +68,17 @@ def unitGates {C : Circuit} {n : ℕ} (P : Partition C n) (u : Fin n) : List ℕ
 /-- The circuit's input gates, in gate order. -/
 def inputsOf (C : Circuit) : List (Fin C.N) := (List.finRange C.N).filter fun g => (C.op g).isInput
 
-/-- **The input class**: one stratum of a one-gate replay unit per input gate, at its position, in gate order; no
+/-- **The input class**: one stratum of a one-gate replay block per input gate, at its position, in gate order; no
 stratum when there is no input gate. -/
-def inputClassOf (C : Circuit) : List (List Claims.Sampling.RU) :=
+def inputClassOf (C : Circuit) : List (List Claims.Sampling.ReplayBlock) :=
   if inputsOf C = [] then [] else [(inputsOf C).map fun g => [[posOf C g]]]
 
-/-- **The partition**: the population, one stratum with slot `u` the replay unit of the one proof unit
+/-- **The partition**: the population, one stratum with slot `u` the replay block of the one proof unit
 `unitGates P u`, then the input class. -/
 def partOf {C : Circuit} {n : ℕ} (P : Partition C n) : Claims.Sampling.Partition :=
   ⟨[[(List.finRange n).map fun u => [unitGates P u]], inputClassOf C]⟩
 
-/-- **The design**: the population drawn `subset kd`, every proof unit of a drawn replay unit checked; the input class
+/-- **The design**: the population drawn `subset kd`, every proof unit of a drawn replay block checked; the input class
 drawn at rate `0`, so inputs are outside the bound. -/
 def designOf (kd : ℕ) : Claims.Sampling.Design := ⟨[⟨.subset kd, none⟩, ⟨.bernoulli 0 1, none⟩]⟩
 

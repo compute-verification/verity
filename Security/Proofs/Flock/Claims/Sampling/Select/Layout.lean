@@ -308,20 +308,20 @@ theorem toList_expandArr (ranges : Array (ℕ × ℕ)) :
     (ranges.flatMap fun (r : ℕ × ℕ) => (Array.range (r.2 - r.1)).map (r.1 + ·)).toList = expand ranges.toList := by
   simp [expand, Array.toList_flatMap, List.range'_eq_map_range]
 
-/-- The input class `Slots.layout` lays after the population: every gate of the root's input nodes, one replay unit
+/-- The input class `Slots.layout` lays after the population: every gate of the root's input nodes, one replay block
 each, or no stratum when there are none. -/
-def inputClass (d : Program) : Array (Array Slots.RU) :=
-  let inputs := (Slots.inputGates d.desc).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : Slots.RU)
+def inputClass (d : Program) : Array (Array Slots.ReplayBlock) :=
+  let inputs := (Slots.inputGates d.desc).map fun g => ({ unit := none, proofBlocks := #[(g, g + 1)] } : Slots.ReplayBlock)
   if inputs.isEmpty then #[] else #[inputs]
 
-/-- A population stratum as `Slots.layout` lays it: its units in order, each one replay unit of one proof unit. -/
-def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.RU) : Prop :=
-  s.toList.map (·.unit) = (expand p.2.toList).map some ∧ ∀ r ∈ s.toList, r.pus.size = 1
+/-- A population stratum as `Slots.layout` lays it: its units in order, each one replay block of one proof unit. -/
+def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.ReplayBlock) : Prop :=
+  s.toList.map (·.unit) = (expand p.2.toList).map some ∧ ∀ r ∈ s.toList, r.proofBlocks.size = 1
 
 /-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
 theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
     (h : Slots.layout d query = .ok l) :
-    ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.RU),
+    ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.ReplayBlock),
       l = { classes := #[pop, inputClass d] } ∧
       List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList pop.toList := by
   unfold Slots.layout at h
@@ -335,16 +335,16 @@ theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
   dsimp only at hs
   have hf := mapM_ok _ _ _ hs
   rw [toList_expandArr] at hf
-  have key : ∀ (us : List ℕ) (rus : List Slots.RU), List.Forall₂ (fun u (r : Slots.RU) =>
+  have key : ∀ (us : List ℕ) (rbs : List Slots.ReplayBlock), List.Forall₂ (fun u (r : Slots.ReplayBlock) =>
       (match gs[u]? with
-        | some g => pure { unit := some u, pus := #[g] }
-        | _ => throw (toString "unit " ++ toString u ++ toString " has no gates") : Except String Slots.RU) =
-        .ok r) us rus → rus.map (·.unit) = us.map some ∧ ∀ r ∈ rus, r.pus.size = 1 := by
-    intro us rus hF
+        | some g => pure { unit := some u, proofBlocks := #[g] }
+        | _ => throw (toString "unit " ++ toString u ++ toString " has no gates") : Except String Slots.ReplayBlock) =
+        .ok r) us rbs → rbs.map (·.unit) = us.map some ∧ ∀ r ∈ rbs, r.proofBlocks.size = 1 := by
+    intro us rbs hF
     induction hF with
     | nil => exact ⟨rfl, fun r hr => absurd hr (by simp)⟩
     | cons hab _ ih =>
-      rename_i u r us' rus'
+      rename_i u r us' rbs'
       split at hab
       · obtain rfl := (Except.ok.inj hab).symm
         refine ⟨by simp [ih.1], fun r' hr' => ?_⟩
@@ -354,11 +354,11 @@ theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
       · exact absurd hab (by simp [throw, throwThe, MonadExceptOf.throw])
   exact key _ _ hf
 
-/-- **The proof units `checked` lists**: `(v, i)` is one when slot `v` holds a replay unit whose unit is proved (or
+/-- **The proof units `checked` lists**: `(v, i)` is one when slot `v` holds a replay block whose unit is proved (or
 none, an input), and `i` is one of its proof units. -/
 theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v i : ℕ) :
     (v, i) ∈ Slots.checked l proved ↔
-      ∃ h : v < l.rus.size, l.rus[v].unit.all proved.contains = true ∧ i < l.rus[v].pus.size := by
+      ∃ h : v < l.replayBlocks.size, l.replayBlocks[v].unit.all proved.contains = true ∧ i < l.replayBlocks[v].proofBlocks.size := by
   unfold Slots.checked
   simp only [Array.mem_flatMap, Array.mem_filter, Array.mem_map, Array.mem_range, Prod.mk.injEq]
   constructor
@@ -369,6 +369,6 @@ theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v i : ℕ) :
     obtain ⟨hv, rfl⟩ := Array.getElem?_eq_some_iff.1 hz
     exact ⟨hv, hu, hi'⟩
   · rintro ⟨hv, hu, hi⟩
-    exact ⟨(l.rus[v], v), ⟨Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), hu⟩, i, hi, rfl, rfl⟩
+    exact ⟨(l.replayBlocks[v], v), ⟨Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), hu⟩, i, hi, rfl, rfl⟩
 
 end Properties.SampledProofs.SecurityProofs
