@@ -1,6 +1,6 @@
 """Each unit of a partition as a standalone word circuit, and the shape that units with the same circuit share.
 
-A unit's circuit (`UnitCircuit`) lives inside one activation of a *flat* Definition: a Call's Definition, or, for a Definition
+A unit's circuit (`ProofBlockCircuit`) lives inside one activation of a *flat* Definition: a Call's Definition, or, for a Definition
 `Q_word` cuts member by member (`cut.separable`), the member's callee.  Gates are numbered as `cut.call_scope` numbers them: the
 Definition's own gates ``0 .. gates - 1`` in canonical order, its parameter leaf ``p`` as ``-1 - p``.
 
@@ -34,12 +34,12 @@ from .cut import WIRING, CallGraph, DefinitionCut, call_scope, derived_committed
 
 
 def shape_digest(form: str) -> str:
-    """The SHA-512 of a unit's circuit: of its canonical form (`UnitCircuit.form`)."""
+    """The SHA-512 of a unit's circuit: of its canonical form (`ProofBlockCircuit.form`)."""
     return hashlib.sha512(b"verity/partition/v2/shape\0" + form.encode()).hexdigest()
 
 
 @dataclass(frozen=True)
-class UnitCircuit:
+class ProofBlockCircuit:
     definition: str                # the flat Definition's id
     unit: int                      # the unit within that Definition's cut
     gates: tuple[int, ...]
@@ -87,7 +87,7 @@ class Activation:
     def width(self, j: int) -> int:
         return self.gate(j).prim.ret.w
 
-    def circuits(self, owner: Sequence[int]) -> list[UnitCircuit]:
+    def circuits(self, owner: Sequence[int]) -> list[ProofBlockCircuit]:
         """The circuit of every unit of the cut ``owner`` (a unit per computing gate, in `CallGraph` order), in unit order."""
         g = self.graph
         if len(owner) != g.n:
@@ -104,7 +104,7 @@ class Activation:
                 outputs[owner[c]].append(keep[c])
         return [self._circuit(u, owned[u], outputs[u], computing) for u in range(n_units)]
 
-    def _circuit(self, u: int, owned: list[int], outputs: list[int], computing: set[int]) -> UnitCircuit:
+    def _circuit(self, u: int, owned: list[int], outputs: list[int], computing: set[int]) -> ProofBlockCircuit:
         members: set[int] = set()
         stack = list(owned)
         while stack:
@@ -130,7 +130,7 @@ class Activation:
         in_w = tuple(self.width(k) for k in inputs)
         out_w = tuple(self.width(j) for j in outputs)
         text = canonical_json({"in": list(in_w), "gates": form, "out": [local[j] for j in outputs]}).decode()
-        return UnitCircuit(self.fn.id, u, gates, len(owned), inputs, tuple(outputs), in_w, out_w, text,
+        return ProofBlockCircuit(self.fn.id, u, gates, len(owned), inputs, tuple(outputs), in_w, out_w, text,
                            shape_digest(text))
 
 
@@ -143,19 +143,19 @@ class Placement:
     node: int
     member: int
     path: tuple[tuple[int, int], ...]
-    circuit: UnitCircuit
+    circuit: ProofBlockCircuit
 
 
 @dataclass
 class UnitClass:
     shape: str
-    representative: UnitCircuit
+    representative: ProofBlockCircuit
     definition: Any                # the flat Definition the representative lives in (to lift inputs through it)
     units: int                     # how many units of the partition have this shape
 
 
 class PartitionUnits:
-    """Every unit of a partition of ``program`` as a `UnitCircuit`: of ``query`` (as `partition_object.evaluate` applies it), or of
+    """Every unit of a partition of ``program`` as a `ProofBlockCircuit`: of ``query`` (as `partition_object.evaluate` applies it), or of
     ``owners`` (``owners(fn, graph)``: a unit per computing gate of each Call's Definition, cut flat)."""
 
     def __init__(self, program: Any, query: Mapping[str, Any] | None = None,
@@ -168,9 +168,9 @@ class PartitionUnits:
         self._wiring = wiring
         self.partition = PO.evaluate(program, query) if query is not None else None
         self._acts: dict[str, Activation] = {}
-        self._flat: dict[str, tuple[Any, list[UnitCircuit]]] = {}
+        self._flat: dict[str, tuple[Any, list[ProofBlockCircuit]]] = {}
         self._counts: dict[str, Counter] = {}
-        self._reps: dict[str, tuple[UnitCircuit, Any]] = {}
+        self._reps: dict[str, tuple[ProofBlockCircuit, Any]] = {}
 
     def activation(self, fn: Any) -> Activation:
         a = self._acts.get(fn.id)
@@ -182,7 +182,7 @@ class PartitionUnits:
         """The activation of a flat Definition this partition's units live in, by id."""
         return self._acts[definition]
 
-    def flat(self, fn: Any, owner: Sequence[int] | None) -> list[UnitCircuit]:
+    def flat(self, fn: Any, owner: Sequence[int] | None) -> list[ProofBlockCircuit]:
         """The circuits of a flat Definition's units (``owner`` None: the whole activation is one unit), memoised by id."""
         got = self._flat.get(fn.id)
         if got is None:
@@ -210,7 +210,7 @@ class PartitionUnits:
         for k, cut in part.calls:
             yield k, 0, cut.fn, cut
 
-    def _expand(self, cut: Any, fn: Any, path: tuple = ()) -> Iterator[tuple[tuple, UnitCircuit]]:
+    def _expand(self, cut: Any, fn: Any, path: tuple = ()) -> Iterator[tuple[tuple, ProofBlockCircuit]]:
         if isinstance(cut, DefinitionCut) and cut.parts is not None:
             for node, (child, m) in enumerate(cut.parts):
                 if child is None:
@@ -260,4 +260,4 @@ class PartitionUnits:
         return {s: UnitClass(s, *self._reps[s], n) for s, n in total.items()}
 
 
-__all__ = ["shape_digest", "UnitCircuit", "Activation", "Placement", "UnitClass", "PartitionUnits"]
+__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "Placement", "UnitClass", "PartitionUnits"]

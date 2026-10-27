@@ -868,7 +868,7 @@ class Site:
 
 
 @dataclass(frozen=True)
-class Unit:
+class ProofBlock:
     """One tile's unit: its site, its slot of `pouw.positions` (its position at base 0), the site's A and B rows it
     multiplies, its tile, its Definition and its receipt's type."""
 
@@ -1044,12 +1044,12 @@ class Compiled:
         return _grind(self.plan, self.group_of, self.scheme)
 
     @cached_property
-    def units(self) -> tuple[Unit, ...]:
+    def units(self) -> tuple[ProofBlock, ...]:
         """Every unit, by slot."""
         out = []
         for g in self.plan.groups:
             sp = self.plan.sites[g.site]
-            out += [Unit(g.site, g.first + m, sp.units[u].rows, sp.units[u].cols, g.tile, g.unit, g.receipt)
+            out += [ProofBlock(g.site, g.first + m, sp.units[u].rows, sp.units[u].cols, g.tile, g.unit, g.receipt)
                     for m, u in enumerate(g.members)]
         return tuple(out)
 
@@ -1459,4 +1459,4 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
 
 __all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "Floor", "GateCheck", "MATMULS", "Matmul", "POSITIONS",
            "PV_ROWS", "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP",
-           "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]
+           "Scheme", "Site", "Tile", "ProofBlock", "Z", "compile", "rebuild", "register", "seed"]
