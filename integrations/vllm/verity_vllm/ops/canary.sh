@@ -279,6 +279,7 @@ if [[ ",$NEG," == *,wl_swapped,* ]]; then
   RB=$CD/$LLAMA_B2; NW=$CD/neg_wl_swapped; rm -rf "$NW"; mkdir -p "$NW"
   if [ ! -f "$RB/build_request/result.json" ] || [ ! -f "$RB/match/program.json" ]; then rec neg_wl_swapped FAIL "no llama_b2_bm Build/Match under $RB (run positives=...,llama_b2_bm first)"
   else
+    "${PY312%/*}/verity-vllm" workload-file "workloads/$LLAMA_B2.json" > /dev/null
     python3 - workloads/$LLAMA_B2.json "$NW/wl_swapped.json" <<'EOF'
 import json, sys
 wl = json.load(open(sys.argv[1])); a, b = wl["requests"][0], wl["requests"][1]
