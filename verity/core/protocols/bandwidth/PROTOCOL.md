@@ -2,21 +2,19 @@
 
 Status: superseded. The bandwidth audit on the served path is the remote bandwidth audit
 (`verity/core/protocols/remote_bandwidth/PROTOCOL.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
-tag `ro-blake3/v1` is BLAKE3, which the one-hash rule (6 Oct) takes off the served path, so no deployment runs this
+tag `ro-blake3/v1` is BLAKE3, which the one-hash rule takes off the served path, so no deployment runs this
 audit, and no served code reads it: `verity_vllm.protocols.remote_bandwidth`'s receipts are the remote audit's own
 (its `receipts.py`). The code stays for the benchmarks that measure its tags. What follows is v0 as it was granted.
 
 v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
-`f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), fixing `T` and
-`s`, then objected at `5c62196c1` (art:dbbce953a1916411304d1f4558010b6c18cbcb4b69c2c514e32ca83a2bc6b9c5): windows over
-one store could share a key across verifiers, tags and restarts, and the verifier accepted a store not salted for its
-device. It granted `5761861fd`, with those fixes, with two conditions
-(art:c67e2351ef1718c239e20fca8ddc6d92fc3ded80941fb0f1e50812cd6892cb18): one challenger state per store (§3) and a
-device id the challenger reads itself (§2). Both are fixed and await its check; §6 quotes the rate granted at
+`f18c1854a` with conditions, fixing `T` and `s`, then objected at `5c62196c1`: windows over one store could share a
+key across verifiers, tags and restarts, and the verifier accepted a store not salted for its device. It granted
+`5761861fd`, with those fixes, with two conditions: one challenger state per store (§3) and a device id the
+challenger reads itself (§2). Both are fixed and await its check; §6 quotes the rate granted at
 `5761861fd`. The Python reference and verifier are `audit.py` and `tags.py`, pinned by `tests/vectors.json`; the GPU
 tagger is `benchmarks/bandwidth`, checked bit for bit against them and timed on the RTX PRO 6000 (§6). The guarantee
 is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of `Security/`'s guarantees, proved as
-`Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane `ra-bandwidth-lean` (PR #1806); its completeness
+`Bandwidth.SecurityProofs.AuditRO` with no named assumption; its completeness
 is `HonestPasses`.
 
 ## 0. Where each part runs
@@ -47,7 +45,7 @@ Two things still rest on the on-node challenger, and neither is certified until 
    time with the verifier off the node, which adds a round trip inside the site, is unmeasured. This is completeness
    only: the bound reads `T + RTT` on the verifier's clock wherever it runs.
 
-The remote bandwidth audit (PR #1883) keeps the same split: its passes are chained by Fiat–Shamir from the verifier's
+The remote bandwidth audit keeps the same split: its passes are chained by Fiat–Shamir from the verifier's
 live challenge, and its openings are drawn from the verifier's live coin after the last root.
 
 ## 1. What a window certifies
@@ -285,10 +283,10 @@ constant caches, uniform registers (256 bytes a warp) and a TLB; a kernel can lo
 as instruction immediates that it runs before `σ` and again, hitting in the cache, after. The chip has copy-engine,
 PCIe and memory-controller buffers and video engines. The instruction caches' sizes are measured on an RTX PRO 5000
 (GB202, sm_120, the RTX PRO 6000's die) in [Dissecting SM_120](https://zartbot.github.io/micro_arch/nvidia/sm_120/),
-chapter 7; the allowance of 160 KiB a SM and 1 MiB for the chip is the red team's
-(art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), and it costs 31.9 MB (3.0% of `E`). sm_120
-has no Tensor Memory (the same reference, chapter 14), so there is no term for it. Measuring the caches on the
-RTX PRO 6000 (code- and constant-footprint latency sweeps) could tighten the allowance.
+chapter 7; the allowance of 160 KiB a SM and 1 MiB for the chip is the red team's, and
+it costs 31.9 MB (3.0% of `E`). sm_120 has no Tensor Memory (the same reference, chapter 14), so there is no term
+for it. Measuring the caches on the RTX PRO 6000 (code- and constant-footprint latency sweeps) could tighten the
+allowance.
 
 The claims registry (`verity.core.claims`) names what a deployment rests on:
 
@@ -338,10 +336,10 @@ The claims registry (`verity.core.claims`) names what a deployment rests on:
     the set's devices stays inside it, so a helper's slack is counted and the residual disappears. For `m`
     RTX PRO 6000s, each on its own PCIe link, `c_ext ≤ m · cap_side · (T + RTT)`, so the set's total is at least `m`
     times the per-device figure; that bounds the set's total, not any one device. This is AuditRO for `m` stores
-    sampled separately, which lane `ra-bandwidth-lean` is proving; the set's figure is certified once it lands.
+    sampled separately, which is not proved yet; the set's figure is certified once it is.
   - **What is certified now.** Per device, for an isolated device: `I ≥ k·b − S − c − λ` for one device whose side
     links carry nothing computed from any copy of its store during the window, the statement AuditRO makes. A peer
-    that relays tags in over the side link is charged inside the side budget by `AuditRelay` (#1819), at `m·b` bits
+    that relays tags in over the side link is charged inside the side budget by `AuditRelay`, at `m·b` bits
     beyond `c` for `m` relayed blocks with `m·(h − log₂ N) ≥ c + μ`; at the full PCIe cap that is more blocks than
     `N`, so a device a peer can reach gets its figure only in a co-audited set. A device that is neither isolated nor
     in a co-audited set gets no figure.
@@ -355,7 +353,7 @@ paths are the PCIe link, shared by host, NVMe, NIC and peer GPUs.
 rebuild floor. The parameters: **`ro-blake3/v1`, `s = 1,849`, `T = 1.2 ms`**, which leaves up to 0.5 ms for `RTT`,
 fixed by the red team at `f18c1854a`.
 
-**The certified rate, granted at `5761861fd`** (art:c67e2351ef1718c239e20fca8ddc6d92fc3ded80941fb0f1e50812cd6892cb18).
+**The certified rate, granted at `5761861fd`.**
 An accepted `ro-blake3/v1` window at `T = 1.2 ms` and `s = 1,849` certifies that the device's memory delivered at least
 741,353,308 bytes of `E` (68.8%) within `T + RTT`: 618 GB/s with `RTT = 0`, and 722,448,693 bytes (67.0%), 482 GB/s,
 with a 0.3 ms `RTT` allowance. The error is `2^-40.42`. The last table of this section is `audit.bound` at these
@@ -368,12 +366,8 @@ keyed BLAKE3's known answers on host and device; every tag's root over the full 
 vectors' 37 blocks equal to the reference's, with the output buffers poisoned; and a pass without the tag kernel that
 does not match. A failed gate times nothing.
 
-This section reports run `r20261012-024259-a1d6`
-(art:34582b732f2c2e97ecd0621bad0bd17688684365b24c51538f8e9146153b3a14) at `7eb0467af`, the objection's fixes in place.
-Runs `r20261012-011339-b99d` (art:ebd5d428c8dcf6f0807b54454f3fb3107b53fcaa4635ebf3c300c83a3d211f5d, at `84fc4199d`),
-`r20261012-001813-b2be` (art:bde66bd3aff8f3598ce7bddacf4d8a6630c0200ea32ee8d1d16aba5349d37603, at `f18c1854a`),
-`r20261011-235743-0c42` (art:8735b1084479fca8cf64bd225c58fb85a2afe6599a5b6c864759a421699a2e8e) and
-`r20261012-000847-217b` ran the same kernels and reproduced every clean pass time to within 0.01 ms.
+This section reports one run at `7eb0467af`, the objection's fixes in place. Four more runs of the same kernels,
+among them runs at `84fc4199d` and `f18c1854a`, reproduced every clean pass time to within 0.01 ms.
 
 Times are medians of 100 passes (20 for *idle*; p99 in brackets), in ms, under four L2 conditions set before the pass:
 *dirty*, after a 512 MiB write; *warm*, whatever the last pass left; *clean*, after a 512 MiB read of another buffer;
@@ -403,13 +397,11 @@ unprepared at `f18c1854a`). PCIe into the GPU measured 56.3 GB/s (pinned copy) a
 pinned host memory).
 
 Every window of the run went through the store's one challenger state: 53 per tag (50 timed, two with skipped blocks,
-one at the 100 ms deadline), 159 nonces in all, each opened and closed once and none repeated. Run
-`r20261012-022850-f3ea` (art:a2154aeefb5c7c1e6c0f99218828d44ddd764514489ca00da3688ce8d74395f8) at `4ae302654`, before
-`Window.open`, fsynced the state between the prover's scrub and `σ` (§3). Its gates passed and every skipping device
-was rejected, but honest `ro-blake3/v1` windows took 1.095 ms at the median on the verifier's clock (1.221 ms at most)
-with the device's pass at 1.007 ms, and one of 50 was late; three of 50 `gf31-poly/v1` windows were late. It is the
-finding behind §3's ordering, not a measurement of the audit. Run `r20261012-034853-e233`
-(art:6efb3ebf776e10ced6fe6ad128185373189cfc0cedeae3e5fbb67a4f63856737) at `a677eaf3c` checked the grant's two
+one at the 100 ms deadline), 159 nonces in all, each opened and closed once and none repeated. A run at `4ae302654`,
+before `Window.open`, fsynced the state between the prover's scrub and `σ` (§3). Its gates passed and every skipping
+device was rejected, but honest `ro-blake3/v1` windows took 1.095 ms at the median on the verifier's clock (1.221 ms at
+most) with the device's pass at 1.007 ms, and one of 50 was late; three of 50 `gf31-poly/v1` windows were late. It is
+the finding behind §3's ordering, not a measurement of the audit. A run at `a677eaf3c` checked the grant's two
 conditions on the node and timed nothing: nvidia-smi gave the leased GPU's `GPU-…` UUID with MIG disabled,
 `challenger_device` accepted the tagger running on it, and 15 windows over the pinned vectors' 37-block store went
 through the one state file the store names.
@@ -425,7 +417,7 @@ the leaves and the tree, 0.14 ms.
 The windows run through `audit.Verifier` with the honest prover's preparation (§3), and record the device's pass time
 beside the verifier's. Without the warm pass, the last window's openings and verdict (3.3 s of Python BLAKE3 per window,
 on the same host) left about 0.18 ms of host time inside each later `ro-blake3/v1` window while the device's pass stayed
-at 1.01 ms (run `r20261012-000847-217b`, art:3a657af4fa9d2c009caff8382b05bcb97e5bdb3b0804a0705c77830ad87b1324). A
+at 1.01 ms. A
 device that skips 1% or 5% of the blocks was rejected in every run, for every tag; at `s = 1,849` it passes with
 probability `0.99^1849 ≈ 2^-26.8` or `0.95^1849 ≈ 2^-136.8`.
 
@@ -452,12 +444,11 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 2. **`ro-blake3/v1` was v0's deployed tag**, until the one-hash rule took BLAKE3 off the served path; the remote
    bandwidth audit's receipt is sketch-then-SHA-512. Keyed BLAKE3 is the fastest random-oracle candidate on sm_120, whose
    integer pipe runs every integer operation at about 64 thread-operations per SM per clock. TurboSHAKE128, the second
-   candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88 (notes
-   `kb/sm120/tried-techniques.md`, run `r20260930-061717-3e84`), a compute floor of 0.56 ms on this store against
-   0.51 ms.
+   candidate, was not built: on the same device it hashes 4.95 bytes per SM per clock against BLAKE3's 5.88, a compute
+   floor of 0.56 ms on this store against 0.51 ms.
 3. **The helper residual** (§5): an interleaving helper covers most of another device's blocks, so
    `bandwidth-device` is stated for a co-audited set of whole PCIe-only GPUs. The set's figure needs AuditRO for `m`
-   stores (lane `ra-bandwidth-lean`); until then the per-device bound covers an isolated device.
+   stores; until then the per-device bound covers an isolated device.
 4. **The store's leaves are PoUS's, not P2 spec §4's.** `vk`'s leaf is the 99-byte little-endian leaf of
    `pous.verifier`; the P2 spec's is 107 bytes, big-endian (`benchmarks/pous/p2_v1/wire.py`). The audit uses what PoUS
    uses on `main` and inherits its resolution.
