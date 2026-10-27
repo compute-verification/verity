@@ -300,6 +300,23 @@ def partInFn (j : Json) : Except String Json := do
     ("salts", Json.arr (q.rows.map fun (r : In.Row) => short r.salt)), ("refs", natsJson q.refs.toList)]]
   pure (Json.mkObj [("ports", Json.arr (p.map port))])
 
+/-- A rep's tops in the order `VStar.In.Src.tops` lists them: `level0`, the node count of level 0's top (`root_B`, at
+`fast100(m)`'s first cap), then `later`, each later level's top's, in the order the rep's schedule commits them
+(`RecVStar.topSizes` of `repRounds`, or `holoRepRounds` with `holo`). -/
+def topSizesFn (j : Json) : Except String Json := do
+  let o ← input' j ["m", "k_log", "claims", "holo"]
+  let m ← jNatAt o "m" "input"
+  let kLog ← jNatAt o "k_log" "input"
+  let claims ← jNatAt o "claims" "input"
+  let holo ← match o "holo" with
+    | .bool b => pure b
+    | _ => throw "input.holo: not a boolean"
+  let some s := Flock.fast100 m | throw s!"m = {m}: no fast100 schedule"
+  let some rs := (if holo then Flock.RecVStar.holoRepRounds else Flock.RecVStar.repRounds) m kLog claims
+    | throw s!"m = {m}, k_log = {kLog}: no rep schedule"
+  pure (Json.mkObj [("level0", ((2 ^ (s.levels.getD 0 default).cap : Nat) : Json)),
+    ("later", natsJson (Flock.RecVStar.topSizes rs))])
+
 end VStar.DT
 
 open VStar.DT in
@@ -309,4 +326,5 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
-  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn)])
+  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn),
+  ("top_sizes", topSizesFn)])

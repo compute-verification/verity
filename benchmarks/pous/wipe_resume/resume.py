@@ -14,8 +14,8 @@ sessions of `streamed_wipe.Challenger` (sequential reads, batch size 1), signed 
 `wipe_verdict.judge`:
 
 - `honest`: keeps every label. Expect accept.
-- `naive`: the `--foreign-gb fM` cheat: the room of `⌈N/19⌉ + 1` labels kept as prior content, those labels
-  dropped. Expect reject.
+- `naive`: the `--foreign-gb fM` cheat: the room of `dropped(N, k)` labels kept as prior content, one label past the
+  `foreign_bits` `verity/wipe/v0` publishes at `k` reads (`wipe_period.certify`), those labels dropped. Expect reject.
 - `resume`: the attack transported. Each slot keeps the attack's share of its label (1,000/65,536 of it, rounded up
   to one byte) and 63 bytes of prior content; slots `0 … SEEDS−1` keep whole labels, its "states". At a read it
   resumes the label's computation, which needs `K`: it searches keys against its whole labels for as long as the
@@ -28,8 +28,8 @@ sessions of `streamed_wipe.Challenger` (sequential reads, batch size 1), signed 
   with one compression. Expect accept: the attack's mechanism, once the resume state is the prover's.
 - `untiered` (a premise broken): every label kept in memory the commitment doesn't declare, prior content in the
   whole declared store. Expect accept: the verdict sees answers, not where they were kept.
-- `sampling`: the best keyless strategy, `naive`'s `g = N − ⌈N/19⌉ − 1` labels kept, over many sessions at a small
-  `k`: its acceptance rate against `(g/N)^k`, the bound's sampling term.
+- `sampling`: the best keyless strategy, `naive`'s `g = N − dropped(N, k)` labels kept at the sessions' `k`, over many
+  sessions at a small `k`: its acceptance rate against `(g/N)^k`, the bound's sampling term.
 
 For each it records the verdict (each side's), how the session ended, the prior content (its size, its share of the
 declared store, and whether `keep` returns it after the reads) and the read times. `main` writes `resume.json`.
@@ -56,6 +56,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "verity/core/protocols/pous/tests")]
 
 import pous_test_signer as ts  # noqa: E402
 from verity.core.protocols.pous import streamed_wipe as sw  # noqa: E402
+from verity.core.protocols.pous import wipe_period as W  # noqa: E402
 
 WIPE_VERDICT = ROOT / "verity/core/devices/memory_challenger/lean/wipe_verdict.py"
 LABEL = sw.LABEL_BYTES
@@ -65,15 +66,20 @@ KEPT = math.ceil(LABEL * BAND_SHARE)
 """Bytes of each label `resume` keeps: the band attack's share, rounded up to a byte (1)."""
 SEEDS = 5
 """Whole labels `resume` keeps, as the band attack keeps five states."""
-F = Fraction(1, 19)
 UNTIMED_LIMIT_NS = 600 * 10**9
 UNTIMED_TRIES = 1 << 22
 SERVER = b"wipe-resume-fixture"
 
 
-def dropped(n: int) -> int:
-    """`⌈N/19⌉ + 1`: the labels `naive` gives up for prior content, one past `f·N` (`wipe_period`'s `fM`)."""
-    return -(-n // 19) + 1
+def params(n: int, k: int, limit_ns: int = 1) -> sw.WipeParams:
+    """A session's parameters: `n` labels in host memory, declared exactly, `k` sequential reads."""
+    return sw.WipeParams(n, k, 1, limit_ns, (("host-dram", n * LABEL),))
+
+
+def dropped(n: int, k: int) -> int:
+    """The labels `naive` gives up for prior content: one label past the `foreign_bits` published at `k` reads
+    (`wipe_period`'s `fM`)."""
+    return W.foreign_labels("fM", params(n, k))
 
 
 class Honest:
@@ -94,10 +100,11 @@ class Honest:
 
 
 class Naive(Honest):
-    """Keeps prior content in the room of the last `dropped(N)` labels and answers those reads from it."""
+    """Keeps prior content in the room of the last `dropped(N, at_k)` labels (`at_k` the session's reads unless
+    given) and answers those reads from it."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
-        self.cut = n - dropped(n)
+    def __init__(self, n: int, c: sw.Challenger, at_k: int | None = None) -> None:
+        self.cut = n - dropped(n, c.params.k if at_k is None else at_k)
         self.store = bytearray(n * LABEL)
         self.store[LABEL * self.cut:] = os.urandom(LABEL * (n - self.cut))
         self.z = bytes(self.store[LABEL * self.cut:])
@@ -218,8 +225,8 @@ def session(name: str, make: Callable[[int, sw.Challenger], Any], *, n: int, k: 
     """One whole session against the prover `make(n, challenger)` builds; its record (module docstring). The coins
     are the OS's, drawn when the fill completes, unless `coin_secret` fixes them."""
     sid = hashlib.sha512(b"verity-pous/wipe-resume/session\0" + name.encode() + b"\0" + tag).digest()[:32]
-    params = sw.WipeParams(n, k, 1, limit_ns, (("host-dram", n * LABEL),))
-    c = sw.Challenger(os.urandom(32), SERVER, sid, params, signer, log=log, clock=clock, coin_secret=coin_secret)
+    c = sw.Challenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
+                      coin_secret=coin_secret)
     prover = make(n, c)
     z_before = hashlib.sha512(prover.z).hexdigest()
     for start, data in c.fill(1 << 14):
@@ -256,18 +263,19 @@ def provers(clock: Callable[[], int], limit_ns: int, untimed_tries: int = UNTIME
     ]
 
 
-def sampling(*, n: int, k: int, sessions: int, signer, log, judge, decide: str, clock, limit_ns: int) -> dict[str, Any]:
-    """`naive` over `sessions` sessions at `k` reads: accepted count against `(g/N)^k`."""
+def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, decide: str, clock,
+             limit_ns: int) -> dict[str, Any]:
+    """`naive` as it is at `at_k` reads over `sessions` sessions at `k`: accepted count against `(g/N)^k`."""
     accepted = 0
     for r in range(sessions):
-        rec = session("sampling", Naive, n=n, k=k, limit_ns=limit_ns, signer=signer, log=log, judge=judge,
-                      decide=decide, clock=clock, tag=r.to_bytes(4, "big"))
+        rec = session("sampling", lambda n, c: Naive(n, c, at_k), n=n, k=k, limit_ns=limit_ns, signer=signer, log=log,
+                      judge=judge, decide=decide, clock=clock, tag=r.to_bytes(4, "big"))
         accepted += rec["accepted"]
-    g = n - dropped(n)
+    g = n - dropped(n, at_k)
     p = (g / n) ** k
     sd = math.sqrt(sessions * p * (1 - p))
-    return {"labels": n, "k": k, "g": g, "sessions": sessions, "accepted": accepted, "expected": sessions * p,
-            "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
+    return {"labels": n, "k": k, "at_k": at_k, "g": g, "sessions": sessions, "accepted": accepted,
+            "expected": sessions * p, "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
 
 
 def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = time.perf_counter_ns,
@@ -285,13 +293,12 @@ def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Cal
         rec["expect_accept"] = EXPECT[name]
         rec["as_expected"] = rec["accepted"] == EXPECT[name]
         out["sessions"].append(rec)
-    g = n - dropped(n)
-    out["bound"] = {"labels": n, "memory_bits": n * 8 * LABEL,
-                    "family_foreign_bits": (n * 8 * LABEL + 18) // 19,
-                    "naive_log2_accept_at_k": k * math.log2(g / n)}
+    g, cert = n - dropped(n, k), W.certify(params(n, k), 0)
+    out["bound"] = {"labels": n, "memory_bits": cert["memory_bits"], "k": k, "r": cert["r"],
+                    "foreign_bits": cert["foreign_bits"], "naive_log2_accept_at_k": k * math.log2(g / n) if g else None}
     if sample_sessions:
         s_signer = ts.TestSigner(b"wipe-resume sampling", height=10, directory=scratch)
-        out["sampling"] = sampling(n=sample_n, k=sample_k, sessions=sample_sessions, signer=s_signer, log=log,
+        out["sampling"] = sampling(n=sample_n, k=sample_k, at_k=k, sessions=sample_sessions, signer=s_signer, log=log,
                                    judge=judge, decide=decide, clock=clock, limit_ns=limit_ns)
     out["as_expected"] = all(s["as_expected"] for s in out["sessions"]) and (
         "sampling" not in out or abs(out["sampling"]["z_score"]) < 4)
@@ -301,8 +308,8 @@ def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Cal
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--labels", type=int, default=1 << 19, help="N (default 2^19: one 32 MiB segment, the family's least)")
-    ap.add_argument("--k", type=int, default=2152)
+    ap.add_argument("--labels", type=int, default=1 << 19, help="N (default 2^19: one 32 MiB segment)")
+    ap.add_argument("--k", type=int, default=W.READS, help=f"reads a session (default {W.READS})")
     ap.add_argument("--limit-ns", type=int, default=20_000_000)
     ap.add_argument("--decide", choices=("lean", "both", "python"), default="both")
     ap.add_argument("--sample-sessions", type=int, default=600)

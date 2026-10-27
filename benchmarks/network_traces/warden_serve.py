@@ -1075,8 +1075,8 @@ def rehearse(args) -> int:
                 return 1
         if args.fake:
             ids = ["--id-payload", str(params.payload)] if args.ids else []
-            fake = subprocess.Popen(me + ["fake", "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms), *ids],
-                                    stdout=subprocess.PIPE, text=True)
+            fake = subprocess.Popen(me + ["fake", "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms),
+                                          "--first-ms", str(args.first_ms), *ids], stdout=subprocess.PIPE, text=True)
             procs.append(fake)
             upstream = tuple(json.loads(fake.stdout.readline())["listening"])
             model = "fake"
@@ -1150,6 +1150,9 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
     for q in (f, r):
         q.add_argument("--token-ms", type=float, default=20.0, help="the fake endpoint's milliseconds a token")
+        q.add_argument("--first-ms", type=float, default=100.0,
+                       help="the fake endpoint's milliseconds to its first token, or to its whole id-form response "
+                            "(past the warden's delay D, every connection fails late: a void run)")
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the warden is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
@@ -1212,7 +1215,8 @@ def main(argv=None) -> int:
         return 0
     if args.command == "fake":
         async def fake() -> None:
-            server = await asyncio.start_server(lambda rd, wr: fake_endpoint(rd, wr, token_s=args.token_ms / 1000,
+            server = await asyncio.start_server(lambda rd, wr: fake_endpoint(rd, wr, first_s=args.first_ms / 1000,
+                                                                             token_s=args.token_ms / 1000,
                                                                              id_payload=args.id_payload), *args.listen)
             cs._announce({"listening": [args.listen[0], server.sockets[0].getsockname()[1]]})
             await server.serve_forever()
