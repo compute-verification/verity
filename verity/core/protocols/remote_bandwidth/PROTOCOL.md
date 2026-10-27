@@ -14,7 +14,7 @@ input from serving), `store.py` (a registered store bound to a pinned model, §3
 and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 store, §11). Every byte format below is
 pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
-checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
+checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
 `RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
 `lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
@@ -856,7 +856,7 @@ and each word's decode two squarings. Under the default it is 32 words of 128 by
 word is refused if it is one of the 105 values from \(p\) to \(2^{1024} - 1\). Word \(w\)'s index is \(32j + w\), and
 its decode is three inverted rounds, each a squaring with the sign rule less \(c_r + t(i)\), with \(\sigma_K\) after the
 rounds \(r = 2\) and \(r = 1\) (XOR with \(K\), kept only if the result is below \(p\)). A block is then 96 squarings mod
-a 1,024-bit prime and 64 masks, where it was 128 mod a 512-bit prime. In the proof unit (§8), where a product's cost
+a 1,024-bit prime and 64 masks, where it was 128 mod a 512-bit prime. In the proof block (§8), where a product's cost
 grows about as the square of its width, that is about three times the decode check's multiplications; the fallback is
 64 squarings and 32 masks, about twice. The opening is the same size: a block is 4,096 bytes under every codec. Every
 block of a v0 registration is under the seed's key; a bound block (§3, appended as §4 says) is decoded less
@@ -1020,7 +1020,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
 
 - **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
-  proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
+  proves. Deployed, each drawn receipt is one proof block that the proof service proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
   binds \(z\)), plus the link from the block's payload to the circuit's committed values:
   - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
@@ -1097,12 +1097,12 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   `StoreMatches` asks for (`requirement.Requirement.last` over the census, in Python). It reads the circuit, its
   schedule and the registration, never a committed value, so residency comes from the public schedule. A free at a
   value's last *use*, the last step whose gather selected it, would read residency off committed values.
-  `StoreMatches` would fail for every candidate no later step selects, and one wrong unit upstream of the selection
+  `StoreMatches` would fail for every candidate no later step selects, and one faulty proof block upstream of the selection
   would move the free. In FMT-R678's counterexample (note:20261019T0021Z-report-format-r6-r8, run
   r20261019-001741-3fc1), one flipped bit of a length unit keeps \(L - 1\) dead pages of \(L\) resident to the last
   step, \((L - 1)(S - 1) \cdot 32\) bits more, while the structural residency is the same in both runs. The
   structural free holds more instead: each candidate page stays resident to the last step that may select it, \(L\)
-  times the honest run's use there with no wrong unit. The prover does hold those pages, so the audit's own claim is
+  times the honest run's use there with no faulty proof block. The prover does hold those pages, so the audit's own claim is
   sound, but they are memory the circuit may not need. That is why registered weights, which `W` must hold whatever
   the router or the tokens select, are creditable in every format, and KV only where no selection reads it. Each
   request's arrival step and executed extent are part of the schedule. They are host- or value-derived until the
@@ -1114,7 +1114,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   is public structure, and the map and the plan are witness. Because the steps strictly increase, a step has at most
   one pass, so its reads are credited at most once; a step with no pass is credited nothing. Open:
   - *The plan's check.* That a pass's plan holds every complete block the circuit reads at its step is the plan's
-    proof unit's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement
+    proof block's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement
     (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
@@ -1148,7 +1148,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   RD-18). Under a cap of 300 both are credited at 300; under one of 200 its 300-bit schedules are refused, and those
   sessions credit nothing after the seed. Open: the schedule is witness (a
   request's arrivals and lengths), in the clear here as v0's plans are, so deployed it is committed and the check is
-  a proof unit whose output is the bits; the bits are the whole session's schedule, an upper bound on what the prover
+  a proof block whose output is the bits; the bits are the whole session's schedule, an upper bound on what the prover
   chose after a pass's coins; the cap travels with the session's parameters, and `benchmarks/remote_session`'s hello
   carries none, so its sessions credit nothing after the seed; and A7's sessions send their circuit's read sets as
   plans, not the resident sets, so
@@ -1168,7 +1168,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   \(u_s\) the pass's planned blocks it credits no receipt of (0 when its receipts cover its plan), a window
   its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
   to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
-  the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
+  the share of units drawn wrong, is the link's to establish: a faulty proof block at a heavy step carries more than its
   share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts, filler. `PlanMatches` is
@@ -1296,7 +1296,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
 
   The reference's sketch-sha512 meets all three. Its signs come from each pass's seed. For the second it counts every
   key the prover sees, and reads the bound at \(r^* = 12\) (§4). Under a registration that binds \(z\), \(z\) is
-  XORed into the block before the sketch. In the proof unit, check 5 under sketch-sha512 is 16 signed sums over the
+  XORed into the block before the sketch. In the proof block, check 5 under sketch-sha512 is 16 signed sums over the
   block's 4,096 bytes and one compression, in place of block-sha512's 33 compressions.
 - **KV receipts are the driver's receipts.** A KV page's receipt is the registration's one receipt kind (sketch-sha512:
   `SketchReceipter` under the pass's seed, its signs under `SIGN_DOMAIN`, hashed under `SKETCH_RECEIPT_DOMAIN`) of a
@@ -1514,7 +1514,7 @@ ways get there:
   its hash and share of the tree are \(1/m\). #1916's τ of 1.26 a pass scales to about 1.09 at 16 KiB (from its
   measured parts; the whole isn't measured). The openings pay instead. Each carries \(m\) blocks: 20.9 KB at
   16 KiB with a payload leaf a receipt, or 27.0 KB with PoUS's 4 KiB leaf. That is 2.4–3.0 times today's, or
-  0.70–0.90 GB a window and 93–120 Mb/s per node. Each opening's proof unit also decodes \(m\) blocks (check 3).
+  0.70–0.90 GB a window and 93–120 Mb/s per node. Each opening's proof block also decodes \(m\) blocks (check 3).
   sketch-sha512's rate a compression goes from \(2^{-95.12}\) to \(2^{-93.88}\) at 16 KiB's 512 sectors.
   `RateAuditSketch` would need restating for a receipt of \(m\) blocks, and the registration would name \(m\).
 - **Fewer queries.** At 4 KiB, 0.05% needs \(q \le 2^{42.5}\) queries to a pass's oracle:

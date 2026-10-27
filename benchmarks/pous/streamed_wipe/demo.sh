@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # MEM-67 3a.2: one streamed wipe of one GPU's memory, as one Attempt. wipe_period's leg on this node: the prover keeps the
 # fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory challenger
-# streams it natively (wipe_stream.c, built and gated on the challenger's host) and times 2,152 spot reads, and the Lean
-# (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the Lean
-# builds into it):
+# streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
+# the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
+# Lean builds into it):
 #
 #   research run --on NODE --project verity --source . --cwd clone --timeout 90m -- \
 #     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
@@ -11,15 +11,21 @@
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
 #                        run but the size and the placement (trusted-nebius-host unmet)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
-#   --reserve-gib G      device memory left out of the fill (default 1)
+#   --reserve-gib G      device memory left out of the fill (default 1); the whole device is declared, so what the fill
+#                        doesn't reach counts in full in the published foreign_bits (R)
+#   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 5231 is the H200's
+#                        StreamedWipeMeets141GB5, r = 59): a challenger here is started with it; one on its own host
+#                        chooses its own (its --challenger-command's wipe_party --reads K), and the leg refuses a
+#                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
 #                        there, e.g. 'python -m verity.core.protocols.pous.wipe_party --device D --listen 0.0.0.0:P
-#                        --streamer build'); without them it runs on this node, the premise unmet
+#                        --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
 #                        `simulated`, the premise assumed; its key in this run's scratch all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
-#                        labels, or fM, one label past f·M; a cheat's run expects reject
+#                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
+#                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
 #   --egress-bits N      the network certifier's egress count over the session, which a challenger here signs
 #                        (default: UNCOUNTED, the bound vacuous); a challenger on its own host signs the count its
@@ -51,13 +57,14 @@ if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
-  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS=
+  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) DRY=1 ;;
       --simulated) SIMULATED=1 ;;
       --egress-bits) EGRESS=$2; shift ;;
+      --reads) READS=$2; shift ;;
       --link) LINKS="$LINKS$2"$'\n'; shift ;;
       --foreign-gb) FOREIGN=$2; shift ;;
       --expect) EXPECT=$2; shift ;;
@@ -105,11 +112,11 @@ else
   fi
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
-    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${CTRL_DEV:-}" "${CTRL_SRC:-}" \
-    "$CTRL_MBPS" "$LINKS" <<'EOF'
+    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
+    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" <<'EOF'
 import json, shlex, sys
 from fractions import Fraction
-(path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, dev, src, mbps,
+(path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
  specs) = sys.argv[1:]
 links = [] if not dev else [{"name": "control", "to": "outside", "via": f"{dev} {src}: the node's own NIC (ssh, research run)",
                              "mbps": int(mbps) if mbps.strip().isdigit() and int(mbps) > 0 else None}]
@@ -124,7 +131,7 @@ doc = {"tools": json.loads(tools),
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
-                "links": links}}
+                "reads": json.loads(reads), "links": links}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))

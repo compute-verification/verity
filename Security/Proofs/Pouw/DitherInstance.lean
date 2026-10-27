@@ -8,8 +8,10 @@ import Proofs.Pouw.Dither
 * `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open
   parameter: an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's
   verdict, with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`.
-  The rounds fit the period from the deadlines: the certifier's clock bounds each round's work to `Δ` of wall time
-  and its answer to `τ_ans`, G2 bounds their use by `ρ_r Δ` and `ρ_r τ_ans`, and `k (Δ + τ_ans) ≤ T`.
+  The sampling blocks' work fits the period from the clocks (CMP-154): `RootAfterCoin` puts block `b`'s work inside
+  its window, from its coins at `t b` to its root's arrival, G2 bounds its use by `ρ_r` times that window, and the
+  challenger's order (block `b + 1`'s coins after block `b`'s roots) makes the windows disjoint inside `[0, T]`
+  (`sum_windows_le_T`). No count of sampling blocks or of selected ones is read.
 * `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting the floors, and at the `x`
   `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
   `Proofs.Pouw.Dither.WorkSound`.
@@ -28,48 +30,68 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Guarantees.DitherIn
 
 open scoped NNRat
 
+/-- **Windows in sequence telescope**: when each window ends no later than the next one starts, the windows' lengths
+add up to at most the span from the first start to the last end. -/
+theorem sum_windows_le : ∀ (n : ℕ) (a e : Fin (n + 1) → ℝ),
+    (∀ b b' : Fin (n + 1), (b : ℕ) + 1 = b' → e b ≤ a b') → ∑ b, (e b - a b) ≤ e (Fin.last n) - a 0
+  | 0, a, e, _ => by simp
+  | n + 1, a, e, h => by
+    rw [Fin.sum_univ_castSucc]
+    have ih := sum_windows_le n (fun b => a b.castSucc) (fun b => e b.castSucc) fun b b' hb =>
+      h _ _ (by simpa using hb)
+    have hl := h (Fin.last n).castSucc (Fin.last (n + 1)) (by simp)
+    simp only [Fin.castSucc_zero] at ih
+    linarith
+
+/-- **Windows in sequence inside `[0, T]` fit in `T`**: sampling block `b`'s window runs from its coins at `a b ≥ 0`
+to its root's arrival `e b ≤ a b + Δ ≤ T`, and the next block's coins go out only after it ends, so the windows'
+lengths add up to at most `T`, at any number of blocks. -/
+theorem sum_windows_le_T {n : ℕ} (a e : Fin n → ℝ) (T Δ : ℝ) (hT : 0 ≤ T)
+    (h : ∀ b, 0 ≤ a b ∧ a b + Δ ≤ T ∧ e b ≤ a b + Δ)
+    (hs : ∀ b b' : Fin n, (b : ℕ) + 1 = b' → e b ≤ a b') : ∑ b, (e b - a b) ≤ T := by
+  cases n with
+  | zero => simpa using hT
+  | succ n =>
+    have h1 := sum_windows_le n a e hs
+    have h2 := (h 0).1
+    have h3 := h (Fin.last n)
+    linarith [h3.2.1, h3.2.2]
+
 /-- `WorkSound` gives the headline on every card table at every open parameter. -/
 theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : WorkSoundAtX c pb hr x := by
-  intro D P L G e _ _ _ k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho macs comps η δ nmax Hmac Ein Eout κS Δ Q κdmm κdsha
-    Badv ξ κx κsha t cin cout arrive τans tc ansAt hreg hdual hinst hH hη hδ hδ1 hn hHmac hEi hEo hkΔ hξ hκd hcap g1 g2
-    g3 p1 p2 sak sha out svc sees clock aclock ext
-  have hinst' : ∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubCost e μ pb.mm (macs a) ≤ Hmm a ∧
-      pubCost e μ pb.sha (comps a) ≤ Hsha a := fun a ha =>
+  intro D P L G e _ _ _ nsb Reg reg Obs verdict dev Pd μ Wmm Wsha Wans macs comps ηw δ nmax Wmac Ein Eout κS Δ Q
+    κdmm κdsha Badv ξ κx κsha cin cout t arrive sel τans tc ansAt hreg hdual hinst hH hη hδ hδ1 hn hWmac hEi hEo hT0
+    hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc sees root ext
+  have hinst' : ∀ a ∈ Reg, 0 < Wmm a ∧ 0 < Wsha a ∧ 0 ≤ Wans a ∧ pubCost e μ pb.mm (macs a) ≤ Wmm a ∧
+      pubCost e μ pb.sha (comps a) ≤ Wsha a := fun a ha =>
     ⟨(hinst a ha).1, (hinst a ha).2.1, (hinst a ha).2.2.1, (hinst a ha).2.2.2.1, (hinst a ha).2.2.2.2.1⟩
-  have svc' : ServiceSound G P k reg (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt) dev
-      κS := fun A =>
+  have svc' : ServiceSound G P nsb reg
+      (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive sel τans tc ansAt) dev κS := fun A =>
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
-  have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt)
-      dev (Ein + Eout) :=
+  have imp : ImportWithinCertifier G P nsb
+      (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive sel τans tc ansAt) dev (Ein + Eout) :=
     fun A o x hv => (sees A o x).trans (add_le_add hv.1.2.1 hv.1.2.2)
-  refine ⟨h G P k Reg reg Obs _ dev Pd μ Hmm Hsha Ho (fun a => pubCost e μ pb.mm (macs a))
-    (fun a => pubCost e μ pb.sha (comps a)) η δ (nmax * Hmac) (Ein + Eout) κS Q κdmm κdsha Badv ξ κx κsha hreg hdual
-    hinst' hH hη hδ hδ1 (mul_nonneg hn hHmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc' imp ext,
-    ?_⟩
+  refine ⟨h G P nsb Reg reg Obs _ dev Pd μ Wmm Wsha Wans (fun a => pubCost e μ pb.mm (macs a))
+    (fun a => pubCost e μ pb.sha (comps a)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha Badv ξ κx κsha hreg
+    hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
+    imp ext, ?_⟩
   intro A o x hv r
   have hrate : 0 ≤ G.rate r := (g2.1 r).le
-  have hw : ∀ w, G.use (A.work w) (A.workIn o x w) r ≤ G.rate r * Δ := fun w => by
-    have h1 := ((g2.2 (A.work w) (A.workIn o x w)).2 r).2
-    have h2 : G.wall (A.work w) (A.workIn o x w) ≤ Δ := by
-      have := clock A o x w
-      have := (hv.2.2 w).1
+  have hw : ∀ b, G.use (A.work b) (A.workIn o x b) r ≤
+      G.rate r * (arrive (dev A o x) b - t (dev A o x) b) := fun b => by
+    have h1 := ((g2.2 (A.work b) (A.workIn o x b)).2 r).2
+    have h2 : G.wall (A.work b) (A.workIn o x b) ≤ arrive (dev A o x) b - t (dev A o x) b := by
+      have := root A o x b
       linarith
     exact h1.trans (mul_le_mul_of_nonneg_left h2 hrate)
-  have ha : ∀ w, G.use (A.answer w) (A.answerIn o x w) r ≤ G.rate r * τans := fun w => by
-    have h1 := ((g2.2 (A.answer w) (A.answerIn o x w)).2 r).2
-    have h2 : G.wall (A.answer w) (A.answerIn o x w) ≤ τans := by
-      have := aclock A o x w
-      have := (hv.2.2 w).2
-      linarith
-    exact h1.trans (mul_le_mul_of_nonneg_left h2 hrate)
-  show ∑ w, (G.use (A.work w) (A.workIn o x w) r + G.use (A.answer w) (A.answerIn o x w) r) ≤ G.rate r * Pd.T
-  calc ∑ w, (G.use (A.work w) (A.workIn o x w) r + G.use (A.answer w) (A.answerIn o x w) r)
-        ≤ ∑ _w : Fin k, (G.rate r * Δ + G.rate r * τans) :=
-        Finset.sum_le_sum fun w _ => add_le_add (hw w) (ha w)
-    _ = G.rate r * (k * (Δ + τans)) := by
-        rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]; ring
-    _ ≤ G.rate r * Pd.T := mul_le_mul_of_nonneg_left hkΔ hrate
+  show ∑ b, G.use (A.work b) (A.workIn o x b) r ≤ G.rate r * Pd.T
+  calc ∑ b, G.use (A.work b) (A.workIn o x b) r
+        ≤ ∑ b, G.rate r * (arrive (dev A o x) b - t (dev A o x) b) := Finset.sum_le_sum fun b _ => hw b
+    _ = G.rate r * ∑ b, (arrive (dev A o x) b - t (dev A o x) b) := (Finset.mul_sum _ _ _).symm
+    _ ≤ G.rate r * Pd.T :=
+        mul_le_mul_of_nonneg_left
+          (sum_windows_le_T (t (dev A o x)) (arrive (dev A o x)) Pd.T Δ hT0 hv.2.1 hv.2.2.1) hrate
 
 /-- `WorkSound` gives the headline on every card table at θ's floors. -/
 theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)

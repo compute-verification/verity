@@ -38,6 +38,10 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
 law object of its own. Over a registration's N units it is `subset:K` at K = `rate_count`, ceil(q N) for q = NUM/DEN
 rounded up to a multiple of the T tables, so its draw object is a subset's. Under a fixed `subset:K` a unit's inclusion
 K/N falls as the prover pads N; under a rate it stays at least q.
+
+**Several tables** (`--session-tables J`) prove one draw split into J equal consecutive parts, so the draw's count must be
+fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset draw's k, or a stratified draw's sum of
+k_s. A stratified draw is held to the verifier's law once, for the whole session, before the split.
 """
 from __future__ import annotations
 
@@ -253,14 +257,44 @@ def _ranges_ok(rs: Any) -> bool:
                                                     for r in rs)
 
 
+def fixed_count(law: Mapping[str, Any]) -> int | None:
+    """The units every draw under `law` has, when that count is fixed: `k` for `subset` and the strata's sum of k_s for
+    `stratified`; None for `bernoulli` (its count is random) and `work` (its closure varies). Lean `Draw.Law.fixedCount`."""
+    if law.get("law") == "subset":
+        return law.get("k")
+    if law.get("law") == "stratified" and isinstance(law.get("strata"), list):
+        return sum(s.get("k", 0) for s in law["strata"] if isinstance(s, Mapping))
+    return None
+
+
+#: Lean `Draw.TABLES_LAW`, the refusal of a law several tables cannot split
+TABLES_LAW = ("tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli draw's "
+              "count is random, so the tables could not split it evenly, and a work draw's closure is not split)")
+
+
+def tables_problem(law: Mapping[str, Any], tables: int) -> str | None:
+    """Why one draw under `law` can't be split into `tables` equal tables, as the Lean verifier's `Stmt.setupTables`
+    splits a session's draw, or None: one table takes any law; several take a law of fixed count (`fixed_count`) that is
+    positive and a multiple of `tables`. Lean `Draw.tablesWhy`, which `flock-verify draw --tables J` refuses by before
+    any coin."""
+    if tables <= 1:
+        return None
+    n = fixed_count(law)
+    if not _int(n):
+        return TABLES_LAW
+    if n == 0 or n % tables:
+        return f"tables: {n} units do not split into {tables} equal tables"
+    return None
+
+
 def proved(draw: Mapping[str, Any]) -> list[int]:
     """The units a draw proves: the drawn units and a work draw's closure, ascending (Lean `UnitDraw.proved`)."""
     return sorted([*draw["units"], *draw.get("closure", ())])
 
 
-def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any]) -> Verdict:
+def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any], tables: int = 1) -> Verdict:
     """The draw is well formed, over the registered population, under the verifier's law (for `stratified` and `work`,
-    the expanded law of `derive`)."""
+    the expanded law of `derive`), and a session of `tables` tables can split it (`tables_problem`)."""
     c = _Collect()
     if not isinstance(draw, Mapping) or draw.get("law") not in ("subset", "bernoulli", "stratified", "work"):
         c.fail("not-a-draw", draw)
@@ -273,6 +307,8 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
         c.fail("keys", sorted(set(draw) ^ keys))
         return c.verdict()
     n, units = draw["population"], draw["units"]
+    if (why := tables_problem(law_of(draw), tables)) is not None:
+        c.fail("tables", why)
     if not same_law(law_of(draw), dict(law)):
         c.fail("law", {"drawn": law_of(draw), "verifier": dict(law)})
     if n != registration["population"]:
@@ -322,5 +358,6 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["check_draw", "check_proved", "derive", "digits", "law_of", "parse_law", "parse_rate", "proved", "rate_count",
-           "same_law", "strata_problem", "stratum_k", "total_work", "work_k", "work_table"]
+__all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_law", "parse_rate",
+           "proved", "rate_count", "same_law", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
+           "work_table"]
