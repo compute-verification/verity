@@ -302,8 +302,9 @@ __device__ Ret run_sleep(int iters, const volatile int* done) {
 #ifdef PF_SM90
 constexpr int WG_KB = 32, WG_AROWS = 64, WG_BROWS = 128, WG_TILE = (WG_AROWS + WG_BROWS) * WG_KB;
 __device__ __forceinline__ void wg_s8_n128(int (&d)[64], uint64_t da, uint64_t db, int sd) { wgmma_s8_n128(d, da, db, sd); }
-// A warpgroup: per iteration 4 wgmma m64n128k32 s8 (the first overwrites D) from tile 0, or alternately from tiles 0 and
-// 1 (1 = 0's complement in mode 2), commit, and wait for the group before last.
+// A warpgroup: per iteration 4 wgmma m64n128k32 s8 alternately from tiles 0 and 1 (1 = 0's complement in mode 2), commit,
+// and wait for the group before last. Every one accumulates: a group whose D the next overwrites is dead, and ptxas
+// replaces it with an HGMMA.64x8x16 placeholder (build b33cea773e did that to 3 iterations in 4).
 __device__ Ret run_wgmma(const Args& a, int iters, const volatile int* done, const unsigned char* tiles) {
   const uint32_t base = (uint32_t)__cvta_generic_to_shared(tiles);
   const uint64_t da0 = wgmma_desc(base, kmaj_lbo(), kmaj_sbo(WG_KB));
@@ -315,7 +316,7 @@ __device__ Ret run_wgmma(const Args& a, int iters, const volatile int* done, con
 #pragma unroll 1
   for (; it < iters; it++) {
     wgmma_fence();
-    wg_s8_n128(d, da0, db0, 0);
+    wg_s8_n128(d, da0, db0, 1);
     wg_s8_n128(d, da1, db1, 1);
     wg_s8_n128(d, da0, db0, 1);
     wg_s8_n128(d, da1, db1, 1);
@@ -788,8 +789,9 @@ int main(int argc, char** argv) {
       CK(cudaMemcpy(ht.data(), a.times, ht.size() * sizeof(long long), cudaMemcpyDeviceToHost));
       double r = 0, ns = 0;
       for (int b = 0; b < blocks; b++) {
-        r += (double)(ht[4 * b + 1] - ht[4 * b]) / (double)(ht[4 * b + 3] - ht[4 * b + 2]);
-        ns += (double)(ht[4 * b + 3] - ht[4 * b + 2]);
+        const double g = (double)(ht[4 * b + 3] - ht[4 * b + 2]);
+        r += g > 0 ? (double)(ht[4 * b + 1] - ht[4 * b]) / g : 0.0;
+        ns += g;
       }
       clk_ratio += r / blocks;
       kern_ns += ns / blocks;
