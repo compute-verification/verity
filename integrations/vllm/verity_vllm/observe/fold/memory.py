@@ -170,7 +170,7 @@ def _runs_meet(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> bool:
 def address_ordered(view: ViewDesc, refs: Refs) -> tuple[ViewDesc, Refs]:
     """`view` written with `refs` (one producer's leaves base..base+numel in the view's row-major order) as the same element-to-leaf
     map with the axes in decreasing storage stride, so the write covers contiguous address runs: a transposed parameter view
-    (GLM-5.3's absorbed W_UK_T, VLLM-14) writes one run per inner row, not one per element.  Other refs, and a view already in
+    (GLM-5.3's absorbed W_UK_T) writes one run per inner row, not one per element.  Other refs, and a view already in
     address order, pass through."""
     if not isinstance(refs, Affine) or len(view.shape) < 2:
         return view, refs
@@ -325,7 +325,7 @@ class _Alloc:
         # every step (and every query row of a prefill), which made the fold's cost sum(context) x layers x steps.
         self.row_cache: dict[tuple, Refs] = {}
         self.row_geoms: dict[tuple, tuple[int, int, int]] = {}
-        # [VLLM-14] the permuted weight roots written here (`write_root`): (address-ordered root view, space, idx, base, leaf stride per
+        # the permuted weight roots written here (`write_root`): (address-ordered root view, space, idx, base, leaf stride per
         # axis, element runs), each an affine address -> leaf map that answers a read of any sub-box of its axes without slicing
         # intervals; dropped by an ordinary write over its byte extent or a root write over its elements
         self.root_maps: list[tuple[ViewDesc, str, int, int, tuple[int, ...], list[tuple[int, int]]]] = []

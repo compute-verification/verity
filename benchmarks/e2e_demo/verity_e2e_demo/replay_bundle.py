@@ -1,4 +1,4 @@
-"""The drawn-unit replay bundle (CMP-95 interface 5): everything the prover behind the firewall reads to prove the drawn units
+"""The drawn-unit replay bundle: everything the prover behind the firewall reads to prove the drawn units
 of one window, one JSON document (``verity/drawn-unit-bundle/v2``) and one binary payload of the private bytes.
 
 The bundle is the prover's: its payload holds values and salts, so it is written mode 0600, never published and never put in
@@ -19,10 +19,10 @@ in the payload and holds only public structure, hiding commitments and paths bes
   the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
   carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
   registration).
-* ``weights``: the registered values the units read (core's ``one_stage.registered``, as CMP-95 interface 1 registers the
+* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `verity_torch_loop.weights` registers the
   seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in ``hm96-sha512/row/v2``):
   ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
-* ``commitment``: the serving steps' commitment, CMP-95 interface 3 (kernels' commit call, `commit_slots`: step tree over
+* ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
   slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under the step's
   salt key, C-Flock's ``hm96_salt`` with the slot as nonce). ``{format, reference, context, layout, layout_digest, slots,
   blocks: [{block, root, domain, steps: [{step, root, domain}]}]}``: the run's 64-byte context, the step layout (groups of
@@ -85,7 +85,11 @@ from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, merkle_de
 from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.ml.commitments.window import window_domain
 from verity.ml.windows import interface as IF, rows as CS
-from verity_e2e_demo import commit_slots as S
+
+COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
+if str(COMMIT_SLOTS) not in sys.path:
+    sys.path.insert(0, str(COMMIT_SLOTS))
+import slots as S  # noqa: E402
 
 FORMAT = "verity/drawn-unit-bundle/v2"
 COMMITMENT = "verity/commit-slots/v1"
@@ -636,7 +640,7 @@ RUN_ID = "drawn-unit-bundle-fixture"
 
 
 def torch_loop_weights(model: Any, salt_key: bytes, program: str) -> dict[str, REG.Registered]:
-    """The torch loop's linears as registered values, named as CMP-95 interface 1 names a decoder's (``l<i>.wup``,
+    """The torch loop's linears as registered values, named as `verity_torch_loop.weights` names a decoder's (``l<i>.wup``,
     ``l<i>.wdown`` and their ``.scale``): a weight row is output channel c's s8 codes as 64 u16 words, a scale row its f32
     bits; row/v2 rows; row i's salt ChaCha20 under ``salt_key`` at the value's index as nonce (`rows.salts`)."""
     out: dict[str, REG.Registered] = {}
