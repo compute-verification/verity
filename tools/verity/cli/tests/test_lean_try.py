@@ -16,7 +16,7 @@ def stand_in_lake(tmp_path: Path, monkeypatch, rc: int) -> Path:
     bin_.mkdir()
     (bin_ / "lake").write_text(f'#!/bin/sh\n{{ pwd -P; echo "$@"; }} > "{called}"\nexit {rc}\n')
     (bin_ / "lake").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
     return called
 
 
