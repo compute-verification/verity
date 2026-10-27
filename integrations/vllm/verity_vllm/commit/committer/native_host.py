@@ -1076,17 +1076,22 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     # ------------------------------------------------------------------ lifecycle
 
     def register_weights(self) -> dict:
-        """Registered input: every parameter + buffer hashed once (chunked pos_leaf leaves, per-tensor subtree, fold of subtree roots).
-        Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
+        """Registered input: every parameter + buffer hashed once, timed and reported apart from steady state (BRIEF §3 denominator
+        rule).  Under rows-sha512 each tensor's rows are hiding leaves in a SHA-512 tree of its own and the weights root is SHA-512
+        (`step_rows.tensor_root`, `step_rows.weights_tree`); under vllm-v1, chunked pos_leaf leaves, a per-tensor subtree and the fold of
+        the subtree roots, SHA-256."""
         t0 = time.perf_counter()
         # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
-        # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
-        # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
+        # the tensor's bytes, or rows-sha512's rows) and the same per-tensor tree on the GPU (verity_vllm.commit.committer.leafhash /
+        # native_leafhash.cu, or native_rows.cu); the root construction below is untouched.  device-checked computes both and refuses a
+        # mismatch (validation runs record the equality).
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         LH = None
-        if mode != "host":
+        rows = self.rows
+        wk = self._weights_key() if rows else b""
+        if mode != "host" and not rows:
             from verity_vllm.commit.committer import leafhash as LH  # noqa: N812
             LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
         roots, names, n_bytes, checked = [], [], 0, 0
@@ -1099,7 +1104,17 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             src = p.detach().contiguous().reshape(-1)          # 0-dim buffers (e.g. scales) -> 1 element
             flat = src.view(torch.uint8) if src.dtype != torch.uint8 else src
             nb = int(flat.numel())
-            if mode == "host" or not flat.is_cuda:
+            entry = [name, _dtype_name(p), list(p.shape), nb]
+            if rows:
+                r = (self._rows_tensor_root(flat, len(roots), entry, wk) if mode == "host" or not flat.is_cuda else
+                     self._rows_tensor_root_device(flat, len(roots), entry, wk))
+                if mode == "device-checked" and flat.is_cuda:
+                    rh = self._rows_tensor_root(flat, len(roots), entry, wk)
+                    if rh != r:
+                        raise RuntimeError(f"weights registration: device root != host root for {name} ({nb} B, {step_rows.NAME}): "
+                                           f"{r.hex()[:16]} vs {rh.hex()[:16]} -- refusing to commit (SYS-05 device-checked)")
+                    checked += 1
+            elif mode == "host" or not flat.is_cuda:
                 host = flat.cpu()                    # blocking D2H, once
                 mv = memoryview(host.numpy()).cast("B")
                 leaves = self._hash_leaves(mv)
@@ -1114,15 +1129,51 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                     checked += 1
             roots.append(r)
             n_bytes += nb
-            names.append([name, _dtype_name(p), list(p.shape), nb])
-        root = scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots)
+            names.append(entry)
         # the tree under the root, kept off the record: a deferred replay opens the weight fields it consumes against it (replay bundle)
-        self.weights_tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root.hex(), "chunk": self.chunk,
-                             "geo_digest": self._geo_digest.hex()}
-        self.weights = {"root": root.hex(), "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
+        if rows:
+            self.weights_tree = step_rows.weights_tree(self._geo_digest, names, scheme.names_digest(names), roots, wk)
+        else:
+            self.weights_tree = {"names": names, "tensor_roots": [r.hex() for r in roots],
+                                 "root": scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots).hex(), "chunk": self.chunk,
+                                 "geo_digest": self._geo_digest.hex()}
+        root = self.weights_tree["root"]
+        self.weights = {"root": root, "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
-                        **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
+                        "scheme": self.commit_scheme, **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
         return self.weights
+
+    def _weights_key(self) -> bytes:
+        """rows-sha512: the registration's salt key, fresh from the OS generator, or the one this committer registered under before (a
+        re-registration reproduces its root: `c2_replay.live_weights_check`)."""
+        tree = getattr(self, "weights_tree", None) or {}
+        return bytes.fromhex(tree["key"]) if tree.get("scheme") == step_rows.NAME else os.urandom(step_rows.KEY_BYTES)
+
+    def _rows_tensor_root(self, flat: Any, t: int, entry: list, wk: bytes) -> bytes:
+        return step_rows.tensor_root(self._geo_digest, t, entry, memoryview(flat.cpu().numpy()).cast("B"), wk)
+
+    def _rows_tensor_root_device(self, flat: Any, t: int, entry: list, wk: bytes) -> bytes:
+        """`step_rows.tensor_root` of a CUDA tensor's bytes, on its device (native_rows.cu's row hashes, frame leaves and tree)."""
+        from verity.ml.commitments.merkle import merkle_depth
+        from verity_vllm.commit.committer.native_collect import ext
+
+        e, RB = ext(), step_rows.ROW_BYTES
+        if getattr(self, "_weights_rows", None) is None:
+            self._weights_rows = (e.StepHasher(), torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).to(flat.device))
+        H, tn = self._weights_rows
+        dom = step_rows.weights_domain(self._geo_digest, t, entry)
+        rs = e.RowStep(dom.domain_id, step_rows.tensor_key(wk, t), step_rows.row_prefix(8 * RB), step_rows.INST.salt_prefix,
+                       step_rows.INST.leaf_prefix(step_rows.KEY), step_rows.SCHEMA, RB)
+        n, nb = dom.count, int(flat.numel())
+        full, stream = nb // RB, torch.cuda.current_stream(flat.device).cuda_stream
+        src = flat if flat.data_ptr() % 16 == 0 else flat.clone()
+        hs = [H.rows_h(rs, src, full * RB, 0, tn, stream)[0]] if full else []
+        if full < n:
+            tail = torch.zeros(RB, dtype=torch.uint8, device=flat.device)
+            tail[:nb - full * RB].copy_(src[full * RB:])
+            hs.append(H.rows_h(rs, tail, RB, full, tn, stream)[0])
+        leaves = H.rows_frame(rs, torch.cat(hs) if len(hs) > 1 else hs[0], 0, 1 << merkle_depth(n), n, stream)
+        return bytes(H.rows_tree(rs, leaves, 0, stream)[1])
 
     def attach_source(self, src: Any) -> None:
         """An extra acquisition source (e.g. the FA2 M1 hidden stream): install/uninstall with the committer, contributes to the same step

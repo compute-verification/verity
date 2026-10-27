@@ -32,8 +32,9 @@ before the draw (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
 (`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
-window is refused by name (`source`: `sha512`). The summary reports the form (`source`) and the commitment it names
-(`commitment`).
+window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
+against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_rows.weights_tree`). The summary reports the form
+(`source`) and the commitment it names (`commitment`).
 
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
@@ -963,8 +964,10 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     mine = DRW.window_of(r, a.partition)
     manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
 
+    weights_root = str((r.row["commit"].get("weight_registration") or {}).get("root") or "")
+
     def source(w: dict) -> dict:
-        src = DRW.source(w, mine.run, manifest, r.commitment)
+        src = DRW.source(w, mine.run, manifest, r.commitment, weights_root)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
                 "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 
