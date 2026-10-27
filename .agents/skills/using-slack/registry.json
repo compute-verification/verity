@@ -429,10 +429,10 @@
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
-        "benchmarks/network_e2e/",
+        "examples/network_vllm/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "examples/network_sim/",
+        "examples/prove_path/"
       ],
       "branch_suffixes": [
         "728f",

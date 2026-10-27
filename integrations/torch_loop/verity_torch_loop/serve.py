@@ -1,4 +1,4 @@
-"""The torch loop's window, written for the audit from its records alone (`benchmarks/prove_path/records_audit.py`).
+"""The torch loop's window, written for the audit from its records alone (`examples/prove_path/records_audit.py`).
 
     python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--run-id ID] \\
         [--tamper] [--opening FILE] [--pouw h1 [--pouw-out DIR] [--pouw-salt HEX | --pouw-live HOST [--pouw-epoch K]]]

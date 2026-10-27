@@ -35,7 +35,7 @@ verity_vllm/ops/pod_gate.sh
 verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
-verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
+verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by examples/prove_path (window-circuit, class-size)
 verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
 verity_vllm.properties.router_tap_exactness

@@ -13,7 +13,7 @@ committed row longer than one SHA-512 block.
   loop's shape and run alone (`--circuit-only`), the one the verifier registers when there is no compiler. `--run-id ID`
   names the run, which its root binds: two runs of one shape are two roots, since infra's gate opens a root's coins once.
 - `verity_torch_loop/compile.py`: its registered compiler, the command the audit runs on the opened advice (the contract in
-  `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
+  `examples/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
   It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the
   commit that code is at; the audit runs it from its own checkout of that commit (`--table ARGV...`: the verifier's entry).
 - Registered weights (`--registered`, opt-in): `serve --commit-weights OPENING --pin PIN` commits the weights once, before
@@ -62,7 +62,7 @@ committed row longer than one SHA-512 block.
   `GEMM_HOPPER` for QKᵀ and PV), one window per template. The row ops run in torch and are committed as inputs until
   CIR-100's Definitions land. `frozen_w.py`: W per block (core's `Stratified`) and pooled per week, month and year
   (`density_bound`), at δ = 1% and 1e-6. `run.sh` with `PP_TORCH_FROZEN=1` audits each window, honest and tampered (PRF-173).
-- End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
+- End to end: `examples/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
   each tampered window refused. `PP_TORCH_LOOP_REGISTERED=1` serves the registered weights, audits against their pin
@@ -141,7 +141,7 @@ What it doesn't cover:
 - The checks a5 and `records_audit.py` make outside the session (R1 to R7, the receipt, the registration fixed before the
   draw), which the bound does not need.
 - The chain from this bound into `Claims.Sampling.KS` (the "session verdict ⇒ Flock KS" row that
-  `benchmarks/prove_path/README.md` lists as broken). The demo needs no claims-form statement.
+  `examples/prove_path/README.md` lists as broken). The demo needs no claims-form statement.
 - Zero knowledge. The demo claims soundness only. The session's `proof_class` reads `NON_ZK_PROOF`, the upstream label
   that `--zk` keeps (`verity/ml/flock/verifier/PROTOCOL.md` §16.14), with zk hooks on and nothing left unmasked. Its zero
   knowledge is `Flock.Guarantees.ZeroKnowledgeHidden`, honest-verifier at each fixed coin vector. What keeps it from a
@@ -156,5 +156,5 @@ units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64, DOT=HopperBF16Wgmma
 (`--bf16-dot ampere`: `AmpereBF16TcDot16_v2`), computed through the Definition's kernel. PV's 32 positions are padded with
 +0 to 64, since C-Flock pins a unit through a row of more than one SHA-512 block. RMSNorm, softmax, ReLU, the quantizer,
 the adds and argmax run in torch, and are not units until their Definitions land (CIR-100). `serve_transformer.py` writes
-its window as `serve.py` writes the MLP's, `tests/test_transformer.py` covers both, and `benchmarks/prove_path/run.sh`
+its window as `serve.py` writes the MLP's, `tests/test_transformer.py` covers both, and `examples/prove_path/run.sh`
 with `PP_TORCH_DECODER=1` audits it. The plan, counts and wiring: `note:compute-accounting/20261025T2154Z-report-allp-xfmr`.

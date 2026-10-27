@@ -6,7 +6,7 @@ writer, a registered read's ports are tables of the registered rows under the va
 declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
-(`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
+(`examples/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
 
 import hashlib

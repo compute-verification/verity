@@ -37,7 +37,7 @@ from verity_all_protocols import runner as RN, table as T, tie as TIE
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "network_traces"))
-sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
+sys.path.insert(0, str(ROOT / "examples" / "prove_path"))
 import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import records_audit as RA  # noqa: E402

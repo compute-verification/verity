@@ -63,7 +63,7 @@ first seven steps (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12) 
 CompileSlice_v1's about 7.6M, and is its reference on the honest run and a stamp or a return off (run
 r20261025-022833-f907). At the crush traces' class (CN 159 = NB − 1, R 16, CU 256) a call's eviction is 41,476 ANDs,
 a unit of its window 99,172 and its free 10,694, so a step's calls are about 300M ANDs, 85% of them the R takes'
-KL = 160-unit windows: there `benchmarks/network_e2e/encodings/compile_slice_pool.py` holds the calls to the replay's
+KL = 160-unit windows: there `examples/network_vllm/encodings/compile_slice_pool.py` holds the calls to the replay's
 `_KV`.
 """
 from __future__ import annotations
