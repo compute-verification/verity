@@ -25,6 +25,10 @@ records it on the key's leaf state before any signature of it), so a restart wit
 of it, under no-state-rollback. `Period.block` signs the block's liveness record before it appends the block's records,
 so every record a closed period holds is in a block whose liveness record is out.
 
+A party key signs period roots and liveness records only. What a party signs per challenge outside its periods (the
+network certifier's reveals) is no record of a period: it stays under the party's own key, and no statement about a
+period reads it as the device's.
+
 Stdlib only, as a core unit with no ml edge is: the tree is written out here, and its test holds it to
 `verity.ml.commitments.merkle`, the signer is injected (`Signer`; `lms.PartyKey` is one).
 """
