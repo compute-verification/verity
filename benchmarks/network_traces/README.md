@@ -3,7 +3,8 @@
 The network certifier's measured runs and their zero-knowledge proofs: the certifier in front of a served endpoint
 (`certifier_serve.py`), the network certifier functioning as an active warden (`warden_serve.py`), N2's units proved by C-Flock `--zk` (`n2_zk.py`,
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
-driver's docstring says what it runs and what its verifier receives.
+driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
+runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
 
 ## The demo's load
 
@@ -21,8 +22,19 @@ The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the
   reading program's domain as it crosses. The serving session's one signer then signs the load's 733 heads before its
   first window, so one LMS key and one session carry the load and the windows. `load.json` (the registrations the
   block record pins) and `load-relay.json` are public in the run's `out/`.
-- The witness, every row's salts (106.4 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
+- The witness, every row's salts (4.85 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
   vy-dc-h200-2. The certifier's host never writes a salt.
+
+## The wipe's egress
+
+Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
+session [t0, t1) comes after, from a warden session that spans it: `wipe_gate.sh` runs that session through the gate
+(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
+when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
+`wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. The record is covered only when every one
+of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
+keeps the wipe uncounted otherwise.
 
 ## The chain's run of record
 
@@ -38,7 +50,11 @@ The run of record takes the network chain end to end on the gate's machines:
 
 **How it runs.** vy-admin runs the gate on vy-challenger-1: `sudo vy-challenger-gate certifier-rehearse --peer
 vy-nebius-1 --port PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20`
-(and `warden-rehearse --scan`, where it functions as an active warden), then `status` and `fetch`. The fetched tarballs go to one job, `chain_record.sh`, with the
+(and `warden-rehearse --scan`, where it functions as an active warden), then `status` and `fetch`. A prompt range shorter
+than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an
+endpoint takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
+certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
+(`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the
 endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
 `serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps,
 network-e2e's binding and the two provers, and writes `out/report/report.json` and `report.md`:
@@ -58,6 +74,17 @@ The pieces not yet on `main` change only the commands the job runs. N2's sampled
 `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own `client/`.
 A step on a stand-in (the scan on its own synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report
 accepted, and a step that fails or doesn't run says why.
+
+**The warden path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the active warden's own run (the
+gate's `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a network certifier rehearsal's run,
+whose records come through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The
+certificates step reruns the warden's own offline check on its witness (`warden_serve.check`) and holds the public
+`certificates.jsonl` to the certified lines. The warden signs no clock certificate, so none is read. The endpoint step
+binds the endpoint's own advice to the certified I/O read off the warden's cells (`chain_record.py endpoint`, with
+`CR_EOS_IDS` the model's EOS ids). N2 is the plain unit on the warden link (`n2_zk.py prove --warden-run`: both heads
+at the warden's grid and parameters digest, no sync declared or charged). The I/O tie is proved on the warden's ingress
+(`n2_tie_zk.py prove --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove --warden-run`'s.
+Each step is held to the one warden run the certificates step read, and every one is required.
 
 A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
 `verity-vllm/window-advice/v1`) is bound with the window before it: `chain.served_advice` joins them into one I1 v0
@@ -80,9 +107,9 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
     35bb96cd76;
   - for the scan, a0fbcfe1b3, which adds `scan_zk`'s refusal of a void run by name.
 
-**The legs.**
+**The runs.**
 
-| leg | run | endpoint | verdict |
+| what ran | run | endpoint | verdict |
 |---|---|---|---|
 | network certifier | c20261025T224504Z-2982 | r20261025-205018-6541 (:18097, `--window-requests 4`) | accepted |
 | the network certifier functioning as an active warden | c20261025T230848Z-30ab | 6541 | void: lateness |
@@ -94,9 +121,9 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 | the scan on d951 | r20261026-011909-f489 | | accepted: honest 64 of 64, forged refused |
 | the scan on 6cd9 | r20261026-035637-a739 | | accepted: honest 64 of 64, forged refused |
 
-- The network certifier leg ran `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
+- The network certifier's run was `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
   profile and an LMS key of H = 20. It is stored as art:fc8d4f61ebb0a45ecd47456d818bebcfeb0723ab1a8f00dd98f7983064eed76b.
-- The active-warden legs ran `warden-rehearse --scan --minutes 20 --requests 100`. Their public files are stored as
+- The active-warden runs were `warden-rehearse --scan --minutes 20 --requests 100`. Their public files are stored as
   art:1aa7089c7e11b282335c44f79d07ee6a9278cc49141539d8d559d3af3d074e84 (30ab),
   art:8da6ee13709bab38668a08750095b24f3aa3229584335ff8995921f14ba2da85 (0420) and
   art:af3344f7e9466408d8eb598e1db69625c6d27fbd93c01444929166abc885ac95 (89bf), each labelled `void lateness`.
@@ -150,7 +177,7 @@ and is labelled `do-not-cite`.
     26;
   - 32 of `EgressBucket_v1{B=512,R=16,r=4,NR=4,K=64,IB=17,D=21}`: 77,099 ANDs, k_log 23.
 - Honest: 64 of 64 units drawn on the gate's coins, every proof held by Lean, accepted, and the gate's outcome
-  accepted. An accepting draw of all 64 hides no wrong unit except with probability 2⁻²⁰.
+  accepted. An accepting draw of all 64 hides no faulty proof block except with probability 2⁻²⁰.
 - Forged (the 32 egress units, one of them forged): refused by Lean at the registration ("table row 22 does not open
   warden/egress/0's registered root at position 22").
 - The cost a unit:
@@ -167,7 +194,7 @@ s20261026T040447Z-ffd7) is the record's scan at full traffic. Its run record has
 as art:832cc424a984fc015958d5758350f03978d7e0c792d2b8462cceddaec9a988ff.
 - Its sampling block is link-window 0, with the same 64 units of the same two subcircuits as on d951.
 - Honest: 64 of 64 units drawn on the gate's coins, every proof held by Lean, accepted. An accepting draw of all 64
-  hides no wrong unit except with probability 2⁻²⁰.
+  hides no faulty proof block except with probability 2⁻²⁰.
 - Forged (the 32 egress units, one of them forged): refused by Lean at the registration ("table row 22 does not open
   warden/egress/0's registered root at position 22").
 - The cost a unit:
@@ -178,12 +205,12 @@ as art:832cc424a984fc015958d5758350f03978d7e0c792d2b8462cceddaec9a988ff.
   art:9f4adc70e0fb01ad3fbbee273269b4b0cb3392e5979360aed72893fe827059a6.
 - The job's own rc is 1: its report runs without N2, which this part of the record doesn't run.
 
-**Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
-every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
+**Why the active-warden runs are void.** The gate's traffic is seeded, so all three runs sent the same schedule. On
+every run the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
 abort after the network certifier had failed it. The lateness is between the endpoint's output and the egress
 schedule.
 
-The first two legs:
+The first two runs:
 - Connections 81 and 82 arrive at t ≈ 151.5 s, in a burst of four requests within 1.2 s:
   - 81 has a prompt of 531 ids and 43 tokens;
   - 82 has a prompt of 839 ids and 20 tokens.
@@ -194,11 +221,11 @@ The first two legs:
   - on 30ab, at egress cells 19 and 9;
   - on 0420, at egress cells 19 and 10.
 - 98 of 100 requests ended.
-- The network certifier itself kept time on both legs: 225 of 225 link-windows certified, a peak tick lateness of
+- The network certifier itself kept time on both runs: 225 of 225 link-windows certified, a peak tick lateness of
   2.23 ms and 4.30 ms, and none past the 25 ms slack.
-- `--window-requests 8` didn't change it: both legs fail the same two connections at the same buckets.
+- `--window-requests 8` didn't change it: both runs fail the same two connections at the same buckets.
 
-The third leg, 89bf, capped every output at 16 tokens (`--tokens 16`, the least the gate takes) and failed more:
+The third run, 89bf, capped every output at 16 tokens (`--tokens 16`, the least the gate takes) and failed more:
 - 10 connections failed closed as late: 54, 55, 63, 65, 71, 72, 74, 81, 82 and 83. Each failed at egress cell 0 to 8,
   before any output token reached the network certifier. 90 of 100 requests ended.
 - The network certifier kept time: 225 of 225 link-windows certified, a peak tick lateness of 2.10 ms, none past the

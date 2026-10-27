@@ -1,4 +1,4 @@
-"""The greedy argmax of a bf16 logits row as Definitions of at most 16 output bits (a proof unit's outputs), from its V-chunks of C
+"""The greedy argmax of a bf16 logits row as Definitions of at most 16 output bits (a proof block's outputs), from its V-chunks of C
 logits:
 
     ArgmaxChunkBest_v1{C}     (x: bf16[C]) -> bf16: the chunk's first maximum above -inf, -inf when it has none

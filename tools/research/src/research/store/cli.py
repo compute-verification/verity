@@ -50,6 +50,9 @@
                                                    copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
+  research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
+                                                   the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
+                                                   --apply marks them and deletes those still candidates a grace after their mark
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
                                                    the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
@@ -84,7 +87,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..secret_hint import lost
 from . import ids, vocab
@@ -1316,6 +1319,50 @@ def cmd_doctor(argv: list[str]) -> int:
     return 0
 
 
+def cmd_gc(argv: list[str]) -> int:
+    """README §7.4 (`gc.py`): which blobs only uncited artifacts past their kind's TTL hold; `--apply` marks them and deletes those
+    marked at least `gc.GRACE_S` ago that still are.  Read-only without `--apply`."""
+    from . import gc  # noqa: PLC0415
+
+    ap = _ap("gc")
+    ap.add_argument("--cite", action="append", default=[], metavar="DIR", required=True,
+                    help="a tree whose files cite art ids and runs (the notes repository; a checkout of the code); repeatable")
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests, labels and attempts read from the remote are kept")
+    ap.add_argument("--state", metavar="FILE", help="the marks (required with --apply)")
+    ap.add_argument("--apply", action="store_true", help="mark this pass's candidates and delete the ones marked a grace ago")
+    ap.add_argument("--report", metavar="FILE", help="write the plan's summary and the expired ids here (JSON)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (a local disk; default the temp dir)")
+    ap.add_argument("--cite-linear", action="store_true", help="Linear's issues, comments, projects, project updates and "
+                    "documents cite too (research.linear's credentials; required with --apply)")
+    ap.add_argument("--jobs", type=int, default=gc.JOBS)
+    ns = ap.parse_args(argv)
+    if ns.apply and not (ns.state and ns.cite_linear):
+        ap.error("--apply needs --state and --cite-linear (lanes cite in Linear most: top, 26 Oct)")
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data gc: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        linear = None
+        if ns.cite_linear:
+            from ..linear import Linear  # noqa: PLC0415
+            linear = Linear().gql
+        p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
+                    work=Path(ns.work) if ns.work else None, linear=linear, log=say)
+        out: dict[str, Any] = {"remote": st.remote.describe(), "ttl_days": gc.TTL_DAYS, **p.summary()}
+        if ns.apply:
+            out["applied"] = gc.apply(st.remote, p, Path(ns.cache), Path(ns.state), now=gc.clock(), jobs=ns.jobs, log=say)
+    except gc.GcError as e:
+        print(f"research data gc: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    if ns.report:
+        Path(ns.report).write_text(json.dumps({**out, "expired": p.expired}, sort_keys=True) + "\n")
+    _dump(out)
+    applied = out.get("applied") or {}
+    return 1 if applied.get("error_count") or applied.get("lost_count") else 0
+
+
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
 _VERBATIM_COMMANDS = ("sql",)
 
@@ -1376,7 +1423,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc,
 }
 
 

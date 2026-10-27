@@ -8,14 +8,16 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 The deployed check opens a position at the first registered port whose root is the position's (`regPath`'s `find?`
 over `portsOf`), so a row of port `q` is checked in port `q'`'s tree when an earlier `q'` has `q`'s root. Each
 port's root is `FV3.root` over its own domain, its port name (`domOf`), and that root is SHA-512 of one top frame (the
-top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part is the domain. So two
-ports with one root and different domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
+top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part is the domain. With one
+leaf the frame ends in the port's leaf schema and its payload, and two frames at different row schemas differ
+(`step_schema`), so two frames at one domain's place are at one schema. So two ports with one root and different
+domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
 
 * `RootFixesDomain`: an earlier port with a port's root has its domain. Off that collision it holds
-  (`fixes_of_none`), and it is what the deployed check needs: two ports of one name and one root are one registered
-  port record, so the check opens a row of `q` in `q`'s own tree (`find?_portsOf_fixes`). Two ports of one name may
-  share a root with no collision, so the distinct-roots form needs the circuit to name each port once
-  (`Registered.dupName`, which the verifier's registered reads check): `rootsDistinct_of_fixes`.
+  (`fixes_of_none`). Two ports of one name may share a root with no collision, and may have different schemas, so what
+  the deployed check needs is the distinct-roots form, at a circuit that names each port once (`Registered.dupName`,
+  which the verifier's registered reads check): `rootsDistinct_of_fixes`. Then the check opens a row of `q` in `q`'s
+  own tree, at `q`'s schema.
 * `rootsFinder`: a finder with no coins that recomputes every port's root (`rootsCost` SHA-512 calls) and outputs the
   first pair of top frames that `rootsOf_collides` finds (`rootsColl`). Under `ecr/sha-512` (`Claims.ExpectedCR`, read
   through `Claims.ecrBound`) at that finder, a file that holds such a collision has `ecrBound ≥ 1`
@@ -66,11 +68,50 @@ theorem frame_head_inj {tag : String} {d d' : ByteArray} {ps ps' : List ByteArra
   have hd : d.size = d'.size := by omega
   exact (List.cons.inj (foldl_step_inj (.cons hd hps) rfl h).2).1
 
+/-- A frame's last part, of one size, and the rest. -/
+theorem step_inj' {a a' p p' : ByteArray} (hp : p.size = p'.size) (h : Registered.step a p = Registered.step a' p') :
+    a = a' ∧ p = p' := by
+  have hs := congrArg ByteArray.size h
+  rw [Registered.step_size, Registered.step_size, hp] at hs
+  exact Registered.step_inj (by omega) hp h
+
+theorem drop_of_append_eq {l₁ l₂ s t : List UInt8} (h : l₁ ++ s = l₂ ++ t) (hl : t.length ≤ s.length) :
+    s.drop (s.length - t.length) = t := by
+  have hs : s = s.take (s.length - t.length) ++ s.drop (s.length - t.length) := (List.take_append_drop _ _).symm
+  rw [hs, ← List.append_assoc] at h
+  exact (List.append_inj' h (by simp only [List.length_drop]; omega)).2
+
+/-- The row schemas a port's leaves are framed at. -/
+def schemas : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_SCHEMA_SEG]
+
+theorem schemaOf_mem (c : Flock.Circuit) (q : ℕ) : schemaOf c q ∈ schemas := by
+  unfold schemaOf schemas
+  cases c.ports[q]? with
+  | none => simp
+  | some p =>
+    simp only [Option.map_some, Option.getD_some, Registered.portSchema]
+    split_ifs <;> simp
+
+/-- **A frame's schema part ends it apart from its payload**: two frames that end in two row schemas are one only at
+one schema (the schemas' last bytes differ). -/
+theorem step_schema {a a' : ByteArray} {s s' : String} (hs : s ∈ schemas) (hs' : s' ∈ schemas)
+    (h : Registered.step a s.toUTF8 = Registered.step a' s'.toUTF8) : s = s' := by
+  have e : ∀ (b : ByteArray) (t : String), (Registered.step b t.toUTF8).data.toList =
+      (b ++ Flock.be64 t.toUTF8.size.toUInt64).data.toList ++ t.toUTF8.data.toList := fun b t => by
+    simp [Registered.step, ByteArray.data_append]
+  have hl := (e a s).symm.trans ((congrArg (fun b : ByteArray => b.data.toList) h).trans (e a' s'))
+  simp only [schemas, List.mem_cons, List.not_mem_nil, or_false] at hs hs'
+  rcases hs with rfl | rfl | rfl <;> rcases hs' with rfl | rfl | rfl
+  all_goals first
+    | rfl
+    | exact absurd (drop_of_append_eq hl (by decide)) (by decide)
+    | exact absurd (drop_of_append_eq hl.symm (by decide)) (by decide)
+
 /-! ## A port's root and its top frame -/
 
 /-- Port `q`'s registered tree leaves, as `rootsOf` builds them. -/
 def leaves (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : Array ByteArray :=
-  (Array.range nl).map fun u => Flock.Registered.leafAs Flock.HmRow.ROW_SCHEMA_V2 (domOf c q) u (regLeafOf c pub q u)
+  (Array.range nl).map fun u => Flock.Registered.leafAs (schemaOf c q) (domOf c q) u (regLeafOf c pub q u)
 
 theorem leaves_size (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : (leaves c pub nl q).size = nl := by
   simp [leaves]
@@ -98,7 +139,7 @@ theorem one_le_log2ceil {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
 none, the lone pad's. -/
 def topIn (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : ByteArray :=
   if nl = 0 then Registered.frame "pad" [domOf c q, Flock.FV3.uint 0]
-  else if nl = 1 then Registered.leafInAs Flock.HmRow.ROW_SCHEMA_V2 (domOf c q) 0 (regLeafOf c pub q 0)
+  else if nl = 1 then Registered.leafInAs (schemaOf c q) (domOf c q) 0 (regLeafOf c pub q 0)
   else Registered.nodeIn (domOf c q) (Flock.log2ceil nl - 1) 0
     (TopRoot.lev (domOf c q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[0]!
     (TopRoot.lev (domOf c q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[1]!
@@ -136,7 +177,13 @@ theorem topIn_ne {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hd : 
   unfold topIn at h
   split_ifs at h with h0 h1
   · exact frame_head_inj h (.cons rfl .nil)
-  · exact frame_head_inj h (.cons rfl (.cons rfl (.cons rfl (.cons (by rw [regLeafOf_size, regLeafOf_size]) .nil))))
+  · have hs : schemaOf c q' = schemaOf c q := by
+      have h' := h
+      simp only [Registered.leafInAs, Registered.frame, List.foldl] at h'
+      exact step_schema (schemaOf_mem c q') (schemaOf_mem c q)
+        (step_inj' (by rw [regLeafOf_size, regLeafOf_size]) h').1
+    rw [hs] at h
+    exact frame_head_inj h (.cons rfl (.cons rfl (.cons rfl (.cons (by rw [regLeafOf_size, regLeafOf_size]) .nil))))
   · exact frame_head_inj h (.cons rfl (.cons rfl
       (.cons (by rw [lev_top_size c pub (by omega) q' (by omega), lev_top_size c pub (by omega) q (by omega)])
       (.cons (by rw [lev_top_size c pub (by omega) q' (by omega), lev_top_size c pub (by omega) q (by omega)])
@@ -160,47 +207,6 @@ port-roots guard. -/
 def RootFixesDomain (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Prop :=
   ∀ q q' : ℕ, q' < q → q < c.ports.size →
     (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q [] → domOf c q' = domOf c q
-
-/-- Port `q`'s registered record (`portsOf`'s `q`-th). -/
-def portRec (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) (q : ℕ) : Flock.Registered.Port :=
-  { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := nl,
-    words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
-
-theorem portsOf_get (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q : ℕ} (hq : q < (portsOf c nl roots).size) :
-    (portsOf c nl roots)[q] = portRec c nl roots q := by
-  simp [portsOf, portRec]
-
-theorem portsOf_size (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : (portsOf c nl roots).size = c.ports.size := by
-  simp [portsOf]
-
-/-- **The port the deployed check opens a row of port `q` at is `q`'s own record**, when every earlier port with `q`'s
-root has `q`'s domain: two ports of one name and one root are one record. This is `find?_portsOf` with its
-distinct-roots hypothesis weakened to the guard that holds off a collision. -/
-theorem find?_portsOf_fixes (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) {q : ℕ} (hq : q < c.ports.size)
-    (hfix : ∀ q' < q, roots.getD q' [] = roots.getD q [] → domOf c q' = domOf c q) :
-    (portsOf c nl roots).find? (fun p => decide (bs p.root = roots.getD q [])) =
-      some (portRec c nl roots q) := by
-  have hqs : q < (portsOf c nl roots).size := by rw [portsOf_size]; exact hq
-  have hpq : decide (bs ((portsOf c nl roots)[q]'hqs).root = roots.getD q []) = true := by
-    simp [portsOf_get, portRec, bs_bytes]
-  obtain ⟨b, hb⟩ : ∃ b, (portsOf c nl roots).find? (fun p => decide (bs p.root = roots.getD q [])) = some b :=
-    Option.isSome_iff_exists.mp (Array.find?_isSome.mpr ⟨_, Array.getElem_mem hqs, hpq⟩)
-  rw [hb]
-  obtain ⟨hpb, i, hi, hib, hmin⟩ := Array.find?_eq_some_iff_getElem.mp hb
-  subst hib
-  have hiq : i ≤ q := by
-    by_contra hlt
-    have := hmin q (by omega)
-    simp [portsOf_get, portRec, bs_bytes] at this
-  rw [portsOf_get]
-  rcases Nat.lt_or_ge i q with hlt | hge
-  · have hr : roots.getD i [] = roots.getD q [] := by simpa [portsOf_get, portRec, bs_bytes] using hpb
-    have hd := hfix i hlt hr
-    have hn : (c.ports[i]?.map (·.name)).getD "" = (c.ports[q]?.map (·.name)).getD "" := String.toByteArray_inj.1 hd
-    unfold portRec
-    rw [hn, hr, hd]
-  · obtain rfl : i = q := by omega
-    rfl
 
 /-- **The distinct-roots form of the guard**, `TransportsLiveCS`'s hypothesis: from `RootFixesDomain`, at a circuit
 that names each port once (`Registered.dupName`, which the verifier's registered reads check). -/
@@ -267,6 +273,15 @@ theorem fixes_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (h : r
   have := List.find?_eq_none.mp hc (q', q) (mem_pairs.mpr ⟨hlt, hq⟩)
   simp only [decide_eq_true_eq, not_and, not_not] at this
   exact this he
+
+/-- **The decidable form of the guard**: no colliding pair of ports (`rootsColl c pub nl = none`) iff an earlier port
+with a port's root has its domain. -/
+theorem rootsColl_none_iff {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} :
+    rootsColl c pub nl = none ↔ RootFixesDomain c pub nl := by
+  refine ⟨fixes_of_none, fun h => Option.map_eq_none_iff.mpr (List.find?_eq_none.mpr fun ⟨a, b⟩ hp => ?_)⟩
+  obtain ⟨hlt, hq⟩ := mem_pairs.mp hp
+  simp only [decide_eq_true_eq, not_and, not_not]
+  exact h b a hlt hq
 
 theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by

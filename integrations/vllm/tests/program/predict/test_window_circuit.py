@@ -149,7 +149,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 151 wires besides the scan read's, 64 registered reads (63
+    class of record's slots at 2 and at 8 Programs have the same 151 wires besides the scan read's, 88 registered reads (87
     of the weights, one of the scan state), root reads, openings and 83 inference entries, the 8 Programs 4 times the units.
     The scan read's wires are 2 a lane its Programs reach (its row and its head; lane-major, so a lane's slots follow on):
     2 at 2 Programs, both lane 0's, and 8 at 8, whatever the boundaries."""
@@ -157,7 +157,7 @@ def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     two, eight = class_circuit(reg, SLOTS, 2, GRAIN), class_circuit(reg, SLOTS, None, GRAIN)
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
               len(c.blocks.inference)) for c in (two, eight)]
-    assert shape == [(153, 64, 2, 1, 83), (159, 64, 2, 1, 83)] and two.ids == eight.ids
+    assert shape == [(153, 88, 2, 1, 83), (159, 88, 2, 1, 83)] and two.ids == eight.ids
     scan = IF.descriptor_id(next(fn for fn, _ in eight.templates if fn.name == "ScanSlots"))
     assert [sum(w.writer == scan for w in c.wires) for c in (two, eight)] == [2, 2 * SLOTS.lanes]
     assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 10192
@@ -289,27 +289,77 @@ def test_the_scan_state_row_is_pr2s_form_and_its_wide_read_is_one_row_a_slot():
 
 
 def test_the_weights_and_the_embedding_are_registered_reads(window):
-    """The weights record and the scan state are the registered parameters (the scan state the window's 16 buckets' rows of
-    4,548 words): GEMM slices, norms and RoPE read their rows from the weights at public positions, and the embedding is
-    `EmbeddingRead_v1`'s opening of the table over its first V·H words, keyed by ``tok`` and pinned by its verdict. With
-    TINY's tied embeddings the LM head's first row, which the token select's ``x0`` unit reads, is the table's first row.
-    Both slots' reads of a node are one pattern (RoPE's a slot digit of step 0)."""
+    """Each weight a port reads is its own registered parameter at the port's row width (`WB.weight_param`), and the scan
+    state is one more (the window's 16 buckets' rows of 4,548 words): GEMM slices, norms and RoPE read their rows from
+    their weight's at public positions, and the embedding is `EmbeddingRead_v1`'s opening of the table over its V rows of
+    H, keyed by ``tok`` and pinned by its verdict. With TINY's tied embeddings the LM head's slices read the embedding at
+    512 words a row, and the token select's ``x0`` unit its first row at 64, the table's own parameter. Both slots' reads
+    of a node are one pattern (RoPE's a slot digit of step 0)."""
     circuit, ids = window
     reg = circuit.registered
-    assert reg.params == {"weights": 91472, SS.SCAN_STATE: 16 * 4548}
-    assert Counter((r.reader, r.port) for r in reg.reads) == {
-        (ids["Gemm_v2{K=64,N=8}"], "w"): 30, (ids["Gemm_v2{K=128,N=4}"], "w"): 1, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
-        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 10, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 20,
+    emb, cs = "model.embed_tokens.weight", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"
+    assert {p: n for p, n in reg.params.items() if "layers.1" not in p} == {
+        WB.weight_param(emb, 512): 16384, WB.weight_param(emb, 64): 16384, WB.weight_param(cs, 16): 1024,
+        WB.weight_param("model.norm.weight", 64): 64, SS.SCAN_STATE: 16 * 4548,
+        **{WB.weight_param(f"model.layers.0.{w}.weight", n): k for w, n, k in (
+            ("input_layernorm", 64, 64), ("post_attention_layernorm", 64, 64), ("self_attn.qkv_proj", 512, 8192),
+            ("self_attn.o_proj", 512, 4096), ("mlp.gate_up_proj", 512, 16384), ("mlp.down_proj", 512, 8192))}}
+    assert len(reg.params) == 17
+    assert Counter((r.reader, r.port) for r in reg.reads) == {  # a layer's reads its own, a pattern a position
+        (ids["Gemm_v2{K=64,N=8}"], "w"): 35, (ids["Gemm_v2{K=128,N=4}"], "w"): 10, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
+        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 20, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 20,
         (ids[SCAN], "state"): 1}
-    assert [t.doc() for t in reg.tables] == [{"name": "embedding@0", "param": "weights", "offset": 0, "words": 64, "rows": 256}]
+    table = f"table/{WB.weight_param(emb, 64)}+0"
+    assert [t.doc() for t in reg.tables] == [{"name": table, "param": WB.weight_param(emb, 64), "offset": 0, "words": 64,
+                                              "rows": 256}]
     assert sorted(r.doc().items() for r in reg.roots) == sorted(
-        {"reader": ids[EMB], "port": p, "table": "embedding@0", "of": p, "at": 0, "units": 10}.items() for p in ("domain", "root"))
-    assert [o.doc() for o in reg.openings] == [{"reader": ids[EMB], "table": "embedding@0", "key": "tok",
+        {"reader": ids[EMB], "port": p, "table": table, "of": p, "at": 0, "units": 10}.items() for p in ("domain", "root"))
+    assert [o.doc() for o in reg.openings] == [{"reader": ids[EMB], "table": table, "key": "tok",
                                                 "ports": ["row", "salt", "path"], "verdict": "o1", "at": 0, "units": 10}]
-    assert [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["Gemm_v2{K=64,N=1}"]] == [(0, (10,), 0, (0,))]
-    rope = [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["RoPEHead_v1{D=16}"]]
-    assert rope[:4] == [(0, (2, 4), 90432, (0, 0)), (8, (2, 2), 90432, (0, 0)), (12, (2, 4), 90432, (0, 0)),
-                        (20, (2, 2), 90432, (0, 0))]
+    assert [(r.param, r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["Gemm_v2{K=64,N=1}"]] == [
+        (WB.weight_param(emb, 64), 0, (10,), 0, (0,))]
+    rope = [(r.param, r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["RoPEHead_v1{D=16}"]]
+    assert rope[:4] == [(WB.weight_param(cs, 16), 0, (2, 4), 0, (0, 0)), (WB.weight_param(cs, 16), 8, (2, 2), 0, (0, 0)),
+                        (WB.weight_param(cs, 16), 12, (2, 4), 0, (0, 0)), (WB.weight_param(cs, 16), 20, (2, 2), 0, (0, 0))]
+
+
+def _whole_rows(circuit: IF.Circuit) -> None:
+    """Every registered read of ``circuit`` reads whole rows of its parameter, a weight's named for the port's width (the
+    scan state's rows are its NS words)."""
+    reg = circuit.registered
+    for r in reg.reads:
+        lay = IF.layout(circuit.template(r.reader))
+        words = dict(lay.rows + lay.outs)[r.port]
+        assert (r.param == SS.SCAN_STATE or r.param.endswith(f"@{words}")) and reg.params[r.param] % words == 0, r.doc()
+        assert r.base % words == 0 and all(s % words == 0 for s in r.step), r.doc()
+
+
+def test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width(window):
+    """`interface._reads_of` takes a read's rows as whole rows of its parameter, its base and steps multiples of the port's
+    words, which one parameter for the whole weights record (a norm's 64 words between two GEMMs' 512-word rows) breaks. A
+    read whose weight isn't whole rows of its port is refused."""
+    circuit, ids = window
+    _whole_rows(circuit)
+    b = WB._Builder(GRAIN)
+    b.weights = (("a", 0, 96), ("b", 96, 64))
+    with pytest.raises(Unexpressible, match="whole rows of the port"):
+        b.weight(0, 64, 64)
+    with pytest.raises(Unexpressible, match="spans two weights"):
+        b.weight(64, 160, 32)
+    assert b.weight(96, 160, 64) == (WB.weight_param("b", 64), 0) and b.params == {WB.weight_param("b", 64): 64}
+
+
+@pytest.mark.slow
+def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows(window):
+    """`interface.members` forms the window's members (as the record's verifier does, `window_of_record`): every read covers
+    whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows. Slow (about 70 s
+    on one core) for the population Program `members` builds, `EmbeddingRead_v1`'s Merkle path traced once; the cheap
+    check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
+    circuit, ids = window
+    ms = IF.members(circuit, 64)
+    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and len(ms) == 132
+    gemm = [m for m in ms if m.template == ids["Gemm_v2{K=64,N=8}"]]
+    assert gemm and all(dict(m.tables)["w"] <= m.n for m in gemm)
 
 
 def test_a_head_is_its_key_blocks_calls_over_its_kv_groups_gathers(window):
@@ -371,9 +421,9 @@ def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_
     """The class of record itself (8 slots of 1,087 positions, a head over up to 1,087 keys: 8 full key blocks and a first
     of 63) lowers at TINY's geometry and a grain of 256 rows: no unit past the grain's rows (the largest a full block's
     gather, its 128 parts and its output), every input row wired or registered, and its 8 Programs' 8 x 297,800 units (4
-    times 2 Programs') over 2 Programs' 33,284 wires besides the scan read's (2 a lane its Programs reach), 13,048 registered
-    reads and 13,066 inference entries, which grow with the class Program's 26,088 nodes (its heads' Calls among them), not
-    with its units or its slots. The baseline is 2
+    times 2 Programs') over 2 Programs' 33,284 wires besides the scan read's (2 a lane its Programs reach), 18,482 registered
+    reads (18,481 of the weights, one of the scan state) and 13,066 inference entries, which grow with the class Program's
+    26,088 nodes (its heads' Calls among them), not with its units or its slots. The baseline is 2
     Programs, as in `test_the_description_grows_with_the_class_programs_nodes_not_its_slots`: one Program's entries have a
     slot digit of 1, under which a step's unlike allocations run together (2,194 entries here), and from 2 on every
     allocation's slots are one entry's slot digit, so the entries are one list at any slot count. About a minute and a half
@@ -389,7 +439,7 @@ def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_
     assert max(_unit_rows(circuit).values()) == 129
     assert sum(n.values()) == 4 * sum(k for _, k in two.templates) == 8 * 297_800
     shape = [(len(c.wires), len(c.registered.reads), len(c.blocks.inference)) for c in (two, circuit)]
-    assert shape == [(33286, 13048, 13066), (33292, 13048, 13066)] and len(built.program.fn.body.nodes) == 26088
+    assert shape == [(33286, 18482, 13066), (33292, 18482, 13066)] and len(built.program.fn.body.nodes) == 26088
     assert IF.input_count(circuit.description(), pins=PINS)["free"] == 0
 
 
@@ -455,15 +505,16 @@ def test_inference_entries_are_the_slots_runs_side_by_side():
 
 
 def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):
-    """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's pins, the weights
-    record's root, fixed before the run, and the scan state's, which the network certifier's scan proofs hold, finds no free
-    input row and no ingress, so a proof of the window's units leaves nothing but the declared advice to the prover. The
-    registered reads, table reads and openings are of the weights (the GEMM slices', norms' and RoPE tables' rows; the
-    embedding table's root, domain and rows) but for the two slots' scan state rows (4,548 words each): with the weights'
-    pin alone those are free, and with no pin all of them are."""
+    """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's pins, the weights'
+    registration (its roots, one a weight and row width, fixed before the run) and the scan state's root, which the network
+    certifier's scan proofs hold, finds no free input row and no ingress, so a proof of the window's units leaves nothing but
+    the declared advice to the prover. The registered reads, table reads and openings are of the weights (the GEMM slices',
+    norms' and RoPE tables' rows; the embedding table's root, domain and rows) but for the two slots' scan state rows (4,548
+    words each): with the weights' pin alone those are free, and with no pin all of them are."""
     circuit, _ = window
     doc, reg = json.loads(json.dumps(circuit.description())), circuit.registered
-    assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params) == PINS
+    assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params)
+    assert {p.split("/", 1)[0] for p in reg.params if p != SS.SCAN_STATE} == {WC.WEIGHTS} and SS.SCAN_STATE in reg.params
     scan = 2 * 4548 * 16
     count = {"units": 2548, "inputs": 17572128, "wired": 2839712, "registered": 14586880 + scan, "ingress": 0, "free": 0}
     assert IF.input_count(doc, pins=PINS) == count

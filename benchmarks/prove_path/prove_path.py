@@ -527,9 +527,11 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
     """φ of a served engine as vllm's advice compiler (#3619's) registers it (the formula its Build compiles the request Programs under):
-    the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
-    the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
-    (``execution``, else ``engine.execution``); no workload."""
+    the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
+    pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
+    unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
+    included, else the file ``target``) and the engine's execution label (``execution``, else ``engine.execution``); no workload."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict.phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
@@ -539,7 +541,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or LLAMA32_1B_CONFIG).read_text())
+    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
@@ -1009,7 +1011,7 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
     """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
     (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
-    (``location_bits``, `consumers.location_bits`); β_δ, the faulty units' committed bits (``harm_bound``: the profile's
+    (``location_bits``, `consumers.location_bits`); β_δ, the faulty proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
     templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
     (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
@@ -1303,7 +1305,8 @@ def main(argv: list[str] | None = None) -> int:
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
-        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default unsloth/Llama-3.2-1B's)")
+        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
+                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "

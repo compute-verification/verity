@@ -473,7 +473,7 @@ def test_boundary_linkage_positive_and_negatives(world):
 
 
 def _bnd(n_req):
-    return {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 def test_verdict_c2_of_record_replay_plus_linkage_replaces_the_oracle_gate_at_b2():
