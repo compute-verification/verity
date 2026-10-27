@@ -5,7 +5,7 @@ circuit size): half skipped work, half leaked output bits.
 
 **Harm.** A unit's work is its subcircuit's own ANDs (`Candidate.ands`, not its rows' openings), every subcircuit alike,
 the PoUW tiles included, with no PoUW work table and no influence. Every unit carries its output bits. At each budget B
-the exchange rate: each half is divided by the least bound B certifies for that half alone,
+the exchange rate divides each half by the least bound B certifies for that half alone,
 `Objective(delta, work=0.5/H_work(B), bits=0.5/H_bits(B))`, which is scale-free, and the plan reports the certificate's
 two bounds from its one draw, `free_compute` and `leak`, at delta = 1% and 1e-6, and the tile stratum's epsilon at delta
 (`pouw.window.eps_at`).
