@@ -48,7 +48,7 @@ EXCLUDED_DIRS = ("tests", "scripts")
 EXCLUDED_FILES = re.compile(r"(^test_.*\.py|^conftest\.py|Difftest.*\.lean|TestMain\.lean)$")
 FIX = "see AGENTS.md 'One vocabulary' and this module's docstring"
 
-#: The concepts: #4339's 24, and the 23 the C0 census added (its section 7).
+#: The concepts held to one canonical object each.
 CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", "Coins", "CoinTree", "Draw", "Law", "Stmt",
             "Statement", "Witness", "Digest", "Commitment", "Merkle", "Collision", "Device", "InteractiveDevice", "Dag",
             "Transcript", "Hash", "Signature",
