@@ -304,6 +304,7 @@ at every registration, so `rd.Off` is one proposition.
 * **Not off**: the registrant's openings open the registered commitments at every read, the claims are
   `SampledKSLiveV2`'s at every outcome, and its rows term is at most `W·(p + k/(eR_w))/(1 − ρ)` (`rowsPrZC_le_pr`,
   `rowsFinderPrZC_le_mix`, `qs_le_io`). -/
+set_option maxHeartbeats 1000000 in
 theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2) : SampledKSLivePub := by
   intro n Reg own I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω
     _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' K₀ hK₀ τ v qR q L G P vb wo σ Xr δ Cc rows roots Cd κ vreg B
@@ -381,9 +382,11 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
       have hle : prob (fun o : Reg × Finset (Fin n) × Discharge.Exec.Transcript =>
           (LiveAcceptsZKR I own o ∧ OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt) ∧
             rd.Off o.1) G τ ≤ prob (fun o => StrictCR.IsColl H512 (pk o)) G τ :=
-        prob_mono (fun o ho => (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).isColl
-          (rd.offAt_conflict (checked_of_acceptsHJ I ht own dj y₀ (Flock.Desc.parse_flat hD) hU hpub hscope hTags o
-            ho.1.1 rd ho.1.2) ho.2)) G τ
+        prob_mono (fun o ho => by
+          have hc := checked_of_acceptsHJ I ht own dj y₀ (Flock.Desc.parse_flat hD) hU hpub hscope hTags o ho.1.1 rd
+            ho.1.2
+          exact (rd.openings o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port) (rd.offAt o.1)).isColl
+            (rd.offAt_conflict hc ho.2)) G τ
       have heq : (prob (fun o => StrictCR.IsColl H512 (pk o)) G τ).toReal =
           (Bridge.strictComp (StrictCR.oneRun G τ pk) qR).Pr Claims.Sampling.sha512Msg := by
         rw [Bridge.strictComp_Pr, StrictCR.oneRun_ev, prob_toReal]
@@ -445,7 +448,7 @@ theorem sampledKSLivePub_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2)
     rw [Finset.sum_mul]
     exact Finset.sum_le_sum fun c _ => mul_le_mul_of_nonneg_left
       (by linarith [Bridge.rowsFinderPrZC_le_mix dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) _ hp0
-        hfamR c]) (by positivity)
+            hfamR c]) (by positivity)
   refine (prob_mono hsub G τ).trans (hVi.trans ((add_le_add hbase hrowsB).trans ?_))
   refine hfin _ (div_nonneg (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hx0 hkR)) h1ρ.le) ?_
   have e : (Bridge.ioSum P : ℝ) * (x + k / (Real.exp 1 * Rw)) / (1 - ρ) =
