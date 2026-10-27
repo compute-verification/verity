@@ -27,10 +27,6 @@ comes from each certifier's clock.
 
 **Transports.** `MemoryNet` runs every unit in one event loop and hands frames over directly; `serve_tcp` runs one unit as an
 asyncio TCP server and client, one process per unit (`python -m workload.block`).
-
-**Tampering** (`Tamper`), to show what the check refuses: `extra-frame` sends one more canonical frame, of covert bytes,
-after the first message, `flip-bit` flips the first bit of the first message's payload, `fill` writes into the last byte
-of the first frame (its zero fill, for a message shorter than a frame).
 """
 from __future__ import annotations
 
@@ -39,7 +35,6 @@ import asyncio
 import json
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
 from functools import cached_property
 
 from verity.core.protocols.certifier.active import HEADER
@@ -49,19 +44,6 @@ from . import model as M
 from . import placement as P
 from . import values as V
 from .hardware import OUTSIDE, Hardware, mock
-
-TAMPERS = ("extra-frame", "flip-bit", "fill")
-COVERT = b"covert"
-
-
-@dataclass(frozen=True)
-class Tamper:
-    unit: str
-    mode: str
-
-    def __post_init__(self) -> None:
-        if self.mode not in TAMPERS:
-            raise ValueError(f"a tamper is one of {TAMPERS}, not {self.mode!r}")
 
 
 class Context:
@@ -84,8 +66,6 @@ class Context:
         self.edges = P.crossings(self.model, self.placement, self.hw)
         self.phi = F.phi(self.hw, self.edges, config["frame_bytes"])
         self.seed = config.get("seed", 0)
-        t = config.get("tamper")
-        self.tamper = Tamper(t["unit"], t["mode"]) if t else None
 
     @cached_property
     def inputs(self) -> dict[int, int]:
@@ -202,7 +182,6 @@ class Block:
         self.records: dict[str, list[tuple[int, bytes]]] = defaultdict(list)
         self.writers: dict[str, object] = {}
         self.taken: set[str] = set()
-        self.tampered = False
         self.last_tick = 0
 
     def _keys(self, m: F.Message) -> list[str]:
@@ -219,24 +198,13 @@ class Block:
     async def _send(self, m: F.Message) -> None:
         B = self.ctx.phi.frame_bytes
         frames = self.ctx.phi.frames(m, self.transcript)
-        t = self.ctx.tamper
-        extra: list[bytes] = []
-        if t is not None and t.unit == self.unit and not self.tampered:
-            self.tampered = True
-            if t.mode == "flip-bit":
-                frames[0] = frames[0][:HEADER.size] + bytes([frames[0][HEADER.size] ^ 1]) + frames[0][HEADER.size + 1:]
-            elif t.mode == "fill":
-                frames[0] = frames[0][:-1] + b"\x01"
-            else:
-                extra = F.cut(COVERT, B)
-        out = list(frames) + extra
         hello = None
         if m.dst not in self.writers:
             self.writers[m.dst] = await self.connect(self.unit, m.dst)
             hello = F.hello(self.ctx.hw, self.unit, m.dst, B)
-        self._record(m, out, hello)
+        self._record(m, frames, hello)
         w = self.writers[m.dst]
-        for f in ([hello] if hello else []) + out:
+        for f in ([hello] if hello else []) + frames:
             await w.write(f)
 
     async def _take(self, m: F.Message) -> None:

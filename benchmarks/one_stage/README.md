@@ -12,7 +12,15 @@ negatives.
 - `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
   commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture, committed under rows-sha512
   (`COMMIT_SCHEME` names no other: vllm-v1 is kept only to read recorded runs), its window from `verity-vllm serving-rows`
-  (with `WINDOW=served`, the in-Commit hook's), and M0 and Lean built from the run's tree.
+  (with `WINDOW=served`, the in-Commit hook's), and M0 and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
+  single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the window its C2
+  site committed (`A5_WINDOW`).
+- `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on vy-dc-h200 (`research run --on vy-dc-h200 --cwd clone --
+  bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
+  Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
+  (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
+  a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
+  and that window, whose private bodies stay on the node.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the draw): GLM-5.3's TP8 Commit with
@@ -58,9 +66,13 @@ negatives.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol
   (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
-  few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,
-  none carried, it runs sampled proofs: the window's advice and request Programs, V3b's window circuit at each class of
-  `CLASSES`, then the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
+  few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
+  registers its weights under its own key (`prove_path.py weights-registration`). Without a registration, `NO WEIGHTS
+  REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
+  sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
+  circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
+  pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
+  `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
   and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
