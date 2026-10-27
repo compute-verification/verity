@@ -100,8 +100,8 @@ same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the ses
 charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
 \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
 
-The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
-second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
+The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with `SAMPLES` openings a window (`Params.samples`).
+There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
 `timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.896–0.927% in the worst
 window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\)
 (0.0083%), with its whole γ (0.67%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ with
@@ -178,7 +178,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `blocks` | \(N\), the registered store's blocks |
 | `deadline_ns` | \(A\): window \(t\)'s roots are due by \(b_t + A\) |
 | `windows` | \(W\), the windows in a session |
-| `samples` | \(s\), the openings per window: 33,273 (`SAMPLES`, 555 a second of the stated window) unless another count is named |
+| `samples` | \(s\), the openings per window: `SAMPLES` unless another count is named |
 | `delta` | δ of each window's profile: \(2^{-40}\) (`DELTA`) unless another is named |
 | `min_passes` | the fewest passes a window may certify |
 | `window_ns` | \(T\), the stated window: no boundary message leaves sooner than this after its window's challenge (`Session.boundary` refuses one). 60 s (`WINDOW_NS`) unless another is named; 20 s at 11,091 openings and 1 s at 2,773 are options, read in §10 |
@@ -809,12 +809,12 @@ last leaf re-rolls the draws for the price of a leaf and its path, so a prover w
 and keeps one whose draws miss them. By the union bound the window's δ becomes \(Q\delta\), so \(s\) must rise to the
 count at \(\delta/Q\) (`timing.samples_for`). A try reads no block and costs a few to a few tens of compressions (§4
 counts a seed's), so the stated 60 s window affords one node of 8 GPUs about \(2^{35.6}\) to \(2^{39.3}\) of them.
-At the stated window's 33,273 openings (\(\varepsilon_s = \ln(2^{40})/s\) = 0.083%) and δ = \(2^{-40}\), the count at
+At the stated window's `SAMPLES` openings (\(\varepsilon_s = \ln(2^{40})/s\) = 0.083%) and δ = \(2^{-40}\), the count at
 \(\delta/Q\) is \(\lceil s\,(40 + \log_2 Q)/40 \rceil\):
 
 | grinding \(Q\) | \(s\) | × the coin's |
 | --- | --- | --- |
-| none (the coin) | 33,273 | 1.00 |
+| none (the coin) | `SAMPLES` | 1.00 |
 | \(2^{20}\) | 49,910 | 1.50 |
 | \(2^{40}\) | 66,546 | 2.00 |
 | \(2^{64}\) (λ's budget) | 86,510 | 2.60 |
@@ -1419,7 +1419,7 @@ before, and its own chain starts only when that pass ends. So a window is charge
 (20 ms passes) and 0.25–0.33% (50 ms). At the 20 s option it is 0.41–0.65% (20 ms) and 0.50–0.75% (50 ms), and at
 the 1 s option 4.03–8.42% (20 ms) and 9.62–13.65% (50 ms).
 
-**Openings** at the stated \(T\) = 60 s and δ = \(2^{-40}\): \(s = 33{,}273\) per window (555 a second,
+**Openings** at the stated \(T\) = 60 s and δ = \(2^{-40}\): \(s\) = `SAMPLES` per window (555 a second,
 \(\varepsilon_s = \ln(2^{40})/s\) = 0.083%), each about 8.5–9.1 KB (block, leaf, both salts, both paths). That is
 282–303 MB a window per node, or 38–40 Mb/s. The 20 s option's \(\varepsilon_s\) = 0.25% takes 11,091 a window at the
 same rate: 94–101 MB, the same 38–40 Mb/s. The 1 s option's 1% takes 2,773: 23–25 MB, or 0.19–0.20 Gb/s. Under a
@@ -1437,9 +1437,9 @@ correct receipts. The same event bounds every window's share by itself: \(f_t < 
 
 The stated claim is that hybrid: short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
 below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(2^{-40}\), with the window stated at
-\(T\) = 60 s and 33,273 openings. For \(\mu_{\text{sample}}\) it
+\(T\) = 60 s and `SAMPLES` openings. For \(\mu_{\text{sample}}\) it
 needs \(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
-window's 33,273 give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
+window's `SAMPLES` give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
 The 20 s option's 11,091 give each window 0.25%, and over its 30 windows the same 0.0083%. The 1 s option's 2,773
 give each window 1%, and over its 600 windows 0.0017%.
 
@@ -1462,10 +1462,10 @@ a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. 
 
 | \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.827–5.856% | 10 | 0.0083% | 0.668–0.671% |
-| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.009–6.038% | 10 | 0.0083% | 0.911–0.914% |
-| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.678–6.708% | 10 | 0.0083% | 1.680–1.684% |
-| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.271–10.299% | 10 | 0.0079% | 5.355–5.358% |
+| 60 s | `SAMPLES` | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.827–5.856% | 10 | 0.0083% | 0.668–0.671% |
+| 60 s | `SAMPLES` | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.009–6.038% | 10 | 0.0083% | 0.911–0.914% |
+| 60 s | `SAMPLES` | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.678–6.708% | 10 | 0.0083% | 1.680–1.684% |
+| 60 s | `SAMPLES` | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.271–10.299% | 10 | 0.0079% | 5.355–5.358% |
 | 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.39% | 0.115% | 0.065% | 1.267–1.360% | 6.179–6.268% | 30 | 0.0083% | 0.668–0.671% |
 | 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.59% | 0.117% | 0.065% | 1.522–1.616% | 6.422–6.511% | 30 | 0.0083% | 0.911–0.914% |
 | 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.23% | 0.120% | 0.065% | 2.057–2.150% | 6.930–7.019% | 30 | 0.0083% | 1.680–1.684% |
@@ -1529,7 +1529,7 @@ into the next pass. That needs three things:
 - **An assumption.** A bandwidth-hard function on \(S_{\text{chip}}\): evaluating it while holding \(X\) bytes of
   the store on chip costs at least \(X\) bytes more of device-memory traffic, with \(R\) bounding reads and writes
   together. Spilling the held bytes instead costs \(2X\).
-- **The verifier's work.** It recomputes the flush for every pass whose seed it uses, which at 33,273 openings is
+- **The verifier's work.** It recomputes the flush for every pass whose seed it uses, which at `SAMPLES` openings is
   nearly every pass.
 - **The GPU's time.** At least one write and one read of \(S_{\text{chip}}\): 26–105 µs at 5–20 TB/s on chip
   (unmeasured). That adds 0.04–0.17% to the steady state.
