@@ -83,7 +83,7 @@ def _made(fams):
 
 def test_a_glm_tp8_commit_requires_no_hidden_class():
     classes = REQUIRED_CLASSES_DEFAULT + ("tp_rank_partials",)
-    versions = {"required_classes_source": "default (REL-02) + tp_rank_partials (R14 TP-03), checked per rank"}
+    versions = {"required_classes_source": "default (REL-02) + tp_rank_partials, checked per rank"}
     out = TAPS.require_on_every_rank(_made([None] * 8), classes, versions, TAPS.TapSources(), explicit_classes=False)
     assert out == ("input_token_ids", "instance_outputs_native", "sampled_token_ids", "weights", "tp_rank_partials")
     assert versions["required_classes"] == list(out) and "attention hidden class none" in versions["required_classes_source"]

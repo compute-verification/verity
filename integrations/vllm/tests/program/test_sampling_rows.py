@@ -59,7 +59,7 @@ def _pairs(n: int = 30000):
 
 
 def test_add_rz_ftz_v1_model_equals_the_registered_v1_scalar_and_is_rn_on_every_word_pair():
-    """F-stoch-r17-01: the evaluator REGISTERED in GumbelNoiseLane_v1 (`add_rz_ftz_v1_model`) is RN (its toward-zero step is a no-op)
+    """The evaluator REGISTERED in GumbelNoiseLane_v1 (`add_rz_ftz_v1_model`) is RN (its toward-zero step is a no-op)
     and the twin reproduces it word for word -- both asserted so a change of the v1 function is noticed (v1 records depend on it)."""
     a, b = _pairs()
     v = SR.add_rz_ftz_v1_model(a, b)
@@ -123,7 +123,7 @@ def test_add_rz_ftz_is_true_toward_zero_against_an_exact_fraction_reference_and_
     assert SP.add_rz_ftz(0x3F800000, 0xBF800000) == 0 and SP.add_rz_ftz(0x80000000, 0x80000000) == 0x80000000
 
 
-# [F-stoch-r17-01, the exhaustive fact] inside `__nv_log1pf` the `__fadd_rz(a, 1)` word feeds ONLY the binade selector
+# the exhaustive fact: inside `__nv_log1pf` the `__fadd_rz(a, 1)` word feeds ONLY the binade selector
 # e = (s - 0x3F400000) & -2^23, so the RN model and the true RZ can change the output only where RN(1 + a) lands exactly on a selector
 # boundary 0.75 * 2^k that RZ stays under.  Scanning every fp32 word (test below, opt-in; 2^32 words in ~100 s vectorised):
 #   a in (-1, 0)   [the Gumbel lane's whole domain, a = -u]: the SUM differs on 939,524,097 words, e on ONE (0xBE800001), the log1pf
