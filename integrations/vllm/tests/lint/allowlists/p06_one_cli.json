@@ -2,7 +2,7 @@
   "rule": "P6 (one CLI; no __main__, heredocs or python -c)",
   "entries": [
     {"file": "verity_vllm/ops/canary.sh", "kind": "heredoc", "symbol": "<script>", "detail": "python3 <<", "count": 4},
-    {"file": "verity_vllm/ops/canary.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 11},
+    {"file": "verity_vllm/ops/canary.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 10},
     {"file": "verity_vllm/ops/compiled_commit.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 10},
     {"file": "verity_vllm/ops/cov_pod.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY312 <<", "count": 2},
     {"file": "verity_vllm/ops/cov_pod.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 3},

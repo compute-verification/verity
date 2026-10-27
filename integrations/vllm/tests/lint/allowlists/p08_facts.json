@@ -85,7 +85,7 @@
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "sm-arch", "symbol": "CutlassScaledMmFp8Block.match", "detail": "sm_90"},
     {"file": "verity_vllm/observe/runtime_tree.py", "kind": "layer-class", "symbol": "meta_runtime_tree", "detail": "Sampler"},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "layer-class", "symbol": "per_token_bytes_of", "detail": "RotaryEmbedding", "count": 2},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "Options", "detail": "llama", "count": 2},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "Options", "detail": "llama", "count": 1},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "c2_programs_forecast", "detail": "qwen"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "model", "symbol": "Options", "detail": "qwen"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "model", "symbol": "Options", "detail": "smollm"},
