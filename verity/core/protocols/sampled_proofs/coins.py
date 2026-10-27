@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.ml.randomness import uniform_from_words
 
@@ -345,6 +345,71 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
+class Use(NamedTuple):
+    """One read of a family's coins (Lean `Challenger.Use`): its `label`, what they were released after (`after`, 64
+    bytes) and how many coins (`coins`)."""
+
+    label: str
+    after: bytes
+    coins: int
+
+
+def use_roots(uses: Sequence[Use], label: str) -> list[bytes]:
+    """Lean `Use.roots`: the roots family `label`'s coins must be released after, in release order: each use of it in
+    turn, once a coin."""
+    return [u.after for u in uses if u.label == label for _ in range(u.coins)]
+
+
+def exactly_reason(commitment: LiveCommitment, roots: Mapping[str, Sequence[bytes]], uses: Sequence[Use]) -> str | None:
+    """Lean `exactlyReason`: why some family of the commitment's layout shows its coins released after other roots than
+    exactly the uses', coin for coin, in order (`use_roots`); None when none does. So the log holds one release a use:
+    a second release for a use, a release no use reads (a slot the evidence doesn't hold) or a release after another
+    root is refused, not charged."""
+    for label, _ in commitment.families:
+        got, want = list(roots.get(label, ())), use_roots(uses, label)
+        if got != want:
+            return (f"the challenger's log shows family {label}'s coins released after {len(got)} roots, not exactly "
+                    f"the {len(want)} the evidence's uses read, once each in order: a release no use reads, or a use "
+                    "released twice")
+    return None
+
+
+ROUNDS_FORM = ("a session's round coins are {ledger, main, pins, segments, session}: the auditor's ledger, the verifier's "
+               "copy of main's first-parent history, the host's pins log, one segment a use (Segment.to_json) and the "
+               "challenger session's files")
+
+
+def round_coins(key: ChallengerKey, window: str, uses: Sequence[Use], coins: Any, verify: Verify) -> list[bytes]:
+    """Lean `Challenger.roundCoins`: each use's coins, `draw_coins` under `key`, `window`, the use's family and `after`
+    on its segment (`coins["segments"]`, one a use, in order), `coins` coins of 64 bytes each; and the release log of
+    the session the ledger opens on `window` exactly the uses (`exactly_reason`). v2 reads the window's draw and every
+    session's link points and rounds through it. Raises `CoinError`."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segments", "session"]:
+        raise CoinError(ROUNDS_FORM)
+    segments = coins["segments"]
+    if type(segments) is not list:
+        raise CoinError(ROUNDS_FORM)
+    if len(segments) != len(uses):
+        raise CoinError(f"{len(segments)} segments for {len(uses)} uses: one segment a use")
+    out = []
+    for u, s in zip(uses, segments):
+        at = {"ledger": coins["ledger"], "main": coins["main"], "pins": coins["pins"], "segment": s,
+              "session": coins["session"]}
+        xi = draw_coins(key, window, u.label, u.after, at, verify)
+        if len(xi) != u.coins * COIN_BYTES:
+            raise CoinError(f"the {u.label} coins after {u.after.hex()[:16]}… are {len(xi) // COIN_BYTES} coins, not the "
+                            f"use's {u.coins}")
+        out.append(xi)
+    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                           coins["session"], verify)
+    if not withheld_on(coins["ledger"], window):
+        raise CoinError(WITHHELD)
+    why = exactly_reason(commitment, roots, uses)
+    if why is not None:
+        raise CoinError(why)
+    return out
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
     """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every unit in a drawn unit's
     closure that is not itself drawn, ascending."""
@@ -401,5 +466,6 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "ROUNDS_FORM", "SEGMENT_FORM", "Segment",
+           "Use", "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "exactly_reason",
+           "read_reason", "round_coins", "use_roots"]

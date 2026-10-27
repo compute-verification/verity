@@ -23,6 +23,8 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file
 -/
 import CoreProtocol.Blobs
 import SampledProofs.OneStage
+import SampledProofs.ChallengerRounds
+import SampledProofs.Hello
 import Flock
 
 namespace SampledProofs.OneStageZk
@@ -51,6 +53,8 @@ structure Session where
   name : String
   record : String
   reps : Array (String × String)
+  /-- the segments of the session's uses of the challenger's coins (`sessionUses`), in order -/
+  coins : Array Json := #[]
 
 structure Evidence where
   base : OneStage.Evidence
@@ -115,13 +119,19 @@ def ownOfJson (j : Json) : V Own := do
   pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered }
 
 private def sessionOf (j : Json) : V Session := do
-  exactly j #["name", "record", "reps"] "a session of the proofs"
+  let withCoins := (field? j "coins").isSome
+  exactly j (if withCoins then #["coins", "name", "record", "reps"] else #["name", "record", "reps"])
+    "a session of the proofs"
   let (.str name, .str record, .obj _) := (getD j "name", getD j "record", getD j "reps")
     | throw "a session of the proofs is not a name, its record's digest and its rep files' digests"
   let reps ← (entries (getD j "reps")).mapM fun (f, d) => match d with
     | .str d => pure (f, d)
     | _ => throw s!"session {name}: rep file {f}'s digest is not a string"
-  pure { name, record, reps }
+  let coins ← match getD j "coins" with
+    | .arr ss => pure ss
+    | .null => pure #[]
+    | _ => throw s!"session {name}: coins is not a list of segments"
+  pure { name, record, reps, coins }
 
 /-- The evidence's `proofs`: the public file's digest and the sessions. -/
 def proofsOf (pr : Json) : V (String × Array Session) := do
@@ -302,11 +312,101 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     if all && proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
   return out
 
+/-- The session stream its link points are drawn on (`Firewall.Coins.SESSION`). -/
+def POINTS : String := "session"
+
+private def hexes (j : Json) (what : String) : V (Array String) := do
+  let .arr xs := j | throw s!"{what} is not a list of hex strings"
+  xs.mapM fun | .str s => pure s | _ => throw s!"{what} is not a list of hex strings"
+
+/-- What a session's link points are released after: the SHA-512 of its tables' root_B digests
+(`link.root_b_sha512`, 64 bytes each), in the record's key order. -/
+def pointsAfter (link : Json) : V ByteArray := do
+  let .obj _ := getD link "root_b_sha512" | throw "record: link.root_b_sha512 is not an object"
+  let ds ← (entries (getD link "root_b_sha512")).mapM fun (t, d) => match d with
+    | .str h => if h.length == 128 then Flock.unhex h else throw s!"record: link.root_b_sha512.{t} is not 64 bytes of hex"
+    | _ => throw s!"record: link.root_b_sha512.{t} is not 64 bytes of hex"
+  return Flock.Sha512.hash (ds.foldl (· ++ ·) .empty)
+
+/-- Session `slot`'s uses of the challenger's coins, each with the coins (as the record's F128 hex) its bytes must
+begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each stream's rounds in the
+record's order, of family `slot/<slot>/<stream>` after the round's `msg_sha512` (`Round.sha`); `⌈n/4⌉` coins of 64
+bytes for `n` F128s. -/
+def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
+  let j ← (Json.parse record).mapError (s!"record: not JSON: {·}")
+  let link := getD j "link"
+  let .arr ps := getD link "points" | throw "record: link.points is not a list"
+  let pts ← ps.foldlM (fun acc p => return acc ++ (← hexes p "a link point")) #[]
+  let mut out := [({ label := Hello.slotStream slot POINTS, after := ← pointsAfter link, coins := (pts.size + 3) / 4 },
+    pts)]
+  let .arr ss := getD j "streams" | throw "record: streams is not a list"
+  for s in ss do
+    let .str name := getD s "stream" | throw "record: a stream's name is not a string"
+    let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
+    for r in rs do
+      let .str sha := getD r "msg_sha512" | throw s!"record: a round of {name} has no msg_sha512"
+      if sha.length != 128 then throw s!"record: a round of {name}'s msg_sha512 is not 64 bytes of hex"
+      let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
+      out := out ++ [({ label := Hello.slotStream slot name, after := ← Flock.unhex sha, coins := (cs.size + 3) / 4 }, cs)]
+  return out
+
+/-- Why the coins `ξ` don't begin with the F128s `want` (record hex, `{hi:016x}{lo:016x}`, 16 bytes each); none when
+they do. -/
+def coinsMismatch (want : Array String) (ξ : ByteArray) : Option String :=
+  (want.toList.zipIdx.find? fun (h, i) => Flock.hexOf (ξ.extract (16 * i) (16 * i + 16)) != h).map fun (_, i) =>
+    s!"coin {i} is not the challenger's"
+
+def ROUNDS_NEED_CHALLENGER : String :=
+  "v2 reads every session's link points and round coins from the auditor's challenger, and the parameters name " ++
+  "none (challenger and window_root)"
+
+/-- Why the window's coins are not all the challenger's (`Challenger.roundCoins`), one release a use; none when they
+are. The uses are the draw's (its family, after the registration's digest, as many coins as its segment opens) and
+each session's (`sessionUses`, slot `i` the session's index), each with its segment: the draw's `coins.segment`, then
+each session's `coins`. Every coin a session's record holds must be the challenger's (`coinsMismatch`). -/
+def roundsWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Option String :=
+  match p.base.challenger, p.base.verifier.windowRoot with
+  | some (key, label), some w =>
+    let r : V Unit := do
+      let draw := getD e.base.coins "segment"
+      let .arr opened := getD draw "openings" | throw Challenger.SEGMENT_FORM
+      let mut uses : Array Challenger.Use := #[{ label, after := c.digest, coins := opened.size }]
+      let mut wants : Array (Option (String × Array String)) := #[none]
+      let mut segments : Array Json := #[draw]
+      for (s, i) in e.sessions.toList.zipIdx do
+        let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+          | throw s!"session {s.name}'s record is not UTF-8"
+        let us ← (sessionUses i record).mapError (s!"session {s.name}: {·}")
+        unless s.coins.size == us.length do
+          throw s!"session {s.name}: {s.coins.size} segments for its {us.length} uses of the challenger's coins"
+        uses := uses ++ us.toArray.map (·.1)
+        wants := wants ++ us.toArray.map fun (u, hs) => some (s!"{s.name}'s {u.label}", hs)
+        segments := segments ++ s.coins
+      let coins := Json.mkObj [("ledger", getD e.base.coins "ledger"), ("main", getD e.base.coins "main"),
+        ("pins", getD e.base.coins "pins"), ("segments", Json.arr segments), ("session", getD e.base.coins "session")]
+      let ξs ← Challenger.roundCoins key w uses.toList coins
+      for (ξ, want) in ξs.zip wants.toList do
+        if let some (what, hs) := want then
+          if let some why := coinsMismatch hs ξ then throw s!"session {what}: {why}"
+    match r with
+    | .ok () => none
+    | .error why => some why
+  | _, _ => some ROUNDS_NEED_CHALLENGER
+
+/-- v2's check: the sessions' verdicts (`verdicts`), then v1's check at the draw's coins (`OneStage.coinsOf`,
+`OneStage.checkAt`), and an accept only when every coin the window read is the challenger's, one release a use
+(`roundsWhy`). -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match verdicts p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
-  | .ok vs => OneStage.check p.base c { e.base with verdicts := vs }
+  | .ok vs =>
+    match Core.atCoins (OneStage.coinsOf p.base c e.base)
+        (fun ξ => OneStage.checkAt p.base c ξ { e.base with verdicts := vs }) with
+    | .accept x y => match roundsWhy p c e bs with
+      | some why => .reject s!"proofs: round coins: {why}"
+      | none => .accept x y
+    | o => o
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
