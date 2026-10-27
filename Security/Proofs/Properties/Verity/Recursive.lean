@@ -16,9 +16,9 @@ Sampled proofs' recursive configuration (`VStar.Recursive`, `verity/sampled-proo
 the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
 
 * **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads
-  (`recordAt`), a statement that names the component's inputs (`Names`), and blobs that show that run (`Shows`). If
-  the compiled component accepts those blobs and the records it reads hold the run's live coins (`LiveCoins`), then the
-  statement is dense and the run accepts. That is the event `RecursiveKSAt`'s `PrBad` counts.
+  (`recordAt`), a statement that names the component's inputs (`Names`), and blobs that show that run (`Shows`), whose
+  staged rows are the component's (`RowsShow`). If the compiled component accepts those blobs and the records it reads
+  hold the run's live coins (`LiveCoins`), then the statement is dense and the run accepts. That is the event `RecursiveKSAt`'s `PrBad` counts.
   - Each V* part's record is a prover-sent blob. The model verifier checks a record's coins against its own live coins
     (`FlockDeploy.custody`), and the compiled component, which holds no live coin, can't. So `LiveCoins` is
     `live-verifier`'s content at the recursive session (`Assumptions.Zk.RecordCustodyZKJ`).
@@ -49,6 +49,7 @@ here rather than in `Properties` until C-Flock's spec is extracted.
 
 namespace Verity.Recursive
 
+open scoped ENNReal
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 open RecDeploy
@@ -107,6 +108,13 @@ def Shows (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursi
           (q.reps.find? (·.1 == repName spec.repStreams[k].2.2)).map (·.2) = some d ∧
           ∃ hk : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k]
 
+/-- **The staged rows are the component's.** V\*'s shared rows (`--rec-rows`) are no part of `x` (#4744): the prover
+stages one set for every part, off the staging message (`Stage.rows`). The compiled component reads each part's rows
+from its parameters, so the run's staged rows, read as JSON, are every part's. -/
+def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (o : VStar.Recursive.Own) (v : Claims.Seen) : Prop :=
+  ∀ j (hj : j < o.parts.size),
+    o.parts[j].rows.map Except.ok = some (FlockDeploy.jsonOf "rec-rows" (st.rows x (v.msgs.take (kIS IV x))))
+
 /-- **The records hold the live coins** (`live-verifier` at the recursive session, `Assumptions.Zk.RecordCustodyZKJ`):
 at each V\* session `s` of the run's view `v`, wherever the outer verifier decides on session `s`'s messages and coins
 (`actO`), the live session the record shows is the session's link message, first coin and round messages with their
@@ -146,12 +154,12 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
       bs.get p.own.parts[j].circuit s!"part {j}'s circuit" = .ok q.base.circuit ∧
       q.base.partition.map (FlockDeploy.jsonOf "partition") = some (.ok p.own.parts[j].partition) ∧
       q.base.program = some p.own.parts[j].program ∧
-      q.base.registered.map (FlockDeploy.jsonOf "registered") = p.own.parts[j].registered.map Except.ok ∧
-      q.rows.map (FlockDeploy.jsonOf "rec-rows") = p.own.parts[j].rows.map Except.ok
+      q.base.registered.map (FlockDeploy.jsonOf "registered") = p.own.parts[j].registered.map Except.ok
 
 /-- **ONE-9p's property: the recursive component's acceptance is the event `RecursiveKSAt` is stated over.** Suppose
 the compiled recursive component accepts `(p, c, e, bs)`, `x` names its inputs (`Names`), the blobs show a run of the
-deployed recursive verifier (`recordAt`) at `x` (`Shows`), and that run's records hold its live coins (`LiveCoins`).
+deployed recursive verifier (`recordAt`) at `x` (`Shows`) whose staged rows are the component's (`RowsShow`), and
+that run's records hold its live coins (`LiveCoins`).
 Then `x` is dense (`RecDeploy.DenseAt`, the statements `RecursiveKSAt` covers), and the run accepts. -/
 theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -161,6 +169,8 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
     (x : Msg) (hnames : Names p e bs x) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((recordAt wE w b aux nOf hd recRest).V.k x) → Coin)
     (hshow : Shows (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x e.proofs bs
+      (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
+    (hrows : RowsShow (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x p.own
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen)
     (hlive : LiveCoins (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x
       (Claims.run FlockDeploy.sha512 P (recordAt wE w b aux nOf hd recRest).V x ω r).seen) :
@@ -230,7 +240,7 @@ noncomputable def I : Claims.Recursion.Inner Coin Claims.Flock.Wit :=
   Claims.Recursion.Inner.ofFlock q.Bd.deploy q.decI
 
 /-- The recursive relation: the statement parses and the inner relation holds at its inner statement. -/
-def R : Claims.Rel Claims.Flock.Wit := Claims.Recursion.R q.D q.I
+noncomputable def R : Claims.Rel Claims.Flock.Wit := Claims.Recursion.R q.D q.I
 
 /-- **The recursive session's fixed extractor**: `RecursiveKSAt`'s `E` at the two decoders. -/
 noncomputable def E : Claims.Extractor Coin Claims.Flock.Wit q.D.V :=
@@ -238,7 +248,7 @@ noncomputable def E : Claims.Extractor Coin Claims.Flock.Wit q.D.V :=
 
 /-- **The extractor's reruns at `x`**, at most (`Claims.Recursion.Efficient`'s worst-case count): `1 + waits · cap` for
 the inner protocol, times `1 + Σ waits · cap` over the outer sessions. -/
-def runs (x : Msg) : ℕ :=
+noncomputable def runs (x : Msg) : ℕ :=
   (1 + q.I.waits (Claims.Recursion.xI q.D x) * q.I.cap (Claims.Recursion.xI q.D x)) *
     (1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).cap)
 
@@ -256,7 +266,7 @@ device log (`Vocab.rounds`, `Vocab.coinsRead`) with the session.
   device's uniform releases is distributed so (`prob_le`).
 * `drawOf ξ` is the units `ξ` draws.
 * Wherever the recursive component accepts on blobs `bs`, the parameters and evidence it decodes name `x ξ`, and the
-  blobs show the run (`names_shows`).
+  blobs show the run and its staged rows are the component's (`names_shows`).
 * Each run of the session is part of one run of `σ`, so its SHA-512 calls are at most the strategy's, `V.cost`
   (`calls_le`). -/
 structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
@@ -279,7 +289,8 @@ structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.S
     VStar.Recursive.Sampled.evidenceOf (out ξ s).evidence = .ok (.inr e) →
     Names p e (Core.Blobs.ofArray bs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray bs)
-        (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
+        (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen ∧
+      RowsShow q.Bd.IVStar q.st (x ξ) p.own (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
   calls_le : ∀ ξ ω r, runCalls (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) ω r) ≤ V.cost θ F c σ
 
 attribute [instance] SessionIn.finΞ SessionIn.neΞ SessionIn.finΩ SessionIn.neΩ
@@ -360,7 +371,7 @@ def tCost (_ : SessionIn V q θ F c σ) : ℕ := max 1 (V.cost θ F c σ)
 /-- **The binding finder's budget at the draws `ξ₁`, `ξ₂`**, a defined function of the strategy's cost `t'`: two runs,
 and two extractions of at most `runs` reruns each (every rerun a run of the session, so at most `t'` calls), plus each
 extraction's rerun count and `collOf`'s `dColl`: `(2 + r₁ + r₂) · t' + r₁ + r₂ + dColl`. -/
-def bindBudget (S : SessionIn V q θ F c σ) (dColl : ℕ) (ξ₁ ξ₂ : S.Ξ) : ℕ :=
+noncomputable def bindBudget (S : SessionIn V q θ F c σ) (dColl : ℕ) (ξ₁ ξ₂ : S.Ξ) : ℕ :=
   (2 + q.runs (S.x ξ₁) + q.runs (S.x ξ₂)) * q.tCost V S + q.runs (S.x ξ₁) + q.runs (S.x ξ₂) + dColl
 
 /-- **`FinderCR`: the named SHA-512 premises at the strategy, asked only of the finders built from it.** Each session
