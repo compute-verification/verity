@@ -1,5 +1,5 @@
 """J10-R's per-call-noise units (`PouwH1Tile_v5` / `_v6`'s receipt; h1u.cu's kh_seeds_j10r, kh_units_multi_j10r and
-kh_units_multi_j10r_sm) at the frozen shape's linears (s8_simple's SHAPES: width 16384, one KV head, MLP 65536) and
+kh_units_multi_j10r_sm) at the frozen shape's linears (`LINEARS`: width 16384, one KV head, MLP 65536) and
 M = 4,096 and 16,384 token rows, one call a linear, every row live:
 
     python j10r90.py check  --lib NAME=PATH ... --out OUT [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--picks 24]
@@ -27,7 +27,8 @@ verify (a CPU node, check's out/ as DIR): every sampled unit's receipt and z aga
 its 32 rows of A and of B regenerated: v5 on every sampled unit, v6 (stream=True) on the first --v6 of each call; z on
 PAIRS through the Definition and on every cell of the tile against the int64 product. Exit 4 on any mismatch.
 
-time (on the GPU): plain INT8 as s8_simple runs it, torch._int_mm and the f32 epilogue as four eager kernels,
+time (on the GPU): plain INT8, s8_linear's `int_mm.linear` with its eager epilogue: torch._int_mm and the f32
+epilogue as four eager kernels,
 against each build's J10-R call (seeds, rows and units: kh_units_multi_j10r_sm on every SM, the served launch), arms
 interleaved rep by rep; overhead = units / plain and gamma = (plain + units) / plain, a call and summed over a layer's
 linears (q, kv, o, up, down; the head once a step). With --wgmma, KP2-S8's wgmma.linear (the fastest exact plain INT8 on
@@ -59,7 +60,7 @@ import j10r_units as J10R
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-#: the frozen shape's linears (n, k), s8_simple's SHAPES (MQA decoder: width 16384, 256 query heads of 64, 1 KV head,
+#: the frozen shape's linears (n, k), KS8-SIMPLE's SHAPES (#4472; MQA decoder: width 16384, 256 query heads of 64, 1 KV head,
 #: MLP 65536, 256 tokens)
 LINEARS = {"q": (16384, 16384), "kv": (128, 16384), "o": (16384, 16384), "up": (65536, 16384), "down": (16384, 65536),
            "head": (256, 16384)}
@@ -349,14 +350,6 @@ def check(args) -> int:
     return 0 if doc["ok"] else 4
 
 
-def scale(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
-    """s8_simple.scale: bf16((f32(acc) * sx[i]) * sw[j]), four eager kernels."""
-    y = acc.to(torch.float32)
-    y.mul_(sx[:, None])
-    y.mul_(sw[None, :])
-    return y.to(torch.bfloat16)
-
-
 def wgmma_of(d: str):
     """The s8 wgmma kernel's wgmma.linear: its wgmma.py and configs.py from DIR beside build.sh's ship
     (s8_wgmma.cubin, sass.json, MANIFEST.sha256), and a (M, N, K) -> Cfg pick by its tuned table as its run.py's
@@ -376,6 +369,8 @@ def wgmma_of(d: str):
 
 
 def time_(args) -> int:
+    sys.path.append(str(HERE.parents[1] / "torch_gpu" / "s8_linear"))
+    import int_mm as IM
     import unitsbench as U
     from hb_kbench import Clock
     libs = libs_of(args.lib)
@@ -386,7 +381,7 @@ def time_(args) -> int:
     W, wpick = wgmma_of(args.wgmma) if args.wgmma else (None, None)
     plains = ["plain"] + (["wgmma"] if W else [])
     doc = {"schema": "j10r90/time/v1", "device": clock.name, "sms": torch.cuda.get_device_properties(0).multi_processor_count,
-           "libs": dict(v.partition("=")[::2] for v in args.lib), "plain": "s8_simple: torch._int_mm + scale",
+           "libs": dict(v.partition("=")[::2] for v in args.lib), "plain": "int_mm.linear (eager)",
            **({"wgmma": "KP2-S8's wgmma.scaled_mm at its tuned table's config", "wgmma_identity": W.lib().identity()}
               if W else {}),
            "units": "kh_seeds_j10r + kh_units_multi_j10r_sm at 1/1", "reps": args.reps,
@@ -399,7 +394,7 @@ def time_(args) -> int:
         g = torch.Generator(device="cuda").manual_seed(c["b_seed"])
         sx = (torch.rand(c["m"], device="cuda", generator=g) + 0.5) / 127
         sw = (torch.rand(c["n"], device="cuda", generator=g) + 0.5) * 0.02 / 127
-        arms: dict = {"plain": lambda: scale(torch._int_mm(a, b.t()), sx, sw)}
+        arms: dict = {"plain": lambda: IM.linear(a, sx, b, sw, "eager")}
         if W:
             cfg = wpick(c["m"], c["n"], c["k"])
             yw = torch.empty((c["m"], c["n"]), dtype=torch.bfloat16, device="cuda")
