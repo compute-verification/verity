@@ -37,6 +37,10 @@ A window goes through these steps; each names the Lean that decides it.
    (`PouwCheck.Check`, `PouwCheck.Inputs`, `PouwCheck.Protocol`). A served window's credit and its period's are
    `PouwCheck.Credit`, on each drawn unit's verdict (`PouwCheck.Verified`, `PouwCheck.LiveVerified`) over the circuit
    files its period's open committed (`PouwCheck.CommittedFiles`).
+8. **Period.** A period earns all or nothing: `PouwCheck.Period` (`pouw-period`, onsite's work component) credits it
+   only when every window between its open and its close is credited, and refuses by name every window in a form its
+   guarantee doesn't cover. Filler windows on idle tensor pipes (`PouwCheck.Fill`) are reported beside the period's
+   work, and never decided on: no guarantee covers the fill yet, and the credit's `gaps` says so.
 
 The packages, and their module tables: `lean/check/README.md` (`pouw_check`), `lean/window/README.md` (`pouw_window`),
 and `lean/commit` (`pouw_commit`: tagged bindings, frames, rows, coins and draws). Their properties are
@@ -61,6 +65,7 @@ Each guarantee G is stated in `Security/Definitions/Pouw` and proved in `Securit
 - **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
+- **The period check** is held to `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, over the served work alone.
 
 The named premises they rest on include the schemes' conjectures (`Pouw.NCP.Assumptions.TTNCP_U`,
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and Pearl-C's other TT_OUT forms), the seeded noise's forms
@@ -72,10 +77,11 @@ spec, `dither/PROTOCOL.md`.
 ## Core API
 
 ~~~python
-from verity.core.protocols.pouw import core_check, credit, window, verifier
+from verity.core.protocols.pouw import core_check, credit, period_check, window, verifier
 from verity.core.protocols.pouw import schemes
 
 verdict = core_check.check(params, commitment, evidence)   # one audit window, as `pouw-check` answers (the Lean verifier)
+answer = period_check.answer(params, commitment, evidence)  # one period, as `pouw-period` answers
 outcome = credit.window(key, ledger, pins, main, ...)      # a served window's credited set and its drawn units' outcome
 period = credit.period_credit(key, ledger, pins, main, name, windows, verify, ...)   # a period, closed and complete
 passes = credit.pearl_c_period_credit(key, ledger, pins, main, name, passes, earlier, ...)   # a Pearl-C period
@@ -93,8 +99,8 @@ challenger's entropy, read by the Lean from the operating system.
 - `protocol`, `schemes/`: the `PoUWScheme` interface and the named schemes (`ncp-v1`, `pearl-fp8-v4`, the Pearl-C family,
   `pearl-c-nvfp4-v0`); each scheme module's docstring states its steps and roundings, with pinned vectors under
   `tests/vectors`.
-- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`: the
-  references the Lean is held to, and the reference rules not yet ported.
+- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `period_check`, `fill`, `identifier`, `registration`,
+  `weights`, `operands`: the references the Lean is held to, and the reference rules not yet ported.
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
   (`compile`) and the draw plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest.
