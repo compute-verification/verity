@@ -92,18 +92,17 @@ def lookup(tool: Any, root: Path, *, argv=None, params=None, inputs=None, condit
         here.update(tool.tool_conditions(here))          # the Tool's own probe (`tool.<name>.*`), as the runner records it
         conds.update({k: here.get(k) for k in missing})
     drv = D.derivation_id(tool.identity(), inputs or {}, key, conds, tool.key_conditions)
-    st = A.open_store(store)
     if any_source:
-        rk, rows = None, _rows(st.index.attempts_by_derivation(drv))
+        rk = None
+    elif source_tree:
+        rk = D.reuse_key(drv, {"tree": source_tree, "dirty": False, "lockfiles": _lockfiles_at(root, source_tree)})
     else:
-        if source_tree:
-            src = {"tree": source_tree, "dirty": False, "lockfiles": _lockfiles_at(root, source_tree)}
-        else:
-            src = E.source_identity(E.source_conditions(root))
-            if src.get("dirty") is not False or not src.get("tree"):
-                raise ValueError(f"{root} is {'dirty' if src.get('dirty') else 'not a clean git tree'}: no reuse_key; give --source-tree SHA or --any-source")
+        src = E.source_identity(E.source_conditions(root))
+        if src.get("dirty") is not False or not src.get("tree"):
+            raise ValueError(f"{root} is {'dirty' if src.get('dirty') else 'not a clean git tree'}: no reuse_key; give --source-tree SHA or --any-source")
         rk = D.reuse_key(drv, src)
-        rows = _rows(st.index.attempts_by_reuse_key(rk))
+    index = A.open_store(store).index
+    rows = _rows(index.attempts_by_derivation(drv) if any_source else index.attempts_by_reuse_key(rk))
     return {"derivation": drv, "reuse_key": rk, "key_params": key, "key_conditions": {k: conds.get(k) for k in tool.key_conditions},
             "inputs": inputs or {}, "attempts": rows}
 

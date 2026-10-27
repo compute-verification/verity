@@ -1633,10 +1633,9 @@ def _repo(tmp_path):
     (repo := tmp_path / "repo").mkdir()
     (repo / "uv.lock").write_text("lock\n")
     (repo / "pyproject.toml").write_text("")
-    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"]
     env = {**os.environ, "GIT_AUTHOR_DATE": f"@{COMMITTED} +0000", "GIT_COMMITTER_DATE": f"@{COMMITTED} +0000"}
-    for command in (["init", "-q"], ["add", "."], ["commit", "-qm", "points"]):
-        subprocess.run([*git, *command], cwd=repo, env=env, check=True)
+    subprocess.run("git init -q && git add . && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "
+                   "commit -qm points", shell=True, cwd=repo, env=env, check=True)
     return repo, subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
 

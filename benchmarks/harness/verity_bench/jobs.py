@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -18,8 +19,8 @@ from typing import Any
 
 from verity_config import dumps, sha256, value
 
-from verity_bench.tool import VLLM_BENCH_POINT
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
+
 
 @dataclass(frozen=True)
 class Toolchain:
@@ -94,10 +95,9 @@ def _show(root: Path, commit: str, field: str) -> str:
 
 
 class StoreCompletion:
-    """The newest attempt with a point's identity at a commit's tree (`research data lookup`; a dirty tree has no reuse
-    key) whose validation passed with rc 0 (a run killed after writing result.json reads as passed): from this machine's
-    catalog, else, unless `local_only`, from the store's remote, read once per commit by pulling the attempts this store
-    lacks among those started since the commit (`COMMIT_MARGIN_S` before it), and indexing them; never a reindex."""
+    """The newest attempt `research data lookup` finds for a point at its commit's tree, with validation passed and rc 0
+    (a killed run's result.json may read as passed; a dirty tree has no reuse key): from this machine's catalog, else,
+    unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
                  log: Callable[[str], None] | None = None):
@@ -114,6 +114,8 @@ class StoreCompletion:
         return self._store
 
     def __call__(self, identity: str, commit: str) -> str | None:
+        if not re.fullmatch(r"[0-9a-f]{64}", identity) or not re.fullmatch(r"[0-9a-f]{7,64}", commit):
+            raise ValueError("benchmark completion lookup requires hexadecimal identities")
         found = self._local(identity, commit)
         if found is None and not self.local_only and commit not in self._pulled:
             self.pull_since(int(_show(self.root or repository_root(), commit, "%ct")))
@@ -122,11 +124,11 @@ class StoreCompletion:
         return found
 
     def _local(self, identity: str, commit: str) -> str | None:
-        from research.store.cli_prov import lookup  # noqa: PLC0415
+        from research.store import cli_prov, tools_registry
 
         root = self.root or repository_root()
-        attempts = lookup(VLLM_BENCH_POINT, root, params={"identity": identity}, source_tree=_show(root, commit, "%T"),
-                          store=self.store)["attempts"]
+        attempts = cli_prov.lookup(tools_registry.load("verity_bench.tool:VLLM_BENCH_POINT", root), root, store=self.store,
+                                   params={"identity": identity}, source_tree=_show(root, commit, "%T"))["attempts"]
         passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0]
         return passing[-1] if passing else None
 
