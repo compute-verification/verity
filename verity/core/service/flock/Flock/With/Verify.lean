@@ -1,5 +1,5 @@
 /-
-§3 and §9–§14 over the hash oracle (`Flock.With.Hashes`): `verifyWithM` is `Flock.verify` with every hash call the oracle's,
+`Flock.Verify`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` over the hash oracle (`Flock.With.Hashes`): `verifyWithM` is `Flock.verify` with every hash call the oracle's,
 in a verdict monad `M`, and `verifyWith h` runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text;
 what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
 -/
@@ -219,7 +219,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
         liftLM (claimPow p)
         let bb ← liftW (sampleWith hs)
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"
@@ -293,7 +293,7 @@ def repFileShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
   { m := st.m, kLog := st.kLog, claims := 2 + n, sched := sch, hashLen := st.merkle.digestLen, saltLen }
 
 /-- **`verifyRepWith` at the decoded proof `p`**: everything after the decode, on the rep's stream with the statement's
-extra claims: the pinned PCS parameters (R7/F2), §9–§14, every recorded round consumed (S15/R2) and the cap the committed
+extra claims: the pinned PCS parameters (R7/F2), `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, every recorded round consumed (S15/R2) and the cap the committed
 `root_B` (S16/R1). -/
 def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
     (stream : StreamRec) (extras : Array Claim) (p : Proof) : M ByteArray := do

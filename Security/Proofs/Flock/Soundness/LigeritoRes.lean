@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.LigeritoWeights
 
 /-!
-# How Ligerito's weights fold (PROTOCOL.md §13.3, §13.6)
+# How Ligerito's weights fold (`Flock.Ligerito`)
 
 Every term of the final check's weight is a constant times a multilinear extension read at the
 point `fixed ++ bits(y)`: the fixed challenges so far, then the bits of the still-open variables.

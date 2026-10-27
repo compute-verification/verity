@@ -1,18 +1,18 @@
 import Proofs.Flock.Soundness.Refine.Ligerito
 
 /-!
-# A run of the executable's Ligerito is a run of the model's (PROTOCOL.md §13.3)
+# A run of the executable's Ligerito is a run of the model's (`Flock.Ligerito`)
 
 `ligerito_refines`: when the executable's Ligerito verifier accepts, the model's compiled Ligerito (`ligeritoC`), played
 with the proof's messages (`ligMsgs`) and the rounds the executable consumed, ends in a result
 
 * whose caps are the proof's recursive caps, decoded by `capD`;
 * whose every request is a query level whose Merkle check the executable passed (`ReqOK`);
-* whose verdict at the openings `o` is the model's final check (§13.6) on the executable's final state, where the
+* whose verdict at the openings `o` is the model's final check (`Flock.Ligerito`) on the executable's final state, where the
   executable's own final check (`finalProg`, the verifier's last step, verbatim) passed.
 
 That the executable's final check makes the model's hold, and that a passed Merkle check is the model's path check
-(§14), are separate steps.
+(`Flock.Merkle`), are separate steps.
 -/
 
 namespace FlockSoundness.Refine
@@ -28,7 +28,7 @@ variable {D : Type}
 
 section
 open Flock
-/-- The executable Ligerito verifier's final check (PROTOCOL.md §13.6), as `Flock.ligerito` runs it after the level
+/-- The executable Ligerito verifier's final check (`Flock.Ligerito`), as `Flock.ligerito` runs it after the level
 loop: its text is the verifier's, so a run of the verifier's last step is a run of this. -/
 def finalProg (p : LigeritoProof) (basisAt : Array F256 → Nat → Array F256) (n : Nat) (initCh : Array F256)
     (levels : Array (Array F256)) (ext : Nat) : LM Unit := do
@@ -80,10 +80,10 @@ end
 /-- An executable consistency context as the model's. -/
 def consOf (c : Flock.ConsCtx) : Model.ConsCtx 𝔽 := ⟨c.cols, c.pos.toList, c.alpha.toList.map fOf, fOf c.beta, c.start⟩
 
-/-- The proof's clear residual as the model's last message (§13.6). -/
+/-- The proof's clear residual as the model's last message (`Flock.Ligerito`). -/
 def yrOf (p : LigeritoProof) (ext : ℕ) : Fin (2 ^ (ext + 1)) → 𝔽 := fun i => fOf p.finalProof.yr[i.val]!
 
-/-- The messages of the level loop's iterations `i, …, i + left − 1` (§13.3): each folds with four messages; a non-last
+/-- The messages of the level loop's iterations `i, …, i + left − 1` (`Flock.Ligerito`): each folds with four messages; a non-last
 iteration then sends the next level's cap, two out-of-domain values with their intro messages, and the queries'
 message; the last sends the clear residual. `msg` and `ood` are the cursors into the proof's lists. -/
 def recMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (ext : ℕ) : ℕ → ℕ → ℕ → ℕ → List Msg
@@ -93,7 +93,7 @@ def recMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (ext : ℕ) :
       [fMsg p.oodValues[ood]!, kMsg p.messages[msg + 4]!, fMsg p.oodValues[ood + 1]!, kMsg p.messages[msg + 5]!] ++
       [kMsg p.messages[msg + 6]!] ++ recMsgs p capD ext (left + 1) (i + 1) (msg + 7) (ood + 2)
 
-/-- **The messages of a Ligerito run** (§13.3): the level-0 out-of-domain value, the first message and the `k0` folding
+/-- **The messages of a Ligerito run** (`Flock.Ligerito`): the level-0 out-of-domain value, the first message and the `k0` folding
 messages, the level-1 cap, two out-of-domain values with their intro messages, the level-0 queries' message, and the
 level loop's. -/
 def ligMsgs (p : LigeritoProof) (capD : Array ByteArray → Cap D) (sch : Flock.Schedule) : List Msg :=
@@ -112,7 +112,7 @@ def openAt (p : LigeritoProof) (R ℓ : ℕ) : Array (Array F128) × Array ByteA
     ((p.recursiveProofs[ℓ - 1]!).rows, (p.recursiveProofs[ℓ - 1]!).siblings, (p.recursiveProofs[ℓ - 1]!).salts)
   else (p.finalProof.rows, p.finalProof.siblings, p.finalProof.salts)
 
-/-- A model request whose Merkle check the executable passed (§14): the request is level `ℓ`'s queries, it folds the
+/-- A model request whose Merkle check the executable passed (`Flock.Merkle`): the request is level `ℓ`'s queries, it folds the
 level's lanes, its paths have the level's length, and the rows the proof opens there verify against the level's cap. -/
 def ReqOK (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (req : Req) : Prop :=
   req.level < sch.levels.size ∧ req.lanes = (sch.levels.getD req.level default).lanes ∧
@@ -122,7 +122,7 @@ def ReqOK (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p 
       (openAt p (sch.levels.size - 1) req.level).2.1 (openAt p (sch.levels.size - 1) req.level).2.2
       (2 ^ req.lanes) = .ok ()
 
-/-- **The level loop's invariant** before iteration `i` (§13.3): the loop's variables `v = (splitDim, prevCap, levels,
+/-- **The level loop's invariant** before iteration `i` (`Flock.Ligerito`): the loop's variables `v = (splitDim, prevCap, levels,
 ext)`, the executable's state `stE` and transcript `t`, and the model's state `stM`, which at the openings `o` has the
 executable's claim and polynomial. -/
 structure LoopRel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof)
@@ -143,7 +143,7 @@ structure LoopRel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteAr
   caps : stM.caps = (List.range (i + 1)).map fun j => capD p.recursiveCaps[j]!
   reqs : ∀ req ∈ stM.reqs, ReqOK ms sch cap p req
 
-/-- What the level loop ends with (§13.3, §13.6): `R` levels of four challenges, `ext` the schedule's, the clear
+/-- What the level loop ends with (`Flock.Ligerito`): `R` levels of four challenges, `ext` the schedule's, the clear
 residual's length checked, and the model's result: the final check on the executable's final state, the proof's caps,
 and requests that passed. -/
 structure LoopFinal (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof)
@@ -257,7 +257,7 @@ theorem conss_push_pos {cs : Array Flock.ConsCtx} {c : Flock.ConsCtx}
   · exact h x hx
   · exact hc
 
-/-- **The consistency value at the openings** (§13.3 step 10): the model's, reading the openings of level `ℓ`, is the
+/-- **The consistency value at the openings** (`Flock.Ligerito` step 10): the model's, reading the openings of level `ℓ`, is the
 executable's `consE` on the proof's rows, when the openings are those rows and the Merkle check passed. -/
 theorem qbE_eq (r ℓ : ℕ) (lv : Flock.Level) (hl : LevelSeam lv) (ch : Array F256) (hch : ch.size = lv.lanes)
     (o : Opens 𝔽 D) (rows : Array (Array F128)) (hrows : ∀ j < lv.q, rows[j]!.size = 2 ^ lv.lanes)
@@ -317,7 +317,7 @@ theorem drop_levels (sch : Flock.Schedule) (i : ℕ) (hi : i < sch.levels.size) 
   rw [List.drop_eq_getElem_cons (by simpa using hi)]
   simp [Array.getD, hi]
 
-/-- **One level's queries** (§13.3 steps 7–11 and the recursive rounds): the model's `qbOut` on the executable's coins
+/-- **One level's queries** (`Flock.Ligerito` steps 7–11 and the recursive rounds): the model's `qbOut` on the executable's coins
 has, at the openings, the executable's claim and polynomial updates; it records the executable's consistency context,
 and a request that passed the executable's Merkle check. -/
 theorem qbOut_rel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (r ℓ : ℕ)
@@ -391,7 +391,7 @@ theorem qbOut_rel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteAr
 
 /-! ## The model's prefix -/
 
-/-- **The model's Ligerito before the level loop** (§13.3 steps 2–11), composed from its parts: the level-0
+/-- **The model's Ligerito before the level loop** (`Flock.Ligerito` steps 2–11), composed from its parts: the level-0
 out-of-domain sample, the first message and the `k0` folds (`hfold`), the level-1 cap, its two out-of-domain samples
 (`htwo`), the level-0 queries with their message, and any run of the recursive rounds from the resulting state
 (`hrec`). -/
@@ -441,7 +441,7 @@ theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : �
 /-! ## The run -/
 
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's rounds refine the model's** (§13.3). When the executable's Ligerito verifier accepts, from a transcript
+/-- **Ligerito's rounds refine the model's** (`Flock.Ligerito`). When the executable's Ligerito verifier accepts, from a transcript
 whose rounds are well formed, on a schedule whose dimensions and levels are the model's (`DimSeam`, `LevelSeam`) and
 whose levels' consistency coins are not one word (`ceilLog2 q ≠ 1`, which `fast100_alpha` gives), the model's compiled
 Ligerito, played with the proof's messages and the rounds consumed, ends in a result whose caps are the proof's, whose

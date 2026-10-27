@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.1: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
+`Flock.Statement`: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
 whose statement digest `D_b3` the verifier recomputes and compares with the pinned value.
 -/
 import Lean.Data.Json
@@ -99,7 +99,7 @@ def foldRows (m : Sparse) (e : Array F128) : Nat → Nat → Array F128 → Arra
 /-- `Xᵀ e`: `out[c] = Σ_{i : c ∈ row i} e[i]` for `c < width`. -/
 def foldT (m : Sparse) (e : Array F128) : Array F128 := m.foldRows e (min m.rows e.size) 0 (Array.replicate m.width 0)
 
-/-- `Mat(X)` of the circuit digest (§16.1), appended to `buf`, flushing into `h` every 64 KiB. -/
+/-- `Mat(X)` of the circuit digest (`Flock.Statement`), appended to `buf`, flushing into `h` every 64 KiB. -/
 def absorbMat (m : Sparse) (rows : Nat) (h0 : Blake3.Hasher) (buf0 : ByteArray) : Blake3.Hasher × ByteArray := Id.run do
   let mut h := h0
   let mut buf := pushLe64 (pushLe64 buf0 rows) m.width
@@ -143,7 +143,7 @@ structure Comp where
 namespace Comp
 
 /-- `D = BLAKE3("flock-r1cs-stmt-v2" ‖ le64 m ‖ le64 k_log ‖ le64 k_skip ‖ le64 useful_bits ‖ u8 1 ‖ le64 pin ‖ u8 0
-‖ Mat(A) ‖ Mat(B) ‖ Mat(I))`, upstream's circuit digest (§16.1). -/
+‖ Mat(A) ‖ Mat(B) ‖ Mat(I))`, upstream's circuit digest (`Flock.Statement`). -/
 def digestOf (sp : CompSpec) (a b : Sparse) : ByteArray := Id.run do
   let n := 2 ^ sp.kLog
   let mut buf := "flock-r1cs-stmt-v2".toUTF8

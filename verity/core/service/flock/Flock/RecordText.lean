@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §5.1: the session record's canonical text, the text `Json.compress` prints of what it parses to, which every
+The session record's canonical text, the text `Json.compress` prints of what it parses to, which every
 writer emits (`verity/ml/flock/live/src/record_text.rs`, `verity_flock.record_text`) and S0 holds a record to. So the
 record's text is a function of what the verifier reads of it.
 

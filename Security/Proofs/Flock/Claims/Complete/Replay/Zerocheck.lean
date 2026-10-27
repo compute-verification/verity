@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Replay.Steps
 # Zerocheck replays the honest prover's rounds
 
 `zerocheck_replay`: from the honest prover's zerocheck (`zerocheckP`) in the pure session, the verifier's zerocheck
-(`bindAndZerocheckWith`, PROTOCOL.md §9) replayed on rounds that carry the prover's returns the prover's `ZcOut`,
+(`bindAndZerocheckWith`, `Flock.Piop`) replayed on rounds that carry the prover's returns the prover's `ZcOut`,
 consuming exactly the prover's rounds, when the trace satisfies the block R1CS (`a·b = c` bitwise) and no outer coin is
 `1`.
 

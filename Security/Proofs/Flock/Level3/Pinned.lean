@@ -1,5 +1,5 @@
 /-
-`Arith.Correct.pinned_indep` (§9.2): the 128 equality weights of the seven pinned zerocheck coordinates are independent
+`Arith.Correct.pinned_indep` (`Flock.Piop`): the 128 equality weights of the seven pinned zerocheck coordinates are independent
 over GF(2). The certificate is an inverse: for each `k`, the XOR of the weights `pinCols[k]` selects is `x^k` (checked by
 the kernel on the executable's `eqTable Flock.pinned`). So the bit matrix `M` of the weights has a right inverse, hence a
 left inverse, and `M c = 0` forces `c = 0`.

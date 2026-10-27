@@ -1,5 +1,5 @@
 /-
-`Arith.Correct.xhat_poly` (§13.1, §13.4): the novel basis. `s_0 = X`, `s_{j+1} = s_j² + s_j(β_j)·s_j` over `β_j = x^j`
+`Arith.Correct.xhat_poly` (`Flock.Ligerito`): the novel basis. `s_0 = X`, `s_{j+1} = s_j² + s_j(β_j)·s_j` over `β_j = x^j`
 (monic, degree `2^j`); `Ŵ_i = s_i · s_i(β_i)⁻¹`; `X̂_c = Π_{i ∈ bits c} Ŵ_i` is a polynomial of degree exactly `c`, so the
 `X̂_c`, `c < 2^L`, are linearly independent. The executable's `sIter` and `svTable` compute these values, and the kernel
 checks `s_i(β_i) ≠ 0` for `i < 40` on `svTable 40`.

@@ -1,6 +1,6 @@
 """F4 candidate 3's registered opening (`note:proofs/20261010T1820Z-draft-c3-claim-layout`): RecSparse's two reps of one
 session over a stacked table of 22 variables (`test_rec_sparse.session`, the honest prover) each output a ``claim``, rep r's row
-r of ``rec-claim``; an honest prover written here from the verifier's spec (§12, §13) opens the table at both reps'
+r of ``rec-claim``; an honest prover written here from the verifier's spec (`Flock.Opening`, `Flock.Ligerito`) opens the table at both reps'
 `rec_sparse.registered_claim` points by ring switching and Ligerito, and the opening-only algebra (`rec_algebra.Shape`'s
 ``opening_only``) holds on it, reading the claims as witness elements, through the reference, `GfResiduals` and
 `InnerRepCheck`'s ports. A wrong claim row is refused by the opening and by RecSparse; a claim handed to the algebra as a
@@ -57,7 +57,7 @@ def _kadd(a, b):
 
 
 def _round(f: list, W: list) -> tuple[tuple, tuple]:
-    """Sumcheck's message for the lowest variable of ``Σ f W`` (§13.2): ``(q(0), q's X² coefficient)``."""
+    """Sumcheck's message for the lowest variable of ``Σ f W`` (`Flock.Ligerito`): ``(q(0), q's X² coefficient)``."""
     u0, u2 = (0, 0), (0, 0)
     for i in range(0, len(f), 2):
         u0 = _kadd(u0, kmul(f[i], W[i]))
@@ -70,7 +70,7 @@ def _fold(t: list, r: tuple) -> list:
 
 
 def _split(f: list, W: list) -> tuple[list, list]:
-    """A K table as the F table of one more, lowest, variable (§13: ``g(b, x) = f_b(x)``), its weight ``W(x) u^b``."""
+    """A K table as the F table of one more, lowest, variable (`Flock.Ligerito`: ``g(b, x) = f_b(x)``), its weight ``W(x) u^b``."""
     g = [(c, 0) for x in f for c in x]
     return g, [w for x in W for w in (x, kmul(x, U))]
 
@@ -80,7 +80,7 @@ def _eq(z: list[int]) -> list[tuple]:
 
 
 def _hat(cols: int, sv: list[int], sv_inv: list[int], pos: int) -> list[int]:
-    """``X̂_c(ω_pos)`` for c < 2^cols (§13.1)."""
+    """``X̂_c(ω_pos)`` for c < 2^cols (`Flock.Ligerito`)."""
     wh, s = [], pos
     for i in range(cols):
         wh.append(mul(s, sv_inv[i]))
@@ -92,12 +92,12 @@ def _hat(cols: int, sv: list[int], sv_inv: list[int], pos: int) -> list[int]:
 
 
 def pack(bits: np.ndarray) -> list[int]:
-    """The committed table (§12.1): ``t(y) = Σ_v z[128 y + v] x^v``."""
+    """The committed table (`Flock.Opening`): ``t(y) = Σ_v z[128 y + v] x^v``."""
     return [int.from_bytes(row.tobytes(), "little") for row in np.packbits(bits.reshape(-1, 128), axis=1, bitorder="little")]
 
 
 def ring_switch(bits: np.ndarray, z: list[int]) -> list[int]:
-    """§12.2's honest ``s_k[v] = Σ_y z[128 y + v] eq(z_k, y)`` (``z = x_k[1:]``)."""
+    """`Flock.Opening`'s honest ``s_k[v] = Σ_y z[128 y + v] eq(z_k, y)`` (``z = x_k[1:]``)."""
     e = A.eq_table(z)
     lo = np.array([x & (2 ** 64 - 1) for x in e], np.uint64)
     hi = np.array([x >> 64 for x in e], np.uint64)
@@ -110,7 +110,7 @@ def ring_switch(bits: np.ndarray, z: list[int]) -> list[int]:
 
 
 def _phi(rpp: list[int]):
-    """``Φ_k`` (§12.4): ``x^u ↦ eq(r''_k, u)``, by bytes."""
+    """``Φ_k`` (`Flock.Opening`): ``x^u ↦ eq(r''_k, u)``, by bytes."""
     e = A.eq_table(rpp)
     tabs = []
     for j in range(16):

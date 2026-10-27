@@ -1,8 +1,8 @@
-"""Public input ports (PROTOCOL.md §16.10): the Lean verifier reads a hidden-output statement whose unit reads a public
+"""Public input ports (`Flock.HmRow`): the Lean verifier reads a hidden-output statement whose unit reads a public
 input port (RoPE's `cs`, its cos/sin table) from in regions, as the Rust prover writes it, on its recorded CPU selftest
 sessions, with the public words in one aligned block of the unit's leaf group and in two, and holds the public file's words to
 the verifier's own recomputation (`--public-inputs F`). Public input ports are a form the soundness proof does not cover
-(§16.15), so once the statement sets up `verify` refuses every session of it, for that once every check has passed.
+(`Flock.ProvedScope`), so once the statement sets up `verify` refuses every session of it, for that once every check has passed.
 
 It is the one test in `check` of public input ports against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has them. So it catches a verifier that disagrees with the prover on the in regions
@@ -131,7 +131,7 @@ def test_it_refuses_the_provers_sessions(stores, layout, case, tmp_path):
 
 
 def test_a_session_that_fails_a_check_keeps_its_reason(store, tmp_path):
-    """The form's refusal comes once every check has passed (§16.15): in one verifier run, the honest session meets it, and
+    """The form's refusal comes once every check has passed (`Flock.ProvedScope`): in one verifier run, the honest session meets it, and
     the same session with one byte of a proof changed meets the check that catches the change instead."""
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(store / "records-cpu"), str(tmp_path / "s")],
                    check=True, capture_output=True)

@@ -65,7 +65,7 @@ structure Inner where
   stacked : Option StackedShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
 /-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program. -/

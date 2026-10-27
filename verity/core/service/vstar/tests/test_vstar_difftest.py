@@ -528,7 +528,7 @@ def test_statements_agree(server):
 @pytest.mark.slow
 def test_the_verifiers_part_nets_are_vstars_units(server):
     """The Lean verifier refuses a `rec-residuals/…` unit unless it is the verifier's own net for that part
-    (`Flock.RecResiduals`, PROTOCOL.md §16.10), which it computes from the shape alone; V*'s units must be those nets, or
+    (`Flock.RecResiduals`, `Flock.HmRow`), which it computes from the shape alone; V*'s units must be those nets, or
     the verifier refuses honest recursive sessions. At a shape of one part and one of two (about two minutes: each unit's
     net, built twice, is a few million rows); no cheaper test builds the real parts' nets on both sides."""
     p = port("verifier_parts", verifier_parts, st.nothing())

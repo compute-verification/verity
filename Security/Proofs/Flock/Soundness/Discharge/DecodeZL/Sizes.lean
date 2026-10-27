@@ -172,7 +172,7 @@ theorem post_bind_caps {β : Type} {R n : ℕ} {want : ℕ → ℕ} {w : ℕ →
       vecExact (want i) (Reader.bytes n) (w i) >>= fun x => pure (ForInStep.yield (s.push x))) >>= f) Q :=
   post_bind fun a ha => h a (yields_capsLoop ha).1 (yields_capsLoop ha).2
 
-/-- A ring switch's `s_hat_v` (PROTOCOL.md §8): 128 values, then a zero grinding nonce. -/
+/-- A ring switch's `s_hat_v` (`Flock.Proof`): 128 values, then a zero grinding nonce. -/
 theorem post_switch :
     Post (do
         let v ← vecExact 128 f128 "s_hat_v"

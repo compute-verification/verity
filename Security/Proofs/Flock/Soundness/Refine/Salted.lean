@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
-# The salted scheme `hm96-sha512/v1` refines the model's salted leaves (R7 and R8 for hm96; PROTOCOL.md §14)
+# The salted scheme `hm96-sha512/v1` refines the model's salted leaves (R7 and R8 for hm96; `Flock.Merkle`)
 
 `MerkleScheme.hm96Sha512` hashes an opened row's leaf as `SHA-512(leaf_prefix ‖ b ‖ c)`, with `x = SHA-512(row)`,
 `b = x ⊕ M·y` and `c = SHA-512(salt_prefix ‖ y)` for the opening's 192-byte salt `y` (`Hm96.Default512`). Its nodes are
@@ -130,7 +130,7 @@ theorem climb_hm96 (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (ac
       simp only [climb]
       exact climb_hm96 msId rest _ _
 
-/-- **A passed Merkle check is the model's salted path check** (§14), for `hm96-sha512/v1`: every query's row has the lane
+/-- **A passed Merkle check is the model's salted path check** (`Flock.Merkle`), for `hm96-sha512/v1`: every query's row has the lane
 count, and its path verifies from the row's leaf under its salt against the cap. -/
 theorem merkleCheck_verifiesL {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
@@ -182,7 +182,7 @@ theorem merkleCheck_verifiesL {cap : Array ByteArray} {c d : ℕ} {pos : Array �
 def saltRow (p : LigeritoProof) (sch : Flock.Schedule) (ℓ j : ℕ) : List UInt8 :=
   ((openAt p (sch.levels.size - 1) ℓ).2.2.getD j ByteArray.empty).data.toList
 
-/-- **The proof's openings pass the model's salted path checks** (§14): for `hm96-sha512/v1`, a rep whose requests passed
+/-- **The proof's openings pass the model's salted path checks** (`Flock.Merkle`): for `hm96-sha512/v1`, a rep whose requests passed
 the executable's Merkle checks (`ReqOK`) and whose caps are the proof's is `OpensOKL` at openings and salts that are the
 proof's rows, siblings and salts. -/
 theorem opensOKL_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -217,7 +217,7 @@ theorem opensOKL_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, Level
       rw [hrow, hdepth, hpos, ← hd]
       exact hver
 
-/-- The proof files' salts (§14): rep `r`'s opened rows' salts, level by level. -/
+/-- The proof files' salts (`Flock.Merkle`): rep `r`'s opened rows' salts, level by level. -/
 def saltsOf (p₀ p₁ : Proof) (sch : Flock.Schedule) : Salts (List UInt8) :=
   fun r ℓ j => if r = 0 then saltRow p₀.ligerito sch ℓ j else saltRow p₁.ligerito sch ℓ j
 

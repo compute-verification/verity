@@ -403,8 +403,8 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
               "record the earlier, still valid 2^-195.44); "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
 #: M0's generic circuit (statement ``verity/flock-circuit``): one pinned GF(2) circuit per template, the hm96-sha512 leaves
-#: proved inside it and the frame-v3-sha512 trees over them recomputed by the verifier (the Lean verifier's PROTOCOL.md
-#: §16.10, ``HmRow.checkPublic``).  The unit wording, the absent privacy claim and the time and AND qualifiers follow
+#: proved inside it and the frame-v3-sha512 trees over them recomputed by the verifier (the Lean verifier's
+#: ``Flock.HmRow``, ``HmRow.checkPublic``).  The unit wording, the absent privacy claim and the time and AND qualifiers follow
 #: red-team-flock-3's statement review (a plain row would call the attention unit a head, or read the hm96 leaves as hiding).
 FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
     FLOCK_CONFIG, id="C-Flock, generic circuit, SHA-512 in-circuit commitments", scheme="frame-v3-sha512/hm96-sha512",
@@ -440,7 +440,7 @@ FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
        + ("; the circuit computes its type (#268's checks)" if TYPED_C2 else ""),
     pin=f"{CIRCUIT_TYPED} pinned circuit file (circuit_format flock-circuit/types, PR #281); compared with the flat statement per "
         "instance only")
-#: M0's hidden-output statements (the Lean verifier's PROTOCOL.md §16.13, PR #757): the same names, every output port an hm96 row
+#: M0's hidden-output statements (the Lean verifier's `HmOut`, PR #757): the same names, every output port an hm96 row
 #: hashed in the circuit, the identity's ``outputs`` saying so.  Before #757 the names meant the public-output forms (``@e51e2b86``,
 #: ``types@210d32e1``), so a result is read by its identity, never by its name, and hidden and public results never share a cell.
 _HIDDEN_PORTS = ("per instance: one query row (attention: one query over T keys) or one output coordinate (GEMM); x, W and y "

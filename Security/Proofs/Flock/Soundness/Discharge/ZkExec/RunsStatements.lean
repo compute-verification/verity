@@ -196,7 +196,7 @@ def ZkRepFrames : Prop :=
     ∃ T : F128, (chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.length = rounds.size ∧
       ∀ k < rounds.size, Retains rounds[k]! (encs ((chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.getD k []))
 
-/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, PROTOCOL.md §8, read by
+/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, `Flock.Proof`, read by
 `Zk.reader` as by `decodeProof`), and the inner proof's `Y` has fewer than `2^64` words (its `u64` length). -/
 def ZkDecodeSizes : Prop :=
   ∀ (sh : Shape) (bytes : ByteArray) (zp : Zk.ZkProof), Zk.decode sh bytes = .ok zp →

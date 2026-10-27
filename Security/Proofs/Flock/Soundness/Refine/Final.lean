@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.LigeritoRun
 
 /-!
-# The final check refines the model's (PROTOCOL.md §13.6)
+# The final check refines the model's (`Flock.Ligerito`)
 
 `final_refines`: when the executable's final check (`finalProg`, the verifier's last step) passes, the model's
 `finalCheck` holds on the images of its state, given that the executable's basis at the original point is the model's
@@ -21,7 +21,7 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## The subspace polynomials (§13.4) -/
+/-! ## The subspace polynomials (`Flock.Ligerito`) -/
 
 theorem whatsGo_get (sv : Array F128) (ω : F128) : ∀ (fuel i : ℕ) (s : F128) (out : Array F128),
     (∀ j < i + fuel, fOf sv[j]! = (sPoly j).eval (beta j)) → fOf s = (sPoly i).eval (fOf ω) →
@@ -49,7 +49,7 @@ theorem whatsGo_get (sv : Array F128) (ω : F128) : ∀ (fuel i : ℕ) (s : F128
             show i + 1 + k = i + (k + 1) by omega] at this
           exact this
 
-/-- **The subspace polynomials** (§13.4): the executable's `whats (svTable m) q n` at `k < n ≤ m` is the model's
+/-- **The subspace polynomials** (`Flock.Ligerito`): the executable's `whats (svTable m) q n` at `k < n ≤ m` is the model's
 `Ŵ_k(ω_q)`. -/
 theorem whats_get (m q n k : ℕ) (hn : n ≤ m) (hk : k < n) :
     fOf (whats (svTable m) q n)[k]! = What k (FlockLevel3.omega q) := by
@@ -60,7 +60,7 @@ theorem whats_get (m q n k : ℕ) (hn : n ≤ m) (hk : k < n) :
 
 /-! ## The executable's final check, as folds -/
 
-/-- The original point (§13.6): the level-0 challenges, then each later level's challenges after its first. -/
+/-- The original point (`Flock.Ligerito`): the level-0 challenges, then each later level's challenges after its first. -/
 def origE (initCh : Array F256) (levels : Array (Array F256)) : Array F256 :=
   levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
 
@@ -375,7 +375,7 @@ theorem getD_map_fOf (a : Array F128) (i : ℕ) (hi : i < a.size) : (a.toList.ma
 theorem getD_map_gOf (a : Array F256) (i : ℕ) (hi : i < a.size) : (a.toList.map gOf).getD i 0 = gOf a[i]! := by
   rw [List.getD_eq_getElem _ _ (by simpa using hi), List.getElem_map, Array.getElem_toList, getElem!_pos a i hi]
 
-/-- **One out-of-domain term** (§13.6): the executable's, in residual word `y`, is the model's. -/
+/-- **One out-of-domain term** (`Flock.Ligerito`): the executable's, in residual word `y`, is the model's. -/
 theorem gOf_oodTerm (ext : ℕ) (fs : Array F256 × F256) (o : Flock.OodCtx) (y : ℕ)
     (hz : o.z.size = fs.1.size + ext) :
     gOf (oodTerm ext fs o y) = execArith.embed (fOf o.beta) * gOf fs.2 *
@@ -439,7 +439,7 @@ theorem consAdd_get (sv : Array F128) (ext : ℕ) (fixed : Array F256) (cs : Flo
   refine (hgen _ _).trans ?_
   rw [getElem!_pos _ y (by simpa using hy), Array.getElem_replicate]
 
-/-- **One consistency term** (§13.6): the executable's, in residual word `y`, is the model's, when the context's
+/-- **One consistency term** (`Flock.Ligerito`): the executable's, in residual word `y`, is the model's, when the context's
 columns are its fixed coordinates and the residual (`hcols`), within the subspace table (`hm`), and its queries within
 its batching table (`hpos`). -/
 theorem gOf_consTerm (m ext : ℕ) (levels : Array (Array F256)) (hl : ∀ l ∈ levels.toList, l.size = 4)
@@ -586,7 +586,7 @@ theorem final_refines {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
     rw [gOf_consTerm (n + 1) ext levels hl cs y hy hc (by omega) (hpos cs hcs')]
     simp only [consOf]
 
-/-- **Ligerito refines the model's** (§13.3–§13.6). When the executable's Ligerito verifier accepts, and its basis
+/-- **Ligerito refines the model's** (`Flock.Ligerito`). When the executable's Ligerito verifier accepts, and its basis
 `basisAt` is the model's `bHat` of `b` at every original point with the schedule's residual (`hbasis`), the model's
 compiled Ligerito, played with the proof's messages and the rounds consumed, accepts at the openings `o`: its verdict
 there is true, its caps are the proof's, and every request passed the executable's Merkle check. -/

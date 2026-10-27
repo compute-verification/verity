@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.ListSize
 import Mathlib.Data.Nat.BitIndices
 
 /-!
-# The link points (PROTOCOL.md §16.2)
+# The link points (`Flock.Statement`)
 
 `link_sound`: if the committed values do not satisfy the statement, the two link points leave some
 rep start undoomed with probability at most `linkError`. For a codeword near the committed table
@@ -25,7 +25,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- The layout of the link points (§16.2): each region's free bits are distinct and read link
+/-- The layout of the link points (`Flock.Statement`): each region's free bits are distinct and read link
 coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` fit inside the point. -/
 def Model.Statement.LinkLayout (S : Statement) (ptLocal mPts : ℕ) : Prop :=
   (∀ R ∈ S.regions, R.free.Nodup ∧ R.free.length ≤ ptLocal) ∧ ptLocal + S.nbl ≤ mPts
@@ -500,7 +500,7 @@ theorem prCoin_linkBad_le (A : Arith F K) (hA : A.Correct) (S : Statement)
       _ ≤ _ := zero_le
 
 open Classical in
-/-- **The link points** (§16.2), for a list `W` of at most `L` messages none of which packs a
+/-- **The link points** (`Flock.Statement`), for a list `W` of at most `L` messages none of which packs a
 satisfying witness: the link points leave some rep start undoomed over `W` with probability at
 most `L·|regions|·(m_pts/|F|)²`. -/
 theorem link_sound_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)

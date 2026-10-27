@@ -275,7 +275,7 @@ def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
 
 /-! ## The session -/
 
-/-- **A batched session over `--zk` tables and any table run** (PROTOCOL.md §5; `Exec.sessionG` over `TabZK`): `Commit`
+/-- **A batched session over `--zk` tables and any table run** (`Flock.Record`; `Exec.sessionG` over `TabZK`): `Commit`
 sends every table's commitment `Cm`, then one link-point draw, then every table's run `tab` after them, concurrently. -/
 def sessionZG {Cm Out : Type} (tab : TabZK F mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
     (ts : List (TabZK F mPts)) : Game (List Out) :=

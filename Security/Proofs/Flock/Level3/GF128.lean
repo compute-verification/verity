@@ -1,5 +1,5 @@
 /-
-Level 3, L3-F: the executable's GF(2^128) arithmetic (`Flock.F128`, PROTOCOL.md §2.1) is polynomial arithmetic over GF(2)
+Level 3, L3-F: the executable's GF(2^128) arithmetic (`Flock.F128`, `Flock.Field`) is polynomial arithmetic over GF(2)
 modulo the GHASH polynomial `G = X^128 + X^7 + X^2 + X + 1`. An element `⟨lo, hi⟩` is the polynomial of the bits of
 `2^64·hi + lo`.
 -/

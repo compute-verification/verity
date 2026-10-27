@@ -4,7 +4,7 @@ is padded by `(Ŵ_n + c)·μ` with `t_pad` uniform coefficients `μ` and `c = x`
 a pair per rep. Rep `r` folds its own pair `ρ_0 R_{2r} + ρ_1 R_{2r+1}` after its lane rounds, sends the pair's sums `e`
 before `ρ` and the blinded claim `T'` and the padding's combination `ybar` after it, and its level-0 rows are checked against
 `ybar`'s codeword. The lane phase's claim is masked, so its checks are not made here: `ligerito` returns what `Flock.Zk`
-turns into constraints (`L0Rec`), and from `T'` on it is §13's verifier.
+turns into constraints (`L0Rec`), and from `T'` on it is `Flock.Ligerito`'s verifier.
 -/
 import Flock.Ligerito
 import Flock.ZkProof
@@ -77,7 +77,7 @@ def queryLevel0 (ms : MerkleScheme) (p : LigeritoProof) (lv : Level) (cap : Arra
     e := e + acc.smul (ea[j]!)
   return (pos, alpha, e)
 
-/-- §13.3–§13.6 with level 0's hiding `zl`: `Flock.ligerito` but for the lane phase's tail (the pair's sums, `ρ`, `T'`,
+/-- `Flock.Ligerito` with level 0's hiding `zl`: `Flock.ligerito` but for the lane phase's tail (the pair's sums, `ρ`, `T'`,
 `ybar`), level 0's wider rows and their extra terms (rep `zl.rep`'s pair and the padding's codeword). Returns the lane phase's
 record for the constraints. -/
 def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
@@ -175,7 +175,7 @@ def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteAr
         claimPow p
         let bb ← lift sample
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"

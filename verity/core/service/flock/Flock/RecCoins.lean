@@ -130,7 +130,7 @@ structure Inner where
   /-- the inner circuit's unit range (META's `ranges`, the unit net's), whose slots the sparse phase's layout factors weigh -/
   unitRange : V Range := .error "the verifier's inner coins hold no unit range"
 
-/-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the coins the coin server draws. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
 /-- The inner circuit's unit range: META's one range of its unit net, whose slots the sparse phase's layout factors weigh. -/

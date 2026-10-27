@@ -5,8 +5,7 @@ import Mathlib.Data.Finset.Card
 # Circuits, partitions, and the correctness of a unit
 
 A circuit is Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows: the AND
-of the XOR of some earlier gates and the XOR of others, a row as the verifier parses it (PROTOCOL.md
-§16.5; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A partition puts
+of the XOR of some earlier gates and the XOR of others, a row as the verifier parses it (`Flock.Circuit`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A partition puts
 every computed gate in exactly one of `n` units; the input gates are the input unit (`none`). The
 committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of
 another unit reads (`Partition.committed`).

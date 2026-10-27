@@ -22,7 +22,7 @@ def HashDerivedKeyHm96 : Prop := HashDerivedKey Discharge.ZkView.My Discharge.Zk
 def PadNonvanishing40 : Prop :=
   ∀ cols ≤ 40, PadNonvanishing execArith cols (Refine.fOf Flock.Zk.PAD_C)
 
-/-- **The record is the live session's** (`live-verifier`; the custody of the verifier's `PROTOCOL.md` §17.2, with A6,
+/-- **The record is the live session's** (`live-verifier`; the custody of `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`, with A6,
 `uniform/flock-coin-server`, for the coins in it). Nothing in a session record authenticates its writer, and
 `flock-verify verify --zk` reads the draw and the proofs only from the record, so no check of the record establishes
 either fact:

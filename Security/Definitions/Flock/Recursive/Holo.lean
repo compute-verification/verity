@@ -4,7 +4,7 @@ import Definitions.Flock.Holo
 /-!
 # Recursion: hidden unit circuits' class, registered table and registered schedule
 
-F4 candidate 3's statement objects (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §2.1, row S1 of its §4), beside
+F4 candidate 3's statement objects (note:proofs/20261010T0250Z-draft-f4-bitsumcheck `Flock.Field`, row S1 of its §4), beside
 `Target.lean`'s `HClass` and `Hidden`:
 
 * `HoloClass`: what the class publishes about a block statement with hidden unit circuits: `HClass`'s fields, with the

@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Refine.StmtOf
 import Proofs.Flock.Soundness.Refine.Table
 
 /-!
-# The statement decoding, part 2: the regions are the model's (PROTOCOL.md §11, §16.2)
+# The statement decoding, part 2: the regions are the model's (`Flock.Piop`, `Flock.Statement`)
 
 `regionOf` reads a region of the executable's statement as the model's: its free bits, the fixed bits the executable's
 `regionPoint` sets, and bit `k` of block `b`'s bytes. `ofCircuit_extra`: at two link points of `m_pts` coordinates, the
@@ -105,7 +105,7 @@ theorem regionValue_ok (st : Stmt) (reg : Region) (r : Array F128) (v : F128) (h
 
 /-! ### The regions, as the model's -/
 
-/-- A region of the executable's statement, as the model's (§16.2): its free bits, the fixed bits the executable's
+/-- A region of the executable's statement, as the model's (`Flock.Statement`): its free bits, the fixed bits the executable's
 `regionPoint` sets, and bit `k` of block `b`'s bytes. -/
 def regionOf (kl nbl : ℕ) (reg : Region) : Model.Region kl nbl where
   free := reg.free.toList.filterMap fun b => if h : b < kl then some ⟨b, h⟩ else none
@@ -265,7 +265,7 @@ theorem idxOf?_filterMap_fin (kl j : ℕ) (hj : j < kl) : ∀ (L : List ℕ), (�
       rw [idxOf?_filterMap_fin kl j hj L fun x hx => h x (List.mem_cons_of_mem _ hx)]
       simp only [beq_iff_eq, Fin.mk.injEq]
 
-/-- **The region's point, entry by entry** (§16.2): a free bit's link-point coordinate, a fixed bit, or a block bit. -/
+/-- **The region's point, entry by entry** (`Flock.Statement`): a free bit's link-point coordinate, a fixed bit, or a block bit. -/
 theorem regionPoint_get (st : Stmt) (reg : Region) (r : Array F128) (hm : st.m = st.c.kLog + st.nbl)
     (hw : RegionWF st.c.kLog reg) (j : ℕ) (hj : j < st.m) :
     (st.regionPoint reg r)[j]! =
@@ -328,7 +328,7 @@ theorem model_regionPoint_ge (S : Model.Statement) (R : Model.Region S.kLog S.nb
       if hi : ptLocal + (j - S.kLog) < mPts then rr ⟨ptLocal + (j - S.kLog), hi⟩ else 0 := by
   unfold Model.regionPoint; rw [dite_eq_right hjk]
 
-/-- **The region's point is the model's**, coordinate by coordinate (§16.2). -/
+/-- **The region's point is the model's**, coordinate by coordinate (`Flock.Statement`). -/
 theorem regionPoint_model (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (reg : Region) (hw : RegionWF st.c.kLog reg) (hm : st.m = st.c.kLog + st.nbl) (r : Array F128)
     (j : ℕ) (hj : j < st.m) :
@@ -379,7 +379,7 @@ theorem model_regionClaim_x (S : Model.Statement) (R : Model.Region S.kLog S.nbl
     (Model.regionClaim S R ptLocal mPts rr).x i =
       if h : i.val + 6 < S.m then Model.regionPoint S R ptLocal mPts rr ⟨i.val + 6, h⟩ else 0 := rfl
 
-/-- **One region claim is the model's** (§16.2): at a link point of `m_pts` coordinates, the executable's claim of a
+/-- **One region claim is the model's** (`Flock.Statement`): at a link point of `m_pts` coordinates, the executable's claim of a
 well-formed region is the model's `regionClaim`. -/
 theorem regionClaim_rel (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (reg : Region) (hw : RegionWF st.c.kLog reg) (hm : st.m = st.c.kLog + st.nbl) (r : Array F128)
@@ -471,7 +471,7 @@ theorem extraClaims_ok (st : Stmt) (pts : Array (Array F128)) (extras : Array Fl
 
 /-! ### The extra claims are the model's -/
 
-/-- The link points as the model reads them: coordinate `t` of point `k` (§16.2). -/
+/-- The link points as the model reads them: coordinate `t` of point `k` (`Flock.Statement`). -/
 def ptsOf (mPts : ℕ) (points : Array (Array F128)) : Fin 2 → Fin mPts → 𝔽 := fun k t => fOf (points[k.val]!)[t.val]!
 
 /-- The facts about an executable statement's regions that reading its claims as the model's needs. -/

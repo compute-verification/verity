@@ -244,7 +244,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
         liftLM (claimPow p)
         let bb ← liftW (sampleWith hs)
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"

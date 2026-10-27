@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 
 /-!
-# flock-verify refines each table of a session, under `hm96-sha512/v1` (PROTOCOL.md §5, §9–§14, §16.12)
+# flock-verify refines each table of a session, under `hm96-sha512/v1` (`Flock.Record`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, `Stmt.setupTables`)
 
 `verify_refines_hm96` peels a one-table `Flock.verify`. A session of `J` tables runs the same checks on each:
 

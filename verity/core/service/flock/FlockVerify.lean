@@ -75,7 +75,7 @@ def archiveGet (archive hex : String) : IO (Except String ByteArray) := do
   return .ok b
 
 /-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
-named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8);
+named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (`flock-verify --archive`);
 without it, the files at those paths. -/
 def statementInputs (args : List String) : IO (Except String (ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
@@ -99,7 +99,7 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- A recursive session's inner statement's registered reads (§16.16, a plain-leaves statement): with the verifier's own
+/-- A recursive session's inner statement's registered reads (`Tags.withPlainLeaves`, a plain-leaves statement): with the verifier's own
 registered reads, a circuit that names each port once (`Registered.namesOnce`) and its description read from the
 developer's registration (`Registered.checkDescription`); without, a statement that names registered reads is refused, as
 `Registered.check` refuses one. -/
@@ -108,7 +108,7 @@ def checkDescription (st : Stmt) (registered : Option (Array Registered.Port)) :
   | some own => Registered.namesOnce st.c >>= fun _ => Registered.checkDescription st.c st.pub own
   | none => Registered.check st.c st.pub none false
 
-/-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the
+/-- A statement's identifier (`Flock.HmRow`): the public header's `identifier`, a JSON object C-Flock does not read, must be the
 verifier's own `--identifier F` (`own`, its RFC 8785 form) in RFC 8785 form: `canon`'s, on the domain where it is RFC 8785
 (`Program.domainError`). The public digest binds the header, so Σ binds the identifier; a header with one and no `F`, or
 `F` and a header with none, refuses. -/
@@ -124,7 +124,7 @@ def checkIdentifier (st : Stmt) (own : Option String) : V Unit :=
     if (← canon j) != own then throw "identifier: the public header's identifier is not the verifier's own (--identifier F)"
 
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
-session, is the drawn units' statement over the registered population (§7.3). -/
+session, is the drawn units' statement over the registered population (`Flock.Draw`). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
     (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
@@ -692,14 +692,14 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
-pinned compression circuit; `J` (default 1) is the tables of every session (§16.12), which split one draw of fixed count, a
+pinned compression circuit; `J` (default 1) is the tables of every session (`Stmt.setupTables`), which split one draw of fixed count, a
 subset or a stratified one, into `J` equal parts (`Draw.tablesWhy`). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
 values its own `--registered F` (`Registered.check`; a verifier whose own `--program` has a `RegisteredInput<w>_v1` node
 refuses every session without it, whatever the public file's header names, `Registered.checkProgram`, and with it every
 session whose template reads a registered input through a parameter no port of it reads, `Registered.checkCover`), a circuit with public input ports its own `--public-inputs F`, and
-a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
+a public file whose header names an identifier its own `--identifier F` (`Flock.HmRow`), one of V*'s statements its own inner
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
@@ -732,7 +732,7 @@ than one table or whose table holds fewer instances than its population (`RecSet
 reads exceed the recursion's call bound: more than 4096 ports, a tree of more than 64 levels or a table of more than 65536
 instances, or whose inner shape's V* list holds more than 4096 statements (`RecBudget`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
-`ProvedScope.sizesOk`, §16.15) is refused, and
+`ProvedScope.sizesOk`, `Flock.ProvedScope`) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
@@ -748,10 +748,10 @@ fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`.
 `--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
-deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1), so each rep is decoded from the file then
+deployed prover writes after the pair (`Tags.upstreamPlain`, `Flock.Proof`), so each rep is decoded from the file then
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
 refused where the other is pinned. Not with `--zk`.
-`--plain-tables`: the plain path past one table (`ProvedScope.checkP`, §16.15): a plain session of public or hidden
+`--plain-tables`: the plain path past one table (`ProvedScope.checkP`, `Flock.ProvedScope`): a plain session of public or hidden
 outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABLES` tables, at a subset draw, with the
 verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
@@ -1283,7 +1283,7 @@ def heldToRegistration (law : Draw.Law) (pop : Nat) : Lean.Json × Nat → Optio
     else none
 
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
-[--closure F] [--registration F] [--tables J] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
+[--closure F] [--registration F] [--tables J] [--stream HEX | --stream-file F]`: the unit draw (`Flock.Draw`), from the operating system's randomness (a stratified or work draw:
 one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
 The strata are the verifier's own, derived from its program and partition object, and a work law's works and floors are its
 own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. With `--registration F` the
@@ -1345,7 +1345,7 @@ def drawCmd (args : List String) : IO UInt32 := do
   return 0
 
 /-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)] [--closure F] [--registration F]`: U1–U3
-(§7.3) on each case `{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case.
+(`Flock.Draw`) on each case `{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case.
 With a law's flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law`
 and `population`), and with `--registration F` to the registered ones. -/
 def drawTest (path : String) (args : List String) : IO UInt32 := do

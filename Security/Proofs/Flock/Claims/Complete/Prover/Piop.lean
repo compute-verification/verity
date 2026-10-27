@@ -3,12 +3,12 @@ import Proofs.Flock.Claims.Complete.Prover.Transcript
 /-!
 # The honest prover's PIOP: zerocheck, lincheck and ring switch
 
-PROTOCOL.md §9–§12 from the prover's side, on a table's trace (`Trace`): the bits `z` of the `2^m` addresses
+`Flock.Piop`, `Flock.Opening` from the prover's side, on a table's trace (`Trace`): the bits `z` of the `2^m` addresses
 (`a = s + 64·x`, `s` the skip index), and the products `Az`, `Bz` of the block R1CS. Each step absorbs and squeezes
 exactly as the verifier's (`bindAndZerocheckWith`, `lincheckWith`, `ringSwitchWith`) and returns the proof's part and
 what the verifier derives from it (`ZcOut`, `LcOut`, the switched claims).
 
-* **Zerocheck** (§9.2). With `Â(Y, x) = Σ_s L_s(Y)·Az[s + 64x]` over the skip nodes `S`, `B̂` and `Ĉ` (from `z`) alike,
+* **Zerocheck** (`Flock.Piop`). With `Â(Y, x) = Σ_s L_s(Y)·Az[s + 64x]` over the skip nodes `S`, `B̂` and `Ĉ` (from `z`) alike,
   and `r` the pinned coordinates then the outer coins: `round1_ab[i] = Σ_x eq(r, x)·Â(λ_i, x)·B̂(λ_i, x)` and
   `round1_c[i] = Σ_x eq(r, x)·Ĉ(λ_i, x)` at the coset nodes `λ_i = φ8(64 + i)`. At `ζ`, the residual sumcheck runs on
   the tables `a(x) = Â(ζ, x)`, `b(x) = B̂(ζ, x)`, binding the low variable first: round `i` sends `g(1)` and `g`'s
@@ -43,7 +43,7 @@ def foldLow (r : F128) (a : Array F128) : Array F128 :=
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **The zerocheck prover** (§9.1, §9.2): the proof's zerocheck and the verifier's `ZcOut`. -/
+/-- **The zerocheck prover** (`Flock.Piop`): the proof's zerocheck and the verifier's `ZcOut`. -/
 def zerocheckP (io : Asks M) (m : Nat) (digest cap : ByteArray) (tr : Trace) : TMW M (ZerocheckProof × ZcOut) := do
   liftTM (label "flock-r1cs-v0")
   liftTM (absorbBytes digest)
@@ -124,7 +124,7 @@ def switchVec (tr : Trace) (c : Claim) : Array F128 :=
   let eY := eqTable (c.x.extract 1 c.x.size)
   (Array.range 128).map fun v => sumF eY.size fun y => if tr.z[128 * y + v]! then eY[y]! else 0
 
-/-- **The ring-switch prover** (§12.2, §12.3): each claim's `s_k`, and what the verifier derives: `T` and the switched
+/-- **The ring-switch prover** (`Flock.Opening`): each claim's `s_k`, and what the verifier derives: `T` and the switched
 claims. -/
 def ringSwitchP (io : Asks M) (tr : Trace) (claims : Array Claim) :
     TMW M (Array (Array F128) × F128 × Array Switched) := do
@@ -149,7 +149,7 @@ def ringSwitchP (io : Asks M) (tr : Trace) (claims : Array Claim) :
   let sws := (Array.range n).map fun k => { gamma := gamma[k]!, rpp := (perClaim[k]!).1, z := (perClaim[k]!).2 : Switched }
   return (ss, T, sws)
 
-/-- **The batched basis on the Boolean cube** (§12.4): `b(y) = Σ_k γ_k·Φ_k(eq(z_k, y))` for `y < 2^ℓ`, with
+/-- **The batched basis on the Boolean cube** (`Flock.Opening`): `b(y) = Σ_k γ_k·Φ_k(eq(z_k, y))` for `y < 2^ℓ`, with
 `Φ_k(x^u) = eq(r''_k, u)`. -/
 def basisVals (sws : Array Switched) (l : Nat) : Array F128 :=
   let tabs := sws.map fun sw => (sw.gamma, eqTable sw.z, eqTable sw.rpp)
@@ -158,7 +158,7 @@ def basisVals (sws : Array Switched) (l : Nat) : Array F128 :=
       let v := ez[y]!
       acc + g * sumF 128 fun u => if v.bit u then er[u]! else 0) 0
 
-/-- **The packed table** (§12.1): `t[y] = Σ_v z[128y + v]·x^v`, for `y < 2^(m − 7)`. -/
+/-- **The packed table** (`Flock.Opening`): `t[y] = Σ_v z[128y + v]·x^v`, for `y < 2^(m − 7)`. -/
 def packed (tr : Trace) (m : Nat) : Array F128 :=
   (Array.range (2 ^ (m - 7))).map fun y =>
     (List.range 128).foldl (fun acc v => if tr.z[128 * y + v]! then acc + F128.monomial v else acc) 0

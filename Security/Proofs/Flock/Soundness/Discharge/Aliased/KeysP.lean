@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 /-!
 # Δ's source keys with public inputs
 
-With public input ports (§16.10, `HmIn`), a public leaf is a zero leaf of `leaves_in`, so its `srcKey` is the zero; but
+With public input ports (`Flock.HmRow`, `HmIn`), a public leaf is a zero leaf of `leaves_in`, so its `srcKey` is the zero; but
 `HmIn.delta` drops its Δ entries (`HmIn.publicCol`) and an in region pins it to its instance's public word
 (`Layout.public_pinned`). `srcKeyP` keys it by that word instead: bit `t` of public word `q` (`KeyP.pub`), so that
 `keyIdxP`, `keyIdx` at these keys, gives each unit one input gate per public word bit, whose value the instance's

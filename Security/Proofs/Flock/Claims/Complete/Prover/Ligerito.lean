@@ -3,15 +3,15 @@ import Proofs.Flock.Claims.Complete.Prover.Piop
 /-!
 # The honest prover's Ligerito opening
 
-PROTOCOL.md §13–§14 from the prover's side. Ligerito proves `Σ_y t(y)·W(y) = s` for the committed table `t` and a weight
+`Flock.Ligerito`, `Flock.Merkle` from the prover's side. Ligerito proves `Σ_y t(y)·W(y) = s` for the committed table `t` and a weight
 `W` that starts as the batched basis `b` (`basisVals`) with `s = T`; every claim the verifier adds (an out-of-domain
 value, a consistency sum) adds its weight to `W`, scaled by its coin.
 
-* **Commitments** (`commitP`, §13.1, §14). A level's F-table `g` of `2^(lanes + cols)` entries has lanes
+* **Commitments** (`commitP`, `Flock.Ligerito`, `Flock.Merkle`). A level's F-table `g` of `2^(lanes + cols)` entries has lanes
   `M[ℓ][c] = g[c·2^lanes + ℓ]`, codeword `C[q][ℓ] = Σ_c M[ℓ][c]·X̂_c(ω_q)` for `q < 2^d` (the verifier's `whats`), leaf `q`
   the scheme's leaf of row `C[q]` under its salt, and the Merkle cap the `2^cap` nodes `d − cap` levels up. An opening
   (`openP`) is the rows at the query positions, their siblings leaf side first, and their salts.
-* **Sumcheck** (§13.2). The table and the weight are K-tables, folded at each challenge on the low variable
+* **Sumcheck** (`Flock.Ligerito`). The table and the weight are K-tables, folded at each challenge on the low variable
   (`foldK`); a message is `(q(0), q`'s leading coefficient`)` for `q(X) = Σ_{x'} t(X, x')·W(X, x')` (`roundPoly`).
 * **Splits.** After a level's last challenge the folded K-table `f = f₀ + u·f₁` is split into the next level's F-table
   `g(b, x) = f_b(x)` (`splitK`, `b` the new low variable), and the weight into `W'(b, x) = u^b·W(x)` (`liftU`), so
@@ -19,7 +19,7 @@ value, a consistency sum) adds its weight to `W`, scaled by its coin.
 * **Claims.** An out-of-domain sample `z` at a level adds `β·eq(z, ·)` with value `g̃(z)` (`mleF`); level `i`'s queries
   add `β·u^b·V` on the next level's table, `V(c) = Σ_j eq(α)[j]·X̂_c(ω_{pos_j})` (`consW`).
 * **The last level** sends `yr`, the folded K-table as `F` pairs. The message read after its last challenge enters no
-  equation (§13.3); the prover sends upstream's plain fold message there, the round polynomial of the folded, unsplit
+  equation (`Flock.Ligerito`); the prover sends upstream's plain fold message there, the round polynomial of the folded, unsplit
   K-table and weight in their next variable (`recursive_prover_with_basis_impl`, whose last round at the last level is
   `sumcheck.fold`), not the split coordinate's.
 -/
@@ -173,7 +173,7 @@ def queryP (io : Asks M) (nonce : Nat → Nat → UInt64) (ms : MerkleScheme) (l
   let alpha ← liftT (sampleVecP io (Nat.log2 (lv.q - 1) + 1))
   return (openP ms cm lv pos, consW lv.cols pos alpha)
 
-/-- **The Ligerito prover** (§13.3) on the table `t` committed at level 0 as `cm0`, for the claim `Σ t·b = T`: the
+/-- **The Ligerito prover** (`Flock.Ligerito`) on the table `t` committed at level 0 as `cm0`, for the claim `Σ t·b = T`: the
 recursive levels' commitments are salted from `salt l` (level `l ≥ 1`), the nonces read from `nonce`. -/
 def ligeritoP (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit)
     (t b : Array F128) (salt : Nat → Nat → ByteArray) (nonce : Nat → Nat → UInt64) : TMW M LigeritoProof := do

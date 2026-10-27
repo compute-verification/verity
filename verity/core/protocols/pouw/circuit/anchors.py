@@ -157,7 +157,7 @@ def region_bytes(words: Sequence[int]) -> bytes:
     return b"".join(w.to_bytes(2, "little") for w in words)
 
 
-#: C-Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
+#: C-Flock's format of the verifier's own `--public-inputs` file (Lean's ``HmIn.checkOwn``, in ``Flock.HmRow``)
 PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 
 
