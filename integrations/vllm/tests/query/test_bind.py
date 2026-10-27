@@ -98,7 +98,7 @@ def test_a_call_boundary_each_request_spells_by_its_own_fx_node_binds_every_requ
 
 
 def test_each_request_spells_a_call_boundary_in_its_own_program_order_past_a_key_both_requests_spell():
-    """[GLM-5.3 B8 greedy, Commit r20261021-183934-d980] At engine step 9 the layer's own output (`self_attn` `out`, a BatchedGemm_v1
+    """[GLM-5.3 B8 greedy Commit] At engine step 9 the layer's own output (`self_attn` `out`, a BatchedGemm_v1
     Call as the absorb is) is one key that r0 at its step 9 and r1 at its step 0 both spell, at a different place in each one's
     Program.  Ordered by one request's position for it, r0's absorb `bmm_1404` was paired with r1's `self_attn` output: r1's `bmm` was
     left unbound and its output bound twice, at 494 identities per rank."""

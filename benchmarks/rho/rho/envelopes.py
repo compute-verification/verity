@@ -1,26 +1,31 @@
-"""Layer 2, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the working draft's §8).
+"""Protocol soundness, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the
+working draft's §8).
 
-An envelope `E_i` narrows the prior if its verifier accepts, except with probability `δ_i(S)` per serving block. Each
-one here carries its parameters, the slack it leaves (shares of capacity by route, the uncertified gates `U` no
-inference block constrains) and its `delta`, split into the coins' draws and the cryptography's advantage:
+An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
+summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
+uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
+cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (the host CPUs, known compute running no declared work), `gap` (its floor credit `residual` and the clock above the
-  credited one; with `undecl`, the audited residual `r̂`) and `skip` (its deficit `ε_W` and the certificate slack `ε'`).
+  (monitored capacity running no certified declared work: the host CPUs, the GPUs outside the floor credit `residual`
+  and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
+  certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
   the faulty blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
   accepted faulty blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
-* `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the prior content of its whole memory `M_s` (`per =
-  "server"`, Daniel's operating point, 26 Oct 12:16 PM PDT), or, the per-device sensitivity, each device
+* `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
+  "server"`, the ruled operating point), or, the per-device sensitivity, each device
   `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the horizon.
 * `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
-  `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. Its δ is 0: the
-  certifier is the auditor's device (`trusted-nebius-host`), and the side channels an assumed cap.
+  `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
+  `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
+  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
+  set. Its δ is 0: the certifier is the auditor's device (`trusted-host`), and the side channels an assumed cap.
 * The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
@@ -46,9 +51,9 @@ from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
 from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
 
-#: the routes of the uncertified gates, the prefix of each slack term's key (the working draft's §8: `ε_undecl`,
-#: `ε_gap`, `ε_skip`, `ε_break`, and Lean's `χ` as `exfil`)
-ROUTES = ("undecl", "gap", "skip", "break", "exfil")
+#: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
+#: Lean's `χ` as `exfil`)
+ROUTES = ("undecl", "skip", "break", "exfil")
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,9 @@ class Policy:
     name: str
     gamma: float
     k: float
+    #: the inference overhead: the honest inference workload's circuit under this partition over its unpartitioned
+    #: size, a factor beside the training overhead. NaN where it isn't modeled (its source says so).
+    inference_overhead: float = math.nan
 
 
 @dataclass(frozen=True)
@@ -82,8 +90,8 @@ class Context:
 
 @dataclass(frozen=True)
 class Delta:
-    """`Σ_i Σ_S δ_i(S)`, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the devices' logged coins (LMS), is
-    named beside it and not bounded here."""
+    """`Σ_a δ_a`, over envelopes and serving blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
+    devices' logged coins (LMS), is named beside it and not bounded here."""
 
     by: Mapping[str, tuple[float, float]]
 
@@ -127,8 +135,8 @@ class Pouw:
 
     def slack(self, loc: Location) -> dict[str, float]:
         r = self.audited(loc)
-        return {"undecl.host": self.host * loc.host_phi / loc.phi, "gap.floor": self.residual,
-                "gap.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
+        return {"undecl.host": self.host * loc.host_phi / loc.phi, "undecl.gpu": self.residual,
+                "undecl.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
 
     def delta(self, ctx: Context) -> tuple[float, float]:
         return self.window_delta_coin / self.eps_agg, self.window_delta_crypto / self.eps_agg
@@ -214,7 +222,7 @@ class Wipe:
     host_residual_bits: float = 0.0
     #: bits each server's boot disk keeps through a wipe that doesn't reach it (today's), on top of either form
     boot_disk_bits: float = 0.0
-    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (#4707's retention game)
+    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (the streamed wipe's retention game)
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
 
@@ -247,27 +255,154 @@ class Wipe:
         return n * self.game_delta_coin, n * self.prf_advantage
 
 
+#: the warden form's public parameters the declared I/O bound reads (`Certifier.declared`)
+DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "outputs", "bucket_s", "window_buckets")
+#: a request's fields besides its prompt ids: `max_tokens` and `seed` (u32), `temperature` and `top_p` (24 bits each)
+FIELD_BITS = 112
+
+
+def clog2(x: float) -> int:
+    """`⌈log₂ x⌉` for `x ≥ 1`, as `NetworkCheck.Period.clog2`."""
+    return (int(x) - 1).bit_length()
+
+
 @dataclass(frozen=True)
 class Certifier:
-    """A network certifier on each host's links, and the channels it doesn't read."""
+    """A network certifier on each host's links, and the channels it doesn't read.
 
-    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 once
-    #: NET-35's count check holds it there
+    With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
+    inference block runs on a single server (ruled). At the warden form's public parameters a request
+    is at most `cells` cells of `K = (cell_bytes − 9) // 11` ids of `id_bits` bits, its fields and `request_slack` in,
+    and `outputs` ids and their count out; each bucket adds which of each lane's `r` slots it carries; and a lane holds
+    a request at least `hold + 1` buckets of `bucket_s`. So a server anchors at most `lanes ⌈T / (D + 1)⌉` requests in a
+    link-window of `T = window_buckets` buckets, and
+
+        r_in ≤ windowBits / (T τ_b)
+             = (lanes ⌈T / (D + 1)⌉ (C K IDB + 112 + requestSlack) + lanes T ⌈log₂(r + 1)⌉) / (T τ_b)
+        r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
+
+    (`requestBits`, `windowRequests` and `windowBits` of the draft per-server ingress bound,
+    `draft:per-server-ingress`). The bound is stated per window, so the
+    rate is too: the ceiling's extra request a lane a window is in it, and this package never cites less than the bound
+    states. This is the bound's honest-δ form, at a δ where only the empty faulty set is possible: a faulty ingress unit
+    frees its bucket, `faulty_unit_bits` more a unit, which the count charges and this bound excludes until every ingress
+    unit is drawn. It is a draft until Lean proves it. Until then `declared_x` keeps the line rate as the ingress's
+    upper end: the ingress is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is
+    below the prompt rate of the serving credited at the location can't feed that serving, so `declared` is off by
+    default until a deployment picks one that does."""
+
+    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 when a
+    #: server's ingress admits only declared inputs (without `declared`)
     intake: float = 1.0
-    #: the certified prompt ingress in bit/s per location, given directly (None: `intake · α Φ`)
+    #: the certified prompt ingress in bit/s per location, given directly (None: `hosts · r_in` with `declared`, else
+    #: `intake · α Φ`)
     ingress: float | None = None
     #: per host, bit/s: the certifier's timing channel, and side channels no certifier sees
     timing: float = 0.0
     side: float = 0.0
+    #: each server's ingress at most its inference blocks' declared inputs, at the parameters below
+    declared: bool = False
+    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the warden's line rate); lanes a server; `C`, cells a
+    #: request
+    cell_bytes: float = math.nan
+    cell_rate: float = math.nan
+    lanes: float = math.nan
+    cells: float = math.nan
+    #: `IDB`, bits an id; `D`, a lane held at least `D + 1` buckets a request; `KO`, outputs a request; `τ_b`, seconds
+    #: a bucket
+    id_bits: float = math.nan
+    hold: float = math.nan
+    outputs: float = math.nan
+    bucket_s: float = math.nan
+    #: `T`, buckets a link-window (the warden's `window`), the length the per-server bound is stated per
+    window_buckets: float = math.nan
+    #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
+    #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
+    declared_x: float = 1.0
 
-    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits",
-             "draft:NET-35")
+    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
+    INTAKE = ("draft:declared-ingress",)
+    DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
+
+    def __post_init__(self) -> None:
+        unset = [k for k in DECLARED_IO if self.declared and not math.isfinite(getattr(self, k))]
+        if unset:
+            raise ValueError(f"the declared I/O bound needs {unset}")
+
+    def cites(self) -> tuple[str, ...]:
+        return self.CITES + (self.DECLARED if self.declared else self.INTAKE)
+
+    @property
+    def ids_per_cell(self) -> int:
+        """`K = (B − 9) // 11`: the warden form's id request carries 10-digit decimal ids in fields of 11 bytes."""
+        return int(self.cell_bytes - 9) // 11
+
+    @property
+    def request_slack(self) -> int:
+        """`requestSlack = 32 + 1 + ⌈log₂(C + 1)⌉ + 1`: a request's connection ordinal, whether its prompt ends at its
+        last cell, a failed request's prefix, and an absent request."""
+        return 32 + 1 + clog2(self.cells + 1) + 1
+
+    @property
+    def request_in(self) -> float:
+        """Bits a request's declared input holds: `C K IDB + 112 + requestSlack` (`requestBits`)."""
+        return self.cells * self.ids_per_cell * self.id_bits + FIELD_BITS + self.request_slack
+
+    @property
+    def bucket_in(self) -> int:
+        """Bits a bucket adds to a server's ingress, how many of each lane's `r` slots it carries:
+        `lanes ⌈log₂(r + 1)⌉`."""
+        return int(self.lanes) * clog2(self.cell_rate + 1)
+
+    @property
+    def faulty_unit_bits(self) -> float:
+        """Bits a faulty ingress unit frees, which the honest-δ form excludes: its row's `8 B lanes r` and its lanes'
+        requests (`scanBound`'s charge a unit)."""
+        return 8 * self.cell_bytes * self.lanes * self.cell_rate + self.lanes * self.request_in
+
+    @property
+    def request_out(self) -> float:
+        """Bits a request's declared output holds: `KO IDB + ⌈log₂(KO + 1)⌉`, its ids and their count."""
+        return self.outputs * self.id_bits + math.ceil(math.log2(self.outputs + 1))
+
+    def window_bits(self, buckets: float) -> tuple[float, float]:
+        """`(ingress_bits, egress_bits)` of one server in a link-window of `buckets` buckets (`windowBits`), at the most
+        requests it anchors, `windowRequests = lanes ⌈buckets / (D + 1)⌉`, and each bucket's `bucket_in` in. A period of
+        `W` link-windows is `W` times it (`ingressBits`), not one ceiling over all its buckets."""
+        n = self.lanes * math.ceil(buckets / (self.hold + 1))
+        return n * self.request_in + buckets * self.bucket_in, n * self.request_out
+
+    @property
+    def r_in(self) -> float:
+        """One server's declared ingress, bit/s: a link-window's `windowBits` over its `T τ_b` seconds."""
+        return self.window_bits(self.window_buckets)[0] / (self.window_buckets * self.bucket_s)
+
+    @property
+    def r_out(self) -> float:
+        """One server's declared egress, bit/s, at a link-window's requests."""
+        return self.window_bits(self.window_buckets)[1] / (self.window_buckets * self.bucket_s)
+
+    @property
+    def warden_rate(self) -> float:
+        """The warden's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
+        return self.lanes * self.cell_rate * 8 * self.cell_bytes / self.bucket_s
+
+    def prompts(self, ctx: Context) -> float:
+        """The certified prompt ingress into a location, bit/s."""
+        loc = ctx.location
+        if self.ingress is not None:
+            return self.ingress
+        if self.declared:
+            return min(self.declared_x * loc.hosts * self.r_in, loc.links)
+        return self.intake * ctx.policy.k / ctx.c * loc.phi
+
+    def intake_of(self, ctx: Context) -> float:
+        """The certified prompt ingress as a multiple of `α Φ`: `r_in / (α Φ_s)` with `declared`."""
+        return self.prompts(ctx) / (ctx.policy.k / ctx.c * ctx.location.phi)
 
     def rate_in(self, ctx: Context) -> float:
         """`r_in + r_side`: bit/s of unregistered input into a location."""
-        loc = ctx.location
-        prompts = self.ingress if self.ingress is not None else self.intake * ctx.policy.k / ctx.c * loc.phi
-        return prompts + loc.hosts * (self.timing + self.side)
+        return self.prompts(ctx) + ctx.location.hosts * (self.timing + self.side)
 
     def delta(self, ctx: Context) -> tuple[float, float]:
         return 0.0, 0.0
@@ -287,7 +422,7 @@ def _dark(ctx: Context) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class Unmonitored:
-    """No protocol: every serving block is unconstrained (`g = 1`, `ρ = μ`)."""
+    """No protocol: every serving block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
 
@@ -312,7 +447,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
-    ABIDING = ("undecl.host", "gap.floor", "gap.clock", "skip.pouw")
+    ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
     def envelopes(self) -> dict[str, Any]:
         return {"pouw": self.pouw, "detection": self.detection}
@@ -374,7 +509,8 @@ class Onsite(Remote):
     #: bounds information where `WindowsAt` reads width at line rate: the information form is a draft
     SERVING = ("Accounting.Guarantees.Actual.WindowsAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
                "Accounting.Placed.Links", "draft:windows-information-form")
-    PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES))
+    PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
+                                   + Certifier.DECLARED))
 
     def __post_init__(self) -> None:
         if self.form not in FORMS:
@@ -387,7 +523,7 @@ class Onsite(Remote):
         """The serving cut's citations."""
         if self.form == "links":
             return self.LINKS
-        return tuple(dict.fromkeys(self.SERVING + self.wipe.cites() + self.certifier.CITES))
+        return tuple(dict.fromkeys(self.SERVING + self.wipe.cites() + self.certifier.cites()))
 
     def state(self, ctx: Context) -> float:
         """Bits a serving block carries in: all its servers' memory `M_s` (`links`), or what a wipe leaves

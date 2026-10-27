@@ -102,7 +102,7 @@ def _decided(case: dict) -> dict:
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:
     """In the serve's lease, before its engine loads: the card checked idle, the wipe of it, and DIR/answer.json the
     accepted core answer of verity/wipe/v0 that the case decides, the challenger the one WIPE_COMMAND starts on
-    vy-auditor-2 (trusted-nebius-host's premise held), the window's serve dir and the card in served.json, and the
+    vy-auditor-2 (trusted-host's premise held), the window's serve dir and the card in served.json, and the
     piece's last line its `WIPE` headline."""
     d = tmp_path / "pieces" / "wipe"
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d, "--no-lean")
@@ -115,7 +115,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-nebius-host"] == "holds: the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200"
+    assert placement["trusted-host"] == "holds: the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200"
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     assert _decided(json.loads((d / "wipe.case.json").read_text())) == answer | {"profile": profile}
     party = json.loads((d / "party.json").read_text())
