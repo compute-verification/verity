@@ -2443,7 +2443,7 @@ class LakeBuild:
     `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
     killed at the step's deadline; else, given ``on`` (`ready --on`: `PREFLIGHT_LEAN_ON`), as a `research run` of the tree there
     on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline; else not
-    at all, and says so: an agent VM builds nothing (AGENTS.md, "Tests"), and its preflight never starts a run unasked."""
+    at all, and says so: an agent VM builds nothing (the team skill, "Machines"), and its preflight never starts a run unasked."""
     on: str | None = None
     pool: str | None = PREFLIGHT_LEAN_POOL
     by: str | None = None
