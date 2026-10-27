@@ -53,9 +53,10 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    without N: `next`'s members above `main` that no land verdict at their head
                                                    lands, bottom first (number, head, owner, files, whether it waits for a Lean
                                                    check: `lean_change`); with N: a reviewer's verdict, a `reviewed` label on
-                                                   `pr:N@HEAD` (its head on `next`, or --sha), which drive's review landing
-                                                   counts unless LANE is the PR's owner, its handle or its ready mark's author,
-                                                   refused here
+                                                   `pr:N@HEAD` (its head on `next`, or --sha, a full or short SHA), which drive's
+                                                   review landing counts unless LANE is the PR's owner, its handle or its ready
+                                                   mark's author, refused here; without --sha, refused when GitHub has another
+                                                   head than `next` (pushed since drive's last sync)
     research queue baseline SHA --by ci             record `main` at SHA as green for the review landing, which otherwise first
                                                    runs the after-landing run on `main` itself, and lands nothing until it ends
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
@@ -3363,7 +3364,9 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
            sha: str | None = None, as_json: bool = False) -> int:
     """`research queue review`: without ``pr``, list `next`'s members above `main` that no land verdict at their head lands
     (`unreviewed`), bottom first, the order drive lands them in; with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
-    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner."""
+    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Without
+    ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either (27 Oct: #5149's verdict went
+    on the head `next` still had, not the one pushed and read); a short ``sha`` is the known head or clone commit it starts."""
     from .store.cli import _label_write_through
 
     q._clone()
@@ -3390,6 +3393,17 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
             print(f"research queue review: {len(rows)} of {len(chain)} member(s) of `{q.branch}` above `main` lack a land verdict")
         return 0
     m = next((m for m in chain if m.pr == pr), None)
+    live = (p := opened.get(pr)) and ((p.branch and getattr(q.github, "branch_tip", lambda _b: None)(p.branch)) or p.head)
+    if sha and len(sha) < 40:
+        known = {h for h in (m and m.head, live) if h and h.startswith(sha)}
+        r = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False)
+        if len(known) != 1 and r.returncode:
+            raise QueueError(f"review: --sha {sha} is neither #{pr}'s head on `{q.branch}` nor on GitHub, nor a commit the queue's "
+                             "clone has: pass the full 40-character SHA")
+        sha = known.pop() if len(known) == 1 else r.stdout.strip()
+    if sha is None and m and live and live != m.head:
+        raise QueueError(f"review: #{pr} is on `{q.branch}` at {m.head[:12]}, but GitHub has its head at {live[:12]}, pushed since "
+                         f"drive's last sync: pass --sha with the head you read ({live} or {m.head})")
     head, owner = (sha or m.head, m.owner) if m and (sha in (None, m.head)) else (sha, None)
     if owner is None:
         if (open_pr := opened.get(pr)) is None:
