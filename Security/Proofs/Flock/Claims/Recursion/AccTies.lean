@@ -172,6 +172,7 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
           try rfl
         unfold accRead at hR
         simp [hA, Except.toOption, hu] at hR
+        dsimp only
         omega
       · unfold accRead at hR
         simp [hnm] at hR
@@ -232,7 +233,8 @@ theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hs
       · exact h
       · exact absurd h (by decide)
     subst hd0
-    exact Or.inl ⟨l, LANES, HH, m, 1, hsv, List.mem_cons_of_mem _ List.mem_cons_self, hu, by simp only at hP; omega⟩
+    dsimp only at hP
+    exact Or.inl ⟨l, LANES, HH, m, 1, hsv, List.mem_cons_of_mem _ List.mem_cons_self, hu, by omega⟩
   · exfalso
     simp only [List.mem_cons, Prod.mk.injEq, List.mem_nil_iff, or_false] at hd
     rcases hd with ⟨h, -⟩ | ⟨h, -⟩ <;> exact absurd h (by decide)
