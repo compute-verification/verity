@@ -1510,6 +1510,12 @@
         "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
         "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/": "examples/one_stage/",
+        "benchmarks/private_circuit/": "examples/private_circuit/"
+      }
     }
   ]
 }

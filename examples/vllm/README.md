@@ -3,7 +3,7 @@
 Llama-3.2-1B (`unsloth/Llama-3.2-1B` at `9535bd9b1d1dea6acafbdc4813b728796aeb28da`), bf16, batch-invariant eager, served
 by vLLM on one RTX PRO 6000 through `verity_vllm`'s committing OpenAI endpoint, and a served window audited through every
 subprotocol. This directory holds what is the example's: its workload, its placement and its commands. What attaches
-Verity to vLLM is `integrations/vllm/`, and the chain a served window runs is `benchmarks/one_stage/served_verdicts.sh`'s.
+Verity to vLLM is `integrations/vllm/`, and the chain a served window runs is `examples/one_stage/served_verdicts.sh`'s.
 
 ## Workload
 
