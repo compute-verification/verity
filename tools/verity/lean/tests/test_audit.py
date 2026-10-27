@@ -218,6 +218,27 @@ def test_spec_definitions_no_guarantee_reads_are_reported():
     assert A.unread_spec(f, {"P.elsewhere"}) == {"P.Assumptions": ["P.Old"], "P.Defs": ["P.unused"]}
 
 
+def test_an_unread_spec_definition_fails_unless_unread_lists_it_and_the_list_only_shrinks():
+    """`unread` lists the spec definitions no statement read when the rule came; a new one fails with the fix, a package
+    without `unread` is not held to it, `--update` keeps only the listed ones still unread (under their module now) and
+    adds none, and a move renames the listed ones."""
+    unread = {"P.Assumptions": ["P.Old"], "P.Defs": ["P.unused"]}
+    pol = {**POLICY, "layers": {"P.Defs": {"imports": []}}}
+    assert A.unread_failures(pol, unread) == []
+    listed = {**pol, "unread": {"P.Defs": ["P.unused", "P.Old", "P.gone"]}}
+    assert A.unread_failures(listed, unread) == []
+    assert A.unread_kept(listed, unread) == {"P.Assumptions": ["P.Old"], "P.Defs": ["P.unused"]}
+    fails = A.unread_failures({**pol, "unread": {"P.Defs": ["P.unused"]}}, unread)
+    assert [f.code for f in fails] == ["unread.new"] and fails[0].entry == "P.Old"
+    assert fails[0] == ("unread: P.Old (P.Assumptions) is a definition of the spec (P.Defs) that no listed statement reads: "
+                        "move it to Proofs/, or have a listed statement read it (`unread` lists only the definitions that "
+                        "predate the rule, and only shrinks)")
+    assert A.unread_kept({**pol, "unread": {}}, unread) == {}
+    assert [f.code for f in A.unread_failures({**pol, "unread": ["P.Old"]}, {})] == ["unread.form"]
+    assert A.renamed_witnesses(listed, {"P.unused": "P.Lib.unused"})["unread"] == {"P.Defs": ["P.Lib.unused", "P.Old",
+                                                                                              "P.gone"]}
+
+
 def test_homes_give_each_module_its_package_s_spec(tmp_path):
     core, pkg = tmp_path / "core", tmp_path / "pkg"
     for d, files in ((core, ("Q/Spec.lean", "Q/Math.lean")), (pkg, ("P/Defs.lean", "P/Thms.lean"))):

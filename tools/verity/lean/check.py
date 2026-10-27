@@ -64,6 +64,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  that form, ranges over its instance instead of building it, takes a hypothesis that is no named
                  assumption the lock lists, or is an honest one at an accept-all verifier (`witness_failures`,
                  LEAN-66), unless `unwitnessed`, which only shrinks, lists the guarantee with its statement's hash
+    unread       in a package whose lock has `unread`, a definition of the spec that no listed statement reads,
+                 neither its own nor one of a package requiring it by path (`unread_spec`), is not among those `unread`
+                 lists, the ones that predate the rule; the list only shrinks (`unread_failures`, LEAN-67)
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
@@ -139,8 +142,9 @@ declaration or a namespace) renames the record's guarantees and compares the bui
 guarantee moved or lifted that says what its record says, and the definitions the same under their old names, get one
 line each.  `--all` first runs the controls (`controls`): a fixture package built with each audited toolchain (which
 `--build` installs first), which must pass clean and fail each check once a violation is added.
-Each package's report lists, without failing, the spec definitions that no guarantee reads, neither its own nor one of a
-package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
+Each package's report lists the spec definitions that no guarantee reads, neither its own nor one of a package that
+requires it by path (`unread_spec`): a definition of the trusted text that nothing cites. Where the lock has `unread`,
+one it doesn't list fails.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
 too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
@@ -209,7 +213,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "witnesses",
-         "unwitnessed", "compile_time",
+         "unwitnessed", "unread", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
@@ -1054,8 +1058,12 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses` and `unwitnessed` with every guarantee and theorem they name `renamed` by ``moved``."""
+    """The policy's `witnesses`, `unwitnessed` and `unread` with every guarantee, theorem and definition they name `renamed`
+    by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    if isinstance(policy.get("unread"), dict):
+        out["unread"] = {m: [renamed(n, moved) for n in ns] if isinstance(ns, list) else ns
+                         for m, ns in policy["unread"].items()}
     if isinstance(ws, dict):
         out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
                                                 if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
@@ -2495,6 +2503,38 @@ def unread_spec(facts: dict, elsewhere: set[str] = frozenset()) -> dict[str, lis
     return {m: sorted(ds) for m, ds in sorted(out.items())}
 
 
+def unread_listed(policy: dict) -> tuple[set[str] | None, list[str]]:
+    """The definitions `unread` lists, and why the entry is malformed; None when the package has no `unread`."""
+    allow = policy.get("unread")
+    if allow is None:
+        return None, []
+    if not isinstance(allow, dict) or not all(isinstance(ns, list) and all(isinstance(n, str) for n in ns)
+                                              for ns in allow.values()):
+        return set(), ["unread: `unread` must be {module: [definitions]}"]
+    return {n for ns in allow.values() for n in ns}, []
+
+
+def unread_failures(policy: dict, unread: dict[str, list[str]]) -> list[str]:
+    """A definition of the spec that no listed statement reads (``unread``, `unread_spec`) fails unless `unread` lists it.
+    `unread` ({module: [definitions]}) lists those the rule found (Daniel, 26 Oct: Definitions/ holds only what a
+    statement reads), and only shrinks: `--update` keeps an entry while its definition stays unread and adds none
+    (`unread_kept`). A package without `unread` is not held to it."""
+    listed, bad = unread_listed(policy)
+    if listed is None:
+        return []
+    return [Failure("unread.form", None, b) for b in bad] + [
+        Failure("unread.new", n, f"unread: {n} ({m}) is a definition of the spec ({', '.join(spec_of(policy))}) that no "
+                f"listed statement reads: move it to Proofs/, or have a listed statement read it (`unread` lists only the "
+                f"definitions that predate the rule, and only shrinks)")
+        for m, ns in unread.items() for n in ns if n not in listed]
+
+
+def unread_kept(policy: dict, unread: dict[str, list[str]]) -> dict[str, list[str]]:
+    """The `unread` an `--update` writes: each listed definition that is still unread, under its module now."""
+    listed = unread_listed(policy)[0] or set()
+    return {m: kept for m, ns in unread.items() if (kept := [n for n in ns if n in listed])}
+
+
 def read_by_dependents(pkg: Path, root: Path = ROOT) -> set[str]:
     """The definitions that the records of the other packages under ``root`` requiring ``pkg`` by path list under `reads`:
     none for a package outside ``root`` or among the controls' fixtures, whose dependents' records are not ``root``'s."""
@@ -3267,6 +3307,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current), roles) + \
         tree_failures(current, facts, roles) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
+    fails += unread_failures(current, rep["unread_spec"])
+    if update and "unread" in current:
+        new["unread"] = unread_kept(current, rep["unread_spec"])
     (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
         scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
     fails = scans(pkg, files, policy) + missed + fails
@@ -3363,6 +3406,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep.setdefault("notes", []).append(
             f"{len(unread)} definitions of the spec ({', '.join(spec_of(policy))}) are read by no guarantee, candidates to "
             f"move out of it: {', '.join(unread[:8])}{more} (`unread_spec` in its report.json)")
+    if not update and (gone := len(unread_listed(current)[0] or set()) - len(unread_kept(current, rep["unread_spec"]))):
+        rep.setdefault("notes", []).append(f"{gone} definitions `unread` lists are read now or gone; `check.py --update` "
+                                           f"drops them")
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "guarantees": new.get("guarantees", {}), "reads": new.get("reads", {}),
             "failures": fails}
