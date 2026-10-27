@@ -70,11 +70,11 @@ cell_rate = { value = 4, unit = "cell/lane/bucket", source = "benchmarks/network
 lanes = { value = 4, unit = "lane/server", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class lanes", status = "declared" }
 cells = { value = 47, unit = "cell/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class C (WardenParams ingress_cells)", status = "declared" }
 id_bits = { value = 17, unit = "bit", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class IDB", status = "declared" }
-hold = { value = 21, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class D (WardenParams delay), a lane held at least D + 1 buckets a request", status = "declared" }
+hold = { value = 27, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class D (WardenParams delay), a slot held D + 1 buckets from its admission", status = "declared" }
 outputs = { value = 64, unit = "id/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class KO", status = "declared" }
 bucket_s = { value = 0.1, unit = "s", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams bucket_ms", status = "declared" }
 window_buckets = { value = 32, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams window, a link-window's buckets, the length the per-server bound's windowBits is stated per", status = "declared" }
-declared_x = { value = 1, unit = "x declared", low = 1, high = 1e8, source = "ruled: a server's ingress carries only its inference blocks' declared inputs (draft:declared-ingress); high: line rate, the upper end until Lean states the per-server bits (the ingress is at most the location's links, 5.3e7 x the declared bound on a server and 2.7e7 x on a GB200 tray)", status = "ruled" }
+declared_x = { value = 1, unit = "x declared", low = 1, high = 1e8, source = "ruled: a server's ingress carries only its inference blocks' declared inputs (draft:declared-ingress); high: line rate, the upper end until Lean states the per-server bits (the ingress is at most the location's links, 5.3e7 x the declared bound on a server and 2.6e7 x on a GB200 tray)", status = "ruled" }
 
 # Today's wipe: about 12 GB a server, every tier but the boot disk, which it doesn't reach. A measurement of the wipe
 # decides whether the 5 GB of regime.onsite is reached.
