@@ -1,12 +1,11 @@
-"""The challenger party's wire (`challenger_party.py`): the verifier's `a5_coins.Loopback` opens and finishes a session
-on it over loopback TCP, and each refused op (a second open while one is open, a root opened twice, a finish with
-nothing open, a malformed root, an unknown op) reaches the verifier as a `CoinError` naming its reason. The host is a
-stand-in for `a5_coins.Local` (no serve.py), so only the wire is tested; the session itself runs in all_protocols'
-opt-in end to end."""
+"""The challenger's host (`challenger_party.py`): the verifier's `a5_coins.Loopback` opens and finishes a session on it
+over loopback TCP, and each refused op (a second open while one is open, a root opened twice, a finish with nothing
+open, a malformed root, an unknown op) reaches the verifier as a `CoinError` naming its reason; `Host` serves it on a
+thread from `start` until `stop`. The host is a stand-in for `a5_coins.Local` (no serve.py), so only the wire is
+tested."""
 
 from __future__ import annotations
 
-import json
 import socket
 import sys
 import threading
@@ -41,15 +40,15 @@ def party(tmp_path, monkeypatch):
     p = CP.Party(tmp_path / "host", ["f" * 40])
     srv = socket.create_server(("127.0.0.1", 0))
     address = "%s:%d" % srv.getsockname()[:2]
-    t = threading.Thread(target=CP.serve, args=(p, srv, tmp_path / "address.json"))
+    t = threading.Thread(target=CP.serve, args=(p, srv))
     t.start()
-    yield p, address, tmp_path / "address.json"
+    yield p, address
     AC.Loopback(address)._ask({"op": "stop"})
     t.join()
 
 
 def test_the_verifier_opens_and_finishes_a_session_on_the_challenger_party(party, tmp_path):
-    p, address, file = party
+    p, address = party
     lb = AC.Loopback(address)
     assert lb.open(ROOT_A, [["work", 3]]) == ("127.0.0.1:4242", "5e" * 32, "c0" * 64)
     assert lb.session == "s1" and p.local.opened == [(ROOT_A, [["work", 3]], AC.MINUTES, AC.SCHEME)]
@@ -57,13 +56,12 @@ def test_the_verifier_opens_and_finishes_a_session_on_the_challenger_party(party
     assert (session, ledger, pins) == (tmp_path / "dest" / "session", tmp_path / "dest" / "windows.jsonl",
                                        tmp_path / "dest" / "pins.jsonl")
     assert (key.W, key.H, key.public) == (4, 5, b"\x07" * 80)
-    assert json.loads(file.read_text()) == {"address": address} and file.read_text().endswith("\n")
     lb.open(ROOT_B, [["work", 1]])
     assert p.local.session == "s2"
 
 
 def test_each_refused_op_reaches_the_verifier_by_its_reason(party, tmp_path):
-    _, address, _ = party
+    _, address = party
     lb = AC.Loopback(address)
     with pytest.raises(AC.Ch.CoinError, match="no-session"):
         lb.finish(tmp_path / "dest")
@@ -86,3 +84,16 @@ def test_a_host_root_is_made_once(tmp_path, monkeypatch):
     (tmp_path / "host").mkdir()
     with pytest.raises(SystemExit, match="exists"):
         CP.Party(tmp_path / "host", ["f" * 40])
+
+
+def test_the_host_serves_from_start_until_stop(tmp_path, monkeypatch):
+    monkeypatch.setattr(CP.AC, "Local", FakeLocal)
+    host = CP.Host(tmp_path / "host", ["f" * 40])
+    at = host.start()
+    assert at["pin"] == "f" * 40 and at["address"].startswith("127.0.0.1:")
+    assert AC.Loopback(at["address"]).open(ROOT_A, [["work", 1]])[2] == "c0" * 64
+    host.stop()
+    assert not host.thread.is_alive()
+    ip, port = at["address"].rsplit(":", 1)
+    with pytest.raises(OSError):
+        socket.create_connection((ip, int(port)))
