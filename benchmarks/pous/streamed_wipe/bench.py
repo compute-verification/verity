@@ -1,6 +1,6 @@
 """The streamed-label wipe's timing on one node: the labels a GPU generates, what reaches host memory and the network
 stack, and the challenge round trips, so the fill time and the challenger's GPU budget are measured
-(`verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe").
+(`verity/core/protocols/pous/streamed_wipe.py`; the game is `Security/Definitions/Pous/Model/StreamedWipe.lean`).
 
 `bench.py all --bin WIPELABELS --scratch DIR --out DIR` runs every step and writes `timing.json`:
 

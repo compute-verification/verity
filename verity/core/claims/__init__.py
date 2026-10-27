@@ -240,7 +240,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
-    # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
+    # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/schemes/p2.py):
     # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
     # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
     # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the

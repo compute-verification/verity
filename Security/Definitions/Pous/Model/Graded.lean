@@ -40,7 +40,7 @@ that `Pous.Guarantees.BackgroundRebuildExcluded` requires the memory challenger 
 re-encoding a band segment from `W` takes).
 
 **Requirements on the protocol.** The game assumes each of these, and a bound proved in it says nothing about a
-protocol that breaks one. `PROTOCOL.md` ("The graded audit") states them as requirements of the graded audit.
+protocol that breaks one.
 
 1. **No pipelining.** The memory challenger sends challenge `j + 1` only after it receives answer `j`, and each round's
    deadline runs from its own challenge's send time. The game reveals index `i_{j+1}` only after answer `j`, and times
