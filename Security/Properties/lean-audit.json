@@ -3523,7 +3523,7 @@
     "outcome": "none"
    },
    "Properties.Onsite.integrityHorizonCovers": {
-    "function": "Core.Onsite.Pooled.wrongUnits",
+    "function": "Core.Onsite.Pooled.faultyBlocks",
     "outcome": "none"
    },
    "Properties.Onsite.integrityPeriodCovers": {
