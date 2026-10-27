@@ -36,7 +36,8 @@ every subprotocol accepts its own case, and the commitment binds all of theirs.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
   PoUS, PoUB and network certification.
-- **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
+- **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
+  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
 
 The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
 policy is not yet a subprotocol of the composites.
@@ -114,7 +115,7 @@ GPU machine.
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
 | The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. The other onsite subprotocols (PoUS, the bandwidth audit, network certification, memory wipes) are only a skeleton on fixture coins, and the demo claims none of them. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
-| vLLM | Llama-3.2-1B in int8, served by vLLM on one H200 through the committing endpoint. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
+| vLLM | Llama-3.2-1B in bf16, served by vLLM on one RTX PRO 6000 through the committing endpoint. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
 
 The remote protocol's demo is `verity example vllm`, its sampled-proofs half; PoUW's half has no runner yet.

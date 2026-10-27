@@ -6,7 +6,7 @@ import PouwCheck
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
 
 PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
-each protocol, composed in `Accounting.Guarantees.JointPeriod`). `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`
+each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`
 is stated over the accounting model's abstract proofs (`PeriodRun`): whether window `w`'s proof of its `i`-th drawn tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
 `core_check.py`'s port, the `Core.Protocol` that `CoreOnsite` composes) on the window's registration and the proof
