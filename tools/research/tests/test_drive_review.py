@@ -1214,6 +1214,8 @@ def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pai
     _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
     h = Review(world, monkeypatch)
     old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    h.tick()                                                                    # drive sees #5 at `old`
     world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # moved on from `old`, unmarked
     world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # branched from #5 at `old`
     world.gh.put(8, world.change({"y.txt": "y\n"}, base=old), ready=False)      # waits too, but isn't marked: no one hears
@@ -1237,14 +1239,13 @@ def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pai
     assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5")
     world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
     h.tick()
-    # #9 holds #5's older head now, and shares `old` with #8 as #7 does (`Queue.entries`); #7 is marked, so its owner hears nothing
+    # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
     assert [p.split(": mark")[0] for p in told()[3:]] == [
         f"@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
-        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})",
-        f"@ci @lane-8 queue: #9 (marked by lane-9) waits for your mark of #8, which it contains (at {old[:12]})"], told()
+        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
     world.gh.ready.add((5, world.gh.prs[5].head))
     h.tick()
-    assert len(told()) == 6 and h.q.status()[7].state != "waiting"
+    assert len(told()) == 5 and h.q.status()[7].state != "waiting"
 
 
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:

@@ -136,7 +136,8 @@ runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `ne
 syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
 keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
-PR whose head contains another open PR's head, or commits of a lower-numbered one's branch at an older head (`Queue.entries`), goes
+PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
+`Queue.entries`; never by PR number, and never for commits the two merely share), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
 mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked PR waits for, once per pair of heads
 (`Driver.tell_unmarked`).  What a sync merges on top goes non-Lean first
@@ -764,14 +765,14 @@ class Entry:
     pr: PR
     state: str = "ready"                  # ready | queued | waiting | refused
     why: str = ""
-    after: tuple[int, ...] = ()           # open PRs whose heads, or some of whose own commits (`shares`), its head contains
-    shares: tuple[int, ...] = ()          # those of `after` whose current head it doesn't contain (`Queue.entries`)
+    after: tuple[int, ...] = ()           # open PRs whose current or an older head its head contains (`Queue.entries`)
+    older: tuple[int, ...] = ()           # those of `after` whose current head it doesn't contain
     position: int | None = None           # 1-based, on `next`
     commit: str | None = None
 
     def contains(self, n: int) -> str:
         """How a reason names ``n``, one of `after`."""
-        return f"#{n}'s commits (at an older head)" if n in self.shares else f"#{n}"
+        return f"#{n}'s commits (at an older head)" if n in self.older else f"#{n}"
 
 
 def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[int]:
@@ -922,21 +923,24 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict, base: str = "origin/main") -> dict[int, Entry]:
-        """Each open PR's standing.  A PR goes after, and waits while it isn't admitted, each other open PR whose current head
-        its head contains, and each lower-numbered one it shares an own commit with (`shares`; a PR's own commits are those in
-        ``base``.. its head less those below the heads of open PRs it contains), as when it branched from that PR's older head
-        and the PR moved on unmarked (25 Oct: #4412 from #4382's eadb6663, which would have landed #4382's unmarked commits under #4412's
-        mark).  One `rev-list` a PR and one index of commits by PR, not a merge base for each pair.
+        """Each open PR's standing.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
+        head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
+        when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains) is
 
-        The queue keeps no PR's past heads (marks on them are a store pull per PR, too slow for every tick), so: an older head
-        that its PR no longer contains (rebased or force-pushed) isn't seen; and when two PRs share commits but neither
-        contains the other's head, which branched from which can't be told from the commits, so the higher-numbered one is
-        taken to carry the lower one's (a PR stacked on a branch whose PR was opened after its own lands that branch's commits
-        unseen, and waits for nothing)."""
+        - a head the queue saw Q at, and the first open PR it saw there (`seen`), that Q's head still contains, as when P
+          branched from Q and Q moved on unmarked (25 Oct, CI-178: #4412 from #4382's eadb6663, which would have landed
+          #4382's unmarked commits under #4412's mark); or
+        - one of Q's own commits on Q's first-parent line that P has only through a merge, as when P merged Q's branch and Q
+          moved on (27 Oct: #4772 merged #4855's branch; it waits for #4855, and #4855 for nothing).
+
+        Commits two PRs merely share wait for nothing: a third branch both merged (on neither first-parent line), or a fork
+        point the queue never saw either PR at (on both).  One `rev-list` and one `rev-list --first-parent` a PR, not a merge
+        base for each pair."""
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
         below: dict[int, set[str]] = {}
+        line: dict[int, set[str]] = {}
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         for p in prs:
@@ -957,18 +961,22 @@ class Queue:
             else:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
             below[p.number] = set(_out(self.workdir, "rev-list", f"{base}..{p.head}").split())
+            line[p.number] = set(_out(self.workdir, "rev-list", "--first-parent", f"{base}..{p.head}").split())
             e.after = tuple(sorted(heads[h] for h in below[p.number] if h in heads and heads[h] != p.number))
         own = {n: below[n].difference(*(below[a] for a in e.after)) for n, e in out.items()}
-        owners: dict[str, list[int]] = {}                   # commit: the PRs it is an own commit of
+        branch: dict[str, list[int]] = {}                   # commit: the PRs it is an own commit on the first-parent line of
         for n, cs in own.items():
-            for c in cs:
-                owners.setdefault(c, []).append(n)
+            for c in cs & line[n]:
+                branch.setdefault(c, []).append(n)
+        seen = state.get("seen") or {}
         for n, e in out.items():
-            e.shares = tuple(sorted({q for c in own[n] for q in owners[c] if q < n}))
-            e.after = tuple(sorted(e.after + e.shares))
+            held = {q for c in own[n] for q in seen.get(c, ()) if q in out and c in below[q]}
+            held |= {q for c in own[n] - line[n] for q in branch.get(c, ())}
+            e.older = tuple(sorted(held - {n}))
+            e.after = tuple(sorted(e.after + e.older))
         for e in out.values():
             e.after = tuple(a for a in e.after if not self._carried(e.pr, out[a], state))
-            e.shares = tuple(a for a in e.shares if a in e.after)
+            e.older = tuple(a for a in e.older if a in e.after)
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
@@ -976,6 +984,18 @@ class Queue:
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
                     e.state, e.why, changed = "waiting", f"contains {e.contains(blocking[0])}, which isn't admitted", True
         return out
+
+    @staticmethod
+    def _seen(state: dict, prs: list[PR], open_numbers: set[int]) -> None:
+        """Record in ``state``'s `seen` ({head: PRs}) each head of ``prs`` no open PR was seen at before, for the PRs at it now,
+        so a PR holding it later holds an older head of theirs (`entries`); a closed PR's records go."""
+        seen = state["seen"] = {h: kept for h, ns in (state.get("seen") or {}).items()
+                                if (kept := [n for n in ns if n in open_numbers])}
+        new: dict[str, list[int]] = {}
+        for p in prs:
+            if p.head not in seen:
+                new.setdefault(p.head, []).append(p.number)
+        seen.update(new)
 
     def _carried(self, p: PR, a: Entry, state: dict) -> bool:
         """Whether ``p`` carries the change of ``a``, a PR whose head or own commits it contains (`entries`) and that isn't
@@ -1195,10 +1215,13 @@ class Queue:
         self._drive_only(self.branch, "queue sync", dry_run)
         self._clone()
         state = self.load_state()
-        prs = [p for p in self.github.open_prs() if p.base == "main"]
-        prs, waiting = self.fetch_prs(prs)
+        open_prs = self.github.open_prs()
+        prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
+        self._seen(state, prs, {p.number for p in open_prs})
         if why := self.holding(state):
             self.log(f"research queue: {why}")
+            if not dry_run:
+                self.save_state(state)
             return built_on(self.workdir, f"refs/remotes/origin/{self.branch}")[1], {}
         chain = self.chain()
         entries = self.entries(prs, state)
