@@ -8458,13 +8458,22 @@
    "type_hash": "9feae5d9e2ff364afe60468502cf1a03c68b15c84d81616e07a03ee4b35a3f5d"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DampenerRemotePeriod : Nci.Guarantees.DampenerRemotePeriod"],
+   "assumptions": [],
+   "type_hash": "f2167e10c1f3bdadfee41a7346dd05b7cbb25383842da21f1accda19d252e145"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DampenerRemotePeriod_honest : Nci.Guarantees.DampenerRemotePeriod_honest"],
+   "assumptions": [],
+   "type_hash": "758484026aef0f1c121e7249b351b8116d2c0fbc16b87918a12b4b151206b701"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DampenerRemotePeriod_nontrivial : Nci.Guarantees.DampenerRemotePeriod_nontrivial"],
+   "assumptions": [],
+   "type_hash": "37a9dd20dbd9846c0fa2704730c0843e97677106f446caa801d2970bb88b856c"
   },
   "Nci.SecurityProofs.DampenerThreaded": {
    "owner": "@lean",
@@ -19042,7 +19051,9 @@
     "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
-    "Nci.SecurityProofs.DampenerRemotePeriodStated",
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
@@ -19140,7 +19151,9 @@
     "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
-    "Nci.SecurityProofs.DampenerRemotePeriodStated",
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
@@ -22489,7 +22502,9 @@
    "guarantees": [
     "Nci.SecurityProofs.CertificateSlack",
     "Nci.SecurityProofs.DampenerRemote",
-    "Nci.SecurityProofs.DampenerRemotePeriodStated",
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
     "Nci.SecurityProofs.VerdictLag"
    ]
   },
@@ -22723,7 +22738,9 @@
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Nci.SecurityProofs.Dampener",
     "Nci.SecurityProofs.DampenerRemote",
-    "Nci.SecurityProofs.DampenerRemotePeriodStated",
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.DampenerWindows"
@@ -23080,12 +23097,17 @@
    ]
   },
   "Definitions.Nci.Guarantees.RemotePeriod": {
-   "digest": "75efe6a0d1c500dadbc6a9feedceb15cdba044ac880f2d9baf6a5ca13ebdc884",
+   "digest": "9c1ce05170f2845529c070d2b2c1f052c61b88564ed4f57e83287dc52af2d182",
    "definitions": {
     "Nci.Guarantees.DampenerRemotePeriod": "6b813f5ad2f9ac59983989dfb0781b0d21bc5407c1e7517965236d2d7b746411",
-    "Nci.Guarantees.DampenerRemotePeriodStated": "0c2d5664c8ab9c3776ae1dfd8f47d48e45f8463ac63c339715294ffb35e7db4f"
+    "Nci.Guarantees.DampenerRemotePeriod_honest": "3cb4b5ee21964f105d8420a640bcb822e58613570d732b503772f60e7b667dda",
+    "Nci.Guarantees.DampenerRemotePeriod_nontrivial": "17501b71a5950398d8e563d3a45ed7daa690eabe26a3a9d1202acbad84b51d8a"
    },
-   "guarantees": ["Nci.SecurityProofs.DampenerRemotePeriodStated"]
+   "guarantees": [
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial"
+   ]
   },
   "Definitions.Nci.Guarantees.Threads": {
    "digest": "1cbfaa21af8c99133f4ca64ccf1e7ccdf55c1f9ef89580e9f54118c3114b6306",
@@ -23260,7 +23282,9 @@
    "guarantees": [
     "Nci.SecurityProofs.CertificateSlack",
     "Nci.SecurityProofs.DampenerRemote",
-    "Nci.SecurityProofs.DampenerRemotePeriodStated",
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
     "Nci.SecurityProofs.VerdictLag"
    ]
   },
@@ -23339,7 +23363,9 @@
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.DampenerRemote",
-    "Nci.SecurityProofs.DampenerRemotePeriodStated",
+    "Nci.SecurityProofs.DampenerRemotePeriod",
+    "Nci.SecurityProofs.DampenerRemotePeriod_honest",
+    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
