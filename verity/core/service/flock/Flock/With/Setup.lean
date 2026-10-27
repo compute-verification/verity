@@ -282,14 +282,14 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - HmRow.pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - HmRow.pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -502,7 +502,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
   let header ← match Json.parse text with
-    | .ok j => pure j
+    | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
   if (← J.str header "format" pctx) != tags.publicFormat || (← J.str header "statement" pctx) != tags.statement then
@@ -689,7 +689,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 namespace HmOut
 
@@ -886,6 +886,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -895,7 +896,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- `Stmt.setupTables` through the oracle. -/
 def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
@@ -934,7 +935,10 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
-    if tags.hiddenOutputs then Stmt.setupHiddenWith hs t circuitFile publicFile coins tables d partition program publicInputs
+    if tags.hiddenOutputs then
+      let st ← Stmt.setupHiddenWith hs t circuitFile publicFile coins tables d partition program publicInputs
+      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
+      pure st
     else
       let st ← Stmt.setupHWith hs t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
@@ -974,6 +978,6 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 end Flock
