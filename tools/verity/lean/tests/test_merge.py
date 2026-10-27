@@ -371,6 +371,14 @@ def test_shape_entries_and_frozen_names_merge_one_by_one():
     assert why == ["shape[frozen][P.a]: changed on both sides, differently"]
 
 
+def test_unwitnessed_entries_both_sides_add_merge_in_the_order_update_writes():
+    """`--update` writes `unwitnessed` sorted (`unwitnessed_kept`), so a merge that appended theirs' entries after ours'
+    left an order-only diff for the next `--update`."""
+    base = {"unwitnessed": {"P.b": "1"}}
+    merged, why = M.merge(base, {"unwitnessed": {"P.b": "1", "P.c": "2"}}, {"unwitnessed": {"P.a": "3", "P.b": "1"}})
+    assert why == [] and list(merged["unwitnessed"]) == ["P.a", "P.b", "P.c"]
+
+
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
     """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
