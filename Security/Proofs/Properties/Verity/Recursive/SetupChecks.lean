@@ -217,7 +217,7 @@ each part's circuit is V\*'s statement's of its index (`partsVStar`). -/
 theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
     (hr : readXPre x = some r) (hparts : ∀ s p, r.w.parts[s]? = some p → PartSetup r st x ms s p) :
     readX x = some r ∧
-      ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.bindings r.w.parts vs = true := by
+      ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by
   have hrx : readX x = some r := readX_of_sessions hr fun s p hp => by
     obtain ⟨i, h, j, tags0, tags, circuitB, pubB, partition, program, registered, bindings, rows, draw, spec, sts,
       hi, hm, hsp, hhm, hset, hregs, hfull, hc, hscope⟩ := hparts s p hp
