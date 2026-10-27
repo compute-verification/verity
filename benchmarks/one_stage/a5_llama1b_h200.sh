@@ -4,7 +4,7 @@
 # --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1) is
 # committed at its C2 site before the bundle is sealed (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte
 # run root. Then the Commit's C2 replay on CPU from the sealed bundle, and a5.sh (WINDOW=served, A5_ROW_DIR) on that bundle and
-# window, in the same job, so the window's private bodies (m*-private.bin: rows and salts) never leave the node.
+# window, in the same job, so the window's private bodies (m*-private.bin, v*-private.bin: rows and salts) never leave the node.
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --mem-gb 192 --timeout 6h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 # Needs on the node what served_verdicts.sh does: vLLM's venv /workspace/cp/venv312, the int8 checkpoint in /workspace/hf, the
