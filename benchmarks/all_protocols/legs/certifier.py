@@ -90,10 +90,10 @@ input-row bits, less the rows wires feed or ``external`` names) and its Program 
 population program rebuilt from its records, off which the period check reads its units and the bits each commits),
 the observation horizon the link's (its link-windows' buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1
 (N2 holds the planned profile's egress counts exactly, so no count moves; that no offset within a bucket tells a
-receiver more is J's, assumed, `JITTER`: the session's proxy releases each egress bucket at a time fixed before the
-bucket is made, `certifier_serve.PACED_MS` after its boundary (`active.Proxy(paced=…)`), while the warden path's
-warden writes each bucket on the loop that reads the server, so there an offset the prover chooses within a bucket can
-move when the bucket leaves, and J isn't met), and no connection through the network certifier but the link, whose
+receiver more is J's, assumed, `JITTER`: each path releases each egress bucket at a time fixed before the bucket is
+made, `certifier_serve.PACED_MS` after its boundary, the session's proxy (`active.Proxy(paced=…)`) and the warden
+path's warden (`warden.Warden(paced=…)`) alike, and J isn't met until a run shows the written buckets tell a receiver
+no more than an idle one), and no connection through the network certifier but the link, whose
 counts the profile fixes (``cells`` empty).
 
 **The block record**: a period's accepted answer, of either path, is the certifier leg of ``verity/block-record/v1``
@@ -130,8 +130,8 @@ SESSION = "certifier-session"
 #: the δ a period's certificate holds at: its answer's, then the one written beside it, each split across the case's
 #: terms (`term_delta`)
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
-#: K's jitter term, 0 at the case's jitter bound 1: J (`NetTiming.JitterBounded`) assumes it, which the warden path
-#: doesn't meet at that bound (the layout terms above); each answer's row in ``summary.json`` says so (``jitter_term``)
+#: K's jitter term, 0 at the case's jitter bound 1: J (`NetTiming.JitterBounded`) assumes it, not met at that bound
+#: (the layout terms above); each answer's row in ``summary.json`` says so (``jitter_term``)
 JITTER = "assumed (J)"
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40

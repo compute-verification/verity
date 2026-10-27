@@ -2105,6 +2105,11 @@ how they were read.
     failing the connection.
   - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its J). A tick past
     the slack faults every record's window.
+  - With `paced` (`Warden(paced=…)`), the tick hands each connection's cells to the egress pacer, as the active
+    certifier's pacer (above), which writes them to the connection's socket `paced` after the bucket's boundary, a
+    time fixed before the bucket is made. A bucket that reaches the pacer after that time, or whose release starts
+    past the slack, faults every record's window: the open one, or the records held until each of its buckets'
+    releases is reported. `benchmarks/network_traces/warden_serve.py` paces at 50 ms by default (`--paced-ms`).
 - **The advice is not on the wire.** The network certifier sends no advice. Whatever the proofs need beyond the committed values
   travels on the proof side and is charged there (`A_c`).
 - **log2 of the schedule's public parameters**, once per deployment: log2 of the number of parameter sets it may

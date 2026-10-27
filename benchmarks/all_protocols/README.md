@@ -28,9 +28,9 @@ every machine of a census deployment, the pooled total first and the per-window 
     the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
     cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
     none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. The jitter term is 0 at jitter bound 1,
-    assumed (J) (`NetTiming.JitterBounded`). The certifier path's proxy releases each egress bucket at a time fixed
-    before it is made (`active.Proxy(paced=…)`); the warden writes each bucket on the loop that reads the server, which
-    doesn't meet J at that bound. Each K says so (`jitter_term`). Its `share` is K over the period's
+    assumed (J) (`NetTiming.JitterBounded`). Both paths release each egress bucket at a time fixed before it is made
+    (`active.Proxy(paced=…)`, `warden.Warden(paced=…)`), and J at that bound is not met until a run shows the written
+    buckets tell a receiver no more than an idle one. Each K says so (`jitter_term`). Its `share` is K over the period's
     output bits, 16 a unit; `fleet` is the deployment's machines joined by a union bound at δ/machines each (not in
     Lean); each window's own `K` stands beside it. `HorizonLeakAccepted` is conditional on two per-window inputs not yet
     discharged (proofs' `SampledKSLive` and the live `SampledLeakAccepted`), so this K is cited as conditional.
