@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-FORMS = {0: "sx::compress<0, 1>, inline schedule", 1: "ap_cmp + ap_serve (h1c_a_call2_k's)", 2: "paired, inlined",
+FORMS = {0: "sha512_compress, inline schedule", 1: "ap_cmp + ap_serve (h1c_a_call2_k's)", 2: "paired, inlined",
          3: "paired, inlined, reassociated round", 4: "form 3, off-chain sums on IMAD"}
 
 
