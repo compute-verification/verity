@@ -170,7 +170,7 @@ theorem rowPortCol_eq {ns : List ℕ} {i : ℕ} (hi : i < ns.length) (hn : 0 < n
 /-- **A copy's row port elements are its committed row's**: at a staged algebra part whose unit the verifier accepted
 as part `jj` of its shape (`(S, ns, nv)`), element `o` of row port `i` among the rows the copy of instance `n` reads is
 element `o` of the bytes of port `i`'s row at instance `n` (`rowHidden`'s forms) where the port isn't named `out`. The
-port is the circuit's port `i` (`port_at`), its row's columns are the copy's from the port's first word (`rowHidden_eq`,
+port is the circuit's port `i`, which its name finds (`port_at`), its row's columns are the copy's from the port's first word (`rowHidden_eq`,
 the unit's first input group at column 0, `inCol_unitLaid`), and the verifier's row column of port `i` is that word
 (`rowPortCol_eq`). -/
 theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
@@ -182,7 +182,8 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     (hres : RecResiduals.params c.unit.name = some (m, k, cl, jj)) (hshp : RecResiduals.shape? m k cl = some sh)
     (hholo : RecResiduals.holoOf c = .ok holo) (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
     {i o : ℕ} (hi : i < ns.length) (ho : o < ns[i]) (n : ℕ) :
-    ∃ hi' : i < pt.S.ports.length, (∀ P, RecVStar.partPorts { sh with holo } jj = .ok P →
+    ∃ hi' : i < pt.S.ports.length, c.ports.findIdx? (·.name == pt.S.ports[i].1) = some i ∧
+      (∀ P, RecVStar.partPorts { sh with holo } jj = .ok P →
       ∃ hP : i < P.size, pt.S.ports[i].1 = (RecVStar.portNames { sh with holo })[P[i]]!) ∧
       (pt.S.ports[i].1 ≠ "out" →
       _root_.Flock.Readable.rowsRead ns nv (Flock.Readable.copyOf p 0 ht w (n / c.g) (n % c.g) 0) ((ns.take i).sum + o) =
@@ -214,7 +215,8 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     have := congrArg List.length hns
     simp only [List.length_map] at this
     omega
-  refine ⟨hi', fun P hP => ?_, fun hnout => ?_⟩
+  obtain ⟨hcs, hfind, hbits, hwords⟩ := port_at hu hrows hi'
+  refine ⟨hi', hfind, fun P hP => ?_, fun hnout => ?_⟩
   · have heq := hnames P hP
     have hlen := congrArg List.length heq
     simp only [List.length_map, Array.length_toList] at hlen
@@ -224,7 +226,6 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     exact h2
   have hnsi : ns[i] = pt.S.ports[i].2 := by subst hns; simp
   have hpos : 0 < ns[i] := by omega
-  obtain ⟨hcs, hfind, hbits, hwords⟩ := port_at hu hrows hi'
   have hout : pt.S.ports[i].1 ∉ (VStar.Stmt.inner j nm' pt).sub.outputs := by
     show pt.S.ports[i].1 ∉ ["out"]
     simpa using hnout
