@@ -1,7 +1,7 @@
 """J10 banded noise on the RTX PRO 6000 at kernel level: the credited one-stream arm `mix-cpeel` (block2 where a call's
 column tiles outnumber the SMs, split elsewhere; peeled, z = A B^T) with per-unit noise, against the same units on banded
-noise (h1o.cu's h1o_band_launch: a band-rows pass, then units that hash only their columns), labelled `j10b_ref.LABEL`
-until CA's reference lands. Measured only: nothing here is served or credited.
+noise (h1o.cu's h1o_band_launch: a band-rows pass, then units that hash only their columns), labelled `j10b_ref.CA_LABEL`
+with the banded reference's tree, else `j10b_ref.LABEL`. Measured only: nothing here is served or credited.
 
     arms  mix-cpeel        per-unit noise, h1o.cu's served kernels (the baseline)
           mix-cpeel-b1s    the banded kernels at g = 1: every unit its own leader, so per-unit noise with the rows hashed
@@ -16,7 +16,7 @@ until CA's reference lands. Measured only: nothing here is served or credited.
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
           seeds buffer), its CPU units on j10b_ref's noise (h1v3_ca's word functions: dither_one.h1v3_unit with h1tile's
-          rows taken from the leader), z held to A B^T (peeled), and CA's banded reference itself on the same units, which
+          rows taken from the leader), z held to A B^T (peeled), and credit's banded reference itself on the same units, which
           the gate requires (banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
           banded-1a4d1de024.tar.gz). Then the band workspace of the gate
           step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 drawn bands 8
@@ -321,7 +321,7 @@ def main() -> int:
     doc = {"schema": "kernels-j10/rtx/v1", "gpu": torch.cuda.get_device_name(dev), "label": JB.CA_LABEL if ca else JB.LABEL,
            "noise_reference": (f"credit's banded_reference (at {JB.CA_SHA}) on the gate's CPU units, required; every "
                                "receipt against h1r_launch_band, the band workspace against j10b_ref (equal to the "
-                               "reference on its pinned vectors)") if ca else "none: no CA tree, so no banded arm passes its gate",
+                               "reference on its pinned vectors)") if ca else "none: no banded reference tree, so no banded arm passes its gate",
            "arms": arms, "ms": ms,
            "shapes": HG.SHAPES, "sms": torch.cuda.get_device_properties(dev).multi_processor_count,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "windows": {}}
