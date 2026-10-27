@@ -75,8 +75,8 @@ def refuse(args: Any) -> None:
            "--padded-finalize: padding steps are not in the replay bundle's store" if args.padded_finalize else
            f"--compiled-taps {args.compiled_taps}: the compiled check is its own C2" if args.compiled_taps != "off" else
            "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else
-           "--serving-rows commits in the in-process replay; `verity-vllm serving-rows BUNDLE` writes a deferred Commit's"
-           if args.serving_rows else
+           "slim with --serving-rows: the plan would commit the window and seal every unit it reads; a full deferral commits it at "
+           "the C2 site (`c2_replay.serving_rows`)" if args.serving_rows and args.replay_deferred == "slim" else
            "--memory-map writes in the in-process replay" if getattr(args, "memory_map", None) else None)
     if why:
         raise SystemExit(f"--replay-deferred: {why}")
