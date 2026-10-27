@@ -76,7 +76,7 @@ hash, nor false of every hash.
     (`rdT`, `cand`) are charged nowhere, and must fit in `t′` or in `q`'s slack.
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
-  is unsupported. Tying the five to one per-run count in the signatures would check this in Lean; it is a follow-up.
+  is unsupported. Tying the five to one per-run count in the signatures would check this in Lean, and is not done yet.
 - **Where it is used.** The compiled term's rewinding finders (`Adv_{r,ℓ}`: two continuations after a rep's level-`ℓ`
   cap) and its self-clash finder (one run that opens a position two ways), the knowledge term's level-0 finder (`Adv₀`:
   two runs after the level-0 cap), the serving roots' Merkle binding (`δ_tree`: two continuations after the

@@ -30,7 +30,7 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   (`Flock.Deploy.dec`, a named, counted program), at the encoded length of the word it decodes (`Flock.wordLen`). The
   form first frozen (`DecoderComplexity`) took the decoder, its count and its size as arguments, so a count of `0` met
   it.
-* Nontriviality is recorded honest runs that the verifier accepts (`Nontrivial`). (16 Oct, TOP-53) It is established
+* Nontriviality is recorded honest runs that the verifier accepts (`Nontrivial`). It is established
   by a test against recorded sessions, not by a Lean theorem, and no Lean proof of it is expected: Lean's kernel can't
   evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job (`tools/verity/check/ci.toml`), which
   runs the compiled Lean verifier on every recorded honest session (`verity/ml/flock/verifier/agree.py`) and fails
@@ -39,7 +39,7 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   zero-filled word of the trace's codeword length (`Flock.fill`: at each position the first opened column there, the
   positions from the length on ignored), and the decoder lists every trace whose encoding agrees with that word on at
   least `(1 − θ)·len` positions, so leaving positions unopened or opening one twice gains a prover nothing. The radius
-  is read per trace, like the length (`Flock.Deploy.len`, `Flock.Deploy.θ`; TOP-48): the plain level-0 rate is `1/2`
+  is read per trace, like the length (`Flock.Deploy.len`, `Flock.Deploy.θ`): the plain level-0 rate is `1/2`
   at every schedule, but the masked code's varies with `m`, so one `θ` would cost bits. It replaces the form that
   listed a trace from `nMin` opened columns above the Johnson bound, under which a prover that avoids positions was
   accepted at about `2^{−8}`, so `KS` was false. `Flock.Efficient` asks it of the decoder it costs.
@@ -525,7 +525,7 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
   r : Fin (V.k x) → Coin
 
 /-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is established by
-a test against recorded sessions, not by a Lean proof, and none is expected (TOP-53): `check`'s `lean-agreement` job
+a test against recorded sessions, not by a Lean proof, and none is expected: `check`'s `lean-agreement` job
 (`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier
 (`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
@@ -809,7 +809,7 @@ def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg �
     ∀ os, (D.decode os).length ≤ p.eval (wordLen os)
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
-accepts. It is established by a test against recorded sessions, not by a Lean proof, and none is expected (TOP-53):
+accepts. It is established by a test against recorded sessions, not by a Lean proof, and none is expected:
 `check`'s `lean-agreement` job (`tools/verity/check/ci.toml`) runs the compiled Lean verifier on recorded honest
 sessions (`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin Col T) (recs : List (Recorded D.V)) : Prop :=
