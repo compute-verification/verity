@@ -19,10 +19,11 @@ audit. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/
     {"format": "verity/all-protocols-window/v1", "window": W, "node": NAME, "run": RUN, "loop": {...},
      "protocols": {NAME: ROW, ...}, "composed": {...}, "seconds": {...}}
 
-After each window ``DIR/monitoring-period.json`` is `monitoring.monitoring` over the windows so far: integrity's pooled
-total over a week, a month and a year of the census deployment (``--deployment``) at δ = 1% and 10⁻⁶, the per-window
-figure beside it, and what is proved and what scaled. Its line (``ALLP``) leads with it. Windows run on several machines
-(``--start`` apart) pool with ``python -m verity_all_protocols.monitoring DIR1/reports.jsonl DIR2/reports.jsonl``.
+After each window ``DIR/monitoring-period.json`` is `monitoring.monitoring` over the windows so far: the joint bound
+``onsite bound`` (``--onsite``) evaluates over the windows onsite accepted, and over the blocks of a week, a month and a
+year of the census deployment (``--deployment``). Its line (``ALLP``) leads with it. Windows run on several machines
+(``--start`` apart) pool with ``python -m verity_all_protocols.monitoring DIR1/reports.jsonl DIR2/reports.jsonl --onsite
+EXE``.
 
 A row is ``{"verdict": "missing", "owner": LANE}`` for a protocol with no leg, ``{"verdict": "error", "owner", "reason"}``
 for a leg that couldn't decide, and otherwise its answer's verdict with ``protocol``, ``owner``, ``commitment``,
@@ -106,8 +107,8 @@ PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "ser
 #: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
 #: of their roots in ``DIR``
 WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
-#: ``--law``'s default (k = 64: about 74 wrong units over a whole monitoring period at δ = 1% and n = 1024), and its
-#: default with ``--tie``, whose output class a5 proves only beside a streamed work draw
+#: ``--law``'s default (k = 64 of n = 1024), and its default with ``--tie``, whose output class a5 proves only beside a
+#: streamed work draw
 LAW, TIE_LAW = "subset:64", "work:64"
 CAP = 8
 #: the tie's work law on the wired toy, which has 14 units, so its work law draws at most k = 14
@@ -368,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--steps", type=int, default=2)
     ap.add_argument("--pouw", choices=["h1"], help="the loop's PoUW window and its audit (ALLP-H1LOOP's, until it lands)")
     ap.add_argument("--deployment", default=M.REFERENCE, help="the census deployment the monitoring periods are over")
-    ap.add_argument("--onsite", help="onsite's executable (`onsite check`), for when its components are ports")
+    ap.add_argument("--onsite", help="onsite's executable: `onsite check` decides each window, `onsite bound` the joint bound")
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
     ap.add_argument("--registered", action="store_true", help="the loop reads its weights as registered values "
                     "(`serve --registered`), committed once before the first window")
@@ -435,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
             (wdir / "report.json").write_text(json.dumps(report, indent=1, sort_keys=True))
             with open(out / "reports.jsonl", "a") as f:
                 f.write(json.dumps(report, sort_keys=True) + "\n")
-            m = M.monitoring(sorted(reports, key=lambda r: r["window"]), dep)
+            m = M.monitoring(sorted(reports, key=lambda r: r["window"]), dep, a.onsite)
             (out / "monitoring-period.json").write_text(json.dumps(m, indent=1, sort_keys=True))
             print("ALLP " + json.dumps({"monitoring_period": M.lead(m), "window": summary_line(report)}, sort_keys=True),
                   flush=True)

@@ -48,7 +48,8 @@
   "Properties.RemoteAudit.Live",
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Onsite"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -330,6 +331,8 @@
   "Definitions.Pouw.Basic",
   "Properties.Composition",
   "CoreComposition",
+  "Properties.Onsite",
+  "CoreOnsite.Pooled",
   "Properties.NciDesc",
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
@@ -560,6 +563,11 @@
    "imports": ["CoreComposition.Product"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Onsite": {
+   "imports": ["Mathlib", "CoreOnsite.Pooled"],
+   "except": [],
+   "why": "the pooled figures are stated against the code that computes them (`CoreOnsite.Pooled`) and Mathlib's logarithm and binomials, restating the arithmetic of the statements they evaluate, never a proof"
   }
  },
  "reads_exempt": {
@@ -1574,6 +1582,21 @@
    "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
+  },
+  "Properties.Onsite.horizonLeakCovers": {
+   "owner": "@proofs"
+  },
+  "Properties.Onsite.integrityHorizonCovers": {
+   "owner": "@proofs"
+  },
+  "Properties.Onsite.integrityPeriodCovers": {
+   "owner": "@proofs"
+  },
+  "Properties.Onsite.lnBrackets": {
+   "owner": "@proofs"
+  },
+  "Properties.Onsite.pooledShortCovers": {
+   "owner": "@proofs"
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
@@ -3494,6 +3517,26 @@
    "Properties.Composition.answerAccepts": {
     "function": "Core.Protocol.answer",
     "outcome": "accept"
+   },
+   "Properties.Onsite.horizonLeakCovers": {
+    "function": "Core.Onsite.Pooled.leakBits",
+    "outcome": "none"
+   },
+   "Properties.Onsite.integrityHorizonCovers": {
+    "function": "Core.Onsite.Pooled.wrongUnits",
+    "outcome": "none"
+   },
+   "Properties.Onsite.integrityPeriodCovers": {
+    "function": "Core.Onsite.Pooled.threshold",
+    "outcome": "none"
+   },
+   "Properties.Onsite.lnBrackets": {
+    "function": "Core.Onsite.Pooled.ln",
+    "outcome": "none"
+   },
+   "Properties.Onsite.pooledShortCovers": {
+    "function": "Core.Onsite.Pooled.shortCount",
+    "outcome": "none"
    }
   },
   "frozen": {

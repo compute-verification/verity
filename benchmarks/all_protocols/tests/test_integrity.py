@@ -178,4 +178,4 @@ def test_two_windows_through_the_verifier_of_record(tmp_path):
     assert tampered["verdict"] == "reject"
     assert [r["composed"]["verdict"] for r in reports] == ["pending-ports", "reject"]
     m = json.loads((tmp_path / "out" / "monitoring-period.json").read_text())
-    assert m["integrity"]["observed"]["verdict"] == "reject" and m["composed"]["verdict"] == "reject"
+    assert m["composed"]["verdict"] == "reject" and m["accepted_windows"] == []

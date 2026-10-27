@@ -12,8 +12,6 @@
   `CoreOnsite.lean` as written;
 * windows audited at once each get their report, and the monitoring-period report over all of them leads the line;
 * under ``--pouw h1`` PoUW's audit of the H1 window runs before the legs, on the window's own PoUW circuit;
-* the network certifier's K over a week, a month and a year with the faulty proof blocks paid for once
-  (`HorizonLeakAccepted`), each window's K beside it;
 * the loop's window keeps only its public files, and its circuit is the one registered before it ran (slow).
 """
 from __future__ import annotations
@@ -24,7 +22,6 @@ import json
 import stat
 import sys
 from argparse import Namespace
-from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -118,7 +115,7 @@ print(json.dumps({{"commitment": c.hex(), "profile": None if {verdict!r} != "acc
 
 def test_nothing_composes_to_accept_while_onsite_has_stubs(tmp_path):
     every = {e.name: fake("accept", {"commitment": "00", "evidence": "00", "params": {}}) for e in T.TABLE}
-    r = decide(tmp_path, **every, onsite=[*EVERY_PORT[:-1], "Stub.sampledProofs"], exe=str(onsite_exe(tmp_path)))
+    r = decide(tmp_path, **every, onsite=[*(x for x in EVERY_PORT if x != "SampledProofs.OneStage.protocol"), "Stub.sampledProofs"], exe=str(onsite_exe(tmp_path)))
     assert all(x["verdict"] == "accept" for x in r["protocols"].values())
     assert r["composed"]["verdict"] == "pending-ports"
     assert "onsite's stubs" in r["composed"]["reason"]
@@ -358,10 +355,11 @@ def test_windows_audited_one_after_another_each_report_and_the_monitoring_period
     assert [r["window"] for r in reports] == [5, 6, 7]
     assert all((tmp_path / "out" / f"w{w}" / "report.json").exists() for w in (5, 6, 7))
     m = json.loads((tmp_path / "out" / "monitoring-period.json").read_text())
-    assert m["integrity"]["observed"]["windows"] == 3 and m["integrity"]["observed"]["verdict"] == "accept"
+    assert m["composed"]["windows"] == 3 and m["bound"] is None and m["why"] == "no onsite executable given"
+    assert [m["periods"][p]["blocks"] for p in ("week", "month", "year")] == [12_600_000, 54_000_000, 657_000_000]
     lines = [json.loads(x.split(" ", 1)[1]) for x in capsys.readouterr().out.splitlines() if x.startswith("ALLP ")]
     assert len(lines) == 3 and list(lines[-1]) == ["monitoring_period", "window"]
-    assert set(lines[-1]["monitoring_period"]) >= {"week", "month", "year", "observed"}
+    assert lines[-1]["monitoring_period"] == {"why": "no onsite executable given", "composed": "pending-ports"}
 
 
 def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
@@ -403,51 +401,6 @@ def test_jobs_and_session_jobs_take_only_one_naming_the_rule(flag, tmp_path, cap
         RN.main(["--out", str(tmp_path), "--tools", str(tmp_path / "tools.json"), flag, "2"])
     err = capsys.readouterr().err
     assert flag in err and "through the firewall one at a time" in err and "whichever window" in err
-
-
-def _period(units: int, drawn: int, K: int = 24, schedules: int = 4, cells: int = 3, free: int = 1,
-            jitter: int = 2) -> dict:
-    return {"K": K, "eps": "1/100", "windows": 1, "schedules": schedules, "cells": cells,
-            "audits": [{"units": units, "drawn": drawn, "free": free, "jitter": jitter}]}
-
-
-def _communication(verdict: str, quantity: dict | None = None) -> dict:
-    row = {"verdict": verdict, "protocol": C.CERTIFIER, "quantity": quantity if verdict == "accept" else None}
-    return {"protocols": {"integrity": {"verdict": "missing"}, "communication": row}, "composed": {"verdict": "reject"}}
-
-
-def test_the_horizon_pays_for_the_faulty_units_once():
-    def fmax(units: int, drawn: int, delta: Fraction) -> int:
-        return C.horizon_leak([_period(units, drawn)], delta)["Fmax"]
-    assert fmax(1024, 64, Fraction(1, 100)) == 74
-    assert fmax(1024, 2, Fraction(1, 100)) == 2358
-    mixed = {**_period(3, 3), "audits": [*_period(3, 3)["audits"], *_period(2, 1)["audits"]]}
-    assert C.horizon_leak([mixed], Fraction(1, 100))["q"] == "1/2"
-    assert C.horizon_leak([mixed], Fraction(1, 100))["Fmax"] == 10
-
-
-def test_the_network_certifiers_k_is_pooled_once_per_span_with_the_per_window_figure_beside_it():
-    p = _period(3, 3)
-    reports = [_communication("accept", p), _communication("reject"), _communication("accept", p)]
-    c = C.communication(reports, period_s=60, spans={"five": 300}, deltas=(Fraction(1, 100), Fraction(1, 10**6)),
-                        machines=10)
-    assert {k: c[k] for k in ("periods", "accepted", "refused")} == {"periods": 3, "accepted": 2, "refused": 1}
-    assert c["per_window"] == [{"K": 24, "eps": "1/100", "windows": 1, "share": 0.5}] * 2
-    so_far = c["pooled"]["1/100"]
-    assert (so_far["units"], so_far["Fmax"], so_far["K"]) == (6, 5, 8 + 6 + 80 + 15 + 2 + 4)
-    five = c["five"]["pooled"]["1/100"]
-    assert c["five"]["periods"] == 5 and five["windows"] == 5 and five["q"] == "1"
-    assert five["terms"] == {"schedules": 20, "cells": 15, "faulty_bits": 80, "faulty_sets": 20, "free": 5,
-                             "jitter": 10}
-    assert (five["units"], five["Fmax"], five["K"], five["share"]) == (15, 5, 150, 0.625)
-    assert five["e_for_eps_2delta"] == "1/500" and five["eps"].startswith("1/100 + ") and five["conditional"]
-    assert c["five"]["pooled"]["1/1000000"]["Fmax"] == 14 and c["five"]["pooled"]["1/1000000"]["K"] == 330
-    many = c["five"]["fleet"]["1/100"]
-    assert (many["machines"], many["delta_each"], many["Fmax_each"], many["K"], many["units"]) == (
-        10, "1/1000", 7, 1900, 150)
-    none = C.communication([_communication("reject")], period_s=0, spans={"week": 7 * 86400}, deltas=(Fraction(1, 100),),
-                           machines=10)
-    assert none["accepted"] == 0 and none["pooled"] is None and none["week"] == {"periods": None}
 
 
 @pytest.mark.slow

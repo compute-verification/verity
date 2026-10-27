@@ -8,8 +8,9 @@ their ported components' packages, with no Mathlib:
   `registered id R s components`, the same after a registration check `R`, on the registration the component `s`
   commits to (`Registered.lean`); both over blobs (`Blobs.lean`); the stub components (`Stubs.lean`); and the `#guard`s
   that pin both rules (`Guards.lean`).
-- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth and
-  communication.
+- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth,
+  communication and the wipe; and `onsite bound` (`CoreOnsite/Bound.lean`), the joint bound's evaluation on its
+  answers (below).
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
 
 The rule and the formats are written once, over any list of components, and the two products are values
@@ -90,6 +91,30 @@ it rejects too when the committing component's case (the first under the id `s`)
 whatever the components answer (`mismatch`: `registration: R checked D, s committed D'`, `D'` hex or `no digest`).
 Otherwise it answers as the product of the components does under the commitment's first 64 bytes, and the registration
 adds nothing to what is public or kept.
+
+## The joint bound
+
+`onsite bound ANSWERS [--delta R]… [BLOCKS…]` (`Core.Onsite.Bound`) evaluates the right-hand side of
+`Accounting.Guarantees.JointHorizonBlocks` on `onsite check`'s accepted answers, one a line of the file `ANSWERS`, each a
+server-time block. A block's terms are each subprotocol's error, read where it publishes it (`Bound.SOURCES`, which a
+`#guard` holds to `Core.Onsite.components`): the network certifier's, PoUS's, the remote bandwidth audit's and the
+wipe's `eps`, PoUW's period `delta` (the δ its periods' ε are stated at) and sampled proofs' profile `delta`. It prints
+each block's terms and their sum, the run's error (the blocks' sums added), and for each count `B` the error over a
+monitoring period of `B` blocks each audited as the run's are (`B` times the largest block's sum), vacuous at 1 or more,
+as a union over the blocks is past about `1/δ` of them.
+
+Beside it, at each `R`, each period's pooled reading (`horizons`) gives the pooled figures (`Core.Onsite.Pooled`), each
+from the statement that pays `δ` once over the period, at the run's worst block: integrity's faulty proof blocks
+(`Flock.Guarantees.IntegrityHorizon`) and the per-block threshold at `δ/B` (`Flock.Guarantees.IntegrityPeriod`), PoUS's
+certified sampling periods (`Pous.Period.SecurityProofs.pooledShort_log`) and the network certifier's leak in bits
+(`NetTiming.Guarantees.HorizonLeakAccepted`, conditional on its per-block inputs). A logarithm a statement reads is
+replaced by a certified bound on the safe side. Each figure's `tied_by` names the property of `Properties.Onsite`
+(`Security/Properties/Onsite.lean`) proving that the code's figure meets that statement's arithmetic. `inputs` gives
+what each figure read, or why no block gives it.
+
+`open` names what no guarantee states: the memory term's `δ_PoUS` (no subprotocol publishes it), bandwidth pooled over a
+monitoring period, space as `proved, not locked` (no lock lists `pooledShort_log` as a guarantee yet), and a per-machine
+leak joined over machines. A block that wasn't accepted establishes no claim, and is refused.
 
 ## The difftest
 

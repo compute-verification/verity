@@ -12,10 +12,12 @@ on what left the site), and the wipe by the memory challenger's streamed-label w
 or onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before composing, in its
 commit phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`, `verity/nci/v1`, a
 registration check and not a component): a registration it refuses refuses onsite, and so does one other than the
-registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
+registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`). `Bound.evaluate` reads the
+joint bound's terms and the pooled figures' inputs from its accepted answers.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
+import CoreOnsite.Bound
 import MemoryChallenger.WipeProtocol
 import NciCheck.Protocol
 import NetworkCheck.Period
@@ -49,6 +51,8 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 #guard orderedB components
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
   "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"]
+-- the bound reads an error from every component, and from nothing else
+#guard Bound.SOURCES.map (·.1) == components.map (·.id)
 
 -- every component refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)

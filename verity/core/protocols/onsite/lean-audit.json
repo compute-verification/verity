@@ -1,7 +1,7 @@
 {
  "roots": ["CoreOnsite", "CoreProduct"],
  "exempt": {
-  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "OnsiteMain": "the onsite executable's entry point: `bound` is Core.Onsite.Bound.main, audited under CoreOnsite, and every other command Core.Protocol.main, audited under CoreProtocol",
   "ProductMain": "the product executable's entry point, one line; its command is Core.Product.main, audited under CoreProduct"
  },
  "layers": {
@@ -9,6 +9,10 @@
    "imports": [
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
+    "CoreOnsite.Bound",
+    "CoreOnsite.Pooled",
+    "CoreProtocol.Protocol",
+    "CoreProtocol.Ratio",
     "MemoryChallenger.WipeProtocol",
     "NciCheck.Protocol",
     "NetworkCheck.Period",

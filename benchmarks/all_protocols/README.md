@@ -3,34 +3,27 @@
 `verity bench all-protocols` (`run.sh`): every window, one run of the torch loop (`integrations/torch_loop`, a two-layer
 W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own and composed through onsite Verity
 (`verity/core/protocols/onsite`). The result is per monitoring period, over all compute: a week, a month and a year of
-every machine of a census deployment, the pooled total first and the per-window figure beside it.
+every machine of a census deployment: each resource's pooled figure first, then the joint error.
 
 - `verity_all_protocols/monitoring.py`: the monitoring-period report (`$OUT/monitoring-period.json`). A monitoring period
-  of a deployment (`benchmarks/census/deployments.json`: its machines and window length, stated parameters) is
-  `T = machines × ⌊period/window⌋` windows, each on its own live draw of `kd` of its `n` units (`q = kd/n`).
-  - Pooled (the result): `IntegrityHorizon` (#4358; its sampling core `horizon_escape_log`, #4350). If every window is
-    accepted, the period's faulty proof blocks total fewer than `ln(1/δ)/q`, except with probability `δ + Σ_t (ε_ks,t + δ_link,t)`.
-    At k = 64 of n = 1024 that is at most 73 units at δ = 1% and 221 at 10⁻⁶, whatever `T` is.
-  - Per window (beside it): `IntegrityPeriod` (#4358) at `δ/T` a window, the exact hypergeometric threshold.
-  - Proved: each window's verdict, by the Lean verifier of record. Scaled: the number of windows, and that every window
-    is audited as the run's are. The run doesn't compute `ε_ks` or `δ_link`, so each figure names that term.
-  - PoUS, the bandwidth audit and the network certifier pool from the run's own answers over the same `T`, when they
-    report. PoUS's is a count: its shortness reads each window's own coins, so the period certifies at least `T − M + 1`
-    windows at each δ, by `pooledShort`'s Chernoff form at `p` the windows' `eps` (#4418, given `FixedBefore`; #4413).
-    The bandwidth audit fails with probability `T · eps`, not `eps`. The network certifier pays each window's own
-    terms of its itemized K every window and the faulty proof blocks once, `⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))` bits
-    (`HorizonLeakAccepted`, #4367, conditional on its per-window inputs until they are discharged).
-  - `python -m verity_all_protocols.monitoring A/reports.jsonl B/reports.jsonl` pools windows run on several machines.
-  - Communication per machine, beside it: the network certifier's `K` over a week, a month and a year
-    (`communication`, `compose.communication`), at δ = 1/100 and 10⁻⁶. Where `resources.communication` pools every
-    machine's windows as one sequence, this pools one machine's: each window draws its own live coins, so the faulty
-    proof blocks are paid for once over that machine's windows (`HorizonLeakAccepted`, #4367): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
-    the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
-    cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
-    none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. Its `share` is K over the period's output bits,
-    16 a unit; `fleet` is the deployment's machines joined by a union bound at δ/machines each (not in Lean); each
-    window's own `K` stands beside it. #4367 is conditional on two per-window inputs not yet discharged (proofs' `SampledKSLive`
-    and the live `SampledLeakAccepted`), so this K is cited as conditional.
+  of a deployment (`benchmarks/census/deployments.json`: its machines and block length `window_s`, stated parameters) is
+  `B = machines × ⌊period/window_s⌋` server-time blocks, each one onsite decides. It computes no bound: it hands the
+  blocks onsite accepted and each period's `B` to `onsite bound` (`Core.Onsite.Bound`, the composition README's "The
+  joint bound"), which evaluates the right-hand side of `Accounting.Guarantees.JointHorizonBlocks` on them: each accepted
+  block's subprotocols' errors summed, the run's total, and per period `B` times the run's largest block (`vacuous` once it
+  reaches 1, past about `1/δ` blocks). Beside it, at δ = 1/100 and 10⁻⁶, each resource's pooled figure, from the
+  statement that pays δ once over the period, evaluated by the same executable (`Core.Onsite.Pooled`): integrity's faulty
+  proof blocks (`IntegrityHorizon`, 73 at k = 64 of n = 1024 and δ = 1%, whatever `B` is) with the per-block threshold at δ/B
+  beside them (`IntegrityPeriod`), PoUS's certified sampling periods (`pooledShort_log`) and the network certifier's leak in bits
+  (`HorizonLeakAccepted`, conditional on its per-block inputs), each meeting its statement's arithmetic by a property
+  of `Properties.Onsite` (its `tied_by`). `open` names what no guarantee states: the memory term's `δ_PoUS` (no
+  subprotocol publishes it), bandwidth pooled over a period, space as `proved, not locked` (`pooledShort_log` is in no
+  lock yet), and a per-machine leak joined over machines.
+  - Proved: each block's verdict, by onsite's Lean, and each figure's evaluation, by the same executable. Scaled: the
+    number of blocks, and that every block is audited as the run's worst is.
+  - Without `--onsite`, or with no block onsite accepted, there is no bound, and the report says why.
+  - `python -m verity_all_protocols.monitoring A/reports.jsonl B/reports.jsonl --onsite EXE` pools blocks run on
+    several machines.
 - `verity_all_protocols/table.py`: the protocols (`TABLE`) and the one subprotocol interface. A subprotocol is
   `legs/<component>.py` defining `leg(period_dir, node, out) -> dict`. `period_dir` is the window's loop records (the
   window the loop wrote) with `period.json` (the window's index, the circuit registered before the loop ran, the run
@@ -107,6 +100,7 @@ every machine of a census deployment, the pooled total first and the per-window 
 | `space` | PoUS | `legs/pous.py` | memory-accounting | missing |
 | `bandwidth` | the bandwidth audit over PoUS's store, or remote bandwidth | `legs/bandwidth.py` | memory-accounting | missing |
 | `communication` | the network certifier | `legs/certifier.py` | network-accounting | real |
+| `wipe` | the wipe (`verity/wipe/v0`) | `legs/wipe.py` | memory-accounting | real |
 
 ## S1's run of record
 

@@ -20,11 +20,15 @@ import functools
 import hashlib
 import itertools
 import json
+import math
 import random
 import shutil
+import subprocess
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 import periods
@@ -367,6 +371,90 @@ def test_remote_agrees(remote_server):
 @pytest.mark.slow
 def test_onsite_agrees(onsite_server, recorded):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
+
+
+#: Where each onsite component publishes its error (`Core.Onsite.Bound.SOURCES`), stated again here.
+ERRORS = {"verity/certifier/v0": ("public", "eps"), "verity/pous/p2/v4/run": ("public", "eps"),
+          "verity/pouw/period/v1": ("public", "delta"), "verity/remote-bandwidth/v0": ("public", "eps"),
+          "verity/sampled-proofs/one-stage/v2": ("profile", "delta"), "verity/wipe/v0": ("public", "eps")}
+
+
+@st.composite
+def accepted(draw) -> dict:
+    """An accepted answer of onsite, as `Core.Composition.judge` writes one: each subprotocol's public outputs and profile
+    under its id, from that subprotocol's own accepted answer on a case its generator aims at acceptance. v2 accepts only
+    on a proof of its drawn proof blocks, which no case here carries, so integrity's are v1's audit's on an audit it
+    accepts, which v2 publishes unchanged when it accepts (`OneStageZk.protocol`'s `publicJson` and `profileJson` are
+    v1's)."""
+    answers = {}
+    for C in R.ONSITE.product.components:
+        if C is R.SAMPLED_PROOFS:
+            a = OS.answer(OS._case(draw(OS.changed_audits(most=0))))
+        else:
+            c = draw(component_case(C, R.ACCEPT))
+            a = C.answer({"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "params": c["params"]})
+        assert a["verdict"] == R.ACCEPT, (C.id, a["reason"])
+        answers[C.id] = a
+    return R.P.outcome(R.ONSITE.id, R.ACCEPT, digest=bytes(64), public={i: a["public"] for i, a in answers.items()},
+                       profile={i: a["profile"] for i, a in answers.items()})
+
+
+@pytest.mark.slow
+def test_onsite_bound_sums_each_components_published_error(recorded, tmp_path_factory):
+    """`onsite bound` on onsite's accepted answers (`accepted`, from each component's own accepted answer) gives
+    each block's terms where `ERRORS` reads them, their sum, the run's total and a horizon's ``B`` times the largest
+    block, and beside it the pooled figures' inputs read from the same answers, integrity's faulty proof blocks and the
+    certifier's leak as their statements count them: the figures `verity bench all-protocols` prints for its
+    monitoring periods."""
+    exe = D.build(PROTOCOLS / "onsite", "onsite")
+    assert [C.id for C in R.ONSITE.product.components] == list(ERRORS)
+
+    @settings(max_examples=6, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.lists(accepted(), min_size=1, max_size=3))
+    def check(answers):
+        f = tmp_path_factory.mktemp("bound") / "answers.jsonl"
+        f.write_text("".join(canonical(a) + "\n" for a in answers))
+        horizon = 10**9
+        p = subprocess.run([str(exe), "bound", str(f), "--delta", "1/100", str(horizon)], capture_output=True, text=True,
+                           check=False)
+        assert p.returncode == 0, p.stderr
+        out = json.loads(p.stdout)
+        terms = [{i: Fraction(functools.reduce(dict.__getitem__, path, a[where][i])) for i, (where, *path) in ERRORS.items()}
+                 for a in answers]
+        sums = [sum(t.values(), Fraction(0)) for t in terms]
+        assert out["blocks"] == [{"error": str(s), "terms": {i: str(r) for i, r in t.items()}} for t, s in zip(terms, sums)]
+        assert out["run"] == {"blocks": len(answers), "error": str(sum(sums)), "vacuous": sum(sums) >= 1}
+        e = horizon * max(sums)
+        [h] = out["horizons"]
+        assert {k: h[k] for k in ("blocks", "error", "vacuous")} == {"blocks": horizon, "error": str(e), "vacuous": e >= 1}
+        assert out["statement"] == "Accounting.Guarantees.JointHorizonBlocks"
+        assert [o["figure"] for o in out["open"]] == ["joint: δ_PoUS", "bandwidth", "space", "communication per machine"]
+        pooled, inputs = h["pooled"]["1/100"], out["inputs"]
+        draws = [(lv["size"], prof["drawn"][lv["name"]]) for a in answers
+                 for prof in [a["profile"]["verity/sampled-proofs/one-stage/v2"]] for lv in [prof["levels"][-1]]]
+        q = min(Fraction(kd, n) for n, kd in draws)
+        assert inputs["integrity"]["q"] == str(q)
+        assert pooled["integrity"]["faulty_blocks_at_most"] == math.ceil(math.log(100) / q) - 1
+        assert pooled["integrity"]["tied_by"] == "Properties.Onsite.integrityHorizonCovers"
+        assert pooled["integrity_per_block"]["tied_by"] == "Properties.Onsite.integrityPeriodCovers"
+        stores = [a["public"]["verity/pous/p2/v4/run"] for a in answers]
+        stores = [s for s in stores if s["certified"]]
+        if stores:
+            assert inputs["space"] == {"p": str(max(Fraction(s["eps"]) for s in stores)),
+                                       "s_bits": min(s["s_bits"] for s in stores)}
+            assert 0 <= pooled["space"]["certified_at_least"] <= horizon
+            assert (pooled["space"]["status"], pooled["space"]["tied_by"]) == (
+                "proved, not locked", "Properties.Onsite.pooledShortCovers")
+        else:
+            assert "why" in pooled["space"]
+        leak = inputs["communication"]
+        if "why" not in leak:
+            fmax = math.ceil(math.log(100) / Fraction(leak["q"]))
+            assert pooled["communication"]["K_bits"] == horizon * leak["every_block_bits"] + fmax * (
+                16 + math.ceil(math.log2(horizon * leak["proof_blocks"] + 1)))
+            assert pooled["communication"]["tied_by"] == "Properties.Onsite.horizonLeakCovers"
+
+    check()
 
 
 class Trial(R.Product):

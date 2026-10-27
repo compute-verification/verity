@@ -2,7 +2,8 @@
 # period credit, `verity/pouw/period/v1`), space (PoUS's run check), bandwidth (the remote bandwidth session),
 # communication (the network certifier over the period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`), after
 # NCI's registration check (`verity/nci/v1`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
-# drives. Code: no Mathlib.
+# drives, and `onsite bound`, the joint bound's evaluation and each resource's pooled figure (`CoreOnsite/Bound.lean`,
+# `CoreOnsite/Pooled.lean`). Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
