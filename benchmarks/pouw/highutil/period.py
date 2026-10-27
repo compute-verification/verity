@@ -411,15 +411,28 @@ class GpuDriver:
         torch.cuda.synchronize()
         self.keys: dict[tuple[int, int], bytes] = {}
         self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {os.environ.get('V31_LTW', '0')}"]
+        self._poll_clock()
+
+    def _poll_clock(self) -> None:
+        """The SM clock, sampled every 200 ms by one nvidia-smi beside the run (none inside a timed block)."""
+        import threading
+        uuid = os.environ.get("GPU_LEASE_UUID")
+        self.clock = 0
+        try:
+            self.smi = subprocess.Popen(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits", "-lms", "200",
+                                         *(["-i", uuid] if uuid else [])], stdout=subprocess.PIPE, text=True)
+        except OSError:
+            self.smi = None
+            return
+
+        def read() -> None:
+            for line in self.smi.stdout:
+                if line.strip().isdigit():
+                    self.clock = int(line)
+        threading.Thread(target=read, daemon=True).start()
 
     def _mhz(self) -> int:
-        uuid = os.environ.get("GPU_LEASE_UUID")
-        try:
-            got = subprocess.run(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits", *(["-i", uuid] if uuid else [])],
-                                 capture_output=True, text=True, check=True).stdout.split()
-            return int(got[0])
-        except (OSError, subprocess.CalledProcessError, ValueError, IndexError):
-            return 0
+        return self.clock
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
         torch, NL = self.torch, len(LAYERS)
@@ -490,6 +503,8 @@ class GpuDriver:
         return self.ps[li].open(c, positions)
 
     def close(self) -> None:
+        if self.smi:
+            self.smi.terminate()
         for p in self.ps:
             self.point_b(p.h, None)
             p.close()
@@ -633,7 +648,7 @@ class Period:
         reg_digest, reg = self.registration(pid, plan)
         session = self.coins.session()
         t_s = time.monotonic()
-        address, secret, _ = session.open(reg_digest.hex(), [["seeds", plan.blocks], ["check", plan.blocks]], 30, SCHEME)
+        address, secret, _ = session.open(reg_digest.hex(), [["seeds", plan.blocks], ["check", plan.blocks]], 10, SCHEME)
         client = self.coins.connect(address, secret)
         t_open = time.monotonic() - t_s
         openings, blocks, all_picks, roots_of, seeds_of, keys_of = [], [], [], {}, {}, {}
