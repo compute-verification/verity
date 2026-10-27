@@ -74,10 +74,15 @@ def test_the_factors_and_the_v4_arm(tiny, v2, ids, calib):
     probe = run_all()
     rows = probe["rows"]
     measured = {a: P.attn(rows, "deepseek-v2-lite@2048", a, (2.0, 4.0)) for a in P.ATTN_ARMS["deepseek-v2-lite@2048"]}
+    measured["int8-all"] *= 10
     f = P.factors(probe, measured)
     assert (f["fit"]["tau"], f["fit"]["beta"]) == (2.0, 4.0) and f["fit"]["log_rms_misfit"] == 0
     assert set(f["linear"]) == set(P.V2_CLASSES) and all(v > 0 for v in f["linear"].values())
     assert f["qk"] > 0 and f["pv"] > 0 and set(f["llama_8b_check"]["predicted_8k"]) == set(P.LLAMA_8B["llama-3.1-8b@8192"])
+    assert [2.0, 4.0] in f["near"]["points"]
+    assert all(f["near"][k][0] <= f[k] <= f["near"][k][1] for k in ("qk", "pv", "attention_whole"))
+    upper = tomllib.loads(P.spec_toml(f, "adopted-bd-lm-pv", upper=True))["attention"][0]
+    assert (upper["qk"], upper["pv"]) == pytest.approx((f["near"]["qk"][1], f["near"]["pv"][1]), abs=1e-4)
     arm = spec.parse(tomllib.loads(P.spec_toml(f, "adopted-bd-lm-pv")), "v4")
     base = spec.load("adopted-bd-lm-pv")
     assert [s.defn.name for s in arm.linear] == ["scale_error"] * len(P.V2_CLASSES) + [s.defn.name for s in base.linear]

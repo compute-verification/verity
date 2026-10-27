@@ -280,9 +280,11 @@ it by a factor per matmul, so its matmuls carry the per-matmul error another mod
 
 `error_probe.py measure` gives those factors' inputs: an arm's relative error per linear class on synthetic operands of
 each model's (k, n), and per attention shape (whole, Q K^T alone, P V alone) over a grid of logit spreads and sink
-logits. `error_probe.py factors PROBE.json --fit RESULTS.json --spec specs/NAME.toml` fits the attention grid to a
-V2-Lite run's measured `attn_rel_err_w0`, checks the fit's context scaling on Llama-3.1-8B (2K fitted, 8K predicted
-against H1's measured errors), and writes the V4-scaled arm.
+logits. `error_probe.py factors PROBE.json --fit RESULTS.json --spec specs/NAME.toml [--upper]` fits the attention
+grid to a V2-Lite run's measured `attn_rel_err_w0` of the arms that differ only in P V's block (the synthetic Q and K
+have no outlier channels, so int8-all is not a target), checks the fit's context scaling on Llama-3.1-8B (2K fitted, 8K
+predicted against H1's measured errors), and writes the V4-scaled arm, at the fit or at the upper end of the attention
+factors over the grid points near it.
 
 The engine (`engine.py`, tonight's layer-wise evaluation) reads one layer's weights at a time from the safetensors with
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer

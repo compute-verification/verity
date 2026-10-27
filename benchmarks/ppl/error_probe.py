@@ -2,7 +2,7 @@
 that a model the bench runs can be given another's error (`steps.scale_error`), and the factors that do it.
 
     error_probe.py measure --out DIR [--arm A] [--tau 1,2,3] [--beta 0,4,8] [--seeds 0,1] [--workers W] [--threads T]
-    error_probe.py factors PROBE.json --fit RESULTS.json [--spec OUT.toml]
+    error_probe.py factors PROBE.json --fit RESULTS.json [--spec OUT.toml [--upper]]
 
 Linears: x (ROWS x k) with lognormal channel scales and a few outlier channels, W (n x k) Gaussian, through the arm's
 linear chain (lm_head's own steps for the head; smoothing reads a calibration batch of the same x), r = |y - x W^T| /
@@ -13,9 +13,10 @@ with the arm's attention chain, whole and as its Q K^T steps or its P V steps al
 (the engine's `attn_rel_err_w0`). V4's sparse attention is causal attention over as many keys per query on average:
 CSA at 2K about 128 + t / 4 (as a causal length 768), HCA 128 + t / 128 (272), pooled over its 30 and 31 layers.
 
-`factors` fits (tau, beta) to DeepSeek-V2-Lite's measured attention errors (its results.json) and gives V4's r over
-V2-Lite's per class at that fit; it checks the fit's context scaling on Llama-3.1-8B (fitted at 2K, predicted at 8K,
-against H1's measured 8K errors)."""
+`factors` fits (tau, beta) to DeepSeek-V2-Lite's measured attention errors (its results.json) of the arms that differ
+from the adopted arm only in P V's block (`fit_targets`), and gives V4's r over V2-Lite's per class at that fit, and
+the attention factors' range over the grid points near it; it checks the fit's context scaling on Llama-3.1-8B (fitted
+at 2K, predicted at 8K, against H1's measured 8K errors)."""
 from __future__ import annotations
 
 import argparse
@@ -188,15 +189,27 @@ def cmd_measure(a) -> int:
     return 0
 
 
-def fit(rows, shape: str, targets: dict) -> tuple:
-    """(tau, beta) whose errors on `shape` are nearest `targets` (arm -> r) in log, and the RMS of the log misfit."""
+def misfits(rows, shape: str, targets: dict) -> dict:
+    """(tau, beta) -> the RMS of the log misfit of its errors on `shape` against `targets` (arm -> r)."""
     grid: dict = {}
     for r in rows:
         if r["what"] == "attention" and r["shape"] == shape and r["arm"] in targets:
             grid.setdefault((r["tau"], r["beta"]), {})[r["arm"]] = r["r"]
-    best = min((math.sqrt(sum(math.log(v[t] / targets[t]) ** 2 for t in targets) / len(targets)), th)
-               for th, v in grid.items() if set(v) == set(targets))
-    return best[1], best[0]
+    return {th: math.sqrt(sum(math.log(v[t] / targets[t]) ** 2 for t in targets) / len(targets))
+            for th, v in grid.items() if set(v) == set(targets)}
+
+
+def fit(rows, shape: str, targets: dict) -> tuple:
+    """(tau, beta) whose errors on `shape` are nearest `targets` in log, and the RMS of the log misfit."""
+    m = misfits(rows, shape, targets)
+    th = min(m, key=lambda t: (m[t], t))
+    return th, m[th]
+
+
+def fit_targets(measured: dict) -> dict:
+    """The arms a fit reads: those that differ from the adopted arm only in P V's block. The synthetic Q and K have no
+    outlier channels, so int8-all's Q K^T error, which they drive, is not a target."""
+    return {a: v for a, v in measured.items() if a != "int8-all"}
 
 
 def attn(rows, shape: str, arm: str, th: tuple) -> float:
@@ -210,38 +223,57 @@ def lin(rows, model: str, cls: str, arm: str) -> float:
                          and r["class"] == cls and r["arm"] == arm))
 
 
+#: a grid point within this much log-RMS misfit of the best fit is near it: the attention factors' range is over those
+NEAR = 0.05
+
+
+def attention_factors(rows, arm: str, th: tuple) -> dict:
+    """V4's Q K^T, P V and whole-attention error over V2-Lite's at (tau, beta), V4's pooled RMS over its CSA and HCA
+    layers."""
+    def v4(a):
+        return math.sqrt(sum(n * attn(rows, s, a, th) ** 2 for s, n in V4_LAYERS.items()) / sum(V4_LAYERS.values()))
+    names = {"qk": f"{arm}:qk", "pv": f"{arm}:pv", "attention_whole": arm}
+    return {k: v4(a) / attn(rows, "deepseek-v2-lite@2048", a, th) for k, a in names.items()}
+
+
 def factors(probe: dict, measured: dict) -> dict:
     """V4's per-class error over V2-Lite's, for `probe`'s arm: the linear classes, and Q K^T and P V at the (tau, beta)
-    fitted to V2-Lite's measured attention errors (`measured`, arm -> r)."""
+    fitted to V2-Lite's measured attention errors (`measured`, arm -> r; `fit_targets` of it), with their range over
+    the grid points near that fit."""
     rows, arm = probe["rows"], probe["arm"]
     out = {"linear": {c: lin(rows, "deepseek-v4-pro", c, arm) / lin(rows, "deepseek-v2-lite", c, arm)
                       for c in LINEARS["deepseek-v2-lite"]}}
-    th, misfit = fit(rows, "deepseek-v2-lite@2048", measured)
+    targets = fit_targets(measured)
+    m = misfits(rows, "deepseek-v2-lite@2048", targets)
+    th, misfit = fit(rows, "deepseek-v2-lite@2048", targets)
     out["fit"] = {"tau": th[0], "beta": th[1], "log_rms_misfit": misfit, "measured": measured,
                   "probe": {a: attn(rows, "deepseek-v2-lite@2048", a, th) for a in measured}}
-    for p in ("qk", "pv"):
-        v4 = math.sqrt(sum(n * attn(rows, s, f"{arm}:{p}", th) ** 2 for s, n in V4_LAYERS.items()) / sum(V4_LAYERS.values()))
-        out[p] = v4 / attn(rows, "deepseek-v2-lite@2048", f"{arm}:{p}", th)
-    whole = math.sqrt(sum(n * attn(rows, s, arm, th) ** 2 for s, n in V4_LAYERS.items()) / sum(V4_LAYERS.values()))
-    out["attention_whole"] = whole / attn(rows, "deepseek-v2-lite@2048", arm, th)
-    th8, mis8 = fit(rows, "llama-3.1-8b@2048", LLAMA_8B["llama-3.1-8b@2048"])
+    out |= attention_factors(rows, arm, th)
+    near = sorted(t for t, v in m.items() if v <= misfit + NEAR)
+    per = [attention_factors(rows, arm, t) for t in near]
+    out["near"] = {"points": [list(t) for t in near],
+                   **{k: [min(p[k] for p in per), max(p[k] for p in per)] for k in ("qk", "pv", "attention_whole")}}
+    th8, mis8 = fit(rows, "llama-3.1-8b@2048", fit_targets(LLAMA_8B["llama-3.1-8b@2048"]))
     out["llama_8b_check"] = {"tau": th8[0], "beta": th8[1], "log_rms_misfit_2k": mis8,
                              "predicted_8k": {a: attn(rows, "llama-3.1-8b@8192", a, th8) for a in LLAMA_8B["llama-3.1-8b@8192"]},
                              "measured_8k": LLAMA_8B["llama-3.1-8b@8192"]}
     return out
 
 
-def spec_toml(f: dict, arm: str) -> str:
-    """The V4-scaled arm: scale_error on every V2-Lite linear class and on attention, then `arm`'s steps."""
+def spec_toml(f: dict, arm: str, upper: bool = False) -> str:
+    """The V4-scaled arm: scale_error on every V2-Lite linear class and on attention, then `arm`'s steps. `upper` takes
+    the attention factors' upper end over the points near the fit instead of the fit's."""
     base = spec.load(arm).to_toml()
+    qk, pv = (f["near"]["qk"][1], f["near"]["pv"][1]) if upper else (f["qk"], f["pv"])
+    at = "the upper end over the points near the fit" if upper else "the fit"
     lines = [f'description = "{arm} with each matmul\'s error scaled to DeepSeek-V4-Pro\'s (error_probe.py factors: '
-             f'V4 over V2-Lite per class, attention at the fit to V2-Lite\'s measured errors; CMP-155 proxy)"', ""]
+             f'V4 over V2-Lite per class, attention at {at} to V2-Lite\'s measured errors; CMP-155 proxy)"', ""]
     for c, names in V2_CLASSES.items():
         lines += ["[[linear]]", 'step = "scale_error"', f"factor = {f['linear'][c]:.4f}",
                   "linears = [" + ", ".join(f'"{n}"' for n in names) + "]", ""]
     for st in base["linear"]:
         lines += ["[[linear]]"] + [f"{k} = {json.dumps(v)}" for k, v in st.items()] + [""]
-    lines += ["[[attention]]", 'step = "scale_error"', f"qk = {f['qk']:.4f}", f"pv = {f['pv']:.4f}", ""]
+    lines += ["[[attention]]", 'step = "scale_error"', f"qk = {qk:.4f}", f"pv = {pv:.4f}", ""]
     for st in base["attention"]:
         lines += ["[[attention]]"] + [f"{k} = {json.dumps(v)}" for k, v in st.items()] + [""]
     return "\n".join(lines)
@@ -264,7 +296,7 @@ def cmd_factors(a) -> int:
     f = factors(probe, measured)
     print(json.dumps(f, indent=1))
     if a.spec:
-        Path(a.spec).write_text(spec_toml(f, probe["arm"]))
+        Path(a.spec).write_text(spec_toml(f, probe["arm"], a.upper))
     return 0
 
 
@@ -275,7 +307,7 @@ def main(argv) -> int:
     q.add_argument("--out", required=True)
     q.add_argument("--arm", default="adopted-bd-lm-pv")
     q.add_argument("--tau", default="1,1.5,2,2.5,3,4")
-    q.add_argument("--beta", default="0,3,6,9,12")
+    q.add_argument("--beta", default="0,3,6,9,12,15,18")
     q.add_argument("--seeds", default="0,1")
     q.add_argument("--workers", type=int, default=8)
     q.add_argument("--threads", type=int, default=8)
@@ -283,6 +315,7 @@ def main(argv) -> int:
     q.add_argument("probe")
     q.add_argument("--fit", required=True, help="DeepSeek-V2-Lite's results.json")
     q.add_argument("--spec", help="write the V4-scaled arm's TOML here")
+    q.add_argument("--upper", action="store_true", help="the spec's attention factors: the near points' upper end")
     a = p.parse_args(argv)
     return {"measure": cmd_measure, "factors": cmd_factors}[a.cmd](a)
 
