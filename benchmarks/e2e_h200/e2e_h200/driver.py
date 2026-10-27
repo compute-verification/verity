@@ -23,7 +23,7 @@ rest +0), ``pv``, ``o_amax``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_sums
 ``wup``, ``down_amax``, ``down_quant`` (RELU), ``wdown``, ``mlp_residual``; then ``final_sums``, ``final_norm``,
 ``head_amax``, ``head_quant``, ``head`` and ``argmax``; under the committer's ``residual`` fusion (`plan.Map`) there is no
 ``wo`` or ``wdown``, their coordinates' words being added straight into the residual, and under its ``norm`` fusion no
-``attn_norm``, ``mlp_norm`` or ``final_norm``, and those quantizers' amax is the row's one word. The map's units
+``attn_norm``, ``mlp_norm`` or ``final_norm``, and those quantizers' amax words are every part's, then the row's. The map's units
 (`plan.Units`) are slices of these rows. RMSNorm sums in chunks and groups (`shape.Forms`), which changes its words from one
 sequential sum wherever a row is more than one chunk. With ``keep=False`` a group's tables are dropped once committed (a
 run of record keeps no step's tables: a drawn slot is opened by replaying its request, `opening`).
@@ -203,9 +203,14 @@ class Driver:
     def _quantize(self, T: dict, op: str, lo: int, hi: int, x: torch.Tensor, relu: bool = False,
                   normed: bool = False) -> O.Quant:
         """The quantizer ``op`` of rows lo .. hi: its amax words into ``op_amax``, its codes and scale into ``op_quant``.
-        ``normed``: it quantizes an RMSNorm's output, whose amax is the row's one word under the ``norm`` fusion."""
+        ``normed``: it quantizes an RMSNorm's output, whose amax words under the ``norm`` fusion are every part's (the fused
+        parts of `shape.Forms.norm_parts`), then the row's."""
         n = x.shape[1]
-        q = O.quantize(x, relu, n if normed and "norm" in self.committer.fused else self.forms.parts(n)[1])
+        if normed and "norm" in self.committer.fused:
+            parts, pw = self.forms.norm_parts(n)
+            q = O.quantize(x, relu, pw, every=parts > 1)
+        else:
+            q = O.quantize(x, relu, self.forms.parts(n)[1])
         T[op + "_amax"][0].view(torch.int16)[lo:hi] = q.amax
         t = T[op + "_quant"]
         t[0][lo:hi] = q.codes

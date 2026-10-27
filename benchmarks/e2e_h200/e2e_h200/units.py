@@ -11,8 +11,9 @@ Definition where it exists, else the lane's reference), until the replay lane ad
 * ``RmsSumSqChunks_v1{C, K}``: ``RmsSumSqPart_v1{C = K}`` a chunk; ``RmsNormOutSums_v1{C, S, G, N, EPS}``:
   ``F32SumPart_v1{G = S / G}`` a group, ``RmsNormRecip_v1{N, G, EPS}`` and ``RmsNormOut_v1`` a word;
 * ``RowAbsMax_v1{N, RELU}``: that template; ``QuantChunkS8_v1{N, RELU}``: ``QuantS8Pair_v1{RELU}`` a pair and
-  ``QuantS8Scale_v1``; ``RmsNormAbsMax_v1{C, S, G, N, EPS}`` and ``RmsNormQuantChunk_v1{C, S, G, N, EPS}`` (``fused``
-  ``norm``): ``RmsNormOutSums_v1``'s, then ``RowAbsMax_v1{C, false}``'s or ``QuantChunkS8_v1{C, false}``'s;
+  ``QuantS8Scale_v1``; ``RmsNormAbsMax_v1{C, S, G, N, EPS}`` and ``RmsNormQuantCodes_v1{C, S, G, N, EPS}`` (``fused``
+  ``norm``): ``RmsNormOutSums_v1``'s, then ``RowAbsMax_v1{C, false}``'s or ``QuantChunkS8_v1{C, false}``'s codes, and
+  ``QuantScaleS8_v1``: ``QuantS8Scale_v1``;
 * ``ScaledMmS8CoordinateRows_v1{K, R, DOT}``: ``ScaledMmS8Coordinate_v1{K}`` on the R rows joined (main's test holds the two
   equal); ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``: that, then ``Bf16Add_v2`` with the residual stream's word;
 * ``QkSoftmaxRowPad_v1{T, D}``: ``GemmCoordinate_v2{K = D}`` a key and `softmax_row` over the slot's n = position + 1 keys,
@@ -280,7 +281,7 @@ class Replayer:
         """One family a `plan.Units` of the map, in the order the step writes them."""
         build = {"EmbeddingCoordinate_v1": self._embed, "AllGather_v1": self._gather, "RmsSumSqChunks_v1": self._sums,
                  "RmsNormOutSums_v1": self._norm, "RowAbsMax_v1": self._amax, "QuantChunkS8_v1": self._quant,
-                 "RmsNormAbsMax_v1": self._normed, "RmsNormQuantChunk_v1": self._normed,
+                 "RmsNormAbsMax_v1": self._normed, "RmsNormQuantCodes_v1": self._normed, "QuantScaleS8_v1": self._scale,
                  "ScaledMmS8CoordinateRows_v1": self._linear, "ScaledMmS8ResidualCoordinateRows_v1": self._linear,
                  "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv, "Bf16AddRow_v2": self._add,
                  "Argmax_v2": self._argmax}
@@ -331,6 +332,11 @@ class Replayer:
     def _amax(self, step: int, u: Units) -> Replay:
         op = u.table[:-len("_amax")]
         relu = op.endswith("down")
+        if "norm" in self.map.fused and self.src[op + "_quant"].endswith("_norm"):
+            def combine(b: int, i: int):
+                x = self.u16(step, u.table, b)[:u.offset // 2]
+                return [x], self.out(step, u, b, i).view(np.uint16), np.array([row_abs_max(x, False)], np.uint16)
+            return combine
 
         def replay(b: int, i: int):
             x = self.u16(step, self.src[op + "_quant"], b)
@@ -355,25 +361,32 @@ class Replayer:
         return replay
 
     def _normed(self, step: int, u: Units) -> Replay:
-        """The ``norm`` fusion's amax (the whole row) or chunk i: RMSNorm's output there from the stream, the gain and the
-        sums, then `row_abs_max` of it, or `quant_chunk` of it under the row's amax."""
+        """The ``norm`` fusion's amax part i or code block i: RMSNorm's output there from the stream, the gain and the sums,
+        then `row_abs_max` of it, or its codes (`quant_chunk`'s) under the row's amax."""
         op = u.table.rsplit("_", 1)[0]
         norm, n = self.src[op + "_quant"][:-len("_norm")], self.shape.width
-        groups, c = self.map.f.groups(n), u.nbytes if u.scale else n
+        codes = u.template == "RmsNormQuantCodes_v1"
+        groups, c = self.map.f.groups(n), u.nbytes if codes else self.map.f.norm_parts(n)[1]
 
         def replay(b: int, i: int):
             x = self.u16(step, self.src[norm], b)[i * c:(i + 1) * c]
             w = self._gain(norm + "_norm")[i * c:(i + 1) * c]
             sums = self.raw(step, norm + "_sums", b).view(np.uint32)
             h = norm_out_sums(x, w, sums, n, groups)
-            if not u.scale:
+            if not codes:
                 return [x, w, sums], self.out(step, u, b, i).view(np.uint16), np.array([row_abs_max(h, False)], np.uint16)
             amax = self.u16(step, op + "_amax", b)[-1]
-            codes, scale = quant_chunk(h, amax, False)
-            got = np.concatenate([self.out(step, u, b, i).view(np.uint8),
-                                  np.atleast_1d(self.word(step, u.table, b)).view(np.uint8)])
-            want = np.concatenate([codes, np.array([scale], np.uint32).view(np.uint8)])
-            return [x, w, sums, np.array([amax], np.uint16)], got, want
+            return [x, w, sums, np.array([amax], np.uint16)], self.out(step, u, b, i).view(np.uint8), \
+                quant_chunk(h, amax, False)[0]
+        return replay
+
+    def _scale(self, step: int, u: Units) -> Replay:
+        """``QuantScaleS8_v1``: the scale of quantizer ``u.table``'s chunk row i, from the row's amax."""
+        op = u.table[:-len("_quant")]
+
+        def replay(b: int, i: int):
+            amax = np.array([self.u16(step, op + "_amax", b)[-1]], np.uint16)
+            return [amax], np.atleast_1d(self.word(step, u.table, b)), _word("QuantS8Scale_v1", amax)
         return replay
 
     def _linear(self, step: int, u: Units) -> Replay:

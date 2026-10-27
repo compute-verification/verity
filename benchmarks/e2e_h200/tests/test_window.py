@@ -41,11 +41,11 @@ FUSED_WRITERS = ("59b05a362a01f35542a56228db5f37dc1172e956168562e4990ced295e0342
                  "fbda60c5e1f52cfb19ca927699cf472697e5ac0c71ab9cbd09ed5ff6eeb317f9")
 BOTH = RESIDUAL | {"norm"}
 #: the frozen shared layout under the ``norm`` and ``residual`` fusions, as above
-BOTH_ROWS, BOTH_BYTES = 15_169, 20_567_620
-BOTH_DIGEST = ("f8928310f5007a766de4462f896d4f29e397e1fe18b2cd8f5334c866f0c08dda"
-               "4c52246ea42289624f4e88c2d6999ead73da87f26d1a0a32986b163913b0490f")
-BOTH_WRITERS = ("de53750b79bf349528ab6dd2e91e0d93ac0c52f23bcb007a4b5f64fd2e800920"
-                "e3b766c593f9014540fd5deedb5f0556e9a5cca91e498fc63770e14996b0ff3d")
+BOTH_ROWS, BOTH_BYTES = 15_169, 20_569_300
+BOTH_DIGEST = ("ee72e98b95ff7c65b169b045b56ae1817ee1397271f97f7094b616af648d040d"
+               "b937c6b3254713b9265234776f8b8949a372822f033fa7f48cf8aeb599024763")
+BOTH_WRITERS = ("76500ee2039320165ece05dc036700700e4821e8187353e1765ec6f13389d619"
+                "08f52fff0d9ac2f719bd904b091724b45ca16a3945912d937ca3da9e5934b478")
 SLOTS, N, P, G, ADMIT = 4, 7, 2, 3, 1
 
 
@@ -96,32 +96,42 @@ def test_the_residual_fusion_drops_the_projections_tables_and_the_residual_adds_
 
 def test_the_norm_fusion_drops_each_norms_table_and_its_quantizer_reads_the_stream_at_the_frozen_shape(frozen_fused,
                                                                                                       frozen_both) -> None:
-    """Each norm's output table goes (32 KiB, 32 rows) and with it its ``RmsNormOutSums_v1`` family; the amax and quantizer
-    after it read the stream, the registered gain and the sums."""
+    """Each norm's output table goes (32 KiB, 32 rows) and with it its ``RmsNormOutSums_v1`` family. The amax is 8 parts of
+    2,048 and a combine over their partials (16 B more a norm), the codes blocks of 512 and each chunk row's scale a block
+    of its own (two more families a norm); the parts and blocks read the stream, the registered gain and the sums, and the
+    rows the linears read are the chunk rows they read unfused."""
     lay, norms = frozen_both.layout, 2 * FROZEN.layers + 1
     assert (lay.row_count, lay.slot_bytes, lay.digest.hex()) == (BOTH_ROWS, BOTH_BYTES, BOTH_DIGEST)
     assert frozen_fused.layout.row_count - lay.row_count == 32 * norms
-    assert frozen_fused.layout.slot_bytes - lay.slot_bytes == 32_768 * norms
+    assert frozen_fused.layout.slot_bytes - lay.slot_bytes == (32_768 - 16) * norms
     ws = frozen_both.writers()
-    assert len(ws) == len(frozen_fused.writers()) - norms and W.writers_digest(ws) == BOTH_WRITERS
+    assert len(ws) == len(frozen_fused.writers()) + norms and W.writers_digest(ws) == BOTH_WRITERS
     assert ({u.template for u in frozen_fused.units.values()} - {u.template for u in frozen_both.units.values()}
             == {"RmsNormOutSums_v1"})
     statics = f"S=128,G=2,N={FROZEN.width},EPS=1e-05}}"
-    for f, count, key in (("l50.attn_amax", 1, f"RmsNormAbsMax_v1{{C={FROZEN.width},{statics}"),
-                          ("l50.up_quant", 2, f"RmsNormQuantChunk_v1{{C=8192,{statics}"),
-                          ("head_quant", 2, f"RmsNormQuantChunk_v1{{C=8192,{statics}")):
+    for f, table, count, key in (("l50.attn_amax.part", "l50.attn_amax", 8, f"RmsNormAbsMax_v1{{C=2048,{statics}"),
+                                 ("l50.attn_amax", "l50.attn_amax", 1, "RowAbsMax_v1{N=8,RELU=false}"),
+                                 ("l50.up_quant", "l50.up_quant", 32, f"RmsNormQuantCodes_v1{{C=512,{statics}"),
+                                 ("head_quant.scale", "head_quant", 2, "QuantScaleS8_v1")):
         u = frozen_both.family(f)
-        assert (u.table, u.count, u.key) == (f, count, key)
+        assert (u.table, u.count, u.key) == (table, count, key)
     for t in ("l50.attn_norm", "l50.mlp_norm", "final_norm"):
         assert t in frozen_fused.tables and t not in frozen_both.tables
     at = lambda f, *a: frozen_both.locate(7, 1, f, *a)  # noqa: E731
-    first = frozen_both.outputs(7, 1, "l49.wdown", 8192)[0][0].row
-    assert at("l50.attn_quant", 1, "x") == tuple(W.Segment(7, 1, first + r, 0, 1024) for r in range(16))
-    assert at("l50.attn_quant", 1, "w") == tuple(W.Registered("l50.attn_norm", 8192 + j, 0, 2) for j in range(8192))
-    sums = frozen_both.outputs(7, 1, "l50.attn_sums", 0)[0][0].row
-    assert at("l50.attn_quant", 1, "s") == at("l50.attn_amax", 0, "s") == (W.Segment(7, 1, sums, 0, 512),)
-    assert at("l50.attn_quant", 1, "amax") == frozen_both.outputs(7, 1, "l50.attn_amax", 0)[0]
-    assert len(at("l50.attn_amax", 0, "x")) == len(at("l50.attn_amax", 0, "w")) // 512 == 32
+    out = lambda f, i: frozen_both.outputs(7, 1, f, i)[0]  # noqa: E731
+    first = out("l49.wdown", 0)[0].row
+    assert at("l50.attn_quant", 17, "x") == (W.Segment(7, 1, first + 17, 0, 1024),)
+    assert at("l50.attn_quant", 17, "w") == tuple(W.Registered("l50.attn_norm", 17 * 512 + j, 0, 2) for j in range(512))
+    assert at("l50.attn_amax.part", 3, "x") == tuple(W.Segment(7, 1, first + 12 + r, 0, 1024) for r in range(4))
+    sums = out("l50.attn_sums", 0)[0].row
+    assert at("l50.attn_quant", 17, "s") == at("l50.attn_amax.part", 3, "s") == (W.Segment(7, 1, sums, 0, 512),)
+    p0 = out("l50.attn_amax.part", 0)[0]
+    assert at("l50.attn_amax", 0, "x") == (W.Segment(7, 1, p0.row, p0.offset, 16),)
+    assert at("l50.attn_quant", 17, "amax") == at("l50.attn_quant.scale", 1, "amax") == out("l50.attn_amax", 0)
+    c1 = at("l50.wq", 5, "x1")
+    assert out("l50.attn_quant", 17) == (W.Segment(7, 1, c1[0].row, 512, 512),) and c1[0].nbytes == 8192
+    assert at("l50.wq", 5, "sx") == out("l50.attn_quant.scale", 0)
+    assert out("l50.attn_quant.scale", 1) == (W.Segment(7, 1, c1[0].row, 8192, 4),)
 
 
 def _written(writers: list[dict]) -> dict[int, list[tuple[int, int]]]:

@@ -1,8 +1,10 @@
 """`verity.ml.circuits.ops.boolean.norm_quant`: at the frozen shape's statics (S = 128 chunk sums in G = 2 groups, N = 16,384,
 EPS = 1e-5) and parts of C words, each fused block is its unfused chain word for word, `RmsNormOutSums_v1` into
-`RowAbsMax_v2` or `QuantChunkS8_v2` (and the toy's word Definitions, `RowAbsMax_v1` and `QuantChunkS8_v1`), on rows of
-activations, special words and uniform words, under the part's own amax and under special and uniform amax words;
-`QuantScaleS8` then `QuantCodeS8` a word is `QuantChunkS8_v2`; and what `RmsNormOutSums_v1` refuses each refuses."""
+`RowAbsMax_v2` or `QuantChunkS8_v2`'s codes (and the toy's word Definitions, `RowAbsMax_v1` and `QuantChunkS8_v1`), on rows of
+activations, special words and uniform words, under the part's own amax and under special and uniform amax words; the toy's
+fused row, `RowAbsMax_v2` of the parts' amaxes, then `QuantScaleS8` and the parts' codes under it, is the unfused row's amax,
+codes and scale; `QuantScaleS8` then `QuantCodeS8` a word is `QuantChunkS8_v2`; and what `RmsNormOutSums_v1` refuses each
+refuses."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -17,7 +19,7 @@ from verity.ml.circuits.ops import quant as Q
 from verity.ml.circuits.ops.boolean import norm_quant as NQ
 from verity.ml.circuits.ops.boolean import quant as BQ
 from verity.ml.circuits.ops.boolean import rmsnorm as RN
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array
 
 FROZEN = {"S": 128, "G": 2, "N": 16384, "EPS": 1e-5}
 #: signed zeros, the smallest and largest subnormals, 1.0, the largest finite, infinities and NaNs, each of either sign
@@ -67,8 +69,31 @@ def test_each_fused_block_is_its_unfused_chain_at_the_frozen_statics(C: int) -> 
     amax[200:300] = rng.integers(0, 1 << 16, 100)
     want = _words(bind(BQ.QuantChunkS8, N=C, RELU=False), out, amax).reshape(-1, C + 1)
     assert np.array_equal(E.evaluate_batch(bind(Q.QuantChunkS8, N=C, RELU=False), out, amax).astype(np.uint32), want)
-    got = _words(bind(NQ.RmsNormQuantChunk, C=C, **FROZEN), x, w, s, amax).reshape(-1, C + 1)
-    assert np.array_equal(got, want), np.argwhere(got != want)[:5]
+    got = _words(bind(NQ.RmsNormQuantCodes, C=C, **FROZEN), x, w, s, amax).reshape(-1, C)
+    assert np.array_equal(got, want[:, :C]), np.argwhere(got != want[:, :C])[:5]
+    assert np.array_equal(_words(BQ.QuantScaleS8, amax).reshape(-1), want[:, C])
+
+
+@pytest.mark.parametrize("P,M", [(4, 4), (3, 2)])
+def test_the_toys_fused_row_is_the_unfused_rows_amax_codes_and_scale(P: int, M: int) -> None:
+    """A row of M parts of P words, as the toy's ``norm`` fusion proves it: `RowAbsMax_v2{M, false}` of each part's
+    `RmsNormAbsMax`, `QuantScaleS8` of that, and each part's `RmsNormQuantCodes` under it, against `RmsNormOutSums_v1` over
+    the row into `RowAbsMax_v2` and `QuantChunkS8_v2` over the row."""
+    rng = np.random.default_rng(40 + P)
+    C = P * M
+    x, w, s = _inputs(rng, 24, C)
+    x[:4, :P] = BF16_SPECIALS[[0, 1, 10, 14]][:, None]
+    out = _words(bind(RN.RmsNormOutSums, C=C, **FROZEN), x, w, s).reshape(-1, C).astype(np.uint16)
+    amax = _words(bind(BQ.RowAbsMax, N=C, RELU=False), out).reshape(-1)
+    want = _words(bind(BQ.QuantChunkS8, N=C, RELU=False), out, amax.astype(np.uint16)).reshape(-1, C + 1)
+    parts = [slice(j * P, (j + 1) * P) for j in range(M)]
+    partial = np.stack([_words(bind(NQ.RmsNormAbsMax, C=P, **FROZEN), x[:, p], w[:, p], s).reshape(-1) for p in parts], 1)
+    row = _words(bind(BQ.RowAbsMax, N=M, RELU=False), partial.astype(np.uint16)).reshape(-1)
+    assert np.array_equal(row, amax)
+    codes = np.concatenate([_words(bind(NQ.RmsNormQuantCodes, C=P, **FROZEN), x[:, p], w[:, p], s, row.astype(np.uint16))
+                            .reshape(-1, P) for p in parts], 1)
+    assert np.array_equal(codes, want[:, :C])
+    assert np.array_equal(_words(BQ.QuantScaleS8, row.astype(np.uint16)).reshape(-1), want[:, C])
 
 
 def test_the_scale_then_a_code_a_word_is_the_chunk() -> None:
@@ -88,12 +113,12 @@ def test_the_scale_then_a_code_a_word_is_the_chunk() -> None:
 
 def test_the_signatures_and_what_each_refuses() -> None:
     S = SimpleNamespace
-    sig = NQ.RmsNormAbsMax.signature(S(C=16384, **FROZEN))
-    assert [n for n, _ in sig[0]] == ["x", "w", "s"] and sig[0][0][1].n == 16384 and sig[0][2][1].n == 128 and sig[1] == RN.BF16
-    sig = NQ.RmsNormQuantChunk.signature(S(C=8192, **FROZEN))
-    assert [n for n, _ in sig[0]] == ["x", "w", "s", "amax"] and sig[1] == Tuple(Array(8192, BQ.CODE), RN.F32)
+    sig = NQ.RmsNormAbsMax.signature(S(C=2048, **FROZEN))
+    assert [n for n, _ in sig[0]] == ["x", "w", "s"] and sig[0][0][1].n == 2048 and sig[0][2][1].n == 128 and sig[1] == RN.BF16
+    sig = NQ.RmsNormQuantCodes.signature(S(C=512, **FROZEN))
+    assert [n for n, _ in sig[0]] == ["x", "w", "s", "amax"] and sig[1] == Array(512, BQ.CODE)
     for bad in (S(C=4, S=6, G=4, N=24, EPS=1e-5), S(C=0, S=6, G=2, N=24, EPS=1e-5), S(C=4, S=6, G=2, N=24, EPS=0.0),
                 S(C=4, S=6, G=2, N=0, EPS=1e-5)):
-        for d in (NQ.RmsNormAbsMax, NQ.RmsNormQuantChunk):
+        for d in (NQ.RmsNormAbsMax, NQ.RmsNormQuantCodes):
             with pytest.raises(ValueError):
                 d.signature(bad)
