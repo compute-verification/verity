@@ -204,8 +204,6 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
       rw [Boundary.ref_input _ (gates_posOf_input hin hk), hval a (mem_io_of_owner ha) hk]
       simp
     refine lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ (fun i hi hc => ?_) pu hpu
-    change RU.ref (progOf C κ) [unitGates P u] ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
-      (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
     unfold RU.ref
     split_ifs with hin
     · rfl

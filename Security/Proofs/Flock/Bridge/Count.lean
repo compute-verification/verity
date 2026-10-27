@@ -78,7 +78,7 @@ theorem count : CountTarget := by
 theorem designOf_wellFormed (P : FlockSoundness.Audit.Partition C n) {kd : ℕ} (hkd : 1 ≤ kd) (hkdn : kd ≤ n) :
     (designOf kd).WellFormed (partOf P κ) := by
   refine ⟨rfl, fun p hp => ?_⟩
-  simp only [designOf, partOf, List.zip_cons_cons, List.zip_nil_left, List.zip_nil_right, List.mem_cons,
+  simp only [designOf, partOf, List.zip_cons_cons, List.zip_nil_right, List.mem_cons,
     List.not_mem_nil, or_false] at hp
   subst hp
   exact ⟨⟨hkd, by simpa [Claims.Sampling.strataSizes] using hkdn⟩, fun k hk => by simp at hk⟩
