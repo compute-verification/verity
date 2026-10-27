@@ -5,8 +5,8 @@
 # --store-read).
 # PERIOD and PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit. Through the
 # lane's gate key it reads the ledger (`ledger`), a head beside each session's, and the challenger host's pins log
-# (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
-# zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`, CMP-74): a pin off
+# (`pins`). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
+# zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`): a pin off
 # that line, or no list when the fetch fails, likewise credits zero. Writes $OUT/auditor_line.json and $OUT/credit.md,
 # each session's checks and the line, which the Lean verifier computes (`line_by` lean: auditor_line.py builds
 # remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be

@@ -1,7 +1,7 @@
-"""Demo A's report: it renders IFACE-B's block records with every number they don't hold as a placeholder, in Daniel's
-sections, refuses the words CMP-98 retires ("leg", "window", "template") and the subprotocols' old names, fills each number from exactly one source,
-derives part 1's and part 3's figures from their inputs, and renders tonight's PyTorch dry run (r20261025-230005-b71a,
-period 30, written by `block_record.from_period`) labelled as such."""
+"""Demo A's report: it renders block records with every number they don't hold as a placeholder, in the report's
+sections, refuses the retired words ("leg", "window", "template") and the subprotocols' old names, fills each number from exactly one source,
+derives part 1's and part 3's figures from their inputs, and renders a PyTorch dry run (one period, written by
+`block_record.from_period`) labelled as such."""
 from __future__ import annotations
 
 import copy
@@ -139,7 +139,7 @@ def test_a_report_with_an_unfilled_number_is_refused() -> None:
     doc["sections"][0]["serve_noise"] = True
     out = D.render([], doc)
     assert out.splitlines()[0] == D.M3_STATUS and not re.search(r"⟨[A-Z][A-Z0-9_]*⟩", out.split("## Sources")[0])
-    assert f"a one-week sampling block of one H200\nhas at most H = 3,126,434 faulty AND gates and B = 177,688" in out
+    assert "a one-week sampling block of one H200\nhas at most H = 3,126,434 faulty AND gates and B = 177,688" in out
     for name in ("H_POOLED", "SERVE_NOISE_S"):
         partial = copy.deepcopy(doc)
         del partial["values"][name]
@@ -385,8 +385,8 @@ def _noise() -> dict:
 
 
 def test_per_call_noise_is_seconds_a_step_with_both_ratios_never_gamma_step_alone() -> None:
-    """CMP-126's 02:23Z correction: γ_step 1.115 is against a commit-bound 74.4 s step, so the line states +8.5 s a step
-    with 1.115× and about 3.2× against #4562's 3.78 s step, in M3's part 2 and in Demo A's."""
+    """γ_step 1.115 is against a commit-bound 74.4 s step, so the line states +8.5 s a step
+    with 1.115× and about 3.2× against the plain 3.78 s step, in M3's part 2 and in Demo A's."""
     doc = _proved()
     doc["values"] = _noise()
     doc["sections"][0]["serve_noise"] = True

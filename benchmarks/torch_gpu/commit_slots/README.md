@@ -61,9 +61,6 @@ plan = G.Plan(context, G.regroup(layout, 4))
 - Returns `StepCommit(root, slot_roots)`: the 64-byte step root, and every slot's 64-byte root in slot order (the
   prover keeps them; only `root` leaves the prover).
 
-The by-table fallback (`commit_fb`, beside this directory) matches the call by taking the same arguments and returning a
-`StepCommit` with a 64-byte `root`; its root differs, since its tree is laid out by table.
-
 ## Rows and leaves
 
 Row g of slot s (rows numbered in layout order within the slot), rank r in its unit u:
