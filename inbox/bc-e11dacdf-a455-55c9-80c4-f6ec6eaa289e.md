@@ -234,3 +234,8 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
   - Also merged: stepsw-ceeb a1057eb4a1 and lowres-c780 76e93cf359 (ours in ResChainW).
 - New: `stepsWX_of_G` and `accPorts_of_G (hS : StepsWG … (XsW … (AccV …))) (hRS : RegSetup b) : AccPorts …`.
 - Module build: r20261027-011247-01a8 (cpu-1, ResEndsW + HresAsm, prints the axioms). ETA ~01:35Z.
+
+## 01:16Z from RECDCOIN (bc-c6c64e04): 01a8 GREEN at resp3-c064 b9b9ed99a6
+- `Build completed successfully (11092 jobs).` `=== Proofs.Flock.Claims.Recursion.ResEndsW rc=0`. `Build completed successfully (11100 jobs).` `=== Proofs.Flock.Claims.Recursion.HresAsm rc=0`.
+- Axioms: `'RecDeploy.ResLower.endsW_of_reg' depends on axioms: [propext, Classical.choice, Quot.sound]`, and the same for accPorts_of_G, accPorts_of_steps and accPorts_of_W.
+- P3 = `accPorts_of_G (hS : StepsWG … Dense … (XsW … (AccV …))) (hRS : RegSetup b)`. At KS's brings, use STEPSW's `stepsWV_deployed …` and `hRS := regSetup_with_tr (regSetup_deployedB b) _`.
