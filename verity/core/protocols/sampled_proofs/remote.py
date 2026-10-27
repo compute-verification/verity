@@ -38,7 +38,8 @@ connects with `connect_when_listening`: until the session's tunnel listens, the 
 so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
-bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
+bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head the auditor
+host's operator published
 (`ledger_lines`, `challenger.ledger_head`): the commitment the challenger signed and the roots its signed release log
 shows it received (`challenger.session_named`), its record, close and refused hellos the files the ledger's end sealed,
 against which a family's openings are `order_reason`'s.  An
@@ -460,7 +461,7 @@ def session_files(directory: str | os.PathLike) -> dict[str, Any]:
 
 
 def ledger_lines(path: str | os.PathLike) -> list[str]:
-    """One published head of the auditor's ledger at `path` (infra's ``windows.jsonl``), its lines without their
+    """One published head of the auditor's ledger at `path` (its operator's ``windows.jsonl``), its lines without their
     newlines; a missing or unreadable head raises `CoinError`."""
     text = _read(Path(path), "auditor's ledger")
     if text is None:
@@ -470,7 +471,8 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
 
 def main_lines(path: str | os.PathLike) -> list[str]:
     """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
-    newlines; a missing or unreadable file raises `CoinError`.  infra writes the file at each re-pin from
+    newlines; a missing or unreadable file raises `CoinError`.  The auditor host's operator writes the file at each
+    re-pin from
     ``git rev-list --first-parent origin/main`` (vy-auditor-1 reads it from /opt/vy-verifier/main-first-parent.txt), so
     the line is main's first-parent commits.  A deployment that wants `pouw.credit`'s freshness floor measured against the
     checked train heads instead (the commits whose own ``check`` passed and landed them, less a reverted train's) writes
@@ -484,7 +486,8 @@ def main_lines(path: str | os.PathLike) -> list[str]:
 def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
-    auditor's ledger as infra published it, every head at `heads` checked and the longest taken (`challenger.ledger_head`);
+    auditor's ledger as the auditor host's operator published it, every head at `heads` checked and the longest taken
+    (`challenger.ledger_head`);
     the one session it opens for the window, under the challenger key the window's deployment pins, `key`
     (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
     session's directory the coin commitment the challenger signed and the roots its signed release log shows it received
