@@ -790,13 +790,13 @@ theorem forIn'_range_inv {σ : Type} (P : σ → Prop) (r : Std.Legacy.Range) (i
 theorem id_bind_eq {α β : Type} (x : Id α) (k : α → Id β) : (x >>= k) = k x := rfl
 
 /-- A loop over a range whose state's first part stays 64 bytes, read back by that part: 64 bytes. -/
-theorem bind_forIn'_size {r : Std.Legacy.Range} {init : MProd ByteArray ℕ}
-    {f : (a : ℕ) → a ∈ r → MProd ByteArray ℕ → Id (ForInStep (MProd ByteArray ℕ))}
-    {k : MProd ByteArray ℕ → Id ByteArray} (hk : ∀ s, k s = s.fst)
+theorem bind_forIn'_size {r : Std.Legacy.Range} {init : ByteArray × ℕ}
+    {f : (a : ℕ) → a ∈ r → ByteArray × ℕ → Id (ForInStep (ByteArray × ℕ))}
+    {k : ByteArray × ℕ → Id ByteArray} (hk : ∀ s, k s = s.fst)
     (hf : ∀ a h b, b.fst.size = 64 → ((f a h b).value).fst.size = 64) (h0 : init.fst.size = 64) :
     (forIn' r init f >>= k).size = 64 := by
   rw [id_bind_eq, hk]
-  exact forIn'_range_inv (fun s : MProd ByteArray ℕ => s.fst.size = 64) r init f hf h0
+  exact forIn'_range_inv (fun s : ByteArray × ℕ => s.fst.size = 64) r init f hf h0
 
 /-- A root climbed to is a node or the leaf: 64 bytes. -/
 theorem climb_size (d : FrameV3.Domain) (pos : ℕ) (schema : String) (value : ByteArray) (path : Array ByteArray) :
@@ -995,11 +995,12 @@ theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB 
   have hj : 0 < reg.key.codec.maxBlocks := by
     rw [hk]
     decide
+  have hlt : honestCodec.field.c < 2 ^ honestCodec.field.n :=
+    Nat.lt_of_lt_of_le (show honestCodec.field.c < 2 ^ 7 by decide)
+      (Nat.pow_le_pow_right (by norm_num) (show 7 ≤ honestCodec.field.n by decide))
   have hfp : 0 < reg.key.codec.field.p := by
     rw [hk]
-    show 0 < 2 ^ 1024 - 105
-    exact Nat.sub_pos_of_lt (Nat.lt_of_lt_of_le (by norm_num : (105 : ℕ) < 2 ^ 7)
-      (Nat.pow_le_pow_right (by norm_num) (by norm_num)))
+    exact Nat.sub_pos_of_lt hlt
   refine checkOpening_of (pr := honestPass reg (seed challenge 0 previous)) (j := 0)
     (y := (receipter reg.receipt (seed challenge 0 previous) reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES))
     (payload := zeroPayload reg.key) rfl rfl rfl (zeros_size _) rfl (zeros_size _) (zeros_size _) ?_ hb0
