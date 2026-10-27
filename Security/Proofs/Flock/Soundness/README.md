@@ -80,7 +80,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines a faulty unit through extracted values, so it pays the table's knowledge error and a
+unit used. The audit bound defines a faulty proof block through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
@@ -411,7 +411,7 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 - **Lemma A**, the pre-final view on two witnesses carrying the public region data (the dummy is one) has one
   distribution: `table_prefinal_indep` where the prover refuses nothing, and at every coin vector on what is sent before
   it refuses (a failing rank check, dependent `ρ^r`, `β = 0`), in the code's order, `session_prefinal_indep_cut`
-  (`ZK/Cut.lean`, `ZK/Refusal.lean`).
+  (`Definitions/Flock/ZK/Cut.lean`, `ZK/Refusal.lean`).
 - **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
   prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
   `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).

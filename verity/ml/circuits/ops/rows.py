@@ -1,4 +1,4 @@
-"""Row units as IR composites: one proof unit a row, the unit writing the whole row (the e2e demo's decoder, CMP-92).
+"""Row units as IR composites: one proof block a row, the unit writing the whole row (the e2e demo's decoder, CMP-92).
 
     Bf16AddRow_v1{N}   (a: Array<N, bf16>, b: Array<N, bf16>) -> Array<N, bf16>    the residual add: Bf16AddF2fp_v1 per element
     Argmax_v1{V}       (logits: Array<V, bf16>) -> Value<16>                      greedy selection: the 16-bit index of the
