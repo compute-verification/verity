@@ -312,10 +312,20 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
     else none
   else none
 
-/-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
-until every other step accepts. -/
-def Internal.credited (key ledger pins main salt calls served commit rounds draw : Json) :
-    R (List Nat) := do
+/-- `credit._credited`'s draw session: the coin commitment and roots of the session the auditor's ledger opens on the
+draw root `root` (its hex) under `k`, from the session's files `session` (`trustedSessionOf`), when the ledger opens it
+withheld (`withheldOn`); else the refusal (`coin`). -/
+def drawSession (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
+    R (SampledProofs.Challenger.LiveCommitment × SampledProofs.Challenger.Roots) := do
+  let got ← (trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
+    fun e => ("coin", s!"the draw's session is not trusted: {e}")
+  unless SampledProofs.Challenger.withheldOn ledger root do throw ("coin", SampledProofs.Challenger.WITHHELD)
+  pure got
+
+/-- `credit._credited` up to the draw root: the verifier's challenger key, the credited calls' indices and the root
+`draw_root` gives over the window's manifest, Commit record, receipts and round log; else the refusal. -/
+def Internal.creditedRoot (key salt calls served commit rounds draw : Json) :
+    R (ChallengerKey × List Nat × ByteArray) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let some s := digest? salt | throw ("manifest", SALT_FORM)
   let .arr rows := calls | throw ("manifest", CALLS_FORM)
@@ -344,12 +354,13 @@ def Internal.credited (key ledger pins main salt calls served commit rounds draw
     let o ← (LiveOpening.ofJson (get x "coin")).mapError fun e => ("rounds", s!"round {r}'s coin: {e}")
     parts := parts ++ [.bytes root, .bytes o.coin]
   let some receipts := (if isObj draw then digest? (get draw "receipts") else none) | throw ("draw", DRAW_FORM)
-  let root := tagged DRAW_TAG ([.bytes (callsRoot s rows servedB (some cd.1)), .bytes receipts] ++ parts)
+  pure (k, out, tagged DRAW_TAG ([.bytes (callsRoot s rows servedB (some cd.1)), .bytes receipts] ++ parts))
+
+/-- `credit._credited` from the draw root `root` on: none when `draw`'s `root` is it and its draw coin is the one the
+withheld session the ledger opens on it released after it (`drawSession`); else the refusal. -/
+def Internal.creditedDraw (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) : R Unit := do
   unless (str? (get draw "root")) == some (Flock.hexOf root) do throw ("draw", DRAW_ROOT)
-  let (c, received) ← (trustedSessionOf ledger (Json.mkObj [("root", Json.str (Flock.hexOf root))]) k pins main
-    (get draw "session")).mapError fun e => ("coin", s!"the draw's session is not trusted: {e}")
-  unless SampledProofs.Challenger.withheldOn ledger (Flock.hexOf root) do
-    throw ("coin", SampledProofs.Challenger.WITHHELD)
+  let (c, received) ← drawSession ledger k pins main (get draw "session") (Flock.hexOf root)
   let got := (received.lookup PouwWindow.DRAW).getD []
   if got.isEmpty then throw ("draw", NO_DRAW)
   unless got == [root] do throw ("draw", CHANGED)
@@ -359,6 +370,12 @@ def Internal.credited (key ledger pins main salt calls served commit rounds draw
       | .error e => some e
       | .ok w => w
   if let some w := why then throw ("coin", s!"the draw coin: {w}")
+
+/-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
+until every other step accepts. -/
+def Internal.credited (key ledger pins main salt calls served commit rounds draw : Json) : R (List Nat) := do
+  let (k, out, root) ← Internal.creditedRoot key salt calls served commit rounds draw
+  Internal.creditedDraw ledger k pins main draw root
   pure out
 
 def layoutRefuse {α : Type} (why : String) : R α := throw ("layout", why)
