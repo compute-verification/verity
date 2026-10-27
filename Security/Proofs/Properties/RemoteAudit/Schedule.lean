@@ -4,6 +4,7 @@ import Proofs.Properties.RemoteAudit.Plan
 import Proofs.Properties.RemoteAudit.Window
 import Definitions.Accounting.Assumptions.Stacking
 import Mathlib.Tactic.Choose
+import Mathlib.Data.Fintype.Pigeonhole
 import Batteries.Lean.Except
 
 /-!
@@ -620,15 +621,473 @@ def coinPasses (keep12 : Bool) : Array (ℕ × Array (ℕ × ℕ)) :=
     (3, if keep12 then #[(0, 2), (3, 6), (10, 4)] else #[(0, 2), (3, 6), (10, 2), (13, 1)]),
     (4, #[(0, 2), (3, 6), (10, 4)])]
 
-example : Schedule.check honest 8 200 (coinPasses false) #[(8, 4), (12, 2)] =
+theorem coinPasses_refused : Schedule.check honest 8 200 (coinPasses false) #[(8, 4), (12, 2)] =
     .error "pass 3's plan is not the schedule's at step 3" := by
   decide +kernel
 
-example : Schedule.check honest 8 200 (coinPasses true) #[(8, 4), (12, 2)] = .ok 200 := by
+theorem coinPasses_accepted : Schedule.check honest 8 200 (coinPasses true) #[(8, 4), (12, 2)] = .ok 200 := by
   decide +kernel
 
-example : Schedule.check honest 8 199 (coinPasses true) #[(8, 4), (12, 2)] =
+theorem coinPasses_overCap : Schedule.check honest 8 199 (coinPasses true) #[(8, 4), (12, 2)] =
     .error "the schedule is 200 bits, over the cap of 199 committed before the coins" := by
   decide +kernel
+
+/-! ## Honest and nontrivial lemmas
+
+Each property's honest lemma (`_meets`) shows its premises hold at the deployed instance, gate run 7
+(`benchmarks/remote_session/tests/fixtures/gate_run_7.json.gz`: verifier run r20261023-124317-07a8, auditor run
+r20261023-133359-30ad): a store of 130023424 blocks of 4096 bytes under p1024/k3/masked with sketch-sha512 receipts,
+sessions of 2118 windows (T = 60 s) and 96 (T = 1 s), each window one pass over the whole store (`Plan.whole`), with
+no appends and no schedule cap committed. Its nontrivial lemma (`_fails`) shows its conclusion fails where the code's
+check is dropped, for a verifier that accepts everything. -/
+
+theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi : ℕ) :
+    (as.qsort lt lo hi).size = as.size := by
+  unfold Array.qsort
+  split
+  · rfl
+  · simp
+
+/-- **`PlanBlocks` meets the deployed plan.** The plan of gate run 7's passes, the whole store as one run, is one
+`Plan.make?` makes, and it is `Plan.whole`, the second conjunct's plan. -/
+theorem planBlocks_meets : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) := by
+  have h : (Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424).map (fun pl => (pl.blocks, pl.runs, pl.ends)) =
+      some (130023424, #[(0, 130023424)], #[130023424]) := by
+    first
+      | decide +kernel
+      | (simp only [Plan.make?, size_qsort]; decide +kernel)
+      | simp [Plan.make?, storeBlocks, size_qsort, RemoteAudit.endsOf]
+  cases e : Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 with
+  | none => rw [e] at h; cases h
+  | some pl =>
+    rw [e] at h
+    obtain ⟨b, rs, ends⟩ := pl
+    simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl, rfl⟩ := h
+    rfl
+
+/-- **`PlanBlocks` fails for any plan**: a plan the verifier did not make can hold more positions than its runs have
+blocks. -/
+theorem planBlocks_fails : ¬ ∀ pl : Plan, pl.length = (runBlocks pl.runs).length ∧
+    ∀ p < pl.length, (runBlocks pl.runs)[p]? = some (pl.block p) :=
+  fun h => absurd (h ⟨1, #[], #[1]⟩).1 (by decide)
+
+theorem runBlocks_whole (B : ℕ) : runBlocks (Plan.whole B).runs = List.range' 0 B := by
+  simp [runBlocks, Plan.whole]
+
+theorem tileAt_whole {B i : ℕ} (hi : i < B) : tileAt B #[] (Plan.whole B).runs i = some (0, i) := by
+  rw [tileAt, runBlocks_whole, List.getElem?_range' hi]
+  simp [position, hi]
+
+/-- **`CodeLayoutTiles` meets the deployed pass.** At gate run 7's plan, made by `Plan.make?`, its runs hold the
+store's 130023424 blocks, each at a position below `(1, 130023424)`: the registration's tree, at its own index. -/
+theorem codeLayoutTiles_meets :
+    Plan.make? #[((0 : ℤ), (130023424 : ℤ))] 130023424 = some (Plan.whole 130023424) ∧
+      (runBlocks (Plan.whole 130023424).runs).length = 130023424 ∧
+      ∀ i < 130023424, ∃ t m, tileAt 130023424 #[] (Plan.whole 130023424).runs i = some (t, m) ∧ t < 1 ∧
+        m < 130023424 :=
+  ⟨planBlocks_meets, by rw [runBlocks_whole, List.length_range'], fun i hi => ⟨0, i, tileAt_whole hi, Nat.one_pos, hi⟩⟩
+
+/-- An embedding that puts each tile at `tileAt` of the runs is the verifier's layout. -/
+theorem codeLayout_eq {N T M blocks : ℕ} {dflt : Fin N ↪ Fin T × Fin M} {appends runs : Array (ℕ × ℕ)}
+    (e : Fin N ↪ Fin T × Fin M) (hN : (runBlocks runs).length = N)
+    (he : ∀ i : Fin N, tileAt blocks appends runs i = some (((e i).1 : ℕ), ((e i).2 : ℕ))) :
+    codeLayout blocks dflt appends runs = e := by
+  have hex : ∃ e : Fin N ↪ Fin T × Fin M, (runBlocks runs).length = N ∧
+      ∀ i : Fin N, tileAt blocks appends runs i = some (((e i).1 : ℕ), ((e i).2 : ℕ)) := ⟨e, hN, he⟩
+  have hc : codeLayout blocks dflt appends runs = hex.choose := by
+    unfold codeLayout
+    split
+    · rfl
+    · rename_i hn
+      exact absurd hex hn
+  rw [hc]
+  refine Function.Embedding.ext fun i => ?_
+  obtain ⟨h1, h2⟩ := Prod.mk.inj (Option.some.inj ((hex.choose_spec.2 i).symm.trans (he i)))
+  exact Prod.ext (Fin.ext h1) (Fin.ext h2)
+
+/-- Store order: tile `i` at block `i` of the registration's tree. -/
+def wholeLayout (B : ℕ) : Fin B ↪ Fin 1 × Fin B := ⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩
+
+/-- At gate run 7's plan the verifier's layout is store order. -/
+theorem codeLayout_whole (B : ℕ) (dflt : Fin B ↪ Fin 1 × Fin B) :
+    codeLayout B dflt #[] (Plan.whole B).runs = wholeLayout B :=
+  codeLayout_eq (wholeLayout B) (by rw [runBlocks_whole, List.length_range']) fun i => tileAt_whole i.2
+
+/-- **`CodeLayoutTiles` fails for any plan**: runs that repeat a block, which `Plan.make?` refuses, put two tiles at
+one position, where no embedding puts each tile at its block's. -/
+theorem codeLayoutTiles_fails : ¬ ∀ (N T M blocks : ℕ) (appends : Array (ℕ × ℕ)) (pl : Plan)
+    (dflt : Fin N ↪ Fin T × Fin M), (runBlocks pl.runs).length = N →
+    (∀ i < N, ∃ t m, tileAt blocks appends pl.runs i = some (t, m) ∧ t < T ∧ m < M) →
+    ∀ i : Fin N, tileAt blocks appends pl.runs i =
+      some (((codeLayout blocks dflt appends pl.runs i).1 : ℕ), ((codeLayout blocks dflt appends pl.runs i).2 : ℕ)) := by
+  intro h
+  let dflt : Fin 2 ↪ Fin 1 × Fin 2 := ⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩
+  have ht : ∀ i < 2, tileAt 1 #[] #[(0, 1), (0, 1)] i = some (0, 0) := by decide
+  have hc := h 2 1 2 1 #[] ⟨1, #[(0, 1), (0, 1)], #[1, 2]⟩ dflt (by decide)
+    (fun i hi => ⟨0, 0, ht i hi, by decide, by decide⟩)
+  have e0 := (Prod.mk.inj (Option.some.inj ((ht 0 (by decide)).symm.trans (hc 0)))).2
+  have e1 := (Prod.mk.inj (Option.some.inj ((ht 1 (by decide)).symm.trans (hc 1)))).2
+  have : codeLayout 1 dflt #[] #[(0, 1), (0, 1)] 0 = codeLayout 1 dflt #[] #[(0, 1), (0, 1)] 1 :=
+    Prod.ext (Subsingleton.elim _ _) (Fin.ext (e0.symm.trans e1))
+  exact absurd ((codeLayout 1 dflt #[] #[(0, 1), (0, 1)]).injective this) (by decide)
+
+/-! ### An opening the verifier accepts at the deployed shape
+
+A tree whose siblings are all 64 zero bytes (`zeroPath`) has the root its leaf climbs to (`zeroRoot`), and its
+opening verifies (`verifyOpening_zeroRoot`). The zero block decodes under every key (its words are 0, below `p`), to a
+payload `zeroPayload`; a registration whose payload tree holds that payload at block 0, and a pass over the whole store
+whose receipt tree holds the zero block's receipt at position 0, accept the opening of position 0
+(`opensAtPosition_meets`). The payload is the zero block's decoding under the codec key, which an honest prover stores
+after the key is drawn; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
+deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
+
+theorem size_sha512 (b : ByteArray) : (RemoteAudit.sha512 b).size = 64 := by
+  unfold RemoteAudit.sha512 Flock.Sha512.hash
+  exact Array.size_ofFn
+
+theorem size_frameHash (tag : String) (parts : List ByteArray) : (FrameV3.hash tag parts).size = 64 := by
+  unfold FrameV3.hash
+  exact size_sha512 _
+
+theorem size_node (d : FrameV3.Domain) (l i : ℕ) (a b : ByteArray) : (d.node l i a b).size = 64 :=
+  size_frameHash _ _
+
+theorem size_leaf (d : FrameV3.Domain) (r q : ℕ) (s : String) (v : ByteArray) : (d.leaf r q s v).size = 64 :=
+  size_frameHash _ _
+
+theorem zeros_size (n : ℕ) : (zeros n).size = n := by
+  first
+    | exact Array.size_replicate
+    | simp [zeros, ByteArray.size]
+
+theorem receipt_size (r : Receipter) (j : ℕ) (b : ByteArray) : (r.receipt j b).size = 64 := by
+  unfold Receipter.receipt
+  split <;> exact size_sha512 _
+
+/-- A `for` loop over a list in `Id` whose every step from a state `P` holds of continues with a state `P` holds of
+ends in one. -/
+theorem forIn'_inv {α σ : Type} (P : σ → Prop) (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ))
+    (hf : ∀ a h b, P b → ∃ b', f a h b = pure (.yield b') ∧ P b') (init : σ) (h0 : P init) :
+    P (forIn' l init f).run := by
+  induction l generalizing init with
+  | nil => first | exact h0 | simpa using h0
+  | cons a as ih =>
+    obtain ⟨b', hb, h1⟩ := hf a List.mem_cons_self init h0
+    rw [List.forIn'_cons, hb]
+    first
+      | exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m b hb => hf a' _ b hb) b' h1
+      | (simp only [Id.run, pure_bind]
+         exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m b hb => hf a' _ b hb) b' h1)
+
+theorem forIn'_inv_eq {α σ : Type} (P : σ → Prop) {l : List α} {f : (a : α) → a ∈ l → σ → Id (ForInStep σ)}
+    {init : σ} {L : Id σ} (hL : forIn' l init f = L) (hf : ∀ a h b, P b → ∃ b', f a h b = pure (.yield b') ∧ P b')
+    (h0 : P init) : P L.run :=
+  hL ▸ forIn'_inv P l f hf init h0
+
+/-- A root climbed to is a node or the leaf: 64 bytes. -/
+theorem climb_size (d : FrameV3.Domain) (pos : ℕ) (schema : String) (value : ByteArray) (path : Array ByteArray) :
+    (FrameV3.climb d pos schema value path).size = 64 := by
+  unfold FrameV3.climb
+  simp only [Id.run]
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range']
+  generalize hL : (forIn' (m := Id) (List.range' _ _ _) (_ : MProd ByteArray ℕ) _ : Id (MProd ByteArray ℕ)) = L
+  obtain ⟨dg, cur⟩ := L
+  refine forIn'_inv_eq (fun r : MProd ByteArray ℕ => r.fst.size = 64) hL ?_ (size_leaf _ _ _ _ _)
+  intro a h b _
+  refine ⟨_, rfl, ?_⟩
+  first
+    | (dsimp only; split <;> exact size_node _ _ _ _ _)
+    | simp [apply_ite ByteArray.size, size_node]
+
+/-- A path of `depth count` siblings, each 64 zero bytes. -/
+def zeroPath (d : FrameV3.Domain) : Array ByteArray := Array.replicate (FrameV3.depth d.count) (zeros 64)
+
+/-- The root `value` at `position` climbs to along `zeroPath`. -/
+def zeroRoot (d : FrameV3.Domain) (position : ℕ) (value : ByteArray) : ByteArray :=
+  FrameV3.climb d position SCHEMA value (zeroPath d)
+
+theorem verifyOpening_zeroRoot (d : FrameV3.Domain) (pos : ℕ) (v : ByteArray) (hc : 0 < d.count)
+    (hs : d.start ≤ pos) (hp : pos < d.start + d.count) :
+    FrameV3.verifyOpening d (zeroRoot d pos v) pos v SCHEMA (zeroPath d) = true := by
+  unfold FrameV3.verifyOpening zeroRoot zeroPath
+  simp [climb_size, zeros_size, Array.all_replicate, hc, hs, hp]
+
+theorem leafReceipt_first {R : ByteArray} (hR : R.size = 64) : leafReceipt (R ++ zeros 960) 0 130023424 = some R := by
+  have hs : (R ++ zeros 960).size = 1024 := by rw [ByteArray.size_append, hR, zeros_size]
+  unfold leafReceipt
+  dsimp only
+  split
+  · rename_i h
+    rw [hs] at h
+    exact absurd h (by decide)
+  · first
+      | (show some ((R ++ zeros 960).extract 0 64) = some R
+         rw [ByteArray.extract_append_eq_left hR.symm])
+      | (simp only [DIGEST_BYTES, PER_LEAF]
+         norm_num
+         rw [ByteArray.extract_append_eq_left hR.symm])
+
+theorem bytes_toList_loop (b : ByteArray) (i : ℕ) (r : List UInt8) :
+    ByteArray.toList.loop b i r = r.reverse ++ b.data.toList.drop i := by
+  fun_induction ByteArray.toList.loop b i r with
+  | case1 i r h ih =>
+    rw [ih, List.reverse_cons, List.append_assoc, List.singleton_append]
+    congr 1
+    conv_rhs => rw [List.drop_eq_getElem_cons (by simpa using h)]
+    simp [ByteArray.get!, h]
+  | case2 i r h =>
+    rw [List.drop_eq_nil_of_le (by simp; simpa using h), List.append_nil]
+
+theorem bytes_toList (b : ByteArray) : b.toList = b.data.toList := by
+  unfold ByteArray.toList
+  rw [bytes_toList_loop]
+  simp
+
+theorem foldr_zero : ∀ l : List UInt8, (∀ x ∈ l, x = 0) → l.foldr (fun x acc => acc * 256 + x.toNat) 0 = 0
+  | [], _ => rfl
+  | x :: l, h => by
+    have hx := h x List.mem_cons_self
+    subst hx
+    simp [foldr_zero l fun y hy => h y (List.mem_cons_of_mem _ hy)]
+
+theorem leNat_zeros (n a c : ℕ) : leNat ((zeros n).extract a c) = 0 := by
+  unfold leNat
+  rw [bytes_toList]
+  refine foldr_zero _ fun x hx => ?_
+  rw [Array.mem_toList_iff] at hx
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
+  simp [ByteArray.data_extract, zeros]
+
+/-- The zero block decodes, under any key of a codec whose stores hold a block. -/
+theorem decode_zeros (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.codec.field.p) :
+    ∃ payload, Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none = .ok (some payload) := by
+  have hw : ∀ x ∈ Codec.words (zeros Codec.BLOCK_BYTES) k.codec.field, x = 0 := by
+    intro x hx
+    simp only [Codec.words, Array.mem_map] at hx
+    obtain ⟨w, -, rfl⟩ := hx
+    exact leNat_zeros _ _ _
+  have hany : ((Codec.words (zeros Codec.BLOCK_BYTES) k.codec.field).any fun x => decide (x ≥ k.codec.field.p)) =
+      false := by
+    rw [Array.any_eq_false]
+    intro i hi
+    rw [hw _ (Array.getElem_mem hi)]
+    simp only [ge_iff_le, decide_eq_true_eq]
+    omega
+  unfold Codec.decode
+  dsimp only
+  rw [hany]
+  simp [hj.ne', Nat.not_le.mpr hj, zeros_size]
+  try exact ⟨_, rfl⟩
+
+/-- The zero block's decoding under `k`. -/
+def zeroPayload (k : Codec.Key) : ByteArray :=
+  match Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none with
+  | .ok (some p) => p
+  | _ => .empty
+
+theorem decode_zeroPayload (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.codec.field.p) :
+    Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none = .ok (some (zeroPayload k)) := by
+  obtain ⟨payload, h⟩ := decode_zeros k hj hp
+  unfold zeroPayload
+  rw [h]
+  try rfl
+
+/-- `checkOpening` accepts an opening of a registered block that passes checks 1–5. -/
+theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Array Append} {w : WindowRecord}
+    {R : Receipter} {i p : ℕ} {o : Opening} {pr : PassRecord} {j : ℕ} {y payload : ByteArray}
+    (hpr : w.passes[i]! = pr) (hpass : o.pass = i) (hpos : o.position = p)
+    (hblock : o.block.size = Codec.BLOCK_BYTES) (htile : o.tile.size = 0) (hls : o.leafSalt.size = SALT_BYTES)
+    (hps : o.payloadSalt.size = SALT_BYTES) (hpaths : ∀ x ∈ o.receiptPath ++ o.payloadPath, x.size = DIGEST_BYTES)
+    (hjb : pr.plan.block p = j) (hj : j < reg.blocks) (hdig : o.digest.size = 0)
+    (hy : leafReceipt o.leaf p pr.plan.length = some y)
+    (hleaf : verifyLeaf (w.seedOf i) pr.plan pr.root p o.leaf o.leafSalt o.receiptPath = true)
+    (hdec : Codec.decode o.block j reg.key none = .ok (some payload))
+    (hver : FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot j (hidden payload o.payloadSalt) SCHEMA
+      o.payloadPath = true)
+    (hrec : R.receipt j o.block = y) :
+    checkOpening reg digest appends w R i p o = none := by
+  have hany : ((o.receiptPath ++ o.payloadPath).any fun x => decide (x.size ≠ DIGEST_BYTES)) = false := by
+    rw [Array.any_eq_false]
+    intro k hk
+    rw [hpaths _ (Array.getElem_mem hk)]
+    simp
+  unfold checkOpening
+  simp only [Id.run, hpr, hjb]
+  rw [hany]
+  simp [hpass, hpos, hblock, htile, hls, hps, hj, hdig, hy, hleaf, hdec, hver, hrec]
+
+/-- The deployed codec: p1024, three rounds, masked. -/
+def honestCodec : Codec.Codec := ⟨Codec.P1024, 3, true⟩
+
+/-- The deployed registration of node `node` under codec seed `codecSeed`: 130023424 blocks, sketch-sha512 receipts
+of `rows` rows, and a payload tree holding `zeroPayload` at block 0. -/
+def honestReg (node codecSeed : ByteArray) (rows : ℕ) : Registration :=
+  let key := Codec.key codecSeed honestCodec
+  let pd := FrameV3.Domain.make (RemoteAudit.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
+  { node, blocks := 130023424, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
+    codecSeed, codec := honestCodec, receipt := .sketch, rows, key }
+
+/-- The receipts of position 0's leaf: the zero block's receipt under seed `s`, then the 15 others' bytes. -/
+def honestLeaf (reg : Registration) (s : ByteArray) : ByteArray :=
+  (receipter reg.receipt s reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES) ++ zeros 960
+
+/-- A pass over the whole store under seed `s` whose receipt tree holds `honestLeaf` at leaf 0. -/
+def honestPass (reg : Registration) (s : ByteArray) : PassRecord :=
+  ⟨zeroRoot (treeDomain s (Plan.whole 130023424)) 0 (hidden (honestLeaf reg s) (zeros SALT_BYTES)),
+    Plan.whole 130023424, none⟩
+
+/-- Window 0 of one pass, as gate run 7's windows. -/
+def honestWindow (reg : Registration) (challenge previous : ByteArray) : WindowRecord :=
+  ⟨0, challenge, previous, #[honestPass reg (seed challenge 0 previous)]⟩
+
+/-- The opening of position 0 of pass 0. -/
+def honestOpening (reg : Registration) (challenge previous : ByteArray) : Opening :=
+  let s := seed challenge 0 previous
+  ⟨0, 0, zeros Codec.BLOCK_BYTES, honestLeaf reg s, zeros SALT_BYTES, zeroPath (treeDomain s (Plan.whole 130023424)),
+    zeros SALT_BYTES, zeroPath reg.payloadDomain, .empty, .empty⟩
+
+theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB : reg.blocks = 130023424)
+    (hk : reg.key.codec = honestCodec)
+    (hroot : reg.payloadRoot = zeroRoot reg.payloadDomain 0 (hidden (zeroPayload reg.key) (zeros SALT_BYTES))) :
+    checkOpening reg reg.digest #[] (honestWindow reg challenge previous)
+      (receipterOf reg (honestWindow reg challenge previous) 0) 0 0 (honestOpening reg challenge previous) = none := by
+  have hc : 0 < (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).count := by
+    show 0 < leaves (Plan.whole 130023424).length
+    decide
+  have hs : (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).start ≤ 0 := Nat.le_refl 0
+  have hp : 0 < (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).start +
+      (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).count := by
+    show 0 < 0 + leaves (Plan.whole 130023424).length
+    decide
+  have hc' : 0 < reg.payloadDomain.count := by
+    show 0 < reg.blocks
+    rw [hB]
+    decide
+  have hs' : reg.payloadDomain.start ≤ 0 := Nat.le_refl 0
+  have hp' : 0 < reg.payloadDomain.start + reg.payloadDomain.count := by
+    show 0 < 0 + reg.blocks
+    rw [hB]
+    decide
+  have hb0 : (Plan.whole 130023424).block 0 = 0 := by
+    first
+      | rfl
+      | decide
+      | decide +kernel
+  have hj : 0 < reg.key.codec.maxBlocks := by
+    rw [hk]
+    decide
+  have hfp : 0 < reg.key.codec.field.p := by
+    rw [hk]
+    decide
+  refine checkOpening_of (pr := honestPass reg (seed challenge 0 previous)) (j := 0)
+    (y := (receipter reg.receipt (seed challenge 0 previous) reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES))
+    (payload := zeroPayload reg.key) rfl rfl rfl (zeros_size _) rfl (zeros_size _) (zeros_size _) ?_ hb0
+    (by rw [hB]; decide) rfl (leafReceipt_first (receipt_size _ _ _)) ?_ (decode_zeroPayload reg.key hj hfp) ?_ rfl
+  · intro x hx
+    simp only [honestOpening, zeroPath, Array.mem_append, Array.mem_replicate] at hx
+    rcases hx with ⟨-, rfl⟩ | ⟨-, rfl⟩ <;> exact zeros_size 64
+  · unfold verifyLeaf
+    exact verifyOpening_zeroRoot (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)) 0
+      (hidden (honestLeaf reg (seed challenge 0 previous)) (zeros SALT_BYTES)) hc hs hp
+  · rw [hroot]
+    exact verifyOpening_zeroRoot reg.payloadDomain 0 (hidden (zeroPayload reg.key) (zeros SALT_BYTES)) hc' hs' hp'
+
+theorem honestReg_make (node codecSeed : ByteArray) (rows : ℕ) (hnode : 1 ≤ node.size ∧ node.size ≤ 64)
+    (hseed : codecSeed.size = Codec.SEED_BYTES) (hrows : rows = 16 ∨ rows = 64) :
+    Registration.make? node 130023424 (honestReg node codecSeed rows).payloadRoot codecSeed honestCodec .sketch false
+      LAYOUT rows = .ok (honestReg node codecSeed rows) := by
+  have hs1 : storeBlocks 130023424 = true := by decide
+  have hs2 : 130023424 ≤ honestCodec.maxBlocks := by decide
+  have hroot : (honestReg node codecSeed rows).payloadRoot.size = 64 := by
+    simp only [honestReg, zeroRoot, climb_size]
+  have hrow : Kind.rowsOk .sketch rows = true := by
+    rcases hrows with rfl | rfl <;> rfl
+  unfold Registration.make?
+  simp [hnode.1, hnode.2, hs1, hs2, hroot, hseed, hrow]
+  try rfl
+
+/-- **`OpensAtPosition` meets the deployed instance.** For any node id and codec seed of the sizes `Registration.make?`
+takes, and any challenge and previous root, the deployed registration (130023424 blocks, p1024/k3/masked,
+sketch-sha512 receipts of 16 or 64 rows) is one `Registration.make?` accepts, and in a window of one pass over the
+whole store, as gate run 7's, `checkOpening` accepts an opening of position 0: `OpensAtPosition`'s premise holds. -/
+theorem opensAtPosition_meets (node codecSeed challenge previous : ByteArray) (rows : ℕ)
+    (hnode : 1 ≤ node.size ∧ node.size ≤ 64) (hseed : codecSeed.size = Codec.SEED_BYTES)
+    (hrows : rows = 16 ∨ rows = 64) :
+    ∃ (reg : Registration) (w : WindowRecord) (o : Opening),
+      Registration.make? node 130023424 reg.payloadRoot codecSeed honestCodec .sketch false LAYOUT rows = .ok reg ∧
+      w.challenge = challenge ∧ w.previous = previous ∧ w.passes.size = 1 ∧
+      w.passes[0]!.plan = Plan.whole 130023424 ∧
+      checkOpening reg reg.digest #[] w (receipterOf reg w 0) 0 0 o = none :=
+  ⟨honestReg node codecSeed rows, honestWindow (honestReg node codecSeed rows) challenge previous,
+    honestOpening (honestReg node codecSeed rows) challenge previous,
+    honestReg_make node codecSeed rows hnode hseed hrows, rfl, rfl, rfl, rfl, honest_checks _ _ _ rfl rfl rfl⟩
+
+/-- **`OpensAtPosition` fails without `checkOpening`.** Its conclusion's first part, that the opened block has a
+position, fails at the deployed registration for a pass whose plan reads past the store, where no append is: a
+verifier that accepted every opening would accept it. -/
+theorem opensAtPosition_fails : ¬ ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : ℕ),
+    ∃ t, position reg.blocks (appends.map fun a => (a.first, a.count)) (w.passes[i]!.plan.block p) =
+      some (t, w.passes[i]!.plan.block p) := by
+  intro h
+  obtain ⟨t, ht⟩ := h (honestReg (zeros 1) (zeros Codec.SEED_BYTES) 16) #[]
+    ⟨0, .empty, .empty, #[⟨.empty, Plan.whole 130023425, none⟩]⟩ 0 130023424
+  have hn : position 130023424 ((#[] : Array Append).map fun a => (a.first, a.count))
+      ((⟨0, .empty, .empty, #[⟨.empty, Plan.whole 130023425, none⟩]⟩ : WindowRecord).passes[0]!.plan.block
+        130023424) = none := by
+    decide +kernel
+  exact Option.some_ne_none _ (ht.symm.trans hn)
+
+/-! ### The scheduled layout -/
+
+/-- **The schedule check meets the deployed session.** Gate run 7 commits no schedule cap and appends nothing, so its
+ledger asks no schedule; had it committed one, its T = 1 s session's 96 passes over the whole store are the plans of
+the schedule with no frees and no appends at steps 0 to 95, which the check accepts at its 792 bits (99 one-byte
+integers). The premises of `Properties.DeclaredCircuit.ScheduledRequirement` besides the check are `G`'s, whose honest
+lemma is `G`'s; at gate run 7's plan the verifier's layout is store order (`codeLayout_whole`). -/
+theorem scheduled_meets : Schedule.check ⟨#[], #[], (List.range 96).toArray⟩ 130023424 792
+    ((List.range 96).map fun s => (s, (Plan.whole 130023424).runs)).toArray #[] = .ok 792 := by
+  decide +kernel
+
+/-- No appends. -/
+def noAppends : Unit → Fin 3 → Array (ℕ × ℕ) := fun _ _ => #[]
+
+/-- A pass of one block that reads block `y` of a store of three. -/
+def coinRun : Unit → Fin 3 → Array (ℕ × ℕ) := fun _ y => #[((y : ℕ), 1)]
+
+/-- One tile at block `y` of the registration's tree. -/
+def threeLayout (y : Fin 3) : Fin 1 ↪ Fin 1 × Fin 3 := ⟨fun _ => (0, y), fun _ _ _ => Subsingleton.elim _ _⟩
+
+theorem runBlocks_coinRun : ∀ y : Fin 3, (runBlocks (coinRun () y)).length = 1 := by decide
+
+theorem tileAt_coinRun : ∀ (y : Fin 3) (i : Fin 1),
+    tileAt 3 #[] (coinRun () y) i = some (((threeLayout y i).1 : ℕ), ((threeLayout y i).2 : ℕ)) := by
+  first
+    | decide
+    | decide +kernel
+
+theorem sessionLayout_coinRun (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) (y : Fin 3) :
+    sessionLayout 3 dflt noAppends coinRun () y = threeLayout y :=
+  codeLayout_eq (threeLayout y) (runBlocks_coinRun y) (tileAt_coinRun y)
+
+/-- **`steered_of_checked` fails without the schedule check.** A verifier that accepted every session would meet its
+premise for the pass that reads the block a coin `y ∈ {0, 1, 2}` names, at cap 0; the verifier's layout there takes
+three values, which one bit does not steer. The real check refuses every schedule at cap 0 and a coin-steered plan at
+any cap (`coinPasses_refused`). -/
+theorem steered_of_checked_fails (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) :
+    ¬ ∃ steer : Unit → Fin 3 → Pous.Bits (0 + 1),
+      Accounting.Assumptions.SteeredLayout (sessionLayout 3 dflt noAppends coinRun) steer := by
+  rintro ⟨steer, slot, h⟩
+  have key : ∀ y y' : Fin 3, steer () y 0 = steer () y' 0 → y = y' := by
+    intro y y' hs
+    have hs' : steer () y = steer () y' := funext fun i => by
+      obtain ⟨i, hi⟩ := i
+      obtain rfl : i = 0 := by omega
+      exact hs
+    exact congrArg (fun e : Fin 1 ↪ Fin 1 × Fin 3 => (e 0).2)
+      ((sessionLayout_coinRun dflt y).symm.trans ((h () y).trans ((congrArg (slot ()) hs').trans
+        ((h () y').symm.trans (sessionLayout_coinRun dflt y')))))
+  obtain ⟨y, y', hne, he⟩ := Fintype.exists_ne_map_eq_of_card_lt (fun y : Fin 3 => steer () y 0) (by simp)
+  exact hne (key y y' he)
 
 end Properties.RemoteAudit
