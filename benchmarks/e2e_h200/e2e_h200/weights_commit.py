@@ -4,13 +4,13 @@ salts, and every row opened later against its root.
 
 * **The reader** (`reader`): the Program's leaf width of each tensor, from its root parameters' types (`program`'s
   ``_weight_type``: every weight parameter is an array of bits, so every tensor, an f32 scale too, is read at 16-bit
-  leaves) and its digest, which the caller names (the H200 Program's is r20261026-175736-307c's). Neither the Program nor
+  leaves) and its digest, which the caller names (the H200 Program's is its registration run's). Neither the Program nor
   its gate lists are built: `weights.reader` takes them from ``registered.parameter_gates``, a list of every leaf's gate,
-  ~86 GB a tensor at H200 (PRF-208).
+  ~86 GB a tensor at H200.
 * **The commit** (`commit`): each tensor's rows in aligned chunks of 2^b rows (at most ``chunk_bytes``) over ``workers``
   processes. A chunk's bytes are generated from the seed, or read from a weights stream file (``source``: interface 1's
   ``plain`` stream, the file the H200's server loads); its rows' salts are drawn from the operating system by the worker
-  that commits them (every hm96 salt is the operating system's, Daniel 9 Oct, decisions 4(a) and 4(c)) and written to the
+  that commits them (every hm96 salt is the operating system's) and written to the
   witness, or read from an existing witness (``salts="witness"``: the same registration again, or network's load's,
   `load_relay`'s witness). The witness holds every tensor's row salts in tensor order, each row's 192 bytes at
   ``192 * (rows of earlier tensors + row)`` (load_relay's layout); it is the prover's alone (0600). Each worker returns its
