@@ -61,12 +61,12 @@ theorem deltaPub_le_of {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.u
 theorem card_unbound_congr {C C' : Verity.Circuit} (hC : C = C') {n n' : ℕ} (hn : n = n')
     {P : Verity.Partition C n} {P' : Verity.Partition C' n'} (hP : HEq P P')
     {O : (g : Fin C.N) → BitVec (C.w g) → Prop} {O' : (g : Fin C'.N) → BitVec (C'.w g) → Prop} (hO : HEq O O')
-    {X : C.Transcript} {X' : C'.Transcript} (hX : HEq X X') :
-    (Accounting.unbound P O X).card = (Accounting.unbound P' O' X').card := by
+    {T : C.Transcript} {T' : C'.Transcript} (hT : HEq T T') :
+    (Accounting.unbound P O T).card = (Accounting.unbound P' O' T').card := by
   subst hC hn
   obtain rfl := eq_of_heq hP
   obtain rfl := eq_of_heq hO
-  obtain rfl := eq_of_heq hX
+  obtain rfl := eq_of_heq hT
   rfl
 
 /-- The values the session's extractor opens at `τ`: its witness's openings in the sampling statement. -/
