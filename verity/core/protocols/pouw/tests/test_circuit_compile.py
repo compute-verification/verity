@@ -6,7 +6,7 @@ The scheme here (`compile-test`, tile 2 × 2; `compile-test-16`, 16 × 16) is a 
 from the salt, its position and its seed group's roots (`seeds.PouwSeed`), and from the seed one noise block a row of A; it
 adds the noise to its rows, folds each cell's noised arm into the receipt (the s8 family's prefix arm, or for another kind its
 own Definition on the noised row) and returns its cells' exact products as z. #2365's layer is `TemplatePopulations` over
-`ScaledMmS8Coordinate_v1` at K = 2048 and 8192, as `benchmarks/one_stage/a6.py` builds it."""
+`ScaledMmS8Coordinate_v1` at K = 2048 and 8192, as `examples/one_stage/a6.py` builds it."""
 from __future__ import annotations
 
 import dataclasses
