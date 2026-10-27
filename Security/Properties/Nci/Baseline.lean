@@ -11,7 +11,7 @@ registered at the start of the deployment, which the log's first record register
 
 * `BaselineProvenance`: on every instance and trusted input it accepts, the trusted input's log is in R6's chain from a
   record that opens it (`Chained`), the run's own record is one of its records and is this Program's whatever θ is (its
-  `program` is the Program's SHA-512, NET-94), the parameters are the trusted input's (`ParamsOf`), and every θ entry `t`
+  `program` is the Program's SHA-512), the parameters are the trusted input's (`ParamsOf`), and every θ entry `t`
   is `HeldAtStart`: its provenance cites, by digest, the log's first record, which registers the cited value under the
   cited root, and the run's own record registers the parameter whose input node θ names under that same root.
 

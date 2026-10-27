@@ -9,7 +9,7 @@ on every expansion. As for the other two NCI difftests, the audit checks the dat
 its pass on the Lean package's files alone, so the first test is what says the data is still what the generator and the
 reference write. The second checks that the random cases reach every refusal code and an acceptance, the third that each
 pinned case gets the code it was built for, gate by gate as well, the fourth that a run's own record binds the Program
-checked with θ empty (ONE3B's pair of windows), the fifth that an entry of the `output` kind is refused as any unknown
+checked with θ empty (two served windows), the fifth that an entry of the `output` kind is refused as any unknown
 kind is, and the sixth that θ cites the log's first record, from the first run and from a later one, and never a record
 registered mid-deployment.
 """
@@ -65,7 +65,7 @@ def test_the_random_cases_reach_every_code():
 def test_the_pinned_cases_get_their_codes():
     """Two accepted, one per refusal code, an entry of the `output` kind, θ holding an input bound per run
     (`theta-not-registered`), a field of another JSON type than the string or null the check compares it with (`TYPED`),
-    then ONE3B's pair of windows, two accepted and two `run-program`; the unrolled check on each expansion gives the
+    then two served windows, two accepted and two `run-program`; the unrolled check on each expansion gives the
     same."""
     pinned = vectors.pinned()
     assert [p["malformed"] for p in pinned] == [None, None, *vectors.CODES, "theta-provenance", "theta-not-registered",
@@ -91,12 +91,12 @@ def _relinked(log: list[dict], run: int, program: str) -> dict:
 
 
 def test_a_windows_record_binds_its_program_whatever_theta():
-    """ONE3B's pair (NET-94): two served windows with θ empty, A (request 3, one step) and B (requests 3 and 7, two
-    steps), each accepted on its own log. A's log with B's Program, which the check accepted until then, and B's with
-    A's are refused `run-program`, with no θ entry to reach `theta-unbound`. The refusal is the record's program alone:
-    A's log with its record naming B's Program instead is accepted, with B's verdict."""
+    """Two served windows with θ empty, one serving request 3 for one step and one requests 3 and 7 for two, each
+    accepted on its own log. Each one's log with the other's Program is refused `run-program`, with no θ entry to reach
+    `theta-unbound`. The refusal is the record's program alone: the first window's log with its record naming the
+    second's Program instead is accepted, with the second's verdict."""
     a, b, ab, ba = vectors.pinned()[-4:]
-    assert [p["window"] for p in (a, b)] == ["A", "B"]
+    assert [p["window"] for p in (a, b)] == list(vectors.WINDOWS)
     for p in (a, b):
         inst, tr = p["case"]["instance"], p["case"]["trusted"]
         assert inst["theta"] == [] and inst["provenance"] == []

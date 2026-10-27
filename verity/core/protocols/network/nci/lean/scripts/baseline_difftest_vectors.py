@@ -22,9 +22,9 @@ record naming another Program is `run-program`, whatever θ is. The data ends wi
 hand, two cases the check accepts (the first record cited from the deployment's first run and from its third), one
 negative per code, an entry of the `output` kind θ no longer takes (`theta-provenance`), `theta-not-registered`, two of
 a field of another JSON type than the string or null the check compares it with (`TYPED`): the cited entry's root a
-number (`theta-root`) and a record's `previous` neither its predecessor's digest nor null (`trusted`); then ONE3B's pair
-(`windows()`, NET-94): two served windows with θ empty, each accepted on its own log, and each one's log with the other's
-Program, refused `run-program`.
+number (`theta-root`) and a record's `previous` neither its predecessor's digest nor null (`trusted`); then two served
+windows with θ empty (`windows()`), each accepted on its own log, and each one's log with the other's Program, refused
+`run-program`.
 """
 from __future__ import annotations
 
@@ -90,8 +90,8 @@ def hand() -> tuple[str, list]:
     return text, [[n, t.to_json()] for n, t in params]
 
 
-#: ONE3B's two served windows (NET-94): A serves request 3 for one step, B requests 3 and 7 for two.
-WINDOWS = {"A": ((3,), 1), "B": ((3, 7), 2)}
+#: two served windows by label, as (requests, steps): one serves request 3 for one step, the other requests 3 and 7 for two
+WINDOWS = {"one request": ((3,), 1), "two requests": ((3, 7), 2)}
 
 
 def window(requests: tuple[int, ...], steps: int) -> tuple[str, list]:
@@ -325,20 +325,21 @@ def pinned() -> list[dict]:
 
 
 def windows() -> list[dict]:
-    """ONE3B's pair: windows A and B (`WINDOWS`), each its deployment's first run with θ empty and accepted on its own log,
-    then A's log with B's Program and B's log with A's, each refused `run-program`. Before NET-94 the check accepted
-    both, so `verity/nci/v1` answered A's registration with B's Program with A's digest, the one one-stage commits to."""
+    """The two windows of `WINDOWS`, each its deployment's first run with θ empty and accepted on its own log, then each
+    one's log with the other's Program, each refused `run-program`. With θ empty no entry reads the run's record, so its
+    `program` is all that ties the log to the Program checked: without it, `verity/nci/v1` would answer one window's
+    registration, the digest one-stage commits to, with the other's Program."""
     made = {}
     for seed, (w, (requests, steps)) in enumerate(WINDOWS.items()):
         text, params = window(requests, steps)
         made[w] = build(random.Random(30_000 + seed), text, params, lambda c: [], None, 0) | {"window": w}
-    a, b = made["A"]["case"], made["B"]["case"]
+    one, two = (made[w]["case"] for w in WINDOWS)
 
     def swap(inst: dict, tr: dict, w: str) -> dict:
         return {"case": copy.deepcopy({"instance": inst, "trusted": tr}), "malformed": "run-program", "theta": 0,
                 "window": w}
-    return [made["A"], made["B"], swap(b["instance"], a["trusted"], "A's record, B's Program"),
-            swap(a["instance"], b["trusted"], "B's record, A's Program")]
+    return [*made.values(), swap(two["instance"], one["trusted"], "one request's record, two requests' Program"),
+            swap(one["instance"], two["trusted"], "two requests' record, one request's Program")]
 
 
 def total(count: int = COUNT) -> int:
