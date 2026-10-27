@@ -1410,6 +1410,10 @@
    "owner": "@training",
    "digest": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
   },
+  "Nci.Ldl.Assumptions.HeldRate": {
+   "owner": "@training",
+   "digest": "ffd64517cc4d94d5f880e9eb9ef96f35f081ddd9814060645b8847529fa9a43c"
+  },
   "Nci.Ldl.CKPartition": {
    "owner": "@training",
    "digest": "3d7b0910224d34fe886ee78be5ec5b263947f09a07ecadbffd2b639965dd2862"
@@ -8504,6 +8508,12 @@
    "assumptions": [],
    "type_hash": "34fad08a16ceabe7a13ebf23acc2cf8449ae3ec9cda710def752e631b7a8876e"
   },
+  "Nci.Ldl.SecurityProofs.PairBound": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.PairBound : Nci.Ldl.Guarantees.PairBound"],
+   "assumptions": [],
+   "type_hash": "b8f442ece31d2385acf662bc9647dbbf3173805a08c6a77f6557a3b1c1f0578b"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
@@ -12491,7 +12501,8 @@
    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.FanOutBound: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the rate β = 2 and T₀ = 1: CKPartition, the registration, Products.FanOut, β, T₀ > 0 and EvaluatesBlocks hold, ¬ ActivationRate, and ¬ (c β M / (T₀ e h) ≤ |C| / T₀); not a Lean function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (Security/Definitions/Nci/Assumptions/Remote.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds, NciCheck.Properties.Throttled's conclusion) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerRemotePeriod_honest": "frozen (no-function): It states that DampenerRemotePeriod's premises hold at a constructed honest developer over one window at the remote reference's p = 3 * 2^-40 and eps' = 2p/10^-6, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
-   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate, every other premise of DampenerRemotePeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance."
+   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate, every other premise of DampenerRemotePeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
+   "Nci.Ldl.SecurityProofs.PairBound": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it, counted product occurrences each naming a distinct (weight, entry) pair and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks and HeldRate (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance. Its honest instance is Nci.Ldl.SecurityProofs.Witness.pairBound_honest, and Nci.Ldl.SecurityProofs.Witness.pairBound_nontrivial is its conclusion failing with HeldRate dropped."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -19253,6 +19264,7 @@
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.FanOutBound_honest",
     "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -19366,6 +19378,7 @@
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.FanOutBound_honest",
     "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -19712,6 +19725,7 @@
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.FanOutBound_honest",
     "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -22667,6 +22681,7 @@
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.FanOutBound_honest",
     "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -22936,10 +22951,11 @@
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
   },
   "Definitions.Nci.Assumptions.Ldl": {
-   "digest": "b8f07c106255f52731a8f34ff1eb09359980259b8dc298a85845e35e882db025",
+   "digest": "a570ac48de4f48a631a8b2053a7a84beeb18c09ec0ae4eb466e2a7f105984b93",
    "definitions": {
     "Nci.Ldl.Assumptions.ActivationRate": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d",
-    "Nci.Ldl.Assumptions.EvaluatesBlocks": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
+    "Nci.Ldl.Assumptions.EvaluatesBlocks": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495",
+    "Nci.Ldl.Assumptions.HeldRate": "ffd64517cc4d94d5f880e9eb9ef96f35f081ddd9814060645b8847529fa9a43c"
    },
    "guarantees": [
     "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
@@ -22950,7 +22966,8 @@
     "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.FanOutBound_honest",
-    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial"
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
+    "Nci.Ldl.SecurityProofs.PairBound"
    ]
   },
   "Definitions.Nci.Assumptions.Packed": {
@@ -23556,16 +23573,18 @@
    ]
   },
   "Definitions.Nci.Guarantees.Ldl": {
-   "digest": "1bf0a41e00d30c513184e404334391a23fdf592b84f556b702343ce7112cdbb4",
+   "digest": "4b13098efd1f4d17945e4f5f8c19f51a5a8449b8aaa3e69512755c48d7ed869d",
    "definitions": {
     "Nci.Ldl.Guarantees.BlockDescription": "dccf2ea2af37dcf7b6aef97c8b100ecff7a6f7095d0ec7cc2e153b61777e3968",
     "Nci.Ldl.Guarantees.Counting": "ad03ea31ea21f0e489c0860b567bf59d0ab8ca3435c5321486a585a6775e9a84",
-    "Nci.Ldl.Guarantees.FanOutBound": "ee0978a22e21f240c2e6db730be048647031ff243ee2e9fb43da937806579318"
+    "Nci.Ldl.Guarantees.FanOutBound": "ee0978a22e21f240c2e6db730be048647031ff243ee2e9fb43da937806579318",
+    "Nci.Ldl.Guarantees.PairBound": "6d1d2d811d12aeb3b0f11b680fca44f8383b7b1b76b14a01a5a33d7310ad7472"
    },
    "guarantees": [
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
-    "Nci.Ldl.SecurityProofs.FanOutBound"
+    "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound"
    ]
   },
   "Definitions.Nci.Guarantees.Ldl.Witnesses": {
@@ -23798,7 +23817,8 @@
     "Nci.Ldl.SecurityProofs.Counting_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.FanOutBound_honest",
-    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial"
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
+    "Nci.Ldl.SecurityProofs.PairBound"
    ]
   },
   "Definitions.Nci.Ldl.Instances": {

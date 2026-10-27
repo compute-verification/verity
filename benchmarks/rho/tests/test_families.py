@@ -155,7 +155,8 @@ KIMI = {"kappa_forward": (0.294, 0.005), "kappa_wgrad": (0.294, 0.005), "layers"
         "map_width": (7168, 0), "map_width_min": (7168, 0), "h_eff": (17, 0), "b_ps": (1, 0), "step_tokens": (6.7e7, 0),
         "token_state_bits": (5.9e11, 0.005), "shared_state_bits": (1.18e10, 0.012), "flops_per_token": (2.07e11, 0.002),
         "cut_bits": (2 * 28672, 0), "token_bits": (20, 0), "decode_flops": (0, 0), "tile_weight_bits": (8, 0),
-        "beta_x_marginal": (2.6, 0), "psum_bits": (16, 0), "tile_inputs": (7168, 0), "tile_outputs": (4096, 0)}
+        "beta_x_marginal": (2.6, 0), "psum_bits": (16, 0), "beta_g": (8, 0), "tile_inputs": (7168, 0),
+        "tile_outputs": (4096, 0)}
 _FIELDS = list(Profile.__dataclass_fields__)
 FILLED = ["c_w", "c_a", *_FIELDS[_FIELDS.index("thread_c") + 1:]]
 
