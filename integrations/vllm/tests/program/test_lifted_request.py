@@ -1,4 +1,4 @@
-"""Stage DENSE B1, the Program OF RECORD path (F-pad-14) — **padded baseline (experimental)**, lane `pad` (R16, BRIEF §7B).
+"""Stage DENSE B1, the Program OF RECORD path — **padded baseline (experimental)**.
 
 The Build's Program of record for a B1 row is the DERIVED FLAT request Program (derive_step `--wrapper request`, `T = cap − 1`),
 composed by GP-01 as a `WorkloadRequest_v1{program_digest, program_fn}` component whose body is the flat root with the prescribed
@@ -19,7 +19,7 @@ call that returns the token).  What this establishes, gate for gate on TINY:
     `s ≥ a_r`; with an EOS the request never emits every event is Active and every gate agrees;
   * the manifest fixes the Program: the digest depends on the EOS set and on nothing about a stop; refusals are by name.
 
-What it does NOT establish: anything about a real record (exec's earlystop run, HELP M-0106 / coord GO M-0111).
+What it does NOT establish: anything about a real record (an early-stop serve's record).
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from verity.ml.circuits import Program, bind
 from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY
 from verity_vllm.program import workload as W
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1, lifted as L
 from verity.ml.definitions.numerics import serve3_reference as ref
 from verity.ml.definitions.registry.b1 import weights_type
@@ -41,7 +42,7 @@ BOUNDARY = "Final_v2"  # Serve_v2's root emits `t=<T>/final` = Final_v2{…} →
 
 
 def tiny_component(steps: int):
-    """GP-01's component of `Serve_v2{TINY, LP, steps}` under the request wrapper's parameter names, as every pad test builds it: one
+    """GP-01's component of `Serve_v2{TINY, LP, steps}` under the request wrapper's parameter names, as every padded test builds it: one
     descriptor is one cached component (`workload._REQUEST_CACHE`, `lifted._LREQUEST_CACHE`) whatever the names, so a build under
     other names leaves another test in the process a workload root without `shared.weights`."""
     desc = encode_program(Program(b1.serve_v2(TINY, LP, steps)))
@@ -95,7 +96,7 @@ def test_component_is_the_flat_program_and_the_lift_has_exactly_the_guard_nodes_
     assert component.step_nodes == ((0, len(body_u.nodes)),) and L.request_boundaries(body_u) == []
     assert lifted.id.startswith("LiftedRequest_v2{") and lifted.bindings["EOS"] == (17,) and lifted.bindings["GUARD"] == "in"
     assert lifted.bindings["program_digest"] == component.program_digest and lifted.bindings["program_fn"] == component.program_fn
-    # R17-1 guard: (live, tok_in) per guarded step + |E| + bot; Continuation_v1 (R17-32): is_eos + out per slot, emit per slot (t=1 a constant)
+    # the guard: (live, tok_in) per guarded step + |E| + bot; Continuation_v1: is_eos + out per slot, emit per slot (t=1 a constant)
     assert len(body_l.nodes) == len(body_u.nodes) + 2 * (CAP - 1) + 1 + 2 + 3 * CAP
     assert body_l.gates == body_u.gates + 2 * (CAP - 1) + 1 + 2 + 3 * CAP == body_u.gates + L.continuation_gate_count(CAP, 1, 0)
     # G1 (v0.7 A11): the component's parameters are PRESCRIBED inputs -- ordinary, unwidened -- unless the body needs one lifted; the return is lifted
@@ -210,12 +211,12 @@ def test_no_eos_means_every_event_active_and_every_gate_agrees(component):
 
 
 def test_a_served_shape_component_is_refused_against_the_declared_cap(component):
-    """F-pad-15 (padrev M-0157, A3): a component derived at the SERVED shape (`build_request_LP<lp>_T<served>`, MOE-05's eos-truncated
+    """A3: a component derived at the SERVED shape (`build_request_LP<lp>_T<served>`, MOE-05's eos-truncated
     derivation) has fewer sampling events than the declared `max_tokens`; lifting it would make the served length the "fixed population".
     Refused by name; the same component under its own (wrong) count is what the refusal prevents."""
     served = tiny_component(D_MAX - 3)  # served 6 of cap 9
     assert len(L.request_boundaries(served.fn.body, BOUNDARY)) == CAP - 3
-    with pytest.raises(ValueError, match=r"has 6 sampling events but the manifest declares max_tokens=9.*F-pad-15"):
+    with pytest.raises(ValueError, match=rf"has 6 sampling events but the manifest declares max_tokens=9.*{EVIDENCE['lifted_served_shape']['finding']}"):
         L.lift_request_component(served.fn, (17,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(ValueError, match="declares max_tokens=10"):
         L.lift_request_component(component.fn, (17,), max_tokens=CAP + 1, lag=0, boundary_prefix=BOUNDARY)
@@ -260,7 +261,7 @@ def test_boundary_detection_refuses_a_body_whose_steps_do_not_consume_the_token(
 
 
 def test_lag1_candidate_the_placeholder_step_is_active_on_the_eos_and_bit_exact_then_bot(component, lifted):
-    """DP-pad-02 option (b), labelled candidate `LAG=1` (padrev F-pad-16, exec M-0140: vLLM async scheduling runs the step after the
+    """DP-pad-02 option (b), labelled candidate `LAG=1` (vLLM async scheduling runs the step after the
     EOS on the EOS token and discards its sample).  On the fixture (EOS 17, a_r = 4): steps 1..4 are Active — step 4 takes tok_in = 17 and
     its output `out[4]` equals the UNLIFTED Program's `y_4` bit for bit at every gate (the placeholder's discarded sample is a value of the
     execution, not invented); step 5 is the first ⊥ step (its guard reads tok_in_4 = 17 ∈ E), and every later step stays ⊥ even though
@@ -276,7 +277,7 @@ def test_lag1_candidate_the_placeholder_step_is_active_on_the_eos_and_bit_exact_
     pl, tl, out_l = _run(l1, _inputs_per_param(component.fn.body.params, True))
     ru, rl = _node_gate_ranges(pu), _node_gate_ranges(pl)
     # the RAW committed events (the boundary nodes): Active through the placeholder step -- out[4] = the placeholder's sample = y_4 of the
-    # unlifted run -- then bot: R17-1's pre-challenge assignment of the events
+    # unlifted run -- then bot: the pre-challenge assignment of the events
     # (the unlifted return gates are the boundary nodes' output gates; PAD-03 maps them 1:1 into the lifted node ranges)
     raw_l = [tl[rl[l1.node_map[b]][0] + (gu - ru[b][0])] for b, gu in zip(l1.boundaries, pu.circuit.root_outputs())]
     assert raw_l == Y_RAW[:5] + [L.enc_bot(32)] * (CAP - 5) == L.assign_inactive("tiny", Y_RAW[:5], (17,), CAP, lag=1)
@@ -310,7 +311,7 @@ def test_lag1_candidate_the_placeholder_step_is_active_on_the_eos_and_bit_exact_
 
 @pytest.mark.slow
 def test_continuation_v1_words_of_the_lifted_program_equal_the_rules_recurrence_under_both_profiles(component):
-    """coord R17-39 (e) 'add the lifted-Program tests' / revb S-r17b-20: the controller words the LIFTED PROGRAM computes on the fixture's own
+    """The controller words the LIFTED PROGRAM computes on the fixture's own
     transcript -- `slot=t/emit`, `slot=t/is_eos`, `slot=t/out` and `r_t` (= 1 at the unguarded slots, else `s=t-1/live`) -- EQUAL
     `continuation.recurrence` over the raw committed events, under A = 0 and A = 1: one mechanism, read off the circuit rather than restated
     (the two fixed lists in the tests above are what the rule gives on this transcript; here the rule itself is the oracle)."""
