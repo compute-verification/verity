@@ -94,7 +94,7 @@ def step (n : ℕ) : Accounting.Step Unit Unit :=
   ⟨fun _ o => (device n).rate o, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => 0⟩
 
 theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
-  unfold Verity.Step.Fits
+  unfold Accounting.Step.Fits
   refine ⟨fun o => ?_, ?_, fun _ => ?_, ?_, ?_⟩ <;> simp [step, device]
 
 /-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
@@ -142,9 +142,9 @@ def acceptAll (n : ℕ) :
 theorem work_step (n : ℕ) (p : Accounting.Price) (r : Accounting.PeriodRun (device n) Unit emptyCircuit
     (fun _ : Unit => Paths HonestH1.Ω1 n)) (hs : ∀ ξ, r.schedule ξ = fun _ => step n) (hw : r.win = ⟨0, 1⟩)
     (ξ : (i : Unit) → Paths HonestH1.Ω1 n) : r.work p ξ = p .tc * (65536 * n) := by
-  unfold Accounting.PeriodRun.work Verity.Schedule.work Verity.Schedule.ops
-  rw [hs, hw, Fintype.sum_eq_single Verity.OpClass.tc]
-  · simp [step, device, Verity.Window.ticks]
+  unfold Accounting.PeriodRun.work Accounting.Schedule.work Accounting.Schedule.ops
+  rw [hs, hw, Fintype.sum_eq_single Accounting.Op.tc]
+  · simp [step, device, Accounting.Window.ticks]
   · intro o ho
     simp [step, device, ho]
 

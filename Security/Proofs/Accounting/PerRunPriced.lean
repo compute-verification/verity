@@ -171,7 +171,7 @@ end Sure
 section Covert
 
 theorem totalRead_le (ω : ΩW × ΩQ × ΩS) : r.totalRead ω ≤ d.bw * (r.win .bandwidth).len :=
-  Verity.Schedule.sum_read_le (r.fits ω) _
+  Schedule.sum_read_le (r.fits ω) _
 
 variable [DecidableEq α]
 
@@ -244,7 +244,7 @@ theorem ComputeOfPearlCPerRunPriced : Accounting.Guarantees.ComputeOfPearlCPerRu
   intro Q R S _ _ _ _ CM P D γ η hγ hG hCM U hU w κ hκ hw t εs hεs hne ι α ΩQ ΩS _ _ _ d r p pRead hq real o
   obtain ⟨⟨_, _, tix⟩⟩ := hne
   have hA : CallsWithinPearlC (real.adv o) U (d.rate .oracle * (r.win .compute).len) := fun H s =>
-    (real.calls_le (H, s, tix) o).trans (Verity.Schedule.ops_le (r.fits _) _ _ _)
+    (real.calls_le (H, s, tix) o).trans (Schedule.ops_le (r.fits _) _ _ _)
   refine le_trans (pr_mono fun x hx => ?_)
     (PearlCEndToEndPerRun Q R S CM P D γ η hγ hG hCM U hU w κ hκ hw _ hq (real.adv o) hA t εs hεs)
   exact ⟨(real.accepts_iff x o).1 hx.1, (real.cost_le x o).trans_lt hx.2⟩

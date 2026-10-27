@@ -1,7 +1,6 @@
 import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
-import Proofs.Accounting.Adversary
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Headline

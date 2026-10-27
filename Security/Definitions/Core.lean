@@ -7,8 +7,6 @@ import Definitions.Core.Declaration
 import Definitions.Core.Boolean
 import Definitions.Core.Game
 import Definitions.Core.Draw
-import Definitions.Core.Device
-import Definitions.Core.Adversary
 import Definitions.Core.Decisive
 import Definitions.Core.Scalar
 import Definitions.Core.Prims

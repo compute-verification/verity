@@ -1,4 +1,3 @@
-import Definitions.Core.Adversary
 import Definitions.Pous.Game.Prob
 
 /-!
@@ -130,21 +129,6 @@ def ingress (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : ℕ 
   (A.chip (A.state E)).ingressBits (A.world E O)
 
 end Device
-
-/-- A device is an adversary of the window (core's `Verity.Adversary`): its state laid out from the store, its chip
-program in the world of the store and the oracle, the side sources it reads as its link (bound `c`), and its query
-bound `q`. -/
-instance instAdversaryDevice (N b h S c G q : ℕ) :
-    Verity.Adversary (Device N b h S c G q) (Store N b) (Oracle N b h) S (World N b h) (Fin N × Bits b)
-      (Fin N → Bits h) c q where
-  state A := A.state
-  world A E O := A.world E O
-  run A st w := (A.chip st).run w
-  queries A st w := (A.chip st).queries w
-  ingressBits A st w := (A.chip st).ingressBits w
-  linkBits A st w := (A.chip st).sideBits w
-  queries_le A st w := (A.bounded st w).2.2
-  linkBits_le A st w := (A.bounded st w).1
 
 /-- The verifier accepts: every sampled block's committed tag is the oracle's tag of that block. -/
 def Accepts {N b h S c G q s : ℕ} (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h)
