@@ -350,7 +350,7 @@ theorem sampledKSLivePub_nontrivial :
 
 /-- **`SampledKSLiveV2`'s parameter hypotheses hold as deployed**: `1 ≤ k`, `1 ≤ R_w`, `1 ≤ M`, `ρ < 1`, and every
 table of the hidden-output plan at rate at most `ρ` (`planZHJ_M1W`, `rateZ_le_m1w`), at `k = ⌈2^24/e⌉`,
-`R_w = M = 2^192` and `ρ = 1/2`. `SampledKSLiveV3` takes the same. -/
+`R_w = M = 2^192` and `ρ = 1/2`. `EndToEndHidden`, `SampledKSLive` and `SampledKSLiveV3` take the same. -/
 theorem sampledKSLiveV2_honest {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) :
     1 ≤ Bridge.kDep ∧ 1 ≤ (2 ^ 192 : ℕ) ∧ 1 ≤ (2 ^ 192 : ℕ) ∧ (1 / 2 : ℝ) < 1 ∧

@@ -668,7 +668,7 @@ theorem linkPrZC_le_closed {k Rw M : ℕ} {ρ : ℝ} (hρ : ρ < 1) {t' : ℝ} (
     linkPrZC A Hs P planZ tab vb k Rw M ρ R τ ≤
       ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
         (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) := by
-  have h := linkPrZC_le_linkBoundZC A Hs P planZ tab vb hρ ht R τ
+  have h := linkPrZC_le_linkBoundZC A Hs P planZ tab vb (k := k) (Rw := Rw) (M := M) hρ ht R τ
   rwa [linkBoundZC, if_pos hA2] at h
 
 /-- **The link theorem: `δ_link` at the link finders' collision probabilities, prover by prover.** For the batched
