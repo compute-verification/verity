@@ -3,6 +3,7 @@ backward of HF `LlamaRMSNorm` and of SiLU, each as PyTorch eager computes it in 
 
     Transpose_v1{R, C}                      (x: Array<R, Array<C, U16>>) -> Array<C, Array<R, U16>>
     RmsNormTorchBackward_v1{H, LANES}       (dy, x, w: Array<H, BF16>, r: F32) -> Array<H, BF16>
+    RmsNormTorchWeightGrad_v1{M, H}         (dy, hb: Array<M, BF16>) -> BF16
     SiluTorch_v1{N, EX2}                    (x: Array<N, BF16>) -> Array<N, BF16>
     SiluTorchBackward_v1{N, EX2, CONTRACT}  (dy, x: Array<N, BF16>) -> Array<N, BF16>
 
@@ -32,13 +33,21 @@ lane l the vectors l, l + LANES, ... below H / 4, into four running sums from 0 
 `reduce_lanes` is LANES for a launch: 32 for H = 576 at 16 or more tokens. A launch whose config splits the row across warps or
 blocks, or doesn't vectorize, is refused.
 
+`RmsNormTorchWeightGrad_v1` is one column of the weight's gradient, MulBackward0's ``grad * hb`` (bf16, f32 opmath) summed over
+the M tokens to the weight's shape (`sum_to_size`): `Reduce.cuh` over the slow dimension, vectorized along output (four columns
+a thread, a 32 x 4 block), each column summed by the block's four warps and, from 1,024 tokens, by `column_ctas` CTAs, whose
+partials the last CTA adds (`column_sum`). That count is ceil(M / 64) (64 at M = 4,096) while it is below the device's grid
+over CTAs a column; past it, sm_120's 188 multiprocessors set it, and the Definition refuses. On sm_120 the profiler shows
+grids (5, 1) at 256 tokens and (5, 64) at 4,096 for H = 576 (r20261027-031630-ce8e).
+
 `SiluTorch_v1` is `silu_kernel`'s ``x / (1 + ::exp(-x))`` in f32, then bf16; `SiluTorchBackward_v1` is `silu_backward_kernel`'s
 ``s = 1 / (1 + exp(-x))``, ``dy * s * (1 + x * (1 - s))`` (the kernel autograd runs when the backward doesn't build a graph).
 ``exp`` is CUDA's ``expf`` (libdevice ``__nv_expf``, `boolean_moe`'s `NvExpfIn_v1` and `NvExpfOut_v1` around its
 ``ex2.approx.ftz.f32``), and EX2 is a static: the Definition of MUFU.EX2, on sm_120 `mufu.MufuEx2Ftz_v2`, which equals that
 unit on every input kernels' sm_120 table read (r20261027-024703-41d4). The divides are ``div.rn.f32``. CONTRACT is the one
 contraction the source leaves to nvcc: 1 reads ``1 + x * (1 - s)`` as ``fma(x, RN(1 - s), 1)``, 0 as ``RN(1 + RN(x * RN(1 -
-s)))``; the sm_120 SASS of ``silu_backward_kernel`` in the wheel's libtorch_cuda.so settles it. Every NaN result is 0x7FFF.
+s)))``; the sm_120 SASS of ``silu_backward_kernel`` in torch 2.14's libtorch_cuda.so is the FFMA, CONTRACT = 1
+(r20261027-042723-8ec6). Every NaN result is 0x7FFF.
 """
 from __future__ import annotations
 
@@ -53,8 +62,9 @@ from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry.boolean_moe import nv_expf_in, nv_expf_out
 
-__all__ = ["RmsNormTorchBackward", "SiluTorch", "SiluTorchBackward", "SiluTorchBackwardOut", "SiluTorchIn", "SiluTorchOut",
-           "Transpose", "reduce_lanes", "rmsnorm_backward", "row_sum", "silu_backward_out", "silu_out"]
+__all__ = ["RmsNormTorchBackward", "RmsNormTorchWeightGrad", "SiluTorch", "SiluTorchBackward", "SiluTorchBackwardOut",
+           "SiluTorchIn", "SiluTorchOut", "Transpose", "column_ctas", "column_sum", "reduce_lanes", "rmsnorm_backward", "row_sum",
+           "silu_backward_out", "silu_out"]
 
 U16 = Array(16, BL.BIT)
 BF16 = U16
@@ -65,6 +75,8 @@ BF16_NAN = 0x7FFF
 ONE = 0x3F800000
 #: `mnt_wrapper<float>::MAX_NUM_THREADS` and the warp
 MAX_THREADS, WARP = 512, 32
+#: the RTX PRO 6000's multiprocessors and threads a multiprocessor (sm_120), which size `setReduceConfig`'s target grid
+SM120_SMS, SM120_THREADS = 188, 1536
 
 
 def _count(name: str, v: Any, least: int = 1) -> int:
@@ -182,6 +194,88 @@ RmsNormTorchBackward = specialized(
     doc="torch 2.14 CUDA autograd of HF LlamaRMSNorm (bf16) for one token on bits: g = f32(bf16(dy w)); dx = bf16(RN(g r) + "
         "RN(RN(RN(RN(gr -0.5) RN(RN(r r) r)) f32(1/H)) RN(2 f32(x)))), gr = sum RN(g f32(x)) in Reduce.cuh's float4 order at "
         "LANES threads; r the saved rsqrt; NaN 0x7FFF")
+
+
+# --- RMSNorm weight gradient -----------------------------------------------------------------------------------------------
+
+def column_ctas(M: int, H: int) -> int:
+    """CTAs a column of `Reduce.cuh`'s sum over the M rows of an (M, H) bf16 tensor (output-vectorized, a 32 x 4 block), the
+    rows' stride 4 * CTAs; ValueError for a launch this module doesn't build (unvectorized, a warp a column, or a CTA count the
+    device's grid sets)."""
+    M, H = _count("M", M), _count("H", H)
+    if H < 128 or H % 4:
+        raise ValueError(f"H = {H}: Reduce.cuh vectorizes along output with a 32-thread row only from 128 columns in fours")
+    if M < 64:
+        raise ValueError(f"M = {M}: below 64 rows each warp sums its own columns")
+    vpt = -(-M // 4)
+    if vpt < 256:
+        return 1
+    by_grid = -(-(SM120_SMS * (SM120_THREADS // 128)) // -(-(H // 4) // WARP))
+    by_rows = -(-vpt // 16)
+    if by_grid < by_rows:
+        raise ValueError(f"M = {M}, H = {H}: the CTA count is the device's grid ({by_grid}), not the rows' ({by_rows})")
+    return max(by_rows, -(-vpt // 256))
+
+
+def column_sum(C, p, ctas: int):
+    """`Reduce.cuh`'s sum of one column's f32 words p at ``ctas`` CTAs, ``+0`` its identity: thread y of CTA c (y < 4) reads rows
+    y + 4c, then every 4 * ctas, into accumulator i of four in turn, combined ((a0 + a1) + a2) + a3; `block_y_reduce` adds y2 to
+    y0 and y3 to y1, then y1 to y0. With CTAs, the last block's thread y adds partials y, y + 4, .. to +0 and reduces again."""
+    M, stride = len(p), 4 * ctas
+    zero = fp.f32_const(0)
+
+    def add(a, b):
+        return fp.f32_add(C, a, b, nan_word=NAN)
+
+    def block_y(ys):
+        return add(add(ys[0], ys[2]), add(ys[1], ys[3]))
+
+    parts = []
+    for c in range(ctas):
+        ys = []
+        for y in range(4):
+            idx, acc = y + 4 * c, [zero] * 4
+            while idx + 3 * stride < M:
+                acc = [add(a, p[idx + i * stride]) for i, a in enumerate(acc)]
+                idx += 4 * stride
+            for i in range(4):
+                if idx >= M:
+                    break
+                acc[i] = add(acc[i], p[idx])
+                idx += stride
+            ys.append(add(add(add(acc[0], acc[1]), acc[2]), acc[3]))
+        parts.append(block_y(ys))
+    if ctas == 1:
+        return parts[0]
+    ys = []
+    for y in range(4):
+        v = zero
+        for j in range(y, ctas, 4):
+            v = add(v, parts[j])
+        ys.append(v)
+    return block_y(ys)
+
+
+def _wgrad_signature(S: Any):
+    column_ctas(S.M, S.H)
+    col = Array(S.M, BF16)
+    return (("dy", col), ("hb", col)), BF16
+
+
+def _wgrad_build(S: Any):
+    M, ctas = S.M, column_ctas(S.M, S.H)
+
+    def build(C, *e):
+        p = [fp.bf16_to_f32(fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(a), fp.bf16_to_f32(b), nan_word=NAN), BF16_NAN))
+             for a, b in zip(e[:M], e[M:], strict=True)]
+        return fp.f32_to_bf16(C, column_sum(C, p, ctas), BF16_NAN)
+    return build
+
+
+RmsNormTorchWeightGrad = specialized(
+    "RmsNormTorchWeightGrad", 1, ("M", "H"), _wgrad_build, _wgrad_signature,
+    doc="torch 2.14 CUDA autograd of HF LlamaRMSNorm's weight (bf16) for one of its H columns on bits: bf16(sum f32(bf16(dy "
+        "hb))) over M tokens, the sum Reduce.cuh's column order at `column_ctas` CTAs on sm_120; NaN 0x7FFF")
 
 
 # --- SiLU ------------------------------------------------------------------------------------------------------------------

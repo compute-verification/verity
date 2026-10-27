@@ -27,6 +27,8 @@ COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merg
 
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7 (CIR-117)
 
+COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1 (CIR-117)
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()

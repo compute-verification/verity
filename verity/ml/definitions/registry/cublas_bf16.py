@@ -38,6 +38,14 @@ rows against partition, reduction-order and partial-type alternatives.  On cc 12
 (M, K, N), a `splitKreduce_kernel` whose workspace is bf16: `CublasSplitKGemmBf16Partials` is that route, the same chunks and chains
 with each partial rounded to bf16 before the reduction widens it; at others it launches a cutlass kernel alone, whose grid.z
 slices meet in its epilogue through the bf16 output: `CublasSerialSplitKGemm`.
+
+smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs.  F.linear's three GEMMs
+at x (M, K), W (N, K) are each one row's `x @ w^T` (`TRAIN_LINEAR_ROLES`): forward x = X's row against W's rows, dX = dY's row
+against W^T's, dW = dY^T's row against X^T's.  `train_route` is the route sm_120 takes for one at the captured (M, K, N), and
+`route_gemm` binds a route, an explicit parameter: unsplit `Gemm_v3`, `CublasSplitKGemmBf16Partials_v2` or
+`CublasSerialSplitKGemm_v2`; `train_linear` is the two together.  Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the
+batch on grid.z and no reduction kernel: `attention_bmm` binds `BatchedGemm_v2` over B members (heads), one query or key row each.
+Either refuses a shape or role the capture does not cover.
 """
 from __future__ import annotations
 
@@ -61,8 +69,10 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGem
            "CublasSplitKGemm", "CublasSplitKGemmBf16Partials",
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
            "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
-           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step",
-           "conformance_cc12", "dot_step", "split_bounds"]
+           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX",
+           "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
+           "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "route_gemm", "split_bounds", "train_linear",
+           "train_route"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 CONFORMANCE = ("exact-model-tested: every output word at K/N statics 6144/{19360,160,256}, 7168/{16160,64,384,2048,1024,512}, "
@@ -278,3 +288,82 @@ CublasSplitKGemmBf16Partials.word = lambda b: bind(CublasSplitKGemmBf16PartialsW
                                                    SPLIT_K=b["SPLIT_K"], DOT=word_of(b["DOT"]))
 CublasSerialSplitKGemm.word = lambda b: bind(CublasSerialSplitKGemmWord, K=b["K"], N=b["N"],  # type: ignore[attr-defined]
                                              SPLIT_K=b["SPLIT_K"], DOT=word_of(b["DOT"]))
+
+TRAIN_CAPTURE = ("run r20261027-030510-d787: smollm2-135m's training GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
+                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256 and B 8 x S 512, every launch's "
+                 "kernel and grid recorded, each role's sampled words fitting its route exactly on random and count-probe words")
+TRAIN_M = (256, 4096)
+TRAIN_LINEARS = ((576, 576), (576, 192), (576, 1536), (1536, 576), (576, 49152))
+#: F.linear's GEMMs at x (M, K), W (N, K): role -> (x's rows, w's rows, the row GEMM's (K, N) at (M, K, N))
+TRAIN_LINEAR_ROLES: dict[str, tuple[str, str, Callable[[int, int, int], tuple[int, int]]]] = {
+    "fwd": ("X", "W", lambda M, K, N: (K, N)),
+    "dX": ("dY", "W^T", lambda M, K, N: (N, K)),
+    "dW": ("dY^T", "X^T", lambda M, K, N: (M, K)),
+}
+#: eager attention's bmm's after repeat_kv, per head: op -> (x's rows, w's rows, the row GEMM's (K, N) at (S, D))
+TRAIN_BMM: dict[str, tuple[str, str, Callable[[int, int], tuple[int, int]]]] = {
+    "qk": ("q", "k", lambda S, D: (D, S)),
+    "pv": ("p", "v^T", lambda S, D: (S, D)),
+    "dp": ("do", "v", lambda S, D: (D, S)),
+    "dv": ("p^T", "do^T", lambda S, D: (S, D)),
+    "dq": ("ds", "k^T", lambda S, D: (S, D)),
+    "dk": ("ds^T", "q^T", lambda S, D: (S, D)),
+}
+TRAIN_BMM_SHAPES = ((256, 64), (512, 64))
+_NOSPLIT = {"kernel": "nosplit"}
+#: (M, K, N, role) -> the route sm_120 takes, in `bf16_gemm_check.cublas_route_rows`' form
+TRAIN_ROUTES: dict[tuple[int, int, int, str], dict[str, Any]] = {
+    **{(M, K, N, role): _NOSPLIT for M in TRAIN_M for K, N in TRAIN_LINEARS for role in TRAIN_LINEAR_ROLES},
+    (256, 576, 1536, "dX"): {"kernel": "splitk", "SPLIT_K": 8, "partial": "bf16"},
+    (256, 576, 49152, "dX"): {"kernel": "splitk", "SPLIT_K": 17, "partial": "bf16"},
+    (4096, 576, 49152, "dX"): {"kernel": "serialk", "SPLIT_K": 7},
+    (4096, 576, 49152, "dW"): {"kernel": "serialk", "SPLIT_K": 2},
+}
+_UNMODELLED_DW = {(576, 576): 7, (576, 192): 12, (576, 1536): 3, (1536, 576): 3}
+for (_K, _N), _z in _UNMODELLED_DW.items():
+    TRAIN_ROUTES[(4096, _K, _N, "dW")] = {"kernel": "splitk", "SPLIT_K": _z, "partial": "bf16", "align": 8}
+
+
+def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
+    """The cuBLAS route sm_120 takes for F.linear's ``role`` GEMM at x (M, K), W (N, K) (`TRAIN_CAPTURE`); refuses any the
+    capture does not cover."""
+    if role not in TRAIN_LINEAR_ROLES:
+        raise ValueError(f"train_route: role {role!r} (only {', '.join(TRAIN_LINEAR_ROLES)})")
+    if (M, K, N, role) not in TRAIN_ROUTES:
+        raise ValueError(f"train_route: (M, K, N) = ({M}, {K}, {N}) is not captured (M in {TRAIN_M}, (K, N) in {TRAIN_LINEARS})")
+    return dict(TRAIN_ROUTES[(M, K, N, role)])
+
+
+def route_gemm(route: dict[str, Any], K: int, N: int) -> Any:
+    """``route``'s Definition on bits at the row GEMM (K, N), `HopperBF16WgmmaDot16_v2` its k16 step: (x: Array<K, BF16>,
+    w: Array<N, Array<K, BF16>>) -> Array<N, BF16>."""
+    kind, dot = route.get("kernel"), BG.HopperBF16WgmmaDot16
+    if kind == "nosplit":
+        return bind(BG.Gemm, K=K, N=N, DOT=dot)
+    if route.get("align", 64) != 64:
+        raise ValueError(f"route_gemm: route {route}: sm_120's grid.z slices of ceil(K/z) rounded up to {route['align']} with a "
+                         "bf16 workspace are not a Definition yet (split_bounds' chunks are 64-aligned)")
+    partials = CublasSplitKGemmBf16Partials if route.get("partial") == "bf16" else None
+    split = {"serialk": CublasSerialSplitKGemm, "splitk": partials}.get(kind)
+    if split is None:
+        raise ValueError(f"route_gemm: route {route} has no Definition on bits")
+    split_bounds(K, int(route["SPLIT_K"]))
+    return bind(split, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=dot)
+
+
+def train_linear(role: str, M: int, K: int, N: int) -> Any:
+    """`route_gemm` of `train_route`: one row of F.linear's ``role`` GEMM at x (M, K), W (N, K) as sm_120 computes it."""
+    return route_gemm(train_route(role, M, K, N), *TRAIN_LINEAR_ROLES[role][2](M, K, N))
+
+
+def attention_bmm(op: str, S: int, D: int, B: int = 1) -> Any:
+    """`BatchedGemm_v2{B, K, N, HopperBF16WgmmaDot16_v2}` of eager attention's bmm ``op`` (`TRAIN_BMM`) at S tokens and head
+    dimension D: B members (heads), each one x row against its head's w rows; refuses any (S, D) the capture does not cover."""
+    if op not in TRAIN_BMM:
+        raise ValueError(f"attention_bmm: op {op!r} (only {', '.join(TRAIN_BMM)})")
+    if (S, D) not in TRAIN_BMM_SHAPES:
+        raise ValueError(f"attention_bmm: (S, D) = ({S}, {D}) is not captured (only {TRAIN_BMM_SHAPES})")
+    if B < 1:
+        raise ValueError(f"attention_bmm: B = {B}")
+    K, N = TRAIN_BMM[op][2](S, D)
+    return bind(BatchedGemm, B=B, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)
