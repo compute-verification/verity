@@ -1,12 +1,14 @@
 /-
 `flock-verify rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
 `flock-verify verify --zk` process at one V* statement (`--rec-part J`), and each names in its `VERDICT` lines the
-SHA-512 of the shared rows file it checked its row ports against (`rec_rows_sha512`, `--rec-rows`). The shared rows are
-one set, which the prover stages once, after the inner rounds and before any V* session: its running sums' `rec-acc`
-registration (`acc0`), the tops' `rec-top-L<l>` and the message rows' `rec-c<k>`. No part sees another, so only the
-composition can hold every part to one set. It accepts exactly when there is one log per V* statement, `rec_part` `0`
-to `n − 1` each once, every log has a `VERDICT`, every `VERDICT` accepts, and each names the digest of the one staged
-rows file.
+SHA-512 of the shared rows file it checked its row ports against (`rec_rows_sha512`, `--rec-rows`) and of the verifier's
+own inner shape file it read (`rec_inner_sha512`, `--rec-inner`). The shared rows are one set, which the prover stages
+once, after the inner rounds and before any V* session: its running sums' `rec-acc` registration (`acc0`), the tops'
+`rec-top-L<l>` and the message rows' `rec-c<k>`. The inner shape is one too: the compiled statement holds one, which
+gives V*'s statements. No part sees another, so only the composition can hold every part to one set and one shape. It
+accepts exactly when there is one log per V* statement, `rec_part` `0` to `n − 1` each once, every log has a `VERDICT`,
+every `VERDICT` accepts, and each names the digest of the one staged rows file and of the composition's own inner shape
+file.
 -/
 import Lean.Data.Json
 
@@ -25,8 +27,8 @@ def verdicts (log : String) : Except String (Array Json) :=
     else pure out
 
 /-- **One part's log**: it has a `VERDICT`, every `VERDICT` accepts at one `rec_part`, and each names `digest` as its
-`rec_rows_sha512`. Its part. -/
-def checkPart (digest : String) (name log : String) : Except String Nat := do
+`rec_rows_sha512` and `innerDigest` as its `rec_inner_sha512`. Its part. -/
+def checkPart (digest innerDigest : String) (name log : String) : Except String Nat := do
   let vs ← (verdicts log).mapError (s!"{name}: " ++ ·)
   let some v0 := vs[0]? | throw s!"{name}: no VERDICT"
   let some j := (v0.getObjValAs? Nat "rec_part").toOption
@@ -41,13 +43,18 @@ def checkPart (digest : String) (name log : String) : Except String Nat := do
     | some h =>
       if h != digest then
         throw s!"{name}: checked against the rows file {h}, not the one staged rows file {digest}"
+    match (v.getObjValAs? String "rec_inner_sha512").toOption with
+    | none => throw s!"{name}: its VERDICT names no rec_inner_sha512: it read no inner shape (--rec-inner)"
+    | some h =>
+      if h != innerDigest then
+        throw s!"{name}: read the inner shape file {h}, not the composition's {innerDigest}"
   pure j
 
 /-- **The composition**: `parts`' logs (name, text), one per V* statement of `n`, each accepted at the one staged rows
-file of SHA-512 `digest` (`checkPart`). -/
-def check (n : Nat) (digest : String) (parts : List (String × String)) : Except String Unit := do
+file of SHA-512 `digest` and the one inner shape file of SHA-512 `innerDigest` (`checkPart`). -/
+def check (n : Nat) (digest innerDigest : String) (parts : List (String × String)) : Except String Unit := do
   if n == 0 then throw "no V* statement"
-  let js ← parts.mapM fun (name, log) => checkPart digest name log
+  let js ← parts.mapM fun (name, log) => checkPart digest innerDigest name log
   for j in js do
     if j ≥ n then throw s!"rec_part {j}: V* has {n} statements"
     if js.count j != 1 then throw s!"rec_part {j}: {js.count j} logs, not one"
