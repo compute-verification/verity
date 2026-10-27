@@ -6,6 +6,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -243,6 +244,45 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     assert rep["registration"]["compiler"]["inner"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
     private = out / "private"
     assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
+
+
+def test_the_registration_records_the_committers_weights_roots_and_refuses_anything_else(tmp_path):
+    """``--weights-of-record``: the registration records the committer's registered root for each weight parameter of the
+    window circuit (its weights registration's, ``registered_roots``, what `interface.input_count` holds the verifier's pins
+    to); without it, none. A weights record (the verifier's shapes, no root), a registration of no value, one whose values
+    aren't weight parameters' entries with a root of 64 bytes, or one of another model than the run's ``serve.json`` names,
+    is a usage error."""
+    from verity.ml.windows import interface as IF
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.records import weights_registration as WRG
+
+    _served(tmp_path, n=4)
+    roots = {"weights/model.norm.weight@64": "cd" * 64, "weights/model.embed_tokens.weight@64": "ef" * 64}
+    values = {p: {"value": p, "root": r, "leaves": 1, "words": 64, "domain": "01" * 64} for p, r in roots.items()}
+    registration = {"schema": WRG.SCHEMA, "program": "ab" * 64, "model": {"repo": "org/m", "revision": "r"},
+                    "grain": {"gemm_words": 32768, "rows": 256, "select": 768}, "values": values, "unrooted": {}}
+    (tmp_path / "wr.json").write_text(json.dumps(registration))
+    assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "a"), compiler_digest="ab" * 64,
+                                weights_of_record=str(tmp_path / "wr.json"))) == 0
+    reg = json.loads((tmp_path / "a" / "registration.json").read_text())
+    assert reg["registered_roots"] == IF.registered_roots(reg) == roots
+    assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "b"), compiler_digest="ab" * 64)) == 0
+    assert "registered_roots" not in json.loads((tmp_path / "b" / "registration.json").read_text())
+    p = "weights/model.norm.weight@64"
+    record = {"schema": WR.SCHEMA, "of_record": True, "root_of_record": "cd" * 32,
+              "registered_entries": {q: {k: v for k, v in e.items() if k != "root"} for q, e in values.items()}}
+    for bad, serve, why in [(record, None, "never a weights record"),
+                            ({**registration, "values": {}}, None, "'values' is empty"),
+                            ({**registration, "values": {"x": {**values[p], "value": "x"}}}, None, "registers ['x'], not weight"),
+                            ({**registration, "values": {**values, p: {**values[p], "root": "cd" * 32}}}, None,
+                             f"'values.{p}' doesn't name its parameter with a root of 64 bytes"),
+                            (registration, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
+        (tmp_path / "wr.json").write_text(json.dumps(bad))
+        if serve:
+            (tmp_path / "serve.json").write_text(json.dumps(serve))
+        with pytest.raises(UsageError, match=re.escape(why)):
+            ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "c"), compiler_digest="ab" * 64,
+                                 weights_of_record=str(tmp_path / "wr.json")))
 
 
 def test_the_command_reports_a_disagreeing_run_as_a_usage_error(tmp_path):

@@ -7,12 +7,16 @@ Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `
 honest and under one edit of the run, of its session or of its JSON, each as the protocol's case with its setup's own
 commitment and evidence, those under one edit of the case's framing, and those under one edit of the setup's evidence
 (another setup's, a bit of its commitment, salt or `C*` off, `C*` cut short, the setup missing). Under the deployed
-protocol (S1's LMS alone) they are a small period of `pous.period.run`, signed by a key at S1's deployed parameters
-(`mc_cases.deployed_signer`), honest and under a prover that answers every other round with zeros; each protocol refuses
-the other's signer; and the same two at the certified point (`period.certified_point`) on a store set up there, where
-the honest one certifies its store (slow: a 256-block encode). The period's setup case is the setup protocol's
-(`pous-setup`), which accepts it; the period's case with another store's setup (a run committed to a different setup) is
-refused, for the tie's reason."""
+protocol (S1's LMS alone) they are a small period of `pous.period.run` (the small point, `point_for(size, W, C0)`),
+signed by a key at S1's deployed parameters (`mc_cases.deployed_signer`), honest and under a prover that answers every
+other round with zeros; each protocol refuses the other's signer; and the same two at the certified point
+(`period.point_for`'s default) on a store set up there, where the honest one certifies its store (slow: a 256-block
+encode). The period's setup case is the setup protocol's (`pous-setup`), which accepts it; the period's case with another
+store's setup (a run committed to a different setup) is refused, for the tie's reason.
+
+`pous-run serve`'s `certify` (`PousCheck.RunProtocol.certifyFn`) against `period.certify` and `period.profile` at points
+no setup could reach: drawn about each certificate's edges (blocks per segment, segments, `k`, `Δ + RTT`, the width), and
+Demo B's `C*`, 1038 segments of `2^16` blocks, where both publish `PeriodHeldDemo`'s 1,060,008,348,186 bits."""
 
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from test_run import LEAN, WIDTHS, M, Run, _decode_session, _decode_setup, _point_of, documents, runs
+from test_run import INVALID, LEAN, WIDTHS, M, Run, _decode_session, _decode_setup, _point_of, _Port, documents, runs
 from test_setup_difftest import _commitment as _setup_commitment
 from test_setup_difftest import _evidence as _setup_evidence
 from test_setup_difftest import _evidence_bytes, honest, setup_port, setup_protocol
@@ -33,6 +37,7 @@ from verity_difftest import protocol as P
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous import setup as pous_setup
+from verity.core.protocols.pous.schemes import p2 as P2
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -167,6 +172,34 @@ test_server = D.server_fixture(TEST)
 deployed_server = D.server_fixture(DEPLOYED)
 setup_server = D.server_fixture(setup_port())
 
+
+def certify_reference(j) -> dict:
+    """`PousCheck.RunProtocol.certifyFn` in Python: the point decoded as the Lean decodes it, then `period.profile` and
+    `period.certify` there."""
+    pt = _point_of(M._get(j, "point"))
+    return {"profile": period.profile(pt), "public": period.certify(pt)}
+
+
+def _certify_line(wc: tuple[int, int], bps: int, segments: int, k: int, limit_ns: int) -> dict:
+    return {"point": {"k": k, "limit_ns": limit_ns,
+                      "params": {"blocks_per_segment": bps, "c0": wc[1], "segments": segments, "w": wc[0]}}}
+
+
+DEMO_B = _certify_line(P2.POINT[:2], 1 << 16, 1038, period.K, period.LIMIT_NS)
+"""Demo B's `C*`: 1038 segments of `2^16` blocks at the registered width and prime, audited at the deployed `k` and
+`Δ + RTT`."""
+#: Points about the certificates' edges: mostly the registered width and prime, else the small point's or a width
+#: `P2Params` refuses; blocks per segment and segment counts whose products fall at and beside `2^8`, `2^19` (the
+#: registered point's `2^16 × 8`), `2^23` and `2^27` blocks; `k` about 105; `Δ + RTT` about one root's time.
+CERTIFY_POINTS = st.builds(
+    _certify_line, st.sampled_from([P2.POINT[:2]] * 6 + [(period.W, period.C0)] + INVALID),
+    st.sampled_from([1, 2, 3, 128, 255, 256, 257, 1 << 15, (1 << 16) - 1, 1 << 16, (1 << 16) + 1]),
+    st.sampled_from([0, 1, 2, 8, 127, 128, 129, 1038, (1 << 11) - 1, 1 << 11, (1 << 11) + 1]),
+    st.sampled_from([0, 104, 105, 106]),
+    st.sampled_from([0, period.LIMIT_NS, P2.ROOT_CALL_NS - 1, P2.ROOT_CALL_NS, 2 * P2.ROOT_CALL_NS]))
+CERTIFY = _Port("pous-run", "certify", certify_reference, CERTIFY_POINTS, package=LEAN)
+certify_server = D.server_fixture(CERTIFY)
+
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(2000)
 OTHER_STORE = hashlib.shake_256(b"another tiny MLP's weights").digest(2000)
 COINS = hashlib.sha512(b"the period's live coins").digest()
@@ -177,10 +210,11 @@ def _zeros_on_odd_rounds(blocks):
 
 
 def periods(signer, store: bytes = STORE) -> dict[str, period.Period]:
-    """A small period of `store` on node `n0` signed by `signer`: honest, and under a prover that answers every other
-    block with zeros."""
+    """A small period of `store` on node `n0` at the small point, signed by `signer`: honest, and under a prover that
+    answers every other block with zeros."""
     kw = dict(signer=signer, schemes=mc.SCHEMES if signer.scheme == mc.LMS else M.ts.SCHEMES,
-              protocol=period.PROTOCOL if signer.scheme == mc.LMS else TEST_ID)
+              protocol=period.PROTOCOL if signer.scheme == mc.LMS else TEST_ID,
+              point=period.point_for(len(store), period.W, period.C0))
     return {"honest": period.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9), **kw),
             "zeros": period.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9),
                                 prover=_zeros_on_odd_rounds, **kw)}
@@ -219,16 +253,16 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
 
 @pytest.fixture(scope="module")
 def certified_store() -> period.Store:
-    """`STORE` set up at the certified point (`period.certified_point`, 256 blocks), its `C*` encoded in up to
+    """`STORE` set up at the certified point (`period.point_for`'s default, 256 blocks), its `C*` encoded in up to
     `period.SETUP_WORKERS` processes: about 16 core-minutes, since no `C*` that setup accepts there is cheaper than
     encoding one (a random block decodes to a payload with probability 2^-16)."""
     workers = min(period.SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    return period.setup_store(STORE, COINS, period.certified_point(len(STORE)), workers=workers)
+    return period.setup_store(STORE, COINS, period.point_for(len(STORE)), workers=workers)
 
 
 @pytest.mark.slow
 def test_a_certified_periods_answers_agree(deployed_server, certified_store) -> None:
-    """The deployed protocol at the certified point (`period.certified_point`, P2's proved family at 256 blocks), on a
+    """The deployed protocol at the certified point (`period.point_for`'s default, P2's proved family at 256 blocks), on a
     store set up there: the Lean and the Python accept the honest period, its setup tied, with `s_bits` = 3,989,072 at
     `1% + 2^-128` and no gap, under `P2SlackFamilyUncond`, and reject the prover that answers every other block with
     zeros. The one test of an accepted, certified run through the tie: the quick tier's certified-point checks hold the
@@ -295,3 +329,24 @@ def test_drawn_runs_agree(test_server) -> None:
                           serve=("--test", "serve"))
     stats = D.run(port, examples=400, server=test_server)
     assert stats.counts.get("accept", 0) > 20 and stats.counts.get("reject", 0) > 100, stats
+
+
+def test_demo_bs_certificate_agrees(certify_server) -> None:
+    """At Demo B's `C*` (`DEMO_B`), past the proved family's `2^23` blocks, the Lean and the Python publish
+    `PeriodHeldDemo`'s 1,060,008,348,186 bits at `1% + 2^-128` under `periodHeldAt`, with no gap; at `k = 104`, nothing,
+    and the gap is the certificate's `k`."""
+    got = json.loads(D.replay(CERTIFY, DEMO_B, certify_server)[1])
+    assert got["public"] == {"certified": True, "eps": f"{2 ** 126 + 25}/{25 * 2 ** 128}", "s_bits": 1_060_008_348_186}
+    assert got["profile"]["blocks"] == 68_026_368 and got["profile"]["gaps"] == []
+    assert got["profile"]["certificate"]["theorem"] == "Pous.Period.SecurityProofs.periodHeldAt"
+    assert got["profile"]["certificate"]["claims"] == list(P2.WIDE_CLAIMS)
+    low = json.loads(D.replay(CERTIFY, {"point": DEMO_B["point"] | {"k": 104}}, certify_server)[1])
+    assert low["public"] == {"certified": False, "eps": "0", "s_bits": 0}
+    assert low["profile"]["gaps"] == ["k = 104 is below the certificate's 105"]
+
+
+def test_drawn_points_certify_alike(certify_server) -> None:
+    """`CERTIFY_POINTS`, about every certificate's edges: the Lean's `certify` and profile are the Python's on each, and
+    on a point `P2Params` refuses both refuse."""
+    stats = D.run(CERTIFY, examples=300, server=certify_server)
+    assert stats.outputs > 100 and stats.rejects > 10, stats
