@@ -20,10 +20,8 @@ theorem OnsiteServingEndToEnd : Verity.OnsiteServingEndToEnd := by
   have hL2 : ∀ s, Game.prob (fun o => (Accepts o.sent ∧ V.Registered o.params o.file) ∧
       ¬ (Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o)) (V.game θ F c) s ≤
       ∑ a, V.error a θ F c s := fun s =>
-    (Game.prob_mono (fun o ⟨⟨hA, hR⟩, hn⟩ => ⟨hA, hR, by
-      by_contra hall
-      push_neg at hall
-      exact hn ⟨hA, hR, hall⟩⟩) _ _).trans (hV s)
+    (Game.prob_mono (fun o ⟨⟨hA, hR⟩, hn⟩ => ⟨hA, hR, not_forall.mp fun hall => hn ⟨hA, hR, hall⟩⟩) _ _).trans
+      (hV s)
   exact (Game.prob_mono (fun o ⟨hA, hR, hs, hw⟩ => ⟨⟨hA, hR⟩, hs, hw⟩) _ _).trans
     (Accounting.SecurityProofs.ServingRoute.ServingEndToEnd (V.game θ F c) P play
       (fun _ o => Accepts o.sent ∧ V.Registered o.params o.file)
