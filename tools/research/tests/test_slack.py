@@ -2239,6 +2239,39 @@ def test_traffic_replay_reads_the_people_s_channels_and_keeps_a_chat_s_text_out(
     assert f"REPLAY #chat-luke {secret['ts']} by @luke: missed @top (private)" in out and "private question" not in out
 
 
+def test_traffic_volume_counts_each_posters_words_in_the_window_threads_included_and_inboxes_aside(fake, registry, capsys):
+    since, now = 1700088400, 1700092000                                       # --hours 1
+    bot = {"bot_id": BOT}
+    old = fake.add(COORD, ts="1700050000.000001", text="infra: the old question", username="infra", reply_count=2,
+                   latest_reply="1700090000.000001", **bot)
+    fake.add(COORD, ts="1700060000.000001", text="before the window", username="ci", thread_ts=old["ts"], **bot)
+    fake.add(COORD, ts="1700090000.000001", text="the check passed on main", username="ci", thread_ts=old["ts"], **bot)
+    brief = fake.add(COORD, ts="1700089000.000001", text="top 06:55Z: " + "word " * 88, username="top", reply_count=3,
+                     latest_reply="1700091000.000001", **bot)                  # 90 words: over
+    fake.add(COORD, ts="1700089500.000001", text="<!subteam^SINFRA|@top> on it", username="infra", thread_ts=brief["ts"], **bot)
+    fake.add(COORD, ts="1700090500.000001", text="done, #4800", username="infra", thread_ts=brief["ts"], **bot)
+    fake.add(COORD, ts="1700091000.000001", text="thanks", user="UDANIEL", thread_ts=brief["ts"])
+    bells = fake.add(COORD, ts="1700080000.000001", text=f"{slack.INBOX_HEAD}infra", username="infra", reply_count=1,
+                     latest_reply="1700090200.000001", **bot)
+    fake.add(COORD, ts="1700090200.000001", text="a doorbell copying a post", username="router", thread_ts=bells["ts"], **bot)
+    fake.add(COORD, ts="1700070000.000001", text="earlier, no replies", username="ci", **bot)
+    fake.add(COORD, ts="1700093000.000001", text="after the window", username="ci", **bot)
+    rc, out, _ = run(capsys, "traffic", "--volume", "--hours", "1", "--now", str(now), "--json")
+    rep = json.loads(out)
+    assert rc == 0 and (rep["since"], rep["now"]) == (since, now)
+    assert rep["posters"] == [{"poster": "infra", "posts": 2, "median": 2, "p90": 3, "max": 3, "over": 0},
+                              {"poster": "ci", "posts": 1, "median": 5, "p90": 5, "max": 5, "over": 0},
+                              {"poster": "daniel", "posts": 1, "median": 1, "p90": 1, "max": 1, "over": 0},
+                              {"poster": "top", "posts": 1, "median": 90, "p90": 90, "max": 90, "over": 1}]
+    assert rep["totals"] == {"posts": 5, "words": 101, "over": 1, "median": 3}
+    assert [(t["ts"], t["by"], t["replies"]) for t in rep["threads"]] == [(brief["ts"], "top", 3), (old["ts"], "infra", 1)]
+    rc, out, _ = run(capsys, "traffic", "--volume", "--hours", "1", "--now", str(now))
+    lines = out.splitlines()
+    assert rc == 0 and lines[0].endswith(": 5 posts, 101 words (median 3), 1 over 80 words")
+    assert lines[2].split() == ["@infra", "2", "2", "3", "3", "0"] and lines[5].split() == ["@top", "1", "90", "90", "90", "1"]
+    assert lines[7].startswith(f"    {brief['ts']} by @top: 3 replies: top 06:55Z: word")
+
+
 def unreadable_ask_team(monkeypatch):
     """The bot may post in #ask-the-team but lacks its history, as on 19 Oct."""
     real = slack.post
