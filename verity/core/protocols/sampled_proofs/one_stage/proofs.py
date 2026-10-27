@@ -119,16 +119,14 @@ def _header(path: Path) -> Any:
 
 def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
     """The circuit file's META and its ``unit`` circuit's header line (``flock-ir-unit/v2 name rows const n_in_groups
-    ..``), read from the file's head; None for a file not in that form (a templated one among them)."""
+    ..``), read from the file's head; None for a file not in that form (a templated one among them). A META that is no
+    JSON raises: `verify` reads it only off a session Lean accepted, whose parser read it."""
     with open(circuit, "rb") as f:
         f.readline()
         meta = f.readline().decode()
         if not meta.startswith("META "):
             return None
-        try:
-            m = json.loads(meta[len("META "):])
-        except ValueError:
-            return None
+        m = json.loads(meta[len("META "):])
         while head := f.readline().decode().split():
             if len(head) != 3 or head[0] != "CIRCUIT" or not head[2].isdigit():
                 return None

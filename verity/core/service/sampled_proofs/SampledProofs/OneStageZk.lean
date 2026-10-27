@@ -290,9 +290,10 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
   | .error _ => none
 
 /-- `verify --zk`'s verdict on one session set up as `st` at `draw`: its proof files, its coin-tree key fresh among
-`coinKeys`, `Zk.verify` and the checks `verifyCmd` makes after it, the last the files' ports and roots
-(`Flock.PortRoots.checkOf`) and the form `SampledKSLiveV4` covers (`Flock.KsScope.checkOf`). -/
-def verdictOf (I : Flock.Witness.Inputs) (scope : V Unit) (coinKeys : Array String) (record : String)
+`coinKeys`, `Zk.verify` and the checks `verifyCmd` makes after it, its last the files' ports and roots
+(`ksFiles`, `Flock.PortRoots.checkOf`) and the form `Flock.Guarantees.SampledKSLiveV4` covers at `draw`
+(`Flock.KsScope.checkOf`). -/
+def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles : V Unit) (coinKeys : Array String) (record : String)
     (draw : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) : V Unit := do
   let proofs ← files
   (match coinKey with | some k => Flock.CoinTree.checkFresh coinKeys k | none => pure () : V Unit)
@@ -305,10 +306,9 @@ def verdictOf (I : Flock.Witness.Inputs) (scope : V Unit) (coinKeys : Array Stri
   Flock.RecSetup.innerDrawn none
   Flock.ProvedScope.programHeld I.program
   Flock.RecordText.check record
-  Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
-    (Flock.Witness.zkTags I) I.publicFile
-  Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
-    (Flock.Witness.zkTags I) I.publicFile I.count draw
+  ksFiles
+  let tags := Flock.Witness.zkTags I
+  Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.publicFile I.count draw
 
 /-- A session's verdict as `verify` writes it (`flock-verify/<name>`, of record). -/
 def verdictJson (rd : Reads) (programSha : Option String) (s : Session) (st : SetUp) (ok : Bool) (why : String)
@@ -341,14 +341,15 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in no blob or not UTF-8, or it
 accepted naming another program than the partition object's. -/
-def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope : V Unit) (programSha : Option String)
+def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles : V Unit) (programSha : Option String)
     (want : Json) (r : Run) (s : Session) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
   let st := setupAt I rd draw
   let coinKey := coinKeyOf record st
-  push I rd programSha want r s record st coinKey (verdictOf I scope r.coinKeys record draw st (filesOf bs s st) coinKey)
+  push I rd programSha want r s record st coinKey
+    (verdictOf I scope ksFiles r.coinKeys record draw st (filesOf bs s st) coinKey)
 
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
@@ -371,7 +372,8 @@ def run (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Opti
   let tags := Flock.Witness.zkTags I
   let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
     false rd.registered.isSome
-  let r ← sessions.foldlM (step I rd bs scope (programDigest p.program) (getD p.partition "program"))
+  let ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags pubB
+  let r ← sessions.foldlM (step I rd bs scope ksFiles (programDigest p.program) (getD p.partition "program"))
     ⟨#[], #[], #[], true⟩
   match provedUnits? with
   | some want =>
