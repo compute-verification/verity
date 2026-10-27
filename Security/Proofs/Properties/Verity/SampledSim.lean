@@ -548,7 +548,8 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (tagOf : ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (rootOf : ByteArray → Array ByteArray) (bytesOf : ByteArray → ByteArray) (pfOf : ByteArray × Array ByteArray → Array ByteArray)
-    (hcanon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+    (hcanon : ∀ (hs : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool))) (e : ByteArray × Array ByteArray),
+      V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ∃ (kd kp : Game.LiveDrive.Block m) (rds : List (Game.LiveDrive.RoundBlock m)),
         hs.filter (Game.LiveDrive.Tagged m tagOf) =
@@ -597,7 +598,8 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
   rootOf : ByteArray → Array ByteArray
   bytesOf : ByteArray → ByteArray
   pfOf : ByteArray × Array ByteArray → Array ByteArray
-  canon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+  canon : ∀ (hs : List (Σ m' : ℕ, ByteArray × (Fin m' → Bool))) (e : ByteArray × Array ByteArray),
+    V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ∃ (kd' kp : Game.LiveDrive.Block m) (rds : List (Game.LiveDrive.RoundBlock m)),
       hs.filter (Game.LiveDrive.Tagged m tagOf) =
