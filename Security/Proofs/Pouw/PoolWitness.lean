@@ -24,6 +24,9 @@ and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2
 * `FleetSound_nontrivial`: at that fleet, the verifier that accepts everything, `δ_coin = 1/2` and `κ_max = 0`, the idle
   fleet is accepted with every replica's shortfall at least 12, past the fleet's luck `7 (n + 1) ln 2`, on every
   oracle and coins, so `FleetSound`'s event has probability 1.
+* `AcceptedWithinCap_nontrivial`: at the witness period, which fits `callCap = 8` oracle calls, the verifier that
+  accepts everything accepts a prover making 18 (`greedy`), so the card's `AcceptedWithinCap` is the deadlines' work
+  (CMP-163).
 -/
 
 namespace Pouw.SecurityProofs.DitherWitness
@@ -54,6 +57,36 @@ theorem idle_fits (o : Unit) (x : Fin 2 → TDraw × Fin 2) : twPd.Fits (idle.ti
   simp
 
 end Idle
+
+section Greedy
+
+/-- A greedy sampling block's work: the honest work's words and root, at nine hash units and nine oracle calls. -/
+noncomputable def gWork : TAlg (Unit × TTr × TDraw) (TTr × TRoot) where
+  run := hWork.run
+  use _ r := if r = 1 then 9 else 2
+  use_nonneg _ r := by split_ifs <;> norm_num
+  calls _ := 9
+  calls_nonneg _ := by norm_num
+  calls_le _ := by norm_num
+  words _ _ := (card_le_two _).trans (by norm_num)
+  roots _ _ := (card_le_two _).trans (by norm_num)
+  work _ _ _ _ := ⟨(card_le_two _).trans (by norm_num), (card_le_two _).trans (by norm_num)⟩
+
+/-- **The greedy prover**: the honest prover with each sampling block's work making nine oracle calls, 18 in all, more
+than the witness period fits (`callCap = 8`). -/
+noncomputable def greedy : Prover tw twRound 2 where
+  St := TTr
+  start := hw fun _ => 0
+  commit _ := constAlg (hw fun _ => 0, twInst)
+  work _ := gWork
+  absorb _ s _ := s
+  answer b := hAnswer b
+
+theorem greedy_calls (o : Unit) (x : Fin 2 → TDraw × Fin 2) : greedy.calls o x = 18 := by
+  show ∑ _b : Fin 2, ((0 : ℝ) + 9) = 18
+  norm_num
+
+end Greedy
 
 section Value
 
@@ -212,6 +245,20 @@ theorem WorkSound_nontrivial :
   rintro ⟨W', z', -, hfit, hval⟩
   rw [hC, value_eight] at hval
   linarith [value_le W' z' hfit, twε_lt idle]
+
+/-- **The cap is the deadlines', not a hypothesis** (CMP-163): at the witness period, which fits `callCap = 8` oracle
+calls, the verifier that accepts everything accepts the greedy prover, whose sampling blocks make 18. So
+`AcceptedWithinCap`, which `WorkSoundAtX` derives on the card from the deadlines `Timed` checks (`TimedWorkFits`,
+`AnswersFit`), says something: a verdict without them accepts provers past the cap. -/
+theorem AcceptedWithinCap_nontrivial :
+    ¬ AcceptedWithinCap tw twRound 2 (fun _ _ _ _ => True) twDev twSel twPd := by
+  intro h
+  have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
+    (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
+  obtain ⟨o, x⟩ := Classical.arbitrary (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk))
+  have h1 := (h greedy o x trivial).1
+  rw [greedy_calls o x, twCallCap] at h1
+  norm_num at h1
 
 /-- **`FleetSound`'s honest witness** (LEAN-66): at a fleet of `n + 1` replicas of the witness, the challenger's
 randomness every replica's coins (`coin = id`), each replica's moment holds at the honest verdict (`witness_moment`),
