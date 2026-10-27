@@ -1,60 +1,66 @@
 """Step 0 of the deployment API (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to
-00:30Z): what `verity run CONFIG` runs, beside the sampled-proofs parties (`parties`, compute-accounting's), until each
-protocol's package holds its own.
+00:30Z): what `verity run CONFIG` runs, until each protocol's package holds its own.
 
 `MANIFESTS` is what each of the six subprotocols declares to a configuration (`verity.core.deploy.config.Component`):
 its id, the workload hooks it needs, the components it requires, its parties and their principals, its channels and
 messages, the parties that must share a machine, its parameters and the service laws it runs under. `TOY` is what the
-toy (`integrations/torch_loop`) declares as a workload (`Workload`), and `workers` is its party. `PARTIES` holds each
-party's entry, ``PARTIES[subprotocol][party] = run(config, state, local) -> int``, which runs that party's part of every
-period of the run:
+toy (`integrations/torch_loop`) declares as a workload (`Workload`), and ``workers`` is its party. `PARTIES` holds each
+party of each subprotocol, ``PARTIES[subprotocol][party]``: an entry, ``run(config, state, local) -> int``, which runs
+that party's part of every period of the run in a process of its own, or `LIVE`, a party of the run's one live run of
+the deployment layer (`live`):
 
-- sampled proofs: the challenger, the firewall and the verifier are `parties`' (`parties.PARTIES`).
-- the network certifier: ``network-certifier`` relays the run's periods through the network certifier before the
-  workers serve, committing each period's output at the reading circuit's out shape and signing its record
-  (`tie.relay`, the certifier-only path of `legs/certifier.py`), and ``verifier`` decides each period by
-  ``network-period check`` on the case the communication leg builds (`legs/certifier.py`), after sampled proofs'
-  verifier: until network-accounting's parties replace them. The leg's tampered relay is a benchmark's self-test, so a
-  run relays honest traffic alone unless ``CERTIFIER_TAMPER`` asks for one.
+- sampled proofs: the challenger, the firewall, the workers and the verifier are core's parties
+  (`verity.core.protocols.sampled_proofs.parties`), on the toy's machine (`Machine`, `parties.Machine`'s capabilities).
+- the network certifier: ``network-certifier`` is an entry, run before the live run: it relays the run's periods
+  through the network certifier, committing each period's output at the reading circuit's out shape and signing its
+  record (`tie.relay`, the certifier-only path of `legs/certifier.py`). Its ``verifier`` is sampled proofs' verifier,
+  whose ``component("certifier")`` is the period's ``network-period check`` on the case the communication leg builds
+  (`certifier_check`), right after that period's sampled-proofs audit: until network-accounting's parties replace
+  them. The leg's tampered relay is a benchmark's self-test, so a run relays honest traffic alone unless
+  ``CERTIFIER_TAMPER`` asks for one.
 - PoUW, PoUS, the bandwidth audit and the wipe: none yet, so `verity run` refuses a configuration that lists them.
 
-The toy's ``workers`` serve each period (`runner.loop_window`): the verifier registers the circuit from the loop's
-shape, then the loop writes its window into ``STATE/blocks/w<I>/`` (its rows and salts stay there) and its public files
-into ``STATE/public/w<I>/``. With the certifier listed (the ``ingress-relay`` hook), each output unit reads the output the
-network certifier relayed for the period, pinned from its record, opened from the rows and salts it handed the workers.
+The toy's ``workers`` serve each period (`Machine.serve`, `runner.loop_window`): the verifier registers the circuit from
+the loop's shape, then the loop writes its window into ``STATE/blocks/w<I>/`` (its rows and salts stay there) and its
+public files into ``STATE/public/w<I>/``. With the certifier listed (the ``ingress-relay`` hook), each output unit reads
+the output the network certifier relayed for the period, pinned from its record, opened from the rows and salts it
+handed the workers.
 
-On one machine step 0 runs the parties one after another (`ORDER`), the challenger beside them from the first until the
-last (`SERVICES`). `compose` is the verifier's verdict on a period: `Core.Composition.product` over exactly the listed
-components (onsite's ``product IDS check``; onsite's own protocol when all five are listed), each component's status its
-answer's verdict, ``absent`` when its verifier wrote none, and a component without a case refused by its decoders.
+Each period's verdict is core's verifier's: `Core.Composition.product` over exactly the listed components (onsite's
+``product IDS check``), each component's status its answer's verdict, ``absent`` when its check gave none, and a
+component without a case refused by its decoders.
 
 A run's state (``verity run --state``) is `parties`' layout, with the network certifier's session in
 ``blocks/certifier-session/`` (witness) and its public files in ``record/certifier-session/``; each period's record is
-``record/w<I>/<component>/``, its ``answer.json`` and ``case.json``.
+``record/w<I>/<component>/``, its ``answer.json`` and ``case.json``; the live run's transcripts and record are under
+``runs/<local, or the parties here joined by +>/``.
 """
 from __future__ import annotations
 
 import json
 import os
 import shutil
-import subprocess
 import traceback
-from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, fields
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, fields
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from verity.core.deploy.config import Channel, Component, Refused, Workload
+from verity.core.deploy import runtime
 from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 
-from . import compose as C, parties as P, runner as RN, settings as S, tie as T
+from . import parties as P, runner as RN, settings as S, tie as T
 from .table import check_answer, load
 
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
+Check = Callable[[Mapping[str, Any], Path, int], tuple[dict[str, Any], dict[str, Any] | None] | None]
 BLOCKS, PUBLIC, RECORD = "blocks", "public", "record"
-ABSENT = "absent"
+#: a party of the live run (module docstring), not an entry of its own
+LIVE = "live"
 
 
 # --- what each subprotocol and the toy declare -------------------------------------------------------------------------
@@ -147,22 +153,6 @@ def _loop(cfg: Mapping[str, Any], state: Path, tie: bool) -> SimpleNamespace:
                            tools=P.tools(state), mode={"of_record": False, "configuration": run["configuration"]})
 
 
-def workers(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
-    """The toy's workers (module docstring): each period served into ``STATE/blocks``, tied to the network certifier's
-    relay when the run uses the ``ingress-relay`` hook."""
-    run = run_of(state)
-    a = _loop(cfg, state, "ingress-relay" in run["hooks"])
-    if a.tie:
-        relay = state / BLOCKS / load("certifier").SESSION / "relay.json"
-        if not relay.exists():
-            raise RuntimeError(f"no relay of the network certifier ({relay}): run --party network-certifier first")
-        a.relay = json.loads(relay.read_text())
-    (state / BLOCKS).mkdir(parents=True, exist_ok=True)
-    for i in range(run["periods"]):
-        RN.loop_window(i, run["run"], a, state / BLOCKS, state / PUBLIC / f"w{i}")
-    return 0
-
-
 def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     """The network certifier at step 0 (module docstring): the run's periods relayed through it before the workers
     serve, each period's requests in a link-window of their own, and each link-window's output committed at the
@@ -176,89 +166,112 @@ def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     return 0
 
 
-def certifier_verifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
-    """The network certifier's verifier at step 0: each period's communication leg (`legs/certifier.py`) on the
-    period's window, after sampled proofs' verifier, whose answer and audit it reads; its answer and case in
-    ``record/w<I>/certifier/``. A leg that raises leaves its error there (``error.txt``) and an error answer, and the
-    entry returns 1."""
-    S.setdefault(S.RUST)
-    leg, failed = load("certifier").leg, 0
-    for i in range(run_of(state)["periods"]):
-        block, rec = state / BLOCKS / f"w{i}", state / RECORD / f"w{i}"
-        out = rec / "certifier"
-        out.mkdir(parents=True, exist_ok=True)
-        try:
-            integrity = rec / "sampled-proofs"
-            if not (integrity / "answer.json").exists():
-                raise RuntimeError(f"no sampled-proofs answer for period {i}: run sampled proofs' verifier first")
-            (block / "answers").mkdir(exist_ok=True)
-            shutil.copy(integrity / "answer.json", block / "answers" / "sampled-proofs.json")
-            if not (rec / "integrity").exists():
-                (rec / "integrity").symlink_to("sampled-proofs")
-            ans = check_answer(leg(block, os.uname().nodename, out))
-        except Exception as e:  # noqa: BLE001  (a leg that can't decide is the period's error, never a verdict)
-            (out / "error.txt").write_text(traceback.format_exc())
-            ans, failed = {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}, 1
-        (out / "answer.json").write_text(json.dumps(ans, indent=1, sort_keys=True))
-        if (out / "certifier.case.json").exists():
-            shutil.copy(out / "certifier.case.json", out / "case.json")
-    return failed
-
-
-PARTIES: dict[str, dict[str, Entry]] = {
-    "sampled-proofs": {p: e for p, e in P.PARTIES["sampled-proofs"].items() if p != "workers"},
-    "certifier": {"network-certifier": network_certifier, "verifier": certifier_verifier},
-}
-WORKLOADS: dict[str, tuple[Workload, Entry]] = {"toy": (TOY, workers)}
-#: the order step 0 runs a machine's parties in: a party's sends come before the parties that read them
-ORDER = ("challenger", "firewall", "network-certifier", "workers", "verifier")
-
-
-@dataclass(frozen=True)
-class Service:
-    """A party that serves the others while they run: started first, ready once it prints a line starting ``ready``,
-    and stopped (``stop(state)``) once the rest are done."""
-
-    ready: str
-    stop: Callable[[Path], None]
-
-
-SERVICES = {"challenger": Service("CHALLENGER ", P.stop)}
-
-
-# --- the verdict -------------------------------------------------------------------------------------------------------
-
 def _json(path: Path) -> dict[str, Any] | None:
-    """``path``'s JSON, or None when its party wrote none; one it can't read raises, the period's error."""
+    """``path``'s JSON, or None when its party wrote none; one it can't read raises."""
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def compose(cfg: Mapping[str, Any], state: Path, period: int,
-            manifests: Mapping[str, Component] = MANIFESTS) -> dict[str, Any]:
-    """Period ``period``'s verdict (module docstring): ``components``, each listed component's status; ``product``,
-    the product's id; ``verdict`` and ``reason``, the product's answer. A listed component outside the product (the
-    wipe) rejects the verdict when it doesn't accept."""
-    exe, rec = P.tools(state)["product"], state / RECORD / f"w{period}"
-    listed = list(cfg["protocols"])
-    inside = [c for c in listed if manifests[c].product]
-    status, cases, digests = {}, {}, {}
-    for c in listed:
-        ans = _json(rec / c / "answer.json")
-        status[c] = ABSENT if ans is None else str(ans.get("verdict", "error"))
-        if c in inside:
-            cases[manifests[c].id] = _json(rec / c / "case.json") or C.NO_CASE
-            digests[manifests[c].id] = (ans or {}).get("commitment") or ""
-    argv = [exe, ",".join(sorted(cases))]
-    pid = subprocess.run([*argv, "id"], capture_output=True, text=True, check=True).stdout.strip()
-    got = C.onsite_check(argv, cases, digests, pid)
-    verdict, reason = got["verdict"], got.get("reason")
-    for c in (c for c in listed if c not in inside):
-        if status[c] not in ("accept", "undecided"):
-            verdict, reason = "reject", f"{c} {status[c]}"
-        elif status[c] == "undecided" and verdict == "accept":
-            verdict, reason = "undecided", f"{c} undecided"
-    return {"components": status, "product": pid, "verdict": verdict, "reason": reason}
+def certifier_check(cfg: Mapping[str, Any], state: Path, i: int) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """The network certifier's period check, sampled proofs' verifier's ``component(i, "certifier")``: period ``i``'s
+    communication leg (`legs/certifier.py`) on its window, after the period's sampled-proofs audit, whose answer it
+    reads; its answer and case, also in ``record/w<I>/certifier/``. A leg that raises leaves its error there
+    (``error.txt``) and is the period's ``error``, with no case."""
+    S.setdefault(S.RUST)
+    block, rec = state / BLOCKS / f"w{i}", state / RECORD / f"w{i}"
+    out = rec / "certifier"
+    out.mkdir(parents=True, exist_ok=True)
+    try:
+        integrity = rec / "sampled-proofs"
+        if not (integrity / "answer.json").exists():
+            raise RuntimeError(f"no sampled-proofs answer for period {i}: its audit comes first")
+        (block / "answers").mkdir(exist_ok=True)
+        shutil.copy(integrity / "answer.json", block / "answers" / "sampled-proofs.json")
+        if not (rec / "integrity").exists():
+            (rec / "integrity").symlink_to("sampled-proofs")
+        ans = check_answer(load("certifier").leg(block, os.uname().nodename, out))
+    except Exception as e:  # noqa: BLE001  (a leg that can't decide is the period's error, never a verdict)
+        (out / "error.txt").write_text(traceback.format_exc())
+        ans = {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}
+        (out / "answer.json").write_text(json.dumps(ans, indent=1, sort_keys=True))
+        return ans, None
+    (out / "answer.json").write_text(json.dumps(ans, indent=1, sort_keys=True))
+    if (out / "certifier.case.json").exists():
+        shutil.copy(out / "certifier.case.json", out / "case.json")
+    return ans, _json(out / "case.json")
 
 
-__all__ = ["ABSENT", "MANIFESTS", "ORDER", "PARTIES", "SERVICES", "TOY", "WORKLOADS", "Service", "certifier_verifier",
-           "compose", "network_certifier", "run_of", "workers"]
+#: each listed component's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
+CHECKS: dict[str, Check] = {"certifier": certifier_check}
+
+
+class Machine(P.Machine):
+    """The toy's machine for the live run: `parties.Machine`'s capabilities over ``state``, with the workers' ``serve``
+    the configuration's workload (`_loop`), tied to the network certifier's relay when the run uses the
+    ``ingress-relay`` hook, and the verifier's ``component`` each listed component's check (`CHECKS`)."""
+
+    def __init__(self, config: Mapping[str, Any], state: Path, checks: Mapping[str, Check] = CHECKS) -> None:
+        super().__init__(config, state)
+        self.checks = checks
+
+    def serve(self, i: int) -> bytes:
+        run = run_of(self.state)
+        try:
+            a = _loop(self.config, self.state, "ingress-relay" in run["hooks"])
+            if a.tie:
+                relay = self.state / BLOCKS / load("certifier").SESSION / "relay.json"
+                if not relay.exists():
+                    raise SP.Unavailable(f"no relay of the network certifier ({relay}): its party runs first")
+                a.relay = json.loads(relay.read_text())
+            (self.state / BLOCKS).mkdir(parents=True, exist_ok=True)
+            RN.loop_window(i, run["run"], a, self.state / BLOCKS, self.state / PUBLIC / f"w{i}")
+            return (self.state / BLOCKS / f"w{i}" / "registration.json").read_bytes()
+        except P.FAILED as e:
+            raise SP.Unavailable(f"serving period {i}: {type(e).__name__}: {e}") from e
+
+    def component(self, i: int, name: str) -> tuple[dict[str, Any], dict[str, Any] | None] | None:
+        check = self.checks.get(name)
+        return super().component(i, name) if check is None else check(self.config, self.state, i)
+
+
+def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
+    """Where each of sampled proofs' listening parties listens for the verifier: its ``address`` (default loopback) and
+    its ``listen`` port, for those the configuration gives one."""
+    return {p["name"]: f"{p.get('address', '127.0.0.1')}:{p['listen']}" for p in cfg["party"]
+            if p["name"] in P.SPOKES and "listen" in p}
+
+
+def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
+         machine: Callable[[Mapping[str, Any], Path], Machine] = Machine) -> runtime.RunResult:
+    """The live run of sampled proofs' parties ``here`` (`verity.core.deploy.runtime.run`) on ``machine``: every one
+    of them in this process when all four are here (their coins then ``simulated``), else each listening one at its
+    configured address (`listening`) and the verifier dialing those that run elsewhere; refused by name (``listen``)
+    when one the verifier needs has none. Its transcripts and record are under ``STATE/runs/<local|here joined by +>/``.
+    """
+    local, at = set(here) == set(P.ROLES), listening(cfg)
+    view = {"protocols": list(cfg["protocols"]), "workload": {"blocks": run_of(state)["periods"]},
+            "party": [p for p in cfg["party"] if p["name"] in P.ROLES]}
+    dial = {} if local or SP.VERIFIER not in here else {p: at[p] for p in P.SPOKES if p not in here and p in at}
+    if not local and (missing := [p for p in P.SPOKES if p not in here and SP.VERIFIER in here and p not in at]):
+        raise Refused("listen", f"the verifier dials {', '.join(missing)}, which run elsewhere, and the configuration "
+                                "gives them no listen port")
+    if not local and (silent := [p for p in P.SPOKES if p in here and p not in at]):
+        raise Refused("listen", f"{', '.join(silent)} listen for the verifier, which runs elsewhere, and the "
+                                "configuration gives them no listen port")
+    m = machine(cfg, state)
+    return runtime.run(P.deployment(view, local, {} if local else at), list(here), "live",
+                       state / "runs" / ("local" if local else "+".join(here)), protocols=SP.PROTOCOLS,
+                       keys={p: P.PartyKey() for p in here}, verify=P.verify,
+                       capabilities={p: m.capabilities(p) for p in here}, dial_to=dial or None)
+
+
+PARTIES: dict[str, dict[str, Entry | str]] = {
+    "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
+    "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
+}
+WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}
+#: the order a machine's entries run in, all before the live run: a party's sends come before the parties that read them
+ORDER = ("network-certifier",)
+
+
+__all__ = ["CHECKS", "LIVE", "MANIFESTS", "ORDER", "PARTIES", "TOY", "WORKLOADS", "Machine", "certifier_check",
+           "listening", "live", "network_certifier", "run_of"]

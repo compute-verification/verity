@@ -1,8 +1,10 @@
 """`verity config` and `verity run` (`verity_cli.run`, `verity.core.deploy.config`): the configuration's refusals by name,
-its hash, the example reproduced by `config new`, and all-local runs of step 0's table with stand-in parties and a
-stand-in product executable, so no build, GPU, network or clock is involved."""
+its hash, the example reproduced by `config new`, and runs of step 0's table: its entries in this process, and core's
+sampled-proofs parties in the deployment layer's live run, on the toy's machine with stand-in capabilities and a
+stand-in product executable, every party on in-memory channels, so no build, GPU, network or clock is involved."""
 from __future__ import annotations
 
+import functools
 import json
 import os
 import sys
@@ -11,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from verity.core.deploy import config as K
+from verity.core.protocols.sampled_proofs import parties as SP
+from verity.core.protocols.sampled_proofs.one_stage import registration as RG
 from verity_cli import run as R
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -156,170 +160,191 @@ def periods(state: Path) -> range:
     return range(json.loads((state / "run.json").read_text())["periods"])
 
 
-def verifier_of(component: str, verdicts: dict):
-    def entry(cfg, state, local):
-        assert cfg["protocols"] == [component]
-        for i in periods(state):
-            v = verdicts.get((component, i), "accept")
-            if v == "raise":
-                raise RuntimeError(f"{component}'s leg failed")
-            if v == "silent":
-                continue
-            write(state / "record" / f"w{i}" / component / "answer.json", {"verdict": v, "commitment": "00"})
-            write(state / "record" / f"w{i}" / component / "case.json",
-                  {"commitment": "", "evidence": v.encode().hex(), "params": {}})
-        return 0
-    return entry
+def case(verdict: str) -> dict:
+    return {"commitment": "", "evidence": verdict.encode().hex(), "params": {}}
 
 
-def registry(tmp: Path, verdicts: dict | None = None, workers_rc: int = 0) -> R.Registry:
-    verdicts = verdicts or {}
+class StandIn(D.Machine):
+    """The toy's machine with every capability but the product a stand-in. ``verdicts[(who, period)]`` is what that
+    component's check answers (``accept`` by default; ``silent``: nothing; ``raise``: a fault; ``unavailable``: a step
+    it can't do), or for ``workers`` whether they serve; a case's evidence is its verdict, so the stand-in product
+    accepts only over accepting components."""
 
-    def workers(cfg, state, local):
-        assert "ingress-relay" not in json.loads((state / "run.json").read_text())["hooks"] or \
-            (state / "blocks" / "certifier-session" / "relay.json").exists()
-        for i in periods(state):
-            write(state / "blocks" / f"w{i}" / "period.json", {"period": i})
-            write(state / "public" / f"w{i}" / "registration.json", {"period": i})
-        return workers_rc
+    def __init__(self, config, state, verdicts):
+        super().__init__(config, state, {"certifier": self.certifier})
+        self.verdicts = verdicts
 
-    def challenger(cfg, state, local):
-        write(state / "challenger" / "address.json", {"address": "127.0.0.1:1"})
-        return 0
+    def _of(self, who, i):
+        v = self.verdicts.get((who, i), "accept")
+        if v == "raise":
+            raise RuntimeError(f"{who}'s check failed")
+        if v == "unavailable":
+            raise SP.Unavailable(f"{who} can't")
+        return v
 
-    def firewall(cfg, state, local):
-        write(state / "firewall" / "ready.json", {"local": local})
-        return 0
+    def host(self):
+        state = self.state
 
+        class Host:
+            def start(self):
+                write(state / "challenger" / "address.json", {"address": "127.0.0.1:1"})
+                return {"address": "127.0.0.1:1", "pin": "f" * 40}
+
+            def stop(self):
+                write(state / "challenger" / "host" / "ledger.json", {"closed": True})
+        return Host()
+
+    def pin(self):
+        return {"sha512": "5a" * 64, "sessions": 1}
+
+    def serve(self, i):
+        assert "ingress-relay" not in D.run_of(self.state)["hooks"] or \
+            (self.state / "blocks" / "certifier-session" / "relay.json").exists()
+        self._of("workers", i)
+        write(self.state / "blocks" / f"w{i}" / "period.json", {"period": i})
+        write(self.state / "public" / f"w{i}" / "registration.json", {"period": i})
+        return json.dumps({"period": i}).encode()
+
+    def audit(self, i, registration, challenger, firewall):
+        v = self._of("sampled-proofs", i)
+        answer = {"verdict": v, "commitment": RG.digest(json.loads(registration))}
+        write(self.state / "record" / f"w{i}" / "sampled-proofs" / "answer.json", answer)
+        return answer, case(v)
+
+    def certifier(self, cfg, state, i):
+        v = self._of("certifier", i)
+        return None if v == "silent" else ({"verdict": v, "commitment": "00"}, case(v))
+
+
+def registry(verdicts: dict | None = None, certifier_rc: int = 0) -> R.Registry:
     def network_certifier(cfg, state, local):
         write(state / "blocks" / "certifier-session" / "relay.json", {"periods": len(periods(state))})
-        return 0
+        return certifier_rc
 
-    def stop(state):
-        write(state / "challenger" / "host" / "ledger.json", {"closed": True})
-
-    (tmp / "build").mkdir(exist_ok=True)
-    return R.Registry(REG.components, REG.workloads, {"toy": workers},
-                      {"sampled-proofs": {"challenger": challenger, "firewall": firewall,
-                                          "verifier": verifier_of("sampled-proofs", verdicts)},
-                       "certifier": {"network-certifier": network_certifier,
-                                     "verifier": verifier_of("certifier", verdicts)}},
-                      REG.order, {"challenger": D.Service("CHALLENGER ", stop)}, D.compose)
+    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_certifier}}
+    return R.Registry(REG.components, REG.workloads, REG.workers, parties, REG.order,
+                      functools.partial(D.live, machine=lambda c, s: StandIn(c, s, verdicts or {})))
 
 
-def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None, state: str = "state") -> tuple[int, list[dict]]:
+def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None) -> tuple[int, list[dict]]:
     path = tmp / "config.toml"
     path.write_text(K.render(cfg or config()))
-    s = tmp / state
-    if "--replay" not in args:
-        s.mkdir(exist_ok=True)
-        if not (s / "tools.json").exists():
-            (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp))}))
+    s = tmp / "state"
+    s.mkdir(exist_ok=True)
+    if not (s / "tools.json").exists():
+        (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp))}))
     rc = R.run_main([str(path), "--state", str(s), *args], reg, in_process=True)
     lines = (s / "record" / "verdicts.jsonl").read_text().splitlines() if (s / "record" / "verdicts.jsonl").exists() else []
     return rc, [json.loads(x) for x in lines]
 
 
+def said(out: str, what: str = "PARTY") -> list[dict]:
+    return [json.loads(x.split(" ", 1)[1]) for x in out.splitlines() if x.startswith(what + " ")]
+
+
 def test_every_party_here_accepts(tmp_path, capsys):
-    rc, lines = run(tmp_path, registry(tmp_path))
+    rc, lines = run(tmp_path, registry())
     out = capsys.readouterr().out
     assert rc == 0 and [x["verdict"] for x in lines] == ["accept"]
     line = lines[0]
     assert line["components"] == {"sampled-proofs": "accept", "certifier": "accept"}
     assert line["product"] == "verity/product/v0" and line["coins"] == "simulated" and line["block"] == 0
+    assert line["registration"] == RG.digest({"period": 0})
     assert any("Faithful" in u for u in line["simulated"]) and any(COMMIT in u for u in line["simulated"])
-    assert "VERDICT " + json.dumps(line, sort_keys=True) in out.splitlines()
-    parties = [json.loads(x.split(" ", 1)[1])["party"] for x in out.splitlines() if x.startswith("PARTY ")]
-    assert parties == ["challenger", "firewall", "network-certifier", "workers", "verifier", "challenger"]
+    assert said(out, "VERDICT") == lines
+    assert said(out) == [{"party": "network-certifier", "exit": 0},
+                         *({"party": p, "refused": None} for p in ("challenger", "firewall", "verifier", "workers"))]
     state = tmp_path / "state"
-    workers = [json.loads(x) for x in (state / "transcripts" / "workers.jsonl").read_text().splitlines()]
-    assert {(x["file"], x["kind"]) for x in workers} == {("blocks/w0/period.json", "private"),
-                                                         ("public/w0/registration.json", "public")}
-    challenger = {json.loads(x)["file"] for x in (state / "transcripts" / "challenger.jsonl").read_text().splitlines()}
-    assert challenger == {"challenger/address.json", "challenger/host/ledger.json"}
-    kept = (state / "record" / "transcripts" / "workers.jsonl").read_text()
-    assert "public/w0/registration.json" in kept and "blocks/" not in kept
+    relay = [json.loads(x) for x in (state / "transcripts" / "network-certifier.jsonl").read_text().splitlines()]
+    assert [(x["file"], x["kind"]) for x in relay] == [("blocks/certifier-session/relay.json", "private")]
+    assert (state / "challenger" / "host" / "ledger.json").exists()
+    kept = state / "runs" / "local" / "runs" / "1"
+    assert (kept / "record").exists() and {f.name for f in kept.glob("*.transcript")} == {
+        f"{p}.transcript" for p in ("challenger", "firewall", "verifier", "workers")}
 
 
 def test_a_component_that_rejects_rejects(tmp_path):
-    rc, lines = run(tmp_path, registry(tmp_path, {("certifier", 0): "reject"}))
+    rc, lines = run(tmp_path, registry({("certifier", 0): "reject"}))
     assert rc == 1 and lines[0]["verdict"] == "reject"
     assert lines[0]["components"] == {"sampled-proofs": "accept", "certifier": "reject"}
 
 
-@pytest.mark.parametrize("how, status", [("raise", "absent"), ("silent", "absent"), ("error", "error")])
+@pytest.mark.parametrize("how, status", [("silent", "absent"), ("error", "error")])
 def test_a_component_with_no_answer_never_accepts(tmp_path, how, status):
-    rc, lines = run(tmp_path, registry(tmp_path, {("certifier", 0): how}))
+    rc, lines = run(tmp_path, registry({("certifier", 0): how}))
     assert rc == 1 and lines[0]["verdict"] == "reject" and lines[0]["components"]["certifier"] == status
 
 
-def test_the_verdict_covers_exactly_the_listed_components(tmp_path):
-    rc, lines = run(tmp_path, registry(tmp_path), cfg=config(["sampled-proofs"]))
+def test_a_check_that_faults_fails_the_run_with_no_verdict(tmp_path, capsys):
+    rc, lines = run(tmp_path, registry({("certifier", 0): "raise"}))
+    assert rc == 2 and lines == []
+    assert {"party": "verifier", "refused": "party-died"} in said(capsys.readouterr().out)
+
+
+def test_the_verdict_covers_exactly_the_listed_components(tmp_path, capsys):
+    rc, lines = run(tmp_path, registry(), cfg=config(["sampled-proofs"]))
     assert rc == 0 and lines[0]["components"] == {"sampled-proofs": "accept"}
+    assert "network-certifier" not in capsys.readouterr().out
 
 
 def test_each_period_has_its_verdict(tmp_path):
-    rc, lines = run(tmp_path, registry(tmp_path, {("sampled-proofs", 1): "reject"}), "--periods", "2")
+    rc, lines = run(tmp_path, registry({("sampled-proofs", 1): "reject"}), "--periods", "2")
     assert rc == 1 and [(x["block"], x["verdict"]) for x in lines] == [(0, "accept"), (1, "reject")]
 
 
-def test_a_party_that_fails_stops_the_run_and_the_verdict_rejects(tmp_path, capsys):
-    rc, lines = run(tmp_path, registry(tmp_path, workers_rc=3))
-    out = capsys.readouterr().out
-    assert rc == 1 and lines[0]["components"] == {"sampled-proofs": "absent", "certifier": "absent"}
-    assert '"party": "verifier"' not in out
+def test_an_audit_that_is_unavailable_is_its_periods_error(tmp_path):
+    rc, lines = run(tmp_path, registry({("sampled-proofs", 0): "unavailable"}))
+    assert rc == 1 and lines[0]["components"]["sampled-proofs"] == "error" and lines[0]["verdict"] == "reject"
 
 
-def test_a_replayed_verifier_gives_the_same_verdicts(tmp_path):
-    rc, first = run(tmp_path, registry(tmp_path), "--periods", "2")
-    assert rc == 0
-    again = tmp_path / "again"
-    rc, second = run(tmp_path, registry(tmp_path), "--periods", "2", "--party", "verifier", "--replay",
-                     str(tmp_path / "state"), state="again")
-    assert rc == 0 and first == second
-    assert (again / "public" / "w1" / "registration.json").exists()
-    assert (again / "transcripts" / "workers.jsonl").read_text() == \
-        (tmp_path / "state" / "transcripts" / "workers.jsonl").read_text()
-    verifier = {json.loads(x)["file"] for x in (again / "transcripts" / "verifier.jsonl").read_text().splitlines()}
-    assert "record/w1/certifier/answer.json" in verifier
+def test_an_entry_that_fails_stops_the_run(tmp_path, capsys):
+    rc, lines = run(tmp_path, registry(certifier_rc=3))
+    assert rc == 2 and lines == [] and said(capsys.readouterr().out) == [{"party": "network-certifier", "exit": 3}]
 
 
-def test_the_parties_run_one_command_at_a_time(tmp_path, capsys):
-    _, whole = run(tmp_path, registry(tmp_path), "--periods", "2")
-    reg = registry(tmp_path)
-    for parties in (["firewall"], ["network-certifier"], ["workers"], ["challenger", "verifier"]):
-        rc, split = run(tmp_path, reg, "--periods", "2", *[x for p in parties for x in ("--party", p)], state="split")
-    assert rc == 0 and split == whole
-    assert [json.loads(x.split(" ", 1)[1])["party"] for x in capsys.readouterr().out.splitlines()
-            if x.startswith("PARTY ")][-3:] == ["challenger", "verifier", "challenger"]
+def test_workers_that_cant_serve_leave_no_verdict(tmp_path, capsys):
+    rc, lines = run(tmp_path, registry({("workers", 0): "unavailable"}))
+    parties = {x["party"]: x.get("refused") for x in said(capsys.readouterr().out)}
+    assert rc == 2 and lines == [] and parties["workers"] == "serve" and parties["verifier"] == "closed"
 
 
 def test_a_party_placed_elsewhere_is_refused(tmp_path, capsys):
-    rc, _ = run(tmp_path, registry(tmp_path), "--party", "challenger", "--machine", "auditor-1")
+    rc, _ = run(tmp_path, registry(), "--party", "challenger", "--machine", "auditor-1")
     assert rc == 2 and "refused machine" in capsys.readouterr().err
 
 
-def test_parties_on_another_machine_run_there(tmp_path, capsys):
-    cfg = config(challenger="auditor-1", network_certifier="auditor-1", verifier="auditor-1")
-    rc, lines = run(tmp_path, registry(tmp_path), "--machine", "auditor-1", cfg=cfg)
-    out = capsys.readouterr().out
-    assert [json.loads(x.split(" ", 1)[1])["party"] for x in out.splitlines() if x.startswith("PARTY ")] == [
-        "challenger", "network-certifier", "verifier", "challenger"]
-    assert lines[0]["coins"] == "development"
-    assert lines[0]["components"] == {"sampled-proofs": "accept", "certifier": "accept"}
+def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
+    auditor = config(challenger="auditor-1", network_certifier="auditor-1", verifier="auditor-1")
+    rc, _ = run(tmp_path, registry(), "--machine", "auditor-1", cfg=auditor)
+    captured = capsys.readouterr()
+    assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]
+    assert "refused listen: the verifier dials firewall, workers" in captured.err
+    prover = tmp_path / "prover"
+    prover.mkdir()
+    rc, _ = run(prover, registry(), cfg=auditor)
+    assert rc == 2 and "refused listen: firewall, workers listen for the verifier" in capsys.readouterr().err
+    party(auditor, "firewall").update(address="10.0.0.5", listen=7001)
+    party(auditor, "workers").update(listen=7002)
+    assert D.listening(K.check(auditor, REG.components, REG.workloads)) == {"firewall": "10.0.0.5:7001",
+                                                                           "workers": "127.0.0.1:7002"}
 
 
 def test_a_component_with_no_parties_yet_is_refused(tmp_path, capsys):
-    rc, _ = run(tmp_path, registry(tmp_path), cfg=config(["sampled-proofs", "wipe"]))
+    rc, _ = run(tmp_path, registry(), cfg=config(["sampled-proofs", "wipe"]))
     assert rc == 2 and "refused no-party: wipe" in capsys.readouterr().err
 
 
 def test_a_state_of_another_configuration_is_refused(tmp_path, capsys):
-    assert run(tmp_path, registry(tmp_path))[0] == 0
-    rc, _ = run(tmp_path, registry(tmp_path), "--periods", "2")
+    assert run(tmp_path, registry())[0] == 0
+    rc, _ = run(tmp_path, registry(), "--periods", "2")
     assert rc == 2 and "refused state" in capsys.readouterr().err
 
 
-def test_the_toy_declares_what_the_certifier_needs():
+def test_the_table_holds_what_the_listed_components_need():
     assert REG.components["certifier"].needs <= REG.workloads["toy"].provides
     assert os.path.basename(D.__file__) == "deployment.py"
+    live = {p for ps in D.PARTIES.values() for p, e in ps.items() if e == D.LIVE} | {
+        p for w, (decl, e) in D.WORKLOADS.items() if e == D.LIVE for p in decl.parties}
+    assert live == set(D.P.ROLES)
+    decided_live = {c for c, ps in D.PARTIES.items() if ps.get("verifier") == D.LIVE}
+    assert decided_live - {"sampled-proofs"} == set(D.CHECKS)
