@@ -118,15 +118,12 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
     fun b b' hb => ?_) hrate
   · have h1 := (commit A o x).1 b hb
     have h2 := hv.2.2.1 b
-    dsimp only
     linarith
   · have h1 := root A o x b
     have h2 := hv.2.1 b
-    dsimp only
     linarith [h2.2.1, h2.2.2]
   · have h1 := (commit A o x).2 b b' hb
     have h2 := hv.2.2.1 b'
-    dsimp only
     linarith
 
 /-- `WorkSound` gives the headline on every card table at θ's floors. -/
