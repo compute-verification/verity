@@ -35,7 +35,7 @@ Two pieces of served-only work that the cheater skips are not priced as skippabl
 
 Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
 either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same
-(`benchmarks/pouw/fpx_design/h1_o_free.py`). Against honest's time (`summary`'s honest credit) they are skippable work
+(FPX-DESIGN's `h1_o_free.py`, art:f0b36e66…). Against honest's time (`summary`'s honest credit) they are skippable work
 these shares omit, so there ε_skip is short of them.
 """
 

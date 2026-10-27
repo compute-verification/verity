@@ -334,7 +334,7 @@ def cmd_uniform(a) -> int:
     return 0
 
 
-#: QSTAR's fastest table kernel (fr16_c32, benchmarks/pouw/qstar, note:20261017T0344Z-draft-eps1-qstar) sustains this
+#: QSTAR's fastest table kernel (fr16_c32, QSTAR's probe in art:f0b36e66…, note:20261017T0344Z-draft-eps1-qstar) sustains this
 QSTAR_TBS = 3.3
 
 
