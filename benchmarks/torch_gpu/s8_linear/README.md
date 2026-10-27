@@ -7,25 +7,23 @@ The linear `ScaledMmS8Coordinate_v1{K, DOT}` defines, DOT the card's s8 step (`G
 Two exact kernels, each with that epilogue fused in that order (run.py's `--kernel`):
 
 - **sm_90a: `s8_wgmma.cu`** (`wgmma.py` launches it on torch tensors; `wgmma.linear(x_s8, sx_f32, w_s8, sw_f32)` is
-  the signature of KS8-SIMPLE's simple path, HASH-11). Pearl-C's sm_90a plain GEMM (`benchmarks/pouw/pearl_c_sm90`) on the s8
+  the signature of `s8_simple`'s path). Pearl-C's sm_90a plain GEMM (`benchmarks/pouw/pearl_c_sm90`) on the s8
   atom: persistent and warp-specialized (one TMA producer warpgroup, one or two consumer warpgroups), `wgmma
   m64nNk32 .s32.s8.s8` (N = 64, 128 or 256, the tile's columns) into one s32 accumulator over all of K, the epilogue
   after the main loop. Its grid is a set of SMs (`Cfg` cN: at most N CTAs), the producer its own warpgroup role, and the
-  main loop issues no integer work but counters, for KP2-DEC's decode warps beside it. Two variants change only where
+  main loop issues no integer work but counters, for decode warps beside it. Two variants change only where
   the operands and sums travel: `:m2` runs clusters of two CTAs on M-adjacent tiles that share each W box by TMA
   multicast (a third less L2 traffic at 128 x 256), and `:kN` splits K where the tiles leave SMs idle (the narrow
   linears, kv and head, at decode), each split's s32 sums added into a workspace (integer addition: exact in any order)
-  and the epilogue run once on the total. Adopted over int8_fused on this card because Triton reached about 47% of the
-  H200's 1,942.7 s8 TOPS (r20261019-183823-8641) and mma.sync runs at 0.656 of the wgmma rate on sm_90.
+  and the epilogue run once on the total.
 - **sm_120: `verity_vllm.engine.int8_fused.scaled_mm`**, as vLLM's int8 profile serves it: one Triton GEMM on mma.sync
-  m16n8k32 (about 93% of the RTX's 807.5 TOPS at M = 8192, r20261019-183925-ef93); on sm_90 a second exact kernel beside
-  wgmma.
+  m16n8k32; on sm_90 a second exact kernel beside wgmma.
 
 Set aside: torch's `_int_mm` plus a torch epilogue (separate launches; kept as the gate's independent s32 sums) and vLLM's
 CUTLASS int8 GEMM (its epilogue applies s_w first; on the transposed product it is the Definition's order but needs M a
 multiple of 16 and writes y^T), both baselines in `bench.py`.
 
-The shapes are `fixture.MODELS`, compute-accounting's: `mqa16k52` (the H200's: width 16384, 52 layers, MQA, MLP 65536,
+The shapes are `fixture.MODELS`: `mqa16k52` (the H200's: width 16384, 52 layers, MQA, MLP 65536,
 context 32, ~20,480 sequences), `mqa16k` and `mha8k` (the RTX's), plus `d<width>` for any fused-QKV 4x layer. `realw.py`
 gates the kernel on the demo's seeded weights at the H200 shape (`verity_torch_loop.weights`).
 
@@ -40,7 +38,7 @@ gates the kernel on the demo's seeded weights at the H200 shape (`verity_torch_l
 | `configs.py` | the configs per kernel, arch and (N, K), `tune.py`'s gated winners |
 | `tune.py` | the config sweep (kbench's interleaved timing, each config gated before it is timed) |
 | `bench.py`, `lt.py`, `roofline.py` | time against M for the exact kernels, cuBLASLt int8 autotuned and vLLM's CUTLASS, against the s8 peak (measured and data-sheet readings) and the measured DRAM bandwidth |
-| `commit.py` | a layer's unit outputs as hm96-sha512 row tables against the layer's linears (now KCOMMIT's to measure) |
+| `commit.py` | a layer's unit outputs as hm96-sha512 row tables against the layer's linears |
 | `run.sh` | steps of these scripts on one leased GPU of vy-dc-h200, a lease each, from build.sh's ship |
 
 `tests/` holds the twin to the Definition's evaluator for both steps, wgmma.py's host side and the SASS gate to the kernel's

@@ -1,7 +1,7 @@
 # attn_ref: attention's BF16 GEMMs, slow and exact
 
-The fallback for the e2e demo's decode attention on one H200 (sm_90a), so nothing waits on the fast kernel (the kernels
-lane's attn_bf16). QK^T and PV, each output word exactly `GemmCoordinate_v2{K, GEMM_HOPPER}`
+The fallback for the e2e demo's decode attention on one H200 (sm_90a), so nothing waits on the fast kernel
+(`attn_bf16`, beside this directory). QK^T and PV, each output word exactly `GemmCoordinate_v2{K, GEMM_HOPPER}`
 (`verity.ml.circuits.ops.gemm`): K/16 `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` steps (`sm90.mma.m16n8k16.bf16`,
 pinned to `HOPPER_BF16_M16N8K16`) in ascending k from +0, then `cvt.rn.bf16.f32`. QK^T's K is the head dim. PV is the H200
 circuit's `GemmCoordinatePad_v1{T=n, K=32}` at KV length n: the n live keys, both operands padded with +0 to K = 32, so two

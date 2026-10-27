@@ -2,7 +2,7 @@
 
 GPU kernels for the units between the matmuls of the frozen shape (MQA decoder, width 16384, 52 layers, 256 query heads of
 64, one KV head, MLP 65536, byte vocabulary, context 32), each word for word its CPU twin, both in circuits' forms (the
-CMP-96 replay's templates, CIR-100's quantizer, CIR-104's row units). Linear HASH-19, for the walking skeleton (CMP-96).
+CPU replay's templates, `ops.quant`'s quantizer, `ops.rows`' row units), for the walking skeleton.
 `build.sh` builds `units.cu` for sm_90a (the H200) and sm_120a (the RTX PRO 6000), and `lib.py` loads the cubin of the
 device's arch.
 
@@ -51,8 +51,8 @@ research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU
 ```
 
 The fixture holds every pool word of the twins to circuits' references and refuses to write on a disagreement:
-`--replay` to the CMP-96 replay's (`benchmarks/e2e_h200/replay.py`, which `build.sh` passes unless REPLAY names another),
-and `--rows` to `ops.rows`' `argmax` and `add_row` (CIR-104; ROWS names a file to load in its place). `tests/` run on a
+`--replay` to the CPU replay's (`benchmarks/e2e_h200/replay.py`, which `build.sh` passes unless REPLAY names another),
+and `--rows` to `ops.rows`' `argmax` and `add_row` (ROWS names a file to load in its place). `tests/` run on a
 CPU: the word operations against the fp32 primitives' evaluators, each twin against a scalar composition of them, the
 sweep digests and models, and `build_check.py`.
 
