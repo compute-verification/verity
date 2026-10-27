@@ -37,9 +37,9 @@
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
   tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
-  ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, #4404's ``certifier.answer.json``,
+  ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, all_protocols' ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``), #4404's
+  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``), all_protocols'
   `block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is ``network-period
   check``'s own on its case (`decide_period`; `block_entry`).
 * **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's
@@ -122,7 +122,7 @@ WARDEN_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
+#: what `horizon_k`'s K rests on until its two per-window inputs are discharged (all_protocols' `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: the all-protocols runner's network accounting, whose `block_leg` is the block record's one certifier entry
@@ -307,7 +307,7 @@ def advice_bits(b: dict) -> dict:
             "derived": sum(derived) if runs and None not in derived and b.get("rebuilt") else None}
 
 
-#: `verity-vllm advice` (vllm's #3619), as network-e2e runs it
+#: `verity-vllm advice`, as network-e2e runs it
 ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
@@ -506,7 +506,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
 
 
 def free_inputs(circuit: dict) -> int:
-    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by the rule of #4404's
+    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``, by the rule of all_protocols'
     ``legs/certifier.free_inputs``: every unit's input-row bits (each template's units times its statement's
     ``in_rows`` widths), less each unit's rows whose every port a wire feeds from another unit's output (``wires``) or
     ``external`` names as the system's I/O. A row the registration's anchors register still counts, an overcount."""
@@ -557,11 +557,11 @@ def audit_of(d: Path) -> dict:
 
 
 def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
-    """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period, as #4404's `compose.horizon_leak`
+    """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period, as all_protocols' `compose.horizon_leak`
     counts it: the faulty units paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of
     its compute audits (a stratified audit's least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
     + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability
-    ``δ + Σ_i (e_i + e'_i)``. #4367 is conditional on its per-window inputs, so this K is cited as conditional."""
+    ``δ + Σ_i (e_i + e'_i)``. The theorem is conditional on its per-window inputs, so this K is cited as conditional."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
@@ -763,7 +763,7 @@ def _allp():
 
 def decide_period(case: dict) -> dict:
     """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
-    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as #4404's runner decides a period."""
+    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as all_protocols' runner decides a period."""
     exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
     if not exe:
         raise RuntimeError("no VERITY_NETWORK_PERIOD_EXE: no network-period executable to re-decide the case")
@@ -814,7 +814,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
 
 def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server: str | None, runs: list[str],
                 chain: dict) -> dict:
-    """The block record's certifier entry: #4404's `block_leg` of certifier/v0's period ``answer`` on ``server``, from
+    """The block record's certifier entry: all_protocols' `block_leg` of certifier/v0's period ``answer`` on ``server``, from
     ``runs``. Written only when the chain itself is accepted, the answer is held to it (`period_binding` on ``chain``:
     its certificates, N2's registrations and the ``--audit`` registrations) and ``network-period check`` gives exactly
     that answer on its ``case`` (`decide_period`), so neither a refused chain nor another period's answer carries a K;
@@ -841,7 +841,7 @@ def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server:
 
 def period_block(a, verdict: str, runs: list[str], *, cert: dict, n2: dict | None, audit_dirs: list[Path]) -> dict:
     """`block_entry` on the report's ``--period-answer``, its case (``--period-case``, by default ``X.case.json``
-    beside ``X.answer.json``, as #4404's runner writes them) and ``--server``."""
+    beside ``X.answer.json``, as all_protocols' runner writes them) and ``--server``."""
     pa = getattr(a, "period_answer", None)
     if pa and not Path(pa).is_file():
         return {"written": False, "why": f"--period-answer {pa}: not a file"}

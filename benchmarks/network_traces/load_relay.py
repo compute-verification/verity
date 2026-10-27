@@ -133,7 +133,7 @@ class Shape:
     row_codes: int
 
 
-#: a linear's row the 8,192 codes a FAMILIES ``wrow`` part reads (interface 1's, #4681)
+#: a linear's row the 8,192 codes a FAMILIES ``wrow`` part reads (interface 1's)
 H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 8192)
 TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
 SHAPES = {"h200": H200, "tiny": TINY}

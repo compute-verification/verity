@@ -6,7 +6,7 @@ than the longest cached prefix is refused), the earliest-admitted source, arriva
 order are refused) and the `rebuild(residual(a)) == a` round-trip. These cases reach the one surface those don't: the
 key.
 
-REDTEAM phase 4 found `Prefixes._key` chaining Python's builtin `hash()` of an int-tuple: neither Verity's one hash nor
+`Prefixes._key` once chained Python's builtin `hash()` of an int-tuple: neither Verity's one hash nor
 stable across CPython releases, so a collision, or a verifier on another interpreter, false-rejected honest advice. The
 key is now `unit_key`, SHA-512 over the parent key and a whole hit unit's canonical token bytes, and a key names a
 request only where that request's tokens through the prefix match. These cases hold both halves: the key is SHA-512 with

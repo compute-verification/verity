@@ -3,8 +3,8 @@ and a fitted one; the engine's arrival order is sent as its deviations from the 
 from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
 registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
 the decisions charged before their step's window; the strings are prefix-free (so the charge
-meets LEAK-LEAN's `BitsCount`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's
-phase 7 probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
+meets LEAK-LEAN's `BitsCount`); and `decode` is total, refusing by name everything but a canonical string. The adversarial
+probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
 changes, a shortened shortfall) are among them."""
 
 from __future__ import annotations
@@ -223,7 +223,7 @@ def test_hits_past_the_bound_are_sent_and_held_to_the_replay(smallkv):
 
 
 def test_the_pool_is_registered_never_sent(smallkv):
-    """REDTEAM phase 7 (3): the KV pool's size was a header field the prover set, about 20 bits, and a bigger declared
+    """The KV pool's size was a header field the prover set, about 20 bits, and a bigger declared
     pool bought derived hits. Now the registration holds it (no `pinned`, no header): the string is code_v1's encoding
     of the residual alone, nothing in it moves the pool, and the same string under another registered pool decodes to
     another advice or is refused."""
@@ -241,7 +241,7 @@ def test_the_pool_is_registered_never_sent(smallkv):
 
 
 def test_the_book_changes_only_the_length():
-    """REDTEAM phase 7 (4), on the book that replaced the contexts: the registered book is public and fixed before the
+    """On the book that replaced the contexts: the registered book is public and fixed before the
     run, and changes only a string's length, never which advice it decodes to."""
     t, rec, reg, adv = case("async-prefix-cache", T=20)
     charges = set()
@@ -412,7 +412,7 @@ def test_truncated_and_extended_strings_are_refused():
 
 
 def test_decode_is_total():
-    """Random strings, every one-bit change of an encoding, REDTEAM phase 7 (2)'s adversarial frames (empty, all zeros,
+    """Random strings, every one-bit change of an encoding, adversarial frames (empty, all zeros,
     all ones, truncations, splices and extensions of an encoding), and the codes of edited residuals (a decision
     flipped, an order entry added): `V1Error` and nothing else, or an advice whose encoding they are."""
     rng = random.Random(5)
@@ -449,7 +449,7 @@ def test_decode_is_total():
 
 @pytest.mark.parametrize("book", ("uniform", "fit"))
 def test_long_strings_are_prefix_free_and_self_delimiting(book):
-    """REDTEAM phase 7 (1), past the exhaustive 16 bits: each case's string under T = 4 (hundreds of bits, many
+    """Past the exhaustive 16 bits: each case's string under T = 4 (hundreds of bits, many
     windows) decodes to its advice, and is refused cut at any window's end but the last, cut by one bit, or extended
     by a byte; and no case's string is a proper prefix of another's that decodes under the other's record."""
     fit = _fit_cases() if book == "fit" else None

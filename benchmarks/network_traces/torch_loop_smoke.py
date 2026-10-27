@@ -9,7 +9,7 @@ rest of the arguments in this process, timing each key's making or loading (`loa
 `certified.jsonl` and `clocks.jsonl` and the client's kept `client/certificates.jsonl` and `client/clocks.jsonl`, holds
 the kept ones to the deployment's key and session again (`check_certificates`), and holds one kept certificate with a
 bit of its signature flipped, which must be refused. `DIR/smoke.json` has the CPUs, the timings, the counts, the
-verdicts and the rehearsal's exit, which is this script's. On a network-pool slot, from a clone (r20261025-191204-3c34):
+verdicts and the rehearsal's exit, which is this script's. On a network-pool slot, from a clone:
 
     research run --on vy-nebius-cpu-1 --project verity --source . --cwd clone --mem-gb 16 -- \\
       env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by network-accounting -- \\

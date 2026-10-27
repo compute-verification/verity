@@ -25,7 +25,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   `REFUSED`, or `--kinds`' in their order). ``honest``; ``flip``, a decision flipped in its window row (the advice row
   stays the registered one); ``charge``, the charge one below the advice's; ``arrival``, arrival 1's prompt one token
   longer in its ``cert`` row (an arrival not in the certified record); ``cleared``, advice that leaves the last asked
-  decision uncommitted (REDTEAM phase 14's cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
+  decision uncommitted (a cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
   scan reads past the count); ``carry``, a carry-out other than the charge's carry' (the priors on the demo and the
   corpus, counts fitted to the window on w212); ``restart``, the charge from a carry-in of its own (zero counts on the
   demo and the corpus, the fitted counts on w212, which charge 25 bits in place of 27) under a fresh salt. With prefix
@@ -33,8 +33,8 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   two blocks under ROOT on the demo, request 1's first block on the corpus, which gives it a 16-token hit at step 6);
   ``tokens``, request 1's first block made up in its ``cert`` row (9s on the demo, request 0's on the corpus); on the
   demo ``short``, request 1's admission hit claimed one block of its two, and ``unasked``, the waiting candidate's hit
-  claimed 0; REDTEAM's phase 9 choices the slice can take (`compile_slice.phase9`: a prefix hit, and on the corpus a
-  decision read again and an arrival left in the queue). On the corpus and w212, REDTEAM phase 10's six passes (advice
+  claimed 0; the adversarial choices the slice can take (`compile_slice.phase9`: a prefix hit, and on the corpus a
+  decision read again and an arrival left in the queue). On the corpus and w212, the passes (advice
   of a pass at every ask where the served window admitted: six on the corpus, twenty-one on w212, one an async unit), with the served rows in
   ``srv`` (``sixpass``) and with its own (``sixpass-own``). The rest are honest, enough of them that the statement fits
   `--zk`'s shape (`stage`).

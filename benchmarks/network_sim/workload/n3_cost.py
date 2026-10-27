@@ -41,8 +41,7 @@ the 3 ANDs that join them (`head_check.size`)."""
 
 SERVED = {"T": 600, "R": 1686, "B": 4096, "L": 9, "windows_a_day": 1440, "egress_frames": (34_499, 35_386),
           "ingress_share": 21_372 / 715_340}
-"""llama8b-node1's served rows (the consistency draft, note:network-accounting/20261006T0633Z-draft-circuit-certificate-
-consistency, run r20261006-035423-2cd5): windows of T = 600 buckets of 100 ms and r = 1,686 slots of 4,096 bytes, so
+"""llama8b-node1's served rows (run r20261006-035423-2cd5): windows of T = 600 buckets of 100 ms and r = 1,686 slots of 4,096 bytes, so
 1,440 a day; busy egress link-windows of 34,499 to 35,386 real frames; and 21,372 ingress frames to 715,340 egress ones
 over the ten configurations, which `served` takes as each link-window's ingress share."""
 

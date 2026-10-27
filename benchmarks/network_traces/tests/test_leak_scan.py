@@ -1,7 +1,7 @@
 """`leak_scan`: a found witness piece is ``leaked`` wherever its find is one field's bytes (inside one field of a proof
 stream's format or one record of a round message) or the format isn't read, whatever its row or bytes, unless the
 statement fixes its bytes (the public rows, the statement and circuit, the streams' integers, the messages' framing). A
-find across two fields is no find. REDTEAM phase 16 finding 1's case (a switch row found in one repetition) is leaked."""
+find across two fields is no find. A switch row found in one repetition is leaked."""
 from __future__ import annotations
 
 import json
@@ -70,7 +70,7 @@ def test_a_find_where_the_format_isnt_read_is_leaked():
 
 
 def test_phase16_a_switch_leak_in_one_repetition_is_leaked(tmp_path):
-    """REDTEAM phase 16 finding 1: the routed tie's switch row is low-entropy, and found in one repetition it fails the
+    """The routed tie's switch row is low-entropy, and found in one repetition it fails the
     statement, as in both, and as it does written into one field of a stream, the very bytes a rule excusing whatever
     the streams hold would let through."""
     sw = "sw_route 0 @0"
@@ -263,8 +263,8 @@ def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
     """``lig.qn``, ``lig.fold``, ``lig.cbn`` and ``lig.consn`` are grinding nonces (`transcript_check`'s ``t.pow``;
     `redigest`'s ``lig-query-nonce`` and ``lig-claim-nonce`` flip them and the verifier accepts), so the prover controls
     them and `public_bytes` must not take them for the reader-fixed integers. The switch row leaked in one field, with
-    its bytes also written across two grinding nonces as a ``public`` alibi, is still leaked (REDTEAM phase 16's rule,
-    which a nonce-blind scan lets through)."""
+    its bytes also written across two grinding nonces as a ``public`` alibi, is still leaked (which a nonce-blind scan lets
+    through)."""
     stream = _zk_stream()
     off = LS.RD.layout(stream, zk=True)
     _fields, nonces = LS.reads(stream)
@@ -378,7 +378,7 @@ def test_a_short_row_is_found_whole_and_judged_by_the_rule(tmp_path):
 
 @pytest.mark.parametrize("t", range(1, 16))
 def test_a_row_packed_whole_from_an_element_boundary_is_leaked_by_its_last_element(tmp_path, t):
-    """REDTEAM phase 19 #3984: a row of 16 zeros the circuit holds and then t witness bytes, packed into 16-byte
+    """A row of 16 zeros the circuit holds and then t witness bytes, packed into 16-byte
     elements from an element boundary (a stream's elements, each its own read; a round message's, each its own record),
     holds its tail in its last element, zero-padded. The overlapping tail piece straddles that element and the one
     before it (``across``), so only the zero-padded last chunk is one field's bytes."""

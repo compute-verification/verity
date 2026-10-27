@@ -1,4 +1,4 @@
-"""network-e2e's stages after N2 and the proofs, toward the one command over varied traffic (G-A): the advice (I1 v0,
+"""network-e2e's stages after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
 `verity.core.protocols.certifier.advice`), its bits per link-window (v0's `bits_by_window` beside ENC-DERIVED's residual,
 `encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice (PROVE-PATH,
 `benchmarks/prove_path`), and NEG's negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what it
@@ -639,8 +639,7 @@ def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = 
 TIE_OWED = ("token",)
 #: what the I/O tie must establish on the honest run beside its acceptance, for the report to be OK (`tie_gate`): each a
 #: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. CERT-VARLEN's compact
-#: finish (each response's length and finish held to the advice, `active.compact_finish_violations`; REDTEAM phase 12
-#: target 3) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
+#: finish (each response's length and finish held to the advice, `active.compact_finish_violations`) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
 TIE_REQUIRED: dict[str, str] = {
     "finish": "the I/O tie didn't establish the honest run's finish (`negatives.tie_run`'s finish: on a compact run "
               "its records held to its sampled ids, `active.compact_finish_violations`)"}
@@ -719,7 +718,7 @@ def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
     advice profile: each request's user and served ``output``), or None when every one has a sampled id for each of
     its served outputs. `negatives.tie_run` gives each sampled id one row of the Commit's port and has no backstop for
     a served output with none (its unplaced count is committed outputs no cell carries), so ids that miss a request,
-    or name it with fewer ids than it served, leave those outputs untied (REDTEAM phase 14)."""
+    or name it with fewer ids than it served, leave those outputs untied."""
     io = _read_json(run / "io.json")
     if not isinstance(io, dict) or not isinstance(io.get("requests"), list):
         return "no certified I/O (io.json) to hold the sampled ids to"
