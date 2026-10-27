@@ -10,7 +10,8 @@ the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the r
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts.
 `verifies_iff`: the reader's LMS check is `LmsVerifies`; `keyOfParams_eq_some`: the key v2's compiled check reads from
-the registered parameters; `verifies_registered`: under that key, the check is `LmsVerifies` at `lmsKey`.
+the registered parameters; `verifies_registered`: under that key, the check accepts exactly what `LmsVerifies` accepts
+at `lmsKey (keyOfParams ps)`.
 -/
 
 namespace Properties.Challenger
