@@ -12,4 +12,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and their traits.
 inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",
-          "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json"]
+          "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
+          # tiers.py reads the RTX PRO 6000's card file
+          "verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards"]
