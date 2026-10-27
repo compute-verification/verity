@@ -96,7 +96,7 @@ __device__ __forceinline__ void nblock(const u64* sd, u64 t, u64 nt0, u64 nt1, u
   w[14] = 0;
   w[15] = 96 * 8;
   sx::iv(s);
-  sx::compress<0, 1>(s, w);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     h[2 * j] = (u32)(s[j] >> 32);
@@ -137,7 +137,7 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[12 + j] = C.roots[j] ^ p;
   sx::iv(s);
-  sx::compress<0, 1>(s, w);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[j] = C.roots[4 + j] ^ p;
 #pragma unroll
@@ -146,7 +146,7 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   w[13] = 0;
   w[14] = 0;
   w[15] = 224 * 8;
-  sx::compress<0, 1>(s, w);
+  sx::compress<0, 2>(s, w);
 }
 
 // the seeds of every live unit: seeds[(seed0 + u) * 2 + kind] (8 words), kind 0 seed_j, 1 σ_R

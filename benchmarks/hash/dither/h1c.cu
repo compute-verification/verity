@@ -165,7 +165,7 @@ __device__ __forceinline__ void hs_init(Hs& s) {
   s.tot = 0;
 }
 __device__ __forceinline__ void hs_flush(Hs& s) {
-  sx::compress<0, 1>(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
@@ -209,7 +209,7 @@ __device__ void hs_final(Hs& s, u64 out[8]) {
   ++s.n;
   if (s.n > 112) hs_flush(s);
   s.w[15] = bits;
-  sx::compress<0, 1>(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) out[j] = s.h[j];
 }
@@ -611,7 +611,7 @@ __device__ __noinline__ void hb_block(u64* h, const uint8_t* b) {
   for (int k = 0; k < 16; ++k) w[k] = (u64)bswap32(q[2 * k]) << 32 | bswap32(q[2 * k + 1]);
 #pragma unroll
   for (int j = 0; j < 8; ++j) v[j] = h[j];
-  sx::compress<0, 1>(v, w);
+  sx::compress<0, 2>(v, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) h[j] = v[j];
 }
@@ -778,7 +778,7 @@ __device__ __forceinline__ void hb_row(Hb& s, const H1Tab& T, long long i, int o
         w[2 * k] = (u64)bswap32(v.x) << 32 | bswap32(v.y);
         w[2 * k + 1] = (u64)bswap32(v.z) << 32 | bswap32(v.w);
       }
-      sx::compress<0, 1>(s.h, w);
+      sx::compress<0, 2>(s.h, w);
       s.tot += 128;
       p += 128;
     } else {
@@ -1369,7 +1369,7 @@ __device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, lo
         for (int i = 3; i < 15; ++i) w[i] = 0;
         w[15] = bits;
       }
-      sx::compress<0, 1>(h, w);
+      sx::compress<0, 2>(h, w);
     }
     u64* o = T.level + 8 * (off + (width >> lv) + idx);
 #pragma unroll
@@ -1632,7 +1632,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
 #pragma unroll
               for (int j = 0; j < 8; ++j) nx[j] = __ldg(q + j);
             }
-            sx::compress<0, 1>(s.h, w);
+            sx::compress<0, 2>(s.h, w);
             s.tot += 128;
             if (!more) break;
           }

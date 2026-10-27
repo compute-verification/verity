@@ -54,7 +54,7 @@ __device__ void noise_block(const u64* tag, const u64* seed, u64 t, u32* out) {
                0x8000000000000000ULL, 0, 0, 96 * 8};
   u64 s[8];
   sx::iv(s);
-  sx::compress<0, 1>(s, w);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     out[2 * j] = (u32)(s[j] >> 32);
@@ -76,8 +76,8 @@ __global__ void __launch_bounds__(128) k_seeds(const u64* __restrict__ data, u64
   msg[31] = 224 * 8;
   u64 s[8];
   sx::iv(s);
-  sx::compress<0, 1>(s, msg);
-  sx::compress<0, 1>(s, msg + 16);
+  sx::compress<0, 2>(s, msg);
+  sx::compress<0, 2>(s, msg + 16);
   u64* o = i == n ? seedc : sigma + 8 * (u64)i;
   for (int j = 0; j < 8; ++j) o[j] = s[j];
 }

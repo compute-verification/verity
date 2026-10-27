@@ -14,7 +14,9 @@
 // multiply back into a shift. On the host every V is the plain function.
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
-// instruction fetch), 0 straight-line.
+// instruction fetch), 0 straight-line, and 2 all 80 rounds as one loop of 16-round bodies that move the state each round,
+// the schedule step skipped in the first pass: benchmarks/codec_tensor/sha512.cuh's sha512_compress, statement for
+// statement, about two thirds of ROLL 1's code.
 #pragma once
 #include <cstdint>
 #include <cstring>
@@ -199,25 +201,44 @@ SX_HD void compress(Word* st, Word* W) {
   SX_ROUND(c, d, e, f, g, h, a, b, K[(tk) + 6] + wf((tw) + 6));                                                            \
   SX_ROUND(b, c, d, e, f, g, h, a, K[(tk) + 7] + wf((tw) + 7))
 #define SX_RAW(j) W[(j)]
-  SX_EIGHT(0, 0, SX_RAW);
-  SX_EIGHT(8, 8, SX_RAW);
-  if constexpr (ROLL) {
+  if constexpr (ROLL == 2) {
+    // kept beside ROLL 1 because the two compile to different SASS and each is faster somewhere: dither's h1c and h1r
+    // run up to 2.5% slower on ROLL 1 (and on ROLL 1's rounds at this loop's code size), its h1u 3.5% faster
 #ifdef __CUDA_ARCH__
 #pragma unroll 1
 #endif
-    for (int t = 16; t < 80; t += 16) {
-      SX_EIGHT(t, 0, SX_W);
-      SX_EIGHT(t + 8, 8, SX_W);
+    for (int r = 0; r < 80; r += 16) {
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+      for (int t = 0; t < 16; ++t) {
+        if (r) W[t] += s0<m0>(W[(t + 1) & 15]) + W[(t + 9) & 15] + s1<m1>(W[(t + 14) & 15]);
+        const u64 t1 = h + S1<M1>(e) + ((e & f) ^ (~e & g)) + K[r + t] + W[t];
+        const u64 t2 = S0<M0>(a) + ((a & b) ^ (a & c) ^ (b & c));
+        h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+      }
     }
   } else {
-    SX_EIGHT(16, 0, SX_W);
-    SX_EIGHT(24, 8, SX_W);
-    SX_EIGHT(32, 0, SX_W);
-    SX_EIGHT(40, 8, SX_W);
-    SX_EIGHT(48, 0, SX_W);
-    SX_EIGHT(56, 8, SX_W);
-    SX_EIGHT(64, 0, SX_W);
-    SX_EIGHT(72, 8, SX_W);
+    SX_EIGHT(0, 0, SX_RAW);
+    SX_EIGHT(8, 8, SX_RAW);
+    if constexpr (ROLL) {
+#ifdef __CUDA_ARCH__
+#pragma unroll 1
+#endif
+      for (int t = 16; t < 80; t += 16) {
+        SX_EIGHT(t, 0, SX_W);
+        SX_EIGHT(t + 8, 8, SX_W);
+      }
+    } else {
+      SX_EIGHT(16, 0, SX_W);
+      SX_EIGHT(24, 8, SX_W);
+      SX_EIGHT(32, 0, SX_W);
+      SX_EIGHT(40, 8, SX_W);
+      SX_EIGHT(48, 0, SX_W);
+      SX_EIGHT(56, 8, SX_W);
+      SX_EIGHT(64, 0, SX_W);
+      SX_EIGHT(72, 8, SX_W);
+    }
   }
 #undef SX_RAW
 #undef SX_EIGHT
