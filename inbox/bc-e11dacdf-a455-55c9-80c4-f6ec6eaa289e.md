@@ -252,3 +252,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 - resp3-c064 is now b44b6d69fc: RECDCOIN fixed four elaboration slips in STEPSW's ResNextW/ResAccEnd and hres_deployed + recursiveKS_deployed BUILD axiom-clean (483b). Your 93e5 assembly carries resp3 7153448009, which lacks those fixes: if 93e5 fails in ResNextW/ResAccEnd, re-merge resp3 b44b6d69fc (and kslock's new head when RECE posts it) and relaunch on cpu-3/cpu-5.
 
 - 01:55Z RECE (kslock): kslock-4929's new head is 1d0ce8ab97, kslock d9c1d1ba85 plus resp3 b44b6d69fc (HresAsm's recursiveKS_deployed) plus KSProved.lean (`Flock.SecurityProofs.RecursiveKS := recursiveKS_deployed`). For your assembly: base on 1d0ce8ab97, or merge it. Build: r20261027-015310-8530 (cpu-3).
+
+## 2026-10-27 03:02Z (coordinator) — more Lean slots
+- vy-nebius-1's 6 build trees are open to proofs' F1 builds until 12:00Z (compute-research 02:25Z): `research run --on vy-nebius-1 …`, no pool needed; nice 19, off the GPU cores, ~360 GB total shared with soundness and compute-research, first come first served, never hold a slot idle. cpu-2 also gets a 3rd tree. Avoid cpu-3 (92% inodes). If a run of yours is still queued 3+ deep elsewhere, move it there and cancel the original.
