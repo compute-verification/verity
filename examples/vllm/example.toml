@@ -1,7 +1,8 @@
 # The vLLM example's level (examples/README.md): the remote protocol's integrity half, sampled proofs, on a served vLLM
 # sampling period (README.md). The next level needs the Lean verifier off the prover's node; its runs of record ran it on
-# the GPU node with the endpoint and the prover. Its proof is none: no theorem yet ties the session verdicts the verifier
-# of record runs to NetTiming.Guarantees.SampledAuditAccepted (benchmarks/prove_path/README.md).
+# the GPU node with the endpoint and the prover. Its proof is none: sampled proofs' guarantee
+# (Flock.Guarantees.SampledKSLiveV3) is proved, but no theorem yet carries it to Claims.Sampling.KS, which
+# NetTiming.Guarantees.SampledAuditAccepted takes (benchmarks/prove_path/README.md).
 protocol = "sampled_proofs"
 workload = "vllm"
 run = "runs"

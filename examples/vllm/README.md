@@ -12,9 +12,13 @@ two subprotocols and accepts only when both accept:
 
 This example runs the integrity half end to end. Its work half doesn't run here: PoUW's served form needs an int8 model
 and the challenger's gate, and on such a workload `benchmarks/one_stage/served_verdicts.sh` runs it today only as a
-development run, which credits nothing. `example.toml` records what the example establishes: its proof is none, since no
-theorem yet ties the session verdicts the Lean verifier runs to the sampled audit's guarantee
-(`NetTiming.Guarantees.SampledAuditAccepted`; `benchmarks/prove_path/README.md`).
+development run, which credits nothing.
+
+`example.toml` records what the example establishes. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is
+proved: when the verifier accepts a `--zk` session, the committed transcript is outside the sampling relation with
+probability at most δ plus the proof system's errors. The example's proof level is still none, because no theorem yet
+carries that guarantee to the audit-level claim `Claims.Sampling.KS`, which the audit's property
+`NetTiming.Guarantees.SampledAuditAccepted` takes as a hypothesis (`benchmarks/prove_path/README.md`).
 
 ## What runs
 
