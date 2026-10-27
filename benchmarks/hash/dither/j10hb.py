@@ -199,7 +199,18 @@ class NoiseLib:
 
 
 TW_C = 8
-TW_PEAK_TBS = {"H200": 4.8, "B200": 8.0, "RTX PRO 6000": 1.792}  # DRAM bandwidth, data sheets: the modeled delta only
+TW_CARDS = {"H200": "h200-sxm-141gb", "RTX PRO 6000": "rtx-pro-6000-server"}
+TW_PEAK_TBS = {"B200": 8.0}  # no card file yet: the data sheet's DRAM bandwidth
+
+
+def tw_peak_tbs(device: str) -> float | None:
+    """The device's DRAM bandwidth in TB/s, for the modeled delta only: its card's, else the data sheet's."""
+    from verity.hardware import load
+
+    sku = next((s for d, s in TW_CARDS.items() if d in device), None)
+    if sku is not None:
+        return load(sku)["memory"]["bandwidth"]["value"] / 1e12
+    return next((v for d, v in TW_PEAK_TBS.items() if d in device), None)
 
 
 def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.Random, workers: int) -> tuple[dict, dict]:
@@ -303,7 +314,7 @@ def tw_price(out: dict, gs: list[int], device: str) -> dict:
     if osp is None or not tw.get("ok"):
         return {"error": "no gated per-unit arm or tile-width gate"}
     c32, c8 = tw["c"][32], tw["c"][TW_C]
-    peak = next((v for d, v in TW_PEAK_TBS.items() if d in device), None)
+    peak = tw_peak_tbs(device)
     extra = (c8["units"] - c32["units"]) * (c32["row_blocks"] * 64 + 4 * c8["receipt_words"])
     p: dict = {"bytes_extra": extra, "peak_tb_s": peak,
                "delta_us_modeled": round(extra / (peak * 1e6), 3) if peak else None}
