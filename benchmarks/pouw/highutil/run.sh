@@ -36,8 +36,8 @@ CKPT=${CKPT:-/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/
 ROW=${ROW:-8192} LP=${LP:-512} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
 COINS=${COINS:-local} MAIN=${MAIN:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt}
 CARD=${CARD:-${RESEARCH_RUN_DIR:-.}/inputs/card.toml}
-CARD_ARGS=()
-if [ -f "$CARD" ] || [ "${CARD%.toml}" = "$CARD" ]; then CARD_ARGS=(--card "$CARD"); fi
+CARDA=()
+if [ -f "$CARD" ] || [ "${CARD%.toml}" = "$CARD" ]; then CARDA=(--card "$CARD"); fi
 W=$(mktemp -d /dev/shm/highutil.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
@@ -77,7 +77,7 @@ if [ "$COINS" != local ]; then
 fi
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
 export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0}
-export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARD_ARGS[*]}"
+export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARDA[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
