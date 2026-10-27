@@ -14,7 +14,8 @@ the change's base, the list's total held, a loosened lint failing, a base lint t
 the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
-further, the source checks' findings kept beside the verdict, where ruff comes from (this
+further, a public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
+there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
@@ -328,8 +329,8 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
 
 
 def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
-    """A sync gates each PR on its merge onto `next`, every PR below it included (#4183's gate held drive's tick ~20 min a PR on
-    26 Oct): with the cache, N merges cost N judgments, not N(N+1)/2."""
+    """A sync gates each PR on its merge onto `next`, every PR below it included: with the cache, N merges cost N judgments, not
+    N(N+1)/2."""
     base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     heads = []
     for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -412,8 +413,8 @@ def test_a_revert_and_a_pure_move_are_exempt(linted):
 
 
 def test_once_main_moves_a_passed_change_is_not_judged_again_and_a_failed_one_is(repo, monkeypatch):
-    """Drive's sync after a landing gates `next` on a new `main`: keyed by BASE, every verdict missed and the first sync's gate run
-    went past drive's 600 s (27 Oct, #4927). Only a failed change's exemptions read BASE, so only it is judged again."""
+    """Drive's sync after a landing gates `next` on a new `main`: keyed by BASE, every verdict would miss and the first sync's gate
+    run would pass drive's 600 s. Only a failed change's exemptions read BASE, so only it is judged again."""
     base = repo.git("rev-parse", "main")
     repo.git("checkout", "-q", "-b", "ok", base)
     ok = repo.commit("retires A", {"integrations/vllm/verity_vllm/a.py": "A = 2\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
@@ -433,8 +434,8 @@ def test_once_main_moves_a_passed_change_is_not_judged_again_and_a_failed_one_is
 
 
 def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, monkeypatch):
-    """26 Oct on drive's pod: `git worktree remove --force` failed ("Directory not empty"), the gate exited 2, and the sync left
-    the PR out of `next`."""
+    """When `git worktree remove --force` fails ("Directory not empty"), the gate still decides the verdict: it doesn't exit 2,
+    which would leave the PR out of `next`."""
     linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
                                                        P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
     run = subprocess.run
@@ -823,6 +824,14 @@ def env_linted(repo) -> Repo:
     return repo
 
 
+def _repo_env_fix() -> str:
+    """the fix the repository's environment-read lint names, which the gate quotes from the base's copy"""
+    spec = importlib.util.spec_from_file_location("repo_env_reads", SCRIPT.parents[3] / REPO_ENV_LINT)
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    return lint.FIX
+
+
 def _env_lint(repo: Repo) -> str | None:
     """the repository's environment-read lint, as the root suite runs it after landing, on ``repo``'s checkout"""
     r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_env_reads as T; "
@@ -838,9 +847,8 @@ def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_reg
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["touched"], c["counted"].get("repo_env_reads")) == ("failed", [], ["tools/a.py", "tools/c.py"]), c["why"]
     assert c["why"].startswith(f"adds 2 direct environment read(s) to the Python it changes, as the base's {REPO_ENV_LINT} "
-                               "counts them (tools/a.py 1 -> 2; tools/c.py 0 -> 1): Read the variable through your area's "
-                               "settings registry, which declares each one once (the template: "
-                               "integrations/vllm/verity_vllm/settings.py"), c["why"]
+                               f"counts them (tools/a.py 1 -> 2; tools/c.py 0 -> 1): {_repo_env_fix()}"), c["why"]
+    assert "settings registry" in _repo_env_fix()
     assert c["fix"] == ["tools/a.py:3 B (os.environ[...])", "tools/c.py:2 C (in os.environ)"]
     assert "tools/c.py: 1 found, 0 allowed" in (_env_lint(env_linted) or "")
     env_linted.commit("reads them through the area's registry", {
@@ -1090,6 +1098,52 @@ def test_both_counted_lints_count_the_top_change_each_naming_its_own_fix(env_lin
     assert first.startswith("adds 1 direct environment read(s)") and "settings registry" in first, c["why"]
     assert second.startswith(f"adds 1 silent except handler(s) to the Python it changes, as the base's {REPO_SILENT_LINT} "
                              "counts them (tools/b.py 0 -> 1): Re-raise;"), c["why"]
+
+
+CALLERS_LINT = "integrations/vllm/tests/lint/test_p16_cli_callers.py"
+CLI = "integrations/vllm/verity_vllm/pipeline/cli.py"
+ROW = {"row": "benchmarks/row.sh"}
+
+
+def _cli(*names: str) -> str:
+    """cli.py's COMMANDS table, each command running a module of its own"""
+    return "COMMANDS: dict[str, tuple[str, str]] = {\n" + "".join(
+        f'    "{n}": ("verity_vllm.{n}", "help"),\n' for n in names) + "}\n"
+
+
+def _callers(public: dict[str, str]) -> str:
+    return json.dumps({"rule": "P16", "public": public, "entries": []}, indent=1) + "\n"
+
+
+@pytest.fixture
+def callers_linted(repo) -> Repo:
+    """``repo`` with the real P16 lint, whose one command, row, is public, run by benchmarks/row.sh."""
+    repo.commit("p16", {CALLERS_LINT: (REAL_LINT / "test_p16_cli_callers.py").read_text(),
+                        "integrations/vllm/tests/lint/_ratchet.py": (REAL_LINT / "_ratchet.py").read_text(),
+                        CLI: _cli("row"), G.CALLERS_LIST: _callers(ROW), "benchmarks/row.sh": "verity-vllm row --x 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_is_refused_when_it_does_not(callers_linted):
+    """#5088's weights-tie, run only from benchmarks/prove_path/run.sh: the base's P16 lint, run on the change's tree, reads
+    the change's public table, and the gate checks each caller the table gains (a new command's, or one moved to another
+    file) as that lint finds a call."""
+    callers_linted.commit("adds tie, run from benchmarks", {
+        CLI: _cli("row", "tie"), G.CALLERS_LIST: _callers({**ROW, "tie": "benchmarks/tie/run.sh"}),
+        "benchmarks/tie/run.sh": 'WT="$PY -m verity_vllm.pipeline.cli tie"\n$WT --x 1\n'})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.CALLERS_LIST], ["p16_cli_callers"]), c["why"]
+    assert "public, each run by its caller: tie (benchmarks/tie/run.sh)" in c["why"], c["why"]
+    callers_linted.git("checkout", "-q", "-b", "uncalled", "main")
+    callers_linted.commit("adds tie, which its caller only names, and gives row a caller that isn't there", {
+        CLI: _cli("row", "tie"), G.CALLERS_LIST: _callers({"row": "benchmarks/gone.sh", "tie": "benchmarks/tie/run.sh"}),
+        "benchmarks/tie/run.sh": "# run verity-vllm tie by hand\necho tie\n"})
+    [c] = G.gate("main", "uncalled")["changes"]
+    assert (c["verdict"], c["lints"]) == ("failed", []), c["why"]
+    assert c["why"].startswith(f"declares 2 command(s) public in {G.CALLERS_LIST} that the file it names doesn't run"), c["why"]
+    assert c["fix"] == [f'{G.CALLERS_LIST}: public "row": "benchmarks/gone.sh" is no file in the change\'s tree',
+                        f'{G.CALLERS_LIST}: public "tie": benchmarks/tie/run.sh doesn\'t run `verity-vllm tie`']
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"
