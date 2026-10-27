@@ -141,6 +141,29 @@ $LEASE bash -c '
   exit $r
 '
 echo "lease rc $?" >> "$O/rc.txt"
+# FILL_UNTIL=UTC: after the lease above (run it with PERIODS=0 for capture and diag alone), protocol periods with no
+# plain arm and no negative, FILL_PERIODS of them a chunk, each chunk under a preemptible lease of its own, so any waiter
+# takes the GPU back between them; until UTC, which must stop short of the node's booked windows (~/.research/lease).
+# Each chunk writes fill-NNN/ (periods.jsonl, summary.json with the declared utilization); smi-fill.csv samples the card.
+if [ -n "${FILL_UNTIL:-}" ] && grep -q "^diag rc 0" "$O/rc.txt"; then
+  END=$(date -u -d "$FILL_UNTIL" +%s)
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,power.draw,utilization.gpu --format=csv -lms 1000 > "$O/smi-fill.csv" 2>&1 &
+  fsmi=$!
+  n=0 bad=0
+  while [ "$(date -u +%s)" -lt "$END" ] && [ $bad -lt 3 ]; do
+    n=$((n + 1))
+    export C=$O/fill-$(printf %03d $n)
+    gpu-lease 1 --wait --preemptible --max-min "${FILL_MIN:-25}" -- bash -c '
+      $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$C" --coins "$COINS" --main "$MAIN" $GATE_ARGS $CARD_ARGS --blocks "$BLOCKS" \
+        --steps "$STEPS" --q "$Q" --periods "${FILL_PERIODS:-6}" --negative "" --arms proto --tag "fill$(basename $C | tr -dc 0-9)" \
+        > "$C.log" 2>&1
+    '
+    fr=$?
+    echo "fill $n rc $fr" >> "$O/rc.txt"
+    if [ $fr = 0 ]; then bad=0; else bad=$((bad + 1)); fi
+  done
+  kill $fsmi 2>/dev/null
+fi
 cat "$O/rc.txt"
 tail -40 "$O/period.log"
 grep -q "^period rc 0" "$O/rc.txt"
