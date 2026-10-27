@@ -1,6 +1,6 @@
-"""A slice of the in-proof compile unit as one Boolean Definition: the pieces of PRF-143's statement (the certifier
-PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to end before the
-chain splits it into one unit a step.
+"""A slice of the in-proof compile unit as one Boolean Definition: the pieces of the compile unit's statement (the
+certifier PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to
+end before the chain splits it into one unit a step.
 
     CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
         (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
@@ -60,7 +60,7 @@ the steps' rows are ``srv``'s (through ``map`` at AS = 1); bit 5 ``cache``, C_0 
 The rest are 0.
 
 **The reference** is `check`, the flags the circuit's pieces' references give any unit's rows; `case` builds the rows of
-a prover's run (`scan`, with the choices REDTEAM's phases 9, 10 and 14 found free in a piece alone: the prefix hits and
+a prover's run (`scan`, with the choices free in a piece alone: the prefix hits and
 the heads' moves, a made-up table or made-up tokens, the advice it commits and the carry it charges from) against the
 served rows it puts in ``srv``, and `check`'s verdict on them. No witness field carries a context, a frequency, an
 enable, a consumed count or a carry, and the hits are the cache's: ChargeLink_v1 reads its contexts and estimates from
@@ -70,11 +70,11 @@ certified tokens at the table the step reads, which chains from the empty one. O
 with the served rows in ``srv``, a prefix hit is refused by ``cache`` and ``rows`` (0x0F); made-up tokens by ``rows``
 (0x2F); a decision read again and an arrival left queued by ``steps`` and ``rows`` (0x2D). A made-up table that buys
 request 1 a free 16-token hit at step 6 is refused by ``cache`` alone (0x1F) even where the server served that hit, its
-own rows in ``srv``. Advice that drops a decision the scan asks (REDTEAM phase 14's cleared enable) is refused by
-``load`` when the window row keeps it and by ``steps`` when the scan reads past the count; a carry-out other than the
-charge's carry' by ``code``. Free returns aren't expressible on the slice: it has no stopping request. REDTEAM phase
-10's six passes (advice that registers six passes where the served window admitted user-1 at the sixth ask) are
-refused by ``rows`` (0x2F) with the served rows in ``srv``; with its own rows there, the circuit accepts and the native
+own rows in ``srv``. Advice that drops a decision the scan asks (a cleared enable) is refused by ``load`` when the
+window row keeps it and by ``steps`` when the scan reads past the count; a carry-out other than the charge's carry' by
+``code``. Free returns aren't expressible on the slice: it has no stopping request. Advice that registers six passes
+where the served window admitted user-1 at the sixth ask is refused by ``rows`` (0x2F) with the served rows in
+``srv``; with its own rows there, the circuit accepts and the native
 b‖c check refuses ``srv``. A restarted carry-in (the priors, or counts fitted to the window) is accepted by the unit,
 which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry``) on its b‖c.
 
@@ -749,12 +749,12 @@ PHASE9 = ("hit", "reread", "untaken")
 
 
 def phase9(S, sl: Slice) -> dict[str, dict]:
-    """REDTEAM's phase 9 interfaces (`note:network-accounting/20261024T0558Z-finding-redteam-v3`, "PHASE 9 RESULTS") the
-    slice still has, as `case`'s keywords, each the prover's run of `sl` with that interface chosen to lower its charge
-    or its schedule: ``hit``, the first step's first candidate takes a 2-block prefix hit; ``reread``, step 2 leaves the
-    decision head in place, so step 3 reads its decision again; ``untaken``, step 0 leaves the arrival head in place.
-    ``srv``'s rows are the caller's (the served ones). Its context and frequency choices have no input: ChargeLink_v1
-    computes both from ``cin`` and the committed decisions."""
+    """The interfaces free in a piece alone that the slice still has, as `case`'s keywords, each the prover's run of
+    `sl` with that interface chosen to lower its charge or its schedule: ``hit``, the first step's first candidate
+    takes a 2-block prefix hit; ``reread``, step 2 leaves the decision head in place, so step 3 reads its decision
+    again; ``untaken``, step 0 leaves the arrival head in place. ``srv``'s rows are the caller's (the served ones).
+    Its context and frequency choices have no input: ChargeLink_v1 computes both from ``cin`` and the committed
+    decisions."""
     return {"hit": {"hits": {0: (2,) + (0,) * (S.W + S.A - 1)}},
             "reread": {"consume": {2: (0, 0)}},
             "untaken": {"consume": {0: (0, 0)}}}

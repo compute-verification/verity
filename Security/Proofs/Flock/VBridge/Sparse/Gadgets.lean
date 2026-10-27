@@ -4,7 +4,7 @@ import Flock.RecSparse
 /-!
 # The sparse-phase unit's gadgets
 
-The gadgets `Flock.RecSparse.steps` builds past `GfResiduals`' (circuits' #1751), each on forms that carry elements of
+The gadgets `Flock.RecSparse.steps` builds past `GfResiduals`', each on forms that carry elements of
 `Flock.F128` (`Holds`: 128 forms, form `k` carrying bit `k`), and each against a mirror of it on the elements, so that
 what the gadget computes is stated apart from the algebra:
 

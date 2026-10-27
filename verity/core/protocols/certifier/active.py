@@ -40,6 +40,17 @@ boundaries meet (both timers expire in one turn of the loop, or one `VirtualCloc
 difftest's harness wakes one ticker a tick event, so there each step runs that tick alone, as `CertifierDevice.step`
 takes one event, and the trace orders a shared boundary's two ticks either way.
 
+**The pacer** (`Proxy(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, so when the
+server writes within a bucket, which the prover chooses, moves when the bucket reaches the client. With `paced`, a
+number of seconds past `slack`, the egress tick hands its bucket to a process of its own (`pacer.Pacer`) instead, which
+writes it to the link at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made,
+so the loop's lateness within the slack never moves it. A bucket that reached the pacer after its time, or whose release
+started more than `slack` after it, faults its window `monitor-unavailable`, as a late tick does, and one the link
+refused, `delivery-refused`. A client slow to read holds bytes in the pacer, never a later bucket's release: a tick
+that finds more than one bucket past its time and not yet written faults its window `delivery-refused`, as the loop's
+own backlog of more than a bucket does unpaced. A window's record is published once its last bucket's writes are
+reported, so a fault on that bucket is its window's.
+
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
 content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
 Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
@@ -178,10 +189,10 @@ import socket
 import struct
 import threading
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import aead
@@ -193,9 +204,11 @@ from verity.core.protocols.certifier.grid import (
     Record,
     Row,
     Certifier,
+    Status,
     row_count,
 )
 from verity.core.protocols.certifier.online import Prover, Refused
+from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
@@ -1085,6 +1098,11 @@ class _Stream:
     ended: int | None = None  # the ready bucket of its end upstream
 
 
+def _faulted(record: Record, reason: Reason) -> Record:
+    """`record` with `reason` as its status, unless it has one already: a window records its first fault."""
+    return record if not record.status.complete else replace(record, status=Status(reason))
+
+
 class Proxy:
     """The active certifier on one link: `run(reader, writer)` serves the link connection from `origin`, the clock's time
     of bucket 0, for the windows of `syncs`, or `windows` of them declared by an online `prover`, then closes it.
@@ -1135,6 +1153,10 @@ class Proxy:
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
       unit that doesn't open faults its ingress window `malformed`, and every later one too (`link_frames_read` counts
       units then);
+    - with `paced`, seconds past `slack` (off by default), the egress tick hands each bucket to the pacer
+      (`pacer.Pacer`), which writes it to the link `paced` after its boundary on the host's monotonic clock, `origin`'s
+      clock then; `releases` holds each bucket's `pacer.Report`, and each egress record is published once its last
+      bucket's is in;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -1150,7 +1172,10 @@ class Proxy:
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
                  served: ServedProfile | None = None, ordinals: bool = False, compact: bool = False,
-                 pair: Pair | None = None) -> None:
+                 pair: Pair | None = None, paced: float | None = None) -> None:
+        if paced is not None and not (isinstance(paced, (int, float)) and paced > slack):
+            raise ValueError(f"a paced bucket leaves past the slack, so that a tick in time hands it before its time, "
+                             f"not {paced!r} s after its boundary")
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if compact and not (ordinals and egress.frame_bytes >= COMPACT_RECORD.size):
@@ -1211,7 +1236,12 @@ class Proxy:
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
         self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
                                  served=admission)
-        self.pair = pair
+        self.pair, self.paced = pair, paced
+        self.releases: list[Report] = []
+        self._pacer: Pacer | None = None
+        self._reports_task: asyncio.Task | None = None
+        self._unwritten: Counter[int] = Counter()
+        self._held: dict[int, Record] = {}
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
@@ -1235,10 +1265,13 @@ class Proxy:
             await asyncio.gather(self._egress(writer), self._ingress())
         finally:
             link.cancel()
-            tasks = [st.task for st in self.streams.values() if st.task] + [t for t in (self._salt_task,) if t]
+            tasks = [st.task for st in self.streams.values() if st.task] + \
+                [t for t in (self._salt_task, self._reports_task) if t]
             for task in tasks:
                 task.cancel()
             await asyncio.gather(link, *tasks, return_exceptions=True)
+            if self._pacer is not None:
+                await self._pacer.kill()
             writer.close()
             if self.choices is not None:
                 await asyncio.to_thread(self.choices.executor.shutdown, True, cancel_futures=True)
@@ -1275,31 +1308,82 @@ class Proxy:
         bucket_bytes = p.allocation * (p.frame_bytes if pair is None else p.frame_bytes + aead.TAG_BYTES)
         padding = memoryview(bytes(p.allocation * p.frame_bytes))
         pad = bytes(p.frame_bytes)
+        tau = p.bucket_ms / 1000
+        pacer = None
+        if self.paced is not None:
+            pacer = self._pacer = await Pacer.start({0: writer.get_extra_info("socket").fileno()})
+            self._reports_task = asyncio.create_task(self._reports(pacer))
         choices = self.choices
         if choices is not None and self.windows:
             choices.start()
 
         def tick(t: int) -> None:
-            backlog = writer.transport.get_write_buffer_size()
-            if backlog > bucket_bytes:
+            if pacer is None:
+                backlog = writer.transport.get_write_buffer_size()
+                refused, dropped = backlog > bucket_bytes, backlog > 4 * bucket_bytes
+            else:
+                behind = pacer.behind(self.clock())
+                refused, dropped = behind > 1, behind > 4
+            if refused:
                 self.shaper.certifier.fault(Reason.DELIVERY_REFUSED)
             self._check_forwarding()
             row, record = self.shaper.tick()
             n = row_count(row)
-            if backlog <= 4 * bucket_bytes:
+            if not dropped:
                 if pair is None:
-                    writer.writelines([*row[:n], padding[: (p.allocation - n) * p.frame_bytes]])
+                    cells = [*row[:n], padding[: (p.allocation - n) * p.frame_bytes]]
                 else:
-                    writer.writelines(pair.sealer.seal_bucket(t, [*row[:n], *[pad] * (p.allocation - n)]))
+                    cells = pair.sealer.seal_bucket(t, [*row[:n], *[pad] * (p.allocation - n)])
+                if pacer is None:
+                    writer.writelines(cells)
+                else:
+                    pacer.hand(t, self.origin + t * tau + self.paced, [(0, b"".join(cells), False)])
+                    self._unwritten[t // p.buckets] += 1
             if choices is not None and (t + choices.prover.lag) % p.buckets == 0 and \
                     (t + choices.prover.lag) // p.buckets < self.windows:
                 choices.start()
             if record is not None:
-                self.publish(record, p)
+                if self._unwritten[record.window]:
+                    self._held[record.window] = record
+                else:
+                    self.publish(record, p)
             self._changed.set()
 
         await self._ticks("egress", p, self.shaper.certifier, tick)
-        await writer.drain()
+        if pacer is None:
+            await writer.drain()
+            return
+        await pacer.close()
+        await self._reports_task
+        for w in sorted(self._held):
+            self.publish(_faulted(self._held.pop(w), Reason.MONITOR_UNAVAILABLE), p)
+        self._changed.set()
+
+    async def _reports(self, pacer: Pacer) -> None:
+        async for report in pacer.reports():
+            self._report(report)
+
+    def _report(self, report: Report) -> None:
+        """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
+        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
+        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
+        is published once the writes of every bucket of it that was handed are reported."""
+        w = report.t // self.egress.buckets
+        if report.end is None:
+            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+        else:
+            self.releases.append(report)
+            reason = None if report.written else Reason.DELIVERY_REFUSED
+        if reason is not None:
+            if w in self._held:
+                self._held[w] = _faulted(self._held[w], reason)
+            elif w == self.shaper.certifier.window:
+                self.shaper.certifier.fault(reason)
+        if report.end is not None:
+            self._unwritten[w] -= 1
+            if not self._unwritten[w] and w in self._held:
+                self.publish(self._held.pop(w), self.egress)
+        self._changed.set()
 
     def _check_forwarding(self) -> None:
         """Fault every window a late forward can reach: a released request not written upstream by its deadline makes

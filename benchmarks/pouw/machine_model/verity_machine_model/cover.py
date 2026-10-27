@@ -25,6 +25,8 @@ from verity_machine_model.model import DATA, device, kind_lists
 
 COVER = DATA / "cover"
 TABLES = Path(__file__).resolve().parents[2] / "sass_census" / "data"
+#: corpus.json and the ISA tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
+FETCH = "uv run research data fetch-fixtures benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data"
 DEVICES = ("sm_90", "sm_120")
 FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}
 MARKS = ("covered", "coarse", "hole", "absent")
@@ -100,14 +102,20 @@ def _kinds(dev: str) -> set[str]:
     return out
 
 
+def fetched(p: Path) -> dict:
+    if not p.is_file():
+        raise FileNotFoundError(f"{p} is a fetched fixture and isn't here: `{FETCH}`")
+    return json.loads(p.read_text())
+
+
 def load(cover: Path = COVER, tables: Path = TABLES) -> Cover:
     env = tomllib.loads((cover / "envelope.toml").read_text())
     data = tomllib.loads((cover / "rows.toml").read_text())
     rows = [Row(i, tuple(r["ops"]), tuple(r.get("devices", DEVICES)), tuple(r.get("forms", ())), r["mark"],
                 r["envelope"], r) for i, r in enumerate(data["row"])]
-    bu = json.loads((tables / "bu_12_9.json").read_text())["tables"]
-    c13 = json.loads((tables / "sass_isa_tables.json").read_text())["tables"]
-    corpus = json.loads((cover / "corpus.json").read_text())["opcodes"]
+    bu = fetched(tables / "bu_12_9.json")["tables"]
+    c13 = fetched(tables / "sass_isa_tables.json")["tables"]
+    corpus = fetched(cover / "corpus.json")["opcodes"]
     opcodes: dict[str, dict[str, set[str]]] = {}
     for dev in DEVICES:
         o: dict[str, set[str]] = {}

@@ -1,20 +1,20 @@
-"""`verity.ml.circuits.ops.boolean.elementwise`: the Boolean element-wise operations (the f32 ones with the IR's NaN words and,
+"""`verity.ml.circuits.ops.boolean.elementwise`: the Boolean element-wise operations (the f32 ones with the word primitives' NaN words and,
 as the `_v4`s, with the GPU's) agree with their word primitives (`trace.word_of`) on
 every pair (triple) of special words, on random words and on words chosen to land in the subnormal range (a bf16 operation also
 on every word against a few specials, and a product at f32's subnormal and overflow ends), carry exactly their
 builders' live ANDs, and are pinned by gate count and program digest. Bf16AddF2fp_v2 is checked on every pair of words when
-``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is set."""
+``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is on."""
 from __future__ import annotations
 
 import itertools
 import json
-import os
 import zlib
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from verity import settings
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
@@ -272,13 +272,13 @@ def test_a_specialized_constant_is_folded() -> None:
     d = EW.specialized("SpecializedCheck", 1, ["K"], lambda S: lambda C, x: EW.bf16_mul_f32(C, x, const_bits(S.K, 32)),
                        lambda S: ((("x", EW.BF16),), EW.BF16), register=False)
     every = np.arange(1 << 16, dtype=np.uint16)
-    for K in (0x41F00000, 0x3D088889):
-        target = bind(d, K=K)
-        T = d.traced(SimpleNamespace(K=K))
+    for word in (0x41F00000, 0x3D088889):
+        target = bind(d, K=word)
+        T = d.traced(SimpleNamespace(K=word))
         assert all(o >= 2 for _, ops in T.gates for o in ops)
         assert T.counts["and"] < PINS["Bf16MulF32_v2"][0]
         got = np.asarray(BS.evaluate_words(target, every)).reshape(-1)
-        assert np.array_equal(got, np.asarray(E.evaluate_batch(W.Bf16MulF32, every, np.full(every.shape, K, np.uint32))).reshape(-1))
+        assert np.array_equal(got, np.asarray(E.evaluate_batch(W.Bf16MulF32, every, np.full(every.shape, word, np.uint32))).reshape(-1))
 
 
 def test_a_composite_on_bits_has_the_word_composite_as_its_word_view() -> None:
@@ -377,7 +377,7 @@ def test_the_bf16_add_agrees_with_bf16_add_f2fp_v1_on_every_b_for_some_a() -> No
     _every_pair_chunks([0x000, 0x3F8, 0x800, 0x7F8])
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_ML_BOOLEAN_EXHAUSTIVE"),
+@pytest.mark.skipif(not settings.VERITY_ML_BOOLEAN_EXHAUSTIVE,
                     reason="every pair of bf16 words (2^32 instances, about 7 minutes); set VERITY_ML_BOOLEAN_EXHAUSTIVE=1")
 def test_the_bf16_add_agrees_with_bf16_add_f2fp_v1_on_every_pair() -> None:
     """All 2^32 operand pairs, 2^20 per chunk: b and a's low 4 bits are the instance counter, a's high 12 bits the chunk."""

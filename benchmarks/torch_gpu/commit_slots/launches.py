@@ -1,5 +1,5 @@
 """The host's enqueue calls inside each NVTX range of a name, from an nsys report exported to SQLite: how long each call held
-the thread, and from which call on they block (HASH-25: does the launch queue's depth pace ``StepCommitter.add``?).
+the thread, and from which call on they block (does the launch queue's depth pace ``StepCommitter.add``?).
 
     nsys profile -t cuda,nvtx --export sqlite -o OUT python step.py time ...      # step.py marks each step's enqueue
     python benchmarks/torch_gpu/commit_slots/launches.py OUT.sqlite [--range enqueue]
