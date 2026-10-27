@@ -1,11 +1,15 @@
 import Proofs.Pouw.DitherWitness
 
 /-!
-# `WorkMoment` and `FleetSound` say something (LEAN-66; CMP-152)
+# `WorkSound`, `WorkMoment` and `FleetSound` say something (LEAN-66; CMP-152, CMP-154)
 
 Each guarantee's honest and nontrivial witnesses, at `Proofs.Pouw.DitherWitness`'s machine `tw`, round `twRound` and
 period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2` sampling blocks:
 
+* `WorkSound_honest`: every premise of `WorkSound` holds there, `AnswersFit` among them, and the verdict accepts the
+  honest prover on every oracle and coins, within the cap with its answers' calls. `WorkSound_nontrivial`: the
+  conclusion there (`witness_freed`) is false at the verifier that accepts everything, since the idle prover's other
+  work is worth 46 against at most `32 + ε_A C < 46`.
 * `WorkMoment_honest`: every premise of `WorkMoment` outside the named assumptions holds there (the dual price, the
   cost split, the cap, G1–G3, P1, P2), so do the named assumptions, and the verdict `twVerdict` (the rounds' checks)
   accepts the honest prover on every oracle and coins. `WorkMoment` at these premises is `MomentSound` with
@@ -28,35 +32,18 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
 
 section Idle
 
-theorem card_nonconst_const {X α : Type} {f : X → Fin 2 → Fin 1 → Fin 1 → α} (hf : ∀ x y, f x = f y) :
-    ((nonconst f).card : ℝ) = 0 := by
-  have : nonconst f = ∅ := eq_empty_of_forall_notMem fun c hc => by
-    obtain ⟨x, y, h⟩ := mem_nonconst.1 hc
-    exact h (by rw [hf x y])
-  rw [this, card_empty, Nat.cast_zero]
-
-/-- A constant program: it outputs `v` at no use and no calls. No cell of its output varies, so no law charges it. -/
-noncomputable def constAlg {I O : Type} (v : O) : TAlg I O where
-  run _ := v
-  use _ _ := 0
-  use_nonneg _ _ := le_rfl
-  calls _ := 0
-  calls_nonneg _ := le_rfl
-  calls_le _ := le_rfl
-  words _ _ := le_of_eq (card_nonconst_const fun _ _ => rfl)
-  roots _ _ := le_of_eq (card_nonconst_const fun _ _ => rfl)
-  work _ _ _ _ := ⟨le_of_eq (card_nonconst_const fun _ _ => rfl), le_of_eq (card_nonconst_const fun _ _ => rfl)⟩
-
-/-- **The idle prover**: every sampling block commits the zero root and answers zero, at no use. -/
+/-- **The idle prover**: every sampling block commits the zero instance and the zero root and answers zero, at no
+use. -/
 noncomputable def idle : Prover tw twRound 2 where
   St := Unit
   start := ()
+  commit _ := constAlg ((), twInst)
   work _ := constAlg ((), fun _ _ _ => 0)
   absorb _ _ _ := ()
   answer _ := constAlg fun _ => (0, ())
 
 theorem idle_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) (r : Fin 3) : idle.timedUse o x r = 0 := by
-  show ∑ _b : Fin 2, (0 : ℝ) = 0
+  show ∑ _b : Fin 2, ((0 : ℝ) + 0) = 0
   simp
 
 /-- The idle prover's sampling blocks leave the whole period to other work: 8 units of each job. -/
@@ -124,11 +111,11 @@ end Probability
 /-- `WorkMoment`'s conclusion at the witness: the moment at `ε = 1/7`, `C = 14`, `η = 1/7` and `κ = 0`. -/
 theorem witness_moment :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) := by
-  obtain ⟨hreg, hdual, hinst, hC, -, -, -, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
-    hsvc, himp, hext, -, -⟩ := witness
-  have h := Pouw.SecurityProofs.Dither.WorkMoment tw twRound 2 Set.univ twReg Unit twVerdict twDev twPd twμ twHmm
-    twHsha twHo twHmm twHsha twη 0 0 0 twQ (fun _ => 0) (fun _ => 0) twBadv twξ (fun _ => 0) (fun _ => 0) hreg hdual
-    hinst hC hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hext
+  obtain ⟨hdual, hinst, hC, -, -, -, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
+    hsvc, himp, hans, hext, -, -⟩ := witness
+  have h := Pouw.SecurityProofs.Dither.WorkMoment tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm
+    twHsha twHo twHmm twHsha twη 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
+    hinst hC hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
   convert h using 1
   · funext A
     norm_num [epsWorkSound, twHmm, twHsha, twHo, twξ, Fin.sum_univ_two]
@@ -148,20 +135,21 @@ premise of `WorkMoment` that is no named assumption holds (the dual price, the c
 and P2), the named assumptions hold too, and the verdict accepts the honest prover on every oracle and coins. -/
 theorem WorkMoment_honest :
     twPd.DualOpt twμ 1 ∧
-      ∑ w, (twHmm (twReg w) + twHsha (twReg w) + twHo (twReg w)) = ∑ r, twμ r * twPd.hon r ∧
+      ∑ w, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r ∧
       (∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r) ∧
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
-      SAKMatmul tw twRound twμ Set.univ twHmm (fun a => twη * (twHmm a + twHsha a + twHo a) / twHmm a)
-        (fun _ => 0) ∧
-      ShaSpeed tw twRound 2 twReg twμ twHsha (fun a => twη * (twHmm a + twHsha a + twHo a) / twHsha a)
+      (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
+        (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
+      ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
       OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
-      ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧
-      ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) ∧
+      ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
+      ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x := by
-  obtain ⟨-, hdual, -, hC, -, -, -, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hext, -,
-    hhon⟩ := witness
-  exact ⟨hdual, hC, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hext, fun o x => (hhon o x).1⟩
+  obtain ⟨hdual, -, hC, -, -, -, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
+    -, hhon⟩ := witness
+  exact ⟨hdual, hC, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp, hans, hext,
+    fun o x => (hhon o x).1⟩
 
 /-- **`WorkMoment`'s nontrivial witness** (LEAN-66): its conclusion at the witness (`witness_moment`'s period and
 parameters, `ε = 1/7`, `C = 14`, `η = 1/7`, `κ = 0`) is false at the verifier that accepts everything. -/
@@ -177,6 +165,53 @@ theorem WorkMoment_nontrivial :
   have hpos : 0 < twη * D ox := mul_pos (by norm_num [twη]) (by linarith)
   linarith [Real.one_lt_exp_iff.2 hpos]
 
+/-- **`WorkSound`'s honest witness** (LEAN-66, CMP-154): at `Proofs.Pouw.DitherWitness`'s machine, protocol and period,
+every premise of `WorkSound` that is no named assumption holds (the dual price, the costs and their split, the rate
+and confidence, the cap on calls, G1–G3, P1 and P2), the named assumptions hold too, `AnswersFit` among them, and the
+verdict accepts the honest prover on every oracle and coins, with its sampling blocks' timed use the period's honest
+use and its run, its answers' calls included, within the cap. -/
+theorem WorkSound_honest :
+    twPd.DualOpt twμ 1 ∧
+      (∀ w, 0 < twHmm w ∧ 0 < twHsha w ∧ 0 ≤ twHo w) ∧
+      ∑ w, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r ∧
+      0 < twη ∧ 0 < twδ ∧ twδ ≤ 1 ∧
+      (∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r) ∧
+      tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
+      (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
+        (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
+      ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
+        (fun _ => 0) (fun _ => 0) ∧
+      OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
+      ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
+      ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
+      ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧
+        honest.WithinCap twSel twQ o x := by
+  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, -, -, -, -, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout, hsvc, himp,
+    hans, hext, -, hhon⟩ := witness
+  exact ⟨hdual, fun w => ⟨(hinst w).1, (hinst w).2.1, (hinst w).2.2.1⟩, hC, hη, hδ, hδ1, hcap, hG1, hG2, hG3, hP1,
+    hP2, hsak, hsha, hout, hsvc, himp, hans, hext, hhon⟩
+
+/-- **`WorkSound`'s nontrivial witness** (LEAN-66, CMP-154): its conclusion at the witness (`witness_freed`'s period
+and bounds, `ε_A = 1/7 + ln 2 / 2`, `C = 14`, `κ_A = 1/2`) is false at the verifier that accepts everything. The
+idle prover is accepted on every oracle and coins and leaves the period to other work worth 46, against at most
+`32 + ε_A C < 46` for any honest strategy (`value_le`), so the event has probability 1. -/
+theorem WorkSound_nontrivial :
+    ¬ FreedSound tw twRound 2 (fun _ _ _ _ => True) twDev twPd 1 twε (∑ r, twμ r * (1 * twPd.hon r)) twκ := by
+  intro h
+  have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
+    (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
+  have hC : ∑ r, twμ r * (1 * twPd.hon r) = 14 := by
+    change ∑ r : Fin 3, twμ r * (1 * twHon r) = 14
+    norm_num [Fin.sum_univ_three, twμ, twHon]
+  have h1 := h idle
+  rw [prob_of_forall] at h1
+  · linarith [twκ_lt idle]
+  intro ox
+  refine ⟨trivial, fun _ => 8, idle_fits ox.1 ox.2, ?_⟩
+  rintro ⟨W', z', -, hfit, hval⟩
+  rw [hC, value_eight] at hval
+  linarith [value_le W' z' hfit, twε_lt idle]
+
 /-- **`FleetSound`'s honest witness** (LEAN-66): at a fleet of `n + 1` replicas of the witness, the challenger's
 randomness every replica's coins (`coin = id`), each replica's moment holds at the honest verdict (`witness_moment`),
 each replica's coins are its own, the honest fleet reads no replica's coins, and the verdict accepts it. -/
@@ -186,7 +221,7 @@ theorem FleetSound_honest (n : ℕ) :
       CoinsConfidential (G := tw) (P := twRound) (k := 2) (N := n + 1)
         (fun ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2 => ω) (fun _ _ => honest) ∧
       ∀ (u : Fin (n + 1)) (ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
-  ⟨witness_moment, fun _ => rfl, fun _ _ _ _ => rfl, fun u ω o => honest_accepted o (ω u)⟩
+  ⟨witness_moment, fun _ => rfl, fun _ _ _ _ => rfl, fun u ω o => honest_passes o (ω u)⟩
 
 /-- **`FleetSound`'s nontrivial witness** (LEAN-66): at the fleet of `FleetSound_honest`, the verifier that accepts
 everything, `δ_coin = 1/2` and `κ_max = 0`, some prover's fleet breaks `FleetSound`'s bound: its event has

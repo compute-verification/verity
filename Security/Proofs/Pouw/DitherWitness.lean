@@ -20,12 +20,17 @@ prover (`witness`). `witness_freed` is the headline's conclusion there, from `Wo
   `p = 1/16`. The check draws one of the two words (`s = 1`). The root is transparent: root cell `i` is word `i`
   reduced into `Fin 17` (`dec`), and a cell opens where its root cell reads back as the word (`enc`). There is no
   oracle (`Orc = Unit`), so the commitment is perfectly binding.
-* The period (`twPd`): credited use `hon = (4, 4, 2)`, two honest rounds whose work uses `(2, 2, 1)` and makes two
-  oracle calls and whose answer uses nothing (`honest`, timed use `hon`), `T = 8`, and one other job per resource
-  worth its use at `μ`, so `μ` is the period's dual price (`twDual`). The cap on a run's calls is `Q = 8`, the
-  period's hash units (`twCap`); the honest prover makes 4. A round's honest cost is
-  `H = H_mm + H_sha + H_o = 4 + 2 + 1` and the public bests are the honest ones (`pub_mm = 4`, `pub_sha = 2`), so
-  `C = 14`.
+* The period (`twPd`): credited use `hon = (4, 4, 2)`, two honest sampling blocks whose commit phase commits the
+  zero instance at no cost, whose work uses `(2, 2, 1)` and makes two oracle calls, and whose answer uses nothing
+  (`honest`, timed use `hon`), `T = 8`, and one other job per resource worth its use at `μ`, so `μ` is the period's
+  dual price (`twDual`). The cap on a run's calls is `Q = 8`, the period's hash units (`twCap`); the honest prover
+  makes 4, and its answers none. Each sampling block's honest cost is `H = H_mm + H_sha + H_o = 4 + 2 + 1` and the
+  public bests are the honest ones (`pub_mm = 4`, `pub_sha = 2`), so `C = 14`. Every instance is registrable for
+  every block (`twReg`): the noise reads none.
+* The verdict (`twVerdict`) is the sampling blocks' checks at their committed instances and the devices' reading
+  (`twDev`): that every block's answer ran within the period, resource by resource. That reading stands in for the
+  card's clock (`Definitions.Pouw.Guarantees.DitherInstance`), so `AnswersFit` holds with every check coin selected
+  (`twSel`), and the answers' calls are under the cap.
 
 **The rate and free guesses (L38).** A words program charged for `j` varying words costs at least `2 j` at `μ`, falls
 short of `pub_mm = 4` by at most `4 − 2 j`, and passes the check with probability at most `(j + (2 − j) p)/2`. At rate
@@ -45,7 +50,9 @@ at `δ = 1/2`.
   predicts it (W2's degenerate set is empty here).
 * `ExtractAdv` holds at `ξ = 0`, `κ_x = 0` and advice of `|Adv|` bits for every prover because the commitment is
   transparent; that is not `ShaRealize` on a random oracle.
-* No program exchanges bits (`ext = 0`), so `β = K = 0`, and the verdict is the rounds' checks (`κ_S = 0`).
+* No program exchanges bits (`ext = 0`), so `β = K = 0`, and the verdict implies the checks (`κ_S = 0`).
+* The commit phase is free: no law reads an instance, so a commit phase that adapts its instance to the earlier
+  blocks' coins is charged nothing, and the instance changes no check (the noise reads none).
 * The oracle is trivial (`Orc = Unit`), so the calls are counted and priced but read nothing, and `ShaRealize`'s
   `OracleCalls` and realization over a random oracle aren't exercised here. Any table `eo : Unit ≃ (X → D)` is a
   single point, so at `D = Unit` the realization's walk clause is vacuous and `WorkSoundNoFold`'s `κ`, with its
@@ -419,14 +426,14 @@ theorem twDual : twPd.DualOpt twμ 1 := by
   · show ∑ j : Fin 3, twμ j * (8 - twHon j) = ∑ r : Fin 3, twμ r * (1 * 8 - 1 * twHon r)
     simp
 
-/-- A round's honest matmul cost at `μ` (two words, a MAC unit each), its public best's too. -/
-noncomputable def twHmm (_ : twRound.Inst) : ℝ := 4
+/-- A sampling block's honest matmul cost at `μ` (two words, a MAC each), its public best's too. -/
+noncomputable def twHmm (_ : Fin 2) : ℝ := 4
 
-/-- A round's honest hashing cost at `μ` (two root cells, a hash unit each), its public best's too. -/
-noncomputable def twHsha (_ : twRound.Inst) : ℝ := 2
+/-- A sampling block's honest hashing cost at `μ` (two root cells, a hash each), its public best's too. -/
+noncomputable def twHsha (_ : Fin 2) : ℝ := 2
 
-/-- The rest of a round's honest cost at `μ`. -/
-noncomputable def twHo (_ : twRound.Inst) : ℝ := 1
+/-- The rest of a sampling block's honest cost at `μ`. -/
+noncomputable def twHo (_ : Fin 2) : ℝ := 1
 
 /-- The rate a unit of priced cost: `η_mm = 1/4`, `η_sha = 1/2`. -/
 noncomputable def twη : ℝ := 1 / 7
@@ -444,11 +451,17 @@ theorem twCap : ∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r :=
   · show (1 : ℝ) * 8 ≤ twQ * if (1 : Fin 3) = 1 then 1 else 0
     norm_num [twQ]
 
-/-- The registered instances: the witness round's noise reads none, so any will do. -/
-def twReg (_ : Fin 2) : twRound.Inst := (fun _ _ => 0, fun _ _ => 0)
+/-- The registrable instances of each sampling block: every instance, since the witness's noise reads none. -/
+def twReg (_ : Fin 2) : Set twRound.Inst := Set.univ
+
+/-- The instance the honest prover commits. -/
+def twInst : twRound.Inst := (fun _ _ => 0, fun _ _ => 0)
+
+/-- The selected check coins: every one. -/
+def twSel : twRound.Chk → Prop := fun _ => True
 
 theorem twCost :
-    ∑ w : Fin 2, (twHmm (twReg w) + twHsha (twReg w) + twHo (twReg w)) = ∑ r, twμ r * twPd.hon r := by
+    ∑ w : Fin 2, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r := by
   show ∑ _w : Fin 2, ((4 : ℝ) + 2 + 1) = ∑ r : Fin 3, twμ r * twHon r
   norm_num [Fin.sum_univ_three, twμ, twHon]
 
@@ -456,15 +469,17 @@ end Period
 
 section Premises
 
-/-- **The witness verdict**: the rounds' checks on the transcript. The devices read nothing. -/
-def twVerdict : Verdict twRound 2 Unit := fun o x t _ =>
-  ∀ w, twRound.accept o (twReg w) (x w).1 (x w).2 (t w).1 (t w).2
+/-- **The witness verdict**: every sampling block's check on the transcript at its committed instance, and the
+devices' reading. -/
+def twVerdict : Verdict twRound 2 Prop := fun o x t ob =>
+  (∀ w, twRound.accept o (t w).1 (x w).1 (x w).2 (t w).2.1 (t w).2.2) ∧ ob
 
-/-- The devices' readings: nothing. -/
-def twDev : Readings tw twRound 2 Unit := fun _ _ _ => ()
+/-- **The devices' reading**: every sampling block's answer ran within the period, resource by resource. It stands in
+for the card's clock, which has each answer arrive before the period's end. -/
+def twDev : Readings tw twRound 2 Prop := fun A o x => ∀ b r, tw.use (A.answer b) (A.answerIn o x b) r ≤ twPd.cap r
 
-theorem twSAK : SAKMatmul tw twRound twμ Set.univ twHmm
-    (fun a => twη * (twHmm a + twHsha a + twHo a) / twHmm a) (fun _ => 0) := by
+theorem twSAK (w : Fin 2) : SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
+    (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0) := by
   intro _ _ _ _ a _ B St _ s Mw _
   refine ⟨fun _ => False, prob_le_zero fun _ h => h, ?_⟩
   unfold wordsMoment
@@ -486,9 +501,9 @@ theorem twSAK : SAKMatmul tw twRound twμ Set.univ twHmm
   · exact le_rfl
 
 theorem twShaSpeed : ShaSpeed tw twRound 2 twReg twμ twHsha
-    (fun a => twη * (twHmm a + twHsha a + twHo a) / twHsha a) (fun _ => 0) (fun _ => 0) := by
+    (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w) (fun _ => 0) (fun _ => 0) := by
   intro _ _ _ _ _ A B Adv _ adv _ Mw Mh _ _ _
-  refine prob_le_zero fun ox ⟨w, hw⟩ => hw ⟨fun _ => False, prob_le_zero fun _ h => h, ?_⟩
+  refine prob_le_zero fun ox ⟨w, _, hw⟩ => hw ⟨fun _ => False, prob_le_zero fun _ h => h, ?_⟩
   unfold commitMoment
   refine moment_le_one
     (fun d c => enc ((TAlg.run (Mh w) (ox.1, (adv ox.1 ox.2 w, d), TAlg.run (Mw w) (adv ox.1 ox.2 w, d)) : TRoot)
@@ -518,11 +533,13 @@ theorem twOutsource : OutsourceWithinEgress tw twμ 0 := by
   exact ⟨f, fun i => ⟨rfl, rfl, by simp⟩⟩
 
 theorem twService : ServiceSound tw twRound 2 twReg twVerdict twDev 0 := fun _ =>
-  prob_le_zero fun _ h => h.2 h.1
+  prob_le_zero fun _ h => h.2 fun w => ⟨Set.mem_univ _, h.1.1 w⟩
 
 theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _ _ _ _ => by
-  show ∑ _b : Fin 2, ((0 : ℝ) + 0) ≤ 0
+  show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0
   simp
+
+theorem twAnswersFit : AnswersFit tw twRound 2 twVerdict twDev twSel twPd := fun _ _ _ hv b _ r => hv.2 b r
 
 /-- The extractor's advice at round `w`: the coins of the rounds before `w`, which is all the round's state reads
 besides the oracle (`Unit` here). -/
@@ -548,15 +565,19 @@ theorem fill_past (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w v : Fin 2) (hv : 
     fill (past o x w) v = x v := by
   simp [fill, past, show v < w from hv]
 
-/-- Round `w`'s root, recomputed from the advice and the dither: the prover's own work. -/
+/-- The state sampling block `w`'s work starts from, recomputed from the advice: the prover's own commit phase. -/
+noncomputable def stOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv) : A.St :=
+  (TAlg.run (A.commit w) ((), A.state () (fill p) w)).1
+
+/-- Sampling block `w`'s root, recomputed from the advice and the dither: the prover's own commit phase and work. -/
 noncomputable def rootOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv × TDraw) : TRoot :=
-  (TAlg.run (A.work w) ((), A.state () (fill p.1) w, p.2)).2
+  (TAlg.run (A.work w) ((), stOf A w p.1, p.2)).2
 
 theorem rootOf_past (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w : Fin 2) :
     rootOf A w (past o x w, (x w).1) = A.root o x w := by
   cases o
-  show (TAlg.run (A.work w) ((), A.state () (fill (past () x w)) w, (x w).1)).2 =
-    (TAlg.run (A.work w) ((), A.state () x w, (x w).1)).2
+  show (TAlg.run (A.work w) ((), (TAlg.run (A.commit w) ((), A.state () (fill (past () x w)) w)).1, (x w).1)).2 =
+    (TAlg.run (A.work w) ((), (TAlg.run (A.commit w) ((), A.state () x w)).1, (x w).1)).2
   rw [Pouw.SecurityProofs.ShaRealize.state_congr A () w fun v hv => fill_past () x w v hv]
 
 /-- The root cells round `w`'s work varies: the MAC and hash units the machine charges it. -/
@@ -566,12 +587,12 @@ noncomputable def cw (A : Prover tw twRound 2) (w : Fin 2) : ℕ :=
 theorem mw_card_le (A : Prover tw twRound 2) (w : Fin 2) :
     (nonconst fun (p : twAdv × TDraw) (i : Fin 2) (_ _ : Fin 1) => enc (rootOf A w p i 0 0)).card ≤ cw A w :=
   card_le_card (nonconst_mono fun _ x y hxy =>
-    ⟨((), A.state () (fill x.1) w, x.2), ((), A.state () (fill y.1) w, y.2), fun he => hxy (congrArg enc he)⟩)
+    ⟨((), stOf A w x.1, x.2), ((), stOf A w y.1, y.2), fun he => hxy (congrArg enc he)⟩)
 
 theorem mh_card_le (A : Prover tw twRound 2) (w : Fin 2) :
     (nonconst fun p : Unit × (twAdv × TDraw) × TTr => rootOf A w p.2.1).card ≤ cw A w :=
   card_le_card (nonconst_mono fun _ x y hxy =>
-    ⟨((), A.state () (fill x.2.1.1) w, x.2.1.2), ((), A.state () (fill y.2.1.1) w, y.2.1.2), hxy⟩)
+    ⟨((), stOf A w x.2.1.1, x.2.1.2), ((), stOf A w y.2.1.1, y.2.1.2), hxy⟩)
 
 theorem mh_shape (S : Type) (hI : (Unit × (twAdv × TDraw) × TTr) = (Unit × (S × TDraw)))
     (hO : TRoot = (S × TRoot)) : False := by
@@ -614,7 +635,7 @@ noncomputable def mhX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (Unit × (twA
     simpa using this
   work S hI h _ := (mh_shape S hI h).elim
 
-theorem twExtract : ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) := by
+theorem twExtract : ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) := by
   intro _ _ _ _ _ A
   refine ⟨twAdv, past, mwX A, mhX A, adv_inj, fun o x x' w hx => ?_, fun o x w => rootOf_past A o x w,
     fun o x _ r => ?_, fun o x w => ?_, ?_⟩
@@ -625,23 +646,27 @@ theorem twExtract : ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) :
     · rfl
   · show ∑ w, (TAlg.use (mwX A w) (past o x w, (x w).1) r +
         TAlg.use (mhX A w) (o, (past o x w, (x w).1), TAlg.run (mwX A w) (past o x w, (x w).1)) r) ≤
-      ∑ w, TAlg.use (A.work w) (A.workIn o x w) r + 0
+      ∑ w, (TAlg.use (A.commit w) (A.commitIn o x w) r + TAlg.use (A.work w) (A.workIn o x w) r) + 0
     rw [add_zero]
     refine sum_le_sum fun w _ => ?_
     have hw : (cw A w : ℝ) ≤ TAlg.use (A.work w) (A.workIn o x w) 0 ∧
         (cw A w : ℝ) ≤ TAlg.use (A.work w) (A.workIn o x w) 1 :=
       TAlg.work (A.work w) A.St rfl rfl (A.workIn o x w)
     have h2 := TAlg.use_nonneg (A.work w) (A.workIn o x w) r
+    have h3 := TAlg.use_nonneg (A.commit w) (A.commitIn o x w) r
     show (if r = 0 then (cw A w : ℝ) else 0) + (if r = 1 then (cw A w : ℝ) else 0) ≤
-      TAlg.use (A.work w) (A.workIn o x w) r
-    fin_cases r
-    · simpa using hw.1
-    · simpa using hw.2
-    · simpa using h2
+      TAlg.use (A.commit w) (A.commitIn o x w) r + TAlg.use (A.work w) (A.workIn o x w) r
+    split_ifs with h0 h1 h1
+    · exact absurd (h0.symm.trans h1) (by decide)
+    · subst h0
+      linarith [hw.1]
+    · subst h1
+      linarith [hw.2]
+    · linarith
   · show (0 : ℝ) + 0 ≤ 0
     norm_num
   · refine prob_le_zero fun ox ⟨hacc, _, w, hw⟩ => hw ⟨?_, ?_⟩
-    · have ha := (twAccept_iff _ _ _ _ _ _).1 (hacc w)
+    · have ha := (twAccept_iff _ _ _ _ _ _).1 (hacc w).2
       refine (twOk_iff _ _ _ _).2 ?_
       exact (congrArg (fun r : TRoot => enc (r (ox.2 w).2 0 0)) (rootOf_past A ox.1 ox.2 w)).trans
         (ha.1.trans ha.2)
@@ -651,6 +676,25 @@ theorem twExtract : ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) :
 end Premises
 
 section Honest
+
+theorem card_nonconst_const {X α : Type} {f : X → Fin 2 → Fin 1 → Fin 1 → α} (hf : ∀ x y, f x = f y) :
+    ((nonconst f).card : ℝ) = 0 := by
+  have : nonconst f = ∅ := eq_empty_of_forall_notMem fun c hc => by
+    obtain ⟨x, y, h⟩ := mem_nonconst.1 hc
+    exact h (by rw [hf x y])
+  rw [this, card_empty, Nat.cast_zero]
+
+/-- A constant program: it outputs `v` at no use and no calls. No cell of its output varies, so no law charges it. -/
+noncomputable def constAlg {I O : Type} (v : O) : TAlg I O where
+  run _ := v
+  use _ _ := 0
+  use_nonneg _ _ := le_rfl
+  calls _ := 0
+  calls_nonneg _ := le_rfl
+  calls_le _ := le_rfl
+  words _ _ := le_of_eq (card_nonconst_const fun _ _ => rfl)
+  roots _ _ := le_of_eq (card_nonconst_const fun _ _ => rfl)
+  work _ _ _ _ := ⟨le_of_eq (card_nonconst_const fun _ _ => rfl), le_of_eq (card_nonconst_const fun _ _ => rfl)⟩
 
 /-- The honest words at the dither `d`: word `i` is `d i`. -/
 def hw (d : TDraw) : TTr := fun i _ _ => ((d i : ℕ) : Word)
@@ -684,27 +728,34 @@ noncomputable def hAnswer (b : Fin 2) : TAlg (Unit × TTr × (Fin 2 → TDraw ×
   roots h _ := absurd (congrArg Nat.card h) (by rw [card_ans, card_troot]; omega)
   work S _ h _ := absurd (congrArg Nat.card h) (by rw [card_ans, Nat.card_prod, card_troot]; omega)
 
-/-- **The honest prover**: every sampling block computes the words and commits them, keeps the words as its state,
-and opens the checked one. -/
+/-- **The honest prover**: every sampling block's commit phase commits the zero instance, its work computes the words
+and commits them, keeping the words as its state, and its answer opens the checked one. -/
 noncomputable def honest : Prover tw twRound 2 where
   St := TTr
   start := hw fun _ => 0
+  commit _ := constAlg (hw fun _ => 0, twInst)
   work _ := hWork
   absorb _ s _ := s
   answer b := hAnswer b
 
 theorem honest_accepted (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.Accepted twReg o x := fun w =>
-  (twAccept_iff _ _ _ _ _ _).2 ⟨enc_dec ((x w).1 (x w).2), rfl⟩
+  ⟨Set.mem_univ _, (twAccept_iff _ _ _ _ _ _).2 ⟨enc_dec ((x w).1 (x w).2), rfl⟩⟩
+
+theorem honest_passes (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.Passes twVerdict twDev o x :=
+  ⟨fun w => (honest_accepted o x w).2, fun _ _ => show (0 : ℝ) ≤ 1 * 8 by norm_num⟩
 
 theorem honest_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.timedUse o x = twPd.hon := by
   funext r
-  show ∑ _b : Fin 2, (if r = 2 then (1 : ℝ) else 2) = twHon r
+  show ∑ _b : Fin 2, ((0 : ℝ) + if r = 2 then (1 : ℝ) else 2) = twHon r
   unfold twHon
   split_ifs <;> norm_num
 
 theorem honest_calls (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.calls o x ≤ twQ := by
-  show ∑ _b : Fin 2, (2 : ℝ) ≤ twQ
+  show ∑ _b : Fin 2, ((0 : ℝ) + 2) ≤ twQ
   norm_num [twQ]
+
+theorem honest_withinCap (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.WithinCap twSel twQ o x :=
+  ⟨honest_calls o x, fun _ _ => show (0 : ℝ) ≤ twQ by norm_num [twQ]⟩
 
 end Honest
 
@@ -712,9 +763,8 @@ section Witness
 
 /-- The headline's error at the witness, prover by prover (`WorkSound`'s `ε_A`): `1/7 + ln 2 / 2`. -/
 noncomputable def twε (A : Prover tw twRound 2) : ℝ :=
-  epsWorkSound (fun w => twHmm (twReg w) + twHsha (twReg w) + twHo (twReg w)) (fun w => twHmm (twReg w))
-      (fun w => twHsha (twReg w)) twη twδ 0 0 +
-    (∑ r, twμ r * twξ A r) / ∑ w, (twHmm (twReg w) + twHsha (twReg w) + twHo (twReg w))
+  epsWorkSound (fun w => twHmm w + twHsha w + twHo w) twHmm twHsha twη twδ 0 0 +
+    (∑ r, twμ r * twξ A r) / ∑ w, (twHmm w + twHsha w + twHo w)
 
 /-- The headline's probability at the witness, prover by prover (`WorkSound`'s `κ_A`): `δ = 1/2`. -/
 noncomputable def twκ (_ : Prover tw twRound 2) : ℝ := twδ + 0 + 0 + 0 + ((2 : ℕ) : ℝ) * (0 + 0)
@@ -730,45 +780,44 @@ theorem twκ_lt (A : Prover tw twRound 2) : twκ A < 1 := by
   norm_num [twκ, twδ]
 
 /-- **The witness statement** (RT-LEAN L7, RT-LEAN-2 L38): every premise of `WorkSound`, in its order, at the witness
-machine `tw`, round `twRound` and period `twPd`, with `k = 2`, `Reg` every instance, `μ = (2, 1, 1)`,
-`H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1`, `η = 1/7`, `δ = 1/2`, `β = K = κ_S = 0`, the cap `Q = 8`,
-`κ_dmm = κ_dsha = 0`, and for every prover `B_adv = |Adv|`, `ξ = 0`, `κ_x = 0` and `κ_sha = 0`; then the
-conclusion's bounds are nontrivial for every prover, `ε_A < 1` and `κ_A < 1`; and the honest prover passes on every
-oracle and coins, its rounds' timed use is the period's whole honest use, and its oracle calls are within the cap. -/
+machine `tw`, protocol `twRound` and period `twPd`, with `k = 2` sampling blocks, every instance registrable for each
+(`twReg`), `μ = (2, 1, 1)`, `H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1` a block, `η = 1/7`, `δ = 1/2`,
+`β = K = κ_S = 0`, the cap `Q = 8`, every check coin selected (`twSel`), `κ_dmm = κ_dsha = 0`, and for every prover
+`B_adv = |Adv|`, `ξ = 0`, `κ_x = 0` and `κ_sha = 0`; then the conclusion's bounds are nontrivial for every prover,
+`ε_A < 1` and `κ_A < 1`; and the honest prover passes on every oracle and coins, its sampling blocks' timed use is the
+period's whole honest use, and its run is within the cap, its answers' calls included. -/
 def WitnessHolds : Prop :=
-  (∀ w, twReg w ∈ (Set.univ : Set twRound.Inst)) ∧ twPd.DualOpt twμ 1 ∧
-    (∀ a ∈ (Set.univ : Set twRound.Inst),
-      0 < twHmm a ∧ 0 < twHsha a ∧ 0 ≤ twHo a ∧ twHmm a ≤ twHmm a ∧ twHsha a ≤ twHsha a) ∧
-    ∑ w, (twHmm (twReg w) + twHsha (twReg w) + twHo (twReg w)) = ∑ r, twμ r * twPd.hon r ∧
+  twPd.DualOpt twμ 1 ∧
+    (∀ w, 0 < twHmm w ∧ 0 < twHsha w ∧ 0 ≤ twHo w ∧ twHmm w ≤ twHmm w ∧ twHsha w ≤ twHsha w) ∧
+    ∑ w, (twHmm w + twHsha w + twHo w) = ∑ r, twμ r * twPd.hon r ∧
     0 < twη ∧ 0 < twδ ∧ twδ ≤ 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0 ∧ (∀ A r, 0 ≤ twξ A r) ∧
     (∀ _B : ℕ, (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0) ∧ (∃ r, 0 < tw.callUse r ∧ twPd.cap r ≤ twQ * tw.callUse r) ∧
     tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
-    SAKMatmul tw twRound twμ Set.univ twHmm (fun a => twη * (twHmm a + twHsha a + twHo a) / twHmm a)
-      (fun _ => 0) ∧
-    ShaSpeed tw twRound 2 twReg twμ twHsha (fun a => twη * (twHmm a + twHsha a + twHo a) / twHsha a)
+    (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
+      (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
+    ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
       (fun _ => 0) (fun _ => 0) ∧
     OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
-    ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧
-    ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) ∧
+    ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
+    ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
     (∀ A, twε A < 1 ∧ twκ A < 1) ∧
-    ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧ honest.calls o x ≤ twQ
+    ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧ honest.WithinCap twSel twQ o x
 
 theorem witness : WitnessHolds :=
-  ⟨fun _ => Set.mem_univ _, twDual,
-    fun _ _ => ⟨by norm_num [twHmm], by norm_num [twHsha], by norm_num [twHo], le_rfl, le_rfl⟩, twCost,
+  ⟨twDual, fun _ => ⟨by norm_num [twHmm], by norm_num [twHsha], by norm_num [twHo], le_rfl, le_rfl⟩, twCost,
     by norm_num [twη], by norm_num [twδ], by norm_num [twδ], le_rfl, le_rfl, fun _ _ => le_rfl,
     fun _ => ⟨le_rfl, le_rfl⟩, twCap, tw_G1, tw_G2, tw_G3, trivial, trivial, twSAK, twShaSpeed, twOutsource,
-    twService, twImport, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
-    fun o x => ⟨honest_accepted o x, honest_timedUse o x, honest_calls o x⟩⟩
+    twService, twImport, twAnswersFit, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
+    fun o x => ⟨honest_passes o x, honest_timedUse o x, honest_withinCap o x⟩⟩
 
 /-- **The headline at the witness**: `WorkSound`'s conclusion from `witness`. -/
 theorem witness_freed :
     FreedSound tw twRound 2 twVerdict twDev twPd 1 twε (∑ r, twμ r * (1 * twPd.hon r)) twκ := by
-  obtain ⟨hreg, hdual, hinst, hC, hη, hδ, hδ1, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
-    hsvc, himp, hext, -, -⟩ := witness
-  exact Pouw.SecurityProofs.Dither.WorkSound tw twRound 2 Set.univ twReg Unit twVerdict twDev twPd twμ twHmm twHsha
-    twHo twHmm twHsha twη twδ 0 0 0 twQ (fun _ => 0) (fun _ => 0) twBadv twξ (fun _ => 0) (fun _ => 0) hreg hdual
-    hinst hC hη hδ hδ1 hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hext
+  obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,
+    hsvc, himp, hans, hext, -, -⟩ := witness
+  exact Pouw.SecurityProofs.Dither.WorkSound tw twRound 2 twReg Prop twVerdict twDev twPd twμ twHmm twHsha
+    twHo twHmm twHsha twη twδ 0 0 0 twQ (fun _ => 0) (fun _ => 0) twSel twBadv twξ (fun _ => 0) (fun _ => 0) hdual
+    hinst hC hη hδ hδ1 hβ hK hξ hdeg hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hsvc himp hans hext
 
 end Witness
 
