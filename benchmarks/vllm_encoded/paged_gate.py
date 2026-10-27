@@ -57,7 +57,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
 
     - `pinned` (a library at the remote audit's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
       (the remote audit's payloads j = 0 and 20 under their bound keys) and its `codec.coin` blocks (the same payloads
-      appended under the append coin's form b_j(c_a), PROTOCOL.md §3), each appended as one token's K and V at the
+      appended under the append coin's form b_j(c_a), `codec.binding`), each appended as one token's K and V at the
       slot and layer whose store-order block is j (store base 0) under b_j, and at another slot with the index
       difference folded into its offset (b_j + tau W (j − there)): the token-layer's words equal the pinned block (its
       SHA-512 and first word) both times, so a page encodes at its store index whatever slot holds it. The `codec.coin`
@@ -216,9 +216,9 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
 
 def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.Layout, bt, btd, lens, q, rng,
                   main_rc, log) -> dict:
-    """The plaintext flag (deferred residency, remote_bandwidth's PROTOCOL.md §4) on `bound_gate`'s random caches: each
-    slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every
-    decode's tiles mix both.
+    """The plaintext flag (deferred residency, remote_bandwidth's `audit.Params.deferred`) on `bound_gate`'s random
+    caches: each slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at
+    random, so every decode's tiles mix both.
 
     - `cache`: the mixed cache holds the plain cache's words at the flagged slots and the all-encoded cache's at the
       rest, and the flags are what the appends wrote; `pg_append_multi` (both forms, the flags in its table) writes the

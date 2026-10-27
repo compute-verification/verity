@@ -85,8 +85,8 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
 
 def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> None:  # noqa: F811
     """`Session(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
-    (`PROTOCOL.md` §5), and it was optional: left out, it failed open.  Two sessions run at once over one clock, both
-    told they may start at 0, as only a verifier that runs them at once would; each block is read once a pass and
+    (`RemoteAudit.Session`), and it was optional: left out, it failed open.  Two sessions run at once over one clock,
+    both told they may start at 0, as only a verifier that runs them at once would; each block is read once a pass and
     serves a receipt of each chain.  Both are accepted with every receipt opened, and the two records together certify
     twice the reads made.  Fixed: every session names its `not_before_ns`, and one that names the last record's end
     waits it out."""

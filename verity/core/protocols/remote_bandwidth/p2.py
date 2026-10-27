@@ -37,7 +37,7 @@ at PoUS's setup, so a block on its path is C*'s block j, by SHA-512's collision 
 setup: a session appends nothing to it (`append` rejects with `append`).  `audit.Rebuild` refuses a P2 codec, so
 `audit.ledger` refuses a P2 record until μ_rebuild at P2's encode is stated (`codec.P2Codec`).
 
-The decode kernel's side of the receipts is `PROTOCOL.md` §11: per block it decodes, π from the pass's sign bits, and
+The decode kernel's side of the receipts is the table above: per block it decodes, π from the pass's sign bits, and
 per unit σ and y.  `Sketcher` is its CPU reference.
 """
 
@@ -154,7 +154,7 @@ def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
 class Sketcher(receipts.SketchReceipter):
     """sketch-sha512 receipts of P2 units under one pass's seed at `rows` = k_s: `sketcher(g, unit)` is `y` of unit g
     from its 8,224 bytes, `block(j, b)` block j's partial π, `total` the partials of a unit summed, and
-    `receipt(g, σ)` y from them, the decode's side (`PROTOCOL.md` §11)."""
+    `receipt(g, σ)` y from them, the decode's side (the module's table)."""
 
     def __init__(self, seed: bytes, rows: int = receipts.SKETCH_ROWS) -> None:
         super().__init__(seed, rows, UNIT_BYTES)

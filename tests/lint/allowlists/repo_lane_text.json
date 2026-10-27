@@ -1509,7 +1509,6 @@
     {"file": "verity/core/protocols/pouw/tests/test_pouw_ncp.py", "count": 1},
     {"file": "verity/core/protocols/pouw/tests/test_pouw_pearl_c_period.py", "count": 2},
     {"file": "verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py", "count": 1},
-    {"file": "verity/core/protocols/remote_bandwidth/PROTOCOL.md", "count": 50},
     {"file": "verity/core/protocols/remote_bandwidth/README.md", "count": 5},
     {"file": "verity/core/protocols/remote_bandwidth/codec.py", "count": 1},
     {"file": "verity/core/protocols/remote_bandwidth/lean/tests/replay.py", "count": 2},

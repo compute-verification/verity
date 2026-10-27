@@ -15,7 +15,8 @@ the period's live secret and the registration's nonce, drawn once. Its clock tim
   and the registration's `not_before_ns` at the payload root's;
 - the start at a reading of its clock;
 - each boundary at the reading its timer fires at, `next_boundary_ns`, whether or not the window's roots are in: the
-  pass in flight then is its window's last, and the next window's first is asked once its root is in (`audit` §4);
+  pass in flight then is its window's last, and the next window's first is asked once its root is in
+  (`audit.Session.boundary`);
 - each close at its timer too, at the window's deadline `D_t + 1`, or at a reading for a window the next window's
   first root made final.
 

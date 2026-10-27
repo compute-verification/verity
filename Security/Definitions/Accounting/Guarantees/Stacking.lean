@@ -87,7 +87,7 @@ def CarrierBits : Prop :=
 /-- **The remote audit at the deployed parameters with a store per pass, with stacking: carriers are rebuilds of
 bounded size in every pass, and every appended block is keyed after its writers chose it.**
 `RemoteSessionConservationSketchDeployed`'s game and bound, with each pass on its own store, made by the append-coin
-rule (`Accounting.appendCoinBlocks`; remote_bandwidth's PROTOCOL.md §3–§4). The store is `T` appends of `M` block
+rule (`Accounting.appendCoinBlocks`; `RemoteAudit.Codec.binding`). The store is `T` appends of `M` block
 positions each, the registration first, whose coin is the seed. Append `a`'s choices `choose c ω a κ_<a` (its
 payloads, which may be a circuit's values over other blocks' encodings, their padding, the run inputs behind them, how
 many blocks, the schedule up to it) read the codec `ω`, the coins of the appends before it and the prefix `c`; its own
@@ -135,11 +135,12 @@ carrier is one it computes rather than reads at its position, a rebuild.
   append's coin its encoding is fixed: a block decodes only under its digest and coin, a coin is drawn once, and a
   re-sent root is refused. What its payload carries about other blocks is its carrier, charged in `C`.
 * **Outside the game.** Two choices can still follow a coin and matter. The layout `slot c` reads the prefix only, the
-  protocol stating frees, writes and plans as functions of the served steps, fixed before the coins (PROTOCOL.md §8):
-  a layout selected by encodings after their coins (which blocks are freed or planned, or a re-key rather than a free
-  at the cap, steered through run inputs or other inputs to the served steps) is a choice among the layouts the
-  writers can steer to, which this game doesn't pay. And registrations: the game's seed is one draw, so a node that
-  registers `R` times (`Registry.drawn`) keeps one of `R` seeds and fails at most `R` times this bound.
+  protocol stating frees, writes and plans as functions of the served steps, fixed before the coins
+  (`RemoteAudit.Schedule`): a layout selected by encodings after their coins (which blocks are freed or planned, or a
+  re-key rather than a free at the cap, steered through run inputs or other inputs to the served steps) is a choice
+  among the layouts the writers can steer to, which this game doesn't pay. And registrations: the game's seed is one
+  draw, so a node that registers `R` times (`Registry.drawn`) keeps one of `R` seeds and fails at most `R` times this
+  bound.
 * **Life.** `life` is the life of a carrier's whole provenance: the circuit is each carrier's provenance back to values
   that depend on no store sector, and the property's isolation is what bounds it by the inputs and units of `life`
   windows. A carrier copied forward from older ones is one carrier whose life is the chain's, from its first write. A

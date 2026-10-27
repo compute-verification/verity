@@ -1,6 +1,7 @@
 """One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand chunks, its
-openings proved in zero knowledge through the proof service in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
-deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
+openings proved in zero knowledge through the proof service in place of opened
+(`RemoteAudit.Window.checkOpening`'s checks but the tile's), so that the verifier receives no chunk bytes; and the
+prover's cost per opening.
 
     python benchmarks/one_stage/a8.py --bin flock-circuit --lean flock-verify --out DIR [--blocks 4096] [--plan 64]
       [--samples 16] [--points 1,4,16] [--arms nofw,fw] [--cold 1] [--gpu [--lease CMD]] [--no-audit]
@@ -18,8 +19,8 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   `verify --zk --partition --program`.
 * **What the verifier opens.** Of each proof block its public rows (``pub`` and ``signs``, which it derives itself:
   `opening.public`) and its verdict row ``o0``, under the salts the prover sends for those three rows. It holds the
-  proof block's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear (§8, "What the
-  plan shows"), so the prover sends the plan row's salt with the plan. It decides the window on the verdicts
+  proof block's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear, so the
+  prover sends the plan row's salt with the plan. It decides the window on the verdicts
   (`opening.Session.decide`).
 * **Rounds.** ``honest``, and ``tampered``: the same session (the same coins, so the same draws), the store's chunk at the
   first draw replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its

@@ -11,15 +11,15 @@ pseudorandom pattern.  The tests replay the schedule against `audit.Session` (`t
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
 
-`live_mu` and `live_best_interval` are the steady state of the alternative `PROTOCOL.md`'s appendix weighs: a live coin a
-pass and no chain, so that passes are ordered by the clock alone.
+`live_mu` and `live_best_interval` are the steady state of the alternative the chain replaces: a live coin a pass and
+no chain, so that passes are ordered by the clock alone.
 
-`stated` is the claim of `PROTOCOL.md` §1 and §10 read through `audit.ledger`: the honest prover's session on one
+`stated` is the stated claim read through `audit.ledger`: the honest prover's session on one
 node at the node's R and S_chip, under the default codec at the node's stated squaring ceiling, every window's whole
 γ_t and the horizon's.  `spanning` is the store that spans every tier in proportion to its read rate, and
 `store_floor` the store below which no T brings every window under 1%.
 
-`sketch_reading` is where sketch-sha512's bound is read (`PROTOCOL.md` §4): the rank r* that minimizes `sketch_rate`,
+`sketch_reading` is where sketch-sha512's bound is read (`SketchRank`): the rank r* that minimizes `sketch_rate`,
 the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r beside a fresh key's chance of signs of rank
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
 is a session's, and `grind_compressions` what one grinding try costs.
@@ -486,7 +486,7 @@ def _grid() -> None:
                           for w in (1, 20, t_s)))
     print()
     hbm_rate = GPUS * GPU_READ_BYTES_PER_S
-    print(f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
+    print(f"# the stated claim, T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
           f"the whole γ, on one node of {GPUS} RTX PRO 6000s and their host (R = {READ_BYTES_PER_S / 1e12:.4f} TB/s "
           f"measured, {SPEC_BYTES_PER_S / 1e12:.4f} at spec, S_chip = {CHIP_BYTES:,} B), the default codec at the node's "
@@ -539,7 +539,7 @@ def _grid() -> None:
         row.append(f"{live_mu(live_best_interval(20 * MS, **kj), 20 * MS, **kj):.2%}")
     print("| live coins | " + " | ".join(row) + " |")
     print()
-    print(f"# sketch-sha512's rank bound (§4): P(rank ≤ r) of a uniform ±1 rows × {SECTOR_BYTES} block of one sector's "
+    print(f"# sketch-sha512's rank bound: P(rank ≤ r) of a uniform ±1 rows × {SECTOR_BYTES} block of one sector's "
           f"signs over Q, bounded through F2; rate(r) = 2^-8r + {SECTORS}·P(rank ≤ r − 1) a SHA-512 compression; r* "
           "minimizes it")
     print("| rows | r | P(rank ≤ r), log2 | rate(r), log2 |")

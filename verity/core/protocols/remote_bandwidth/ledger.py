@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
+"""The remote bandwidth audit's declared outputs from an accepted session's
 record: γ against both R, per window and over the session, and the memory line, a session total in three forms, each
 with its ε and δ.  They are computed here and nowhere else: the benchmark and every other consumer reads them from
 `declared`.
@@ -218,7 +218,7 @@ def binding(record: audit.Record, node: Node) -> float:
     prover is sent no coin commitment before the session's end (`coins.Released`, `audit.Session.disclose`), so
     nothing it holds before a window's openings coin is released depends on that coin; the statement that the play
     then fixes each window's roots by its cut is not yet in Lean, and this charge takes split_t as 0 (the gap
-    `binding-split`, `PROTOCOL.md` §8)."""
+    `binding-split`)."""
     if record.samples is None or record.append_coins is None:
         raise ValueError("the binding term is charged at the session's bounds, its draw cap and its append coins, "
                          "which a record no session made doesn't state")

@@ -9,5 +9,6 @@ lifecycle, the record, its γ terms and pacing (a live coin every k passes) are 
 both R and the memory line, are `ledger`'s, from the record; `memory_map` is serving's record of the KV blocks it wrote
 and freed (memory-map/v1) and turns it into the audit's appends, releases and plan changes; `timing` simulates the
 honest schedule and evaluates the sketch's rank bound; `p2` is the audit over PoUS's P2-encoded weights store, its
-receipts of units of four 2,056-byte blocks, checked on PoUS's vk.  `PROTOCOL.md` is the specification.
+receipts of units of four 2,056-byte blocks, checked on PoUS's vk.  The verifier is the Lean package `lean/`
+(`RemoteAudit`), which these modules mirror (`README.md`).
 """

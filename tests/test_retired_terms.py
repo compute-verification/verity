@@ -75,7 +75,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/network/tests/period_case.py": "#4721 rewrites its lines",
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#4721 adds lines",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
-    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/core/protocols/sampled_proofs/README.md": "#4637 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",

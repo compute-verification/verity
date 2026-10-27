@@ -1,154 +1,150 @@
 # Remote bandwidth audit (`verity.core.protocols.remote_bandwidth`)
 
-The remote bandwidth audit v0: a verifier with no hardware at the site certifies, window by window, how many reads of a
-node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
+The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies, window
+by window, how many reads of a node's registered store the node made. The node (its GPUs' HBM, its host's DRAM, its
+CPUs and NICs) is the prover, and none of its hardware is trusted. The store is 4 KiB chunks encoded under a codec seed
+drawn after the payload root (kv/v0: Sloth over 2^1024 − 105, masked, k = 3). Each window's challenge and openings
+coin are live coins from the proof service's one challenger. Inside a window the passes are chained: each pass's seed
+is derived from the window's challenge and the prover's previous root, so a read serves at most one receipt of the
+session. Each pass commits a receipt of every chunk in its plan. The verifier draws `samples` receipts a window after
+its roots are final and checks their openings. An accepted session certifies its correct receipts' reads, at least
+(1 − γ) of the node's read capacity R over the session's span, and a memory line: the registered bytes the session
+shows held in node memory, at least (1 − ε)·N·b except with δ. The same audit runs over PoUS's P2-encoded weights
+store (`p2.py`), with units of four 2,056-byte chunks.
 
-## Which side is the definition
+## The Lean verifier
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
-verifier, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
-(`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
-the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
-`k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
-receipts, openings, draws).
-Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
-`Security/Properties/RemoteAudit.lean`.
+The verifier is the Lean package `lean/` (`RemoteAudit`). Python mirrors it, and `lean/tests/`' difftest holds the two
+together: every event's result, the session's outcome and its record, the registry and the pieces (registration, codec
+seed, codec, plans, receipts, openings, draws). Where they differ, the Python is wrong.
 
-`benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
-is the verifier: it decides each registration, event and window, an accepted session's record is the one
-it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
-registration, event, window verdict or record field on which they differ refuses the session at that window as
-`disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
-runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean is the verifier on these
-grounds:
+| Lean | what it decides | Python held to it |
+| --- | --- | --- |
+| `RemoteAudit.Protocol` | the session behind the core interface (`Core.Protocol`); `certify` publishes `q_bytes` and `eps` | `period.py` |
+| `RemoteAudit.Verifier` | the process `remote-audit-verifier`: every registration, event and window, and the session's record | `benchmarks/remote_session/verifier.py` runs it |
+| `RemoteAudit.Session` | a session's bookkeeping, event by event, on the verifier's clock | `audit.Session` |
+| `RemoteAudit.Window` | `verifyWindow`: a window's draw and its openings' checks | `audit.Session.close`, `verify` |
+| `RemoteAudit.Registry` | one live registration a node, `registry/v0` | `audit.Registry` |
+| `RemoteAudit.Receipts`, `Plan`, `Codec`, `Wire` | seeds, the chain over appends, plans, receipts, trees, decoding and the openings frame | `receipts.py`, `codec.py`, `wire.py` |
+| `RemoteAudit.Shared`, `Flight` | one openings coin over several windows; a paced session at two windows in flight | `audit.Params.groups_per_coin`, `audit.Pace` |
+| `RemoteAudit.Pooled`, `Line` | the openings' pooled bound in exact rationals; the memory line of record | `pooled.py`, `line.py` |
+| `RemoteAudit.Schedule` | the schedule check: each pass's plan is a function of the published schedule | `schedule.py` |
+| `RemoteAudit.Store`, `Unboxed` | whether a registered store is the one a pinned model fixes | `store.py` |
+| `RemoteAudit.P2`, `P2Session` | a P2 store's registration, receipts and openings, and its session | `p2.py`, `p2_party.py` |
 
-- the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
-  (k + 1)-th root is refused as `order` by both sessions. A transcript carries its session's pace. The Lean's record
-  holds every field the ledger reads, except four. The coins' commitment root is the books'. The block size is a
-  constant. The registration's receipt, bind, codec, layout and rows are bound by its digest, which the Lean's record
-  names. The integrity profile is a function of the Lean's lengths and draws at δ (`audit.window_profile`).
-- every recorded session in the store replays through both to the same verdict (`lean/tests/replay.py`), and to the
-  one it recorded wherever its `verifier.json` keeps enough to rebuild its events in turn: three sessions that failed
-  `few` don't keep their appends, and both verifiers refuse the same call of their replay.
-- the Python keeps running beside the Lean as the reference.
-- the protocol's properties are in `Security/Properties/`.
+The verifier's process is the verifier: an accepted session's record is the one it returns, and the ledger reads that
+record. The Python (`audit.Session`, `p2.Session`, `store.Binding`) runs beside it as the reference, and a verdict or
+record field on which the two differ refuses the session as `disagreement`.
 
-The driver's scheduling (when a boundary leaves, `Session.next_boundary_ns`), the plans the `memory` diagnostic
-reads, and the window and draw counts `verifier.json` keeps are still read from the books. The Lean checks the same
-plans event by event.
+What the Lean accepts is stated in `Security/Properties/RemoteAudit.lean` and `Security/Properties/RemoteAudit/`
+(`Properties.RemoteAudit`): `Coins` (draws openable, openings unread until drawn), `Live` (the live process is the
+session's run), `Shared`, `Pooled` (`PooledCovers`), `Line` (`LineHeld`, `LineHeldIdentity`, `LineCoversSession`),
+`Schedule` (`ScheduleChecked`, `ScheduleFixesLayout`; `steered_of_checked` under `ScheduleLayoutGap`) and `Component`
+(`AcceptIsVerified`, `LineHeldAtComponent`), with the chain, the
+plans' distinctness, the steps, the lifetime cap and released chunks staying out of later plans in
+`Properties.RemoteAudit` itself.
 
-The store binding (`store.py`) decides whether a registered store is the one a pinned model fixes (`verifier.py
---model`, and the gate line's `bound` check, `auditor_line.py`). Its decision from what the files hold is Lean's,
-`lean/RemoteAudit/Store.lean`: the verifier's Lean process takes the pin's bytes and the weights blocks' digests at
-startup (`bind`) and decides each hello (`hold`), its payload root's subtrees of 2^16 leaves on `--layout-workers`
-threads, and `Binding` beside it is the reference: a hello the two decide differently (the regions or reason, or the
-expected root) is refused as `disagreement`, and the gate line credits `bound` only where the Lean held the hello's
-root. `lean/tests/test_binding.py`'s difftest holds it to the Python, every refusal's reason compared: the pin from its
-file's bytes (`pinOf`, `modelPin`; the pin, a registry line, a registry's lines of a role and core's `models.json`), the
-canonical JSON and `checkpoint_sha512`, the payload salts (`storeSalt`), the payload root from the weights blocks'
-digests (`expectedRoot`, also against `audit.payload_tree`), the hello's decision (`hold`) and the two requests
-(`binding`). What stays Python only is reading the files: the pin's bytes, `check` (each pinned file's SHA-512), the
-safetensors headers and config.json, the arena's layout from them (`tensors`, `arena`) and the weights blocks' digests
-(`weight_digests`); the Lean takes those digests as given. It lives in this tree because a period's circuit is this
-tree's git hash (`verity/remote-bandwidth/v0 verifier tree
-<tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
-`bound`. A change to it, like any change here, gives later periods a new circuit.
+## Guarantees
 
-A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too (Daniel, 26 Oct: the trusted base is the
-compiled Lean verifier, which parses bytes of untrusted provenance, so Python is never trusted): the verifier's
-process holds the registration file's bytes, recomputes the registration's digest from its fields, reads the
-prover's request and every root and openings line as sent, and checks each opened unit's four blocks on the
-registered vk root (`lean/RemoteAudit/P2Session.lean`); C* is too large to read whole, and an opening is what is
-checked of it. `p2.Session` keeps the books beside it and can only veto: an event, a held store or an answer on which
-the two differ rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the coins
-the challenger releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
+The guarantees are in `Security/Definitions/Accounting/Guarantees/`, each proved as
+`Accounting.SecurityProofs.G : Accounting.Guarantees.G` and listed in `Security/lean-audit.json`:
 
-The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
-`recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
-read over each stretch of a paced session's groups, from their timings, the store, the on-chip storage, the node's
-rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
-W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
-(`lineOfRecordAt`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
-window's draws refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its draws' receipts and draws, each `g`
-windows' summed and refused unless `min(s, U)` and below 2^64, and at one window in flight no line), refused unless
-the record is of the node's registration given with it (`lineOfRegistered`), with the auditor's times and each
-group's reads by kind beside it; and
-`line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
-and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
-compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
+- **Conservation:** `RemoteSessionRunConservation` and `RemoteWindowRunConservation`, each with a `Relay` form
+  (`RateAuditDeployed.lean`), on `Bandwidth.Guarantees.AuditRO` applied per pass.
+- **The draws:** `RateWindowDraw`, `RateSessionDraw` and `HorizonSampling` (`RateAuditHorizon.lean`), and
+  `Remote.PooledDraw` on the deployed draw, with no hiding term (`RemoteDraw.lean`).
+- **The receipts:** `Remote.ReceiptsBindingOfCR` (`RemoteBinding.lean`); `RateAuditSketch`, `RateAuditTensorSketch`
+  and `RateSketchTable` (`RateAuditSketch.lean`); `Remote.SketchBoundSession` and `Remote.SketchBoundDeployed`
+  (`RemoteSketch.lean`), `Remote.SketchBoundLine` (`RemoteSketchLine.lean`) and `Remote.SketchBoundP2`
+  (`RemoteSketchP2.lean`).
+- **The memory line:** `Remote.Held`, `Remote.HeldOverTime` and `Remote.HeldOverTimeLinks`, each with a `Drawn` form,
+  and `Remote.LiveCoinsDrawn` (`RemoteHeld.lean`).
+- **Credit after the codec seed:** `DeclaredCircuitRequirement` (`DeclaredCircuit.lean`) and `RequirementMoved`
+  (`Requirement.lean`).
+
+Their named assumptions are `Accounting.Remote.Held.Assumptions` (`NoOutsideCompute`, `Identity`, `Links`, `Covers`,
+`Paced`, `SketchBoundAt`, `ChipCeiling`, `SquaringCeiling`, `Disks`), `Accounting.Remote.Draw.Assumptions` (`Live`,
+`Refused`, `Counted`) and, for the sketch, `Accounting.Assumptions.SketchRank` and `SketchHashBudget`. P2's
+`WorkHardnessP2` and `SquaringCeilingP2` are in `Security/Definitions/Accounting/Assumptions/RemoteP2.lean`.
+
+## Code
+
+- `audit.py`: the lifecycle. `register` and `Registry` (`register`, `session`, `close`, `live`, `drawn`), `Params`
+  and `Pace`, `Session` (`start`, `boundary`, `next_boundary_ns`, `append`, `release`, `receive`, `close`, `verify`,
+  `outcome`, `record`, `disclose`), the prover's `Prover` and `Store`, `Record` and `WindowRecord`, `window_profile`,
+  `payload_tree` and `append_tree`, and the ledger (`ledger`, `Ledger`, `pooled`, `floors`, `Rebuild`,
+  `RequirementLink`, `PostSeedVerdict`, `Scheduled`).
+- `receipts.py`: `seed`, `Plan` (`of`, `from_array`, `changed`, `digest`), the receipt kinds (`KINDS`: `sketch-sha512`,
+  the default, and `block-sha512`; `SketchReceipter`, `ROWS`), the chunk layout (`LAYOUTS`, `plan_of`) and the receipt
+  tree (`tree`, `leaf_receipt`, `verify_leaf`).
+- `codec.py`: `Codec` (`DEFAULT` `p1024/k3/masked`, `FALLBACK` `p1024/k2/masked`, and `p512/k2`), `key`, `encode`,
+  `decode`, and `P2Codec`.
+- `coins.py`: a session's live coins, one epoch of `sampled_proofs.challenger` (`Coins`, `Released`), released after
+  the root each follows, with the commitment and every opening disclosed only at the session's end
+  (`audit.Session.disclose`); `released_reason` holds the challenger's signed log to the session's record, and
+  `trusted` reads the auditor's session through `challenger.pinned_session`.
+- `ledger.py`: the declared outputs of an accepted session (`declared`): γ at the specified and measured R, per window
+  and over the session (`gamma`), and the memory line's snapshot, time-held and link-charged forms (`memory`) on the
+  verifier's `Node`, with their δ parts (`DELTA_PARTS`: `draw`, `binding`, `hiding`, `rejection`, `sketch`).
+- `monitoring.py`: the monitoring-period table (`table`, format `verity/remote-bandwidth-monitoring-period/v1`): one
+  accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's sessions, at δ = 1% and
+  10⁻⁶, pooled by `prCoin_count_le_choose`'s count bound (`pooled_step`; `short_sessions` in
+  `verity/core/protocols/pous/wipe_monitoring.py`, shared with the wipe's) and per window at δ/T (`per_window`).
+- `wire.py`: the openings frame (`encode_openings`, `openings_of`).
+- `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote, freed and withdrew, as the audit's
+  appends, releases and plan changes (`Replay`), and as the schedule the prover publishes (`schedule`).
+- `schedule.py`: the schedule check, without which `ledger` credits nothing after the codec seed.
+- `store.py`: a registered store bound to a pinned model (`read_pin`, `check`, `arena`, `Store`, `expected_root`,
+  `Binding.hold`). `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
+- `p2.py`, `p2_party.py`, `p2_lean.py`: the P2 store, a P2 session's verifier and challenger as a party of their own,
+  and the Lean verifier's process as that party runs it.
+- `period.py`, `session_parties.py`, `verifier_party.py`: one session a period behind the core interface, and the
+  session's verifier with its challenger, and its prover, as parties on separate machines.
+- `timing.py`: the honest schedule, the stated claim read through the ledger (`stated`), and where the sketch's rank
+  bound is read (`sketch_reading`, `sketch_failure`). `python -m verity.core.protocols.remote_bandwidth.timing`
+  prints the grid.
+- `line.py`, `pooled.py`: the memory line of record and the openings' pooled bound, beside their Lean.
+
+## Records and formats
+
+Every byte format is pinned by `tests/vectors.json`, and the Lean's by the difftest's vectors.
+
+- **Registration:** `Registration.digest` over the node, N, the payload root, the codec seed, the codec, the receipt
+  kind, `bind`, the chunk layout (`store-order/v0`) and the sketch's rows. Every session's coin commitment binds it,
+  and every session's chain starts from it.
+- **Coins:** `verity/remote-bandwidth/coins/v1`, epoch k a session's index over its registration, with the families
+  challenge, openings and append; a released coin is `(epoch, label, index, after, coin)` (`coins.Released`).
+- **The session's record:** `Record.public()` (the registration digest, the coin commitment's root, N, b, the receipt
+  kind, `bind`, the codec and its parameters, the layout, the rows, each window's passes, receipts and post-seed
+  receipts, the appends' chain, the lifetime cap, the draws' `samples` and the span), and each `WindowRecord`
+  (passes' lengths, steps, heads, the challenge's release, the deadline and the `IntegrityProfile`). `stale` stays in
+  the verifier's own record and is never published.
+- **The registry:** `registry/v0` (`Registry.to_json`), digests and outcomes only, never the verifier's secret.
+- **The memory map:** memory-map/v1 (`memory_map.py`), one line a step.
+- **The monitoring period:** `verity/remote-bandwidth-monitoring-period/v1` (`monitoring.table`).
+
+## Decided in Python only
+
+- γ and its terms (`ledger.py`), the timing grid and the stated claim (`timing.py`), and the sketch's rank bound at r*
+  (`timing.sketch_reading`), which `SketchRank` takes as a parameter.
+- The coin commitment's layout and the challenger's release log (`coins.py`): the Lean takes the released coins as
+  given.
+- Reading a pinned model's files (`store.py`'s `check`, `tensors`, `arena`, `weight_digests`): the Lean decides the
+  binding from the weights chunks' digests.
+- Encoding: the verifier only decodes.
 
 ## Replay
 
-`lean/tests/replay.py` replays a recorded session through both verifiers and compares their verdicts and reasons: a
-transcript (the difftest's case: every event, its clock, the coins and each window's openings, which
-`verifier.py --transcript DIR` writes for each session it runs) replays in full, a `receipt`, `codec` or path rejection
-included, and a remote session's `verifier.json`, which keeps no roots, plans, coins or openings, replays as the case
-its arrivals, steps, draws and parameters make (the module's docstring says how it is held to the recorded verdict).
+`lean/tests/replay.py` replays a recorded session through both verifiers and compares their verdicts and reasons. A
+transcript (every event, its clock, the coins and each window's openings, which `verifier.py --transcript DIR` writes)
+replays in full. A session's `verifier.json`, which keeps no roots, plans, coins or openings, replays as the case its
+arrivals, steps, draws and parameters make.
 
 ~~~text
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... --out ROWS.json
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
 ~~~
 
-A transcript that doesn't name its session's pace replays only with the pace its `verifier.json` gives
-(`--record`), matched by the transcript's sha256.
-
-## Code
-
-- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes, two
-  windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
-- `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
-  the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
-  (`Node`).
-- `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
-  process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
-  opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
-  log records the session's pin, on the verifier's own first-parent list of main (`trusted`). The prover gets the
-  coins in this order: each window's challenge as it is released, its value and the root it follows (`Released`); the
-  window's draws after its roots; and, once the session has its outcome and no root can follow, the commitment and
-  every released coin's opening (`audit.Session.disclose`; the remote session's `coins` after `ended`), which it
-  checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
-  prover holds none of it while the session runs (soundness's ruling of 27 Oct, `PROTOCOL.md` §4).
-- `receipts.py`: seeds, plans, receipts and their trees.
-- `codec.py`: the store's encoding (kv/v0).
-- `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
-  receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
-  reference), and openings checked on PoUS's `vk`. Its Lean is `lean/RemoteAudit/P2.lean`, held to it by
-  `lean/tests/test_p2.py`, and its session's is `lean/RemoteAudit/P2Session.lean`, of record.
-- `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
-  control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
-  or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
-  store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
-  the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
-  veto. `prove` is the prover's side of the channel.
-- `p2_lean.py`: the Lean verifier of record of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
-  it: built in `lean/` unless `--lean-exe` names a built one (without lake on the PATH, the one built there), a fresh
-  process each session. The standard library only, so the party runs as an auditor gate starts it (`python3 -s -E`).
-- `session_parties.py`: `period.session` as two parties of the deployment layer (`verity.core.deploy`): the verifier
-  and its challenger, on their own clock and coins, which time each root by its arrival (`Received.at`), disclose the
-  session's coins at its end (`audit.Session.disclose`) and finish with its answer and case; and the prover, on its
-  node's store (`capabilities["store"]`), which checks each challenge it was sent against them (`period.Prover.end`).
-- `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
-  (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
-- `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,
-  releases and plan changes, and as the schedule the prover publishes (`schedule`).
-- `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
-  verifier's plan of the published schedule at its step, the schedule is within the cap on its bits the session
-  committed before its coins (`audit.Params.schedule_cap`), and that cap is the layout's steering
-  (`audit.Session.scheduled`, `audit.Ledger.steering`). Of record in `lean/RemoteAudit/Schedule.lean`.
-- `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
-  lays out the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler
-  (`arena`, `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`).
-  `Binding.hold` decides a hello against it, the reference beside `lean/RemoteAudit/Store.lean`'s `bind` and `hold`,
-  which decide it in the verifier.
-  `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
-- `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
-- `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
-  sessions, at δ = 1% and 10⁻⁶: pooled by `prCoin_count_le_choose`'s count bound (all but M − 1 sessions certify;
-  `short_sessions` in `verity/core/protocols/pous/wipe_monitoring.py`, shared with the wipe's), with each session at
-  δ/T beside it. The deployment's machines and window are parameters.
-
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and
-`verity/core/protocols/remote_bandwidth/lean` (the difftest, the replay and the P2 party's sessions on the Lean of
-record, which build the Lean).
+`verity/core/protocols/remote_bandwidth/lean` (the difftest, the replay and the P2 party's sessions on the Lean
+verifier, which build the Lean).

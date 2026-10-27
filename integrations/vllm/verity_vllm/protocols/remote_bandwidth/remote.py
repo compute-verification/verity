@@ -19,10 +19,10 @@ pass          before each pass `Serving.advance` runs the engine's next step s a
               pass, checks the reply's ``first`` against the append's j and hands its coin c_a to `encode_append`,
               which encodes the blocks under b_j = codec.binding(d_j, j, key, c_a) (`audit.Store.encode`, the CPU
               reference of kv.cu's and paged.cu's per-block offset, or `DeviceEncoded.encode`, which hands b_j to
-              kv.cu) and tells the map the encode has landed: deferred residency (remote_bandwidth's ``PROTOCOL.md``
-              §4) records the blocks' writes in the line open then, the step before the first whose pass reads them
-              encoded, so a block step s completed joins the plans a step or more late (one pass in flight, so its
-              coin is back before step s + 1 runs: resident from s + 1) and is read as plaintext,
+              kv.cu) and tells the map the encode has landed: deferred residency (remote_bandwidth's
+              ``audit.Params.deferred``) records the blocks' writes in the line open then, the step before the first
+              whose pass reads them encoded, so a block step s completed joins the plans a step or more late (one pass
+              in flight, so its coin is back before step s + 1 runs: resident from s + 1) and is read as plaintext,
               uncredited, until then; then the pass reads every live block in store order; its
               ticket carries the step (`step_of`), which the root's message names, and the head of the appends so
               far, which its seed chains (`audit.chained`: unchanged in a session without appends)

@@ -98,7 +98,7 @@ at two windows in flight, as the Lean's `session` refuses one in flight at G > 1
 its end is complete. An append past them refuses the session as `disagreement`: the books refuse it as `coin`, and
 the Lean's session, which holds only the append coins released, otherwise.
 
-Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
+Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (`remote_bandwidth.opening`).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--lean-exe PATH]

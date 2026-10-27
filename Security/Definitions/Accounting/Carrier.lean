@@ -70,14 +70,14 @@ device tick be in two windows or in two passes of one window.
 (`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
 computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
 
-**The append-coin rule.** The audit appends blocks during a session (a KV page), and remote_bandwidth's PROTOCOL.md
-(§3–§4) orders each append's choices before its encoding. The append's root commits its blocks' digests `d_j`, and only
-then does the verifier draw the append's coin `c_a`, once, which each block's key reads: `b_j(c_a) = H(seed ‖ j ‖ d_j ‖
-c_a)`. The registration is the first append, and its coin is the codec seed. So the writers' choices for an append
-(its payloads, their padding, the run inputs behind them, how many blocks, the schedule up to it) are a function of the
-codec and the coins of the appends before it, and the codec encodes its blocks from those choices and the coins
-(`appendCoinBlocks`). Which blocks a pass reads, its plan, is a layout of positions that no encoding chooses: the
-memory map's schedule, which may depend on the session's coins before the pass.
+**The append-coin rule.** The audit appends blocks during a session (a KV page), and the remote audit
+(`RemoteAudit.Codec.binding`) orders each append's choices before its encoding. The append's root commits its blocks'
+digests `d_j`, and only then does the verifier draw the append's coin `c_a`, once, which each block's key reads:
+`b_j(c_a) = H(seed ‖ j ‖ d_j ‖ c_a)`. The registration is the first append, and its coin is the codec seed. So the
+writers' choices for an append (its payloads, their padding, the run inputs behind them, how many blocks, the schedule
+up to it) are a function of the codec and the coins of the appends before it, and the codec encodes its blocks from
+those choices and the coins (`appendCoinBlocks`). Which blocks a pass reads, its plan, is a layout of positions that no
+encoding chooses: the memory map's schedule, which may depend on the session's coins before the pass.
 
 **A store per pass.** The store a pass certifies is the one resident going into the step the pass is bound to, and it
 may depend on the session's coins drawn before it. A pass's `SketchPrefix` is those coins: every earlier window's, its
@@ -90,7 +90,7 @@ coins.
 
 namespace Accounting
 
-/-- **The blocks a pass reads under the append-coin rule** (remote_bandwidth's PROTOCOL.md §3–§4). The store is made by
+/-- **The blocks a pass reads under the append-coin rule** (`RemoteAudit.Codec.binding`). The store is made by
 `T` appends in order, each of `M` block positions: the registration first, whose coin is the codec seed, then the
 appends of blocks written after it. Append `a`'s choices `choose ω a κ_<a` (its payloads, their padding, the run inputs
 behind them, how many blocks, the schedule up to it) read `ω` and the coins of the appends before it only, since its

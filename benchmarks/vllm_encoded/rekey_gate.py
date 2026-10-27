@@ -1,10 +1,10 @@
 """`paged.cu`'s re-key (`pg_rekey`) on one GPU: its gate, then its rate alone and beside a GEMM.
 
-A token-layer kept past the lifetime cap L is re-keyed in its slot (remote_bandwidth's PROTOCOL.md §4): appended again
-at a fresh index j' under a fresh coin, so its bound offset moves from b_j to b_j'(c_a'), and its words are decoded
-under the old and encoded under the new in place. For each k of `--ks`, on caches in vLLM's layout ([pages][KV heads]
-[slots][K ‖ V], two layers, store base 77 TLW, pg_wi's word order), every slot under a random offset of its own and
-about a quarter of them plaintext (deferred residency's flag), each check bit for bit:
+A token-layer kept past the lifetime cap L is re-keyed in its slot (remote_bandwidth's `audit.Params.lifetime`):
+appended again at a fresh index j' under a fresh coin, so its bound offset moves from b_j to b_j'(c_a'), and its words
+are decoded under the old and encoded under the new in place. For each k of `--ks`, on caches in vLLM's layout
+([pages][KV heads][slots][K ‖ V], two layers, store base 77 TLW, pg_wi's word order), every slot under a random offset
+of its own and about a quarter of them plaintext (deferred residency's flag), each check bit for bit:
 
     cache       half the slots of both layers (padding rows among them) re-keyed in one launch on a low-priority stream
                 while a GEMM runs on a high-priority one: the cache equals the one `pg_append` writes under the new

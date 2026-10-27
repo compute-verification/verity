@@ -1029,9 +1029,9 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 
 
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
-    """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
-    GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
-    openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.896–0.927%; over the
+    """The stated claim's reading through the ledger (`timing.stated`), on one node whose store spans every tier, 94 GB
+    of each GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and
+    33,273 openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.896–0.927%; over the
     horizon the pooled μ_sample is under 0.01% and the whole γ about 0.67%, over 0.15%, which μ_chip exceeds alone and
     λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
     The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.57–5.60%.  The 20 s option at 11,091
@@ -1095,7 +1095,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
-    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Bandwidth.Guarantees.AuditRO`'s last term
+    """`named_bits`, λ's count a pass, against `Bandwidth.Guarantees.AuditRO`'s last term
     C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + SLACK_LOG2`, a pass's term is at most 2^-SLACK_LOG2,
     checked in exact integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5),
     never above k·log2 q, and at q = 2^40 at most the 40·k AuditRO's docstring reads.  At 94 GB of 4 KiB receipts and

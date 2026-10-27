@@ -12,13 +12,13 @@
 // its store index j), plus tau (j TLW - store_base - (u layers + l) TLW) mod p when j is not the slot's own block.
 //
 // A token-layer the remote audit appends is written plaintext and encoded in place once its append coin c_a arrives
-// (deferred residency, remote_bandwidth's PROTOCOL.md §4), so an encoded cache may hold plaintext slots: each path takes
-// the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
-// which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each
-// slot; pg_encode encodes listed plaintext slots in place under their bound offsets b_j(c_a) and clears their flags.
-// A token-layer kept past the lifetime cap L is re-keyed in its slot (§4: appended again at a fresh index j' under a fresh
-// coin): pg_rekey decodes listed slots under their old offsets and encodes them under their new ones b_j'(c_a') in place,
-// then writes the new offsets over the old.
+// (deferred residency, remote_bandwidth's `audit.Params.deferred`), so an encoded cache may hold plaintext slots: each
+// path takes the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still
+// plaintext, which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it
+// wrote each slot; pg_encode encodes listed plaintext slots in place under their bound offsets b_j(c_a) and clears
+// their flags. A token-layer kept past the lifetime cap L is re-keyed in its slot (`audit.Params.lifetime`: appended
+// again at a fresh index j' under a fresh coin): pg_rekey decodes listed slots under their old offsets and encodes them
+// under their new ones b_j'(c_a') in place, then writes the new offsets over the old.
 //
 // pg_attn is kv.cu's warp-specialized tensor-core form (attn_mma_ws_kernel) over pages: MDW decoder warps, a lane a
 // word of every tile, load the tile's words of one KV head from the pages (the block table), decode them (encoded) or
@@ -769,8 +769,8 @@ int pg_rekey_ctas() {
   return std::max(1, sms * per);
 }
 
-// The lifetime cap's re-key (remote_bandwidth's PROTOCOL.md §4: a block kept past L windows is appended again at a
-// fresh index under a fresh coin, in its slot), in place: layers layers' listed slots decoded under their old bound
+// The lifetime cap's re-key (remote_bandwidth's `audit.Params.lifetime`: a block kept past L windows is appended again
+// at a fresh index under a fresh coin, in its slot), in place: layers layers' listed slots decoded under their old bound
 // offsets and encoded under their new ones at k rounds, then the new offsets written over the old; a plaintext slot's
 // words and flag are left as they are, its offset moved too. tab (device) holds each layer's PG_REKEY words
 // (pg_rekey_kernel), rows its most rows; every layer's cache in one layout. A layer's listed slots are distinct, and

@@ -1,6 +1,6 @@
-"""sketch-sha512's rank bound (`timing.sketch_reading`, `PROTOCOL.md` §4) against enumeration: the F2 count on every
-small matrix over F2, the ±1 bound on every small ±1 matrix's rank over Q, its exactness at two rows, the readings and
-thresholds the protocol states, and a grinding try's compressions against the reference's own hashes."""
+"""sketch-sha512's rank bound (`timing.sketch_reading`, `SketchRank`'s reading) against enumeration: the F2 count on
+every small matrix over F2, the ±1 bound on every small ±1 matrix's rank over Q, its exactness at two rows, the readings
+and thresholds the protocol states, and a grinding try's compressions against the reference's own hashes."""
 
 from __future__ import annotations
 

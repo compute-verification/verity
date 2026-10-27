@@ -1,6 +1,6 @@
 """The remote bandwidth audit's receipts beside the staging decode: each pass's sketch of every unit of `C*` as the decode
-reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
-§11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
+reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is its module
+docstring, `verity/core/protocols/remote_bandwidth/p2.py`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
     units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
     tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
