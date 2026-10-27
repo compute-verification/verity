@@ -263,9 +263,8 @@ check accepts the honest challenger's session at the deployed parameters, the de
 of the wipe of record. Its nontrivial lemma: a session a verifier that accepts everything accepts is no run of the
 challenger's and carries no break, so `WipeRanAccepted` fails there. -/
 
-/-- The server of r20261026-094403-bb5f's honest wipe (`out/honest/wipe.case.json`; the prover on `vy-nebius-cpu-2`, the
-memory challenger on `vy-nebius-cpu-1`). -/
-def MEASURED_SERVER : ByteArray := "vy-nebius-cpu-2".toUTF8
+/-- The server of r20261026-094403-bb5f's honest wipe, named by its role: the prover's host. -/
+def MEASURED_SERVER : ByteArray := "prover-host".toUTF8
 
 /-- Its session id. -/
 def MEASURED_SESSION : ByteArray :=
