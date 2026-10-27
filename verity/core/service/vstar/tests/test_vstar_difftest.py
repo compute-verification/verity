@@ -241,7 +241,8 @@ def _given(**_):
 
 def _sub(id_: str, template: str, inputs: list[str], outputs: list[str], digests) -> SimpleNamespace:
     """`rec_outer.subcircuit`'s and `rec_residuals.subcircuit`'s shape, its `program_digests` the given ones."""
-    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")
+    def port(nm):
+        return SimpleNamespace(name=nm, dtype="u16")
     return SimpleNamespace(id=id_, template=SimpleNamespace(id=template), inputs=[port(nm) for nm in inputs],
                            outputs=[port(nm) for nm in outputs], definition=_given, program_digests=lambda statics: digests)
 
@@ -405,8 +406,9 @@ def _one(*strategies):
 def _shapes(claims: int):
     """Inner sessions' shapes, three times in four: fast100's m (each of three ranges a branch), k_log from 6, 2 to
     ``claims`` claims; else m, k_log or claims just outside, or not a shape."""
-    valid = lambda lo, hi: st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40),
-                                                  "claims": st.integers(2, claims)})
+    def valid(lo, hi):
+        return st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40), "claims": st.integers(2, claims)})
+
     return st.one_of(valid(22, 26), valid(27, 30), valid(31, 35), _one(
         st.fixed_dictionaries({"m": st.sampled_from([0, 21, 36, -1, True]), "k_log": st.just(20), "claims": st.just(2)}),
         st.fixed_dictionaries({"m": st.just(22), "k_log": st.sampled_from([0, 5, -1]), "claims": st.just(2)}),
@@ -615,7 +617,8 @@ def test_inner_unit_agrees(server):
     zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
     usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
     p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
-    gf = lambda t: {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
+    def gf(t):
+        return {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
     good = {"S": {"gf": gf(["w", 1]), "ports": [["a", 2]]}, "name": "row0"}
     assert D.replay(p, good, server)[0] == "output"
     for S in ({"gf": gf(["w", 1]), "ports": [["a", 1], ["a", 1]]}, {"gf": gf(["w", 2]), "ports": [["a", 2]]}):
