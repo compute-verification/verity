@@ -2044,7 +2044,7 @@ struct Ctx {
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
-    // form_a_kernel's CTA: L' threads and 64 L' + 64 bytes of shared memory, within the 48 KiB a CTA has without opting in
+    // form_a_kernel's CTA: L' threads, and 64 L' bytes of dynamic shared memory beside its static, under 48 KiB (no opt-in)
     if (m % TILE || n % TILE || k % BK || lp % BK || k % lp || lp > 640 || 32768 % row || row % 16) {
       fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, L' <= 640, ROW | 32768\n", m, n,
               k, lp, row);
