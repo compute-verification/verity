@@ -1,13 +1,15 @@
-// What a SHA-512 warp costs the served GEMM's tensor pipe, taken apart: the served RP 5 CTA (wg_proto.cuh's gemm_r5: 512
-// threads, NM consumer warpgroups at Y registers and the rest at HR, the producer warp first among the rest, the MMAs
-// wg_proto.cuh's own imma calls) with each of its parts optional, beside hash warps that run SHA-512 on registers alone
+// What a SHA-512 warp costs the served GEMM's tensor pipe, taken apart: the served RP 5 CTA (wg_proto.cuh's gemm_r5: NM
+// consumer warpgroups at Y registers and the rest at HR, the producer warp first among the rest, the MMAs wg_proto.cuh's
+// own imma calls) with each of its parts optional, beside hash warps that run SHA-512 on registers alone
 // (sx::compress<0, 1> on a chained block, as the co-issue probe's hash CTAs do), until the consumers are done.
 //
 // A configuration (CFGS) sets:
+//   NWG    the CTA's warpgroups (gemm_r5: 4), NM of them consumers; the register file is 512 registers for each thread
+//          of one warpgroup, so NM Y + (NWG - NM) HR is at most 512
 //   NM     consumer warpgroups: 1 (a 64 x BN tile) or 2 (128 x BN, gemm_r5's)
 //   FORM   n128: one m64n128k32 a k32 atom (BN 128); alt: gemm_r5's 128 x 256 tile, two m64n128k32 an atom into
 //          accumulators 0..63 and 64..127 in turn (imma_atom<256, true>); chain: the same eight MMAs a k-tile, the four
-//          into 0..63 first, then the four into 64..127
+//          into 0..63 first, then the four into 64..127; n256: one m64n256k32 an atom (the probe's)
 //   flags  res: the operands resident in one stage of shared memory, the consumers free-running (no barriers);
 //          bar: the producer warp hands the stages over on gemm_r5's full and empty mbarriers, loading nothing;
 //          load: the producer loads each k-tile with TMA from A (M x K) and B (N x K), tiles in gemm_r5's static
@@ -15,7 +17,8 @@
 //          epi: at each tile's end (K / 128 k-tiles), wgmma.wait_group 0 and gemm_r5's direct O stores (s32, int2 a
 //          pair) into an M x N buffer
 // A launch's arm: hash warps 0 (the GEMM alone) or NHW of the CTA's free warps (the producer's warpgroup's other three,
-// then the next warpgroup's), and the hash alone (no consumers; each hash warp HREPS compressions).
+// then the next warpgroups'), and the hash alone at the configuration's most hash warps (no consumers; each hash warp
+// HREPS compressions).
 //
 // Per launch, from each CTA's consumer warp 0 (clock64 and %globaltimer at its first and last MMA) and its hash warps'
 // compression counts: theta, the INT8 MACs a SM-clock over 4096; the hash's compressions a SM-clock over the bar (sx's
@@ -51,9 +54,9 @@ using u64 = unsigned long long;
 using u32 = uint32_t;
 using wgp::BK;
 
-enum Form { N128 = 0, ALT = 1, CHAIN = 2 };
+enum Form { N128 = 0, ALT = 1, CHAIN = 2, N256 = 3 };
 enum Flag { BAR = 1, LOAD = 2, EPI = 4 };
-constexpr int STAGES = 4, MAXHW = 12;
+constexpr int STAGES = 4;
 constexpr double BAR_RATE = 0.018029;   // compressions a SM-clock: 4.355e9 / (132 x 1830e6)
 
 struct Stamp {
@@ -84,11 +87,13 @@ template <int NM, int FORM, int FL> constexpr int smem_bytes() {
   return 1024 + (FL & LOAD ? STAGES : 1) * Shape<NM, FORM>::STAGE + 16 * STAGES + 16;
 }
 
-template <int NM, int FORM, int FL, int Y, int HR>
-__global__ void __launch_bounds__(512, 1) cta(const __grid_constant__ Prm p) {
+template <int NM, int FORM, int FL, int Y, int HR, int NWG>
+__global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   using S = Shape<NM, FORM>;
-  static_assert(NM * Y + (4 - NM) * HR <= 512, "the warpgroups' registers exceed the launch's");
+  constexpr int NT = NWG * 128, BASE = 65536 / NT / 8 * 8;   // the launch's registers a thread, as setmaxnreg counts them
+  static_assert(NM * Y + (NWG - NM) * HR <= 512, "the warpgroups' registers exceed the register file");
+  static_assert(HR <= BASE && Y >= BASE, "the consumers take registers, the rest give them");
   static_assert(FORM != N128 || Y >= 96, "n128's 64 accumulators");
   constexpr bool bar = FL & (BAR | LOAD);
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -108,14 +113,14 @@ __global__ void __launch_bounds__(512, 1) cta(const __grid_constant__ Prm p) {
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   if (!(FL & LOAD))   // resident operands: any bytes do
-    for (int i = tid; i < S::STAGE / 4; i += 512) reinterpret_cast<u32*>(smem + (base - wgp::smem_at(smem)))[i] = i * 2654435761u;
+    for (int i = tid; i < S::STAGE / 4; i += NT) reinterpret_cast<u32*>(smem + (base - wgp::smem_at(smem)))[i] = i * 2654435761u;
   __syncthreads();
   asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
   __syncthreads();
   Stamp* const out = p.st + blockIdx.x;
 
   if (wg >= NM) {
-    wgp::regs_dec<HR>();
+    if constexpr (HR < BASE) wgp::regs_dec<HR>();
     const int w = warp - 4 * NM;   // 0: the producer warp; 1 ..: hash warps
     if (w == 0) {
       if (lane == 0 && bar && groups > 0) {
@@ -140,7 +145,7 @@ __global__ void __launch_bounds__(512, 1) cta(const __grid_constant__ Prm p) {
     }
     if (w > p.nhw) asm volatile("exit;");
     // a hash warp: SHA-512 over a chained block, in registers, until the consumers are done (or HREPS with none)
-    const u64 g = (u64)blockIdx.x * 512 + tid;
+    const u64 g = (u64)blockIdx.x * NT + tid;
     u64 st[8], wv[16];
     sx::iv(st);
 #pragma unroll
@@ -164,8 +169,7 @@ __global__ void __launch_bounds__(512, 1) cta(const __grid_constant__ Prm p) {
     asm volatile("exit;");
   }
 
-  if constexpr (Y > 128) wgp::regs_inc<Y>();
-  if constexpr (Y < 128) wgp::regs_dec<Y>();
+  if constexpr (Y > BASE) wgp::regs_inc<Y>();
   const int x = tid % 128;
   int32_t d[S::NA];
 #pragma unroll
@@ -185,6 +189,9 @@ __global__ void __launch_bounds__(512, 1) cta(const __grid_constant__ Prm p) {
     } else if constexpr (FORM == ALT) {
 #pragma unroll
       for (int i = 0; i < 4; i++) wgp::imma_atom<256, true>(d, a0 + 32 * i, b0 + 32 * i, i > 0 || sd);
+    } else if constexpr (FORM == N256) {
+#pragma unroll
+      for (int i = 0; i < 4; i++) wgp::imma<256>(d, wgp::desc_sw128(a0 + 32 * i), wgp::desc_sw128(b0 + 32 * i), i > 0 || sd);
     } else {
 #pragma unroll
       for (int i = 0; i < 4; i++) wgp::imma<128>(d, wgp::desc_sw128(a0 + 32 * i), wgp::desc_sw128(b0 + 32 * i), i > 0 || sd);
@@ -232,21 +239,24 @@ __global__ void __launch_bounds__(512, 1) cta(const __grid_constant__ Prm p) {
 // ---------------------------------------------------------------------------------------------------------- host
 struct Cfg {
   const char* name;
-  int nm, form, fl, y, hr, smem;
+  int nm, form, fl, y, hr, nwg, smem;
   double macs;   // a k-tile's, a CTA
   void (*k)(Prm);
 };
-#define CFG(NAME, NM, FORM, FL, Y, HR) \
-  {NAME, NM, FORM, FL, Y, HR, smem_bytes<NM, FORM, FL>(), Shape<NM, FORM>::MACS, cta<NM, FORM, FL, Y, HR>}
-// NM 2: gemm_r5's split at HR 96 (the consumers at 160); NM 1: the consumer warpgroup at 224 and three at 96
+#define CFG(NAME, NM, FORM, FL, Y, HR, NWG) \
+  {NAME, NM, FORM, FL, Y, HR, NWG, smem_bytes<NM, FORM, FL>(), Shape<NM, FORM>::MACS, cta<NM, FORM, FL, Y, HR, NWG>}
+// The consumers' register budget Y and, for each, the tiles and CTA sizes it fits, the hash warps at the registers left:
+// res, the operands resident (the ceiling), and le, TMA loads and the epilogue (the served call's parts). gemm_r5 is
+// y160_m2_alt_w4 (HR 96, 7 hash warps beside the producer).
+#define BOTH(NAME, NM, FORM, Y, HR, NWG) CFG(NAME "_res", NM, FORM, 0, Y, HR, NWG), CFG(NAME "_le", NM, FORM, LOAD | EPI, Y, HR, NWG)
 static const Cfg CFGS[] = {
-    CFG("m1_n128_res", 1, N128, 0, 224, 96),           CFG("m1_alt_res", 1, ALT, 0, 224, 96),
-    CFG("m1_chain_res", 1, CHAIN, 0, 224, 96),         CFG("m2_n128_res", 2, N128, 0, 160, 96),
-    CFG("m2_alt_res", 2, ALT, 0, 160, 96),             CFG("m2_chain_res", 2, CHAIN, 0, 160, 96),
-    CFG("m2_alt_bar", 2, ALT, BAR, 160, 96),           CFG("m2_chain_bar", 2, CHAIN, BAR, 160, 96),
-    CFG("m2_alt_bar_epi", 2, ALT, BAR | EPI, 160, 96), CFG("m2_chain_bar_epi", 2, CHAIN, BAR | EPI, 160, 96),
-    CFG("m2_alt_load", 2, ALT, LOAD, 160, 96),         CFG("m2_chain_load", 2, CHAIN, LOAD, 160, 96),
-    CFG("m2_alt_load_epi", 2, ALT, LOAD | EPI, 160, 96), CFG("m2_chain_load_epi", 2, CHAIN, LOAD | EPI, 160, 96),
+    BOTH("y232_m1_alt_w4", 1, ALT, 232, 88, 4),  BOTH("y232_m1_alt_w5", 1, ALT, 232, 64, 5),
+    BOTH("y200_m1_alt_w5", 1, ALT, 200, 72, 5),  BOTH("y176_m2_alt_w4", 2, ALT, 176, 80, 4),
+    BOTH("y176_m1_alt_w5", 1, ALT, 176, 80, 5),  BOTH("y160_m2_alt_w4", 2, ALT, 160, 96, 4),
+    BOTH("y160_m2_alt_w5", 2, ALT, 160, 64, 5),  BOTH("y128_m2_n128_w4", 2, N128, 128, 128, 4),
+    BOTH("y128_m2_n128_w5", 2, N128, 128, 80, 5), BOTH("y128_m2_n128_w6", 2, N128, 128, 64, 6),
+    BOTH("y104_m2_n128_w6", 2, N128, 104, 72, 6), BOTH("y160_m2_n256_w4", 2, N256, 160, 96, 4),
+    BOTH("y232_m1_n256_w4", 1, N256, 232, 88, 4),
 };
 
 static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
@@ -295,7 +305,8 @@ int main(int argc, char** argv) {
     CK(cudaFuncSetAttribute(c.k, cudaFuncAttributeMaxDynamicSharedMemorySize, c.smem));
     cudaFuncAttributes fa;
     CK(cudaFuncGetAttributes(&fa, c.k));
-    printf("{\"cfg\": \"%s\", \"regs\": %d, \"local\": %zu, \"smem\": %d}\n", c.name, fa.numRegs, fa.localSizeBytes, c.smem);
+    printf("{\"cfg\": \"%s\", \"nm\": %d, \"bn\": %d, \"y\": %d, \"hr\": %d, \"threads\": %d, \"regs\": %d, \"local\": %zu, \"smem\": %d}\n",
+           c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem);
   }
   auto launch = [&](const Cfg& c, int g, int nhw) {
     Prm p{};
@@ -306,7 +317,7 @@ int main(int argc, char** argv) {
     p.st = st;
     p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps;
     CK(cudaMemset(st, 0, nsm * sizeof(Stamp)));
-    c.k<<<nsm, 512, c.smem>>>(p);
+    c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
     CK(cudaGetLastError());
     CK(cudaDeviceSynchronize());
     std::vector<Stamp> s(nsm);
@@ -341,12 +352,11 @@ int main(int argc, char** argv) {
     fflush(stdout);
   };
   for (const Cfg& c : CFGS) {
-    const int maxhw = (4 - c.nm) * 4 - 1;
+    const int maxhw = (c.nwg - c.nm) * 4 - 1;
     arm(c, groups, 0, "gemm");
-    for (int nhw : {3, 7, 11})
-      if (nhw <= maxhw) arm(c, groups, nhw, "gemm+hash");
+    if (maxhw > 7) arm(c, groups, 7, "gemm+hash");
+    arm(c, groups, maxhw, "gemm+hash");
+    if (!(c.fl & LOAD)) arm(c, 0, maxhw, "hash");
   }
-  for (int nhw : {3, 7, 11}) arm(CFGS[0], 0, nhw, "hash");
-  arm(CFGS[4], 0, 7, "hash");
   return 0;
 }

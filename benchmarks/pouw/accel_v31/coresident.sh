@@ -36,18 +36,21 @@ echo "lease rc $?" >> "$O/rc.txt"
 python3 - "$O/coresident.jsonl" > "$O/table.md" <<'EOF'
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1]) if l.startswith("{")]
-regs = {r["cfg"]: r for r in rows if "regs" in r}
+cfg = {r["cfg"]: r for r in rows if "regs" in r}
 alone = {r["cfg"]: r for r in rows if r.get("arm") == "gemm"}
-print("| configuration | regs | spill B | hash warps | theta | theta / alone | hash / bar | SM MHz | ms |")
-print("|---|---|---|---|---|---|---|---|---|")
+solo = {(r["cfg"].rsplit("_", 1)[0], r["nhw"]): r for r in rows if r.get("arm") == "hash"}
+print("| configuration | Y | tile | threads | HR | regs | spill B | hash warps | theta alone | theta | theta / alone | hash / bar "
+      "| hash alone / bar | SM MHz | ms |")
+print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 for r in rows:
-    if "arm" not in r:
+    if r.get("arm") != "gemm+hash":
         continue
-    g = regs.get(r["cfg"], {})
-    a = alone.get(r["cfg"])
-    rel = f'{r["theta"] / a["theta"]:.3f}' if a and a["theta"] and r["arm"] != "hash" else ""
-    name = r["cfg"] if r["arm"] != "hash" else f'hash alone ({r["cfg"][:2]})'
-    print(f'| {name} | {g.get("regs", "")} | {g.get("local", "")} | {r["nhw"]} | {r["theta"]:.4f} | {rel} | {r["hash_bar"]:.4f} | '
-          f'{r["mhz"]:.0f} | {r["ms"]:.3f} |')
+    c, a = cfg.get(r["cfg"], {}), alone.get(r["cfg"])
+    h = solo.get((r["cfg"].rsplit("_", 1)[0], r["nhw"]))
+    rel = f'{r["theta"] / a["theta"]:.3f}' if a and a["theta"] else ""
+    print(f'| {r["cfg"]} | {c.get("y", "")} | {64 * c.get("nm", 0)} x {c.get("bn", "")} | {c.get("threads", "")} | '
+          f'{c.get("hr", "")} | {c.get("regs", "")} | {c.get("local", "")} | {r["nhw"]} | {a["theta"] if a else 0:.4f} | '
+          f'{r["theta"]:.4f} | {rel} | {r["hash_bar"]:.4f} | {h["hash_bar"] if h else float("nan"):.4f} | {r["mhz"]:.0f} | '
+          f'{r["ms"]:.3f} |')
 EOF
 cat "$O/table.md"
