@@ -33,7 +33,9 @@ import h1c as H1CM  # noqa: E402
 from dither_a import UNIT, ZY_KIND, zy_bytes, zy_fields_of  # noqa: E402
 from h1c import CM, H1C, Dom, Tab, unwords  # noqa: E402
 from h1cgate import POISON, linears  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 FORMS = ("row", "zy")
 
 
@@ -143,7 +145,7 @@ def timed(g: torch.cuda.CUDAGraph, reps: int) -> list[float]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lib", default=os.environ.get("DITHER_H1C"))
+    ap.add_argument("--lib", default=settings.DITHER_H1C)
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", default=None, help="unused (sbench.sh's SBENCH_SCRIPT passes it)")
     ap.add_argument("--reps", type=int, default=9)
@@ -154,7 +156,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     key = os.urandom(64)
-    window = os.environ.get("RESEARCH_RUN_ID") or "gate"
+    window = settings.RESEARCH_RUN_ID or "gate"
     lib = H1C(a.lib, key, dev)
     lin = linears()
     doc: dict = {"gpu": torch.cuda.get_device_name(), "unit": list(UNIT), "by_t": {}}

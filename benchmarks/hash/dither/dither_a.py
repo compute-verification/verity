@@ -72,7 +72,6 @@ cpu and the served h1u build's kh_lanes) to each other and to the receipts, and 
 from __future__ import annotations
 
 import ctypes as C
-import os
 import sys
 from pathlib import Path
 
@@ -91,6 +90,9 @@ from hb_side import auto_j
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
+from verity_config.settings import of
+
+settings = of(__file__)
 
 
 def arm_label() -> dict:
@@ -393,13 +395,13 @@ class Side:
             raise ValueError(f"dither-a's ao: one of {AO} ({AO_SEEDS} for kh and hbk, whose seeds are a launch of their "
                              f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
-        self.zdead = z == "zy" and os.environ.get(ZDEAD_ENV) == "1"
-        if os.environ.get(YCMP_ENV) == "1" and not (self.zdead and not getattr(win, "overlap", 0)):
+        self.zdead = z == "zy" and settings.get(ZDEAD_ENV)
+        if settings.get(YCMP_ENV) and not (self.zdead and not getattr(win, "overlap", 0)):
             raise RuntimeError(f"{YCMP_ENV}=1 needs -zy and {ZDEAD_ENV}=1, without -ov")
         self.ycmp: torch.Tensor | None = None
         # under YCMP_ENV each capture's calls refused by the byte compare and by the roots' (`y_leaves`)
         self.ycmp_at: dict[str, dict] = {}
-        self.side = torch.cuda.Stream(device=dev, priority=int(os.environ.get(UNITS_PRIO_ENV) or 0))
+        self.side = torch.cuda.Stream(device=dev, priority=settings.get(UNITS_PRIO_ENV))
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
             win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
@@ -421,7 +423,7 @@ class Side:
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
         self.mm_cfg = {tuple(int(v) for v in nk.split(",")): (EL.Cfg.parse(c), mm_group(c))
-                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
+                       for nk, c in (e.split("=") for e in (settings.get(MM_CFG_ENV) or "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
         self.shift = int(win.o.h1o_fault_shift())
@@ -467,10 +469,10 @@ class Side:
             self.y_refused: list[dict] = []
             # DITHER_ZY1=1: the y tables read nothing the z tables write and are built right after them, so the three
             # sets go through one h1c_build in the z tables' place, each table into its own set's buffers
-            self.zy1 = os.environ.get(ZY1_ENV) == "1"
+            self.zy1 = settings.get(ZY1_ENV)
             if self.zy1:
                 win.pre["z"] = win.c.union([self.zyset, self.ysset, self.yuset])
-            if os.environ.get(YCMP_ENV) == "1":
+            if settings.get(YCMP_ENV):
                 self.ycmp = torch.zeros(win.L, dtype=torch.int32, device=dev)
                 if self.zy1:
                     # a step no capture reads builds the union without the units' y tables
@@ -859,7 +861,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     global CAPTURES
     DO.ROUND_EXTRA = (("y-step",) if z == "zy" else ()) + ("receipt-step",)
     CAPTURES = ("gate", "control", "fault") + (("fault_y",) if z == "zy" else ()) + ("fault_rr",)
-    os.environ.setdefault("DITHER_A_FORM", "3")
+    settings.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
     def apply(self, layer, x, bias=None):
@@ -893,7 +895,7 @@ _POOL: list = []
 def table_root(dom, key: bytes, label: str, rows) -> bytes:
     """`CM.levels`' root over each row's `CM.leaf` (rows: byte strings or a 2-D uint8 array), the leaves hashed in
     CHECK_WORKERS_ENV's pool when there are POOL_MIN or more."""
-    n = int(os.environ.get(CHECK_WORKERS_ENV) or 0)
+    n = settings.get(CHECK_WORKERS_ENV)
     if n <= 0 or len(rows) < POOL_MIN:
         return CM.levels(dom, [CM.leaf(dom, key, label, i, bytes(r))[0] for i, r in enumerate(rows)])[-1][0]
     if not _POOL:
@@ -1131,7 +1133,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and not yleaf_bad and commits_ok and h1v3_ok
                  and y_match and not (zy and doc["y_refused_steps"])
                  and all(x["receipt_equal"] and x["z_equal_today"] for x in units_doc))
-    lr = os.environ.get(LANE_REFS_ENV)
+    lr = settings.get(LANE_REFS_ENV)
     if which == "gate" and lr:
         import lane_refs as LR
         doc["lane_refs"] = LR.served(win, g, salt[0], getattr(SIDE[0], "h", None) if SIDE else None,

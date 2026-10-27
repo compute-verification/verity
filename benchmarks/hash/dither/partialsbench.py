@@ -40,7 +40,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks/pouw/served_h1"))
 import partials as PT  # noqa: E402
 import receipts as RC  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 T, STEPS = 64, 16
 CALLS = {4096: 28672, 14336: 4096}  # K: the widest call's N
 STEP_UNITS = {4096: 77824, 14336: 8192}
@@ -208,7 +210,7 @@ def gate(kern: PT.Kernel, win: PT.Window) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lib", default=os.environ.get("HB_H1U_KC"))
+    ap.add_argument("--lib", default=settings.HB_H1U_KC)
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch")
     ap.add_argument("--arms", help="sbench.sh's: dither-a-hbc builds the served h1u_kc.so ($HB_H1U_KC)")

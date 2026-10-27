@@ -55,7 +55,9 @@ from h1r import H1R  # noqa: E402
 
 from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 FORM_ID = {"block2": 0, "split": 1, "split2": 2, "block": 3}  # h1o_band_launch's forms: block rows read in the loop
 FORM_STAGED = {"block2": 4, "split": 1, "split2": 2, "block": 5}  # every form's rows staged in its noise buffers
 FORM_NAMES = ("block2", "split", "split2", "block", "block2-staged", "block-staged")
@@ -217,7 +219,7 @@ def noise_check(win: BandWindow, rng: random.Random, max_bands: int = 384) -> di
 def gate(arm: str, t: int, ms: list[int], dev, rng: random.Random) -> tuple:
     os.environ[DO.UNITS_ENV] = "mix"
     os.environ[DO.PEEL_ENV] = "1"
-    h1c, h1o = os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV]
+    h1c, h1o = settings.need("DITHER_H1C"), settings.need(DO.LIB_ENV)
     tail = None if arm == "mix-cpeel" else arm.rsplit("-b", 1)[1]
     g = None if tail is None else int(tail.rstrip("sp"))
     win = DO.Window(t, os.urandom(64), h1c, h1o, True, dev) if g is None else BandWindow(t, os.urandom(64), h1c, h1o,

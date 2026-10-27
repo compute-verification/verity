@@ -51,7 +51,9 @@ import dither_fused as DF
 import forms as F
 from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
+from verity_config.settings import of
 
+settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
 # the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
@@ -165,10 +167,10 @@ class Window:
                           lab=("r/", f"/{w}")))
         self.rset = self.c.set(rt)
         self.o = C.CDLL(h1o_path)
-        self.units_form = os.environ.get(UNITS_ENV, "block")
+        self.units_form = settings.get(UNITS_ENV)
         if self.units_form not in UNITS_FORMS and self.units_form not in MIX_FORMS:
             raise RuntimeError(f"{UNITS_ENV}={self.units_form}: one of {sorted(UNITS_FORMS) + sorted(MIX_FORMS)}")
-        self.peel = os.environ.get(PEEL_ENV) == "1"
+        self.peel = settings.get(PEEL_ENV)
         if self.peel and self.units_form == "warp":
             raise RuntimeError(f"{PEEL_ENV}=1: the warp form serves the dithered product only")
         self.captures = CAPTURES + (("fault_xa",) if self.peel else ())
@@ -191,7 +193,7 @@ class Window:
         if self.o.h1o_init():
             raise RuntimeError("h1o_init refused")
         self.percall = None
-        pc = os.environ.get(PERCALL_ENV)
+        pc = settings.get(PERCALL_ENV)
         if pc:
             ns = [0] if pc == "0" else [int(x) for x in open(pc).read().split()]
             if self.o.h1o_percall_init(L, (C.c_longlong * len(ns))(*ns), len(ns)):
@@ -240,7 +242,7 @@ class Window:
         self.tree_streams: tuple | None = None
         # called on the serving stream after the z tables and before the step trees (an arm's leaves of its own)
         self.before_mid: list = []
-        self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
+        self.nvtx = settings.DITHER_NSYS == "prof"
         self.phase_open = False
         self._epoch()
 
@@ -727,7 +729,7 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 def a_chunks(k: int) -> int:
     """A_STEP_ENV's leaves a row of K = k: `weights.chunks` (k), or 1 under A_CHUNKS_ENV=0."""
     from verity.core.protocols.pouw import weights as WT
-    return 1 if os.environ.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
+    return 1 if settings.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
 
 
 def a_step_fields(win: Window, k: int, s: int) -> dict:
@@ -790,9 +792,9 @@ def h1v3_itself(units: list[dict]) -> dict:
     import subprocess
     import sys
     import tempfile
-    tree = os.environ.get("DITHER_H1V3_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    tree = settings.DITHER_H1V3_TREE or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))))
-    sha = os.environ.get("DITHER_H1V3_SHA") or os.environ.get("RESEARCH_SOURCE_SHA") or "source"
+    sha = settings.DITHER_H1V3_SHA or settings.RESEARCH_SOURCE_SHA or "source"
     with tempfile.TemporaryDirectory() as td:
         src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
         with open(src, "w") as f:

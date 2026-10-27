@@ -12,12 +12,14 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
-import os
 import statistics
 import subprocess
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
+settings = of(__file__)
 FORMS = {0: "sha512_compress, inline schedule", 1: "ap_cmp + ap_serve (h1c_a_call2_k's)", 2: "paired, inlined",
          3: "paired, inlined, reassociated round", 4: "form 3, off-chain sums on IMAD"}
 
@@ -29,7 +31,7 @@ def build(scratch: Path) -> Path:
     arch = f"{major}{minor}" + ("a" if major >= 9 else "")
     here = Path(__file__).resolve().parent
     so = scratch / "libshalat.so"
-    cmd = [os.environ.get("NVCC", "nvcc"), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch},code=sm_{arch}",
+    cmd = [settings.NVCC or "nvcc", "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch},code=sm_{arch}",
            "-Xptxas", "-v", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(here / "shalat.cu")]
     r = subprocess.run(cmd, capture_output=True, text=True, check=False)
     (scratch / "build-shalat.log").write_text(r.stdout + r.stderr)
