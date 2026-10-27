@@ -69,8 +69,11 @@ def _descriptor(rng: random.Random, sh: D.Shape, calls: int, name: str) -> bytes
         raw = Cr._canonical(j).encode()
     if name == "fill-shape":
         j = json.loads(raw)
-        x = rng.choice(["m", "lp", "L"])
-        j[x] = {"m": 100, "lp": 48, "L": 3 * sh.k}[x]
+        x = rng.choice(["m", "lp", "L", "t"])
+        if x == "t":
+            j.update(lp=32, L=32 * (F.T_MAX + 1), k=32 * (F.T_MAX + 1))
+        else:
+            j[x] = {"m": 100, "lp": 48, "L": 3 * sh.k}[x]
         raw = Cr._canonical(j).encode()
     return raw
 

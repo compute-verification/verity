@@ -9,9 +9,9 @@ auditor's ledger opens and closes as it does a served period: its open commits t
 descriptor, `descriptor_of`) and the draw K (`credit.K_FIELD`). `work` and its rule (`credit.period_credit`) are unchanged.
 
 * **The circuit is public structure** (`descriptor_of`): the descriptor is canonical JSON ``{L, calls, checkpoint, k, lp,
-  m, n, row, unit}``, the Dither filler's shape, its call count, the SHA-512 `dither.checkpoint_digest` of B and the unit
-  ``PouwDitherBlock_v1``. The window's open root is `open_root` of the circuit and the window's session, so it is fixed
-  before every coin and no two windows share one.
+  m, n, row, unit}``, the Dither filler's shape (t = min(L, K)/L′ at most `T_MAX`), its call count, the SHA-512
+  `dither.checkpoint_digest` of B and the unit ``PouwDitherBlock_v1``. The window's open root is `open_root` of the
+  circuit and the window's session, so it is fixed before every coin and no two windows share one.
 * **The pad and noise are live coins** (`_coins`): the window's challenger session (`families`: one salt coin, one call
   coin a call, one draw coin) is read through the auditor's ledger (`challenger.trusted_session_of`); its log shows the
   open root as the one root its salt coin and every call coin followed. The window's salt is the salt coin's round-0
@@ -46,6 +46,8 @@ SUFFIX = ":fill"
 #: a filler window's call coins, one a call, between its salt coin and its draw coin
 CALL = "pouw/fill/call"
 UNIT = "PouwDitherBlock_v1"
+#: the most L′-tiles a block's words span, t = min(L, K) / L′ (Dither's NOFOLD-OPT pick, `dither.Shape`)
+T_MAX = 8
 DESCRIPTOR_KEYS = ("L", "calls", "checkpoint", "k", "lp", "m", "n", "row", "unit")
 OPEN_TAG = "verity/pouw/fill/open/v2"
 ROOTS_TAG = "verity/pouw/fill/roots/v1"
@@ -61,8 +63,8 @@ DESCRIPTOR_FORM = ("the filler window's descriptor is not canonical JSON {" + ",
                    f"Dither filler's shape and call count as positive integers, B's checkpoint digest (128 lowercase "
                    f"hex) and the unit {UNIT}")
 SHAPE = (f"the filler window's shape is not a Dither filler's: m and n whole tiles of {D.TILE}, lp a multiple of 32 "
-         f"dividing k, L a multiple of lp dividing k, k below {D.K_LIMIT}, and row a multiple of 16 dividing "
-         f"{D.TILE_WORD_BYTES}")
+         f"dividing k, L a multiple of lp dividing k with t = min(L, k) / lp at most {T_MAX}, k below {D.K_LIMIT}, "
+         f"and row a multiple of 16 dividing {D.TILE_WORD_BYTES}")
 OPEN = ("the filler window's open root is not open_root of its circuit and its session: open each filler window on "
         "its own root, after the circuit is fixed")
 FILL_EPOCH = ("the coin commitment's coins are not a filler window's: its salt coin, a call coin for each of its "
@@ -105,7 +107,7 @@ def descriptor_of(raw: bytes) -> tuple[tuple[D.Shape, int] | None, tuple[str, st
         sh = D.Shape(j["m"], j["n"], j["k"], j["lp"], j["L"], j["row"], o=False)
     except ValueError:
         return None, ("descriptor", SHAPE)
-    if j["k"] % j["L"]:
+    if j["k"] % j["L"] or min(sh.L, sh.k) // sh.lp > T_MAX:
         return None, ("descriptor", SHAPE)
     return (sh, j["calls"]), None
 
@@ -324,6 +326,6 @@ def period_fill(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: A
 
 __all__ = ["CALL", "CALLS_FORM", "CALLS_NOT_RECEIVED", "CHANGED", "DESCRIPTOR_FORM", "DESCRIPTOR_HEX", "DESCRIPTOR_KEYS",
            "DRAW_ROOT", "DRAW_TAG", "FILL_EPOCH", "FILL_KEYS", "FILL_SALT", "FILLS_FORM", "OPEN", "OPEN_TAG", "RECEIPTS",
-           "ROOTS_FORM", "ROOTS_TAG", "SALT_NOT_RECEIVED", "SHAPE", "STATEMENT_TAG", "SUFFIX", "TEMPLATE", "UNIT",
-           "block_of", "blocks", "descriptor", "descriptor_of", "draw_root", "eps", "families", "open_root",
+           "ROOTS_FORM", "ROOTS_TAG", "SALT_NOT_RECEIVED", "SHAPE", "STATEMENT_TAG", "SUFFIX", "T_MAX", "TEMPLATE",
+           "UNIT", "block_of", "blocks", "descriptor", "descriptor_of", "draw_root", "eps", "families", "open_root",
            "period_fill", "period_name", "receipts", "registered", "statement", "stratum", "work"]

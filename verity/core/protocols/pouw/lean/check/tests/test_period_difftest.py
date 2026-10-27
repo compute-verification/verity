@@ -21,6 +21,7 @@ from hypothesis import strategies as st
 
 import pouw_fill_cases as fill_cases
 import pouw_period_cases as cases
+from verity.core.protocols.pouw import fill as F
 from verity.core.protocols.pouw import period_check as PC
 from verity.core.protocols.pouw import verifier as V
 
@@ -92,6 +93,15 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
         assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
         assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
         assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
+
+
+def test_a_filler_shape_spans_at_most_t_max_noise_tiles():
+    """A filler descriptor whose block spans t = min(L, K)/L′ = `fill.T_MAX` noise tiles is a shape, one more is not."""
+    sh = fill_cases.D.Shape(128, 128, 32 * F.T_MAX, 32, 32 * F.T_MAX, 16384, o=False)
+    assert F.descriptor_of(F.descriptor(sh, 1, bytes(64)))[0] == (sh, 1)
+    j = json.loads(F.descriptor(sh, 1, bytes(64)))
+    j.update(L=32 * (F.T_MAX + 1), k=32 * (F.T_MAX + 1))
+    assert F.descriptor_of(fill_cases.Cr._canonical(j).encode()) == (None, ("descriptor", F.SHAPE))
 
 
 def test_a_fill_is_credited_beside_work():

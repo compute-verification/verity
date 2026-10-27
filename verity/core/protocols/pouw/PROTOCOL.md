@@ -288,9 +288,9 @@ Its Lean port is open.
 **Filler periods** (`fill`, CMP-172, CMP-67; Lean `PouwCheck.Fill`). Filler windows run Dither calls
 (`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its per-call pad (`dither.fill_seeds`)
 and its B a published checkpoint's s8 weights, its proof units `PouwDitherBlock_v1` blocks. They count toward the served
-period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, the call count
-and B's checkpoint digest) and K. A period's credit carries their ``fill`` beside ``work``, whose rule is unchanged
-(`period_check`, given ``fills``). Each filler window's root is `fill.open_root` of its circuit and session, and its
+period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, whose
+t = min(L, K)/L′ is at most 8 (`fill.T_MAX`), the call count and B's checkpoint digest) and K. A period's credit carries
+their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each filler window's root is `fill.open_root` of its circuit and session, and its
 session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
 after the root, the window's salt is the salt coin's (`h1tile.live_salt`), call c's seeds are `dither.fill_seeds` of
 that salt and call coin c, and the draw coin opens after `fill.draw_root` over the salt and every call's value root, so

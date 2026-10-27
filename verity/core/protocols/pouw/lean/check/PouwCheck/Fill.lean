@@ -47,6 +47,8 @@ def TEMPLATE : String := "dither"
 def TILE : Nat := 128
 def K_LIMIT : Nat := 131072
 def TILE_WORD_BYTES : Nat := 32768
+/-- `fill.T_MAX`: the most L′-tiles a block's words span, t = min(L, K) / L′. -/
+def T_MAX : Nat := 8
 def FILL_KEYS : List String := ["calls", "descriptor", "draw", "opening", "proofs", "roots", "salt", "session", "window"]
 def FILLS_FORM : String :=
   "the period's filler windows are not a list of each filler window's evidence {" ++ ", ".intercalate FILL_KEYS ++
@@ -59,7 +61,8 @@ def DESCRIPTOR_FORM : String :=
   UNIT
 def SHAPE : String :=
   s!"the filler window's shape is not a Dither filler's: m and n whole tiles of {TILE}, lp a multiple of 32 " ++
-  s!"dividing k, L a multiple of lp dividing k, k below {K_LIMIT}, and row a multiple of 16 dividing {TILE_WORD_BYTES}"
+  s!"dividing k, L a multiple of lp dividing k with t = min(L, k) / lp at most {T_MAX}, k below {K_LIMIT}, " ++
+  s!"and row a multiple of 16 dividing {TILE_WORD_BYTES}"
 def OPEN : String :=
   "the filler window's open root is not open_root of its circuit and its session: open each filler window on its own " ++
   "root, after the circuit is fixed"
@@ -122,7 +125,8 @@ def descriptorOf (raw : ByteArray) : R Shape := do
       pure ({ m := ← pos "m", n := ← pos "n", k := ← pos "k", lp := ← pos "lp", L := ← pos "L", row := ← pos "row",
               calls := ← pos "calls" } : Shape)) | throw ("descriptor", DESCRIPTOR_FORM)
   unless sh.m % TILE == 0 && sh.n % TILE == 0 && sh.lp % 32 == 0 && sh.k % sh.lp == 0 && sh.k < K_LIMIT
-    && sh.L % sh.lp == 0 && sh.row % 16 == 0 && TILE_WORD_BYTES % sh.row == 0 && sh.k % sh.L == 0 do
+    && sh.L % sh.lp == 0 && sh.row % 16 == 0 && TILE_WORD_BYTES % sh.row == 0 && sh.k % sh.L == 0
+    && min sh.L sh.k / sh.lp ≤ T_MAX do
     throw ("descriptor", SHAPE)
   pure sh
 
