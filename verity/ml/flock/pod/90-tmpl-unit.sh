@@ -2,8 +2,10 @@
 # A templated statement end to end (PRF-133): RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
 # line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
-# covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session must be accepted, and the m0 one
-# refused as a templated statement without --zk, by Lean and by the live server (its LIVE line) alike. Run from the
+# covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, drawn (--draw subset:N, every
+# unit) and verified with the statement's partition and program (tmpl_statement.py's partition.json and program.json),
+# must be accepted, and the m0 one refused as a templated statement without --zk, by Lean and by the live server (its
+# LIVE line) alike. Run from the
 # verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt, template.json, tmpl.txt, stage.json,
 # statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, lean-<mode>.log (its VERDICT line), verdicts.json.
 # env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget where /workspace isn't
@@ -30,7 +32,7 @@ trap 'rm -rf $S' EXIT
 # Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier of record), built once per source, while the prover builds
 LSHA=$( (cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum;
-  cat verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
+  cat $REPO/verity/ml/flock/tests/lean/TmplUnit.lean) | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit
 (
   export PATH=$HOME/.elan/bin:$PATH
@@ -79,11 +81,12 @@ echo '{}' > $O/verdicts.json
 for mode in ${MODES:-m0 zk}; do
   Z=; [ $mode = zk ] && Z=--zk
   C=(--coins os); [ $mode = zk ] && C=()
+  DRAW=(); [ $mode = zk ] && DRAW=(--draw subset:$N)
   U=(--circuit $D/circuit.txt --tmpl-unit $D/unit.placed --tables $D/tables)
   $B statement $Z "${U[@]}" --instances $D/pub-$N.bin > $O/statement-$mode.txt 2>&1
   PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   $B serve $Z --listen 127.0.0.1:$PORT --out $S/sessions-$mode --instances $D/pub-$N.bin "${U[@]}" --pin $PIN --operator tmpl-unit \
-    --sessions 1 > $O/serve-$mode.log 2>&1 &
+    "${DRAW[@]}" --sessions 1 > $O/serve-$mode.log 2>&1 &
   SP=$!
   for i in $(seq 1800); do grep -q SERVING $O/serve-$mode.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
   $B prove $Z --verifier 127.0.0.1:$PORT --instances $D/inst-$N.bin "${U[@]}" --runs 1 --warm 0 > $O/prove-$mode.txt 2> $O/prove-$mode.err
@@ -91,7 +94,7 @@ for mode in ${MODES:-m0 zk}; do
   kill $SP 2>/dev/null; wait $SP
   SESS=$(dirname $(ls -1 $S/sessions-$mode/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $O/prove-$mode.err; continue; }
   $LEAN_BIN verify $Z "${C[@]}" --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
-    --session $SESS > $O/lean-$mode.log 2>&1
+    --partition $D/partition.json --program $D/program.json --session $SESS > $O/lean-$mode.log 2>&1
   echo "$mode rc $?"
   grep -h '^VERDICT' $O/lean-$mode.log | head -1 | cut -c1-600
   python3 - $O/verdicts.json $mode $O/lean-$mode.log $O/prove-$mode.txt <<'EOF'
