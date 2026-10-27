@@ -3591,6 +3591,26 @@
    "assumptions": [],
    "type_hash": "66f19dacaae0cf5d6081ad88844354ac233b3fb0378e50c4a99b342f8b12e019"
   },
+  "Accounting.SecurityProofs.JointPeriodLiveECR": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointPeriodLiveECR : Accounting.Guarantees.JointPeriodLiveECR"],
+   "assumptions": [],
+   "type_hash": "e433c49904200a8b311ce4b9c8fd4a513a42f68d2d845775576976a734a15cab"
+  },
+  "Accounting.SecurityProofs.JointPeriodLive_honest": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointPeriodLive_honest : Accounting.Guarantees.JointPeriodLive_honest"],
+   "assumptions": [],
+   "type_hash": "f3dda61e363485d71c81436d425d69cd691da40b585ecc95f3668b540fbc94cc"
+  },
+  "Accounting.SecurityProofs.JointPeriodLive_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "d827d1d18b0593a155ec26ce712dd997b8315ae1ca6cdf8a6b1ce54ee5ac41cc"
+  },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.LengthCode : Accounting.Guarantees.LengthCode"],
@@ -11044,26 +11064,6 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
-  },
-  "Accounting.SecurityProofs.JointPeriodLiveECR": {
-   "owner": "@lean",
-   "signature": ["Accounting.SecurityProofs.JointPeriodLiveECR : Accounting.Guarantees.JointPeriodLiveECR"],
-   "assumptions": [],
-   "type_hash": "e433c49904200a8b311ce4b9c8fd4a513a42f68d2d845775576976a734a15cab"
-  },
-  "Accounting.SecurityProofs.JointPeriodLive_honest": {
-   "owner": "@lean",
-   "signature": ["Accounting.SecurityProofs.JointPeriodLive_honest : Accounting.Guarantees.JointPeriodLive_honest"],
-   "assumptions": [],
-   "type_hash": "f3dda61e363485d71c81436d425d69cd691da40b585ecc95f3668b540fbc94cc"
-  },
-  "Accounting.SecurityProofs.JointPeriodLive_nontrivial": {
-   "owner": "@lean",
-   "signature": [
-    "Accounting.SecurityProofs.JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "d827d1d18b0593a155ec26ce712dd997b8315ae1ca6cdf8a6b1ce54ee5ac41cc"
   }
  },
  "shape": {
@@ -13381,6 +13381,9 @@
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.JointPeriodLiveECR",
+    "Accounting.SecurityProofs.JointPeriodLive_honest",
+    "Accounting.SecurityProofs.JointPeriodLive_nontrivial",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -13394,10 +13397,7 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120",
-    "Accounting.SecurityProofs.JointPeriodLiveECR",
-    "Accounting.SecurityProofs.JointPeriodLive_honest",
-    "Accounting.SecurityProofs.JointPeriodLive_nontrivial"
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
    ]
   },
   "Definitions.Accounting.Filler": {
@@ -15178,14 +15178,14 @@
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.JointPeriodLiveECR",
+    "Accounting.SecurityProofs.JointPeriodLive_honest",
+    "Accounting.SecurityProofs.JointPeriodLive_nontrivial",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
-    "Accounting.SecurityProofs.RateOfAuditPartialPasses",
-    "Accounting.SecurityProofs.JointPeriodLiveECR",
-    "Accounting.SecurityProofs.JointPeriodLive_honest",
-    "Accounting.SecurityProofs.JointPeriodLive_nontrivial"
+    "Accounting.SecurityProofs.RateOfAuditPartialPasses"
    ]
   },
   "Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod": {
@@ -17362,6 +17362,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
+    "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.JointPeriodLiveECR",
+    "Accounting.SecurityProofs.JointPeriodLive_honest",
+    "Accounting.SecurityProofs.JointPeriodLive_nontrivial",
     "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
@@ -17477,13 +17483,7 @@
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonLive",
-    "Accounting.SecurityProofs.JointPeriodLive",
-    "Accounting.SecurityProofs.JointPeriodLiveECR",
-    "Accounting.SecurityProofs.JointPeriodLive_honest",
-    "Accounting.SecurityProofs.JointPeriodLive_nontrivial"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -18638,6 +18638,9 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.JointPeriodLiveECR",
+    "Accounting.SecurityProofs.JointPeriodLive_honest",
+    "Accounting.SecurityProofs.JointPeriodLive_nontrivial",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
@@ -18727,10 +18730,7 @@
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
-    "Verity.SecurityProofs.RegisteredMeets",
-    "Accounting.SecurityProofs.JointPeriodLiveECR",
-    "Accounting.SecurityProofs.JointPeriodLive_honest",
-    "Accounting.SecurityProofs.JointPeriodLive_nontrivial"
+    "Verity.SecurityProofs.RegisteredMeets"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -19079,6 +19079,9 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.JointPeriodLiveECR",
+    "Accounting.SecurityProofs.JointPeriodLive_honest",
+    "Accounting.SecurityProofs.JointPeriodLive_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -19130,10 +19133,7 @@
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
-    "Verity.SecurityProofs.RegisteredMeets",
-    "Accounting.SecurityProofs.JointPeriodLiveECR",
-    "Accounting.SecurityProofs.JointPeriodLive_honest",
-    "Accounting.SecurityProofs.JointPeriodLive_nontrivial"
+    "Verity.SecurityProofs.RegisteredMeets"
    ]
   },
   "Definitions.Core.Prims": {
@@ -48831,22 +48831,16 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
   "SampledProofs.Json": {
-   "digest": "99c35d0e5462b833da3e3cab51b370a49a0bb020b93865b13f7fdd30ca5ad57c",
+   "digest": "29cd91dd3840abd7081c7c0c4a42591b850e90f4f144ead6545467e82fdeb106",
    "definitions": {
-    "SampledProofs.entries": "cf2f8f3b61701d3cce2c99ad62157369242f88fe0fe42151d768e3f4d3870cc1",
     "SampledProofs.field?": "34de9a547d7ceba63ea306bc8723c89ed04eea9d8f28a323d4785f1e3c0f6e6d",
     "SampledProofs.getD": "0fdac810868183ad3f74efdf4816d4563ec0f3f8f581a69be6e44f29cca2c656",
     "SampledProofs.int?": "c789bbbf23ba5ce3b67fa9aa7846c320c0be2a7f91d8fb8813e5b8fd5be28291",
     "SampledProofs.int?._sparseCasesOn_1": "ec5154f8440d872245c978f0eb03243e9905e2368082db70c226d74a142c6b9c",
-    "SampledProofs.jeq": "caa6fe2fc0d7aa47cb120ab9a5ce40fcf8bf2e88ae32e0ed7a96d42205120ff8",
-    "SampledProofs.jeq._sparseCasesOn_1": "85bce44fa0f2416ffd0c4db80592f6c889b3dc84062d4fbfa638eea12deaffa0",
     "SampledProofs.keys?": "37a2652f9459bf97591b2a36a044d6e2207e92884bab9efd2d2599a0c97a7299",
     "SampledProofs.keys?._sparseCasesOn_1": "ef41f3087eb4a309d964c51e1129b1eaee1c4b9a40c4d188e57d34354728a018",
     "SampledProofs.nat?": "9ec60004020227f25f1827bd5002d740f81ded9156d6f123ae99d13eef8d50fc",
-    "SampledProofs.pyRepr": "8029d0704dab2d8880ca760d813ae20b7355e0288c0787dec2f0a4cb2116c274",
-    "SampledProofs.sortStrings": "eafeb4424c88e596bb6f173558cbe70ed56327a1830957c875e0fbeb7b475f11",
-    "SampledProofs.truthy": "11abf6565a57eb70a95b0fb7617b17d0d850296987b524be5d2d35757db7db4f",
-    "_private.SampledProofs.Json.0.SampledProofs.hexDigits": "4caf758cb28fc30e4e641ee7f8165b4f2fa6340f153d37dcaa1904c4ed3bfda2"
+    "SampledProofs.sortStrings": "eafeb4424c88e596bb6f173558cbe70ed56327a1830957c875e0fbeb7b475f11"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2", "Flock.SecurityProofs.SampledKSLiveV3"]
   },
