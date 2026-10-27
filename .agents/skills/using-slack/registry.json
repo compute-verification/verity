@@ -120,6 +120,7 @@
         "verity/",
         "verity/core/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
+        "benchmarks/flock_pod/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
