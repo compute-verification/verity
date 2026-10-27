@@ -5,12 +5,14 @@ them), and on rows whose residual add, squares or variance overflow, underflow o
 Llama-3.2-1B's down_proj each unit fits a C-Flock proof block where v2 does not."""
 from __future__ import annotations
 
+import importlib.util
 from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.definitions.registry import b1
 from verity.ml.windows import interface as IF
@@ -119,6 +121,18 @@ def test_at_llama_1b_down_proj_each_unit_fits_a_proof_block():
         assert rows == [8] * 64 + [4096, 512] and len(rows) <= ROWS and max(rows) > SHA512_LAST_BLOCK_BYTES
     rows = _rows_of(tail, {"r": N // C})
     assert rows == [512] * 8 + [4096, 4096, 4096] and len(rows) <= ROWS and max(rows) > SHA512_LAST_BLOCK_BYTES
+
+
+def test_the_catalogs_count_holds_after_these_evaluations_in_one_process():
+    """Evaluating the norm at statics no registry module binds registers constants (N and EPS as f32) in this process's
+    registry that the catalog does not; `test_catalog`'s count, run after it here, is still the catalog's."""
+    spec = importlib.util.spec_from_file_location("test_catalog_after_rmsnorm_fused_add", Path(__file__).with_name("test_catalog.py"))
+    catalog_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(catalog_test)
+    _, x, res, w = _rows(np.random.default_rng(0), 24)[0]
+    _split(24, 3e-6, 8, x, res, w)
+    assert {"Const32[0x41c00000]_v1", "Const32[0x3649539c]_v1"} <= set(REGISTRY.defs) - set(catalog_test.fresh()["ids"])
+    catalog_test.test_the_catalog_loads_every_definition_and_no_other()
 
 
 @pytest.mark.parametrize("kw", [{"N": 2048, "C": 300, "AT": 0}, {"N": 2048, "C": 256, "AT": 8}, {"N": 2048, "C": 256, "AT": -1},
