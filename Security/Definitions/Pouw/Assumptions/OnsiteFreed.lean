@@ -1,9 +1,9 @@
-import Definitions.Pouw.ServedFreed
+import Definitions.Pouw.OnsiteFreed
 
 /-!
 # The onsite PoUW protocol's freed compute: its named premises (trusted)
 
-The premises `Definitions.Pouw.Guarantees.ServedFreed` takes besides the accelerator model's device premises (G1, G2,
+The premises `Definitions.Pouw.Guarantees.OnsiteFreed` takes besides the accelerator model's device premises (G1, G2,
 P1, P2) and the period's dual price:
 
 * `RemoteWorkFloor`: the remote form's conclusion in this vocabulary. A prover whose whole inventory is the registered
@@ -24,24 +24,21 @@ namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither
 
-/-- `pouw-served-work-floor` (proposed; the remote form, WORK-H1's `Properties.Pouw.ServedWork.ServedWork`, CMP-145).
-**An accepted period's exchange-free work is at least `F` at the dual price**: in the model at its device premises,
-for every prover whose programs exchange no bits with machines outside the registered devices (`Prover.ExchangeFree`:
-its whole inventory is those devices), the probability over the oracle and the verifier's coins that the work check
-`vw` accepts its transcript and its sampling blocks' timed work costs less than `F` at the prices `μ` is at most `κ`.
+/-- `pouw-remote-work-floor` (proposed; the remote form's conclusion, CMP-145). **An accepted period's exchange-free
+work is at least `F` at the dual price**: in the model at its device premises, for every prover whose programs
+exchange no bits with machines outside the registered devices (`Prover.ExchangeFree`: its whole inventory is those
+devices), the probability over the oracle and the verifier's coins that the work check `vw` accepts its transcript and
+its sampling blocks' timed work costs less than `F` at the prices `μ` is at most `κ`.
 
-It is the remote form's conclusion, at one credit for the whole accepted period: at the served check (H1, J10-R,
-`PouwCheck.Credit.window`) WORK-H1's `ServedWork` gives `F = p · L − Λ`, `p` the public best's priced cost a credited
-word, `L` the least credit an accepted period carries (its `creditPrefix`, the `(1 − ε(j))₊` share of its prefix's
-live words, depends on the period; `F` here is one number, so `L` is that credit's least value over the periods the
-check accepts) and `Λ` the windows' luck allowances, and
-`κ = δ_s + n (δ_bind + δ_ks) + n κ_deg(B)` at the advice bound `B` that (G1)'s memory puts on every prover's state. It
-is taken here as a premise until that guarantee's paths and window programs are this vocabulary's oracle, coins and
-provers.
+It is the remote form's conclusion, at one credit for the whole accepted period. A remote guarantee in this vocabulary
+gives it: at `Proofs.Pouw.DitherWitness`'s instance `WorkSound`'s conclusion does
+(`Pouw.SecurityProofs.OnsiteFreedWitness.twFloor`). At the served check (H1, J10-R, `PouwCheck.Credit.window`) the
+onsite form doesn't take it: `Properties.Pouw.Served.ServedFreed` composes WORK-H1's `ServedWork` itself, whose floor
+depends on the period's credit.
 
-It rests on SAK for matrix products at the served words (`SAKServed`, `Pouw.SakLb.SAKResidual`), on the proof system's
-soundness (`ProofSystemSound` in prose; J10-R's `TileServiceSound`), and, where the commitment's hashing is credited,
-on SAK for SHA-512 (`SAKSha` in prose; `ShaSpeed` in Lean). Under RM1 it is false of 𝓜 as written (module doc).
+It rests on SAK for the credited work (`SakLb.SAKResidual` for matrix products), on the proof system's soundness
+(`ProofSystemSound` in prose), and, where the commitment's hashing is credited, on SAK for SHA-512 (`SAKSha` in prose;
+`ShaSpeed` in Lean). Under RM1 it is false of 𝓜 as written for a check that credits matrix products (module doc).
 
 It is falsified by an exchange-free strategy on the registered devices whose period the work check accepts, with
 probability more than `κ`, at a priced timed work below `F`. -/

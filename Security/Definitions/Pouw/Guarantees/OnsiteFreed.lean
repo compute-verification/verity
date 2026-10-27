@@ -1,14 +1,13 @@
-import Definitions.Pouw.Assumptions.ServedFreed
+import Definitions.Pouw.Assumptions.OnsiteFreed
 
 /-!
 # The onsite PoUW protocol's freed compute (trusted)
 
-`ServedFreed`: an accepted onsite period frees at most `ε C` of the registered devices' capacity at the period's dual
-price, R-ACCEL-1's freed compute (`Pouw.Dither.FreedSound`), for the served check. It composes:
+`OnsiteFreed`: an accepted onsite period frees at most `ε C` of the registered devices' capacity at the period's dual
+price, R-ACCEL-1's freed compute (`Pouw.Dither.FreedSound`), for any work check over a round protocol. It composes:
 
 * the remote form's floor (`RemoteWorkFloor`): an accepted period of a prover whose whole inventory is the registered
-  devices spent at least `F` of priced timed work on them, but with probability `κ` (WORK-H1's
-  `Properties.Pouw.ServedWork.ServedWork` at the served check);
+  devices spent at least `F` of priced timed work on them, but with probability `κ`;
 * the network certifier's count (`CertifiedImport`): the certifier's check accepts a period whose programs exchanged
   more than `K` bits with machines outside the registered devices but with probability `δ`;
 * the price of an exchanged bit over the period's programs together (`OutsourceWithinEgressPeriod`, RT-POOL RP21):
@@ -19,6 +18,10 @@ price, R-ACCEL-1's freed compute (`Pouw.Dither.FreedSound`), for the served chec
 The remote and onsite forms differ in one premise: the remote form prices no outside machine, since the inventory is
 everything the prover runs, and the onsite form prices each bit that crosses the registered devices' boundary at `β`,
 the certifier bounding how many do.
+
+At the served check (H1, J10-R, `PouwCheck.Credit.window`) the same composition is
+`Properties.Pouw.Served.ServedFreed`, over WORK-H1's `ServedWork` in the play's vocabulary, with no remote floor
+taken as a premise.
 -/
 
 namespace Pouw.Guarantees
@@ -43,24 +46,20 @@ then for every prover, the probability over the oracle and the verifier's coins 
 period (`onsiteVerdict vw vn`: both checks) and some other work `z` fits on the registered devices beside its sampling
 blocks' timed work with `rv + W_other(z) > OPT_honest + ε C` is at most `κ + δ`, where `ε C = max(0, C − F + β K)`.
 
-At WORK-H1's served floor `F = p L − Λ`, `L` the least credit an accepted period carries (`RemoteWorkFloor`'s
-docstring), the period frees at most `(C − p L) + Λ + β K`: the honest cost the public best doesn't account for, the
-luck allowances, and the certifier's bits at `β` each.
-
 **Non-vacuity rests on the fixed model.** RM1 (note:compute-research/20261027T0035Z-draft-rt-model-min): on 𝓜 as
-`Definitions.Core.Accel` writes it, SAK for matrix products is false, and so is `RemoteWorkFloor` at any useful `F`.
-This statement says something only on the model MODEL-MIN fixes (CMP-165).
+`Definitions.Core.Accel` writes it, SAK for matrix products is false, and so is `RemoteWorkFloor` at any useful `F`
+for a check that credits matrix products. This statement says something there only on the model MODEL-MIN fixes
+(CMP-165).
 
 Open (stated so the red team can aim at them):
-* `RemoteWorkFloor` is the remote form's conclusion taken as a premise: WORK-H1's `ServedWork` proves it in the J10-R
-  play's vocabulary, and the bridge to this one (its paths as the oracle and coins, its window programs as a prover's
-  sampling blocks, `PouwCheck.Credit.window` as `vw`, its period-dependent credit at its least value) is not written;
+* `RemoteWorkFloor` is the remote form's conclusion taken as a premise. At the served check it isn't needed:
+  `Properties.Pouw.Served.ServedFreed` composes WORK-H1's `ServedWork` itself;
 * `CertifiedImport` counts bits (`Prover.ext`), while the certifier's guarantee
   (`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out (at most `2^K`
   values) in Accounting's device vocabulary: the step from one to the other is open (NET-84);
 * `OutsourceWithinEgressPeriod` is claimed where the coins stay in the certifier's boundary (`CoinsConfidential`,
   RP4); for the MVP that is placement (`WitnessPathPrivate`), whose discharge is the secure-transport workstream's. -/
-def ServedFreed : Prop :=
+def OnsiteFreed : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) (vw : Verdict P k Unit) (vn : Verdict P k Obs)
     (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ) (F β K κ δ : ℝ),
     Pd.DualOpt μ 1 → 0 < ∑ r, μ r * (1 * Pd.hon r) → 0 ≤ β →

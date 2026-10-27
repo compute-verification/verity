@@ -1,11 +1,11 @@
-import Definitions.Pouw.Guarantees.ServedFreed
+import Definitions.Pouw.Guarantees.OnsiteFreed
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 
 /-!
 # The onsite PoUW protocol's freed compute: the proof
 
-* `ServedFreed`: the guarantee `Definitions.Pouw.Guarantees.ServedFreed`. The outsourcing premise turns the prover
+* `OnsiteFreed`: the guarantee `Definitions.Pouw.Guarantees.OnsiteFreed`. The outsourcing premise turns the prover
   into an exchange-free one with the same transcript, which the work check accepts wherever it accepts the prover. Off
   the remote floor's bad event that one spent at least `F`, so the prover spent at least `F − β · ext`, and off the
   certifier's bad event `ext ≤ K`. `FreedOfFloor` turns the floor `F − β K` into freed compute, and the union bound
@@ -14,7 +14,7 @@ import Proofs.Pouw.DitherWitness
 * `outsourcePeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
   `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
   path, and so the transcript, is unchanged, and the answers' exchanged bits are nonnegative (G2).
-* `ServedFreed_honest`, `ServedFreed_nontrivial` (LEAN-66): at `Proofs.Pouw.DitherWitness`'s machine `tw`, round
+* `OnsiteFreed_honest`, `OnsiteFreed_nontrivial` (LEAN-66): at `Proofs.Pouw.DitherWitness`'s machine `tw`, round
   `twRound` and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`), with the work check the witness's sampling blocks'
   checks (`twVerdict`). Every premise holds there: the remote floor at `F = (1 − ε_W) C`, `ε_W = 1/7 + ln 2 / 2`
   `WorkSound`'s error at the witness, from `WorkSound`'s conclusion there (`witness_freed`) by filling each resource the
@@ -37,8 +37,8 @@ theorem floor_of_max {C X F e : ℝ} (hC : 0 < C) (h : F - e ≤ X) : (1 - max 0
   rw [sub_mul, div_mul_cancel₀ _ hC.ne', one_mul]
   linarith [le_max_right 0 (C - F + e)]
 
-/-- **An accepted onsite period frees at most `ε C`** (`Definitions.Pouw.Guarantees.ServedFreed`). -/
-theorem ServedFreed : Pouw.Guarantees.ServedFreed := by
+/-- **An accepted onsite period frees at most `ε C`** (`Definitions.Pouw.Guarantees.OnsiteFreed`). -/
+theorem OnsiteFreed : Pouw.Guarantees.OnsiteFreed := by
   intro G P k Obs vw vn dev Pd μ F β K κ δ hdual hC hβ hG1 hG2 hP1 hP2 hfloor hout himp A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
   obtain ⟨A', hfree, hA'⟩ := hout hG1 hG2 hP1 hP2 A
@@ -140,7 +140,7 @@ theorem outsourcePeriod_of_perProgram (G : Accel) (P : RoundProto) (k : ℕ) (μ
 
 end PerProgram
 
-namespace ServedFreedWitness
+namespace OnsiteFreedWitness
 
 open Pouw.SecurityProofs.DitherWitness
 
@@ -302,19 +302,19 @@ theorem prob_eq_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h 
   unfold prob
   rw [filter_true_of_mem fun ω _ => h ω, card_univ, div_self (by exact_mod_cast Fintype.card_ne_zero)]
 
-end ServedFreedWitness
+end OnsiteFreedWitness
 
 section Witnesses
 
-open Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.ServedFreedWitness
+open Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFreedWitness
 
-/-- **`ServedFreed`'s honest witness** (LEAN-66, CMP-145): at `Proofs.Pouw.DitherWitness`'s machine, round and period,
-every premise of `ServedFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
+/-- **`OnsiteFreed`'s honest witness** (LEAN-66, CMP-145): at `Proofs.Pouw.DitherWitness`'s machine, round and period,
+every premise of `OnsiteFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
 `F = (1 − ε_W) C` and `κ = 1/2` (from `WorkSound` there), the period form of the outsourcing premise (from the
 per-program one) and the certifier's count at `K = 0` and `δ = 0`. The bound says something (`ε = ε_W < 1`,
 `κ + δ = 1/2`), and the onsite verdict accepts the honest prover, which exchanges nothing, on every oracle and
 coins. -/
-theorem ServedFreed_honest :
+theorem OnsiteFreed_honest :
     twPd.DualOpt twμ 1 ∧ 0 < ∑ r, twμ r * (1 * twPd.hon r) ∧ (0 : ℝ) ≤ 0 ∧
       tw.G1 ∧ tw.G2 ∧ tw.P1 ∧ tw.P2 ∧
       RemoteWorkFloor tw twRound 2 twVerdict twμ twF (1 / 2) ∧
@@ -330,11 +330,11 @@ theorem ServedFreed_honest :
   show ∑ _b : Fin 2, ((0 : ℝ) + 0) ≤ 0
   simp
 
-/-- **`ServedFreed`'s nontrivial witness** (LEAN-66, CMP-145): its conclusion at the honest witness's instance
+/-- **`OnsiteFreed`'s nontrivial witness** (LEAN-66, CMP-145): its conclusion at the honest witness's instance
 (`ε = ε_W`, `C = 14`, `κ + δ = 1/2`) is false at verdicts that accept everything. The quiet prover is accepted on
 every oracle and coins and leaves the period to other work worth 46, against at most `32 + ε C < 46` for any honest
 strategy, so the event has probability 1. -/
-theorem ServedFreed_nontrivial :
+theorem OnsiteFreed_nontrivial :
     ¬ FreedSound tw twRound 2 (onsiteVerdict (fun _ _ _ _ => True) (fun _ _ _ _ => True)) twDev twPd 1
       (fun _ => max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r))
       (∑ r, twμ r * (1 * twPd.hon r)) (fun _ => 1 / 2 + 0) := by
