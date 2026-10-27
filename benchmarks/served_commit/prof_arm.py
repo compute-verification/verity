@@ -2,7 +2,6 @@
 committer step end. Measurement only."""
 from __future__ import annotations
 
-import time
 from typing import Any, ClassVar
 
 import torch
@@ -193,17 +192,6 @@ class StockProfArm:
             f.write(json.dumps({"arm": self.id, "thread_cpu_s": cpu}) + "\n")
 
 
-class SwitchArm(RootsArm):
-    """The prof arm with a 0.5 ms GIL switch interval (default 5 ms) in its engine's process: if the serving thread waits for the
-    worker's Python, its step time falls."""
-
-    def ready(self, target: Any) -> None:
-        import sys
-
-        sys.setswitchinterval(0.0005)
-        super().ready(target)
-
-
 class NativeDrainArm(RootsArm):
     """`RootsArm` whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
     ``host_fast`` False puts the committer's step back as it was before its host-cost changes (slots staged as views, the step end in
@@ -229,14 +217,6 @@ class NativeDrainArm(RootsArm):
         com._nc.slot_fast = com.native_end = com.rows_off_thread = self.host_fast
 
 
-class NativeDrainBaseArm(NativeDrainArm):
-    batch_copies = host_fast = False
-
-
-class NativeDrainBatchArm(NativeDrainArm):
-    host_fast = False
-
-
 class RowsArm(NativeDrainArm):
     """`NativeDrainArm` committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
@@ -249,10 +229,6 @@ class RowsBaseArm(RowsArm):
 
 class RowsBatchArm(RowsArm):
     host_fast = False
-
-
-class NativeDrainRing8Arm(NativeDrainArm):
-    window = (256, 32)
 
 
 class RowsRing8Arm(RowsArm):
@@ -372,64 +348,6 @@ class RowsHiPrioArm(HiPrioArm):
     """`HiPrioArm` committing under rows-sha512."""
 
     commit_scheme = "rows-sha512"
-
-
-class FinalizeProfArm(NativeDrainArm):
-    """The nativedrain arm with the committer's finalize under cProfile: the top functions by cumulative time of each run's finalize
-    (inside the timed period) appended to $RESEARCH_RUN_DIR/out/finalize_prof.txt."""
-
-    def ready(self, target: Any) -> None:
-        import cProfile
-        import io
-        import os
-        import pstats
-
-        super().ready(target)
-        com, orig = self.committer, self.committer.finalize
-        out = os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out", "finalize_prof.txt")
-
-        def finalize():
-            pr = cProfile.Profile()
-            t0 = time.perf_counter()
-            pr.enable()
-            try:
-                return orig()
-            finally:
-                pr.disable()
-                buf = io.StringIO()
-                buf.write(f"== {self.id} run {len(self.runs)} finalize wall {1e3 * (time.perf_counter() - t0):.2f} ms\n")
-                pstats.Stats(pr, stream=buf).sort_stats("cumulative").print_stats(30)
-                with open(out, "a") as f:
-                    f.write(buf.getvalue())
-
-        com.finalize = finalize
-
-
-class _PassThroughBoundaries:
-    """A call-boundary source that takes every name as it is: the identity check's verdict is unchanged, but it judges every step."""
-
-    short_name = "pass_through"
-
-    def split_step_names(self, names: Any, step: int, padding_only: bool) -> tuple[Any, dict]:  # noqa: ARG002
-        return names, {}
-
-
-class NoMemoArm(NativeDrainArm):
-    """The nativedrain arm whose finalize checks identities step by step, as before the per-tuple verdicts."""
-
-    def ready(self, target: Any) -> None:
-        super().ready(target)
-        com, orig = self.committer, self.committer.finalize
-
-        def finalize():
-            src = _PassThroughBoundaries()
-            com.sources.append(src)
-            try:
-                return orig()
-            finally:
-                com.sources.remove(src)
-
-        com.finalize = finalize
 
 
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")

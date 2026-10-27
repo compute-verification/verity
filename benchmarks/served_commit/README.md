@@ -15,7 +15,7 @@ labeled run, `served.py` the served arm's runs).
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
-  serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges; `-base` and `-batch`
+  serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`
   arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the
   staging ring at 32 windows of 256 or 64 MiB; `-cap` arms hash in launches of at most `PROF_ROWS_CAP` CTAs while the
   ring has room; `-4k` arms hash 4 KiB rows, and `-layer` arms acquire only each layer's residual stream, K and V; no
