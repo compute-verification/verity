@@ -466,6 +466,12 @@ class GpuDriver:
         self.point_b.argtypes, self.point_b.restype = [ctypes.c_void_p, ctypes.c_void_p], ctypes.c_int
         self.levels_async = ctypes.CDLL(lib).hu_levels_async
         self.levels_async.argtypes, self.levels_async.restype = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_void_p], ctypes.c_int
+        so = ctypes.CDLL(lib)
+        self.lt_create, self.lt_run, self.lt_algo, self.lt_destroy = so.hu_lt_create, so.hu_lt_run, so.hu_lt_algo, so.hu_lt_destroy
+        self.lt_create.argtypes, self.lt_create.restype = [ctypes.c_int] * 3 + [ctypes.c_void_p] * 4, ctypes.c_void_p
+        self.lt_run.argtypes, self.lt_run.restype = [ctypes.c_void_p] * 5, ctypes.c_int
+        self.lt_algo.argtypes, self.lt_algo.restype = [ctypes.c_void_p, ctypes.c_void_p], None
+        self.lt_destroy.argtypes, self.lt_destroy.restype = [ctypes.c_void_p], None
         self.params = Path(tempfile.mkdtemp(prefix="highutil-params-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
         self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
         for name, n, k in LAYERS:
@@ -486,6 +492,16 @@ class GpuDriver:
             join = (lambda x: x[lis[0]]) if len(lis) == 1 else (lambda x: torch.cat([x[li] for li in lis], dim=2))
             self.plain.append((join(self.A), join(self.B), self.out[lis[0]] if len(lis) == 1 else
                                torch.empty((M, LAYERS[lis[0]][1]), dtype=torch.int32, device="cuda")))
+        # cuBLASLt's baseline (hu_lt_create: v31's own lt_setup, autotuned once a linear on block 0's operands), on
+        # torch's stream
+        self.stream = torch.cuda.current_stream().cuda_stream
+        self.lts, self.lt_algos = [], {}
+        for (a, w, o), linear in zip(self.plain, dict.fromkeys(name.split(".")[0] for name, _, _ in LAYERS)):
+            h = self.lt_create(M, w.shape[1], w.shape[2], a[0].data_ptr(), w[0].data_ptr(), o.data_ptr(), self.stream)
+            self.lts.append(h)
+            algo = (ctypes.c_int * 4)()
+            self.lt_algo(h, algo)
+            self.lt_algos[linear] = dict(zip(("algo", "tile", "stages", "splitk"), algo))
         # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async
         self.levels = [torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
                        for w, _, _ in self.geom]
@@ -518,15 +534,22 @@ class GpuDriver:
         torch, NL = self.torch, len(LAYERS)
         if steps < 1 or steps > self.rmax:
             raise ValueError(f"a block is 1 .. {self.rmax} steps")
-        if arm == "plain":
+        if arm.startswith("plain"):
+            base = arm.removeprefix("plain-")
+            if base not in BASELINES:
+                raise ValueError(f"a plain arm's baseline is one of {BASELINES}, not {base!r}")
             e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
             torch.cuda.synchronize()
             t0 = time.monotonic()
             e0.record()
             for s in range(steps):
                 t = (g0 + s) % NB
-                for a, w, o in self.plain:
-                    torch._int_mm(a[t], w[t].t(), out=o)
+                if base == "lt":
+                    for (a, w, o), h in zip(self.plain, self.lts):
+                        self.lt_run(h, a[t].data_ptr(), w[t].data_ptr(), o.data_ptr(), self.stream)
+                else:
+                    for a, w, o in self.plain:
+                        torch._int_mm(a[t], w[t].t(), out=o)
             e1.record()
             e1.synchronize()
             return {"gpu_ms": e0.elapsed_time(e1), "host_ms": 1e3 * (time.monotonic() - t0), "flags": 0, "sm_mhz": self._mhz()}
@@ -585,6 +608,9 @@ class GpuDriver:
     def close(self) -> None:
         if self.smi:
             self.smi.terminate()
+        self.torch.cuda.synchronize()
+        for h in self.lts:
+            self.lt_destroy(h)
         for p in self.ps:
             self.point_b(p.h, None)
             p.close()
@@ -608,7 +634,7 @@ class RefDriver:
         return step % NB
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
-        if arm == "plain":
+        if arm.startswith("plain"):
             return {"gpu_ms": 0.0, "host_ms": 0.0, "flags": 0, "sm_mhz": 0}
         NL, rec = len(LAYERS), seeds.read_bytes()
         kind, at = _split_cheat(cheat)
@@ -712,15 +738,15 @@ class Period:
                                  for kind in ("A", "B")}}
         return H("verity/highutil/registration/v1", json.dumps(reg, sort_keys=True).encode()), reg
 
-    def plain(self, pid: str, plan: Plan) -> dict:
-        """The baseline: the same calls through cuBLASLt, back to back, no coins."""
+    def plain(self, pid: str, plan: Plan, base: str = "lt") -> dict:
+        """A baseline: the same linears, each whole, back to back, no coins: cuBLASLt (``lt``) or torch._int_mm."""
         t0 = time.monotonic()
         blocks = []
         for b in range(plan.blocks):
-            blocks.append(self.drv.block(b, self.g, plan.steps, "plain", "none", self.work / "none", self.work / "none"))
+            blocks.append(self.drv.block(b, self.g, plan.steps, f"plain-{base}", "none", self.work / "none", self.work / "none"))
             self.g += plan.steps
         wall = time.monotonic() - t0
-        return {"period": pid, "arm": "plain", "blocks": blocks, "steps": plan.blocks * plan.steps, "wall_s": wall,
+        return {"period": pid, "arm": "plain", "baseline": base, "blocks": blocks, "steps": plan.blocks * plan.steps, "wall_s": wall,
                 "macs": plan.blocks * plan.steps * step_macs()}
 
     def proto(self, pid: str, plan: Plan, cheat: str = "none") -> dict:
@@ -862,12 +888,13 @@ def cmd_run(a: argparse.Namespace) -> int:
             print("driver " + " ".join(drv.ready), flush=True)
             per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
-            drv.block(0, 0, min(plan.steps, 50), "plain", "none", work / "none", work / "none")
-            arms = [x for x in ("proto", "plain") if a.arms in ("both", x)]
+            bases = baselines(a.plain)
+            drv.block(0, 0, min(plan.steps, 50), f"plain-{bases[0]}", "none", work / "none", work / "none")
+            arms = (["proto"] if a.arms in ("both", "proto") else []) + ([f"plain-{b}" for b in bases] if a.arms in ("both", "plain") else [])
             schedule = [(x, "none") for x in arms] * a.periods + ([("proto", a.negative)] if a.negative else [])
             for x, (arm, cheat) in enumerate(schedule):
                 pid = f"{a.tag}-{x:02d}-{arm}" + ("" if cheat == "none" else "-" + cheat.replace(":", "").replace("@", "l"))
-                r = per.proto(pid, plan, cheat) if arm == "proto" else per.plain(pid, plan)
+                r = per.proto(pid, plan, cheat) if arm == "proto" else per.plain(pid, plan, arm.removeprefix("plain-"))
                 results.append(r)
                 with open(out / "periods.jsonl", "a") as f:
                     f.write(json.dumps(r, default=str) + "\n")
@@ -878,7 +905,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         for p in work.glob("challenger-*"):
             shutil.copytree(p, out / "challenger" / p.name.removeprefix("challenger-"), dirs_exist_ok=True)
         shutil.rmtree(work, ignore_errors=True)
-    summary = summarize(results, plan, source, card)
+    summary = summarize(results, plan, source, card, getattr(drv, "lt_algos", None))
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps(summary, indent=1))
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
@@ -937,9 +964,26 @@ def cmd_diag(a: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def summarize(results: list[dict], plan: Plan, source: dict | None = None, card: dict | None = None) -> dict:
+#: the plain arm's baselines: the same linears, each whole, through
+BASELINES = {"lt": "cuBLASLt's int32 GEMM, autotuned by v31.cu's lt_setup (the call a V31_LTW call makes for X W'^T)",
+             "int_mm": "torch._int_mm (on the H200, CUTLASS's sm80 i16832 mma.sync kernel)"}
+
+
+def baselines(spec: str) -> list[str]:
+    bases = [b for b in spec.split(",") if b]
+    if not bases or any(b not in BASELINES for b in bases):
+        raise SystemExit(f"--plain: a comma-separated list of {', '.join(BASELINES)}, not {spec!r}")
+    return bases
+
+
+def summarize(results: list[dict], plan: Plan, source: dict | None = None, card: dict | None = None,
+              lt_algos: dict | None = None) -> dict:
+    """The run's numbers. gamma and the plain share are against the first baseline the run timed (cuBLASLt by default);
+    ``baselines`` has them against each."""
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
-    plain = [r for r in results if r["arm"] == "plain"]
+    plains = [r for r in results if r["arm"] == "plain"]
+    order = list(dict.fromkeys(r.get("baseline", "lt") for r in plains))
+    plain = [r for r in plains if r.get("baseline", "lt") == (order[0] if order else None)]
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
     med = lambda v: float(np.median(v)) if v else None  # noqa: E731
     per_step = lambda r: r["wall_s"] / r["steps"]  # noqa: E731
@@ -983,6 +1027,18 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
         plain_gpu = out["plain_gpu_s_per_step"] = med([gpu_step(r) for r in plain])
         out["proto_gpu_s_per_step"] = med([gpu_step(r) for r in honest])
         out["gamma_gpu"] = out["proto_gpu_s_per_step"] / plain_gpu if plain_gpu else None
+    out["baseline"] = order[0] if order else None
+    out["baselines"] = {}
+    for base in order:
+        rs = [r for r in plains if r.get("baseline", "lt") == base]
+        b_wall, b_gpu = med([per_step(r) for r in rs]), med([gpu_step(r) for r in rs])
+        out["baselines"][base] = {
+            "kernel": BASELINES[base], "plain_s_per_step": b_wall, "plain_gpu_s_per_step": b_gpu,
+            "gamma_wall": out["proto_s_per_step"] / b_wall if out["proto_s_per_step"] and b_wall else None,
+            "gamma_gpu": out.get("proto_gpu_s_per_step") / b_gpu if out.get("proto_gpu_s_per_step") and b_gpu else None,
+            "plain_share_of_peak": {key: med([r["macs"] / r["wall_s"] / peak for r in rs])
+                                    for key, peak in out["peak_macs_s"].items()},
+            **({"cublaslt_algos": lt_algos} if base == "lt" and lt_algos else {})}
     return out
 
 
@@ -1019,6 +1075,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("--periods", type=int, default=2, help="protocol periods, each followed by a plain one")
     p.add_argument("--negative", default="skip:2@2", help="the cheating period's v31 cheat (`@L`: layer L only); empty: none")
     p.add_argument("--arms", choices=("both", "proto", "plain"), default="both", help="one arm only (a profile of it)")
+    p.add_argument("--plain", default="lt,int_mm", help="the plain arm's baselines, comma-separated, gamma's first: lt "
+                   "(cuBLASLt, v31's own lt_setup) and int_mm (torch._int_mm)")
     p.add_argument("--tag", default="hu")
     p.add_argument("--workers", type=int, default=0)
     p.set_defaults(fn=cmd_run)

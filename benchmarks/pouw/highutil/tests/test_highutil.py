@@ -66,6 +66,24 @@ def test_the_card_s_share_and_the_terms_of_the_rest_sum_to_one():
     assert math.isclose(t["eps"], 0.07 + 1 - t["terms"]["certified"])
 
 
+def test_gamma_is_against_the_first_baseline_timed_and_each_baseline_has_its_own():
+    P.configure({"layers": [["a", 256, 512]], "m": 1024, "nb": 4})
+    steps, macs = 10, 10 * P.step_macs()
+    blocks = lambda gpu_ms: [{"gpu_ms": gpu_ms, "sm_mhz": 1500}]  # noqa: E731
+    proto = {"arm": "proto", "cheat": "none", "credited_macs": macs, "macs": macs, "wall_s": 0.03, "steps": steps,
+             "blocks": blocks(24.0), "gaps_s": [], "session_open_s": 1.0, "q": 64, "eps_skip": 0.07, "accepted": True,
+             "verdict": "ACCEPT"}
+    plain = lambda base, wall, gpu: {"arm": "plain", "baseline": base, "cheat": "none", "macs": macs, "wall_s": wall,  # noqa: E731
+                                     "steps": steps, "blocks": blocks(gpu)}
+    s = P.summarize([proto, plain("lt", 0.01, 8.0), plain("int_mm", 0.015, 12.0)], P.Plan(1, steps, 64))
+    assert s["baseline"] == "lt" and math.isclose(s["gamma_gpu"], 3.0) and math.isclose(s["gamma_wall"], 3.0)
+    assert math.isclose(s["baselines"]["int_mm"]["gamma_gpu"], 2.0) and math.isclose(s["baselines"]["int_mm"]["gamma_wall"], 2.0)
+    assert s["baselines"]["lt"]["gamma_gpu"] == s["gamma_gpu"]
+    assert P.baselines("lt,int_mm") == ["lt", "int_mm"]
+    with pytest.raises(SystemExit):
+        P.baselines("scaled_mm")
+
+
 def test_the_and_credit_per_mac_is_main_s_s8_accumulator_lowering_on_both_cards_imma_steps():
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.bits import compile as compile_bits

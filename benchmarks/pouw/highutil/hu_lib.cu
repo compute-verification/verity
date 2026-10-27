@@ -35,4 +35,31 @@ int hu_levels_async(void* h, uint64_t c, void* dst) {
   CK(cudaMemcpyAsync(dst, f.cm[b].levels, f.levels_count() * 64, cudaMemcpyDeviceToHost, f.s1));
   return 0;
 }
+
+// The plain arm's cuBLASLt baseline: D (m x n int32, row-major) = A (m x k int8) B^T (B n x k), through v31.cu's own
+// lt_setup (autotuned over the heuristic's candidates at these pointers, on stream st) and lt_run, the call a V31_LTW
+// call makes for its X W'^T. A later run may take other pointers of the same shapes.
+void* hu_lt_create(int m, int n, int k, const void* A, const void* B, void* D, void* st) {
+  Lt* L = new Lt();
+  lt_setup(*L, m, n, k, static_cast<const int8_t*>(A), static_cast<const int8_t*>(B), static_cast<int*>(D),
+           static_cast<cudaStream_t>(st));
+  return L;
+}
+
+int hu_lt_run(void* h, const void* A, const void* B, void* D, void* st) {
+  lt_run(*static_cast<Lt*>(h), static_cast<const int8_t*>(A), static_cast<const int8_t*>(B), static_cast<int*>(D),
+         static_cast<cudaStream_t>(st));
+  return 0;
+}
+
+// the kernel cuBLASLt picked: algo id, tile id, stages and split-K into out[0..3]
+void hu_lt_algo(void* h, int* out) {
+  const Lt& L = *static_cast<Lt*>(h);
+  out[0] = L.algo_id, out[1] = L.tile, out[2] = L.stages, out[3] = L.splitk;
+}
+
+void hu_lt_destroy(void* h) {
+  lt_free(*static_cast<Lt*>(h));
+  delete static_cast<Lt*>(h);
+}
 }

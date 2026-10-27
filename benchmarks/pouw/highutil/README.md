@@ -17,8 +17,10 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   so a call takes the least L' from 512 to `--lp-max` that covers its K (`period.lp_of`), and down (K = 14,336, which
   would need L' >= 1,792) runs as K-slices (`period.calls`) whose outputs sum to its own: four of 3,584 at L' 512 (t = 7,
   run.sh's default), or two of 7,168 at L' 1,024 (`LP_MAX=1024`, t = 7), which measured 1.7% more GPU time a step.
-  QKV, O and gate-and-up are whole at L' = 512 (t = 8). The plain arm is cuBLASLt (`torch._int_mm`) on the same linears, each
-  whole, so the slicing's cost counts against the protocol.
+  QKV, O and gate-and-up are whole at L' = 512 (t = 8). The plain arm runs the same linears, each whole, so the slicing's cost counts
+  against the protocol, through each of `--plain`'s baselines: cuBLASLt (`lt`, v31.cu's own autotuned `lt_setup`, the call
+  a `V31_LTW` call makes; `hu_lt_create` in `hu_lib.cu`), against which γ is reported, and `torch._int_mm` (`int_mm`,
+  on the H200 CUTLASS's sm80 `mma.sync` kernel).
 - `hu_lib.cu` builds `libv31.so` from `v31.cu` with two functions more, so the host never waits on the device inside a
   block: `hu_point_b` points a call's weights at the block's device tensor (no `v31_set_b` copy and wait), and
   `hu_levels_async` copies each call's tree to page-locked memory behind its commit (no `v31_root` and `v31_levels`

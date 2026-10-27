@@ -14,11 +14,12 @@
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
 # card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
-# where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
+# where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. PLAIN (default
+# lt,int_mm): period.py's --plain, the plain arm's baselines, gamma's first: cuBLASLt (v31's lt_setup) and torch._int_mm. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
 # and L (default 512, 512 and 16384: S = 1 at every layer, down as four K-slices at L' 512; LP_MAX=1024 runs it as two at
 # L' 1,024, 1.7% more GPU time a step on the RTX, r20261027-071030-adb5 against -071726-a30c): prep's; NSYS=1: after the
-# periods, Nsight Systems over one plain and one protocol period (their
+# periods, Nsight Systems over one plain period of each baseline and one protocol period (their
 # kernels' share of the GPU's time); NCU=1: Nsight Compute over two steps of each arm (pipes.py: each kernel's tensor-pipe
 # active share and INT8 MACs, kernels serialized; pipes-{plain,proto}.json); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
@@ -80,7 +81,7 @@ if [ "$COINS" != local ]; then
   GATE=(--peer "${PEER:?}" --challenger-key "${CHALLENGER_KEY:?}" --gate-key "${GATE_KEY:?}")
 fi
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
-export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0} NCU=${NCU:-0}
+export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN PLAIN=${PLAIN:-lt,int_mm} NSYS=${NSYS:-0} NCU=${NCU:-0}
 export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARDA[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
@@ -102,7 +103,7 @@ $LEASE bash -c '
   echo "diag rc $?" >> "$O/rc.txt"
   r=0
   [ "$PERIODS" = 0 ] || $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$O" --coins "$COINS" --main "$MAIN" $GATE_ARGS $CARD_ARGS --blocks "$BLOCKS" --steps "$STEPS" \
-    --q "$Q" --periods "$PERIODS" --negative "$NEGATIVE" > "$O/period.log" 2>&1
+    --q "$Q" --periods "$PERIODS" --negative "$NEGATIVE" --plain "$PLAIN" > "$O/period.log" 2>&1
   r=$?
   echo "period rc $r" >> "$O/rc.txt"
   nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-after.txt" 2>&1
@@ -126,7 +127,7 @@ $LEASE bash -c '
     for arm in plain proto; do
       ncu --clock-control none --csv --page raw --print-units base --log-file "$O/ncu-$arm.csv" -c 600 \
         --metrics gpu__time_duration.sum,sm__ops_path_tensor_op_imma_src_int8.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__cycles_elapsed.avg.per_second \
-        --kernel-name "regex:^(Kernel2|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
+        --kernel-name "regex:^(Kernel2|sm[0-9]+_xmma|leaf_persist|salt_persist|noise_kernel|fill_a_kernel|fill_b_kernel|top_small|bits_kernel|perm_kernel|level_kernel)" \
         $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/ncu-$arm" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks 1 --steps 2 --q 16 --periods 1 \
         --negative "" --arms $arm >> "$O/ncu.log" 2>&1
       echo "ncu $arm rc $?" >> "$O/rc.txt"
