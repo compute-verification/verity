@@ -1,7 +1,7 @@
 """The timed block's kernel timeline from an Nsight Systems export (`nsys export --type sqlite`): the longest burst of
 kernels with no idle gap over `--gap-ms` (the period's timed block: the warm-up block and setup come before a host
 pause), its span, the union of its busy time, and each kernel's time and union, GEMMs named apart: the plain arm's
-cuBLASLt kernels and the protocol's `gemm_kernel`.
+cuBLASLt kernels (under V31_LTW the protocol's own GEMM too) and v31's `gemm_kernel`, and their union.
 
     timeline.py DB [--gap-ms 5]     prints one JSON object
 """
@@ -47,12 +47,13 @@ def main(argv: list[str] | None = None) -> int:
     for s, e, name in b:
         by[name].append((s, e))
     own = ("form_", "wrap", "bits_kernel", "noise_kernel", "perm_kernel", "salt_", "leaf_", "level_kernel", "top_", "forge_kernel",
-           "gemm_kernel", "fill_", "open_kernel")
+           "gemm_kernel", "fill_", "open_kernel", "pack_kernel")
     lt = [iv for n, ivs in by.items() if not n.startswith(own) for iv in ivs]
     pg = [iv for n, ivs in by.items() if n.startswith("gemm_kernel") for iv in ivs]
     span = t1 - t0
     out = {"span_ms": span / 1e6, "kernels": len(b), "busy_share": union([(s, e) for s, e, _ in b]) / span,
            "cublaslt_gemm_share": union(lt) / span, "protocol_gemm_share": union(pg) / span,
+           "gemm_share": union(lt + pg) / span,
            "by_kernel": sorted(({"name": n, "launches": len(ivs), "sum_ms": sum(e - s for s, e in ivs) / 1e6,
                                  "union_share": union(ivs) / span} for n, ivs in by.items()), key=lambda r: -r["sum_ms"])}
     print(json.dumps(out, indent=1))

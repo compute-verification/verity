@@ -1,5 +1,5 @@
 """HIGHUTIL's period on the CPU: the pick draw, ε, the operand openings, and whole periods at small shapes through v31.py's
-reference prover (`period.RefDriver`) with an in-process coin source: an honest period is accepted, and a skipping
+no-fold reference (`period.RefDriver`) with an in-process coin source: an honest period is accepted, and a skipping
 prover's, a tampered root's and a swapped operand's are refused."""
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def small(tmp_path_factory):
     P.configure(prep)
     secret = b"\x07" * 64
     trees = P.operand_trees(cfg, secret, _Serial())
-    drv = P.RefDriver(cfg, prep["row"])
+    drv = P.RefDriver(cfg, prep["row"], secret)
     work = tmp_path_factory.mktemp("work")
     return P.Period(drv, _Coins(), trees, cfg, prep["row"], prep["source"], secret, work, _Serial())
 
@@ -130,7 +130,9 @@ def test_an_honest_period_is_accepted(small):
 
 
 def test_a_skipping_prover_is_refused(small):
-    r = small.proto("t-skip", P.Plan(2, 2, 12), "skip:1@1")
+    """A prover that leaves noise tile 1 out of every call: a pick catches it when its inner index lands in that tile (1/8
+    of layer a's, 1/16 of b's), so 64 picks miss it with probability about 0.2%; the coins here are fixed."""
+    r = small.proto("t-skip", P.Plan(2, 2, 64), "skip:1")
     assert not r["accepted"] and r["credited_macs"] == 0 and r["failed"] > 0, r["verdict"]
     assert r["verdict"].startswith("REFUSE")
 
@@ -161,6 +163,6 @@ class _FirstBlockOnly(P.RefDriver):
 def test_computing_on_another_block_s_operands_is_refused(small, monkeypatch):
     """The block-1 step's roots commit values its registered operands don't produce, so its picks fail (all 24 picks
     missing that step: 2^-24)."""
-    monkeypatch.setattr(small, "drv", _FirstBlockOnly(small.cfg, small.row))
+    monkeypatch.setattr(small, "drv", _FirstBlockOnly(small.cfg, small.row, b"\x07" * 64))
     r = small.proto("t-swap", P.Plan(1, 2, 24))
     assert not r["accepted"] and 0 < r["failed"] < 24, r["verdict"]

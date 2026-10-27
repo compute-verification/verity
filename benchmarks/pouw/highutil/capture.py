@@ -4,7 +4,7 @@ The checkpoint is verity-int8/Llama-3.1-8B-INT8 (int8 weights, one float32 scale
 wikitext-2-raw-v1's test split, tokenized by the checkpoint's tokenizer into `--seqs` sequences of `--len` tokens (BOS
 first), M = seqs x len = 16,384 rows. Each linear is int8_exact's (integrations/vllm/verity_vllm/engine/int8_exact.py):
 x quantized one scale a token (s_a = absmax / 127, round half to even, |X| <= 127), Y = X W^T exact in int32
-(`torch._int_mm`), y = (Y s_a) s_w in bf16. The fused calls hu.cu runs are the model's own: q, k and v share one
+(`torch._int_mm`), y = (Y s_a) s_w in bf16. The fused calls the period runs are the model's own: q, k and v share one
 quantized input (QKV, 6144 rows of W), gate and up another (UP, 28672). Norms, RoPE (llama3 scaling), causal attention
 (grouped-query) and SiLU run in bf16 with float32 norms.
 

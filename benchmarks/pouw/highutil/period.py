@@ -1,6 +1,6 @@
 """HIGHUTIL: an 8B model's linear layers at full batch on one GPU, each call credited through Dither's no-fold receipt
-(verity/core/protocols/pouw/accel/PROTOCOL.md v3.2) on V31-GPU's prover, with live coins, and the certified share of the
-GPU's tensor peak that the periods establish.
+(CMP-172; v31.py's ``Fill``, under verity/core/protocols/pouw/accel/PROTOCOL.md v3.2's commit phase) on V31-GPU's
+prover, with live coins, and the certified share of the GPU's tensor peak that the periods establish.
 
 **The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
 14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back. A step is one transformer block's four calls,
@@ -12,29 +12,31 @@ batch, and the periods replay that one prefill. Both operands are committed befo
 (operand, layer, block), its rows hm96 rows (`OperandTree`), whose roots the registration carries. `prep --seeded`
 seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the checkpoint doesn't have.
 
-**A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then
-its sampling blocks run in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root
-receipt), and its seeds coin opens after it. Each call's five v31 seeds (dA, dB, U, V, P) are
-``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``. The GPU runs the block's calls, each committed under a
-frame-v3-sha512 root with a fresh salt key, and block b's value-root receipt is H(registration, b, its roots). Its check
-coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin draws Q W_b / W_reg proof
-blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its length, so each MAC is equally likely.
-Each pick's tree paths come off the host copy of its call's tree before the next block overwrites it.
+**A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
+the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
+in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root receipt), and its seeds coin
+opens after it. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
+seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
+call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding) under a frame-v3-sha512 root,
+its leaves salted under the Prover's own key for that call; block b's value-root receipt is H(registration, b, its
+roots). Its check coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin draws
+Q W_b / W_reg proof blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its length, so each MAC is
+equally likely. Each pick's tree paths come off the host copy of its call's tree before the next block overwrites it.
 
 **The verifier** (`verify_pick`), after the period: the prover's answer (`answer`: the opened rows recomputed from the
-tile's operands and coins, their salts and paths, and A's and B's rows with their operand openings) against v31.py's
-``check_block``, on the verifier's own seeds from the coins, the opened operand rows and the call's root.
-Credit is all-or-nothing: the period's MACs if every pick passes, else none. ε_skip = ln(1/δ)/(ηQ) at δ = 1%.
+operands and coins, their salts and paths, and A's and B's rows with their operand openings) against v31.py's
+``fill_check``, on the verifier's own seeds from the coins, the opened operand rows and the call's root. Credit is
+all-or-nothing: the period's MACs if every pick passes, else none. ε_skip = ln(1/δ)/(ηQ) at δ = 1%.
 
 **Deviations from v3.2**, each named in the report: the picks are a fixed Q W_b / W_reg a block, not ``poisson:Q``;
 the coins are 64-byte session coins expanded here, not the challenger's streamed seeds; no certifier signs the receipts
 (the challenger's release log records what each coin opened after); and the checks run in the clear, the stand-in for
 the Definition and C-Flock --zk.
 
-    period.py prep CFG (--checkpoint DIR | --seeded) [--row 32768] [--nb 32]   weights, params and shapes for hu
+    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--L 4096] [--nb 32]   the weights and shapes
     capture.py CFG --checkpoint DIR                                           the activations (on the GPU)
-    period.py diag CFG HU OUT                                                 one step's tiles against v31.py
-    period.py run CFG HU OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
+    period.py diag CFG LIB OUT                                                one step's GPU openings against the answers'
+    period.py run CFG LIB|ref OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
 """
 from __future__ import annotations
 
@@ -44,7 +46,6 @@ import json
 import math
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
@@ -74,7 +75,7 @@ from verity.ml.randomness import derive  # noqa: E402
 LAYERS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, T = 256, 3
+LP, L = 512, 4096   # the noise period L' and the word interval L (t = L / L' = 8; S = 1 at K = 4,096)
 TILE = v31.TILE
 SCHEME = "verity/highutil/period/v1"
 OPERANDS_TAG = "verity/highutil/operands/v1"
@@ -104,8 +105,8 @@ def u64(x: int) -> bytes:
     return x.to_bytes(8, "big")
 
 
-def shape(n: int, k: int, row: int, m: int | None = None) -> v31.Shape:
-    return v31.Shape(M if m is None else m, n, k, LP, T, row)
+def shape(n: int, k: int, row: int, m: int | None = None) -> v31.Fill:
+    return v31.Fill(M if m is None else m, n, k, LP, L, row)
 
 
 def step_macs() -> int:
@@ -201,9 +202,10 @@ def operand_trees(cfg: Path, secret: bytes, pool) -> dict[tuple[str, int, int], 
 
 
 def configure(prep: dict) -> None:
-    """The workload a config was prepared for (its layers, M and NB; the 8B shapes unless a test made it smaller)."""
-    global LAYERS, M, NB
+    """The workload a config was prepared for (its layers, M, NB, L' and L; the 8B shapes unless a test made it smaller)."""
+    global LAYERS, M, NB, LP, L
     LAYERS, M, NB = tuple(tuple(x) for x in prep["layers"]), prep["m"], prep["nb"]
+    LP, L = prep.get("lp", LP), prep.get("L", L)
 
 
 def checkpoint_weights(d: Path, name: str, modules: tuple[str, ...], t: int) -> np.ndarray:
@@ -224,9 +226,9 @@ def cmd_prep(a: argparse.Namespace) -> int:
     d = Path(a.cfg)
     d.mkdir(parents=True, exist_ok=True)
     if a.small:
-        configure({"layers": [["a", 256, 768], ["b", 128, 1536]], "m": 256, "nb": 2})
+        configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": 512})
     else:
-        configure({"layers": [list(x) for x in LAYERS], "m": M, "nb": a.nb})
+        configure({"layers": [list(x) for x in LAYERS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L})
     if a.checkpoint:
         ck = Path(a.checkpoint)
         if ck.name != CHECKPOINT["revision"]:
@@ -244,7 +246,7 @@ def cmd_prep(a: argparse.Namespace) -> int:
         source = {"weights": "seeded", "activations": "seeded", "seed": a.seed}
     lines = []
     for li, (name, n, k) in enumerate(LAYERS):
-        sh = shape(n, k, a.row)
+        shape(n, k, a.row)
         with open(operand_file(d, "B", name), "wb") as f:
             for t in range(NB):
                 w = checkpoint_weights(Path(a.checkpoint), name, FUSED[li][1], t) if a.checkpoint else \
@@ -256,18 +258,20 @@ def cmd_prep(a: argparse.Namespace) -> int:
             with open(operand_file(d, "A", name), "wb") as f:
                 for t in range(NB):
                     seeded_activations(M, k, (a.seed * 16 + li) * 64 + 32 + t).tofile(f)
-        (d / f"params-{name}.bin").write_bytes(v31.params_file(sh, os.urandom(64)))
         lines.append(f"{name} {M} {n} {k} {NB}")
     (d / "shapes.txt").write_text("\n".join(lines) + "\n")
-    (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "source": source}))
+    (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "lp": LP, "L": L, "source": source}))
     return 0
 
 
 # ---------------------------------------------------------------------------------------------------------- the coins
 def call_seeds(coin: bytes, period: str, block: int, receipt: bytes, steps: int) -> list[bytes]:
-    """The block's calls' v31 seeds (320 bytes: dA, dB, U, V, P), step-major, from its seeds coin."""
+    """The block's calls' seeds (384 bytes: dither's six streams, pad dA dB U V P), step-major, from its seeds coin: call
+    (s, layer)'s coin is the block coin's stream at it, and its seeds are dither.call_seeds under the block's window salt
+    (its operand-root receipt)."""
     key = derive(coin, "verity/pouw-accel/seeds/v1", {"period": period, "block": block, "receipt": receipt})
-    return [key.stream(("call", s, li), 320) for s in range(steps) for li in range(len(LAYERS))]
+    return [v31.fill_seeds_bytes(v31.call_seeds(receipt, key.stream(("call", s, li), 64)))
+            for s in range(steps) for li in range(len(LAYERS))]
 
 
 @dataclass(frozen=True)
@@ -297,76 +301,60 @@ def picks(coin: bytes, period: str, block: int, receipt: bytes, steps: int, q: i
     return out
 
 
-def positions(sh: v31.Shape, p: Pick) -> list[int]:
-    return ([sh.word_leaf(p.i, p.j, p.s)[0]] + ([sh.word_leaf(p.i, p.j, p.s - 1)[0]] if p.s > 1 else [])
-            + ([sh.o_leaf(p.i, p.j)[0]] if p.s == sh.S else []))
-
-
-def salt_key(secret: bytes, call: int) -> bytes:
-    """The prover's salt key for global call `call`: fresh a call, so no two calls' leaves share a salt."""
-    return H("verity/highutil/salt-key/v1", secret, u64(call))
+def positions(f: v31.Fill, p: Pick) -> list[int]:
+    return v31.fill_cells_positions(f, p.i, p.j, p.s)
 
 
 # ------------------------------------------------------------------------------------------------ prover and verifier
-class _RowView:
-    """One row of a coin array, indexed as check_block indexes the call's full array (`c.dA[i:i + 1]`)."""
-
-    def __init__(self, row: np.ndarray) -> None:
-        self.row = row
-
-    def __getitem__(self, _: slice) -> np.ndarray:
-        return self.row
-
-
 def _cheated(cheat: str) -> int | None:
     return int(cheat.split(":")[1]) if cheat.startswith("skip:") else None
 
 
+def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes], pos: int, skip: int | None = None) -> bytes:
+    """Leaf `pos`'s row as the prover committed it, recomputed from block t's operands and the call's coins: T_s of its
+    ROW / 2 cells (a run of a tile's rows, every column), mod 2^16, little-endian, in the tile's row-major order."""
+    tile, r = divmod(pos, f.lpt)
+    s, piece = r // f.row_w + 1, r % f.row_w
+    nr = f.row // 2 // TILE
+    tm, tn = divmod(tile, f.n // TILE)
+    i0, j0 = tm * TILE + piece * nr, tn * TILE
+    A = np.fromfile(afile, dtype=np.int8, count=nr * f.k, offset=(t * f.m + i0) * f.k).reshape(nr, f.k)
+    B = np.fromfile(bfile, dtype=np.int8, count=TILE * f.k, offset=(t * f.n + j0) * f.k).reshape(TILE, f.k)
+    fm = v31.form(f, A, B, v31.Coins.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
+    X = fm.X
+    if skip is not None:
+        X = X.copy()
+        X[:, skip * f.lp:(skip + 1) * f.lp] = 0
+    e = f.seg(s)[1]
+    return (v31.imatmul(X[:, :e], fm.Wp[:, :e]) & 0xFFFF).astype("<u2").tobytes()
+
+
 def answer(job: dict) -> dict:
-    """The prover's answer to one pick: the opened rows (recomputed from the tile's operands and coins, as committed), each
-    with its salt, leaf digest and path, and A's and B's rows with their operand openings."""
-    sh = shape(job["n"], job["k"], job["row"], job["m"])
-    tl = v31.Shape(TILE, TILE, sh.k, sh.lp, sh.t, sh.row)
-    seeds = v31.seeds_from(job["seeds"])
-    i, j, t = job["i"], job["j"], job["t"]
-    tm, tn = i // TILE, j // TILE
-    ia, ja = range(tm * TILE, tm * TILE + TILE), range(tn * TILE, tn * TILE + TILE)
-    A = np.fromfile(job["afile"], dtype=np.int8, count=TILE * sh.k, offset=(t * sh.m + tm * TILE) * sh.k).reshape(TILE, sh.k)
-    B = np.fromfile(job["bfile"], dtype=np.int8, count=TILE * sh.k, offset=(t * sh.n + tn * TILE) * sh.k).reshape(TILE, sh.k)
-    c = v31.Coins.rows(sh, seeds, ia, ja)
-    f = v31.form(tl, A, B, c)
+    """The prover's answer to one pick: the opened rows (recomputed from the operands and coins, as committed), each with
+    its salt and path, and A's and B's rows with their operand openings."""
+    f = shape(job["n"], job["k"], job["row"], job["m"])
+    seeds = v31.fill_seeds_from(job["seeds"])
     skip = _cheated(job["cheat"])
-    v = v31.values(tl, f, skip)
-    O = v31.binding(tl, f, c, v.T_full) if skip is not None else v.O
-    words, obuf = v31.words_buffer(tl, v.T), v31.o_buffer(O)
-    tile = tm * (sh.n // TILE) + tn
-    rows = {}
-    for pos, path in zip(job["positions"], job["paths"]):
-        row = v31.row_bytes(tl, words, obuf, pos - tile * sh.lpt)
-        salt = v31.cref.prf_salt(job["ks"], pos)
-        rows[pos] = (row, salt, v31.leaf_h(row, salt), tuple(path))
-    return {"rows": rows, "A": A[i - tm * TILE], "B": B[j - tn * TILE], "A_opening": job["A_opening"],
-            "B_opening": job["B_opening"]}
+    rows = {pos: (leaf_row(f, job["afile"], job["bfile"], job["t"], seeds, pos, skip), v31.cref.prf_salt(job["key"], pos),
+                  tuple(path)) for pos, path in zip(job["positions"], job["paths"])}
+    return {"rows": rows, "A_opening": job["A_opening"], "B_opening": job["B_opening"]}
 
 
 def verify_pick(job: dict, ans: dict) -> str | None:
     """The verifier's checks of one pick (None: passed): A's row i and B's row j against the registered operand roots of
-    the call's block, then v31.py's check_block on the verifier's own seeds, those rows and the call's root."""
-    sh = shape(job["n"], job["k"], job["row"], job["m"])
+    the call's block, then v31.py's fill_check on the verifier's own seeds, those rows and the call's root."""
+    f = shape(job["n"], job["k"], job["row"], job["m"])
     i, j, s, t = job["i"], job["j"], job["s"], job["t"]
-    for kind, x, rows in (("A", i, sh.m), ("B", j, sh.n)):
-        op = ans[f"{kind}_opening"]
-        why = operand_reason(kind, job["name"], t, rows, sh.k, job["operand_roots"][kind], x, op)
-        if why or op[0] != ans[kind].tobytes():
-            return why or f"the answer's {kind} row isn't its opened row"
-    seeds = v31.seeds_from(job["verifier_seeds"])
-    c = v31.Coins.rows(sh, seeds, range(i, i + 1), range(j, j + 1))
-    one = v31.Coins(_RowView(c.dA), _RowView(c.dB), _RowView(c.U), _RowView(c.V), c.perm)
-    want = set(positions(sh, Pick(0, 0, 0, i, j, s)))
+    for kind, x, rows in (("A", i, f.m), ("B", j, f.n)):
+        why = operand_reason(kind, job["name"], t, rows, f.k, job["operand_roots"][kind], x, ans[f"{kind}_opening"])
+        if why:
+            return why
+    want = set(v31.fill_cells_positions(f, i, j, s))
     if set(ans["rows"]) != want:
         return f"the answer opens leaves {sorted(ans['rows'])}, not {sorted(want)}"
-    return v31.check_block(sh, seeds, job["root"], i, j, s, {"rows": ans["rows"], "A": np.frombuffer(ans["A_opening"][0], np.int8),
-                                                             "B": np.frombuffer(ans["B_opening"][0], np.int8)}, one)
+    return v31.fill_check(f, v31.fill_seeds_from(job["verifier_seeds"]), job["root"], i, j, s,
+                          {"rows": ans["rows"], "A": np.frombuffer(ans["A_opening"][0], np.int8),
+                           "B": np.frombuffer(ans["B_opening"][0], np.int8)})
 
 
 def prove_and_verify(job: dict) -> tuple[int, str | None]:
@@ -376,45 +364,138 @@ def prove_and_verify(job: dict) -> tuple[int, str | None]:
         return job["index"], f"{type(e).__name__}: {e}"
 
 
-# --------------------------------------------------------------------------------------------------------- the driver
-class Driver:
-    """hu.cu over its stdin and stdout."""
+def _split_cheat(cheat: str) -> tuple[str, int | None]:
+    kind, _, at = cheat.partition("@")
+    return kind, int(at) if at else None
 
-    def __init__(self, hu: str, cfg: Path, row: int, rmax: int, log: Path, env: dict[str, str] | None = None) -> None:
-        self.p = subprocess.Popen([hu, str(cfg), str(row), str(LP), str(T), str(rmax)], stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=open(log, "ab"), text=True, bufsize=1,
-                                  env={**os.environ, **(env or {})})
-        self.ready = self._line("ready")
 
-    def _line(self, head: str) -> list[str]:
-        got = self.p.stdout.readline().split()
-        if not got or got[0] != head:
-            raise RuntimeError(f"hu answered {got} for {head} (rc {self.p.poll()}; its log has the rest)")
-        return got
+def _path(levels, width: int, depth: int, pos: int) -> bytes:
+    """Leaf pos's siblings, leaf level first, from a tree's levels laid out flat (leaves first, 64 bytes a node)."""
+    return b"".join(bytes(levels[64 * x:64 * x + 64]) for x in
+                    (2 * width - 2 * (width >> d) + ((pos >> d) ^ 1) for d in range(depth)))
+
+
+# --------------------------------------------------------------------------------------------------------- the drivers
+class GpuDriver:
+    """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, one a layer, each call's commit beside the next call's
+    compute) and plain cuBLASLt (torch._int_mm) on the same calls. Both operands of every block sit on the GPU; step g's
+    calls read block g mod NB. Each layer's calls run on a thread of its own (ctypes releases the GIL, so the four layers'
+    calls overlap on the device), and each call's tree levels are copied to host memory before the call two after it is
+    issued, for the openings after the block's check coin."""
+
+    def __init__(self, lib: str, cfg: Path, row: int, rmax: int) -> None:
+        import torch
+        import v31lib
+        from concurrent.futures import ThreadPoolExecutor
+        self.torch, self.rmax = torch, rmax
+        self.lib = v31lib.Lib(lib)
+        self.params = Path(tempfile.mkdtemp(prefix="highutil-params-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
+        self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
+        for name, n, k in LAYERS:
+            f = shape(n, k, row)
+            p = v31lib.Prover(M, n, k, LP, L, row, lib=self.lib, params_dir=str(self.params))
+            self.ps.append(p)
+            depth = p.info()["depth"]
+            self.geom.append((1 << depth, depth, (2 * (1 << depth) - 1) * 64))
+            for kind, rows, dst in (("A", M, self.A), ("B", n, self.B)):
+                x = np.fromfile(operand_file(cfg, kind, name), dtype=np.int8).reshape(NB, rows, k)
+                dst.append(torch.from_numpy(x).cuda())
+            self.out.append(torch.empty((M, n), dtype=torch.int32, device="cuda"))
+            assert f.S == p.info()["S"]
+        torch.cuda.synchronize()
+        self.ex = [ThreadPoolExecutor(1) for _ in LAYERS]
+        self.levels: list[np.ndarray] = [np.empty((0, 0), np.uint8)] * len(LAYERS)
+        self.keys: dict[tuple[int, int], bytes] = {}
+        self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {os.environ.get('V31_LTW', '0')}"]
+
+    def _mhz(self) -> int:
+        try:
+            return int(self.torch.cuda.clock_rate())
+        except Exception:
+            return 0
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
-        self.p.stdin.write(f"block {b} {g0} {steps} {arm} {cheat} {seeds} {roots}\n")
-        got = self._line("done")
-        return {"gpu_ms": float(got[2]), "host_ms": float(got[3]), "flags": int(got[4]), "sm_mhz": int(got[5])}
+        torch, NL = self.torch, len(LAYERS)
+        if steps < 1 or steps > self.rmax:
+            raise ValueError(f"a block is 1 .. {self.rmax} steps")
+        if arm == "plain":
+            e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            torch.cuda.synchronize()
+            t0 = time.monotonic()
+            e0.record()
+            for s in range(steps):
+                t = (g0 + s) % NB
+                for li in range(NL):
+                    torch._int_mm(self.A[li][t], self.B[li][t].t(), out=self.out[li])
+            e1.record()
+            e1.synchronize()
+            return {"gpu_ms": e0.elapsed_time(e1), "host_ms": 1e3 * (time.monotonic() - t0), "flags": 0, "sm_mhz": self._mhz()}
+        rec = seeds.read_bytes()
+        kind, at = _split_cheat(cheat)
+        got: list[bytes] = [b""] * (steps * NL)
+        self.levels = [np.empty((steps, g[2]), np.uint8) for g in self.geom]
+        self.keys = {}
+
+        def run(li: int) -> None:
+            p, lv = self.ps[li], self.levels[li]
+            bad = kind if kind != "none" and at in (None, li) else "none"
+
+            def collect(s: int, c: int) -> None:
+                got[s * NL + li] = p.root(c)
+                self.lib.check(self.lib.levels(p.h, c, lv[s].ctypes.data))
+                self.keys[(s, li)] = v31.call_key(p.ks, c)
+
+            prev = None
+            for s in range(steps):
+                t = (g0 + s) % NB
+                p.set_weights(self.B[li][t].data_ptr(), on_device=True)
+                c = p.prove(v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)]), self.A[li][t].data_ptr(), bad)
+                if prev is not None:
+                    collect(*prev)
+                prev = (s, c)
+            collect(*prev)
+
+        torch.cuda.synchronize()
+        t0 = time.monotonic()
+        for fu in [self.ex[li].submit(run, li) for li in range(NL)]:
+            fu.result()
+        ms = 1e3 * (time.monotonic() - t0)
+        roots.write_bytes(b"".join(got))
+        return {"gpu_ms": ms, "host_ms": ms, "flags": 0, "sm_mhz": self._mhz()}
+
+    def key(self, b: int, step: int, layer: int) -> bytes:
+        return self.keys[(step, layer)]
 
     def paths(self, b: int, picks_file: Path, out: Path) -> None:
-        self.p.stdin.write(f"paths {b} {picks_file} {out}\n")
-        self._line("paths")
+        recs = np.frombuffer(picks_file.read_bytes(), dtype="<u4").reshape(-1, 3)
+        with open(out, "wb") as f:
+            for s, li, pos in recs.tolist():
+                width, depth, _ = self.geom[li]
+                f.write(_path(self.levels[li][s], width, depth, pos))
+
+    def open_now(self, li: int, c: int, positions: list[int]):
+        """The GPU's own openings of call c (one of its layer's last two calls): rows, salts and paths."""
+        return self.ps[li].open(c, positions)
 
     def close(self) -> None:
-        if self.p.poll() is None:
-            self.p.stdin.write("quit\n")
-            self.p.stdin.close()
-            self.p.wait()
+        for e in self.ex:
+            e.shutdown()
+        for p in self.ps:
+            p.close()
+        shutil.rmtree(self.params, ignore_errors=True)
 
 
 class RefDriver:
-    """hu's commands on the CPU through v31.py's reference prover (``period.py run CFG ref ...``, and the tests): the same
-    values, roots and paths at small shapes, so the period's coins, picks, answers and verifier run without a GPU."""
+    """The GPU driver's commands on the CPU through v31.py's no-fold reference (``period.py run CFG ref ...``, and the
+    tests): the same words, roots and paths at small shapes, so the period's coins, picks, answers and verifier run
+    without a GPU. Each layer has its own Ks, and call c of a layer is salted under call_key(Ks, c), as the Prover's."""
 
-    def __init__(self, cfg: Path, row: int) -> None:
+    def __init__(self, cfg: Path, row: int, secret: bytes | None = None) -> None:
         self.cfg, self.row = cfg, row
+        self.ks = [os.urandom(64) if secret is None else H("verity/highutil/ref-ks/v1", secret, u64(li)) for li in range(len(LAYERS))]
+        self.calls = [0] * len(LAYERS)
         self.levels: dict[tuple[int, int], list] = {}
+        self.keys: dict[tuple[int, int], bytes] = {}
         self.ready = ["ready", "ref"]
 
     def block_of(self, step: int) -> int:
@@ -424,20 +505,26 @@ class RefDriver:
         if arm == "plain":
             return {"gpu_ms": 0.0, "host_ms": 0.0, "flags": 0, "sm_mhz": 0}
         NL, rec = len(LAYERS), seeds.read_bytes()
-        kind, _, at = cheat.partition("@")
-        self.levels, out = {}, []
+        kind, at = _split_cheat(cheat)
+        self.levels, self.keys, out = {}, {}, []
         for s in range(steps):
             for li, (_, n, k) in enumerate(LAYERS):
-                r = rec[384 * (s * NL + li):384 * (s * NL + li + 1)]
-                sh = shape(n, k, self.row)
+                f = shape(n, k, self.row)
                 t = self.block_of(g0 + s)
-                bad = kind if kind != "none" and (not at or int(at) == li) else None
-                pv, _ = v31.prove(sh, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
-                                  v31.seeds_from(r[:320]), r[320:], 0, bad)
-                self.levels[(s, li)] = pv.cm.levels
-                out.append(pv.cm.root)
+                sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
+                skip = _cheated(kind) if kind != "none" and at in (None, li) else None
+                T = v31.fill_words(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
+                                   v31.Coins.expand(f, sd), skip)
+                key = v31.call_key(self.ks[li], self.calls[li])
+                self.calls[li] += 1
+                cm = v31.fill_commit(f, v31.words_buffer(f, T), key)
+                self.levels[(s, li)], self.keys[(s, li)] = cm.levels, key
+                out.append(cm.root)
         roots.write_bytes(b"".join(out))
         return {"gpu_ms": 0.0, "host_ms": 0.0, "flags": 0, "sm_mhz": 0}
+
+    def key(self, b: int, step: int, layer: int) -> bytes:
+        return self.keys[(step, layer)]
 
     def paths(self, b: int, picks_file: Path, out: Path) -> None:
         recs = np.frombuffer(picks_file.read_bytes(), dtype="<u4").reshape(-1, 3)
@@ -504,14 +591,15 @@ class Plan:
 
 
 class Period:
-    def __init__(self, drv: Driver, coins: Coins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
+    def __init__(self, drv: GpuDriver | RefDriver, coins: Coins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
                  source: dict, secret: bytes, work: Path, pool: ProcessPoolExecutor) -> None:
         self.drv, self.coins, self.trees, self.cfg, self.row = drv, coins, trees, cfg, row
         self.source, self.secret, self.work, self.pool = source, secret, work, pool
         self.g = 0   # the next global step
 
     def registration(self, pid: str, plan: Plan) -> tuple[bytes, dict]:
-        reg = {"period": pid, "m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "lp": LP, "t": T, "row": self.row,
+        reg = {"period": pid, "receipt": "dither no-fold (v31.py Fill)", "m": M, "nb": NB, "layers": [list(x) for x in LAYERS],
+               "lp": LP, "L": L, "row": self.row,
                "blocks": plan.blocks, "steps_per_block": plan.steps, "q": plan.q, "first_step": self.g,
                "W_reg": plan.blocks * plan.steps * step_macs(), "source": self.source,
                "operand_roots": {kind: [[self.trees[(kind, li, t)].root.hex() for t in range(NB)] for li in range(len(LAYERS))]
@@ -537,7 +625,7 @@ class Period:
         address, secret, _ = session.open(reg_digest.hex(), [["seeds", plan.blocks], ["check", plan.blocks]], 30, SCHEME)
         client = self.coins.connect(address, secret)
         t_open = time.monotonic() - t_s
-        openings, blocks, all_picks, roots_of, seeds_of = [], [], [], {}, {}
+        openings, blocks, all_picks, roots_of, seeds_of, keys_of = [], [], [], {}, {}, {}
         per_block_q = plan.q // plan.blocks
         prev = reg_digest
         val = {}
@@ -558,6 +646,7 @@ class Period:
             for p, pos in meta:
                 _, n, k = LAYERS[p.layer]
                 depth = (shape(n, k, self.row).leaves - 1).bit_length()
+                keys_of[(p.block, p.step, p.layer)] = self.drv.key(p.block, p.step, p.layer)
                 paths = []
                 for _ in pos:
                     paths.append([raw[off + 64 * d:off + 64 * d + 64] for d in range(depth)])
@@ -577,8 +666,7 @@ class Period:
                 sd = call_seeds(sc.coin, pid, b, op, plan.steps)
                 seeds_of[b] = sd
                 g0 = self.g
-                rec = b"".join(sd[s * NL + li] + salt_key(self.secret, (g0 + s) * NL + li) for s in range(plan.steps)
-                               for li in range(NL))
+                rec = b"".join(sd)
                 sf, rf = self.work / f"seeds-{b}.bin", self.work / f"roots-{b}.bin"
                 sf.write_bytes(rec)
                 r = self.drv.block(b, g0, plan.steps, "proto", cheat, sf, rf)
@@ -605,7 +693,7 @@ class Period:
             seeds = seeds_of[p.block][p.step * NL + p.layer]
             ta, tb = self.trees[("A", p.layer, t)], self.trees[("B", p.layer, t)]
             jobs.append({"index": idx, "name": name, "m": M, "n": n, "k": k, "row": self.row, "i": p.i, "j": p.j, "s": p.s,
-                         "t": t, "call": call, "seeds": seeds, "ks": salt_key(self.secret, call),
+                         "t": t, "call": call, "seeds": seeds, "key": keys_of[(p.block, p.step, p.layer)],
                          "afile": str(operand_file(self.cfg, "A", name)), "bfile": str(operand_file(self.cfg, "B", name)),
                          "cheat": cheat.split("@")[0] if cheat_layer in (None, p.layer) else "none",
                          "positions": pos, "paths": paths,
@@ -663,8 +751,8 @@ def cmd_run(a: argparse.Namespace) -> int:
             trees = operand_trees(cfg, secret, pool)
             print(f"{len(trees)} operand roots in {time.monotonic() - t:.1f} s: "
                   + " ".join(f"{k}{li}.{tb} {x.root.hex()[:16]}" for (k, li, tb), x in trees.items() if tb == 0), flush=True)
-            drv = RefDriver(cfg, row) if a.hu == "ref" else Driver(a.hu, cfg, row, plan.steps, out / "hu.log")
-            print("hu " + " ".join(drv.ready), flush=True)
+            drv = RefDriver(cfg, row) if a.lib == "ref" else GpuDriver(a.lib, cfg, row, plan.steps)
+            print("driver " + " ".join(drv.ready), flush=True)
             per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
             drv.block(0, 0, min(plan.steps, 50), "plain", "none", work / "none", work / "none")
@@ -694,83 +782,52 @@ def cmd_run(a: argparse.Namespace) -> int:
 
 
 def cmd_diag(a: argparse.Namespace) -> int:
-    """One protocol step on the GPU (a block of the model other than the first) with seeds and salt keys of its own (no
-    coins), then two tiles of each layer's call against v31.py's reference: the A and B rows the GPU read against the
-    files', its words and O against the tile's values, and its leaves against the reference's under the call's salt key."""
+    """One protocol step on the GPU (a block of the model other than the first) with seeds of its own (no coins), then
+    leaves of each layer's call against the reference: the GPU's own openings (v31_open, inside the call's window) against
+    the rows the prover's answers recompute from the operand files and against the paths from the host copy of the tree,
+    every one opening the call's root."""
     cfg, out = Path(a.cfg), Path(a.out)
     prep = json.loads((cfg / "prep.json").read_text())
     configure(prep)
     row, NL = prep["row"], len(LAYERS)
     rng = np.random.default_rng(a.seed)
     g0 = NB - 1 if NB > 1 else 0
+    t = g0 % NB
     work = Path(tempfile.mkdtemp(prefix="highutil-diag-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
-    drv = Driver(a.hu, cfg, row, 1, out / "hu-diag.log")
-    rec = [os.urandom(384) for _ in range(NL)]
+    drv = GpuDriver(a.lib, cfg, row, 1)
+    rec = [v31.fill_seeds_bytes(v31.call_seeds(os.urandom(64), os.urandom(64))) for _ in range(NL)]
     (work / "seeds").write_bytes(b"".join(rec))
     drv.block(0, g0, 1, "proto", "none", work / "seeds", work / "roots")
+    roots = (work / "roots").read_bytes()
     rep = []
     for li, (name, n, k) in enumerate(LAYERS):
-        sh = shape(n, k, row)
-        tl = v31.Shape(TILE, TILE, k, LP, T, row)
-        for tile in (0, int(rng.integers(sh.tiles))):
-            d = work / f"{name}-{tile}"
-            drv.p.stdin.write(f"dump {li} {tile} {d}\n")
-            got = drv._line("dumped")
-            wraps = {"X_per_row": int(got[6]) / sh.m, "W_per_row": int(got[7]) / sh.n}
-            tm, tn = divmod(tile, n // TILE)
-            ia, ja = range(tm * TILE, tm * TILE + TILE), range(tn * TILE, tn * TILE + TILE)
-            A = np.asarray(operand(cfg, "A", li, g0 % NB)[tm * TILE:(tm + 1) * TILE])
-            B = np.asarray(operand(cfg, "B", li, g0 % NB)[tn * TILE:(tn + 1) * TILE])
-            seeds, ks = v31.seeds_from(rec[li][:320]), rec[li][320:]
-            c = v31.Coins.rows(sh, seeds, ia, ja)
-            f = v31.form(tl, A, B, c)
-            v = v31.values(tl, f)
-            words, obuf = v31.words_buffer(tl, v.T), v31.o_buffer(v.O)
-            dom = sh.domain()
-            g = (d / "leaves.bin").read_bytes()
-            bad = sum(row_leaf(dom, tile * sh.lpt + j, v31.leaf_h(v31.row_bytes(tl, words, obuf, j),
-                                                                  v31.cref.prf_salt(ks, tile * sh.lpt + j)), V2)
-                      != g[64 * j:64 * j + 64] for j in range(sh.lpt))
-            rep.append({"layer": name, "block": g0 % NB, "tile": tile, "A_equal": (d / "A.bin").read_bytes() == A.tobytes(),
-                        "B_equal": (d / "B.bin").read_bytes() == B.tobytes(), "words_equal": (d / "words.bin").read_bytes() == words, "O_equal": (d / "O.bin").read_bytes() == obuf,
-                        "leaves": sh.lpt, "leaves_bad": bad, "wraps": wraps})
-            print(json.dumps(rep[-1]), flush=True)
+        f = shape(n, k, row)
+        seeds, key, root = v31.fill_seeds_from(rec[li]), drv.key(0, 0, li), roots[64 * li:64 * li + 64]
+        pos = sorted({0, f.leaves - 1, *(int(x) for x in rng.integers(f.leaves, size=4))})
+        gpu = drv.open_now(li, 0, pos)
+        width, depth, _ = drv.geom[li]
+        dom, cmt = f.domain(), Commitment(root, f.leaves)
+        bad = []
+        for p, (grow, gsalt, gpath) in zip(pos, gpu):
+            mine = leaf_row(f, str(operand_file(cfg, "A", name)), str(operand_file(cfg, "B", name)), t, seeds, p)
+            path = _path(drv.levels[li][0], width, depth, p)
+            if grow != mine:
+                bad.append(f"leaf {p}: the GPU's row isn't the recomputed one")
+            if gsalt != v31.cref.prf_salt(key, p):
+                bad.append(f"leaf {p}: salt")
+            if b"".join(gpath) != path:
+                bad.append(f"leaf {p}: the host copy's path isn't the GPU's")
+            if not verify_opening(dom, cmt, Opening(p, v31.leaf_h(mine, gsalt), tuple(path[64 * d:64 * d + 64] for d in range(depth))),
+                                  V2, VerificationLimits()):
+                bad.append(f"leaf {p}: doesn't open the root")
+        rep.append({"layer": name, "block": t, "S": f.S, "leaves": f.leaves, "checked": pos, "bad": bad})
+        print(json.dumps(rep[-1]), flush=True)
     drv.close()
     shutil.rmtree(work, ignore_errors=True)
-    ok = all(r["A_equal"] and r["B_equal"] and r["words_equal"] and r["O_equal"] and not r["leaves_bad"] for r in rep)
-    (out / "diag.json").write_text(json.dumps({"exact": ok, "tiles": rep}, indent=1))
+    ok = all(not r["bad"] for r in rep)
+    (out / "diag.json").write_text(json.dumps({"exact": ok, "layers": rep}, indent=1))
     print(f"diag: {'exact' if ok else 'DIFFERS'}", flush=True)
     return 0 if ok else 1
-
-
-def cmd_sweep(a: argparse.Namespace) -> int:
-    """v31's knobs (V31_*, one hu process a setting) timed on the period's calls: per setting a warm block, then REPS rounds
-    of a plain and a protocol block of STEPS steps, each block's GPU time and SM clock. Seeds and salt keys are the
-    process's own and nothing is opened: timing only, never of record."""
-    cfg, out = Path(a.cfg), Path(a.out)
-    prep = json.loads((cfg / "prep.json").read_text())
-    configure(prep)
-    row, NL = prep["row"], len(LAYERS)
-    work = Path(tempfile.mkdtemp(prefix="highutil-sweep-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
-    (work / "seeds").write_bytes(os.urandom(384 * NL * a.steps))
-    rep = []
-    for setting in a.set:
-        env = dict(kv.split("=", 1) for kv in setting.split(",") if kv)
-        drv = Driver(a.hu, cfg, row, a.steps, out / "hu-sweep.log", env)
-        drv.block(0, 0, min(4, a.steps), "proto", "none", work / "seeds", work / "roots")
-        arms: dict[str, list[dict]] = {"plain": [], "proto": []}
-        for r in range(a.reps):
-            for arm in ("plain", "proto"):
-                arms[arm].append(drv.block(0, (r * a.steps) % NB, a.steps, arm, "none", work / "seeds", work / "roots"))
-        drv.close()
-        ms = {arm: float(np.median([b["gpu_ms"] for b in bs])) / a.steps for arm, bs in arms.items()}
-        rec = {"set": env, "steps": a.steps, "reps": a.reps, "plain_ms_per_step": ms["plain"], "proto_ms_per_step": ms["proto"],
-               "gamma_gpu": ms["proto"] / ms["plain"], "sm_mhz": [b["sm_mhz"] for bs in arms.values() for b in bs]}
-        rep.append(rec)
-        print(json.dumps(rec), flush=True)
-    shutil.rmtree(work, ignore_errors=True)
-    (out / "sweep.json").write_text(json.dumps(rep, indent=1))
-    return 0
 
 
 def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> dict:
@@ -784,7 +841,7 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> di
     wall = sum(r["wall_s"] for r in honest)
     mhz = [b["sm_mhz"] for r in results for b in r["blocks"] if b["sm_mhz"]]
     out = {
-        "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(), "lp": LP, "t": T,
+        "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(), "lp": LP, "L": L,
                      "source": source},
         "plan": plan.__dict__, "periods": len(honest),
         "accepted": sum(r["accepted"] for r in honest),
@@ -814,7 +871,9 @@ def main(argv: list[str]) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prep")
     p.add_argument("cfg")
-    p.add_argument("--row", type=int, default=32768)
+    p.add_argument("--row", type=int, default=8192, help="leaf row bytes")
+    p.add_argument("--lp", type=int, default=LP, help="the noise period L'")
+    p.add_argument("--L", type=int, default=L, help="the word interval L")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--checkpoint", help=f"{CHECKPOINT['repo']}'s snapshot directory at {CHECKPOINT['revision'][:10]} (B; "
                                         "capture.py writes A)")
@@ -825,7 +884,7 @@ def main(argv: list[str]) -> int:
     p.set_defaults(fn=cmd_prep)
     p = sub.add_parser("run")
     p.add_argument("cfg")
-    p.add_argument("hu")
+    p.add_argument("lib", help="libv31.so (v31lib.build_lib), or `ref`: v31.py's reference on the CPU")
     p.add_argument("out")
     p.add_argument("--coins", default="local", help="local (development, not of record) or gate:USER@HOST")
     p.add_argument("--main", required=True, help="the verifier's copy of main's first-parent line (git rev-list --first-parent)")
@@ -843,18 +902,10 @@ def main(argv: list[str]) -> int:
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("diag")
     p.add_argument("cfg")
-    p.add_argument("hu")
+    p.add_argument("lib")
     p.add_argument("out")
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_diag)
-    p = sub.add_parser("sweep")
-    p.add_argument("cfg")
-    p.add_argument("hu")
-    p.add_argument("out")
-    p.add_argument("--set", action="append", default=[], help="one setting: K=V[,K=V...] of v31's V31_* knobs (empty: defaults)")
-    p.add_argument("--steps", type=int, default=20)
-    p.add_argument("--reps", type=int, default=2)
-    p.set_defaults(fn=cmd_sweep)
     a = ap.parse_args(argv)
     return a.fn(a)
 
