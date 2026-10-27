@@ -43,7 +43,7 @@
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
-# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), hall (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, V31_MAXNREG or under
+# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), hall (0), hchunk (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, V31_MAXNREG or under
 # V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a
 # verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -51,7 +51,8 @@
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
 # `research run --no-sampler`; empty when already under a lease); CUTLASS=0 (no CUTLASS baseline), V31_CACHE (CUTLASS's
 # clone and object, default /workspace/pouw/accel_v31); NVFLAGS, more nvcc flags for every build (H200: -DV31_WG=1, the
-# GEMM on warpgroup MMAs).
+# GEMM on warpgroup MMAs); SHA_FLAGS, sha512.cuh's issue choices (default -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1, tuned
+# on sm_120).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -75,7 +76,7 @@ knob_env() {
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
-    "V31_RP=$(knob "$1" rp 0) V31_HALL=$(knob "$1" hall 0)"
+    "V31_RP=$(knob "$1" rp 0) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0)"
 }
 export -f knob knob_env
 
@@ -108,7 +109,7 @@ if [ "${CUTLASS:-1}" != 0 ]; then
 fi
 build() {   # BIN LOG [nvcc flags]
   # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${CUT[@]}" ${NVFLAGS:-} "${@:3}" \
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1} "${CUT[@]}" ${NVFLAGS:-} "${@:3}" \
     -o "$1" $D/v31.cu -lcuda -lcublasLt > "$2" 2>&1
 }
 build "$W/v31" "$O/build.log"
@@ -126,7 +127,7 @@ if [ "$MODE" = fill ]; then
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
   export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
   # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1} -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
     -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
   echo "build lib rc $?" >> "$O/rc.txt"
   for v in $VARIANTS; do
@@ -223,7 +224,7 @@ if [ "$MODE" = fill ]; then
         for s in $FILL_SHAPES; do
           f="$O/ncu-$tag-L$L-${s%%:*}"
           for extra in "${tens:+,$tens}" ""; do
-            env $(knob_env "$v") V31_ONCE_OVL="${OVL_CALLS:-4}" "$NCU" --clock-control none --section ComputeWorkloadAnalysis \
+            env $(knob_env "$v") V31_ONCE_OVL="${OVL_CALLS:-4}" V31_LT_TUNE=0 "$NCU" --clock-control none --section ComputeWorkloadAnalysis \
               --section SpeedOfLight --metrics "sm__cycles_active.avg,sm__cycles_elapsed.avg$extra" -f -o "$f" \
               "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
             rc=$?

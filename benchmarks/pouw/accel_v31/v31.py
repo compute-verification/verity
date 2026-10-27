@@ -958,7 +958,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
         variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
                    + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
                    + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
-                   + (" hall" if r.get("hall") else ""))
+                   + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else ""))
         fused = "-"
         if (r.get("fused_leaves") or -1) >= 0 and r.get("o_leaves"):
             fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"

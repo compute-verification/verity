@@ -41,17 +41,19 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //   RP 4  384 threads at 168, the producer warpgroup at 104 and the consumers at 200: warp 8 issues the loads, warps 9 to
 //         11 (one a sub-partition 1 to 3) hash the rows of the tiles the consumers have stored (gemm_r4's H), so the
 //         commit's compressions run on the ALU while the consumers wait on their MMAs. No back-pressure: when the
-//         consumers are done (static schedule, every gridDim.x-th tile) a hash warp drops its leaf within 16 blocks and
-//         stops, and the leaf phase hashes what it didn't (H's flags)
+//         consumers are done (static schedule, every gridDim.x-th tile) a hash warp stops within a block, keeping its
+//         rows' chaining values, and the leaf phase hashes on from there (H's flags)
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0: the commit's CTAs never
 // landed beside it, r20261027-045150-d9ee.)
 template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : 3 * 128; }
-// RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop) hashes O row j of commit tile ct (tm N / 128 + tn),
-// giving up when stop() holds
+// RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on O row j of commit tile ct (tm N / 128
+// + tn) by at most budget blocks, until stop() holds, and says whether the row is hashed whole; chunk, a visit's budget
+// (0: a row whole at once)
 struct NoHash {
+  static constexpr unsigned chunk = 0;
   WGD unsigned lpt() const { return 1; }
-  template <class Stop> WGD void operator()(unsigned long long, unsigned, const Stop&) const {}
+  template <class Stop> WGD bool operator()(unsigned long long, unsigned, const Stop&, unsigned) const { return true; }
 };
 
 template <int BN> struct Tile {
@@ -188,26 +190,46 @@ enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 
 
 // RP 4's hash warps (warps 9 to 11): warp w takes batches w, w + 3, ..: batch b is the CTA's O rows 32 b .. 32 b + 31 in
 // its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8 warps a tile) every
-// tile the batch reads. Without hall, a batch isn't started once the consumers are done, and stop() drops the leaf.
+// tile the batch reads. h.chunk 0: each batch whole in turn; else passes over the batches posted so far, at most chunk
+// blocks of each a visit, so the rows the leaf phase takes on are left with chains of about one length. Without hall,
+// nothing starts once the consumers are done, and stop() ends the row's hash where it is.
 template <int BN, class H>
 WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles_m, int tiles_n, int ntile) {
   const unsigned w = (threadIdx.x - (2 * 128 + 32)) / 32, lane = threadIdx.x % 32, lpo = h.lpt(), Lg = (BN / TW) * lpo,
-                 nq = (unsigned)ntile * Lg, done = 8u * (unsigned)ntile;
+                 nq = (unsigned)ntile * Lg, nb = (nq + 31) / 32, done = 8u * (unsigned)ntile;
   auto stop = [&]() { return !p.hall && ld_acq(posted) >= done; };
-  for (unsigned b = w; 32 * b < nq; b += 3) {
-    const unsigned q0 = 32 * b, need = 8 * (min(q0 + 31, nq - 1) / Lg + 1);
-    unsigned v = ld_acq(posted);
-    if (!p.hall && v >= done) break;
-    while (v < need) {
-      __nanosleep(256);
-      v = ld_acq(posted);
+  auto need = [&](unsigned b) { return 8 * (min(32 * b + 31, nq - 1) / Lg + 1); };
+  auto posts = [&]() { return __shfl_sync(~0u, ld_acq(posted), 0); };   // one value for the warp: its loops stay uniform
+  auto visit = [&](unsigned b, unsigned budget) {   // this lane's row of batch b: whether it's hashed whole
+    const unsigned q = 32 * b + lane;
+    if (q >= nq) return true;
+    const unsigned i = q / Lg, jj = q % Lg;
+    int tm, tn;
+    raster((int)(blockIdx.x + i * gridDim.x), tiles_m, tiles_n, p.group, tm, tn);
+    return h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn * (BN / TW) + jj / lpo, jj % lpo, stop, budget);
+  };
+  if (!h.chunk) {
+    for (unsigned b = w; b < nb; b += 3) {
+      unsigned v = posts();
+      if (!p.hall && v >= done) break;
+      while (v < need(b)) {
+        __nanosleep(256);
+        v = posts();
+      }
+      visit(b, ~0u);
     }
-    const unsigned q = q0 + lane;
-    if (q < nq) {
-      const unsigned i = q / Lg, jj = q % Lg;
-      int tm, tn;
-      raster((int)(blockIdx.x + i * gridDim.x), tiles_m, tiles_n, p.group, tm, tn);
-      h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn * (BN / TW) + jj / lpo, jj % lpo, stop);
+    return;
+  }
+  for (unsigned lo = w; lo < nb;) {   // lo: this warp's first batch not yet hashed whole
+    unsigned v = posts();
+    if (!p.hall && v >= done) break;
+    if (v < need(lo)) {
+      __nanosleep(256);
+      continue;
+    }
+    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += 3) {
+      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += 3;
+      v = posts();
     }
   }
 }
