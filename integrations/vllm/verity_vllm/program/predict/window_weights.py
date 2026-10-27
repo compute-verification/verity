@@ -56,15 +56,16 @@ def _rows(param: str, words: Any) -> np.ndarray:
     return data.view("<u2").reshape(-1, int(w))
 
 
-def weight_value(program: str, param: str, words: Any, key: bytes, nonce: int) -> G.Registered:
+def weight_value(program: str, param: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False) -> G.Registered:
     """Weight parameter ``param``'s registered value: its rows (``words`` in rows of its width) committed as core's
     `registered.Registered` commits ``hm96-sha512/row/v2`` rows (`pouw.h1.registered.commit`, on the GPU where this process
     has one) under ``program``, the weights record's program digest, row j salted `audit.hm96_salt(key, nonce, j)` of the
     committer's secret 32-byte ``key``: a hiding commitment, so its root says nothing of the weight to anyone without the
-    key, a verifier holding a candidate checkpoint included."""
+    key, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows, for a window that closes over
+    its reads (`interface.Window.close`)."""
     if not isinstance(key, bytes) or len(key) != 32:
         raise ValueError("a weight's salts are drawn under the committer's 32-byte key")
-    return H1R.commit(program, param, _rows(param, words), key, int(nonce))
+    return H1R.commit(program, param, _rows(param, words), key, int(nonce), keep_rows=keep_rows)
 
 
 def weight_nonces(params: Any) -> dict[str, int]:
@@ -139,15 +140,17 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
             "unrooted": _unrooted(rec, of, shapes)}
 
 
-def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAIN) -> dict[str, G.Registered]:
+def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAIN,
+                  keep_rows: bool = False) -> dict[str, G.Registered]:
     """The weights a committer serves, committed (VLLM-125's committer, a window's or the registration's): each weight
     parameter the class circuit registers at ``grain`` whose field ``served`` names (its words, as `check.weights_of_record`
-    composes the field), its `weight_value` under ``key`` at its nonce (`weight_nonces`). So a window's root for a weight
-    is the registered one (`weights_registration`) exactly when it serves the registered words, and the verifier's pin
-    holds the reads of no other (`interface.input_count`)."""
+    composes the field), its `weight_value` under ``key`` at its nonce (`weight_nonces`), its rows held with ``keep_rows``.
+    So a window's root for a weight is the registered one (`weights_registration`) exactly when it serves the registered
+    words, and the verifier's pin holds the reads of no other (`interface.input_count`)."""
     r, _fields, params, of = _weights(registered, grain)
     nonces = weight_nonces(params)
-    return {p: weight_value(r.digest, p, served[name], key, nonces[p]) for name in sorted(of) if name in served for p in of[name]}
+    return {p: weight_value(r.digest, p, served[name], key, nonces[p], keep_rows)
+            for name in sorted(of) if name in served for p in of[name]}
 
 
 def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,

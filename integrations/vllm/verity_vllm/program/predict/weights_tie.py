@@ -307,7 +307,7 @@ def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifes
     another checkpoint's words as X's (the refused arm) registers their roots; ``forge_digest``: its ends' digests X's."""
     t = tie(registered, checkpoint_dir, checkpoints_manifest, run_id=run_id, grain=grain, kv_cache_dtype=kv_cache_dtype)
     words = served if served is not None else WW.record_words(registered, checkpoint_dir, checkpoints_manifest, kv_cache_dtype)
-    values = {p: v for p, v in WW.weight_values(registered, words, key, grain).items() if p in t.entries}
+    values = {p: v for p, v in WW.weight_values(registered, words, key, grain, keep_rows=True).items() if p in t.entries}
     if missing := sorted(set(t.entries) - set(values)):
         raise ValueError(f"no words served for {missing}")
     registration = WeightsRegistration(program=t.program, repo=t.model["repo"], revision=t.model["revision"], grain=t.grain,
