@@ -67,6 +67,7 @@ settings.one_blas_thread()
 import numpy as np  # noqa: E402
 
 sys.path.insert(0, str(TREE / "benchmarks" / "one_stage"))
+sys.path.insert(0, str(TREE / "benchmarks" / "pouw" / "accel_v31"))
 
 import v31  # noqa: E402
 

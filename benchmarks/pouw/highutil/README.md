@@ -26,11 +26,8 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
   tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `terms.py`: where θ x wall goes.
-- `v31.cu`, `wg_proto.cuh`, `v31.py` and `v31lib.py` are vendored unmodified from kernels' no-fold fast path on the H200
-  (#5202, branch `cursor/kernels-nofold-fast-0d88` at b7475b2ff8, its accel_v31 directory, which carries #5118's sm_90a
-  port of compute-research's V31-GPU: leaf pos of a Prover's c-th call salted prf_salt(Ks, c leaves + pos); its seeds are
-  main's `verity.core.protocols.pouw.circuit.dither`), sha256 ea70c51549d6..., 2a830ea0dc44..., ea4119e95b7c... and
-  1735dcd9fb4b...; `run.sh` records the hashes. One copy builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1`
-  (run.sh's header), where a filler call's prefix-sum segments run on the warpgroup GEMM (`V31_WGW`, default 1) and
-  `V31_SCHED 2`, `V31_LMINB 4` and `V31_SAHEAD 1` are #5202's timed knobs (its RP 4, `V31_HCHUNK` and `V31_GEMM` are the
-  served call's, which the period doesn't make). Fixes belong upstream there, then a fresh copy here.
+- The prover is `benchmarks/pouw/accel_v31` (V31-GPU, with kernels' sm_90a port and no-fold fast path, #5118 and #5202):
+  `period.py` imports its `v31` and `v31lib`, and `hu_lib.cu` includes its `v31.cu`; `run.sh` records their hashes. It
+  builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4`
+  and `V31_SAHEAD 1` are #5202's timed knobs that act on a filler call. Its RP 4, `V31_HCHUNK` and `V31_GEMM` (which
+  turns on the warpgroup GEMM for prefix sums, `V31_WGW`) are the served call's, which the period doesn't make.

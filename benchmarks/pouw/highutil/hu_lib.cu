@@ -1,9 +1,9 @@
-// libv31.so for HIGHUTIL: V31-GPU's v31.cu (vendored unmodified, built with its V31_LIB binding) and two functions more,
+// libv31.so for HIGHUTIL: V31-GPU's v31.cu (benchmarks/pouw/accel_v31, built with its V31_LIB binding) and two functions more,
 // which the period's GPU driver calls instead of v31_set_b, v31_root and v31_levels. Those wait on the host (for the
 // shared compute stream, or for a call's commit) and copy through pageable memory; the period changes weights every call
 // (step g reads transformer block g mod NB) and keeps every call's tree, so those waits would drain the device's queue
 // each step. Build: run.sh (v31lib.build_lib's flags on this file).
-#include "v31.cu"
+#include "../accel_v31/v31.cu"
 
 #include <unordered_map>
 
