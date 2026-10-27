@@ -69,3 +69,8 @@
   Open for lean (LEAN-66): the head is KSLin2On. RecursiveKSAt hardcodes `recBoundAt …`, so no `¬ RecursiveKSAt …`
   can hold accept-all; `concluded` needs to read through RecursiveKS → RecursiveKSAt → KSLin2On. RecursiveKS's lock
   name: it isn't in a lock on kslock yet.
+- 01:03Z KSNONTRIV: narrowed per the 01:08Z order. Head 3a74607b5f; build r20261027-010045-f8f2 (cpu-4, waiting for a proofs slot).
+  The inner statement is built and its falsity, density and PlainIn are proved. The one named assumption is
+  `RecDeploy.KSFixture := ∃ x aux nOf hd recRest, DeployedParses x ∧ PartsInScope x (recTr …)`, in
+  `Assumptions/KSFixture.lean` (replaces FalseInScope.lean). 4ef9 (old head) built clean, with 8 lemmas on
+  [propext, Classical.choice, Quot.sound]. Posted on LEAN-66 (comment cf421bc0). Asked RECE about the parameter form.
