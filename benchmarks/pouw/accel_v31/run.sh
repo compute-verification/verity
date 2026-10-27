@@ -24,7 +24,8 @@
 # v31lib.py's gate (the binding's calls: the GPU's pad, values and tree against v31.py's Fill, then the verifier's verdicts
 # on the GPU's own openings, honest and cheating, filler and served, a filler's and a served Prover interleaved;
 # verdicts.txt), once with the protocol GEMM and once (the filler's gates) with V31_LTW=1 (cuBLASLt's GEMM at S = 1;
-# variants take it as ltw=1); then, a lease each variant and L of FILL_LS (default "768 4096 8192 0", 0: L = K),
+# variants take it as ltw=1); then, a lease each variant and L of FILL_LS (default "768 2048", t 3 and 8 at LP 256; 0: L =
+# K; each with min(L, K) at most 8 LP, dither/PROTOCOL.md's "The segment and the noise period"),
 # `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384) beside cuBLASLt and
 # CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
@@ -115,7 +116,7 @@ done
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
 if [ "$MODE" = fill ]; then
   [ "$VARIANTS" = row=8192 ] && VARIANTS="row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1"
-  FILL_LS=${FILL_LS:-"768 4096 8192 0"}
+  FILL_LS=${FILL_LS:-"768 2048"}
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
   export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
   # shellcheck disable=SC2086

@@ -2,8 +2,8 @@
 ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's MODE=fill), one `Prover` a shape. v31.py's
 `Fill` is the reference it is checked against and the verifier.
 
-    p = Prover(m, n, k, lp=128, L=k, row=16384, served=True, lib=PATH, device=0)   # its CGP1 params (dither's domain, a
-                                                                                    # fresh Ks unless ks= is given)
+    p = Prover(m, n, k, lp=128, L=1024, row=16384, served=True, lib=PATH, device=0)   # its CGP1 params (dither's domain,
+                                                                                      # a fresh Ks unless ks= is given)
     p.set_weights(B)                     # n x k int8: a numpy array, or a device pointer (int) with on_device=True
     seeds = served_seeds(coin, receipt, call)   # dither.seeds: the raw coin, the operand-root receipt, the call's index
     a_ptr = p.load_a(A)                  # optional: A (m x k int8, host or on_device) into the Prover's buffer
@@ -236,30 +236,30 @@ served_seeds = v31.served_seeds
 # path) or served (A llm/uniform, through the context's device copy). CHEAT none, a cheat the verifier must refuse, or
 # rootless: an honest served call the prover must refuse at its root (a row of A + d_A spans -128 .. 128)
 GATES = """
-f-pad-k fill 256 256 4096 256 4096 1024 pad none
+f-pad-k fill 256 256 4096 512 4096 1024 pad none
 f-pad-768 fill 256 384 3072 256 768 1024 pad none
-f-llm-4096 fill 256 256 8192 256 4096 1024 llm none
+f-llm-4096 fill 256 256 8192 512 4096 1024 llm none
 f-uniform-1280 fill 256 512 2560 256 1280 1024 uniform none
 f-lp512 fill 256 256 4096 512 1024 2048 llm none
-f-row8k fill 128 256 8192 256 8192 8192 pad none
-f-big fill 512 1024 8192 256 4096 1024 llm none
+f-row8k fill 128 256 8192 256 2048 8192 pad none
+f-big fill 512 1024 8192 512 4096 1024 llm none
 c-skip fill 256 256 4096 256 1024 1024 pad skip:5
 c-forge fill 256 256 4096 256 1024 1024 llm forge:2:0.25
 f-k2048 fill 256 384 2048 256 2048 2048 llm none
 c-skip-s1 fill 256 256 2048 256 2048 1024 pad skip:3
 c-forge-s1 fill 256 256 2048 256 2048 1024 llm forge:1:0.25
-s-k served 256 256 4096 128 4096 16384 llm none
+s-k served 256 256 4096 512 4096 16384 llm none
 s-s4 served 256 256 4096 128 1024 16384 llm none
-s-partial served 256 384 3072 128 1280 8192 llm none
+s-partial served 256 384 3072 128 896 8192 llm none
 s-lp256 served 256 256 4096 256 2048 16384 llm none
 s-row1k served 256 512 2048 128 1024 1024 llm none
-s-big served 512 1024 8192 128 8192 16384 llm none
-s-uniform served 256 256 2048 128 2048 16384 uniform rootless
-cs-forgeO served 256 256 4096 128 4096 16384 llm forgeO:0.25
+s-big served 512 1024 8192 512 4096 16384 llm none
+s-uniform served 256 256 2048 256 2048 16384 uniform rootless
+cs-forgeO served 256 256 4096 512 4096 16384 llm forgeO:0.25
 cs-forgeO-s4 served 256 256 4096 128 1024 16384 llm forge:0:0.25
 cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.25
 cs-skip-s4 served 256 256 4096 128 1024 16384 llm skip:5
-cs-nodither served 256 256 4096 128 4096 16384 llm nodither
+cs-nodither served 256 256 4096 512 4096 16384 llm nodither
 cs-nodither-s4 served 256 256 4096 128 1024 16384 llm nodither
 """
 

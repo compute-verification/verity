@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Dither's no-fold receipt (v31.cu) on the H200, sm_90a, at the PoUW filler's segments: each of CONFIGS,
-# an L':t pair (default L' 512 at t 8 and 16, L = 4,096 and 8,192). run.sh as it stands, with GENCODE sm_90a and no
-# CUTLASS baseline. For each pair, its gates (one lease) and its bench (another):
-#   gates  run.sh's own at L' 256 t 3, then at L' 512 t 8 and 16: one and several whole segments, a partial last one,
+# an L':t pair (default L' 512 at t 8, L = 4,096; t at most 8, dither/PROTOCOL.md's "The segment and the noise period").
+# run.sh as it stands, with GENCODE sm_90a and no CUTLASS baseline. For each pair, its gates (one lease) and its bench
+# (another):
+#   gates  run.sh's own at L' 256 t 3, then at L' 512 t 8: one and several whole segments, a partial last one,
 #          wrap-heavy and all-127 operands, a third Z digit, 8 KiB rows, and the three cheats (skip, forge, forgeO);
 #          the first pair runs them all and its own whole-segment gate, the others that gate alone (QUICK=1: each pair
 #          its own gate and skip cheat alone, for a knob sweep whose variants the bench's sampled tiles check)
@@ -14,7 +15,7 @@
 #   research run --on vy-dc-h200 --project verity --campaign CAMPAIGN --source . --cwd source --timeout 120m \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/accel_v31/h200.sh
 #
-# Env: CONFIGS (default "512:8 512:16"), MODEL, VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES
+# Env: CONFIGS (default "512:8"), MODEL, VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES
 # (in place of MODEL's), and run.sh's (NVFLAGS=-DV31_WG=1: the GEMM on warpgroup MMAs; -DV31_WG_BN=256 beside it: 128 x
 # 256 tiles a CTA).
 set -uo pipefail
@@ -46,15 +47,13 @@ g-t8 256 256 16384 llm none 512 8 1024
 g-t8-part 128 256 10240 llm none 512 8 1024
 g-t8-uniform 256 512 8192 uniform none 512 8 1024
 g-t8-dy3 128 256 32768 llm none 512 8 1024
-g-t16 256 256 16384 llm none 512 16 1024
-g-t16-part 128 256 20480 llm none 512 16 1024
-g-t16-max 256 256 16384 max none 512 16 1024
-g-t16-row8k 256 256 16384 llm none 512 16 8192
+g-t8-max 256 256 16384 max none 512 8 1024
+g-t8-row8k 256 256 16384 llm none 512 8 8192
 c-t8-skip 256 256 8192 llm skip:3 512 8 1024
-c-t16-forge 256 256 16384 llm forge:1:0.25 512 16 1024
-c-t16-forgeO 256 256 16384 llm forgeO:0.25 512 16 1024
+c-t8-forge 256 256 16384 llm forge:1:0.25 512 8 1024
+c-t8-forgeO 256 256 16384 llm forgeO:0.25 512 8 1024
 "
-CONFIGS=${CONFIGS:-512:8 512:16}
+CONFIGS=${CONFIGS:-512:8}
 first=1
 for c in $CONFIGS; do
   lp=${c%%:*} t=${c##*:} tag="lp${c%%:*}-t${c##*:}"

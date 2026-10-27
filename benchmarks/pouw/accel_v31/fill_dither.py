@@ -35,15 +35,15 @@ from verity.core.protocols.pouw.circuit import dither
 # call through dither.py
 CASES = """
 f-small 128 256 768 256 512 1024 fill none 1
-f-qkv-L4096 256 6144 4096 256 4096 1024 fill none 0
+f-qkv-L4096 256 6144 4096 512 4096 1024 fill none 0
 f-o-L1024-row16k 256 4096 4096 128 1024 16384 fill none 0
-f-up-L8192 128 28672 8192 256 8192 1024 fill none 0
+f-up-L4096 128 28672 8192 512 4096 1024 fill none 0
 s-small 256 128 1024 128 512 2048 served none 1
 s-small-S1 128 256 768 256 768 1024 served none 1
-s-qkv-L4096-row16k 256 6144 4096 256 4096 16384 served none 0
+s-qkv-L4096-row16k 256 6144 4096 512 4096 16384 served none 0
 s-o-L1024-row16k 256 4096 4096 128 1024 16384 served none 0
-s-down-L4096 128 384 14336 256 4096 1024 served none 0
-s-up-L8192 128 28672 4096 256 8192 1024 served none 0
+s-down-L4096 128 384 14336 512 4096 1024 served none 0
+s-up-L8192 128 28672 4096 512 8192 1024 served none 0
 c-skip 128 256 2048 256 512 1024 fill skip:3 1
 c-forge 256 256 4096 256 1024 1024 served forge:2:0.5 0
 c-forgeO 256 256 4096 256 1024 1024 served forgeO:0.5 0
