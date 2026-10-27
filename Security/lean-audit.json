@@ -1915,6 +1915,14 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.FixedMachine": {
+   "owner": "@lean",
+   "digest": "ce6072bc5284ccd7363834d3b004b01b739c7deae115fcd7139ae82eb85fab89"
+  },
+  "Accounting.InitialBudget": {
+   "owner": "@lean",
+   "digest": "28a732123f6836db53cf66620324f97fd64e71618281c04d2abcddd2fa3dbec3"
   }
  },
  "meaning": [
@@ -3103,19 +3111,44 @@
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
   },
   "Accounting.SecurityProofs.FixedMachine.BlockDescription": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription : Accounting.Guarantees.FixedMachine.BlockDescription"
+   ],
+   "assumptions": [],
+   "type_hash": "ab7ac866efc179fd9a127f3314b153659a60d56f3bbf8d60857a208e9b3e9267"
   },
   "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest :",
+    "  Accounting.Guarantees.FixedMachine.BlockDescription_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "6df156cd71b556a96c73357016dae797be7cbea1483123b8804bc98756b48837"
   },
   "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial :",
+    "  Accounting.Guarantees.FixedMachine.BlockDescription_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "26e0f01857b628b237705ea9acd6c804725b964dd3089acd116ca08b2b5e8be6"
   },
   "Accounting.SecurityProofs.FixedMachine.GateCount": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.FixedMachine.GateCount : Accounting.Guarantees.FixedMachine.GateCount"],
+   "assumptions": [],
+   "type_hash": "fe5538c29e6e66fc919d2f322ee9bb45c1a12f651a83d58872dd7a5230be9009"
   },
   "Accounting.SecurityProofs.FixedMachine.Hard_notFixed": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed : Accounting.Guarantees.FixedMachine.Hard_notFixed"
+   ],
+   "assumptions": [],
+   "type_hash": "99010ed7719e8f70e15c3ce723695b8534e97ca348e98a113290ac43ec158e5a"
   },
   "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": {
    "owner": "@compute-accounting",
@@ -10572,7 +10605,10 @@
    "type_hash": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef"
   },
   "Verity.SecurityProofs.CreditSizeLe": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CreditSizeLe : Verity.Guarantees.CreditSizeLe"],
+   "assumptions": [],
+   "type_hash": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c"
   },
   "Verity.SecurityProofs.ExpandAndSize": {
    "owner": "@lean",
@@ -11969,6 +12005,11 @@
     "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
+    "Accounting.SecurityProofs.FixedMachine.GateCount",
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
@@ -13064,6 +13105,46 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt"
    ]
   },
+  "Definitions.Accounting.FixedMachine": {
+   "digest": "42d346fc1b7dee81a693fe5d5b5f5eceb3b95ec66a663aab8f1d1af2b5984066",
+   "definitions": {
+    "Accounting.BlockDescribed": "881abf1b1a5959cb2b7e68a444226aaa69f99501bcbe3d5e61eee02eba9343fb",
+    "Accounting.FixedMachine": "ce6072bc5284ccd7363834d3b004b01b739c7deae115fcd7139ae82eb85fab89",
+    "Accounting.InitialBudget": "28a732123f6836db53cf66620324f97fd64e71618281c04d2abcddd2fa3dbec3"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
+    "Accounting.SecurityProofs.FixedMachine.GateCount",
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
+   ]
+  },
+  "Definitions.Accounting.FixedMachine.Instances": {
+   "digest": "1cf383f7aeac4f3c5b2a08de10ecf993db4b264bc1f05fda6c5f8939fa88e803",
+   "definitions": {
+    "Accounting.FixedMachine.A₀": "767606814d8acafcfb70e9c61df64cb339384a2497e0c9ae68e3289466f3ecd7",
+    "Accounting.FixedMachine.C₀": "9c753f2b2a6894931db57691c5ce8ac987d8a3b6b5352b7e03412b9a3a6c6f05",
+    "Accounting.FixedMachine.D₀": "17aae1e93059ab7a460499563b2783f66dbf32d6b2939a4b77b705ab620e6caa",
+    "Accounting.FixedMachine.Hard": "5e5b27a93d194ee4ba92080cb3a9a288ba29745b663efe47670fe6163795b18d",
+    "Accounting.FixedMachine.H₀": "3ea79f4a17325c4461b554e50d3ee42aa9bf9429a68116b6564a0a74d7311d71",
+    "Accounting.FixedMachine.M₀": "73ddde392171b82b9427d65397db75b25f8795ec0a2eb5aa885bd24cab205bf2",
+    "Accounting.FixedMachine.R₀": "f5eb19788a808394cee955fc4815cb5375fcac696cf8560d79c8095bdc2da2d5",
+    "Accounting.FixedMachine.S₀": "c10143d82820d10eb81cf34f482cc39460be23534cf51cb4e5c6660c326c5703",
+    "Accounting.FixedMachine.T₀": "003110f54d06d469c0ee7f9bb0d30028e86bd24f039173391cbb54354dddf2c3",
+    "Accounting.FixedMachine.X₀": "9aee1e2c3ffd1ed9767d006a631393b4a52857106829ff1aa05d052d31ee9d55",
+    "Accounting.FixedMachine.a₀": "5ad7da596b5ee5c01e57a41908fe5830e37903399d0e5082eba750207f637e09",
+    "Accounting.FixedMachine.hardString": "b5836b8ef14cb7650d88200e87d2f7aa5ae43e9488cf99fce4131968ad35de05",
+    "Accounting.FixedMachine.twoGates": "44817d9bfc88e53923d017d0380e445f36b679229cb6e6ae6f8ee445dcfc261d",
+    "Accounting.FixedMachine.y₀": "e66850bb220531bc6162ae3f59f6b0417d2cefaeb45fc548bd6e26363fd45907",
+    "Accounting.FixedMachine.φ₀": "38fde18a11e9d605c4b444f69237b7764ce4a46439db50b33887765df151dfbc"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
+   ]
+  },
   "Definitions.Accounting.Gates.Codec": {
    "digest": "7212e4cf8b274c11125dfc7d224c3f0a9fce4ef1012175f1a37574a260419357",
    "definitions": {
@@ -13681,6 +13762,23 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.FixedMachine": {
+   "digest": "3dc0ac2313927b5c936a3a035ee358e713e48736b168afc99ad5ffe58d49085d",
+   "definitions": {
+    "Accounting.Guarantees.FixedMachine.BlockDescription": "ae30036a2c56758612ee894b4f4afff33d937384a7fca2a864db1efc822c23ac",
+    "Accounting.Guarantees.FixedMachine.BlockDescription_honest": "ce2f6dff539c3c48a2e3737bfb9a315933f80f577314e3b6d3c29742f94127b5",
+    "Accounting.Guarantees.FixedMachine.BlockDescription_nontrivial": "10d843ea12d63de66a23cd1b7f6ba57ae8711419c77dbeb158330c25a2e8cdd0",
+    "Accounting.Guarantees.FixedMachine.GateCount": "7e66c352fe3ee54d101a940dac9658ed5e37978bfdaf70dc685bade114f2db19",
+    "Accounting.Guarantees.FixedMachine.Hard_notFixed": "54f32f50a5503efad3573dd75f6ac31778ebf9170f96f83358985d03820b8af6"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
+    "Accounting.SecurityProofs.FixedMachine.GateCount",
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
    ]
   },
   "Definitions.Accounting.Guarantees.FpG1": {
@@ -17777,6 +17875,11 @@
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
+    "Accounting.SecurityProofs.FixedMachine.GateCount",
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -17873,6 +17976,7 @@
     "Verity.SecurityProofs.CorrectOfOpening",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CountingSum",
+    "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
@@ -17909,6 +18013,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -17976,6 +18082,7 @@
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.ContainsImplements",
     "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandSize",
     "Verity.SecurityProofs.Padding"
@@ -18004,7 +18111,7 @@
    ]
   },
   "Definitions.Core.Formalism": {
-   "digest": "7583727c1a1020e3c26bc4b9a016ae5a15274f412d97392941b7df56d001e2e5",
+   "digest": "9aa7d675f568999c5419f6ce58d307a73a659dac06fa835a289861ada75bdf69",
    "definitions": {
     "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
     "Verity.Circuit.Boolean": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
@@ -18027,16 +18134,21 @@
     "Verity.Registration.recompute": "51f1593bec32e117d833e68df76650f6e943d00901420ae442ccd2cc29e8e7bd",
     "Verity.Registration.val": "eecd31e4b834b02f3fac7260073edd5dbb81de978ffaba9b7ad2730d0c350a5a",
     "Verity.blockProgram": "46eb91fb1ad8504bc8495266d44b120c3d72a162d5a1c8386ebe92592a9829ca",
+    "Verity.creditSize": "0b747984e6f21e1cf881b2437ab24b27a28bb32a68c4c506e5f073cbd62d9229",
     "Verity.indexCode": "216f0f6d0fa5066656396f830b46c8cf48acaf6ba4f14be91df4018037744cc8",
     "Verity.slowdown": "bcc17fbdb9d4847eb2dad542959451341d0437675065f525f0bb8c86b421ac7b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.PartitionCovers",
     "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
@@ -18150,13 +18262,14 @@
    ]
   },
   "Definitions.Core.Guarantees.Formalism": {
-   "digest": "c4dcf2821d5d2f33f0dc5fb358ea7b985ad23db1803bc358f837fb61eee23dae",
+   "digest": "a62782efa0698643db511df7c0215814bfe418e250d776ab69c6670c9a73def4",
    "definitions": {
     "Verity.Guarantees.AndSizeLe": "9350d1ae3f31c74ddd50f1897253f464f1fa16189f0058edb6be6125a78b1aca",
     "Verity.Guarantees.BlockDescription": "f949fc60d3af21c28b2093681ba1b3a2b62924451a7ebcda748aa35db70a8c22",
     "Verity.Guarantees.CKSize": "e5ae2c049103314a92e25cf1222e01ac19facf5f244deab0b45fbbbbd2db4db0",
     "Verity.Guarantees.Counting": "c00a9fa2cdff42ac249540011e33c688fbeeac8c0a799d92139829829671facd",
     "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76",
+    "Verity.Guarantees.CreditSizeLe": "9adf46b18c65fac85cd93e56ef6b475a98367436a3e59feb813b80a8eaae6bc7",
     "Verity.Guarantees.InferenceCap": "8cb66991f9d6bf7a627c1a31de466e777ecae9a79ecc3c0385110eafda097454",
     "Verity.Guarantees.Padding": "d499c0da2851fb11e5c6c20d8bfdfb61367bd79eeb17b9b1a045fab01d07269a",
     "Verity.Guarantees.ServingBlockSum": "74e9c171e6e3ec1a92eaaab163f8d684ca12f3c9a88ef5a5302969a1686a28cc",
@@ -18168,6 +18281,7 @@
     "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CountingSum",
+    "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.InferenceCap",
     "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.ServingBlockSum",
@@ -18269,6 +18383,8 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -18687,6 +18803,29 @@
     "Verity.SecurityProofs.HopperUnitSound",
     "Verity.SecurityProofs.HopperUnitSoundZero",
     "Verity.SecurityProofs.PackSoundComplete"
+   ]
+  },
+  "Definitions.Core.Unroll": {
+   "digest": "1146f4a2278b3dbbf5f500067bcc78cd87ecf6bf72049a2637c136f75b8be8b9",
+   "definitions": {
+    "Verity.Circuit.Iso": "3c2b2ffdb4d384df9f98f0cc1513afb767a7a7a4f8dde3393cdec9893279498e",
+    "Verity.Circuit.Iso.e": "3872a8cf7e9686dbd29487263578563401382a33907d508f240f1b4bb862ff00",
+    "Verity.Circuit.Iso.pull": "f08ced3747cf4eaee1bcea1d9318d88a76b13234c57ae3629d1cf5b9c79966a5",
+    "Verity.Circuit.Iso.refl": "2d8c73d29406936a77bbe101dcc4b55feda9d51db82e77eead87a2be9355b804",
+    "Verity.Circuit.StateWires": "41c748a2bd44ad743a3e87db65949d01eb5da69f524126e5a278e282e18e08d2",
+    "Verity.Circuit.StateWires.copy": "d0493d98d3a92f0363db6329e44a34b9c40d6d82c6b219a2ccd2f018ec58cdc1",
+    "Verity.Circuit.StateWires.k": "03c2042fe0899940661d36abc36442ca9174a2de7cc0e7f7986fbb34f8fa62aa",
+    "Verity.Circuit.StateWires.len": "5e1bad6f8b19cf97797f13edad855a0df16c3fcf507f602e107452db342076fc",
+    "Verity.Circuit.StateWires.out": "2498f0584d0f82b4515729c3ce43e6d325b441a888aca19d993f90d6cb9d1917",
+    "Verity.Circuit.StateWires.src": "01967ea870f4fbf439340836eba7b78c40fc2513408da010626354bca92b8542",
+    "Verity.Circuit.StateWires.step": "0003342624e31c2482fee994033c3a98589f6063cf8ce93c84469acf36fa1589",
+    "Verity.Circuit.unroll": "69581ccffe1a2e053e69a7cdfb73a4073235de73952fc08db6b2d80fe92febc0"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.GateCount",
+    "Accounting.SecurityProofs.FixedMachine.Hard_notFixed"
    ]
   },
   "Definitions.Flock.Accounting.Bound": {
