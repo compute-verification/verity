@@ -8,7 +8,10 @@ ruff lint rerun with the base's config and pin (a loosened config, lint or pin f
 both ruff lints read reruns both), the source lint (the top change's Python under the root config: a new finding is refused by
 name, a fixed one passes, one moved to another function passes it and the repository's lint, a rename keeps its findings once
 its entry moves with it and is refused naming the entry when it doesn't, a file the change doesn't touch is never linted, nor
-a member below the top), where ruff comes from (this
+a member below the top), the environment-read check beside it (a new direct read refused by name with the settings-registry
+fix, one in a registry passing, a read moved within its file passing, a rename moving its entry, a registry mark counted from
+the change's base, the list's total held, a loosened lint failing, a base lint that doesn't load leaving the change unjudged),
+the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""

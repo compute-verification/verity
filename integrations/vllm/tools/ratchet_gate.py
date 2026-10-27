@@ -11,8 +11,11 @@ ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` or ``tests/
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
 integration's ruff lint (and ``archive/``) to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
-``integrations/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``; its slugs stay apart from the
-integration's.  A change is judged when it touches a
+``integrations/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and ``test_repo_env_reads.py``
+holds every tracked ``*.py`` file outside ``integrations/vllm/`` (which has its settings rule, P07) and ``archive/`` to
+``allowlists/repo_env_reads.json``, a count of direct environment reads per file, all one kind, beside the settings
+registries it marks (``{"file", "registry": true}``, a declaration rather than an exception, so a mark is never counted);
+its slugs stay apart from the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
 when:
@@ -44,8 +47,17 @@ grows, naming each new finding ``file:line RULE message``.  (file, rule) is the 
 finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its
 findings; but that lint reads no history, so a rename must move the file's entries in ``allowlists/repo_ruff.json`` with it
 (``test_repo_ruff.py --move OLD NEW``), and one that leaves them behind fails, naming each entry and the command.  A file
-the change doesn't touch is never linted.  Only the top change is linted: a PR's own commits at the preflight, its merge onto
-`next` at the sync, where the members below were linted at their own merges.
+the change doesn't touch is never linted.
+
+Its direct environment reads are counted the same way (the vLLM coordinator, 27 Oct 01:30Z: configuration in one place),
+when its base has the repository's environment-read lint, loaded from the base and counting as it counts: each ``*.py`` file
+the change adds or modifies outside that lint's ``LEFT_OUT`` and not a settings registry at the change's base (a
+``settings.py``, or a file the base's list marks, so a mark that comes with the reads it would exempt doesn't count) fails
+when its reads grow, naming the new ones and the fix: read it through the area's settings registry, or create one.  A rename
+must move the file's entry (``test_repo_env_reads.py --move OLD NEW``), as for ruff.
+
+Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
+were linted at their own merges.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
@@ -58,8 +70,9 @@ on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv
 else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A sync gates each PR on its merge onto
 `next`, which holds every PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default
 ``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes, BASE and the change's commits, which are all it
-reads: a sync of N PRs judges each once, not N times.  The source lint isn't kept: it runs on the top change each time, after
-its verdict is judged or recalled.  An entry that can't be read is judged again, and an error is never kept.  Before marking
+reads: a sync of N PRs judges each once, not N times.  The source checks' findings are kept beside the verdict, under the
+same key, and apply to the top change only, so a member below the top is never failed by them.  An entry that can't be read
+is judged again, and an error is never kept.  Before marking
 a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
