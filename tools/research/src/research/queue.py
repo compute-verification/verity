@@ -39,7 +39,8 @@ after landing).
                          [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): sync and land the
                                                    reviewed prefix of `next`, a Lean change once its Lean check passed, then
-                                                   check `main` (--after-landing-no-cache: reusing no pass); tell @ci the rest.
+                                                   check `main` (--after-landing-no-cache: reusing no pass but
+                                                   circuit-check's); tell @ci the rest.
                                                    --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
                                                    fresh each tick, so a change to them is a reviewed commit (drive's of record:
                                                    tools/verity/check/drive.toml); a flag given here overrides the file's, the
@@ -380,7 +381,7 @@ class DriveFlags:
     #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`;
     #: Daniel, 24 Oct 06:05Z)
     land: str = "review"
-    #: the after-landing run reuses no pass (`check.py --no-cache`)
+    #: the after-landing run reuses no pass but circuit-check's per-target ones (`check.py --no-cache --circuit-cache`)
     after_landing_no_cache: bool = False
     #: scripts a PR passes to be admitted (`gate_refusal`: its head at the ready mark's preflight, its merge onto `next` at the
     #: sync), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
@@ -3580,7 +3581,8 @@ def main(argv: list[str]) -> int:
                                                         "order, ahead of members that keep their place (a fix `main` "
                                                         "needs)")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
-                    help="drive: run the after-landing check reusing no pass (check.py --no-cache)")
+                    help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
+                         "(check.py --no-cache --circuit-cache)")
     for old in ("--max-running", "--train-size"):
         ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted, #5070)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")

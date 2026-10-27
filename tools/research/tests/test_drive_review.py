@@ -89,7 +89,8 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert _subject(world, "main").startswith("Queue: #2") and _subject(world, "main^1").startswith("Queue: #1")
     assert _subject(world, "next").startswith("Queue: #3") and _git(world.origin, "rev-parse", "next^1") == main
     assert h.launched == []                                     # no Lean check: no Lean changes
-    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": True, "no_regenerate": True})]
+    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": True, "circuit_cache": True,
+                                                            "no_regenerate": True})]
     assert h.after and h.after[0][1] == {main: "", _git(world.origin, "rev-parse", "main^1"): ""}
     pl = h.postland()
     assert pl["pending"] == [main] and pl["run"]["skip"] == ["lean-agreement", "lean-changed"]
@@ -773,7 +774,8 @@ def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_mai
     main = _main(world)
     out = h.tick()
     assert out.startswith("nothing lands before an after-landing run of `main`"), out
-    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "no_regenerate": True})]
+    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "circuit_cache": False,
+                                                            "no_regenerate": True})]
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_steps_run(world.tmp, "r-post-0", {**{s: "passed" for s in AFTER_LANDING}, "lean-suites": "failed"})]
     assert h.tick().startswith("landed #2"), world.logs
@@ -1189,7 +1191,8 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.review(4)
     out = h.tick()
     assert out.startswith("landed #4"), out
-    assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "no_regenerate": True})
+    assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "circuit_cache": False,
+                                                   "no_regenerate": True})
     assert h.posted[2][0] == _main(world)                                        # #4's after-landing run
     (ring,) = [p for p in h.posts if "is red on" in p]
     assert "#1 #2 each touch it" in ring and "drive bisects them" in ring, ring
