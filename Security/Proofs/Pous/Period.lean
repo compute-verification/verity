@@ -109,8 +109,19 @@ theorem seqAnswers_clip {B w p : ℕ} [NeZero p] {S D Q L ℓ Bn : ℕ} (f : (ri
     rw [unpack_pack s h0.1, clip_run _ _ f _ D Q L h0.2.1 h0.2.2.1 h0.2.2.2]
     rw [seqAnswers_clip f d step is (j + 1) _ ht]
 
-theorem extractPasses : ExtractPasses := by
-  intro ι α ΩW ΩQ _ _ d r P τ D Q L round hdev hinst o B hB x hmem hcert
+/-- **The fixed extractor passes where the period is certified.** For every joint run, every period's audit `P` and
+every strategy `τ` under the device model (`DeviceModel`) and the instantiation (`Instantiates`), every value `o` of the
+other audits' coins and every `B` with `B + S_chip + ∑ cap_i · round < S₀`: the extractor's server `extract τ o` passes
+the ring game's session (`Passes`, at the designated id, bound to the published root, on the payload `W`) on every
+capacity coin where the capacity account holds at most `B` bits of device memory at every tick of the capacity window
+and the period is certified (`Certified`). -/
+theorem extractPasses (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (D Q L round : ℕ) (hdev : DeviceModel r P τ D Q L round)
+    (hinst : Instantiates P τ) (o : ΩW × ΩQ) (B : ℕ) (hB : B + d.chip + ∑ i, d.cap i * round < Pous.EndToEnd.S)
+    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
+    (hmem : ∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, x) t).mem (r.acct .capacity) ≤ B)
+    (hcert : P.Certified (o.1, o.2, x)) : Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L) x := by
   obtain ⟨I, v, hdr, hans⟩ := hinst o x hcert
   obtain ⟨hspeed, hstate⟩ := hdev o x I v hdr
   have hot := hspeed (onTime_of P hcert)

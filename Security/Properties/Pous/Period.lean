@@ -38,8 +38,9 @@ period's strategy take the place of the earlier per-run premise, which handed th
   the challenger's draw is the ring game's and `τ`'s answers in the ring model are the challenged blocks of `C`. It is
   the step from the deployed device to the ring model, so no Lean theorem discharges it.
 
-`ExtractPasses`, proved: under the two, the extractor's server passes the ring game's session on every certified
-capacity coin where the account holds at most `B` bits at every tick, `B + S_chip + c < S₀`.
+Under the two, the extractor's server passes the ring game's session on every certified capacity coin where the account
+holds at most `B` bits at every tick, `B + S_chip + c < S₀` (`Pous.Period.SecurityProofs.extractPasses`, a lemma of
+`PeriodHeld`'s proof).
 
 Both rest on `CoinCommitHides` and the conjecture `P2RingAuditSecure` at a budget `(D, Q, L)`, which
 `Pous.EndToEnd.EndToEndRing` takes, and which is false at some budgets; `Pous.Period.PeriodHeldDeployed`
@@ -217,22 +218,6 @@ noncomputable def extract {ΩW ΩQ : Type} (τ : Strategy ΩW ΩQ) (o : ΩW × �
     Prog.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
       (τ.step o sc W pp j (StateBits.unpack σ) i)
   bounded _ _ _ _ _ _ := Prog.clip_ringBounded _ _ _ _ _ _
-
-/-- **The fixed extractor passes where the period is certified.** For every joint run, every period's audit `P` and
-every strategy `τ` under the device model (`DeviceModel`) and the instantiation (`Instantiates`), every value `o` of the
-other audits' coins and every `B` with `B + S_chip + ∑ cap_i · round < S₀`: the extractor's server `extract τ o` passes
-the ring game's session (`Passes`, at the designated id, bound to the published root, on the payload `W`) on every
-capacity coin where the capacity account holds at most `B` bits of device memory at every tick of the capacity window
-and the period is certified (`Certified`). -/
-def ExtractPasses : Prop :=
-  ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (D Q L round : ℕ),
-    DeviceModel r P τ D Q L round → Instantiates P τ →
-      ∀ (o : ΩW × ΩQ) (B : ℕ), B + d.chip + ∑ i, d.cap i * round < Pous.EndToEnd.S →
-        ∀ x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams,
-          (∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, x) t).mem (r.acct .capacity) ≤ B) →
-            P.Certified (o.1, o.2, x) → Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L) x
 
 /-- **PoUS's per-period guarantee, about the deployed check.** Given the coin commitments' hiding (`CoinCommitHides`)
 and P2's security in the ring model at `(D, Q, L)` (`P2RingAuditSecure`): for every joint run on every device whose
