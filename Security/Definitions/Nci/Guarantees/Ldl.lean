@@ -10,7 +10,7 @@ The working draft's Lemma 1, Theorem 3 and Corollary 4b, on core's circuit and `
 * `Counting` (Theorem 3): blocks of exactly `c` gates, each of counted weight at most `q`, give
   `|C| ≥ (c / q) Σ_v ω_v`.
 * `FanOutBound` (Corollary 4b): with activation fan-out at most `e` and `ActivationRate`,
-  the overhead `|C| / T₀ ≥ c β_x M / (T₀ e h_x)`, `h_x = k' + λ_x`.
+  `ρ ≥ c β_x M / (T₀ e h_x)`, `h_x = k' + λ_x`.
 
 The overhead `|C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` a
 reference construction's size, which bounds the threshold. The statements are about an arbitrary circuit, not the NCI
