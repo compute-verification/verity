@@ -1168,7 +1168,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
     A quiet post wakes only the names at its start.  A reply under an announcement wakes only the names it starts with,
     whatever PRs and runs its body names, and of its status lines only a decline wakes the announcer (`roster` reads the
-    rest): the replies to an announcement to every handle were about 3,000 doorbells a week (reach PR 7).  The author
+    rest): otherwise the replies to an announcement to every handle are thousands of doorbells a week.  The author
     is never a target, unless
     `author_rings` (`rings_own_inbox`: another agent posting as the author's handle, such as the outgoing generation of a
     handover), when a post naming the author's handle is for it like a post naming anyone else."""
