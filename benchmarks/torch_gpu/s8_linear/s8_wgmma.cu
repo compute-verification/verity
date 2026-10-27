@@ -454,11 +454,19 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
     } else {
       // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3, in A's order, as A.  The first half's
       // atoms run under the second half's y words and the second half's under the first's, so no thread reads an accumulator
-      // an atom in flight reads, and each half is put in A's order before the fence its atoms follow.  Each R stage is
+      // an atom in flight reads.  Before each half's fence, its R stages arrive and its accumulators are put in A's order:
+      // nothing between a fence and its atoms, where a barrier's wait loop would make ptxas serialize them.  Each R stage is
       // released once no atom reads it (s8mrb: once the bulk add has read the sums over it)
       using G = Red<TM, BN, RR>;
       constexpr int CH = G::CH, Q = G::Q, RST = G::RST;
       int rs[RST];
+#pragma unroll
+      for (int i = 0; i < RST; i++)
+        if (i * Q < CH / 2) {
+          mbar_wait_warp(bars + 8 * s, ph);
+          rs[i] = s;
+          if (++s == STAGES) { s = 0; ph ^= 1; }
+        }
       a_order<0, NA / 8>(d);
       WG_FENCE;
 #pragma unroll
@@ -472,13 +480,15 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
             for (int i = 0; i < RST; i++)
               if ((i + 1) * Q <= CH / 2 && lane == 0) release<CL>(bars + 8 * (STAGES + rs[i]));
           }
+#pragma unroll
+          for (int i = 0; i < RST; i++)
+            if (i * Q >= CH / 2) {
+              mbar_wait_warp(bars + 8 * s, ph);
+              rs[i] = s;
+              if (++s == STAGES) { s = 0; ph ^= 1; }
+            }
           a_order<NA / 8, NA / 4>(d);
           WG_FENCE;
-        }
-        if (c % Q == 0) {
-          mbar_wait_warp(bars + 8 * s, ph);
-          rs[c / Q] = s;
-          if (++s == STAGES) { s = 0; ph ^= 1; }
         }
         const uint32_t a = base + rs[c / Q] * T::STAGE + (c % Q) * G::CHUNK;
 #pragma unroll
