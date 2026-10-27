@@ -458,7 +458,7 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   rows at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half
   of v3's table (9.86 × 10^9), at 8 bytes a cell over N cells against 16 bytes a slot over M. The steps then come from
   the map's rows, so the port's reads are at hidden positions. `FrameV3Read` already takes its position as a value, so
-  they cost what they cost now. The served window is 1.466 × 10^11, 3.4% more than v4 (the table below).
+  they cost what they cost now. The served window is 1.466 × 10^11, 3.4% more than v4.
 - **The verifier's cost.** v4's map is a public input of 8 bytes a cell, 8.09 MB a served window, which the verifier
   computes in time linear in the window's capacity. At the target it goes away: the verifier reads the roots, the
   domain ids and the statics, which are O(1) a window.

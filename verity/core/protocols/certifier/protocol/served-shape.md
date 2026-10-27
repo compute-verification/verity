@@ -51,8 +51,8 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4`), w212 is
   `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
-  each with its cap, its 14 decisions in 32, and 33 idle steps after its 21 units. The ZK proof of record proves it
-  ([compile-slice.md](compile-slice.md)).
+  each with its cap, its 14 decisions in 32, and 33 idle steps after its 21 units. Its proof in zero knowledge is
+  [compile-slice.md](compile-slice.md)'s.
 - At the sync class, the same sizes under a sync scheduler (`--AS 0`), w212 is
   `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`: 34 idle steps after its 20, whose
   served rows are zero. The slice takes it as it is: it accepts the window with the seal's rows (0x3F), and each
