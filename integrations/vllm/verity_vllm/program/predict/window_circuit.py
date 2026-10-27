@@ -21,9 +21,9 @@ the ``outputs`` from the prompt's last position on). The slot's last position ma
 (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the registered model's first stop id, that one kept,
 `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold
 (a prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the
-egress refuses. The scan's state
-rows and the entries are the circuit's external ports. A slot's Program hands all its outputs to the scan at its anchor,
-which carries them across windows (`SC_GROUP`), so no Program runs into the next window.
+scan refuses at the anchor (a Program's n over KO, network-accounting's #4901) and the egress never renders. The scan's
+state rows and the entries are the circuit's external ports. A slot's Program hands all its outputs to the scan at its
+anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the next window.
 `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and emits the
 class's circuit.
 
@@ -680,9 +680,10 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
                   name: str = NAME) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of
     the scan state row before its anchor (`WindowClass.anchor`), and each allocation's slots side by side in its template; its
-    blocks' slots are the slots. The registered parameters are the weights, one a weight and row width (`window_builder.weight_param`), and
-    ``SCAN_STATE``'s ``cls.buckets`` rows, row a the scan's state row before the window's bucket a. A window's circuit is every slot's; ``programs`` is the first
-    slots only, a probe's census (`class_size`)."""
+    blocks' slots are the slots. The registered parameters are the weights, one a weight and row width
+    (`window_builder.weight_param`), and ``SCAN_STATE``'s ``cls.buckets`` rows, row a the scan's state row before the
+    window's bucket a (`ingress_scan.window_state`'s rows, `scan_state`). A window's circuit is every slot's; ``programs``
+    is the first slots only, a probe's census (`class_size`)."""
     programs = cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")

@@ -49,7 +49,8 @@ outputs served (up to ``max_tokens``, unsigned, and the first of the model's sto
 u32, then output i's low IDB bits for i < n and zeros past it, all zero for an empty slot, zero-padded to whole words. An
 occupied slot whose request the class can't hold has n = KO + 1 and no ids: its prompt not 1 to NP ids (after a Program's
 NP + KO − 1 positions the state's w is lp − NP − KO) or its outputs not ending within KO (``max_tokens`` past KO and no
-stop id among them). The egress renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
+stop id among them). The scan refuses a Program's n over KO at its anchor (network-accounting's #4901), and the egress
+renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
 
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
