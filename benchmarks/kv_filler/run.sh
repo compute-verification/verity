@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes the
-# bandwidth audit's tagger) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the tests, then
+# The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes
+# ../bandwidth/tagger.cu) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the tests, then
 # SCRIPT (default bench.py) under one gpu-lease 1 --wait --max-min MAXMIN (default 25) with ARGS. Results go to
 # $RESEARCH_RUN_DIR/out.
 #
