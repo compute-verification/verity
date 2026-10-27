@@ -30,8 +30,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-import settings
 import verity_difftest as D
+
+from verity import settings
 
 LEAN = Path(__file__).resolve().parents[1]
 RECURSIVE = LEAN / "recursive"
@@ -207,7 +208,7 @@ def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_p
 
 # --- a whole recursive session: a recursion_e2e run's kept data ---------------------------------------------------------------
 
-DATA = settings.RECURSIVE_DATA
+DATA = settings.VERITY_VSTAR_RECURSIVE_DATA
 DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean): set "
                               "VERITY_VSTAR_RECURSIVE_DATA=DIR")
 

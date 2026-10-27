@@ -77,6 +77,11 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- verity.ml.circuits, its suites included
     S("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word and every "
       "pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
+    # ---- V*'s suite (verity/core/service/vstar/tests)
+    S("VERITY_VSTAR_RECURSIVE_DATA", str, "", WHERE, "a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean), which "
+      "the whole-session recursive tests read and skip without: which tests run, never what they check"),
+    S("LEAN_JOBS", int, 4, WHERE, "how many flock-verify processes a whole-session recursive test runs at once: only how long "
+      "it takes"),
 )
 del S
 
