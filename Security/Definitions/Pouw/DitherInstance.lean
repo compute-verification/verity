@@ -1,5 +1,7 @@
 import Definitions.Pouw.Dither
 import Definitions.Core.Assumptions.Accel
+import Definitions.Core.Accel.H200
+import Definitions.Core.Accel.Sm120
 
 /-!
 # The headline's model on the cards: the H200 and the RTX PRO 6000 (trusted)

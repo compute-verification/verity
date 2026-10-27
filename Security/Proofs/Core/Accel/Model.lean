@@ -1,4 +1,7 @@
 import Definitions.Core.Assumptions.Accel
+import Mathlib.Algebra.Order.Monoid.Canonical.Basic
+import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Positivity
 
 /-!
 # The machine 𝓜: an honest semantics, the rate bound, and the coverage premise's refusal
@@ -33,18 +36,12 @@ theorem signed_mulOut_s8 (p q : ℕ) :
   rw [hm]
   unfold signed
   by_cases h : z < 0
-  · rw [if_pos (show decide (z < 0) = true from decide_eq_true h)]
+  · simp only [decide_eq_true h, ↓reduceIte]
     show -((z.natAbs : ℕ) : ℤ) = z
-    first
-      | rw [Int.ofNat_natAbs_of_nonpos h.le, neg_neg]
-      | rw [Int.natCast_natAbs, abs_of_neg h, neg_neg]
-      | omega
-  · rw [if_neg (show ¬ decide (z < 0) = true from fun h' => h (of_decide_eq_true h'))]
+    rw [Int.ofNat_natAbs_of_nonpos h.le, neg_neg]
+  · simp only [decide_eq_false h, Bool.false_eq_true, ↓reduceIte]
     show ((z.natAbs : ℕ) : ℤ) = z
-    first
-      | exact Int.natAbs_of_nonneg (not_lt.mp h)
-      | rw [Int.natCast_natAbs, abs_of_nonneg (not_lt.mp h)]
-      | omega
+    exact Int.natAbs_of_nonneg (not_lt.mp h)
 
 /-- **The exact `s8` dot is in product form** at every `k`. -/
 theorem s8_productForm (k : ℕ) : ProductForm .s8 .s8 k (intDot .s8 .s8) := by
@@ -99,11 +96,8 @@ theorem use_issue_pos (i : m.Instr) : 0 < i.use .issue := by
   rcases i with ⟨o, _, _, _⟩ | ⟨_, _, _⟩
   · cases o <;>
       simp only [Instr.use, Card.use, slot, rd_issue, port_issue, mul_zero, add_zero, zero_add, ↓reduceIte,
-        reduceCtorEq, and_false, false_and] <;>
-      first
-        | positivity
-        | exact add_pos_of_pos_of_nonneg (by norm_num) (zero_le _)
-        | exact div_pos (Nat.cast_pos.mpr (lt_max_of_lt_right one_pos)) (by norm_num)
+        reduceCtorEq, and_false] <;>
+      positivity
   · simp only [Instr.use, slot, ↓reduceIte]
     norm_num
 
@@ -146,7 +140,7 @@ theorem cardWithinAccel_fails (c : Card) (can : (c.Mem → c.Mem) → ℚ≥0 �
   obtain ⟨P, sched, hrun⟩ := h f 0 D hcan
   obtain ⟨hfits, hmem⟩ := hrun ⟨M, fun _ => 0⟩ hD (fun _ => rfl)
   have h0 : Machine.units (Machine.run P ⟨M, fun _ => 0⟩ sched).2 .issue = 0 :=
-    le_antisymm ((Machine.units_le_of_fits P _ sched 0 hfits .issue).trans (by simp)) (zero_le _)
+    le_antisymm ((Machine.units_le_of_fits P _ sched 0 hfits .issue).trans (by simp)) zero_le
   exact hf (hmem.symm.trans (Machine.run_mem_of_issue_zero P _ sched h0))
 
 end Verity.Accel
