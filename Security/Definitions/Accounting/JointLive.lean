@@ -134,8 +134,7 @@ end PeriodLive
 open Classical in
 /-- **An error conditional on its finders' collision resistance**: `δ s` at a strategy `s` where `P s` holds, `⊤`
 (no bound) elsewhere. With `P s` a quantitative bound on the probability that the finders built from `s` output a
-collision (`Claims.Finder.Pr`), this is the conditional form of the one theorem (the 21:55Z ruling); with `P` true it is
-`δ`. -/
+collision (`Claims.Finder.Pr`), this is the conditional form of the one theorem; with `P` true it is `δ`. -/
 noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Strategy G → Prop)
     (δ : Verity.Game.Strategy G → ℝ≥0∞) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
   if P s then δ s else ⊤

@@ -592,7 +592,7 @@ def outNetEntries (a : Array Json) : V (Array Nat × Option (Array Nat)) := do
     | x => do pure (0, ← J.asNat x "out_net_ports")
   pure (e.map (·.2), if a.any (fun x => x matches .arr _) then some (e.map (·.1)) else none)
 
-/-- How many of the last output ports META `pinned_outputs` names (CMP-149's form B): its array's length, else 0. They have
+/-- How many of the last output ports META `pinned_outputs` names: its array's length, else 0. They have
 no output row, so the runs of `out_row_ports` cover the others; `HmOut.checkPinned` holds the key to its form. -/
 def pinnedCount (mj : Json) : Nat :=
   match mj.getObjVal? "pinned_outputs" with
@@ -1669,7 +1669,7 @@ def pinnedNames (v : Json) : Option (Array String) :=
   | .arr a => a.mapM fun x => x.getStr?.toOption
   | _ => none
 
-/-- META `pinned_outputs` (CMP-149's form B), as the prover's `Composite::parse` reads it: the names of the last output
+/-- META `pinned_outputs`, as the prover's `Composite::parse` reads it: the names of the last output
 ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`, which makes every row a bit row; at least one row) whose padding instance's pinned
 output words are zero; and each pinned bit's row a linear row (`linearRow`, its B the constant alone) of a slot of a net
 past the rows' circuits, so that Δ's copy of the forced-zero row onto it (`delta`) pins the bit and its linear form to

@@ -16,21 +16,21 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The deployed session's files parse.** There are a circuit file and a public file with the SHA-512 digests of the
-honest case of the one-stage audit's `--zk` fixture `art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5`
-(`benchmarks/one_stage/forged_proofs.sh`'s files with their sessions regenerated at the 2^9 coin schedule, #4950: one A8
-unit, `LlBf16DotprodDot_v1` at K = 128, staged by `UnitStager` bound to a template query's partition, four instances,
-every unit drawn): `stage/circuit.txt`, 97,364,260 bytes, and `honest/pub-4.bin`, 3,194 bytes, a per-instance public file
+honest case of the one-stage audit's `--zk` fixture (`benchmarks/one_stage/forged_proofs.sh`'s files with their
+sessions at the 2^9 coin schedule: one A8 unit, `LlBf16DotprodDot_v1` at K = 128, staged by `UnitStager` bound to a
+template query's partition, four instances, every unit drawn): `stage/circuit.txt`, 97,364,260 bytes, and
+`honest/pub-4.bin`, 3,194 bytes, a per-instance public file
 (no `shared_rows`), such that, under the tags `verify --zk --statement verity/flock-circuit` sets one session up with
 (`Witness.zkTags` at the inputs `⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no session tables, and no
 partition or program, which the tags don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in
 the hidden-output headlines' scope (`ProvedScope.scopeOkH`), and the public file loads at `D` (`HmOut.loadPublic`) with
 no shared-row tables.
 
-Assumption record. It assumes a computation's result: run `r20261027-042157-5c54` evaluated each conjunct with these
-functions, built from the verifier's source at `main` 2bb751070f, on that fixture's two files, beside
-`flock-verify verify --zk` on its honest session, which it accepted. A shared-row public file (the served registered
-fixtures) is `SampledKSLiveV5`'s. It asks nothing of a hash or of the prover; a change to any of these functions or to
-the files makes it a new premise, to be checked by a new run. -/
+Assumption record. It assumes a computation's result: each conjunct, evaluated with these functions built from the
+verifier's source on the two files with these digests, holds, and `flock-verify verify --zk` accepts their honest
+session. A shared-row public file (the served registered fixtures) is `SampledKSLiveV5`'s. It asks nothing of a hash
+or of the prover; a change to any of these functions or to the files makes it a new premise, to be checked by a new
+run. -/
 def ServedFilesParse : Prop :=
   ∃ cf pf : ByteArray,
     hexOf (Sha512.hash cf) =
