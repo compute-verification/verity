@@ -453,12 +453,15 @@ def BandwidthAuditSound : Prop := V.Target .poub
 the registration sampled proofs committed to. -/
 def NetworkCertifierSound : Prop := V.Target .network
 
-/-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files, the deployment's honest prover meets
-`a`'s claim on almost every play. Each subprotocol's piece proves its own (sampled proofs from
-`Flock.Bridge.card_wrong_lt_of_relS_honest`; the others from their owners' `_honest` lemmas). -/
-def HonestHolds (a : Audit) : Prop :=
-  ∀ θ F c : ByteArray, V.Registered θ F →
-    Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0
+/-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files `θ`, `F` and the commitment the honest
+prover sends from them (`commit θ F`), the deployment's honest prover meets `a`'s claim on almost every play. The
+commitment is the honest one, never an arbitrary `c`: at a commitment that opens nothing, sampled proofs' claim fails
+on every play. Each subprotocol's piece proves its own (sampled proofs from `Flock.Bridge.card_wrong_lt_of_relS_honest`;
+the others from their owners' `_honest` lemmas). -/
+def HonestHolds (commit : ByteArray → ByteArray → ByteArray) (a : Audit) : Prop :=
+  ∀ θ F : ByteArray, V.Registered θ F →
+    Game.prob (fun o => ¬ V.Holds θ F (commit θ F) (V.honest θ F (commit θ F)) a o) (V.game θ F (commit θ F))
+      (V.honest θ F (commit θ F)) = 0
 
 end Vocab
 

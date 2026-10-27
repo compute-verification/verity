@@ -13,7 +13,8 @@ most its target's error at the strategy: `Accounting.Guarantees.JointPeriodLive`
 being `Accounting.PeriodLive.Sound` there.
 
 Beside it, the two checks every guarantee carries: `soundness_of_subprotocols_honest`, at the honest deployment (the
-deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
+deployment's honest prover at registered files and the commitment it sends from them, each subprotocol's honest lemma
+`Vocab.HonestHolds commit`) every target's
 event and the theorem's own have probability `0`; and `soundness_of_subprotocols_nontrivial`, its
 conclusion fails for a verifier that accepts everything, wherever a claim fails on every play of a strategy whose files
 pass the commit phase's check and the errors sum below one. `Vocab.holds_sampled_of_opens` is the honest commitment's
@@ -140,17 +141,20 @@ theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → P
     (fun _ => True) (fun log t => ?_) (releases ns) σ).trans (Game.prob_true _ _)
   simp [Game.prob, hp]
 
-/-- **Its hypotheses hold at the honest deployment**: at registered files, where each subprotocol's honest lemma holds
-(`Vocab.HonestHolds`), the deployment's honest prover meets every target with probability `0` on its event, and the
-event the theorem bounds has probability `0`. -/
+/-- **Its hypotheses hold at the honest deployment**: at registered files and the honest commitment `commit θ F`,
+where each subprotocol's honest lemma holds there (`Vocab.HonestHolds commit`), the deployment's honest prover meets
+every target with probability `0` on its event, and the event the theorem bounds has probability `0`. -/
 theorem soundness_of_subprotocols_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
-    (h : ∀ a, V.HonestHolds a) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+    (commit : ByteArray → ByteArray → ByteArray) (h : ∀ a, V.HonestHolds commit a) (θ F c : ByteArray)
+    (hreg : V.Registered θ F) (hc : c = commit θ F) :
     (∀ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
         ≤ V.error a θ F c (V.honest θ F c)) ∧
       Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o)
         (V.game θ F c) (V.honest θ F c) = 0 := by
-  have h0 : ∀ a, Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0 :=
-    fun a => h a θ F c hreg
+  subst hc
+  have h0 : ∀ a, Game.prob (fun o => ¬ V.Holds θ F (commit θ F) (V.honest θ F (commit θ F)) a o)
+      (V.game θ F (commit θ F)) (V.honest θ F (commit θ F)) = 0 :=
+    fun a => h a θ F hreg
   refine ⟨fun a => ?_, le_antisymm ?_ zero_le⟩
   · refine le_trans (Game.prob_mono (p := fun o => V.Verdict a o ∧ ¬ V.Holds θ F c (V.honest θ F c) a o)
       (q := fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (fun o ho => ho.2) _ _) ?_
@@ -209,13 +213,16 @@ theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d :
       _ = _ := by rw [hz, add_zero]
   exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
 
-/-- **`soundness_at`'s event has probability `0` at the honest deployment**: at registered files, where the honest
-lemma of each claim the deployment decides holds, the deployment's honest prover makes the theorem's event null. -/
+/-- **`soundness_at`'s event has probability `0` at the honest deployment**: at registered files and the honest
+commitment `commit θ F`, where the honest lemma of each claim the deployment decides holds there, the deployment's honest
+prover makes the theorem's event null. -/
 theorem soundness_at_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) (D : Deployment)
-    (h : ∀ a, D.Decides a → V.HonestHolds a) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+    (commit : ByteArray → ByteArray → ByteArray) (h : ∀ a, D.Decides a → V.HonestHolds commit a) (θ F c : ByteArray)
+    (hreg : V.Registered θ F) (hc : c = commit θ F) :
     Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
         ∃ a, D.Decides a ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0 := by
   classical
+  subst hc
   refine le_antisymm ?_ zero_le
   calc Game.prob (fun o => AcceptsAt D o.sent ∧ V.Registered o.params o.file ∧
           ∃ a, D.Decides a ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
@@ -225,7 +232,7 @@ theorem soundness_at_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Voc
     _ ≤ ∑ a ∈ Finset.univ.filter D.Decides,
           Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) :=
         prob_exists_finset_le _ _ _ _
-    _ = 0 := Finset.sum_eq_zero fun a ha => h a (Finset.mem_filter.1 ha).2 θ F c hreg
+    _ = 0 := Finset.sum_eq_zero fun a ha => h a (Finset.mem_filter.1 ha).2 θ F hreg
 
 /-- **One decided claim's failing instance is the deployment's theorem's**: `soundness_of_subprotocols_nontrivial_of`
 at the deployment `D`, for a claim `a` that `D` decides. -/
