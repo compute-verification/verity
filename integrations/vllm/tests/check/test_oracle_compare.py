@@ -786,5 +786,5 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res0["result"] is None and res0["grade"] == "partial" and res0["not_compared"]["identity without a byte range (dtype/range)"] == 4
     assert "padding" not in res0 and len(res0["attribution"]["unverified"]) == 2
-    old = PS.padding_vs_oracle(pp, res0, bmap)                                   # a record whose oracle predates fix (d): named, not ok
-    assert not old["ok"] and old["oracle"].startswith("predates fix (d)") and old["map_padding_entries"] == 0   # (the stamps were popped above)
+    old = PS.padding_vs_oracle(pp, res0, bmap)                                   # a record whose oracle predates the padding block: named, not ok
+    assert not old["ok"] and old["oracle"].startswith("predates the `padding` block") and old["map_padding_entries"] == 0   # (the stamps were popped above)
