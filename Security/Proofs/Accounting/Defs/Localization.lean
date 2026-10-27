@@ -4,14 +4,14 @@ import Mathlib.Logic.Relation
 /-!
 # Reach
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1), section 6, on one actual circuit. A gate is
-*downstream* of a set `C` of gates (`downstream C`) when a path of wires runs to it from a gate of `C`. A challenge `C`
-*reaches the prover through `X` during `W`* (`Reaches C X Y W`, with `Y` the rest of the prover and the verifier's
-leaves the ones in neither) when, in `W`, the rest reads no gate of `C` and nothing downstream of `C` from the verifier.
-`SendsIndependent C X Y W`: no wire from `X` to `Y` during `W` carries a gate downstream of `C`. That is section 6's
-`e = 0` only when, in addition, the gates `X` sends and their ticks don't depend on `C`, which one circuit can't say: the
-per-run lemma is `Accounting.SecurityProofs.Actual.localization_wires`, and localization is
-`Accounting.Guarantees.Localization`, over strategies.
+The actual-circuit model's reach, on one actual circuit. A gate is *downstream* of a set `C` of gates (`downstream C`)
+when a path of wires runs to it from a gate of `C`. A challenge `C` *reaches the prover through `X` during `W`*
+(`Reaches C X Y W`, with `Y` the rest of the prover and the verifier's leaves the ones in neither) when, in `W`, the
+rest reads no gate of `C` and nothing downstream of `C` from the verifier. `SendsIndependent C X Y W`: no wire from `X`
+to `Y` during `W` carries a gate downstream of `C`. That is the model's `e = 0` only when, in addition, the gates `X`
+sends and their ticks don't depend on `C`, which one circuit can't say: the per-run lemma is
+`Accounting.SecurityProofs.Actual.localization_wires`, and localization is `Accounting.Guarantees.Localization`, over
+strategies.
 -/
 
 namespace Accounting.Placed
