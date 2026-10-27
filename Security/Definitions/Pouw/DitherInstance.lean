@@ -24,12 +24,13 @@ import Definitions.Core.Accel.Principles
 * **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the open parameters it gives;
 * **the network certifier's counts** (`Counted`, RT-PROTO P2): the verifier refuses a period whose signed counts into
   or out of the devices, read from the devices' readings (`Readings`), pass the caps `E_in`, `E_out`;
-* **the auditor's clocks** (`Timed`, RT-PROTO P5, RT-PROTO-2 P13, P25, CMP-154): the challenger issues each sampling
-  block's coins at least `Δ` before the period's end, and the next block's only after every root of this one is in. The
-  verifier refuses a period in which the network certifier saw a root arrive more than `Δ` after its block's coins,
-  or a selected block's answer more than `τ_ans` after its check coin. Only selected blocks are answered, and an
-  answer may arrive after later blocks' coins. `TimedWorkFits` is what that buys: the sampling blocks' work within the
-  period's capacity, at any number of blocks.
+* **the auditor's clocks** (`Timed`, RT-PROTO P5, RT-PROTO-2 P13, P25, CMP-154, RT-POOL RP26): the challenger issues
+  each sampling block's dither coins only after the block's operand root is in, at least `Δ` before the period's end,
+  and the next block's only after every root of this one is in. The verifier refuses a period in which the network
+  certifier saw a root arrive more than `Δ` after its block's coins, or a selected block's answer more than `τ_ans`
+  after its check coin. Only selected blocks are answered, and an answer may arrive after later blocks' coins.
+  `TimedWorkFits` and `AnswersFit` are what that buys: the sampling blocks' commit phases and work within the period's
+  capacity, at any number of blocks, and each selected answer within the period.
 
 The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
 H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`, `slack ≥ 1`; on sm_120 `madHi ≥ 2` and no native `b1`, RT-MODEL M12, M13) with the
@@ -304,8 +305,9 @@ section Certifier
 /-- **The verdict with the network certifier's counts** (RT-PROTO P2, RT-LEAN L32): the service's verdict, and the
 certifier's signed counts of the bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them
 from the devices' readings, are within the caps `E_in` and `E_out`, fixed before the period at served traffic; a
-period past either is refused. The counts exclude the certifier's own coin stream (RT-PROTO-2 P18): the dither coin is
-the round's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). -/
+period past either is refused. The counts exclude the challenger's signed coin stream, which the certifier sees cross
+the boundary (RT-PROTO-2 P18, RT-POOL RP27): the dither coin is the sampling block's `Draw`, an input of its programs,
+not an exchanged bit (`Accel.ext`). -/
 def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ)
     (Ein Eout : ℝ) : Verdict P k Obs :=
   fun o x tr ob => verdict o x tr ob ∧ cin ob ≤ Ein ∧ cout ob ≤ Eout
@@ -314,14 +316,21 @@ end Certifier
 
 section Clock
 
-/-- **The verdict with the auditor's clocks** (RT-PROTO P5, RT-PROTO-2 P13, P25, O-REDTEAM NF5, RT-LEAN L33, CMP-154):
-the service's verdict, read with the challenger's signed issue times and the network certifier's signed arrival
-times, as the verdict reads them from the devices' readings `ob`.
+/-- **The verdict with the auditor's clocks** (RT-PROTO P5, RT-PROTO-2 P13, P25, O-REDTEAM NF5, RT-LEAN L33, CMP-154,
+RT-POOL RP26): the service's verdict, read with the challenger's signed issue times and the network certifier's signed
+arrival times, as the verdict reads them from the devices' readings `ob`. Each sampling block runs its commit phase,
+then its challenge phase, then its response phase, every commitment bound before any of its coins (Daniel, 26 Oct,
+11:09 AM PDT).
 
-* The challenger issues sampling block `b`'s dither coins at `t ob b`, at least `Δ` before the period's end, and
-  block `b + 1`'s only after every root of block `b` is in, so the blocks' work runs one block at a time.
-* The network certifier watches the replica's boundary. The period is refused if it saw a root of block `b` arrive
-  (`arrive ob b`) more than `Δ` after the block's dither coins.
+* **The commit phase.** The network certifier signs the arrival of sampling block `b`'s operand root
+  (`opArrive ob b`), and the challenger issues the block's dither coins at `t ob b`, after it: the period is refused
+  if `t ob b` came before `opArrive ob b`. So the block's registered instance is read at `opArrive`, before any coin
+  of the block. The coins' message is derived from that receipt (RT-POOL RP25: the derivation `OwnDither` rests on,
+  with the receipt's digest in its context), so the coins can't be issued against an operand root that wasn't in.
+* **The challenge phase.** The dither coins go out at least `Δ` before the period's end, and block `b + 1`'s only
+  after every root of block `b` is in, so the blocks run one at a time. The network certifier watches the replica's
+  boundary; the period is refused if it saw a root of block `b` arrive (`arrive ob b`) more than `Δ` after the block's
+  dither coins.
 * The challenger issues every sampling block's check coin, which carries whether the block is selected, at `tc ob b`,
   and the period is refused if that was before every root of the block was in (RT-POOL RP22): a prover told early
   that its block isn't selected could skip the block. The coin's message carries the digest of the certifier's
@@ -333,15 +342,16 @@ times, as the verdict reads them from the devices' readings `ob`.
 The number of sampling blocks and of selected ones is bounded by nothing here. The clocks are the auditor's devices,
 and nothing here reads a time the prover reports. -/
 def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdict P nsb Obs) (Pd : Period G) (Δ : ℝ)
-    (t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
+    (opArrive t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
     Verdict P nsb Obs :=
   fun o x tr ob => verdict o x tr ob ∧ (∀ b, 0 ≤ t ob b ∧ t ob b + Δ ≤ Pd.T ∧ arrive ob b ≤ t ob b + Δ) ∧
+    (∀ b, opArrive ob b ≤ t ob b) ∧
     (∀ b b' : Fin nsb, (b : ℕ) + 1 = b' → arrive ob b ≤ t ob b') ∧ (∀ b, arrive ob b ≤ tc ob b) ∧
     ∀ b, sel (x b).2 → 0 ≤ tc ob b ∧ tc ob b + τans ≤ Pd.T ∧ ansAt ob b ≤ tc ob b + τans
 
-/-- **An accepted period's sampling blocks' work fits the period**: for every prover whose period the verdict accepts,
-its sampling blocks' timed use (`Prover.timedUse`: each block's work, from its dither coins to its commitment) is,
-resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count that use
+/-- **An accepted period's sampling blocks' commit phases and work fit the period**: for every prover whose period the
+verdict accepts, its sampling blocks' timed use (`Prover.timedUse`: each block's commit phase and work, from the
+previous block's work to its commitment) is, resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count that use
 against the period's devices: it was done on them, inside the period. -/
 def TimedWorkFits (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict : Verdict P nsb Obs)
     (dev : Readings G P nsb Obs) (Pd : Period G) : Prop :=

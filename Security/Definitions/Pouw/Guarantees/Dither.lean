@@ -10,9 +10,10 @@ The ACCEL program's headline (CMP-136, D2), on the accelerator model of `Definit
 * `WorkSound`: under the accelerator model's device premises (G1, G2, G3, P1, P2) and exactly the program's trust
   base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof service's
   soundness, the network certifier's count, and commit-and-open's extraction), for every prover that runs the period
-  one round at a time on instances registered before it (`Prover`),
+  one sampling block at a time, each in its commit, challenge and response phases, its operands committed before its
+  coins (`Prover`),
   `Pr[accepted ∧ rv + W_other > OPT_honest + ε_A C] ≤ δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm + κ_dsha)`, `C` the
-  registered rounds' honest cost at the dual price.
+  sampling blocks' honest cost at the dual price.
 * `WorkMoment`: `WorkSound` before its Markov step at `δ_coin`, the per-replica moment a fleet pools (CMP-152).
 * `WorkSoundNoFold`: the no-fold round with commit-and-open from SHA-512 as a random oracle
   (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) at the query budget the period's capacity allows, so
@@ -28,54 +29,62 @@ namespace Pouw.Guarantees.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
-/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (R-ACCEL-1's freed compute; CMP-136).
-In every accelerator model `G` and for every round protocol `P` (the no-fold protocol is `noFoldRound` at its knobs, so
-protocol v1 and v2, or a SYM design's rounds, are instances), every set `Reg` of registrable instances and every
-period's registered instances `reg w ∈ Reg`, every service verdict on the transcript and the auditor's devices'
-readings (`Verdict`, `Readings`), every period `Pd` whose credited unit `hon` is the registered sampling blocks' honest
-use (their work and the selected blocks' answers), and every price `μ` that is the period's dual price at that unit
-(`Period.DualOpt μ 1`): if
-each registrable instance's honest round costs `H = H_mm + H_sha + H_o` at `μ` (its words and commitment, both
-positive, and the rest, `H_o ≥ 0`, its answers among it),
-its public bests cost `pub_mm ≤ H_mm` and `pub_sha ≤ H_sha`, the registered rounds' honest costs sum to `μ · hon`,
-`0 < δ ≤ 1`, `η > 0`, `β, K, ξ ≥ 0`, the degenerate dithers' probabilities are `≥ 0`, `Q` oracle calls use at least
-the period's capacity of some resource `r` a call uses (`cap_r ≤ Q callUse_r`, so at most `Q` calls fit, whatever the
-price: RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
+/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (R-ACCEL-1's freed compute; CMP-136,
+CMP-154). In every accelerator model `G` of the machine model 𝓜 and for every round protocol `P` (the no-fold protocol
+is `noFoldRound` at its knobs, so protocol v1 and v2, or a SYM design's sampling blocks, are instances), every
+sampling block's set `Reg w` of registrable instances (each block's operands are committed in its commit phase, after
+the earlier blocks' coins, so `Reg w` holds every instance a prover may commit for it: RT-POOL RP23, RP26), every
+service verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`), every selection `sel`
+of a block by its check coin, every period `Pd` whose credited unit `hon` is the sampling blocks' honest use (their
+commit phases and work and the selected blocks' answers), and every price `μ` that is the period's dual price at that
+unit (`Period.DualOpt μ 1`): if
+each sampling block's honest cost is `H w = H_mm w + H_sha w + H_o w` at `μ` (its words and commitment, both
+positive, and the rest, `H_o w ≥ 0`, its operand root and answer among it), its public bests cost
+`pub_mm w ≤ H_mm w` and `pub_sha w ≤ H_sha w` at every instance of `Reg w`, the blocks' honest costs sum to
+`μ · hon`, `0 < δ ≤ 1`, `η > 0`, `β, K, ξ ≥ 0`, the degenerate dithers' probabilities are `≥ 0`, `Q` oracle calls use
+at least the period's capacity of some resource `r` a call uses (`cap_r ≤ Q callUse_r`, so at most `Q` calls fit,
+whatever the price: RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 
-* SAK(matmul) holds on the words at `μ` on every registrable instance, at rate `η H/H_mm` against `pub_mm`, outside
-  degenerate dithers of probability `κ_dmm(B)` at `B` bits of advice,
-* SHA-512's speed holds on the commitment in sampling form at rate `η H/H_sha` against `pub_sha`, outside degenerate
-  dithers of probability `κ_dsha(B)`, on all but a set of the oracle and coins of probability `κ_sha(A)`,
+* SAK(matmul) holds on block `w`'s words at `μ` on every instance of `Reg w`, at rate `η H w/H_mm w` against
+  `pub_mm w`, outside degenerate dithers of probability `κ_dmm(B)` at `B` bits of advice,
+* SHA-512's speed holds on the commitment in sampling form at rate `η H w/H_sha w` against `pub_sha w` at every
+  committed instance of `Reg w`, outside degenerate dithers of probability `κ_dsha(B)`, on all but a set of the oracle
+  and coins of probability `κ_sha(A)`,
 * an exchanged bit replaces at most `β` of priced work (`OutsourceWithinEgress`),
-* the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`,
-* the network certifier counts at most `K` exchanged bits, and
-* each round's work splits into its words and their commitment on advice of at most `B_adv(A)` bits fixed before the
-  round's coins, the commitment's output the prover's root; on runs whose rounds make at most `Q` oracle calls the
-  two use at most the prover's timed use plus `ξ_A` over the period (the extractor's walk and log), and the check
-  fails on the words with probability at most `κ_x(A)` (`ExtractAdv`; from SHA-512 as a random oracle and its
-  realization,
+* the service's verdict accepts only periods whose sampling blocks' committed instances are registrable and whose
+  checks pass, but with probability `κ_S`,
+* the network certifier counts at most `K` exchanged bits,
+* an accepted period's selected answers run within it (`AnswersFit`), and
+* each sampling block's work splits into its words and their commitment on advice of at most `B_adv(A)` bits fixed
+  before the block's coins, the commitment's output the prover's root; on runs within the cap `Q` (the commit phases'
+  and work's calls, and each selected answer's: `Prover.WithinCap`) the two use at most the prover's timed use plus
+  `ξ_A` over the period (the extractor's walk and log), and the check fails on the words at the committed instance
+  with probability at most `κ_x(A)` (`ExtractAdv`; from SHA-512 as a random oracle and its realization,
   `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`),
 
 then for every prover `A`, the probability over the oracle and the verifier's coins that the service accepts its
-period and other work `z` fits on the period's devices beside its sampling blocks' timed work (`Prover.timedUse`)
-with
+period and other work `z` fits on the period's devices beside its sampling blocks' timed work (`Prover.timedUse`:
+their commit phases and work) with
 `rv + W_other(z) > OPT_honest + ε_A C` is at most
-`δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, with `C = μ · hon = Σ_w H(reg w)` and
-`ε_A = (Σ_w (H − pub_mm − pub_sha)(reg w) + ln(1/δ)/η + β K)/C + μ · ξ_A/C` (`epsWorkSound`).
+`δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, with `C = μ · hon = Σ_w H w` and
+`ε_A = (Σ_w (H − pub_mm − pub_sha) w + ln(1/δ)/η + β K)/C + μ · ξ_A/C` (`epsWorkSound`).
 
-The rate `η` is one rate a unit of priced cost for every round (RT-PROTO-2 P15, P20): a round selected by a Bernoulli
-coin at a probability proportional to its public cost meets its premises at `η = k_draw/C`, so the luck term is
-`ln(1/δ)/k_draw`. The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the honest kernel
-and hashing are the public best), the honest work that is neither (no lower bound, full weight), the sampling luck,
-the exchanged bits, and the walk and log the extraction adds.
+The rate `η` is one rate a unit of priced cost for every sampling block (RT-PROTO-2 P15, P20): a block selected by a
+Bernoulli coin at a probability proportional to its public cost meets its premises at `η = q/C` at `q` checks, so
+the luck term is `ln(1/δ)/q`. The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
+honest kernel and hashing are the public best), the honest work that is neither (no lower bound, full weight), the
+sampling luck (`ε_skip`'s at `δ_coin = δ`), the exchanged bits, and the walk and log the extraction adds.
 
-The cap (L39, CMP-154): the challenger times each sampling block's work, from its dither coins to its commitment, so
-on the event bounded the blocks' work fits the devices, and by (G3) it makes at most `Q` oracle calls
-(`calls_le_of_fits` in the proof); `ExtractAdv` is needed only there. Answers are off the state path, so no answer's
-use or calls are read: the honest answers' cost is in `H_o`, at full weight. Their exchanged bits are counted with the
-work's (`Prover.ext`, RT-POOL RP21). `WorkSoundNoFold` reads it at one query budget and schedule for every prover,
-`k + 1` segments of `⌈Q⌉ + V` queries, so `ε` and `κ` are one bound. The sampling blocks of a period are one sequence;
-a fleet whose replicas' coins aren't serialized is one prover per replica (`FleetSound`, RT-PROTO-2 P16).
+The phases (Daniel, 26 Oct, 11:09 AM PDT): each sampling block's commit phase commits its operands before any of its
+coins, the challenge phase's work commits its words before its check coin, and only the response phase follows the
+check coin (`Prover`). The cap (L39, CMP-154, RT-POOL RP20, RP23): the challenger times each block's commit phase
+and work, from the previous block's work to the block's commitment, so on the event bounded they fit the devices, and
+by (G3) make at most `Q` oracle calls (`calls_le_of_fits` in the proof); a selected answer runs within the period
+(`AnswersFit`), so it makes at most `Q` too; `ExtractAdv` is needed only there. No later program reads an answer, so
+no answer's use is credited or counted against the period: the honest answers' cost is in `H_o`, at full weight. The
+answers' exchanged bits are counted with the work's (`Prover.ext`, RT-POOL RP21). `WorkSoundNoFold` reads it at one
+query budget and schedule for every prover, so `ε` and `κ` are one bound. The sampling blocks of a period are one
+sequence; a fleet whose replicas' coins aren't serialized is one prover per replica (`FleetSound`, RT-PROTO-2 P16).
 
 Open (stated so the red team can aim at them):
 * the split of a program's use into a words part and a commitment part is `ExtractAdv`'s cost clause (the
@@ -83,43 +92,43 @@ Open (stated so the red team can aim at them):
   `Accel` says which steps of a program are its commitment path (RT-LEAN-2 L28's remainder; the facts that would
   discharge it are `Definitions.Pouw.Assumptions.ShaRealize`'s Open);
 * the event reads `Fits`, so a run whose timed use doesn't fit the period's devices is outside it. That an accepted
-  period's sampling blocks' work fits is what the challenger's order and the deadlines buy: each block's root within
-  `Δ` of its coins, and the next block's coins only after it, at any number of blocks (RT-PROTO P5, CMP-154): the
-  card instance's `Timed` and `TimedWorkFits`;
+  period's sampling blocks' commit phases and work fit, and its selected answers run within it, is what the
+  challenger's order and the deadlines buy: each block's operand root in before its dither coins, its root within
+  `Δ` of them, and the next block's commit phase after its work, at any number of blocks (RT-PROTO P5, CMP-154,
+  RT-POOL RP26): the card instance's `Timed`, `TimedWorkFits` and `AnswersFit`;
 * `OutsourceWithinEgress` is per program: a program's outside machines see only what that program exchanges. An
   answer reads every coin of the period, so on a node whose outside machines keep state across programs, an answer
   could send out a later block's coins and that block's work import only its root. The bits are counted
   (`Prover.ext`), so the number holds, but the premise at that node would be false. Stating it over the period's
   programs together (exchange-free programs with the same outputs whose total cost is at most the total plus `β` a
   bit exchanged by any of them) would cover it (RT-POOL RP21);
-* between a block's root and the next block's coins no program runs: `absorb` uses nothing and `work (b + 1)` starts
-  at `t (b + 1)` (`RootAfterCoin`). A protocol that commits a block's operands in that gap (ACCEL's coin order) has an
-  honest prover outside the model. A phase before each block's coins, timed from the previous root to the operand
-  roots' arrival, would close it, and the windows would still telescope to `T` (RT-POOL RP23);
+* a block's costs and public bests are per sampling block, fixed before the period, and hold at every instance of
+  `Reg w`: an instance the prover adapts to the earlier coins gets the cheapest registrable instance's `pub`. A
+  registered cost `W_reg` that is itself a budget read off the committed instances (RT-POOL RP11) is not stated;
 * `G` is any accelerator here. The card instance reads it as MODEL-SPEC's machine at a card's θ with its floors
   (RT-LEAN L4, L9; RT-MODEL M12), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the
   dither bits and counting `K = E_in + E_out` (RT-PROTO P2, which holds only while the dither bits stay streamed), and
   makes the hosts and DPUs resources of `G` (P9; that they are all the processors the cards reach is
   `PeriodInventory`, held pending Daniel). -/
 def WorkSound : Prop :=
-  ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Set P.Inst) (reg : Fin k → P.Inst) (Obs : Type)
+  ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
-    (Hmm Hsha Ho pubmm pubsha : P.Inst → ℝ) (η δ β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P k → ℕ)
-    (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
-    (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
-    (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
-    ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
+    (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η δ β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (sel : P.Chk → Prop)
+    (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
+    Pd.DualOpt μ 1 →
+    (∀ w, 0 < Hmm w ∧ 0 < Hsha w ∧ 0 ≤ Ho w ∧ pubmm w ≤ Hmm w ∧ pubsha w ≤ Hsha w) →
+    ∑ w, (Hmm w + Hsha w + Ho w) = ∑ r, μ r * Pd.hon r →
     0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K → (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
-    SAKMatmul G P μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
-    ShaSpeed G P k reg μ pubsha (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a) κdsha κsha →
-    OutsourceWithinEgress G μ β → ServiceSound G P k reg verdict dev κS →
-    ImportWithinCertifier G P k verdict dev K → ExtractAdv G P k reg Q Badv ξ κx →
+    (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
+    ShaSpeed G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
+    OutsourceWithinEgress G μ β → ServiceSound G P k Reg verdict dev κS →
+    ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
+    ExtractAdv G P k Reg sel Q Badv ξ κx →
     FreedSound G P k verdict dev Pd 1
-      (fun A => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
-          (fun w => pubsha (reg w)) η δ β K +
-        (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+      (fun A => epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η δ β K +
+        (∑ r, μ r * ξ A r) / ∑ w, (Hmm w + Hsha w + Ho w))
       (∑ r, μ r * (1 * Pd.hon r))
       (fun A => δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
 
@@ -132,85 +141,83 @@ crypto failures `δ_crypto` (`κ_x(A)` of the extraction and `κ_sha(A)` of the 
 no luck term (`ln(1/1)/η = 0`) plus the walk and log `μ · ξ_A / C`. Markov at `δ_coin` gives `WorkSound` back, its
 luck `ln(1/δ_coin)/η` added to `ε_A C`. -/
 def WorkMoment : Prop :=
-  ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Set P.Inst) (reg : Fin k → P.Inst) (Obs : Type)
+  ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
-    (Hmm Hsha Ho pubmm pubsha : P.Inst → ℝ) (η β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P k → ℕ)
-    (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
-    (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
-    (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
-    ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
+    (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (sel : P.Chk → Prop)
+    (Badv : Prover G P k → ℕ) (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
+    Pd.DualOpt μ 1 →
+    (∀ w, 0 < Hmm w ∧ 0 < Hsha w ∧ 0 ≤ Ho w ∧ pubmm w ≤ Hmm w ∧ pubsha w ≤ Hsha w) →
+    ∑ w, (Hmm w + Hsha w + Ho w) = ∑ r, μ r * Pd.hon r →
     0 ≤ β → 0 ≤ K → (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
-    SAKMatmul G P μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
-    ShaSpeed G P k reg μ pubsha (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a) κdsha κsha →
-    OutsourceWithinEgress G μ β → ServiceSound G P k reg verdict dev κS →
-    ImportWithinCertifier G P k verdict dev K → ExtractAdv G P k reg Q Badv ξ κx →
+    (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
+    ShaSpeed G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
+    OutsourceWithinEgress G μ β → ServiceSound G P k Reg verdict dev κS →
+    ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
+    ExtractAdv G P k Reg sel Q Badv ξ κx →
     MomentSound G P k verdict dev Pd 1
-      (fun A => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
-          (fun w => pubsha (reg w)) η 1 β K +
-        (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+      (fun A => epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η 1 β K +
+        (∑ r, μ r * ξ A r) / ∑ w, (Hmm w + Hsha w + Ho w))
       (∑ r, μ r * (1 * Pd.hon r)) η
       (fun A => κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
 
-/-- **The no-fold protocol is `(1 − ε)`-work-sound at one bound for every prover** (RT-LEAN-2 L39; CMP-136).
+/-- **The no-fold protocol is `(1 − ε)`-work-sound at one bound for every prover** (RT-LEAN-2 L39; CMP-136, CMP-154).
 `WorkSound` on the no-fold round `noFoldRound nf`, with commit-and-open's extraction proved from SHA-512 as a random
 oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than assumed. The oracle is a uniform table
 `eo : nf.Orc ≃ (X → D)` under which the verifier's opening check is the Merkle path check, programs reach it only
 through their calls (`Accel.OracleCalls`), and the realization premise `ShaRealize` holds on runs within the cap `Q` at
-one query budget and schedule for every prover. Each sampling block's work is timed, so a run within the cap makes at
-most `Q` calls in its work, and the verifier evaluates at most `V` points. The log is `k + 1` segments of
-`M = ⌈Q⌉ + V` queries: segment `w` holds the work's calls and the verifier's evaluations between round `w − 1`'s root
-and round `w`'s (an answer may arrive after later roots, and its evaluations sit where it arrives, CMP-154), padded
-with dummy queries, and the last segment holds those after the last root. So the budget is `q = (k + 1) M`, and
-round `w`'s root comes after the first `τ_w = (w + 1) M` answers, so the walk of round `w` reads only the queries
-before its root. At `τ_w = q` it would also read the queries after the root, which depend on the round's check coins
-and later ones, while the words program reads advice fixed before them: a prover that commits a constant root and
-opens it on a path its check coin picks has no realization at a `q` below the coin's range (WORKSOUND-WIT's WIT1,
-CMP-136 6dbe5998). The premise still asks every prover's words program, on the advice and the dither alone, to be the
-walk over its log; a prover whose words or tree read an oracle answer of the round has none at one `B_adv`, so on a
-machine with such a prover the premise is false and this statement is vacuous (the walk's oracle reach,
+one query budget and schedule for every prover. Each sampling block's commit phase and work are timed, so a run within
+the cap makes at most `Q` calls in them, each selected answer at most `Q` (`AnswersFit`), and the verifier evaluates
+at most `V` points. The log is `k + 1` segments of `M = ⌈Q⌉ + V` queries and `k ⌈Q⌉` more in the last: segment `w`
+holds block `w`'s commit phase's and work's calls between block `w − 1`'s root and block `w`'s, padded with dummy
+queries, and the last segment the answers' calls and the verifier's evaluations, which no root reads (an answer may
+arrive after later roots, CMP-154, RT-POOL RP20). So the budget is `q = (k + 1) M + k ⌈Q⌉`, and block `w`'s root comes
+after the first `τ_w = (w + 1) M` answers, so the walk of block `w` reads only the queries before its root. At
+`τ_w = q` it would also read the queries after the root, which depend on the block's check coin and later ones, while
+the words program reads advice fixed before them: a prover that commits a constant root and opens it on a path its
+check coin picks has no realization at a `q` below the coin's range (WORKSOUND-WIT's WIT1, CMP-136 6dbe5998). The
+premise still asks every prover's words program, on the advice and the dither alone, to be the walk over its log; a
+prover whose words or tree read an oracle answer of the block has none at one `B_adv`, so on a machine with such a
+prover the premise is false and this statement is vacuous (the walk's oracle reach,
 `Definitions.Pouw.Assumptions.ShaRealize`'s Open), and `WorkSound`, at each prover's own bounds, is the one to cite.
-The same holds on a machine with a prover whose openings read oracle answers it got by calls in its answer phase:
-answers are untimed, so the cap doesn't bound those calls and this budget doesn't count them (the answers' calls, the
-same Open, CMP-154, RT-POOL RP20).
 With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
-`κ = δ + κ_S + (q² + k q (q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`; the
+`κ = δ + κ_S + (q² + k q ((k + 1) M + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`; the
 extraction's term is `ExtractOfRealize`'s `(q² + Σ_w q (2 τ_w + 1)) / |D|` at this schedule.
-The log's term `μ · q ξl / C` is `(k + 1) M` log entries' upkeep against the credited cost, the padding included
+The log's term `μ · q ξl / C` is `q` log entries' upkeep against the credited cost, the padding included
 (the padding's upkeep, `Definitions.Pouw.Assumptions.ShaRealize`'s Open): at `Q = cap_r / callUse_r` it is about
-`(k + 1) (μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log entry's upkeep is small next to a
+`(2 k + 1) (μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log entry's upkeep is small next to a
 call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
-  ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
+  ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Fin k → Set (noFoldRound nf).Inst)
     (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
-    (μ : G.Res → ℝ) (Hmm Hsha Ho pubmm pubsha : (noFoldRound nf).Inst → ℝ) (η δ β K κS Q κsha : ℝ)
-    (κdmm κdsha : ℕ → ℝ) (Badv V : ℕ) (X D : Type) [Fintype X] [DecidableEq X] [Fintype D] [DecidableEq D]
+    (μ : G.Res → ℝ) (Hmm Hsha Ho pubmm pubsha : Fin k → ℝ) (η δ β K κS Q κsha : ℝ)
+    (κdmm κdsha : ℕ → ℝ) (sel : (noFoldRound nf).Chk → Prop) (Badv V : ℕ) (X D : Type) [Fintype X] [DecidableEq X]
+    [Fintype D] [DecidableEq D]
     [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D))
     (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool) (ξw ξl : G.Res → ℝ),
-    (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
-    (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
-    ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
+    Pd.DualOpt μ 1 →
+    (∀ w, 0 < Hmm w ∧ 0 < Hsha w ∧ 0 ≤ Ho w ∧ pubmm w ≤ Hmm w ∧ pubsha w ≤ Hsha w) →
+    ∑ w, (Hmm w + Hsha w + Ho w) = ∑ r, μ r * Pd.hon r →
     0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K → (∀ r, 0 ≤ ξw r) → (∀ r, 0 ≤ ξl r) →
     (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     (∀ o r c v p, nf.opens o r c v p → Opens (eo o) E (rD r) (pl p) v ∧ (pl p).map Prod.fst = dirs c) →
     G.G1 → G.G2 → G.G3 → G.OracleCalls eo → G.P1 → G.P2 →
-    SAKMatmul G (noFoldRound nf) μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
-    ShaSpeed G (noFoldRound nf) k reg μ pubsha (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a) κdsha
+    (∀ w, SAKMatmul G (noFoldRound nf) μ (Reg w) (fun _ => pubmm w)
+      (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
+    ShaSpeed G (noFoldRound nf) k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha
       (fun _ => κsha) →
-    OutsourceWithinEgress G μ β → ServiceSound G (noFoldRound nf) k reg verdict dev κS →
-    ImportWithinCertifier G (noFoldRound nf) k verdict dev K →
-    ShaRealize G nf k reg Q E eo rD pl dirs ξw ξl (fun _ => (k + 1) * (⌈Q⌉₊ + V))
+    OutsourceWithinEgress G μ β → ServiceSound G (noFoldRound nf) k Reg verdict dev κS →
+    ImportWithinCertifier G (noFoldRound nf) k verdict dev K → AnswersFit G (noFoldRound nf) k verdict dev sel Pd →
+    ShaRealize G nf k Reg sel Q E eo rD pl dirs ξw ξl (fun _ => (k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊)
       (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) →
     FreedSound G (noFoldRound nf) k verdict dev Pd 1
-      (fun _ => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
-          (fun w => pubsha (reg w)) η δ β K +
-        (∑ r, μ r * (k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) : ℕ) * ξl r)) /
-          ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+      (fun _ => epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η δ β K +
+        (∑ r, μ r * (k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊ : ℕ) * ξl r)) / ∑ w, (Hmm w + Hsha w + Ho w))
       (∑ r, μ r * (1 * Pd.hon r))
-      (fun _ => δ + κS + (((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V)) +
-            k * ((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V) + 1)) : ℕ) : ℝ) /
+      (fun _ => δ + κS + ((((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * ((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) +
+            k * (((k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊) * ((k + 1) * (⌈Q⌉₊ + V) + 1)) : ℕ) : ℝ) /
           Fintype.card D + κsha + k * (κdmm Badv + κdsha Badv))
 
 /-- **A fleet of replicas, pooled by convexity** (CMP-152, tier A; RT-PROTO-2 P16: the sampling blocks of replicas
