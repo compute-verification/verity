@@ -3,6 +3,7 @@ import Definitions.Core.Assumptions
 import Proofs.Properties.NetworkCertifier.Period
 import Proofs.Properties.CertifierDevice.Lms
 import Proofs.Core.Game.Prob
+import Proofs.Properties.Verity.Soundness
 
 /-!
 # The network certifier's target: its honest and nontrivial lemmas
@@ -25,10 +26,10 @@ certifier's error at the strategy. Its two lemmas:
   answers' acceptance (`PeriodRowsProved`, `PeriodWindowsAt`, `PeriodAuditsProved`) and what the prover sent decoding
   to the period (`NetworkPeriod`).
 * nontrivial (`networkComponentBound_nontrivial`): with the compiled component replaced by one that accepts everything
-  (`Vocab.NetworkSoundBy`, which at `ComponentAccepts .network` is the target, `Vocab.networkCertifierSound_by`), a
-  strategy whose plays pass the file check and NCI with probability 1 and every play of which sends more than `K` makes
-  the event certain, so the target fails wherever the network certifier's error at it is below 1: where its finder
-  meets its collision premise, its published `δ` plus its loss (`error_of_finderCR`).
+  (`Vocab.NetworkSoundBy`, which at `ComponentAccepts .network` is the target, `Vocab.networkCertifierSound_by`), at
+  files that pass the commit phase's check, a strategy whose registration NCI accepts and which sends more than `K`,
+  both with probability 1, makes the event certain, so the target fails wherever the network certifier's error at it is
+  below 1: where its finder meets its collision premise, its published `δ` plus its loss (`error_of_finderCR`).
 -/
 
 namespace Verity
@@ -180,18 +181,29 @@ theorem error_of_finderCR {ι : Type} {d : Accounting.Device ι} {α : Type} [Fi
   simp [Vocab.error, Accounting.condError, hcr, Accounting.PeriodLive.error]
 
 /-- **The network certifier's target's nontrivial lemma**: with the compiled component replaced by one that accepts
-everything, a strategy whose plays pass the file check and NCI with probability 1, every play of which sends more than
-`K` bits through the network certifiers, makes the target's event certain, so the target fails wherever the network
-certifier's error at the strategy is below 1. -/
+everything, at files that pass the commit phase's check, a strategy whose registration NCI accepts and which sends more
+than `K` bits through the network certifiers, both with probability 1, makes the target's event certain, so the target
+fails wherever the network certifier's error at the strategy is below 1. -/
 theorem networkComponentBound_nontrivial {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (acc : Sent → Prop) (hacc : ∀ s, acc s)
-    (hreg : Game.prob (fun o => V.Registered o.params o.file ∧ RegistrationAccepts o.sent) (V.game θ F c) σ = 1)
-    (hK : ∀ o, ¬ V.Holds θ F c σ .network o) (hlt : V.error .network θ F c σ < 1) : ¬ V.NetworkSoundBy acc := by
+    (hreg : V.Registered θ F)
+    (hK : Game.prob (fun o => RegistrationAccepts o.sent ∧ ¬ V.Holds θ F c σ .network o) (V.game θ F c) σ = 1)
+    (hlt : V.error .network θ F c σ < 1) : ¬ V.NetworkSoundBy acc := by
   intro h
-  have h1 : Game.prob (fun o => (V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ acc o.sent) ∧
-      ¬ V.Holds θ F c σ .network o) (V.game θ F c) σ = 1 :=
-    le_antisymm (Game.prob_le_one _ _ σ)
-      (hreg.symm.le.trans (Game.prob_mono (fun o ho => ⟨⟨ho.1, ho.2, hacc _⟩, hK o⟩) _ σ))
-  exact absurd (h1.symm.le.trans (h θ F c σ)) (not_le.2 hlt)
+  have hz : Game.prob (fun o => ¬ V.Registered o.params o.file) (V.game θ F c) σ = 0 :=
+    prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ hn => hn hreg) σ
+  have h1 : 1 ≤ Game.prob (fun o => (V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ acc o.sent) ∧
+      ¬ V.Holds θ F c σ .network o) (V.game θ F c) σ :=
+    calc (1 : ℝ≥0∞) = Game.prob (fun o => RegistrationAccepts o.sent ∧ ¬ V.Holds θ F c σ .network o)
+          (V.game θ F c) σ := hK.symm
+      _ ≤ Game.prob (fun o => ((V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ acc o.sent) ∧
+            ¬ V.Holds θ F c σ .network o) ∨ ¬ V.Registered o.params o.file) (V.game θ F c) σ :=
+          Game.prob_mono (fun o ho => by
+            by_cases hr : V.Registered o.params o.file
+            · exact Or.inl ⟨⟨hr, ho.1, hacc _⟩, ho.2⟩
+            · exact Or.inr hr) _ σ
+      _ ≤ _ := Game.prob_or_le _ _ _ σ
+      _ = _ := by rw [hz, add_zero]
+  exact absurd (h1.trans (h θ F c σ)) (not_le.2 hlt)
 
 end Verity
