@@ -33,7 +33,7 @@ there at any error below one (`WorkOfH1CheckedCreditPeriodH200_nontrivial`).
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposePeriod
 
 /-! ## The word count and the price -/
@@ -276,7 +276,7 @@ end Accounting.SecurityProofs.Bridge.HonestH200
 namespace Accounting.SecurityProofs.Bridge
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposePeriod
 open HonestH200
 
@@ -343,12 +343,9 @@ theorem WorkOfH1CheckedCreditPeriodH200_nontrivial :
   have hpr : Pouw.pr (fun x : Paths HonestH1.Ω1 0 =>
       (acceptAll 0).accepts .pouw (Function.update (fun _ => ()) ((acceptAll 0).own .pouw) x) ∧
         ¬ (acceptAll 0).Holds ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .pouw
-          (Function.update (fun _ => ()) ((acceptAll 0).own .pouw) x)) = 1 := by
-    classical
-    unfold Pouw.pr
-    rw [Finset.filter_true_of_mem fun x _ => hev x, Finset.card_univ]
-    have : 0 < Fintype.card (Paths HonestH1.Ω1 0) := Fintype.card_pos
-    field_simp
+          (Function.update (fun _ => ()) ((acceptAll 0).own .pouw) x)) = 1 :=
+    haveI : Nonempty (Paths HonestH1.Ω1 0) := ⟨()⟩
+    Pouw.pr_eq_one hev
   rw [hpr] at h1
   norm_num at h1
 
