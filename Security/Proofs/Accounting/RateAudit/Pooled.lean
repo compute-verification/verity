@@ -9,9 +9,9 @@ Rounds `0, …, n − 1` each draw a sample of `s_i` items, uniform over `M`, af
 `G_i` may be any function of the earlier rounds' coins, their samples among them, and of round `i`'s own other coins,
 but not of round `i`'s sample (`Rate.Causal`). Then every sample lands in its round's good set while the good sets,
 weighted by the sample counts, hold at most `K` items in all, with probability at most `(K / (M·∑ s_i))^(∑ s_i)`
-(`Pooled.pr_causal_le`). The proof peels round 0: its good set is fixed by its own coins, so its sample
-lands in it with probability `(g₀/M)^s₀` (`pr_sample`); given round 0's coins, the later rounds are a causal family
-with `K − s₀·g₀` left (`pr_and_le_mul`), and weighted AM–GM joins the two (`step_le`).
+(`Pooled.pr_causal_le`). The proof peels round 0: its good set is fixed by its own coins, so its sample lands in it
+with probability `(g₀/M)^s₀` (`pr_sample`); given round 0's coins, the later rounds are a causal family with `K − s₀·g₀`
+left (`pr_and_le_mul`), and weighted AM–GM joins the two (`step_le`).
 
 A chain's passes (`Rate.Chain`) are such rounds, with `M = N`: pass `j` is accepted exactly when its sample lands in its
 correct receipts, which the store, the earlier passes' coins and its own stream and oracle family fix

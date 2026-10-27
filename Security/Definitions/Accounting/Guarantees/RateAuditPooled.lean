@@ -5,11 +5,11 @@ import Definitions.Accounting.RateAuditPooled
 # The causal bound over the monitoring period (trusted)
 
 A session's openings certify its average, not each round's: over rounds whose good sets precede their samples
-(`Definitions/Accounting/RateAuditPooled.lean`), every opening passes while the rounds hold at most a
-`1 − d̄` share of good items, weighted by their sample counts, with probability at most `(1 − d̄)^(∑ s_i)`. One budget
-of openings, about `ln(1/ε)/d̄`, serves the whole session, however its rounds are cut. Proofs are in
-`Security/Proofs/Accounting/RateAudit/Pooled.lean`. No named assumption: the samples are the verifier's
-uniform coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
+(`Definitions/Accounting/RateAuditPooled.lean`), every opening passes while the rounds hold at most a `1 − d̄` share of
+good items, weighted by their sample counts, with probability at most `(1 − d̄)^(∑ s_i)`. One budget of openings, about
+`ln(1/ε)/d̄`, serves the whole session, however its rounds are cut. Proofs are in
+`Security/Proofs/Accounting/RateAudit/Pooled.lean`. No named assumption: the samples are the verifier's uniform
+coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 
 * `PooledSampling`: the bound for any causal family of rounds.
 * `RatePooled`: the bound for a chain's passes, with their correct receipts as the good sets.
@@ -19,8 +19,8 @@ uniform coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`)
 * `RateSessionDraw`: a session of such windows, each adapting to the earlier windows' draws: the monitoring
   period's shortfall and every window's, at once.
 
-The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditPooled.lean`): these bound
-the correct receipts, and with conservation the words read, rebuilt or held, whichever devices or parties hold them.
+The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditPooled.lean`): these bound the correct
+receipts, and with conservation the words read, rebuilt or held, whichever devices or parties hold them.
 -/
 
 namespace Accounting.Guarantees

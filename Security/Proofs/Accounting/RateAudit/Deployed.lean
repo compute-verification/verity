@@ -16,8 +16,7 @@ returns the same receipts with the same tier reads, sends what the device sends,
 
 **A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
 `G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
-draws are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_floor_le`), as in
-`Session.lean`.
+draws are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_floor_le`), as in `Session.lean`.
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
