@@ -21,7 +21,7 @@ is one of three, and no other:
   committed the tree as a registered value (`Registered.commit`): under the window's open root R (`window_root`, from
   the challenger's signed open of the window) for a per-window value, and without it for a value held across windows
   (`held`, the weights), so a window-independent program registers each window's values under the same names;
-* an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`, #2929's output values):
+* an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`):
   the log's record with that digest names the port, its root and its leaf count, and the tree is that port's;
 * an earlier record's registered value's domain, when the tree is that value (`reused`: `(record digest, value)`): the
   log's record with that digest registered the value with its root, domain, rows, words and word bits, and the tree is

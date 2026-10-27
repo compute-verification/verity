@@ -7,8 +7,7 @@ the check each drawn unit passes, as a public Program (`Spec.check`), and what i
 compute and prove with zero knowledge off, trusted by neither party; the firewall, trusted by the developer, is their only
 path to the auditor, and commits, registers and releases the proofs; the challenger, trusted by the auditor, receives
 registrations, draws from its own randomness and keeps the record (this module); the verifier, the auditor's Lean
-verifier, verifies offline. The design and each protocol's call sequence are in
-`note:proofs/20261006T0307Z-draft-proof-service-architecture`.
+verifier, verifies offline.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A registration is
 one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the

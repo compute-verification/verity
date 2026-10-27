@@ -8,8 +8,8 @@ committed for the circuit file, the program's descriptor, the partition object a
 registered values, the `--registered` file. It refuses
 a circuit file that doesn't hash to the committed digest before anything runs, so each verdict is over the circuit the
 auditor's own lowering built. The circuit file's tie to the program's Definitions rests on that lowering: the verifier
-holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor
-(PRF-133). Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
+holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor.
+Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
 values), and one `Finding` a session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),

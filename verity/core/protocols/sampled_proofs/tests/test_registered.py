@@ -520,7 +520,7 @@ def _windows(prog: Program, xs, w: G.Registered):
 
 
 def test_two_honest_windows_register_the_same_names_under_their_own_roots():
-    """PRF-127 (a), (c): a window-independent program registers x afresh every window under the same name. Without the
+    """A window-independent program registers x afresh every window under the same name. Without the
     window's open root R, x's domain is the same in both windows, so R7 would hold the second window's x to the first's
     root (`R7-held`, and a replay of the first window's root would pass): the verifier refuses its own inputs instead,
     naming `window_root`, whether or not it holds W. With R (`window_root`, from the challenger's signed open), x's domain
@@ -561,7 +561,7 @@ def test_two_honest_windows_register_the_same_names_under_their_own_roots():
 
 
 def test_a_window_replaying_an_earlier_windows_root_is_refused():
-    """PRF-127 (b): a second window that names the first window's x root opens it under no domain R7 takes. Under the
+    """A second window that names the first window's x root opens it under no domain R7 takes. Under the
     first window's domain R7 refuses the entry (`R7-domain`); under its own window's domain the entry passes R7, which
     holds a per-window value to nothing, but no row of the first window's tree opens that root under the second
     window's domain, so every registered read of the replayed root is refused (`verify_read`, the Lean verifier's
@@ -586,7 +586,7 @@ def test_a_window_replaying_an_earlier_windows_root_is_refused():
 
 
 def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
-    """PRF-127: R7 reads the window's open root and the values held across windows from the verifier alone (the challenger's
+    """R7 reads the window's open root and the values held across windows from the verifier alone (the challenger's
     signed open, and the window Program the period commits), never from the record. A record whose window names another
     root or holds x gets the verdict it gets without them; a record or entry carrying them as keys of its own is refused
     by its form."""
@@ -639,7 +639,7 @@ def _prefixed(prefix: str) -> Program:
 
 
 def test_the_window_prefixed_form_still_verifies():
-    """PRF-127 (d): a registration whose names carry their window's prefix is still accepted, with or without the window's
+    """A registration whose names carry their window's prefix is still accepted, with or without the window's
     root: each window's values are other names, so nothing in the log holds them. (It holds nothing across windows
     either, the weights included, which is what the window's root in the domain gives back.)"""
     for windowed in (False, True):
@@ -790,7 +790,7 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
 
 
 def test_r7_refuses_a_supplied_value_the_prover_chose():
-    """CMP-38: a record whose `pouw.roots` is any other root than the one the verifier fills from the record is refused,
+    """A record whose `pouw.roots` is any other root than the one the verifier fills from the record is refused,
     whether its rows are other roots (all zero, as the witness fixes them), the right rows under fresh salts, or the right
     commitment of a record whose x root moved since."""
     rec, check, w, roots = _seeded_case()
@@ -1149,7 +1149,7 @@ def test_parameter_gates_reads_runs_as_the_leaf_list_did(refs):
 
 def test_parameter_gates_of_an_h200_weight_is_its_range_in_constant_memory():
     """A weight tensor's parameter at H200 width (2^30 leaves, one `Affine`) is its range and its rows without a Python int
-    per leaf: the per-leaf list held ~2 x 43 GB here and was OOM-killed (PRF-208)."""
+    per leaf: the per-leaf list held ~2 x 43 GB here and was OOM-killed."""
     n = 1 << 30
     prog = _Program(Affine("g", 0, 5, n), n)
     tracemalloc.start()

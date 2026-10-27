@@ -1,5 +1,5 @@
 """Produced values: a value committed after the draw that several statements of a session read, each read opened
-against the one root the record names (PRF-134: a served H1 leaf proved as its 32 lanes and a combine, which share the
+against the one root the record names (a served H1 leaf proved as its 32 lanes and a combine, which share the
 leaf's lane partials, `pouw.leaf_lanes`).
 
 A *produced value* is rows the prover computes after the draw from what it committed before it (H1's partials: lane l's

@@ -10,7 +10,7 @@ randomness (Lean `flock-verify draw`, or M0's live `serve --draw`); nothing here
 commitment. `check_draw` holds a draw to the registration and to the verifier's own law, and `check_proved` holds the
 proved statement's units to the draw.
 
-**The stratified law** (Daniel, Sep 27; `docs/sampling-strategies.md`): one stratum per template, a uniform k_s-subset drawn
+**The stratified law**: one stratum per template, a uniform k_s-subset drawn
 without replacement inside each, independently.
 * **Strata** are derived by each verifier from its own program and query (`partition.strata`): one per template descriptor
   id, its units as ascending, disjoint half-open ranges `[lo, hi)`, the strata in the order of their first unit. Defined for
@@ -20,7 +20,7 @@ without replacement inside each, independently.
   "k": k_s}, ...]}`: the agreement's rule `stratified:K` expanded by `derive`. R1 holds the registered law to the verifier's
   own expansion, and the draw carries the law's keys plus `population` and `units`.
 
-**The work law** (Daniel approved work-proportional sizing, Sep 28; the Lean verifier's `Flock.Draw.Law.work`, its bound
+**The work law** (the Lean verifier's `Flock.Draw.Law.work`, its bound
 `FlockSoundness.Audit.Work.work_escape_le`): the stratified law's strata and sampler, with each stratum's draw sized by the
 PoUW work its units do. The verifier's work table gives each template's work per unit, a natural number in any fixed unit,
 and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s draws

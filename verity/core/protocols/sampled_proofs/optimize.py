@@ -1,6 +1,5 @@
 """A planner for the sampling scheme: from a Program's partition candidates, a proof system's cost model and an objective,
-the plans on the Pareto frontier of expected cost against certified harm, over every budget
-(note:proofs/20261018T0335Z-draft-sampling-optimizer-design).
+the plans on the Pareto frontier of expected cost against certified harm, over every budget.
 
 Nothing trusts it.  A plan is a stratified law, `k_s` units of each subcircuit, which registers as `work:1` over a work
 table carrying the credited work and floors equal to the sizes (`work_law`: `one_stage.draw.work_k(1, w, n, W, f)` is
@@ -16,7 +15,7 @@ whose wrong output can forfeit downstream work (a noise or form unit every dot o
 
 **Cost.**  Per touched statement plus per proved unit, as C-Flock does: subcircuit `s` cut into statements of `c` units costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
-committed at serve time whatever the draw (Daniel, 18 Oct, ASK-25): every unit's outputs (`commit_bits`, `commit_rows`),
+committed at serve time whatever the draw: every unit's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn unit's

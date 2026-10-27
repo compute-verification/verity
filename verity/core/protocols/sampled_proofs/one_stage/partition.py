@@ -14,7 +14,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
   activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
   (`benchmarks/verifier_cost/`'s `partition`). Every unit's committed bits fit a public size class (`UNIT_CLASSES`,
-  powers of two from 16 to `UNIT_CLASS_MAX` bits; ASK-61, Daniel 19 Oct 2:59 PM PDT, provisional), its class the least
+  powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its class the least
   that holds them (`unit_class`), a public property of its Definition: a program with a unit wider than the widest class
   is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a `Q_call` unit's count
   the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
