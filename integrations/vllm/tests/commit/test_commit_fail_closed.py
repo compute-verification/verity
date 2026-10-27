@@ -1,7 +1,7 @@
-"""X-03 (R12): the sweep Commit harness is FAIL-CLOSED.  `commit_delta` may report Commit PASS only if the required-value manifest's
+"""The sweep Commit harness is FAIL-CLOSED.  `commit_delta` may report Commit PASS only if the required-value manifest's
 attempted acquisitions equal the bound ones, no collector/arena/hook error was recorded, every opening checked verified (>= 64) and the
-control vs instrumented tokens are equal.  Before X-03 an arena refusal ("arena block too small for this step") produced PASS with the
-errors buried in runs.jsonl (R12 rows llama32-1b 1024/128 B=1..16 on cp-bc).
+control vs instrumented tokens are equal: an arena refusal ("arena block too small for this step") is a FAIL, never a PASS with the
+errors buried in runs.jsonl.
 
 Two layers: (1) the pure verdict function on synthetic records (runs anywhere); (2) the end-to-end regression on a GPU pod with vLLM: a
 deliberately tiny explicit arena (`--arena-mb 1 --arena-unchecked`) forces the collector refusal and the process MUST exit 3 with
@@ -34,7 +34,7 @@ def test_pass_requires_everything():
 
 
 def test_arena_refusal_is_fail_even_with_openings_and_tokens():
-    # the R12 fail-open signature: tokens equal, 64/64 openings, but the prefill step was refused past the 512 MiB block
+    # the fail-open signature: tokens equal, 64/64 openings, but the prefill step was refused past the 512 MiB block
     ok, why = commit_verdict(_rec(expected=27264, committed=27075, errors=["fa2: native_collect: arena block too small for this step"]), True)
     assert not ok and "expected_tensors 27264 != committed_tensors 27075" in why
 
@@ -45,7 +45,7 @@ def test_error_alone_is_fail():
 
 
 def test_windowed_slot_wait_timeout_is_fail_named():
-    # [R15 capacity] bounded staging with backpressure: when the ring is exhausted the serving thread BLOCKS; after win_wait_timeout_s the
+    # bounded staging with backpressure: when the ring is exhausted the serving thread BLOCKS; after win_wait_timeout_s the
     # acquisition fails and is recorded ("hook: windowed staging: waited ...").  It must FAIL Commit by name -- never a warning, never PASS
     # on the remaining tensors (expected != committed) and never PASS even if the counts happened to agree (the error alone fails).
     err = "hook: windowed staging: waited 2 s for a free window slot (ring of 3 x 16 MiB, all held): the worker is not releasing windows"
@@ -72,7 +72,7 @@ def test_abandoned_step_fails_by_its_name_first():
 
 
 def test_opening_after_release_failure_is_fail_named():
-    # [R15 capacity] lifetime: a committed buffer whose device staging was released before the opening was verified must still open against
+    # lifetime: a committed buffer whose device staging was released before the opening was verified must still open against
     # the ORIGINAL bytes; a retained copy that holds a later occupant's bytes (release-before-keep ordering fault) fails the openings-after-
     # release check by name, even with a correct root, 64/64 in-run openings, equal counts, equal tokens and no recorded error.
     r = _rec()
@@ -101,7 +101,7 @@ def test_missing_counters_or_nothing_bound_is_fail():
     assert not commit_verdict(_rec(expected=0, committed=0), True)[0]
 
 
-# ---- REL-02 (R13 rel; reviewer R-14): a required producer that never fires must FAIL even with expected == committed and 0 errors
+# ---- a required producer that never fires must FAIL even with expected == committed and 0 errors
 def _decl(fa2_tensors=48, with_fa2=True):
     classes = [{"class": "input_token_ids", "how": "bound-as-leaf", "tensors": 32, "bytes": 1},
                {"class": "instance_outputs_native", "how": "bound-as-leaf", "tensors": 6000, "bytes": 1},
@@ -119,7 +119,7 @@ def test_x05_all_required_classes_bound_passes():
 
 
 def test_x05_hopper_signature_tap_loaded_zero_launches_fails():
-    # R-14 / F-hw-08: tap attached, FA3 executes, FA2 never called -> class declared with tensors 0, expected == committed
+    # tap attached, FA3 executes, FA2 never called -> class declared with tensors 0, expected == committed
     ok, why = commit_verdict(_rec(), True, declaration=_decl(fa2_tensors=0))
     assert not ok and "fa2_hidden_m1_stream" in why and "never fired" in why
 
@@ -160,9 +160,9 @@ def test_e2e_tiny_arena_forces_commit_fail(tmp_path: Path):
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_windowed_stall_forces_commit_fail(tmp_path: Path):
-    """[R15 capacity] the rc3 default path (windowed ring, retain host) never DROPS an acquisition: a stalled worker (VERITY_CONSUMER_DELAY_MS)
+    """The default path (windowed ring, retain host) never DROPS an acquisition: a stalled worker (VERITY_CONSUMER_DELAY_MS)
     with a 3 x 16 MiB ring makes the serving thread block on the ring; with the slot wait cut to 2 s (VERITY_WIN_WAIT_TIMEOUT_S) the wait times
-    out, the acquisition fails NAMED and the collector is dead for the run -> X-03 must turn it into exit 3 / COMMIT FAIL, never PASS."""
+    out, the acquisition fails NAMED and the collector is dead for the run -> the verdict must turn it into exit 3 / COMMIT FAIL, never PASS."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
@@ -181,11 +181,11 @@ def test_e2e_windowed_stall_forces_commit_fail(tmp_path: Path):
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
-    """[R15 capacity] opening-after-release / lifetime negative on the rc3 default path (windowed ring, retain host): VERITY_FAULT=release_before_keep
+    """Opening-after-release / lifetime negative on the default path (windowed ring, retain host): VERITY_FAULT=release_before_keep
     hands every window slot back to the ring BEFORE its retained copy is taken and copies only after the ring refilled the slot.  The tree is
     hashed in place from the right bytes (root correct, control == instrumented tokens, counts equal, no error recorded) but the retained
-    bytes are a later window's -> the openings-after-release check MUST fail by name -> exit 3 / COMMIT FAIL.  Until R15 the flag was a
-    silent no-op on this path (the arena-path fault never ran for windowed steps): a negative that passed as a positive."""
+    bytes are a later window's -> the openings-after-release check MUST fail by name -> exit 3 / COMMIT FAIL.  The fault runs on the
+    windowed path too, so the negative cannot pass as a positive."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_FAULT="release_before_keep")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
@@ -206,10 +206,10 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
-# [R16 sys, stoch F-stoch-03 M-0646] "collector dead" must be fail-FAST, not only fail-closed by name: on cp-dev1 (09:18Z) a Qwen3 MoE Commit
-# hit the slot-wait timeout and then sat 13+ min at 0 % GPU with every thread in futex_wait (the named throw needs the GIL back and a Python
-# frame that records the failure).  The C++ collector now arms a GIL-free watchdog thread the moment it declares itself dead: unless Python
-# acknowledges (finalize -> ack_dead) within VERITY_COLLECT_DEAD_GRACE_S it writes <out>/COLLECTOR_DEAD_HUNG.json and _exit(3)s.
+# "collector dead" must be fail-FAST, not only fail-closed by name: a Commit that hits the slot-wait timeout can otherwise sit at 0 % GPU
+# with every thread in futex_wait (the named throw needs the GIL back and a Python frame that records the failure).  The C++ collector arms
+# a GIL-free watchdog thread the moment it declares itself dead: unless Python acknowledges (finalize -> ack_dead) within
+# VERITY_COLLECT_DEAD_GRACE_S it writes <out>/COLLECTOR_DEAD_HUNG.json and _exit(3)s.
 
 _WATCHDOG_PROG = r"""
 import os, sys, time, threading
@@ -254,8 +254,8 @@ def test_dead_watchdog_exits_rc3_with_marker_when_never_acknowledged(tmp_path: P
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_collector_dead_hang_exits_rc3_within_grace(tmp_path: Path):
-    """The stall negative above, plus VERITY_FAULT=hang_after_dead: finalize blocks forever instead of failing the run closed (the cp-dev1
-    signature).  With the grace cut to 20 s the process MUST still end with rc 3 -- from the watchdog, not from X-03 -- leaving
+    """The stall negative above, plus VERITY_FAULT=hang_after_dead: finalize blocks forever instead of failing the run closed (the hang
+    signature).  With the grace cut to 20 s the process MUST still end with rc 3 -- from the watchdog, not from the verdict -- leaving
     out/COLLECTOR_DEAD_HUNG.json; row_pod reads rc 3 as COMMIT FAIL.  (verdict.json is NOT written: the hang happened before closure.)"""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000", VERITY_FAULT="hang_after_dead", VERITY_COLLECT_DEAD_GRACE_S="20")
