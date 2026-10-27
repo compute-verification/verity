@@ -7,8 +7,8 @@
 # chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sha512x.cuh's default
 # force-included (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
-# honest chain and -O's shape at each CTA size in SHAPES, in whole waves (commit_gpu's sha launches 8 CTAs of 256 an SM,
-# which an SM holds 3 at a time at its 70 registers, so its last wave is partial).
+# honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
+# 8 CTAs of 256 an SM, 3 resident, a partial last wave; r20261027-044217-d499: whole waves gain the honest chain 1%).
 # cwd = the source tree's root. Outside the lease: the builds and reference.py's cases. The lease: the SM clock locked at
 # LOCK_MHZ (default 1980) and reset on exit, nvidia-smi every 200 ms, the checks, one warm-up a hashcat setting (its kernel
 # build, Accel/Loops/Thr/Vec and the mask), then ROUNDS rounds with every arm interleaved. After it: the SASS pipe mix of

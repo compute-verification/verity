@@ -208,6 +208,7 @@ def main(out: str) -> None:
     honest = max([{"name": f"{s['form']} at {s['threads']} a CTA in whole waves", **s} for s in shapes
                   if s["form"].startswith("chain")] or [{"name": None, "gcomp_per_s": None}], key=lambda v: v["gcomp_per_s"] or 0)
     opt_cfg = max(("1700-O", "1710-O", "1700-O-w4"), key=lambda c: hc[c]["gcomp_per_s"] or 0)
+    opt_name = f"-m {opt_cfg[:4]} -O -w {4 if opt_cfg.endswith('w4') else 3}"
 
     summary = {"sms": sms, "lock_mhz_rc": int(lock.group(1)) if lock else None,
                "clock_mode": mode.group(1) if mode else None, "timed": timed, "forms_check": forms_ok,
@@ -268,13 +269,13 @@ def main(out: str) -> None:
         print("VERDICT HASH-24: incomplete (a rate, a check or hashcat_forms is missing; summary.json)")
     elif pure <= SAME and opt_shape <= SAME:
         print(f"VERDICT HASH-24: no faster public SHA-512 compression on this GPU: hashcat's full-digest kernels (pure) "
-              f"run {fmt(pure)}x ours {base_name} per SM-clock, and its best -O rate (-m {opt_cfg}, {fmt(opt)} Gcomp/s, "
+              f"run {fmt(pure)}x ours {base_name} per SM-clock, and its best -O rate ({opt_name}, {fmt(opt)} Gcomp/s, "
               f"{fmt(hc[opt_cfg]['over_ours'])}x ours) is our compression in -O's shape within 3% (-O / hashcat_forms "
               f"{skip['name']} = {fmt(opt_shape)}){whole}: -O's lead is OPTI_TYPE_EARLY_SKIP, ZERO_BYTE, "
               f"PRECOMPUTE_INIT and no feed-forward, which a commitment of variable blocks can't take")
     else:
         print(f"VERDICT HASH-24: hashcat is faster per compression: pure / ours {base_name} = {fmt(pure)} per SM-clock, "
-              f"its best -O (-m {opt_cfg}) / our compression in its shape ({skip['name']}) = {fmt(opt_shape)}{whole}: "
+              f"its best -O ({opt_name}) / our compression in its shape ({skip['name']}) = {fmt(opt_shape)}{whole}: "
               f"a port candidate")
 
 

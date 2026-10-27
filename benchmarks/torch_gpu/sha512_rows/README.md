@@ -96,6 +96,21 @@ digest and hm96 leaf, each slot's tree over its 1,300 units and the step's tree.
 compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/s of the 4.8 available, and power is 530 of
 700 W, with the clock at its maximum.
 
+Against hashcat (HASH-24, `hashcat.sh`, run r20261027-044217-d499; one lease on vy-dc-h200, the SM clock locked, which
+`-lgc 1980,1980` puts at 1,830 MHz under load), no public SHA-512 compression is faster. hashcat v7.1.2's full-digest
+kernels (`-m 1700`/`1710` pure, 252 and 254 registers, 11,052 SASS instructions a candidate) run 0.762x the default
+compression (4.355 G/s, 3,661 instructions). Its optimized kernel (`-O`, 4.995 G/s at `-w 4`) runs the same rounds in
+3,206 instructions, because it is a cracker: W7..W14 are zero at compile time, the IV is constant, there is no
+feed-forward, and it reads only digest words d and h, so the last three rounds are dead. Our compression in that shape
+(`hashcat_forms` skip, straight-line, whole waves) runs 5.048 G/s, 1.010x it. At its best CTA size our honest
+compression is 0.882x `-O`.
+
+A commit can take the zero-word shortcut where a whole block is padding: a row whose length n has n mod 128 = 0 or n mod
+128 >= 112 ends with such a block. On circuits' 1 KiB layout (21,022 of a slot's 21,857 rows), run r20261027-042951-efff
+timed base and port on one card at 1,980 MHz. The step went from 0.4617 s to 0.4529 s (0.981x) and the row kernel from
+0.2063 s to 0.1981 s. 1 KiB rows alone went from 4.43 to 4.71 G blocks/s, which is the default compression's raw rate
+per SM-clock.
+
 ## Files
 
 - `sha512x.cuh`: the compression. Its rounds are p2keys4.cuh's (`benchmarks/pous/p2_v1/`, copied, not included).
@@ -112,7 +127,8 @@ compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/
 - `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels (`-m 1700`, `-m 1710`, optimized and
   pure, built from source in scratch) against the default compression in one lease at one locked SM clock, in
   compressions a second, with both sides' SASS pipe mix; `hashcat_forms` times our compression in hashcat's shapes
-  (constant IV, zero words, only two digest words read) to attribute the difference (HASH-24).
+  (constant IV, zero words, only two digest words read) to attribute the difference, and at each CTA size in whole
+  waves (HASH-24).
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 ```bash
