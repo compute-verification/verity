@@ -190,12 +190,14 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
 - At H200 V4 (δ_coin = 1e-6, G = 1.15e7, k = 1e9 a week), that is 8.67e-14, about 2^-43, a replica and 2^-73.3 a
   block. Across D6's rows a block's budget is 2^-70 to 2^-75 (RT-POOL's run N1).
 - κ_x(A) holds per prover. One value for every prover would be 2^-310 (2^-308 in the worst row) once the answers' oracle
-  calls are logged after the last root (RT-POOL's run L1b). That awaits the Lean: RP20, and the walk's oracle reach,
-  which leaves the one-budget `WorkSoundNoFold` vacuous.
+  calls are logged after the last root (RT-POOL's run L1b). That awaits the Lean (RP20). `WorkSoundNoFold` gives
+  every prover A the query budget q the period's devices fit (`Period.callCap`) and κ(q, B_adv(A)): a prover whose
+  words read the block's oracle answers is covered at the advice that holds them, and pays in κ_dmm and κ_dsha.
 - κ_dmm and κ_dsha have no value yet. B_adv can be as large as a replica's memory, 1.35e13 bits against a block's 5.63e7
   seed bits, so they can't come from counting dithers against advice: they are claims about the product's structure.
-- Until those values exist, a claim states ε_skip at δ_coin with these terms per prover, for any prover whose oracle calls
-  fit the period's devices, and gives their form.
+- Until those values exist, a claim states ε_skip at δ_coin with these terms per prover, for every prover, and gives
+  their form. No cap is put on the prover: the timed work fits the devices on the event bounded, so by (G3) its oracle
+  calls are at most `Period.callCap` (CMP-163).
 
 ε_skip = (ε_S + ε_net)(1 + W_ans/W_reg), with:
 - ε_S = ln(G/δ_coin)/(ηq), each replica at δ_coin/G, with G the claim's registered replicas. Here η = 1 − p, where p is
