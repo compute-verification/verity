@@ -134,7 +134,7 @@ theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o :
     rw [← L.unitRows_nIn]; exact hx
   rcases Aliased.copyPos_key Lf regs F hg hx' (by simp [hk]) (fun k off => by simp [hk]) with he | ⟨hn, -⟩
   · simp only [AcceptedH.col, siteAddrH, Fin.cast_eq_self]
-    rw [hb]
+    refine hb.trans ?_
     show z _ = z _
     congr 2
     apply Fin.ext
