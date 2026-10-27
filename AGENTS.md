@@ -156,12 +156,12 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   this is a requirement, not a claim that `main` proves it. The verifier refuses any form the proof doesn't cover and
   gains none ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a new
   workload needs no verifier or proof change.
-- **The math is modular.** Each layer is proved once over the guarantee of the layer below: a session verifier's
-  knowledge soundness for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
+- **The math is modular.** Each layer is proved once over the guarantee of the layer below: the knowledge soundness of
+  one run's verifier for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
   (zero-knowledge, plain, recursive) and each protocol instantiates those theorems, and a proof that redoes a layer is
   refactored onto the shared one.
-- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and
-  draws, probability, partitions and units, devices and signatures) has one definition, in `Core` or `Hash`, which every
+- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
+  probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
   area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
