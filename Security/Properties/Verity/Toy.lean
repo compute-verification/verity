@@ -130,7 +130,7 @@ def releasesBy (ans : List Release → ByteArray) (pre : List Release) :
 log. -/
 def honest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Given d α) (θ F c : ByteArray) :
     Game.Strategy (play (G.rounds θ) θ F c) :=
-  bindStrategy (releases (G.rounds θ)) (fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩)
+  bindStrategy (releases (G.rounds θ)) (fun log => .send ByteArray fun e => .ret (⟨θ, F, c, log, e⟩ : Outcome))
     (releasesBy (G.answer θ F c) [] (G.rounds θ)) fun log => ⟨G.evidence θ F c log, PUnit.unit⟩
 
 /-- **The toy's vocabulary**: `G`'s fields, the toy's at the claims it decides and inert at the others, no gates
