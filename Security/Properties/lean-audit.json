@@ -1610,17 +1610,17 @@
    "assumptions": [],
    "type_hash": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd"
   },
-  "Properties.NetworkPeriod.rowsUntiedRefused": {
+  "Properties.NetworkPeriod.rowsStateTied": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsUntiedRefused : Properties.NetworkPeriod.RowsUntiedRefused"],
+   "signature": ["Properties.NetworkPeriod.rowsStateTied : Properties.NetworkPeriod.RowsStateTied"],
    "assumptions": [],
    "type_hash": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24"
   },
-  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": {
+  "Properties.NetworkPeriod.rowsStateTied_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial :",
-    "  Not (Properties.NetworkPeriod.RowsUntiedRefusedOf Properties.NetworkPeriod.acceptAllRows)"
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial :",
+    "  Not (Properties.NetworkPeriod.RowsStateTiedOf Properties.NetworkPeriod.acceptAllRows)"
    ],
    "assumptions": [],
    "type_hash": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5"
@@ -3526,7 +3526,7 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
-   "Properties.NetworkPeriod.rowsUntiedRefused": {
+   "Properties.NetworkPeriod.rowsStateTied": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
@@ -3617,7 +3617,7 @@
   },
   "frozen": {
    "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
-   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "lemma: RowsUntiedRefused's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsUntiedRefusedOf at a rows-form period of one link-window",
+   "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "lemma: RowsTiedDrawn's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsTiedDrawnOf at a rows-form period whose tied audit one-stage didn't answer",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
@@ -4271,7 +4271,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -4370,8 +4370,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial",
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.Pouw.Check.acceptMeans",
@@ -4420,8 +4420,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial",
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -7227,7 +7227,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -7362,7 +7362,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -7574,7 +7574,7 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -8122,7 +8122,7 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8393,7 +8393,7 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -8444,7 +8444,7 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
+    "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -8554,8 +8554,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial",
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9226,8 +9226,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial",
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9333,8 +9333,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial",
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9439,8 +9439,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial",
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9729,8 +9729,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial"
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial"
    ]
   },
   "NetworkCheck.Records": {
@@ -11862,8 +11862,8 @@
     "Properties.NetworkPeriod.RowsProgWiredOf": "ee96521355e32a542aae2f348c8e9d06f2617127755a077ead0a6424034b70ad",
     "Properties.NetworkPeriod.RowsTiedDrawn": "1e71cbf60f6fc46ab1868139518ac1bf968f9cc84b25d401b055491da4b2c208",
     "Properties.NetworkPeriod.RowsTiedDrawnOf": "501a03416eda6e9c4b9e9d97514f495b55ff52766148fbc4f47ef47ffb333fc0",
-    "Properties.NetworkPeriod.RowsUntiedRefused": "b2e9d480766fbfe0c305816d7e45c461f0f9365fcc813895b863836aac68267d",
-    "Properties.NetworkPeriod.RowsUntiedRefusedOf": "9ff4b273bd41d3d669f3c81e12b2e4d10c0e8940073bea103b40058e90935492",
+    "Properties.NetworkPeriod.RowsStateTied": "b2e9d480766fbfe0c305816d7e45c461f0f9365fcc813895b863836aac68267d",
+    "Properties.NetworkPeriod.RowsStateTiedOf": "9ff4b273bd41d3d669f3c81e12b2e4d10c0e8940073bea103b40058e90935492",
     "Properties.NetworkPeriod.acceptAllRows": "3e110665f6b5369d7c6ea189ff03615c368f7b6394d0b84d7cf9cc4c4a7897f2"
    },
    "guarantees": [
@@ -11873,8 +11873,8 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
-    "Properties.NetworkPeriod.rowsUntiedRefused",
-    "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial"
+    "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial"
    ]
   },
   "Properties.NetworkRecords": {
