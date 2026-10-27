@@ -36,6 +36,7 @@
 //        [-DV31_CUTLASS cutlass_2x.o] v31.cu -lcuda -lcublasLt (run.sh builds the harness's cutlass_2x.cu)
 #include <cublasLt.h>
 #include <cuda.h>
+#include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -1326,8 +1327,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
 // V31_GEMM 1, the protocol's and the plain GEMM on warpgroup MMAs (wg_proto.cuh, the bench's wgl arm wgmma.linear itself),
 // V31_WGBN its tiles' columns (256 where N allows, or 128), V31_CM where it keeps the tail's low halves (0 registers, 1 an
-// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 1 the register plan that leaves room for a
-// commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_rp; CM 1; the wgl arm keeps RP 0).
+// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 1 or 2 the register plans that leave room for
+// a commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_rp and gemm_rw; CM 1; the wgl arm keeps RP 0).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
@@ -1526,10 +1527,11 @@ struct Ctx {
     };
     wa_proto = mk(X, W, 1); wa_plain = mk(X, W, 0); wa_wgl = mk(A, B, 2);
     const void* ks[] = {(const void*)wgp::gemm<256, 0>, (const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 0>,
-                        (const void*)wgp::gemm<128, 1>, (const void*)wgp::gemm_rp<256>, (const void*)wgp::gemm_rp<128>};
+                        (const void*)wgp::gemm<128, 1>, (const void*)wgp::gemm_rp<256>, (const void*)wgp::gemm_rp<128>,
+                        (const void*)wgp::gemm_rw<256>, (const void*)wgp::gemm_rw<128>};
     const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM,
-                      wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM};
-    for (int i = 0; i < 6; i++) {
+                      wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM};
+    for (int i = 0; i < 8; i++) {
       CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, sm[i]));
       if (kn.carve >= 0) CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributePreferredSharedMemoryCarveout, kn.carve));
     }
@@ -1540,12 +1542,16 @@ struct Ctx {
   }
 #ifdef V31_WG
   void wg_launch(cudaStream_t st, const wgp::Args& g, int cm, int rp) {
-    if (wbn == 256 && rp) wgp::gemm_rp<256><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
-    else if (rp) wgp::gemm_rp<128><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
-    else if (wbn == 256 && cm) wgp::gemm<256, 1><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
-    else if (wbn == 256) wgp::gemm<256, 0><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
-    else if (cm) wgp::gemm<128, 1><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
-    else wgp::gemm<128, 0><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
+    constexpr int T0 = wgp::threads<0>(), T2 = wgp::threads<2>();
+    constexpr int S256 = wgp::Tile<256>::SMEM, S128 = wgp::Tile<128>::SMEM;
+    if (wbn == 256 && rp == 2) wgp::gemm_rw<256><<<wgrid, T2, S256, st>>>(g);
+    else if (rp == 2) wgp::gemm_rw<128><<<wgrid, T2, S128, st>>>(g);
+    else if (wbn == 256 && rp) wgp::gemm_rp<256><<<wgrid, T0, S256, st>>>(g);
+    else if (rp) wgp::gemm_rp<128><<<wgrid, T0, S128, st>>>(g);
+    else if (wbn == 256 && cm) wgp::gemm<256, 1><<<wgrid, T0, S256, st>>>(g);
+    else if (wbn == 256) wgp::gemm<256, 0><<<wgrid, T0, S256, st>>>(g);
+    else if (cm) wgp::gemm<128, 1><<<wgrid, T0, S128, st>>>(g);
+    else wgp::gemm<128, 0><<<wgrid, T0, S128, st>>>(g);
   }
   // wgmma.linear on A and B (bf16 words into O[b]): the plain GEMM a served call runs, gamma's denominator, always on
   // RP 0's registers (wgmma.linear's own)
@@ -1685,7 +1691,8 @@ static void kernel_attrs(FILE* f) {
 #ifdef V31_WG
   const KAttr wk[] = {{"wg_256_c0", (const void*)wgp::gemm<256, 0>}, {"wg_256_c1", (const void*)wgp::gemm<256, 1>},
                       {"wg_128_c0", (const void*)wgp::gemm<128, 0>}, {"wg_128_c1", (const void*)wgp::gemm<128, 1>},
-                      {"wg_256_rp", (const void*)wgp::gemm_rp<256>}, {"wg_128_rp", (const void*)wgp::gemm_rp<128>}};
+                      {"wg_256_rp", (const void*)wgp::gemm_rp<256>}, {"wg_128_rp", (const void*)wgp::gemm_rp<128>},
+                      {"wg_256_rw", (const void*)wgp::gemm_rw<256>}, {"wg_128_rw", (const void*)wgp::gemm_rw<128>}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));
@@ -1954,9 +1961,26 @@ static int cmd_once(const std::string& pdir, int lp, int t, int row, const std::
     c.compute(c.s0, 0);
     c.commit(c.s0, 0);
   }
-  for (int i = 0; i < novl; i++) c.call_ovl(c.s0);
-  c.ovl_drain(c.s0);
+  // V31_ONCE_RANGE ovl: the overlapped calls inside cudaProfilerStart/Stop (ncu's range replay: every pipe over them, the
+  // kernels concurrent as they run); wgl: as many wgmma.linear calls instead, the baseline's
+  const std::string range = env_str("V31_ONCE_RANGE", "");
+  if (!range.empty()) {
+    CK(cudaDeviceSynchronize());
+    CK(cudaProfilerStart());
+  }
+  if (range == "wgl") {
+#ifdef V31_WG
+    for (int i = 0; i < novl; i++) c.wgl(c.s0, 0);
+#endif
+  } else {
+    for (int i = 0; i < novl; i++) c.call_ovl(c.s0);
+    c.ovl_drain(c.s0);
+  }
   CK(cudaStreamSynchronize(c.s0));
+  if (!range.empty()) {
+    CK(cudaDeviceSynchronize());
+    CK(cudaProfilerStop());
+  }
   CK(cudaGetLastError());
   const std::vector<u64> r = c.root();
   printf("%s: flags %d root %016llx\n", name, c.flags(), (unsigned long long)r[0]);

@@ -19,6 +19,9 @@
 # MODE=nsys: after the gates, Nsight Systems on `v31 once` with OVL_CALLS (default 6) overlapped calls after its two
 # serial ones, on each of SHAPES for each of VARIANTS: out/nsys-TAG-SHAPE.nsys-rep, its kernel trace as CSV, and
 # `v31.py timeline`'s summary of it (.timeline.md: each kernel serial and overlapped, the steady period, the streams' overlap).
+# MODE=duty: after the gates, Nsight Compute's application-range replay over OVL_CALLS (default 6) overlapped calls of
+# `v31 once`, and over as many wgmma.linear calls (gemm=1), on each of SHAPES for each of VARIANTS: every pipe's duty
+# (duty.metrics) with the kernels concurrent as they run, out/duty-TAG-SHAPE-{ovl,wgl}.csv and duty.py's table, duty.md.
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -232,6 +235,29 @@ elif [ "$MODE" = nsys ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
     $PY $D/v31.py timeline "${f%.nsys-rep}_cuda_gpu_trace.csv" > "${f%.nsys-rep}.timeline.md" 2>> "${f%.nsys-rep}.log"
     echo "timeline $(basename "${f%.nsys-rep}") rc $?" >> "$O/rc.txt"
   done
+elif [ "$MODE" = duty ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
+  NCU=$(command -v ncu || ls /usr/local/cuda/bin/ncu /usr/local/cuda-*/bin/ncu /opt/nvidia/nsight-compute/*/ncu 2>/dev/null | head -1)
+  export NCU OVL_CALLS=${OVL_CALLS:-6}
+  [ -n "$NCU" ] || echo "duty rc no-ncu" >> "$O/rc.txt"
+  # shellcheck disable=SC2016,SC2086
+  $LEASE bash -c '
+    for v in $VARIANTS; do
+      tag=$(tr "," "-" <<< "$v" | tr -d "=")
+      n=$(knob "$v" nreg "")
+      for s in $SHAPES; do
+        for r in ovl wgl; do
+          f="$O/duty-$tag-${s%%:*}-$r"
+          env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" V31_ONCE_RANGE=$r "$NCU" --clock-control none --replay-mode app-range \
+            --profile-from-start off --metrics "$(tr -d " \n" < '"$D"'/duty.metrics)" -f -o "$f" \
+            "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
+          echo "duty $tag ${s%%:*} $r rc $?" >> "$O/rc.txt"
+          "$NCU" -i "$f.ncu-rep" --csv --page raw --print-units base > "$f.csv" 2>> "$f.log"
+        done
+      done
+    done'
+  echo "lease duty rc $?" >> "$O/rc.txt"
+  $PY $D/duty.py "$O"/duty-*.csv > "$O/duty.md" 2>> "$O/duty.err"
+  echo "duty table rc $?" >> "$O/rc.txt"
 elif [ "$MODE" != gates ]; then
   echo "$MODE skipped: a gate or its check failed" >> "$O/rc.txt"
 fi

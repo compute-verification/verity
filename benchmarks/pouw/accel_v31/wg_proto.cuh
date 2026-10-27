@@ -11,8 +11,7 @@
 // acc - tau: tau's low halves are kept (CM 0: packed in 64 registers a thread at BN 256; CM 1: in an L2-resident scratch
 // slot of the CTA's, read back at each segment end), so a tail costs (dz + dy) L' inner indices on the tensor cores and
 // no second accumulator. The tail's step order and events are a table in shared memory, built once a CTA.
-//   RP 0    wgmma.linear's registers (168 at launch: producer 40, consumers 232), so nothing else fits on the SM
-//   RP 1    136 at launch (producer 24, consumers 192; CM 1), so one of the commit's CTAs runs beside each GEMM CTA
+// RP, the register plan (below): 0 is wgmma.linear's, 1 and 2 leave room for one of the commit's CTAs beside each GEMM CTA.
 //   mode 0  the plain product X W'^T to O (the bench's `plain` arm)
 //   mode 1  the protocol's GEMM (diag 1: no segment stores, 2: no tail, 4: no dO read; timing only)
 //   mode 2  wgmma.linear itself on A, B: bf16(RN(RN(f32(acc) s_a) s_w)) words, the `wgl` arm, gamma's baseline
@@ -31,13 +30,17 @@ namespace wgp {
 
 // TW: v31's word tile; MAX_TT: the tail's k-tiles a table holds ((dz + dy) L' / BK, 48 at L' 1024 and dz = dy = 3)
 constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW = 128, MAX_TT = 128;
-// RP 1's registers: 136 a thread at launch (the producer drops to 24, the consumers rise to 192), so a CTA leaves 13,312
-// of the SM's 65,536 for one of the commit's 128-thread CTAs (SMALL_MINB 5: <= 104 a thread) beside it
+// The register plans (RP). A commit CTA (128 threads, SMALL_MINB 5: <= 104 registers a thread, 13,312 in all) fits beside
+// a GEMM CTA when the GEMM's launch leaves that much of the SM's 65,536:
+//   RP 0  384 threads at 168 (wgmma.linear's: the producer warpgroup drops to 40, the consumers rise to 232): no room
+//   RP 1  384 threads at 136 (__launch_bounds__(480, 1); producer 24, consumers 192): 13,312 left
+//   RP 2  288 threads at 168 (one producer warp, no setmaxnreg): 17,152 left
 constexpr int RP1_LAUNCH = 136, RP1_PRODUCER = 24, RP1_CONSUMER = 192;
+template <int RP> constexpr int threads() { return RP == 2 ? 2 * 128 + 32 : 3 * 128; }
 
 template <int BN> struct Tile {
   static_assert(BN == 128 || BN == 256, "128 x 128 or 128 x 256 tiles");
-  static constexpr int NWG = 2, NT = 128 * (NWG + 1), NA = BN / 2;
+  static constexpr int NWG = 2, NA = BN / 2;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int STAGES = SMEM_BUDGET / STAGE < MAX_STAGES ? SMEM_BUDGET / STAGE : MAX_STAGES;
   static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 4 * MAX_TT;
@@ -155,7 +158,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
-  for (int i = tid; i < TT; i += T::NT) {
+  for (int i = tid; i < TT; i += threads<RP>()) {
     const TailStep ts = tail_step(i, p.lp, p.dz, p.dy);
     const int ev = !ts.end ? TAIL_NONE : ts.e > 1 ? TAIL_X128 : ts.e == 1 ? TAIL_XM128 : TAIL_CAPTURE;
     tab[i] = ts.kt | ev << 16;
@@ -163,7 +166,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   __syncthreads();
 
   if (wg == NWG) {
-    regs_dec<RP ? RP1_PRODUCER : 40>();
+    if constexpr (RP != 2) regs_dec<RP ? RP1_PRODUCER : 40>();
     if (tid == NWG * 128) {
       wgp::tma_prefetch(&p.a);
       wgp::tma_prefetch(&p.b);
@@ -191,7 +194,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
     }
     asm volatile("exit;");
   }
-  regs_inc<RP ? RP1_CONSUMER : 232>();
+  if constexpr (RP != 2) regs_inc<RP ? RP1_CONSUMER : 232>();
 
   const int x = tid % 128, lane = tid % 32;
   const int rloc = wg * 64 + 16 * (x / 32) + (x % 32) / 4, cq = 2 * (x % 4);   // the thread's first row and column in the tile
@@ -304,16 +307,24 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
 }
 
 template <int BN, int CM>
-__global__ void __launch_bounds__(Tile<BN>::NT, 1) gemm(const __grid_constant__ Args p) {
+__global__ void __launch_bounds__(threads<0>(), 1) gemm(const __grid_constant__ Args p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   body<BN, CM, 0>(p);
 #endif
 }
-// RP 1 (CM 1 only: CM 0's 64 registers of tau don't fit in 192)
+// RP 1 and 2 keep tau in L2 (CM 1): CM 0's 64 registers of it don't fit. ptxas takes its register budget from the launch
+// bounds (65,536 / 480 rounds to 136; __maxnreg__ alone leaves setmaxnreg's raised budget unused and wgmma n256 can't
+// compile in 136); RP 2 is launched with 288 threads under RP 0's bounds (168).
 template <int BN>
-__global__ void __maxnreg__(RP1_LAUNCH) gemm_rp(const __grid_constant__ Args p) {
+__global__ void __launch_bounds__(480, 1) gemm_rp(const __grid_constant__ Args p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   body<BN, 1, 1>(p);
+#endif
+}
+template <int BN>
+__global__ void __launch_bounds__(threads<0>(), 1) gemm_rw(const __grid_constant__ Args p) {
+#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
+  body<BN, 1, 2>(p);
 #endif
 }
 
