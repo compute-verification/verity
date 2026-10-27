@@ -4,7 +4,7 @@ import Definitions.Hash
 # The hash area's guarantee statements
 
 Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Security/Proofs/Hash/`. All are
-deterministic and assume nothing about the hash (Daniel, 8 Oct): each conclusion is the property, or a collision among
+deterministic and assume nothing about the hash: each conclusion is the property, or a collision among
 the messages the two openings' checks themselves hashed, never an advantage bound. So no proof takes an assumption.
 
 * `RowBinding`: two openings of one root at one rank, in the hm96 bit-row leaf format the verifier holds (frame-v3-sha512
@@ -15,7 +15,7 @@ the messages the two openings' checks themselves hashed, never an advantage boun
 * `EmbeddingReadBinding`: when `EmbeddingRead_v1` returns ok for a token in the vocabulary, the row it returns is the
   registered table's row at that token, or the checks hashed a collision. It is `RowBinding` at rank `tok`.
 
-SHA-512 is the served hash (Daniel's ruling on the hash card, 18 Oct: BLAKE3 not adopted). A probability read from
+SHA-512 is the served hash, not BLAKE3. A probability read from
 any of them is per prover: the collision comes from that prover's (extracted) openings, so it is a bound on that
 prover's link finders under `ecr/sha-512` (`FlockSoundness.Assumptions.SHA512CRExpected`), never one `δ_bind` for every
 prover, which is false at SHA-512 (a prover that hard-codes one collision opens one leaf two ways). In particular
@@ -80,8 +80,8 @@ row at `tok`), or two different messages that `H` hashed in the two checks have 
 that `G` hashed in the two row digests have one digest.
 
 Scope:
-* **What it is about.** The reference's outputs (`Definitions/Hash/EmbeddingRead.lean`), not the gates; #4227's tests
-  hold the gates to the reference.
+* **What it is about.** The reference's outputs (`Definitions/Hash/EmbeddingRead.lean`), not the gates; the gates'
+  tests (`verity/ml/commitments/tests/test_boolean_embedding.py`) hold them to the reference.
 * **What the unit's wiring supplies.** `root`, `domain` and `key` are the registered table's: the root and domain id are
   registered reads of the table's root in the unit that holds the read, the domain's count is `V`, and the key is hm96's
   pinned key, which the table's registration uses. `RowBinding`'s note on domains applies: the domain's binding says it

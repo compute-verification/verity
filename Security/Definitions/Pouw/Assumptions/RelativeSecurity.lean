@@ -27,8 +27,8 @@ service refuses a run outside a scope, so no premise here is a check's outcome.
 
 **The service premises per prover.** A premise that bounds every adversary's binding break by one `δb` is false below
 1 at SHA-512: a machine that hard-codes a collision opens a committed leaf two ways
-(note:proofs/20261018T1604Z-report-redteam-2474, side finding). Those constant forms (`ServiceSoundStaged`,
-`ServiceSoundOverlap` and their J10-R mirrors) are retired, with the floors that rested on them (CMP-33).
+(a red team's side finding). Those constant forms (`ServiceSoundStaged`,
+`ServiceSoundOverlap` and their J10-R mirrors) are retired, with the floors that rested on them.
 `ServiceSoundStagedPerProver` and `ServiceSoundOverlapPerProver` are in the form C-Flock's link bound has (`LinkCRZC`,
 `linkBoundZC`): each round's break is at most a constant plus a weight times the probability that a finder for that
 adversary (`Finders`) finds a collision, and `ecr/sha-512` (`Claims.ExpectedCR`) enters only outside the floors, at
@@ -36,7 +36,7 @@ that adversary's finders, `⊤` where they fail it, capped at 1 a value of its c
 `breakBound`, all in `Definitions`, so other areas read the same break term). The bound reads each finder at a budget
 of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
 finder's declared cost, so no choice of finder lowers it. The floors read these premises at the fork finders
-(`forkFinders`) built from the adversary (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
+(`forkFinders`) built from the adversary.
 
 **At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
 columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
@@ -187,8 +187,8 @@ def KScopeOneSided (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B
 that commits first, every value of its coins and every play `x`, the run's charge (`max(|M|, cost)`) is at least `κ`
 times its products over every stage of every round, less its noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine
 B_θ this is P1 at the active price vector VF3j-16's prices (decision 17: τ 0.0610, margin 2.000, every price at most
-its measured cost, (π₃₂) closed for the whole census, every register load credited 16 a word;
-note:20261016T1640Z-draft-rs-vf3j-strict-closure) with P4 (B_θ complete), and it sums the stages' products, so it
+its measured cost, (π₃₂) closed for the whole census, every register load credited 16 a word)
+with P4 (B_θ complete), and it sums the stages' products, so it
 holds when a stage's interval, from its draw to its outputs' commitment, holds no other draw. Stages that overlap are
 `ChargeVF3j16Overlap`'s. -/
 def ChargeVF3j16 (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)

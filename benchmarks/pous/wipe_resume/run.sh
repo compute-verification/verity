@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The resume attack (art:7617c8017e80) against the streamed-label wipe and the band fill, on CPU, as one Attempt. cwd =
+# The red team's resume attack against the streamed-label wipe and the band fill, on CPU, as one Attempt. cwd =
 # a clone (the Lean verdict builds into it):
 #
 #   research run --on NODE --project verity --source . --cwd clone --timeout 60m -- \

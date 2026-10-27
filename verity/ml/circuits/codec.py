@@ -16,14 +16,15 @@ the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotati
 descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
-(the default since 2026-09-08) writes the same program with flat concatenations, the reference-sequence alias
+(the default) writes the same program with flat concatenations, the reference-sequence alias
 and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
-descriptors denote the same circuit (veritor's docs/vllm-poc/descriptor-codec.md).
+descriptors denote the same circuit.
 """
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import re
@@ -333,8 +334,8 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str,
     duplicates: list[tuple[str, FunctionDefinition]] = []
     # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
     # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
-    # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
-    # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
+    # list held one entry per node (on a large workload, over a thousand visits an object) and the identity check below
+    # re-encoded the definitions verbatim that many times.
     dup_objects: set[tuple[str, int]] = set()
     visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
 
@@ -520,10 +521,18 @@ def program_digest(program_or_desc) -> str:
     """SHA-512 of the descriptor's canonical JSON without ``annotations``; a program's is streamed (`descriptor_chunks`)."""
     if isinstance(program_or_desc, dict):
         return hashlib.sha512(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"})).hexdigest()
-    h = hashlib.sha512()
-    for chunk in descriptor_chunks(program_or_desc):
-        h.update(chunk)
-    return h.hexdigest()
+    # The cyclic collector stays off while streaming: encoding frees its pieces by reference counting, and the collector's
+    # passes over a big program's live bodies cost more than the encoding itself.
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        h = hashlib.sha512()
+        for chunk in descriptor_chunks(program_or_desc):
+            h.update(chunk)
+        return h.hexdigest()
+    finally:
+        if on:
+            gc.enable()
 
 
 def descriptor_size(program_or_desc) -> int:
@@ -539,8 +548,8 @@ def descriptor_size(program_or_desc) -> int:
 
 # Primitive families that are materialised on demand (one definition per width / constant / vocab) when a descriptor is
 # decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
-# package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
-# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes the IR's own `Input<w>` or `RegisteredInput<w>`, ahead of
+# package registers its families with `register_lazy_family` (`verity.ml.circuits` never imports a semantics package).  An id matching
+# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes `program`'s own `Input<w>` or `RegisteredInput<w>`, ahead of
 # any registry entry.  A pattern matches the whole id, and the member it makes must carry that id: a family has one spelling
 # per member.
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []

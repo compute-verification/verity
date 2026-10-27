@@ -5,7 +5,7 @@
 3. the server encodes, `C* = Enc(W, salt)`, and sends it segment by segment.  The verifier builds `vk` one of two ways:
    - **public encoder** (the default, POUS `docs/public-encoder/protocol.md`, milestone 1): it decodes each segment of
      `C*`, streams `Dec(C*)` into `commit`'s framing, accepts iff the digest equals the commitment, and builds `vk`
-     from the blocks it decoded (`verifier_key_from_encoding`).  It never runs the encoder and never holds `W`;
+     from the labels it decoded (`verifier_key_from_encoding`).  It never runs the encoder and never holds `W`;
    - **private encoder** (`public_encoder=False`): it encodes `W` itself and builds `vk` from its own encoding
      (`verifier_key`); comparing roots (`check_server_root`) catches a wrong server encoding at setup.
 
@@ -70,7 +70,7 @@ def verifier_key(params: Geometry, prims, w: bytes | Sequence[bytes], commitment
 def verifier_key_from_encoding(params: Geometry, prims, commitment: bytes, salt: bytes,
                                encoded: Iterable[Sequence[bytes]], codec: Codec | None = None) -> VerifierKey:
     """Milestone 1: decode each segment of the server's `C*`, check `commit(Dec(C*)) == commitment`, and return `vk`
-    built from the decoded blocks.  Raises `ValueError` on any mismatch (a block's size, a segment's block count, the
+    built from the decoded labels.  Raises `ValueError` on any mismatch (a label's size, a segment's label count, the
     number of segments, the digest); never calls an encoder, and holds one segment at a time."""
     codec = codec or params.codec
     n, mb = params.blocks_per_segment, params.block_bytes
