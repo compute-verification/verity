@@ -38,7 +38,7 @@ and `session.sh` also runs it on another ship's modules (`units-old.tar`) in the
 ```text
 # on a CPU node with CUDA 13.0: both cubins, build_check.py, the harness SASS gate's verdicts, and the fixture (pools,
 # words, sweep digests)
-research run --on vy-nebius-cpu-1 --cwd source --env PROCS=16 \
+research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd source --env PROCS=16 \
   -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/units/build.sh "$OUT/ship"'
 # on the H200: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing at 4096 and 16384 (with
 # units-old.tar, an earlier build's ship, timed beside it)
