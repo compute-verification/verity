@@ -25,15 +25,16 @@ targets read them:
 * `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings of the wires that aren't constants only;
 * `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
   `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
-* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier of record reads, each a
+* `Bridge.SampledKSLiveXr`: `SampledKSLive` at circuit files whose ports are rows the verifier of record reads, each a
   `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which C-Flock's scope check implies)
   and at registrations whose ports each have one name (`Registered.dupName`) and whose equal roots have one domain
   (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
-  population of the game's `n` units in order (`Bridge.PopMatches`);
-* `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
+  population of the game's `n` units in order (`Bridge.PopMatches`), with the claims' values at the extracted
+  plurality (`XplurZC`);
+* `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `Bridge.SampledKSLiveXr`.
 
-`SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
-them.
+`SampledKSLiveV2` (`Rows`) is its setting with the claims' values at the registrant's rows. `SampledKSLiveV3`
+(`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail them.
 -/
 
 namespace Flock.Bridge
@@ -231,8 +232,10 @@ port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schema
 `PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and
 its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`).
 Its knowledge and link terms are `SampledKSLive`'s, in the additive form: its finders' probabilities of outputting a
-SHA-512 collision, with no collision-resistance hypothesis. `SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
-def SampledKSLiveV2 : Prop :=
+SHA-512 collision, with no collision-resistance hypothesis. The claims' values are the circuit's evaluation on the
+extracted plurality's inputs (`XplurZC`); `SampledKSLiveV2` reads them at the registrant's rows. `SampledKSLive`
+implies it (`Bridge.sampledKSLiveXr_of`). -/
+def _root_.Flock.Bridge.SampledKSLiveXr : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
@@ -292,17 +295,17 @@ def SampledKSLiveV2 : Prop :=
             (linkFinderPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) p k Rw M +
               1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ))
 
-/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses. -/
-theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
+/-- `Bridge.SampledKSLiveXr` is `SampledKSLive` with four more hypotheses. -/
+theorem _root_.Flock.Bridge.sampledKSLiveXr_of (h : SampledKSLive) : Bridge.SampledKSLiveXr := by
   intro n Reg I ht D hD hU pub hpub hpt hscope _ _ _ desc _ _ kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q
   exact h n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
     hM ρ hρ hr K₀ hK₀ τ desc q
 
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
-count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/
+count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`Bridge.SampledKSLiveXr`). -/
 def _root_.Flock.Bridge.AssemblyTargetC : Prop :=
   Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartRusTarget → Bridge.CountTarget →
-    Bridge.EndToEndHiddenC → SampledKSLiveV2
+    Bridge.EndToEndHiddenC → Bridge.SampledKSLiveXr
 
 end Flock.Guarantees
