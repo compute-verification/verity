@@ -358,7 +358,7 @@ def test_a_module_s_tree_is_its_longest_prefix_s_and_reaches_the_packages_requir
 
 
 def test_a_statement_reads_nothing_of_the_proofs_tree_and_the_trusted_trees_import_none_of_it():
-    """Daniel's three trees (24 Oct): a guarantee's or property's statement reads only the definitions tree and the code, and
+    """The three trees: a guarantee's or property's statement reads only the definitions tree and the code, and
     no module of the definitions or properties tree imports the proofs tree; each refusal says what to move where."""
     assert A.tree_failures({}, spec_facts(), TREES) == []
     read = A.tree_failures({}, spec_facts(reads=fact()["reads"] + AUX), TREES)
@@ -1131,7 +1131,7 @@ def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
 
 def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_out():
     """A record whose declarations are unchanged but whose generated constants are grouped differently (`group_keys`) is
-    counted on one line that `statement_changes` leaves out, so Daniel's DM lists only real changes; a changed declaration
+    counted on one line that `statement_changes` leaves out, so the spec-change DM lists only real changes; a changed declaration
     among them is still listed."""
     enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
     mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
@@ -1332,7 +1332,7 @@ def test_a_premise_the_lock_does_not_list_fails():
     digest = pol["assumptions"]["P.Hyp"]["digest"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Hyp\": "
+        "with its guarantees' owner and commit the record (the spec-change DM shows it when it lands), or write \"P.Hyp\": "
         f"{{\"owner\": \"@lean\", \"digest\": \"{digest}\"}} under `assumptions`."]
 
 
@@ -1356,7 +1356,7 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_depend
     assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Sound\": "
+        "with its guarantees' owner and commit the record (the spec-change DM shows it when it lands), or write \"P.Sound\": "
         "{\"owner\": \"@lean\"} under `assumptions`."]
 
 
@@ -1408,7 +1408,7 @@ def test_an_alias_hiding_anything_but_listed_assumptions_is_a_new_one_and_its_fa
         beside = " beside the listed P.Hyp" if why != "P.Hyp applied to a proposition or predicate" else ""
         assert fails == [
             "assumptions: P.Both is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-            "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Both\": "
+            "with its guarantees' owner and commit the record (the spec-change DM shows it when it lands), or write \"P.Both\": "
             f"{{\"owner\": \"@lean\"}} under `assumptions`. It unfolds to {why}{beside}, so it is no alias of listed "
             "assumptions, which the lock would not count."], (why, fails)
         assert "P.Both" in A.judge(listed, got, FILES, update=True)[1]["assumptions"]
@@ -1501,7 +1501,7 @@ def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
     moved = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 2"))
     assert A.judge(pol, moved, FILES)[0] == [
         "assumptions: P.Leaves's definition in P.Thms, or a definition it reads, changed; run `check.py --update` and commit "
-        "the record (Daniel's DM shows the change when it lands)"]
+        "the record (the spec-change DM shows the change when it lands)"]
     new = A.judge(pol, moved, FILES, update=True)[1]
     assert A.assumption_changes(pol, new) == ["assumption P.Leaves: changed (its statement or a definition it reads)"]
     bare = {**pol, "assumptions": {"P.Leaves": {"owner": "@lean"}}}
@@ -1573,7 +1573,7 @@ def test_a_statement_whose_premises_could_not_be_read_fails():
 
 
 def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
-    """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
+    """The two checks on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
     constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
     entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
     path = {"missing": ["P.gone"], "reached": 40,
@@ -1729,7 +1729,7 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
     assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `check.py --update` and commit the record " \
-           "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
+           "(the spec-change DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
     unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
     assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
     assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
@@ -1764,7 +1764,7 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
 
 
 def test_each_heartbeat_override_is_listed_with_its_value_reason_and_module_build_time_and_none_is_refused(tmp_path):
-    """`heartbeats` (Daniel, 2026-10-09: not banned, listed): an override with its reason ending its line, one with the
+    """`heartbeats` (not banned, listed): an override with its reason ending its line, one with the
     comments just above as its reason, one with none, `synthInstance`'s, and one in a comment, which is not an override;
     each with its module's time from the audit's build log (`build_seconds`, which skips a non-module like `:c.o`), or
     None for a module the build didn't build."""

@@ -110,7 +110,7 @@ allowed axioms replaces it.  `--update` writes the records and `reads` from the 
 whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
+those changes: the spec-change DM shows them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
 side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
 same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
@@ -1398,7 +1398,7 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
     no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
-    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    through `stop`, so the verifier hashes through its parameter. `allow` is a
     record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
     that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
     constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
@@ -1630,7 +1630,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                  f"commit the record"))
         elif rec["digest"] != h:
             fails.append(Failure("assumptions.digest", a, f"assumptions: {what} changed; run `check.py --update` and commit "
-                                 f"the record (Daniel's DM shows the change when it lands)"))
+                                 f"the record (the spec-change DM shows the change when it lands)"))
     for d, by in sorted(premised.items()):
         if d in assumed:
             continue
@@ -1646,7 +1646,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                   else "") + ", so it is no alias of listed assumptions, which the lock would not count.")
         fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
                              f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
-                             f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
+                             f"add it with its guarantees' owner and commit the record (the spec-change DM shows it when it "
                              f"lands), or write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
                              f"`assumptions`{'' if mine else ' with the lane that answers for it'}.{parts}"))
     return out, fails
@@ -3046,7 +3046,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         log(f"audit: {pkg}/{POLICY}: guarantees and reads rewritten from the build" + (
             f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or lifted"
             if len(notes) > len(must) else "") + (
-            "; these change what a guarantee says, and Daniel is shown them when they land:\n" + "\n".join(f"  {s}" for s in must)
+            "; these change what a guarantee says, and the spec-change DM shows them when they land:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
     elif update and (work / POLICY).read_text() != (pkg / POLICY).read_text():
         dump(pkg, new)
@@ -3372,7 +3372,7 @@ def main(argv: list[str]) -> int:
     failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
-              f"{', '.join(changed)}: say so in the PR; Daniel gets a DM with the changes above when they land (review.txt in "
+              f"{', '.join(changed)}: say so in the PR; the spec-change DM shows the changes above when they land (review.txt in "
               f"each package's reports)", flush=True)
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
