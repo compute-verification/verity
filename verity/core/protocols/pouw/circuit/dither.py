@@ -594,19 +594,24 @@ def PouwDitherFirstWord(acc: int, t1: int) -> int:
     return step_ok(0, acc, t1)
 
 
-@primitive("PouwDitherOutDot", 1, [("acc", Value(32)), ("a", Array(32, Value(8))), ("da", Array(32, Value(1))),
-                                   ("b", Array(32, Value(8))), ("db", Array(32, Value(1)))], Value(32),
+def _dithers(d: int) -> list[int]:
+    return [d >> k & 1 for k in range(32)]
+
+
+@primitive("PouwDitherOutDot", 1, [("acc", Value(32)), ("a", Array(32, Value(8))), ("da", Value(32)),
+                                   ("b", Array(32, Value(8))), ("db", Value(32))], Value(32),
            conformance="protocol-defined")
 def PouwDitherOutDotWord(acc: int, *v: int) -> int:
-    """O's sum 32 entries on: acc + sum_k (a_k + da_k)(b_k + db_k) mod 2^32."""
-    return out_dot(acc, v[0:32], v[32:64], v[64:96], v[96:128])
+    """O's sum 32 entries on: acc + sum_k (a_k + da_k)(b_k + db_k) mod 2^32, da_k and db_k bit k of da and db (the word view
+    of `PouwDitherOutDot_v2`'s `Array<32, Value<1>>`, `boolean.word_type`)."""
+    return out_dot(acc, v[0:32], _dithers(v[32]), v[33:65], _dithers(v[65]))
 
 
-@primitive("PouwDitherOutDot0", 1, [("a", Array(32, Value(8))), ("da", Array(32, Value(1))), ("b", Array(32, Value(8))),
-                                    ("db", Array(32, Value(1)))], Value(32), conformance="protocol-defined")
+@primitive("PouwDitherOutDot0", 1, [("a", Array(32, Value(8))), ("da", Value(32)), ("b", Array(32, Value(8))),
+                                    ("db", Value(32))], Value(32), conformance="protocol-defined")
 def PouwDitherOutDot0Word(*v: int) -> int:
-    """O's sum over its first 32 entries: sum_k (a_k + da_k)(b_k + db_k) mod 2^32."""
-    return out_dot(0, v[0:32], v[32:64], v[64:96], v[96:128])
+    """O's sum over its first 32 entries: sum_k (a_k + da_k)(b_k + db_k) mod 2^32, da_k and db_k bit k of da and db."""
+    return out_dot(0, v[0:32], _dithers(v[32]), v[33:65], _dithers(v[65]))
 
 
 @primitive("PouwDitherLastOk", 1, [("pre", Value(32)), ("t0", Value(16)), ("oacc", Value(32)), ("o", Value(32))],

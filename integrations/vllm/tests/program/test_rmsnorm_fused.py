@@ -41,7 +41,7 @@ def _standalone(spec):
 def test_ir_body_equals_numpy_twin(N, eps):
     _numerics()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     from verity_vllm.program import rmsnorm_fused_sweep as SW
     rng = np.random.default_rng(1234 + N)
