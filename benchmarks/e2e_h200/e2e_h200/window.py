@@ -2,8 +2,7 @@
 counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`) for circuits' FAMILIES map (`plan.Map`).
 
 **The layout.** `shared_layout` is FAMILIES' shared-row commit layout (CIR-113, CMP-149), one commit unit a row of at most
-``row`` bytes (1 KiB), built from the map's groups (the embedding, each layer, the head) as `verity.ml.commitments.layout`
-groups and checked by its ``check_shared`` with every producer's output (`check_shared`):
+``row`` bytes (1 KiB), built from the map's groups (the embedding, each layer, the head):
 
 - tiled: every table its readers share (the linears' coordinates, the embedding, the norm outputs, the residuals, softmax
   and PV), cut into rows of ``row`` bytes, the last one shorter. Producer unit i of a family writes a window of one row, and
@@ -12,8 +11,8 @@ groups and checked by its ``check_shared`` with every producer's output (`check_
 - folded: each quantizer chunk's codes and its table's f32 scale, one row of two parts;
 - kept: K and V (``wk`` and ``wv``), a slot's one row each, since their positions are read at later steps.
 
-At the frozen shape and 1 KiB it is 21,857 rows a slot (`FROZEN_ROWS`) under ``layout_digest`` `FROZEN_DIGEST` and
-``json_digest`` `FROZEN_JSON_DIGEST`; `writers` gives its producers' window rules.
+At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST` (art:16f2faa0…), and its
+writers (`writers`) are art:8ce57586…'s.
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
