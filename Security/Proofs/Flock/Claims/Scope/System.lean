@@ -69,10 +69,10 @@ def gate (g : Fin S.size) : Verity.Boolean.Op S.size :=
 theorem ins_lt {ts : List ℕ} {a : Fin S.size} (h : a ∈ S.ins ts) : a.val < S.J * S.N := by
   obtain ⟨t, -, e⟩ := List.mem_filterMap.1 h
   by_cases ht : t < S.J * S.N
-  · rw [dif_pos ht] at e
+  · rw [dite_eq_left ht] at e
     obtain rfl := Option.some.inj e
     exact ht
-  · rw [dif_neg ht] at e
+  · rw [dite_eq_right ht] at e
     cases e
 
 theorem gate_lt (g : Fin S.size) : ∀ a ∈ (S.gate g).args, a < g := by
@@ -89,7 +89,7 @@ theorem gate_lt (g : Fin S.size) : ∀ a ∈ (S.gate g).args, a < g := by
 /-- **The block circuit**: gates `0, …, J·N − 1` the input bits, then gate `J·N + q` for row `q = c·N + i`, the AND of the
 XOR of its table's bits that `A c i` selects and the XOR of those `B c i` selects, then a copy of each pin's bit and of
 each fixed bit. Every gate after the inputs is an output. -/
-def circ : Verity.Boolean.Circuit where
+@[reducible] def circ : Verity.Boolean.Circuit where
   N := S.size
   op := S.gate
   topo := S.gate_lt
@@ -157,7 +157,7 @@ theorem foldl_filter (p f : ℕ → Bool) (l : List ℕ) (c : Bool) :
   | nil => simp
   | cons r l ih =>
     rw [List.foldl_cons, ih]
-    cases hp : p r <;> simp [List.filter_cons, hp, Bool.xor_assoc]
+    cases hp : p r <;> simp [hp]
 
 section Eval
 
@@ -199,7 +199,7 @@ include hxa
 theorem bit_row (hN : 0 < S.N) {g : Fin S.size} (h1 : S.J * S.N ≤ g.val) (h2 : g.val < 2 * (S.J * S.N)) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = S.res x (g.val - S.J * S.N) := by
   have hop : S.gate g = .row (S.ins (S.sel S.A (g.val - S.J * S.N))) (S.ins (S.sel S.B (g.val - S.J * S.N))) := by
-    rw [gate, if_neg (by omega), if_pos h2]
+    rw [gate, ite_eq_right (by omega), ite_eq_left h2]
   have hv : ∀ g' : Fin S.size, g'.val < S.J * S.N → (S.circ.toCircuit.eval a g').getLsbD 0 = x g'.val :=
     fun g' h => (bit_input h).trans (hxa g' h)
   rw [bit_op (by rw [hop]; rfl), hop]
@@ -211,7 +211,7 @@ theorem bit_copy {g : Fin S.size} (h2 : 2 * (S.J * S.N) ≤ g.val)
     (hc : ∀ t ∈ S.copied (g.val - 2 * (S.J * S.N)), t < S.J * S.N) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = ((S.copied (g.val - 2 * (S.J * S.N))).map x).foldr xor false := by
   have hop : S.gate g = .row (S.ins (S.copied (g.val - 2 * (S.J * S.N)))) (S.ins (S.copied (g.val - 2 * (S.J * S.N)))) := by
-    rw [gate, if_neg (by omega), if_neg (by omega)]
+    rw [gate, ite_eq_right (by omega), ite_eq_right (by omega)]
   have hv : ∀ g' : Fin S.size, g'.val < S.J * S.N → (S.circ.toCircuit.eval a g').getLsbD 0 = x g'.val :=
     fun g' h => (bit_input h).trans (hxa g' h)
   rw [bit_op (by rw [hop]; rfl), hop]
@@ -255,27 +255,26 @@ theorem forall_outputs {P : Fin S.size → Prop} :
     (∀ o ∈ S.circ.outputs, P o) ↔ (∀ q (h : q < S.J * S.N), P ⟨S.J * S.N + q, by unfold size; omega⟩) ∧
       (∀ c (h : c < S.J), P ⟨2 * (S.J * S.N) + c, by unfold size; omega⟩) ∧
       ∀ k (h : k < S.slots.length), P ⟨2 * (S.J * S.N) + S.J + k, by unfold size; omega⟩ := by
-  have hmem : ∀ o : Fin S.size, o ∈ S.circ.outputs ↔ S.J * S.N ≤ o.val := fun o => by
-    rw [show S.circ.outputs = Finset.univ.filter fun g : Fin S.size => S.J * S.N ≤ g.val from rfl]
-    simp
+  have hmem : ∀ o : Fin S.circ.N, o ∈ S.circ.outputs ↔ S.J * S.N ≤ o.val := fun o =>
+    Finset.mem_filter.trans ⟨fun h => h.2, fun h => ⟨Finset.mem_univ _, h⟩⟩
   constructor
   · intro h
-    exact ⟨fun q _ => h _ ((hmem _).2 (Nat.le_add_right _ _)), fun c _ => h _ ((hmem _).2 (by simp; omega)),
-      fun k _ => h _ ((hmem _).2 (by simp; omega))⟩
+    exact ⟨fun q _ => h _ ((hmem _).2 (Nat.le_add_right _ _)), fun c _ => h _ ((hmem _).2 (by dsimp only; omega)),
+      fun k _ => h _ ((hmem _).2 (by dsimp only; omega))⟩
   · rintro ⟨h1, h2, h3⟩ o ho
     have hlo := (hmem o).1 ho
-    have hhi := o.isLt
+    have hhi : o.val < S.size := o.isLt
     unfold size at hhi
     by_cases e1 : o.val < 2 * (S.J * S.N)
     · have := h1 (o.val - S.J * S.N) (by omega)
-      rwa [show (⟨S.J * S.N + (o.val - S.J * S.N), _⟩ : Fin S.size) = o from Fin.ext (by simp; omega)] at this
+      rwa [show (⟨S.J * S.N + (o.val - S.J * S.N), _⟩ : Fin S.size) = o from Fin.ext (by dsimp only; omega)] at this
     · by_cases e2 : o.val < 2 * (S.J * S.N) + S.J
       · have := h2 (o.val - 2 * (S.J * S.N)) (by omega)
-        rwa [show (⟨2 * (S.J * S.N) + (o.val - 2 * (S.J * S.N)), _⟩ : Fin S.size) = o from Fin.ext (by simp; omega)]
+        rwa [show (⟨2 * (S.J * S.N) + (o.val - 2 * (S.J * S.N)), _⟩ : Fin S.size) = o from Fin.ext (by dsimp only; omega)]
           at this
       · have := h3 (o.val - 2 * (S.J * S.N) - S.J) (by omega)
         rwa [show (⟨2 * (S.J * S.N) + S.J + (o.val - 2 * (S.J * S.N) - S.J), _⟩ : Fin S.size) = o from
-          Fin.ext (by simp; omega)] at this
+          Fin.ext (by dsimp only; omega)] at this
 
 /-- **The block circuit's outputs**: on block `b`'s inputs, every output gate holds the value its output reads exactly
 when the system holds in block `b`. -/
@@ -302,7 +301,7 @@ theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB)
       S.bit w c b i)]
     refine forall₂_congr fun q hq => ?_
     have hout : S.rel.out b (S.J * S.N + q) = .hid (S.idx b q) := by
-      simp only [rel, if_pos (show S.J * S.N + q < 2 * (S.J * S.N) by omega), Nat.add_sub_cancel_left]
+      simp only [rel, ite_eq_left (show S.J * S.N + q < 2 * (S.J * S.N) by omega), Nat.add_sub_cancel_left]
     have hq' : x q = S.bit w (q / S.N) b (q % S.N) := by
       rw [← hx _ _ (Nat.mod_lt _ hN), Nat.div_add_mod']
     simp only []
@@ -312,33 +311,49 @@ theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB)
     rw [hq', res, xsum_congr _ (fun r hr => hx (q / S.N) r hr), xsum_congr (S.B _ _) (fun r hr => hx (q / S.N) r hr)]
   · refine forall₂_congr fun c hc => ?_
     have hout : S.rel.out b (2 * (S.J * S.N) + c) = .pub 0 := by
-      simp only [rel, if_neg (show ¬ 2 * (S.J * S.N) + c < 2 * (S.J * S.N) by omega),
-        if_pos (show 2 * (S.J * S.N) + c < 2 * (S.J * S.N) + S.J by omega)]
-    have hcp : S.copied c = [c * S.N + S.pin c] := if_pos hc
-    simp only []
-    rw [bit_copy hxa (Nat.le_add_right _ _) (by simp only [Nat.add_sub_cancel_left, hcp, List.mem_singleton]; rintro t rfl;
-      exact hcopy c hc _ (hw.pin_lt c hc)), hout, hpub, pubs_zero]
-    simp only [Nat.add_sub_cancel_left, hcp, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil,
-      Bool.xor_false]
+      simp only [rel, ite_eq_right (show ¬ 2 * (S.J * S.N) + c < 2 * (S.J * S.N) by omega),
+        ite_eq_left (show 2 * (S.J * S.N) + c < 2 * (S.J * S.N) + S.J by omega)]
+    have hcp : S.copied c = [c * S.N + S.pin c] := ite_eq_left hc
+    have hlt : ∀ t ∈ S.copied c, t < S.J * S.N := by
+      rw [hcp]
+      intro t ht
+      rw [List.mem_singleton.1 ht]
+      exact hcopy c hc _ (hw.pin_lt c hc)
+    dsimp only
+    rw [bit_copy hxa (g := ⟨2 * (S.J * S.N) + c, by unfold size; omega⟩) (Nat.le_add_right _ _)
+      (by dsimp only; rw [Nat.add_sub_cancel_left]; exact hlt), hout, hpub, pubs_zero]
+    dsimp only
+    rw [Nat.add_sub_cancel_left, hcp]
+    simp only [List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, Bool.xor_false]
     rw [hx c _ (hw.pin_lt c hc)]
   · rw [List.forall_mem_iff_getElem]
     refine forall₂_congr fun k hk => ?_
     obtain ⟨h1, h2⟩ := hw.slot_lt _ (List.getElem_mem hk)
     have hout : S.rel.out b (2 * (S.J * S.N) + S.J + k) = .pub (1 + b * S.slots.length + k) := by
-      simp only [rel, if_neg (show ¬ 2 * (S.J * S.N) + S.J + k < 2 * (S.J * S.N) by omega),
-        if_neg (show ¬ 2 * (S.J * S.N) + S.J + k < 2 * (S.J * S.N) + S.J by omega)]
+      simp only [rel, ite_eq_right (show ¬ 2 * (S.J * S.N) + S.J + k < 2 * (S.J * S.N) by omega),
+        ite_eq_right (show ¬ 2 * (S.J * S.N) + S.J + k < 2 * (S.J * S.N) + S.J by omega)]
       congr 2
       omega
     have hcp : S.copied (2 * (S.J * S.N) + S.J + k - 2 * (S.J * S.N)) =
         [S.slots[k].1 * S.N + S.slots[k].2.1] := by
       rw [show 2 * (S.J * S.N) + S.J + k - 2 * (S.J * S.N) = S.J + k by omega, copied,
-        if_neg (show ¬ S.J + k < S.J by omega), Nat.add_sub_cancel_left, List.getElem?_eq_getElem hk]
+        ite_eq_right (show ¬ S.J + k < S.J by omega), Nat.add_sub_cancel_left, List.getElem?_eq_getElem hk]
       rfl
-    simp only []
-    rw [bit_copy hxa (by omega) (by rw [hcp]; simp only [List.mem_singleton]; rintro t rfl; exact hcopy _ h1 _ h2),
-      hout, hpub, pubs_slot hb hk, hcp]
+    have hlt : ∀ t ∈ S.copied (2 * (S.J * S.N) + S.J + k - 2 * (S.J * S.N)), t < S.J * S.N := by
+      rw [hcp]
+      intro t ht
+      rw [List.mem_singleton.1 ht]
+      exact hcopy _ h1 _ h2
+    dsimp only
+    rw [bit_copy hxa (g := ⟨2 * (S.J * S.N) + S.J + k, by unfold size; omega⟩) (by dsimp only; omega)
+      (by dsimp only; exact hlt), hout, hpub, pubs_slot hb hk]
+    dsimp only
+    rw [hcp]
     simp only [List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, Bool.xor_false]
     rw [hx _ _ h2]
+
+theorem ofBool_getLsbD_zero (v : Bool) : (BitVec.ofBool v).getLsbD 0 = v := by
+  cases v <;> rfl
 
 /-- **One block**: the block circuit maps block `b`'s inputs to its outputs exactly when the system holds in block
 `b`. -/
@@ -351,7 +366,7 @@ theorem block_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC
   obtain rfl : inp = S.rel.inp := hinp
   obtain rfl : out = S.rel.out := hout
   obtain rfl : pub = S.pubs := hpub
-  exact outputs_iff hw w hb _ (fun g => by simp [Claims.Flock.val, rel]) _ (fun _ => rfl) (fun _ => rfl)
+  exact outputs_iff hw w hb _ (fun _ => ofBool_getLsbD_zero _) _ (fun _ => rfl) (fun _ => rfl)
 
 /-- **The relation**: a witness satisfies `RelS` of a statement with the system's fields and `nB` blocks exactly when
 the system holds in every block. -/
