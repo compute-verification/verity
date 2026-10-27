@@ -430,7 +430,7 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
 
 
 def test_a_change_to_a_lock_goes_into_a_train_and_lands_without_any_label(tmp_path, monkeypatch, capsys):
-    """No change waits on a per-head grant (Daniel, 8 Oct): a pull request changing a `lean-audit.json`, with no label at its
+    """No change waits on a per-head grant: a pull request changing a `lean-audit.json`, with no label at its
     head and no store remote to read one from, is built into a train and its checked tip lands."""
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
@@ -467,7 +467,7 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head(tmp_path
     """A tip merging `Merge #1126 (83c25a27b)` would have landed after #1126 moved to a head that fixed two red-team findings
     against that one (the lander, 4 Oct): pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
     on origin must still be the merged one, or add nothing the tip lacks; a check of the tip doesn't stand in for it.  No ready
-    mark is asked: the train's own check is the gate (Daniel, 6 Oct)."""
+    mark is asked: the train's own check is the gate."""
     main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
     capsys.readouterr()
     rc, err = merge_main(["train-prep/t", "--dry-run"]), capsys.readouterr().err
@@ -546,7 +546,7 @@ def test_a_tip_whose_pr_heads_cant_be_read_is_refused(tmp_path, monkeypatch, cap
 
 
 def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):
-    """The coordinator's ruling: no merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
+    """No merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
     An attempt of `check` that passed on the exact commit is refused when its result is of a kind in `REFUSED_KINDS`, or can't
     be read; the push guard reads the same `passing`. A `check/v1` result of the same commit merges."""
     from research.merge import REFUSED_KINDS, unchecked_pushes
@@ -1055,7 +1055,7 @@ def _relock(feat: Path, text: str, trailer: str | None) -> str:
 
 
 def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(tmp_path, monkeypatch, capsys):
-    """CI-64 (Daniel through top, 18 Oct): a train's Lean check passes by regenerating records, and drive lands the train with
+    """A train's Lean check passes by regenerating records, and drive lands the train with
     those locks committed on top.  That commit's tree is the one the check audited, byte for byte, so the check vouches for it;
     other bytes, another file or no `Regenerated:` trailer don't."""
     main, feat, tip = _repos(tmp_path)

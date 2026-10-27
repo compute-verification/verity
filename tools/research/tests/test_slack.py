@@ -1580,8 +1580,8 @@ def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alon
 
 
 def test_groups_sync_never_sets_a_groups_members(fake, registry, capsys):
-    """Agent-role groups are routing labels with no members, so a mention notifies no person (Daniel, 19 Oct: the old groups
-    had him as their only member). sync creates and updates without a member list and never calls usergroups.users.*."""
+    """Agent-role groups are routing labels with no members, so a mention notifies no person (a group
+    with a member would notify that person). sync creates and updates without a member list and never calls usergroups.users.*."""
     fake.groups = [{"id": "SINFRA", "name": "infra", "handle": "infra", "description": "old", "date_delete": 0}]
     assert run(capsys, "groups", "sync", "--apply")[0] == 0
     calls = [(m, p) for m, p in fake.calls if m.startswith("usergroups.")]
@@ -1826,7 +1826,7 @@ def test_wait_gives_up_after_the_deadline_and_its_grace(route, registry, capsys,
 @pytest.mark.parametrize("argv", [card_argv("--wait", "--every", "600", kind="blocking", deadline="2:45 PM"),
                                   ["ask-daniel", "status", "42", "--wait", "--every", "600"]], ids=["post", "status"])
 def test_wait_stops_at_twenty_minutes_with_the_card_pending_and_says_how_to_check_back(route, registry, capsys, monkeypatch, argv):
-    """No tool call may block more than 20 minutes (Daniel, 19 Oct); a card's deadline can be a week away."""
+    """No tool call may block more than 20 minutes; a card's deadline can be a week away."""
     from research import waitcap
 
     slept: list[float] = []
@@ -1850,7 +1850,7 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
 
 
 def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
-    """Leads filed TOP issues only to get Daniel's decisions logged (eight on 17 Oct; COMM-34)."""
+    """Leads filed tracker issues only to get decisions logged."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     top = inbox(fake, routes_dirs, "top")
     card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
