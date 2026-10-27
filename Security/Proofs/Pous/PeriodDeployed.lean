@@ -161,8 +161,9 @@ theorem periodHeldHonest : PeriodHeldHonest := by
           codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2 := by
         funext k
         simp
-      rw [(key o x _ v).1, honestStrategy_pre, hfun, List.map_ofFn]
-      simp only [Equiv.symm_apply_apply, Function.comp_def]
+      rw [(key o x _ v).1, honestStrategy_pre, hfun]
+      simp only [Equiv.symm_apply_apply]
+      exact List.map_ofFn
   · show (0 : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
     norm_num [HONEST_S, K]
   · rw [S_eq]
