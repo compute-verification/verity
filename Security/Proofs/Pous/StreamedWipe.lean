@@ -3,6 +3,7 @@ import Proofs.Pous.StreamedWipe.Bound
 import Proofs.Pous.StreamedWipe.Deployed
 import Proofs.Pous.StreamedWipe.Family
 import Proofs.Pous.StreamedWipe.Honest
+import Proofs.Pous.StreamedWipe.Info
 
 /-!
 # The streamed-label wipe
@@ -21,6 +22,8 @@ import Proofs.Pous.StreamedWipe.Honest
   5231 reads (`PousStreamedWipe.streamed_wipe_meets_141GB5`).
 * `StreamedWipe/Honest.lean`: the honest server, which keeps every label, is accepted on every run
   (`PousStreamedWipe.honest_accepts`).
+* `StreamedWipe/Info.lean`: `StreamedWipeMeetsInfoStated`, which holds the text of `StreamedWipeMeetsInfo`, the
+  retention bound as a conditional mutual information; that statement is not proved yet.
 
 None of them uses a named assumption.
 -/
