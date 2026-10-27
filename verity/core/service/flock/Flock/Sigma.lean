@@ -45,6 +45,7 @@ import Lean.Data.Json
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Flock.Program
+import Flock.JsonParse
 
 namespace Flock.Sigma
 
@@ -578,7 +579,7 @@ def checkBytes (word bits : ByteArray) : Except Refusal Report := do
     | .ok p => pure p
     | .error e => throw { code := "decode", why := s!"Boolean descriptor: {e}" }
   let link := match String.fromUTF8? bits with
-    | some t => match Json.parse t with
+    | some t => match JsonParse.parse t with
       | .ok j => (j.getObjVal? "word").toOption.getD Json.null
       | .error _ => Json.null
     | none => Json.null

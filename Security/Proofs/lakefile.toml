@@ -69,4 +69,5 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Verity.SampledProofs", "Proofs.Properties.Verity.SampledDeploy",
   "Proofs.Properties.Verity.SampledAccept", "Proofs.Flock.Bridge.Unopened", "Proofs.Properties.Verity.SampledCR",
   "Proofs.Properties.Verity.PlayFinder", "Proofs.Properties.Verity.SampledSim",
-  "Proofs.Properties.Verity.PlayDevice"]
+  "Proofs.Properties.Verity.PlayDevice", "Proofs.Properties.Verity.PlayDeviceLog",
+  "Proofs.Properties.Verity.AcceptRounds"]

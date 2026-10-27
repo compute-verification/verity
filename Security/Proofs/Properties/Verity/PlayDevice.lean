@@ -36,7 +36,7 @@ window by its ledger, released each use's coins, shows the uses' roots, each pai
 uses one run each; or the finder outputs a break at the play's device from one use's record. -/
 theorem rounds_at_play (hR : Properties.Challenger.RoundsByDevice) {θ : ByteArray} (o : Outcome) {key : ChallengerKey}
     {w : String} {us : List Use} {order : List (String × String)} {groups : List (List String)} {coins : Lean.Json}
-    {ξs : List ByteArray} (hk : key.pub = (V.key θ).2) (h : roundCoins key w us order groups coins = .ok ξs) :
+    {ξs : List ByteArray} (hk : key.pub = (registeredKey θ).2) (h : roundCoins key w us order groups coins = .ok ξs) :
     (Properties.Challenger.OpensOn (V.deviceOf θ o) key.pub w ((V.device θ).session o.log).id ∧
         (∀ (i : Nat) (u : Use), us[i]? = some u → ξs[i]? = some (((V.device θ).session o.log).released u.label u.after)) ∧
         (∀ ℓ ∈ ((V.device θ).session o.log).families.map (·.1),
@@ -58,7 +58,8 @@ theorem rounds_at_play (hR : Properties.Challenger.RoundsByDevice) {θ : ByteArr
 at the play that the finder outputs: a signature verifying under the registered key over a message the play's device
 never signed. -/
 theorem break_at_play {θ : ByteArray} {o : Outcome} {key : ChallengerKey} {label : String} {coins : Lean.Json}
-    (hk : key = ⟨(V.key θ).1, (V.key θ).2⟩) (hb : Properties.Challenger.Break (V.deviceOf θ o) key label coins) :
+    (hk : key = ⟨(registeredKey θ).1, (registeredKey θ).2⟩)
+    (hb : Properties.Challenger.Break (V.deviceOf θ o) key label coins) :
     (∃ x y, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y ∧
         Properties.Challenger.findBreak (V.deviceOf θ o) key label coins = some (.collision x y)) ∨
       ∃ m sig, Properties.Challenger.findBreak (V.deviceOf θ o) key label coins = some (.forgery m sig) ∧

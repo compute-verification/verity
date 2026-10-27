@@ -1,6 +1,5 @@
 import Mathlib
 import Definitions.Claims.Hm96
-import Definitions.Claims.Json
 
 /-!
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
@@ -72,9 +71,8 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
-which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
-which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
+The named assumptions: `StrictBirthday`, `ExpectedCR` and hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
+which the soundness proofs read). What the claims rest on and no Lean statement can say is `trustedBase`.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here but `Flock.ZK`, and by `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock

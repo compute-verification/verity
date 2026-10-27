@@ -1,4 +1,4 @@
-// F2 (lane pouw rtx-pro GPU 4): one- and two-level Strassen over one NVFP4 group (K = 16) on the TF32 tensor core, against dense
+// F2: one- and two-level Strassen over one NVFP4 group (K = 16) on the TF32 tensor core, against dense
 // NVFP4 on sm_120a, word for word.
 //
 // Within one group every row of A carries one scale and every column of B one scale, so the group's scaled product is

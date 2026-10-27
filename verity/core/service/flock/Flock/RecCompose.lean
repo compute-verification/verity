@@ -9,6 +9,7 @@ to `n − 1` each once, every log has a `VERDICT`, every `VERDICT` accepts, and 
 rows file.
 -/
 import Lean.Data.Json
+import Flock.JsonParse
 
 namespace Flock
 namespace RecCompose
@@ -19,7 +20,7 @@ open Lean (Json)
 def verdicts (log : String) : Except String (Array Json) :=
   (log.splitOn "\n").foldlM (init := #[]) fun out line =>
     if line.startsWith "VERDICT " then
-      match Json.parse (line.drop 8).toString with
+      match JsonParse.parse (line.drop 8).toString with
       | .ok j => pure (out.push j)
       | .error e => throw s!"a VERDICT line that is not JSON: {e}"
     else pure out

@@ -450,7 +450,7 @@ theorem step_hello (s : Schedule) (text : String) :
   refine Rel.bind Rel.get fun a a' q q' h => ?_
   obtain ⟨rfl, rfl, _, _, rfl, _⟩ := h
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
-  rcases hj : Lean.Json.parse text with e | v
+  rcases hj : Flock.JsonParse.parse text with e | v
   · exact Rel.throw_bind
   refine Rel.pure_bind ?_
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
