@@ -14,13 +14,14 @@ them.
   `acc_of_accepts`).
 * `break_le`: the break (ONE-4's `Properties.Challenger.Break`: a forged release, a collision) is at most the loss at
   the probability that the vocabulary's finder outputs a collision, as `Accounting.Live.sound_of_break` charges it.
-* `unbound_le`: the units the vocabulary's extractor leaves unbound are at most those wrong in the session extractor's
-  transcript (`LiveAt.wrongE`, R4′; ONE-7's `place` and ONE78's `circuitOfFile`).
+* `unbound_le`: the units the vocabulary's extractor leaves unbound are at most those faulty under the session
+  extractor's witness (`LiveAt.faultyE`: wrong, or with a committed value unopened; R4′; ONE-7's `place` and ONE78's
+  `circuitOfFile`).
 * `cr`: where the vocabulary's finder meets its quantitative premise (`Vocab.FinderCR`), the finders C-Flock builds
   from the induced strategy meet theirs (`LiveAt.CR`).
 * `delta_le`: the published error at the strategy's cost is at least C-Flock's (`Bridge.deltaPub` at `t'`).
 
-`sampledProofsSound` composes them with `LiveAt.sound`. Its error is the vocabulary's (`Vocab.error`, the conditional
+`sampledProofsSound` composes them with `LiveAt.soundF`. Its error is the vocabulary's (`Vocab.error`, the conditional
 form `Accounting.condError`), so it asks nothing of the strategy. `sampledProofsSound_nontrivial` is
 `soundness_of_subprotocols_nontrivial_of`'s hypothesis at a commitment that opens no committed value of any unit, ONE19's
 instance (#4867); `honestHolds_sampled` is `Vocab.HonestHolds .sampled` at the honest commitment.
@@ -37,7 +38,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι}
 `A` at `n` units, the draw size `kd`, `K₀` and the descriptor `desc`; the strategy `τ` of the session the play induces;
 the sampling query `q`; the play's break `Brk`; and the five facts the target reads off them: outside the break, the
 play's verdict at most as likely as the session's acceptance (`accept_le`), the break at most the loss at the finder
-(`break_le`), the vocabulary's unbound units at most the session extractor's wrong ones (`unbound_le`), the finders'
+(`break_le`), the vocabulary's unbound units at most the session's faulty ones (`unbound_le`), the finders'
 premises (`cr`) and the errors (`delta_le`). `K₀` covers the claim's `ε` share (`hε`). -/
 structure SampledIn (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
   n : ℕ
@@ -55,7 +56,7 @@ structure SampledIn (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V
   accept_le : Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk o) (V.game θ F c) σ ≤
     FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK A.I o) A.G τ
   break_le : Game.prob Brk (V.game θ F c) σ ≤ V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ)
-  unbound_le : (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤ (A.wrongE q τ).card
+  unbound_le : (Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card ≤ (A.faultyE q τ).card
   cr : V.FinderCR .sampled θ F c σ → A.CR τ
   delta_le : ENNReal.ofReal (Flock.Bridge.deltaPub n kd K₀ A.k (A.qF τ) (A.qS τ) (A.t' τ) A.M A.Rw
     (Flock.Bridge.ioSum A.P) A.ρ) ≤ V.delta θ .sampled (V.cost θ F c σ)
@@ -87,11 +88,11 @@ theorem le_error (S : SampledIn V θ F c σ) :
   · refine (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ).trans ?_
     rw [Game.prob_false]
     exact zero_le
-  · have hA : ¬ S.A.Holds S.q (V.certOf θ).ε S.τ := fun h => hH (by
-      have h' : ((S.A.wrongE S.q S.τ).card : ℝ) ≤ (V.certOf θ).ε * S.n := h
+  · have hA : ¬ S.A.HoldsF S.q (V.certOf θ).ε S.τ := fun h => hH (by
+      have h' : ((S.A.faultyE S.q S.τ).card : ℝ) ≤ (V.certOf θ).ε * S.n := h
       have hu : ((V.units F : ℕ) : ℝ) = S.n := by exact_mod_cast S.units_eq
       have hw : ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
-          (S.A.wrongE S.q S.τ).card := by exact_mod_cast S.unbound_le
+          (S.A.faultyE S.q S.τ).card := by exact_mod_cast S.unbound_le
       rw [hu]
       exact hw.trans h')
     calc Game.prob (fun o => V.Verdict .sampled o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ
@@ -100,11 +101,11 @@ theorem le_error (S : SampledIn V θ F c σ) :
       _ ≤ Game.prob (fun o => V.Verdict .sampled o ∧ ¬ S.Brk o) (V.game θ F c) σ +
             Game.prob S.Brk (V.game θ F c) σ := Game.prob_or_le _ _ _ σ
       _ ≤ FlockSoundness.Game.prob
-            (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK S.A.I o ∧ ¬ S.A.Holds S.q (V.certOf θ).ε S.τ)
+            (fun o => FlockSoundness.Discharge.ZkExec.LiveAcceptsZK S.A.I o ∧ ¬ S.A.HoldsF S.q (V.certOf θ).ε S.τ)
             S.A.G S.τ + V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) :=
           add_le_add (S.accept_le.trans (FlockSoundness.Game.prob_mono (fun _ ho => ⟨ho, hA⟩) _ _)) S.break_le
       _ ≤ S.A.bound S.τ + V.loss .sampled θ ((V.live θ F c).collides sha512Msg .sampled σ) :=
-          add_le_add_right (S.A.sound S.q (V.certOf θ).ε S.hε S.τ) _
+          add_le_add_right (S.A.soundF S.q (V.certOf θ).ε S.hε S.τ) _
       _ ≤ V.error .sampled θ F c σ := S.bound_le
 
 end SampledIn
