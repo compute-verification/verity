@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols import answer as CA
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C
 
@@ -24,8 +26,7 @@ def put(d: Path, id: str, params: dict, commitment: bytes, evidence: bytes, dige
     d.mkdir(parents=True)
     case = {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
     (d / "case.json").write_text(json.dumps(case | ({"blobs": blobs} if blobs else {})))
-    (d / "answer.json").write_text(json.dumps({"commitment": digest.hex() if digest else None, "protocol": id,
-                                               "verdict": "undecided"}))
+    (d / "answer.json").write_text(CA.Answer.undecided(id, "no session's proof", digest).canonical())
     return d
 
 
@@ -62,6 +63,13 @@ def test_onsite_appends_the_registrations_digest_and_case(tmp_path):
 def test_a_case_whose_commitment_did_not_decode_stands_in_its_own_commitment(tmp_path):
     pw = put(tmp_path / "pouw", POUW, {}, b"\x05\x06", b"{}", None)
     assert C.piece(pw)["digest"] == b"\x05\x06"
+
+
+def test_an_answer_that_is_not_a_core_answer_is_refused(tmp_path):
+    pw = put(tmp_path / "pouw", POUW, {}, b"\x05", b"{}", b"\xbb" * 64)
+    (pw / "answer.json").write_text(json.dumps({"commitment": "bb" * 64, "protocol": POUW, "verdict": "undecided"}))
+    with pytest.raises(CA.Refused):
+        C.piece(pw)
 
 
 def test_onsite_needs_the_registration_and_remote_takes_none(tmp_path):

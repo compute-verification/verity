@@ -37,7 +37,8 @@ checks on it). FLAGs go to `research run`; `--dry-run` prints the command.
 2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under that Commit, its requests, every closed
    sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
    verdict), PoUW, the bandwidth audit, PoUS and the network certifier where each has its piece, with one record of every
-   verdict in `$OUT/verdicts.txt` and the window's verdict the Lean check's (onsite's `product` on their cases).
+   verdict in `$OUT/verdicts.txt` and the window's verdict onsite's or remote's Lean answer on their cases
+   (`benchmarks/one_stage/composite.py`), or `undecided` naming what each lacks.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    period in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).

@@ -79,14 +79,15 @@ negatives.
   and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one, writing its core answer and its case; otherwise
   its answer is `undecided` with the reason `not run`, and its `NOT RUN` line names its issue. Finally the all-protocols
-  window report (`verity/all-protocols-window/v2`), every row a core answer: its verdict is the Lean check's, onsite's
-  `product` executable on the cases the subprotocols wrote (all five is `verity/onsite/v0`). A Lean rejection, or a
-  rejection by a subprotocol it couldn't compose, rejects the window; anything short of onsite's accept with the wipe
-  accepted leaves it `undecided`. Then the block record, unless the window rejects. Each step's verdict line is in
-  `out/verdicts.txt`.
+  window report (`verity/all-protocols-window/v2`), every row a core answer: its verdict is onsite's Lean answer
+  (`composite.py onsite`) when the pieces that wrote a case beside their answer make up onsite (its six subprotocols and
+  NCI's registration), else remote's (`composite.py remote`, PoUW and sampled proofs v2), else `undecided` naming what
+  each lacks. Then the block record, unless the window or a subprotocol rejects; a subprotocol's rejection fails the run.
+  Each step's verdict line is in `out/verdicts.txt`.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--piece DIR`
   holds one subprotocol's `case.json` (its `serve` line, with `blobs` the paths of the files it reads) and its own Lean
-  answer on it, `answer.json`, whose `commitment` is its digest; onsite's `--registration DIR` is NCI's. It writes the
+  answer on it, `answer.json` (a core answer, read by `verity.core.protocols.answer`), whose `commitment` is its digest;
+  onsite's `--registration DIR` is NCI's. It writes the
   product's params, commitment and evidence in the composition's formats (`verity/core/protocols/composition/README.md`)
   and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8

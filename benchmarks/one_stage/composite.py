@@ -4,9 +4,10 @@
 
 Each ``--piece`` is one subprotocol's directory, holding its case as its own `serve` reads it, ``case.json``:
 ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, and ``blobs``, the paths of the files it
-reads (sampled proofs v2's ``case-v2.json`` is one); and its own Lean answer on that case, ``answer.json``, whose
-``protocol`` is its id and ``commitment`` its digest (null when its commitment didn't decode, and then the case's own
-commitment stands in, which a rejection never binds). ``--registration`` is NCI's (`verity/nci/v1`) for onsite, which
+reads (sampled proofs v2's ``case-v2.json`` is one); and its own Lean answer on that case, ``answer.json``, a
+`Core.Answer` (read by `verity.core.protocols.answer`, which refuses any other shape), whose ``protocol`` is its id and
+``commitment`` its digest (null when its commitment didn't decode, and then the case's own commitment stands in, which a
+rejection never binds). ``--registration`` is NCI's (`verity/nci/v1`) for onsite, which
 registers before composing; its digest is the one sampled proofs' case commits to.
 
 It writes into ``--out`` the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests
@@ -25,6 +26,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+from verity.core.protocols import answer as CA
 
 PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
 REGISTRATION = "verity/nci/v1"
@@ -45,11 +48,11 @@ def piece(d: Path) -> dict[str, Any]:
     """A subprotocol's case and digest from its directory: ``{"id", "params", "commitment", "evidence", "digest",
     "blobs"}``, the commitment, evidence and digest bytes."""
     case = json.loads((d / "case.json").read_text())
-    answer = json.loads((d / "answer.json").read_text())
+    answer = CA.of_json(json.loads((d / "answer.json").read_text()), str(d / "answer.json"))
     commitment = bytes.fromhex(case["commitment"])
-    digest = answer.get("commitment")
-    return {"id": answer["protocol"], "params": case["params"], "commitment": commitment,
-            "evidence": bytes.fromhex(case["evidence"]), "digest": bytes.fromhex(digest) if digest else commitment,
+    return {"id": answer.protocol, "params": case["params"], "commitment": commitment,
+            "evidence": bytes.fromhex(case["evidence"]),
+            "digest": commitment if answer.digest is None else answer.digest,
             "blobs": [str(b) for b in case.get("blobs") or []]}
 
 
