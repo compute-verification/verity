@@ -8,11 +8,11 @@ import json
 
 import pytest
 
-from verity_vllm.config import WORKLOAD_SCHEMA, WORKLOADS, RowConfig
+from verity_vllm.config import WORKLOAD_SCHEMA, RowConfig, workload_files
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 from verity_vllm.records.workload import SCHEMA, V1, Workload
 
-ROWS = sorted(WORKLOADS.glob("*.json"))
+ROWS = workload_files()
 
 
 def _v2() -> dict:

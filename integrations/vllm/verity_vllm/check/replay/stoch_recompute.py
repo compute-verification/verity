@@ -41,7 +41,7 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.records.workload import Workload
 
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
@@ -730,7 +730,7 @@ class Options:
     run: str = option("--run", help="Match dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
     out: str | None = option("--out", default=None)
     max_rows: int | None = option("--max-rows", type=int, default=None)
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="the workload manifest of record (declared seeds / policy); the run's header must agree with it")
     jobs: int | None = option("--jobs", type=int, default=None,
                               help="worker processes for the row evaluations (default min(32, cpus))")

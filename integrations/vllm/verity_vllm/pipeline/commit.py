@@ -65,7 +65,7 @@ from typing import Any
 from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
-from verity_vllm.config import group, option
+from verity_vllm.config import group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -1018,7 +1018,7 @@ def staging_environ(args: Options) -> None:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_cov_b0_b1_c256.json")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
     out: str = option("--out")

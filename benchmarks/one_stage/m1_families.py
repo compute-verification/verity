@@ -172,6 +172,7 @@ def main() -> int:
     if not (a.commit and a.build_root and a.workload):
         ap.error("--commit, --build-root and --workload, or --estimate")
 
+    from verity_vllm.config import workload_file
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
     from verity_vllm.pipeline.tp import serving_rows as TS
@@ -179,7 +180,7 @@ def main() -> int:
     t0 = time.time()
     rec = TS.record(a.commit)
     world = int(rec["world"])
-    doc = json.loads(Path(a.workload).read_text())
+    doc = json.loads(workload_file(a.workload).read_text())
     if hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest() != rec["workload_sha256"]:
         raise SystemExit(f"{a.workload}: not the workload the record served")
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),

@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
 from verity_vllm import settings
-from verity_vllm.config import RowEngine, done_source_refusal, option
+from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
@@ -746,7 +746,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     derived: list[str] = option("--derived", action="append", default=[])
     out: str = option("--out")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id " "become the Program's declared stop rule (F-pm-24)")

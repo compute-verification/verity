@@ -11,6 +11,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.config import workload_file
 from verity_vllm.observe import capture_log as CL
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
@@ -241,7 +242,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     relocation = relocate_components(derived, artifact_path)
     derived = relocation["derived"]
     wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
-    wl = Workload.load(wl_path) if wl_path and os.path.exists(wl_path) else None
+    wl = Workload.load(wl_path) if wl_path and workload_file(wl_path).is_file() else None
     declared = () if wl is None else wl.requests
     for i, q in enumerate(declared):
         if q.prompt_token_ids is None:
@@ -508,7 +509,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
     workload record (named)."""
     wl_path = (gp.get("workload") or {}).get("path")
     wl = None
-    if wl_path and os.path.exists(wl_path):
+    if wl_path and workload_file(wl_path).is_file():
         try:
             wl = Workload.load(wl_path)
         except RecordError as e:

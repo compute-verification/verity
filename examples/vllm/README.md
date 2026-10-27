@@ -7,8 +7,10 @@ Verity to vLLM is `integrations/vllm/`, and the chain a served window runs is `b
 
 ## Workload
 
-- The row `llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager`, the one file in `workloads/`: its
-  requests, its model and revision, and its pinned engine. The integration finds it only through `VERITY_WORKLOADS`, which
+- The row `llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager`, the one file `workloads/SHA256SUMS`
+  lists: its requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store (its art
+  id in `fixtures/artifacts.json`; the file is gitignored), fetched by that id and checked against the digest by `run.sh` and
+  by the integration (`verity_vllm.config.workload_file`). The integration finds it only through `VERITY_WORKLOADS`, which
   `commit.sh` sets (`verity_vllm.config.row_file`); its Build's manifest is what the endpoint commits under.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one window of varied requests (`--varied`), or `serve.sh`'s `BURSTS`
   bursts of `PER_BURST` requests, each burst one window (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order`
