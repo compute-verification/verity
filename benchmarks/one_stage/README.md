@@ -85,6 +85,12 @@ negatives.
   answer on it, `answer.json`, whose `commitment` is its digest; onsite's `--registration DIR` is NCI's. It writes the
   product's params, commitment and evidence in the composition's formats (`verity/core/protocols/composition/README.md`)
   and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs.
+- `pouw_piece.py`: PoUW's `--piece` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
+  the window's one-stage registration and the proof service's answer to it) or onsite's `verity/pouw/period/v1`
+  (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
+  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`. From a served run
+  (`--serve-run DIR --window K`) it names the piece MISSING with why, as an empty case its protocol rejects: an H1
+  window has no `v1` case, and no `period` case outside a period or without its drawn units' proof outcomes.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
