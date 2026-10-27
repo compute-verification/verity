@@ -577,8 +577,8 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     leaves, words, domain) and no root. One key's registration of one checkpoint is one registration; the verifier pins its
     roots only where it registers exactly the record's parameters at their shapes (`registration_pins`), and a window
     records only a registration (`advice.registered_weights`): never a weights record, nor one of another model than the
-    run served. A key that isn't 32 bytes draws no salt, and a shard the manifest doesn't pin leaves the checkpoint not of
-    record, which no committer registers."""
+    run served. A key that isn't 32 bytes draws no salt; a committer registers no checkpoint its manifest pins as another
+    model, and a shard the manifest doesn't pin leaves the checkpoint not of record, which no committer registers."""
     reg = S._registered()
     d, man = _checkpoint(tmp_path)
     rec = WW.weights_record(reg, d, man, grain=GRAIN)
@@ -616,6 +616,10 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
             ADV.registered_weights(bad, serve)
     with pytest.raises(ValueError, match="32-byte key"):
         WW.weights_registration(reg, KEY[:16], d, checkpoints_manifest=man, grain=GRAIN)
+    other = tmp_path / "other.json"
+    other.write_text(Path(man).read_text().replace('"repo": "org/m"', '"repo": "org/other"'))
+    with pytest.raises(ValueError, match=re.escape("manifest entry is org/other@r, not the registered model org/m@r")):
+        WW.weights_registration(reg, KEY, d, checkpoints_manifest=str(other), grain=GRAIN)
     shard = Path(d) / "model.safetensors"
     body = bytearray(shard.read_bytes())
     body[-1] ^= 1
