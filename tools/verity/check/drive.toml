@@ -18,7 +18,10 @@ regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix the next train needs)
 first = []
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
-# its merge onto `next` at the sync, which leaves out what they refuse (26 Oct: #4238's merge took AGENTS.md over its cap)
+# its merge onto `next` at the sync, which leaves out what they refuse (26 Oct: #4238's merge took AGENTS.md over its cap).
+# integrations/vllm/tools/ratchet_gate.py is off until it caches its verdicts: it re-judges every change below TOP in a fresh
+# worktree, so a sync that re-merges N PRs runs O(N^2) worktrees (26 Oct: one tick ran over 50 min); vllm re-judges the window
+# with `ratchet_gate.py MAIN_BEFORE MAIN_AFTER` meanwhile
 landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); "check", each train on its check

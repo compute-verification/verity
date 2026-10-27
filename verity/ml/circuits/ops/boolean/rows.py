@@ -1,4 +1,4 @@
-"""Row units on bits: the next version of each `ops.rows` word Definition, each one proof unit a row that writes the whole
+"""Row units on bits: the next version of each `ops.rows` word Definition, each one proof block a row that writes the whole
 row (the e2e demo's decoder, CMP-92).
 
     Bf16AddRow_v2{N}   (a, b: Array<N, bf16 bits>) -> Array<N, bf16 bits>          word view: Bf16AddRow_v1{N}

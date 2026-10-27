@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.engine import capture as C
+from verity_vllm.observe import capture as C
 
 
 class _Writer:
