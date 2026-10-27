@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.Complete.Encode
 import VStarRecursive
 
 /-!
-# A V\* part's compiled verdict is the model's decision at its session (piece E of `acc_of_accepts`, PRF-202)
+# A V\* part's compiled verdict is the model's decision at its session (piece E of `acc_of_accepts`)
 
 The compiled recursive component runs, per V\* part `j`, `partVerdict`: part `j`'s setup at its record's draw
 (`buildSessionOf` and the recursive setup's checks), then `Zk.verify` on the record and the rep files the part names
@@ -14,7 +14,7 @@ message's record and proof files, `FlockDeploy.checks` pass and so do the verdic
 (`RecDeploy.nextO_decide_sha512`).
 
 `partVerdict_ok` unfolds the compiled verdict, and `decide_of_partVerdict` derives the model's three conditions from it.
-What the compiled part can't see is a hypothesis, each named by the piece of PRF-202's split that supplies it:
+What the compiled part can't see is a hypothesis, each named by the piece of the bridge's split that supplies it:
 
 * **D** (`hD`): `xO`'s session is what `buildSessionOf` sets up at `xO`'s reading of the part's inputs.
 * **B/C** (`hfind` … `hdraw`): `xO`'s reading (`s`, its `Ins`, and `innerOfO`, `srcOfO`) holds the compiled part's

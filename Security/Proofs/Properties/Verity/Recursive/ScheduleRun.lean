@@ -1,12 +1,12 @@
 import Proofs.Properties.Verity.Recursive.ScheduleSession
 
 /-!
-# The recursive verifier's schedule: the run accepts (PRF-202, piece F3)
+# The recursive verifier's schedule: the run accepts (piece F3)
 
 F1 and F2 assembled: a run of the compiled recursive verifier `RecDeploy.V IV st` accepts where its statement has a V*
 part and its last V* session passes F2's hypotheses (`run_acc_last`). That session's acceptance at full length is a
 fact about the run's own messages, so it already holds the earlier sessions: the run reached its last round, so it
-passed every check before it. `run_acc` is the form PRF-202's split states, every session's hypotheses; `run_acc_sha512`
+passed every check before it. `run_acc` is the form the split states, every session's hypotheses; `run_acc_sha512`
 is it at SHA-512, the oracle `Verity.Recursive.acc_of_accepts` runs at, where `(recordAt …).V` is `RecDeploy.V` at
 `(boundAt wE w).IVStar` and `stageAt …` by definition.
 -/

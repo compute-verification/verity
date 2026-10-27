@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
-# A staged part's numbers don't read its public file (ONE-9, C2)
+# A staged part's numbers don't read its public file
 
 Part `s`'s staged statement at inner rounds `ms` (`RecDeploy.staged`) differs from the one at `ms'` only in what
 the rounds put in it: the part's public file, the inner session's record and the transcript. Its numbers (`numsOf`:

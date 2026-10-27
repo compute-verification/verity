@@ -18,7 +18,7 @@ states the `rec-residuals` pieces' half.
   group and a copy of its part's residuals table, `(jj, o, g, u)`, holds where its group's residuals vanish at the
   values the opened messages give (`elemAt`) and the verifier's values at the coins (`vvAt`). At an `.inner` part,
   `partAccepts_resZero` gives it from two hypotheses: check 5's tie at those verifier values (`ResTie`, waiting on the
-  vcalls ask, `note:20261024T2340Z-draft-vcalls-ask`), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
+  verifier-calls decision), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
   statement's copies, with that copy's group, and the elements the copy reads are those `elemAt` reads off the opened
   messages. `rowsRead_msgs` gives the second half of `hcopy` at the raw messages wherever a port is a carried row; the
   step to the opened messages reads `final`, the concrete statement's.

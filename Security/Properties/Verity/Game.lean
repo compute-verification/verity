@@ -17,14 +17,14 @@ components today, one per `Accounting.Audit`:
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
 | sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` |
-| PoUW | `.pouw` | `PouwCheck.protocol` (compute-accounting's period protocol `PouwCheck.period` once posted, CMP-145) |
+| PoUW | `.pouw` | `PouwCheck.protocol` (compute-accounting's period protocol `PouwCheck.period` once posted) |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` |
 
 The sixth, the wipe (`MemoryChallenger.WipeProtocol.protocol`), is composed with them in `Properties.Verity.Wipe`.
 
-The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's one adversary form (26 Oct):
+The statement's form is soundness's rulings R1, R4′, R5 and R6 and the one adversary form:
 
 * **A causal game (R5, R6).** The prover sends the parameters `θ`, the committed files `F` (one blob) and the
   commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays `play (rounds θ) θ F c`, a
@@ -55,7 +55,7 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's on
   `Properties.Composition.AcceptRegistration`), and `a`'s compiled component's acceptance of its own case. The releases
   each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
-  (`computed`), with no pricing (TOP-95).
+  (`computed`), with no pricing.
 
 Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`) is `Target a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s verdict accepts

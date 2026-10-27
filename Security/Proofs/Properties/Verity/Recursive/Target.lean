@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Recursion.DeployFacts
 import Proofs.Core.Circuit
 
 /-!
-# ONE-9p's target, proved: sampled proofs at the recursive configuration (piece H)
+# The target, proved: sampled proofs at the recursive configuration (piece H)
 
 `sampledProofsRecursive_of` proves `sampledProofsRecursive`'s bound from the property G states (`AccOfAccepts`, the
 statement of `acc_of_accepts` at the deployment), and `sampledProofsRecursive` is it at `acc_of_accepts`.
@@ -436,7 +436,7 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     _ = (∑ g, (V.circuitOf F).w g : ℕ) * Real.sqrt K := by
         simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul, Nat.cast_sum, Finset.sum_mul]
 
-/-- **ONE-9p's target from G's property**: `sampledProofsRecursive`'s bound, at every strategy, from `AccOfAccepts` and
+/-- **The target from G's property**: `sampledProofsRecursive`'s bound, at every strategy, from `AccOfAccepts` and
 `sampledProofsRecursive`'s hypotheses. -/
 theorem sampledProofsRecursive_of (q : Dep) (hG : AccOfAccepts q)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
@@ -510,28 +510,28 @@ theorem sampledProofsRecursive_of (q : Dep) (hG : AccOfAccepts q)
           (hdraw θ F c σ _ hU) (fun ξ wt hR u hu => hread θ F c σ ξ wt hreg hR u hu)
           (fun ξ₁ ξ₂ w₁ w₂ g => hcoll θ F c σ ξ₁ ξ₂ w₁ w₂ g) (hlive θ F c σ)
 
-/-- **ONE-9p's target: sampled proofs at the recursive configuration**, in Daniel's per-prover form (26 Oct) over the
+/-- **The target: sampled proofs at the recursive configuration**, in the per-prover form over the
 causal game (R4′, R5, R6), with the recursive configuration's verdict (`RecVerdict`). At all parameters `θ`, circuit
 files `F` and commitments `c`, and for every strategy `σ`, the probability that the recursive component accepts while
-sampled proofs' claim fails on the extractor's transcript (`¬ Holds .sampled`) is at most `Dep.err` at `σ`, ONE8's
+sampled proofs' claim fails on the extractor's transcript (`¬ Holds .sampled`) is at most `Dep.err` at `σ`, the shared
 `condError FinderCR δ σ`: where `FinderCR` holds at the finders built from `σ`,
 `δs + t'(σ) · 2^{-λ} + bits · √(E[bindBudget(σ)] / 2^256)`, and `⊤` elsewhere, with `t'(σ)` the strategy's SHA-512
 calls in one run (`Vocab.cost`) and every finder's budget defined from it. There is no hypothesis on the strategy but
 `live-verifier`.
 
 It takes these hypotheses:
-* `RecursiveKSAt` at the deployed brings (`hKS`), and the honest half (`HonestHalf`, HONESTIV);
+* `RecursiveKSAt` at the deployed brings (`hKS`), and the honest half (`HonestHalf`);
 * the decoders meet the list-decoding spec (`hdecI`, `hdecO`);
 * the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), at the dense statements;
 * `K₀` covers the claim's `ε` share (`hK₀`);
-* `Sof` is the coupling at each strategy (ONE-4's projection, `SessionIn`), and its draw misses any `K₀` units with
+* `Sof` is the coupling at each strategy (`SessionIn`), and its draw misses any `K₀` units with
   probability at most `δs` (`hdraw`);
 * the vocabulary's extractor is the recursive configuration's (`hX`, `Dep.extract` at `Sof`);
 * the deployment's reading `readX` of a witness in the recursive relation is correct at, and opened by the commitment
   on, every unit the statement draws (`hread`); and `collOf`, from two such witnesses that read a wire of units drawn
   in both differently, outputs a SHA-512 collision (`hcoll`);
-* the records hold the run's live coins (`LiveCoins`, `live-verifier`). `live-verifier` is admissible until ONE-4
-  (PRF-200) lands; then the component reads the coins through ONE-4's signed device log and this hypothesis goes. -/
+* the records hold the run's live coins (`LiveCoins`, `live-verifier`). `live-verifier` is admissible until the
+  component reads the coins through the coin server's signed device log; then this hypothesis goes. -/
 theorem sampledProofsRecursive (q : Dep)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)

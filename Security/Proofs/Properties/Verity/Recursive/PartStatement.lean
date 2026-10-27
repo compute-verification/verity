@@ -4,7 +4,7 @@ import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
-# Piece C of `acc_of_accepts` (PRF-202): V\* part `s`'s statement is the compiled part's inputs
+# Piece C of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
 
 The model's V\* statement of part `s` (`RecDeploy.staged st x ms s`, the encoding of `RecDeploy.partRaw`) is read by the
 outer verifier's readers (`RecDeploy.insO`, `RecRaw.ins`) as exactly the recursive inputs compiled part `s`'s
@@ -20,7 +20,7 @@ the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
 * **The readers agree** where they are two pieces of code: the two `metaOf`s (`metaOf_eq`), `jsonOf` whatever it names
   (`jsonOf_what`), `Blobs.get` whatever it names (`blobs_get_what`), and the compiled `registeredOf`'s ports
   (`registeredOf_own`). `innerHeld_ok` reads `innerHeld`'s fields off the blobs.
-* **The correspondence** (`insO_staged_partIns`) takes `Names`' clauses (PRF-202, piece B) and `Shows`' as hypotheses by
+* **The correspondence** (`insO_staged_partIns`) takes `Names`' clauses (piece B) and `Shows`' as hypotheses by
   name, at `readX`'s reading `r` of `x` (`readXPre_spec` relates it to `Names`' `w` and `ri`), and `Names`'
   `PartForm`, the form compiled part `s` sets up (statement `verity/flock-circuit`, `--zk`, one table, no work,
   stratified, closure or public input words).

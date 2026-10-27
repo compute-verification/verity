@@ -1,7 +1,7 @@
 import Proofs.Flock.Claims.Recursion.DeploySessions
 
 /-!
-# The recursive verifier's schedule: the inner and staging rounds (PRF-202, piece F1)
+# The recursive verifier's schedule: the inner and staging rounds (piece F1)
 
 The converse of `RecDeploy.ract_inner`, on a run of the compiled recursive verifier `RecDeploy.V IV st` that need not
 accept. Where the statement reads (`readX`), and so wherever it has a V* part (`0 < nS x`):

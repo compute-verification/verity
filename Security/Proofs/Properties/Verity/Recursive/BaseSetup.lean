@@ -2,7 +2,7 @@ import Proofs.Flock.Claims.DeployInputs
 import SampledProofs.OneStageZk
 
 /-!
-# Piece D1 of `acc_of_accepts`: a V\* part's base setup, compiled and model (PRF-202)
+# Piece D1 of `acc_of_accepts`: a V\* part's base setup, compiled and model
 
 A V\* part's verdict (`VStar.Recursive.partVerdict`) sets its session up with `SampledProofs.OneStageZk.buildSessionOf`
 at the statement `verity/flock-circuit`'s tags `tags0`, on one table's keyed coin tree, with `--zk`'s hooks at the

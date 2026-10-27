@@ -17,7 +17,7 @@ import Proofs.Properties.Verity.Recursive.ScheduleRun
 import Proofs.Properties.Verity.Recursive.Refusals
 
 /-!
-# Sampled proofs' recursive configuration: the component's property and its target (ONE-9p)
+# Sampled proofs' recursive configuration: the component's property and its target
 
 Sampled proofs' recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, which
 `VStar.Recursive.Sampled` runs when the auditor's parameters name `"form": "recursive"`) checks, on the prover's blobs,
@@ -30,8 +30,8 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   - Each V* part's record is a prover-sent blob. The model verifier checks a record's coins against its own live coins
     (`FlockDeploy.custody`), and the compiled component, which holds no live coin, can't. So `LiveCoins` is
     `live-verifier`'s content at the recursive session (`Assumptions.Zk.RecordCustodyZKJ`).
-  - `live-verifier` is admissible here only until ONE-4 (PRF-200) lands. After that, the component reads the session's
-    coins through ONE-4's signed device log, `LiveCoins` follows from the log's signatures, and the premise goes.
+  - `live-verifier` is admissible here only until the component reads the session's coins through the
+    coin server's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
 * **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
   proofs at the recursive configuration, in `Vocab.Target .sampled`'s form (`Properties.Verity.Game`) with the
   recursive component's verdict (`RecVerdict`).
@@ -40,16 +40,17 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   - The claim reads one fixed extractor's transcript (R4′, `Vocab.extract`): `Dep.extract`, at each bit of each gate
     the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the draws and the accepted
     runs that draw the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
-  - Daniel's per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
-    ONE8's `condError FinderCR δ` (`Dep.err`, the shape of `Vocab.error`): where the finders built from the strategy
-    meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session prover, `ecr/sha-512` at each
+  - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
+    the shared `condError FinderCR δ` (`Dep.err`, the shape of `Vocab.error`): where the finders built from the
+    strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session prover, `ecr/sha-512` at each
     binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus the binding term (`Dep.delta`);
     elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the honest half (the honest run is accepted at the
-  deployed statements, `HonestHalf`), the coupling at each strategy (`SessionIn`, ONE-4's projection) with the draw's
+  deployed statements, `HonestHalf`), the coupling at each strategy (`SessionIn`, the session's projection) with the
+  draw's
   miss, the deployment's reading of a witness (`hread`) and its collision from two (`hcoll`), and `live-verifier`.
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
@@ -119,7 +120,7 @@ def Shows (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursi
           (q.reps.find? (·.1 == repName spec.repStreams[k].2.2)).map (·.2) = some d ∧
           ∃ hk : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k]
 
-/-- **The staged rows are the component's.** V\*'s shared rows (`--rec-rows`) are no part of `x` (#4744): the prover
+/-- **The staged rows are the component's.** V\*'s shared rows (`--rec-rows`) are no part of `x`: the prover
 stages one set for every part, off the staging message (`Stage.rows`). The compiled component reads them once, from
 the evidence's `rows` blob (`innerHeld`), so that blob is the run's staged rows. -/
 def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursive.Proofs) (bs : Core.Blobs)
@@ -130,8 +131,8 @@ def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recu
 at each V\* session `s` of the run's view `v`, wherever the outer verifier decides on session `s`'s messages and coins
 (`actO`), the live session the record shows is the session's link message, first coin and round messages with their
 coins (`FlockDeploy.custody`). The model verifier checks this itself. The compiled component can't, since the coins are
-the coin server's. It is admissible until ONE-4 (PRF-200) lands; then the component reads the coins through ONE-4's
-signed device log, and this premise goes. -/
+the coin server's. It is admissible until the component reads the coins through the coin server's signed
+device log; then this premise goes. -/
 noncomputable def LiveCoins (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (v : Claims.Seen) : Prop :=
   ∀ s < nS x, ∀ i spec sts link c₁ mids f,
     actO (vstarAt st x (v.msgs.take (kIS IV x)) s) ((session IV st x s v).msgs.map Prod.fst)
@@ -159,7 +160,7 @@ theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω
     rw [vstarAt_staged ho]
     exact hacc s hs
 
-/-- **What the compiled component refuses, as the model states it** (PRF-201): Flock's own checks on the inner
+/-- **What the compiled component refuses, as the model states it**: Flock's own checks on the inner
 statement (`InnerOkAt`, the compiled `innerOk`) and files too long for their length words (its `fits` at `2^56`):
 `x` with each part's public file, the inner session's record, the coin server's transcript and V\*'s staged rows, at the inner rounds
 `ms`. -/
@@ -455,7 +456,7 @@ theorem acc_of_accepts_of (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ �
   exact ⟨hdense, run_acc_of_staged (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x P ω r hpos
     (fun s hs => (hsess s hs).1) (fun s hs => (hsess s hs).2)⟩
 
-/-- **ONE-9p's property: the recursive component's acceptance is the event `RecursiveKSAt` is stated over.** Suppose
+/-- **The component's property: its acceptance is the event `RecursiveKSAt` is stated over.** Suppose
 the compiled recursive component accepts `(p, c, e, bs)`, `x` names its inputs (`Names`), the blobs show a run of the
 deployed recursive verifier (`recordAt`) at `x` (`Shows`) whose staged rows are the component's (`RowsShow`), and
 that run's records hold its live coins (`LiveCoins`).
@@ -488,7 +489,7 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
 /-- **Sampled proofs' one-stage form is v2** (the bridge's carry-over lemma, soundness 02:10Z): where the parameters name
 the one-stage form and `VStar.Recursive.Sampled` accepts, the evidence is one-stage too and v2
 (`SampledProofs.OneStageZk.checkBlobs`) accepts the same commitment, evidence and blobs with the same public output and
-profile. So what is proved of v2's acceptance (ONE3P's `acceptMeans`, ONE8's sampled proofs bound) holds of the
+profile. So what is proved of v2's acceptance (`acceptMeans`, the sampled proofs bound) holds of the
 composed component's one-stage branch. -/
 theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
@@ -528,7 +529,7 @@ def RecVerdict (V : Vocab d α) (o : Verity.Outcome) : Prop :=
     (∃ j p, Core.canonicalJson o.params = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)) ∧
     ∃ bs, (VStar.Recursive.Sampled.protocol.answer o.params o.commitment o.evidence bs).verdict = .accept
 
-/-- **The honest half** (non-vacuity, from HONESTIV). On every dense statement where the inner relation holds, the
+/-- **The honest half** (non-vacuity). On every dense statement where the inner relation holds, the
 deployed record's honest prover is accepted except with the record's completeness error `δcRec`, at every tape and
 every inner decoder. -/
 def HonestHalf (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -587,7 +588,7 @@ end Dep
 /-- The SHA-512 calls of one run: the prover's and the verifier's. -/
 def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
 
-/-- **The recursive session inside the causal game** at `θ`, `F`, `c` and the strategy `σ`: the coupling of ONE-4's
+/-- **The recursive session inside the causal game** at `θ`, `F`, `c` and the strategy `σ`: the coupling of the
 device log (`Vocab.rounds`, `Vocab.coinsRead`) with the session.
 * The device's releases before the session, its draw among them, are `ξ`, uniform on `Ξ`.
 * At `ξ` the strategy plays the recursive session at the statement `x ξ` as the prover `P ξ`, against the session's
@@ -694,7 +695,7 @@ def SessionCR (n v : ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : 
         (deployZkRec _root_.Flock.Readable.relation) q.decO P x R).charge
           (Claims.Recursion.setupLen q.D x + (q.I.k (Claims.Recursion.xI q.D x) + 1) * (n + v))))
 
-/-- **The strategy's cost parameter `t'`**: its SHA-512 calls in one run (`Vocab.cost`, ONE8's `t' τ`), at least one.
+/-- **The strategy's cost parameter `t'`**: its SHA-512 calls in one run (`Vocab.cost`), at least one.
 Every finder budget below is a defined function of it and of public counts. -/
 def tCost (_ : SessionIn V q θ F c σ) : ℕ := max 1 (V.cost θ F c σ)
 
@@ -708,7 +709,7 @@ noncomputable def bindBudget (S : SessionIn V q θ F c σ) (dColl : ℕ) (ξ₁ 
 prover's finders meet C-Flock's premises (`SessionCR`, at the inner and setup call bounds `nI` and `vS`; `B`'s runs are
 the session's, at most `t'` calls each). Each binding finder (`bindAt`) outputs a SHA-512 collision with probability at
 most its budget over `2^256`: `ecr/sha-512` (`Claims.ExpectedCR`) asked at `bindBudget`, a defined function of the
-strategy's cost parameter `t' = tCost` (`Vocab.cost`), as ONE8's `qF`/`qS` are of `t' τ`. Quantitative, so `⊤` is the
+strategy's cost parameter `t' = tCost` (`Vocab.cost`), as `qF` and `qS` are of `t' τ`. Quantitative, so `⊤` is the
 error only where a finder built from the strategy beats its budget. -/
 def FinderCR (S : SessionIn V q θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
@@ -725,8 +726,8 @@ noncomputable def delta (S : SessionIn V q θ F c σ) (dColl : ℕ) (δs lam : �
       Real.sqrt (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)))
 
 open Classical in
-/-- **The error at the strategy `τ`**, ONE8's `condError FinderCR δ τ := if FinderCR τ then δ τ else ⊤` (the shape of
-`Vocab.error`): `delta` where the finders built from `τ` meet `FinderCR`, and `⊤` elsewhere. -/
+/-- **The error at the strategy `τ`**, the shared `condError FinderCR δ τ := if FinderCR τ then δ τ else ⊤`
+(the shape of `Vocab.error`): `delta` where the finders built from `τ` meet `FinderCR`, and `⊤` elsewhere. -/
 noncomputable def err (Sof : (τ : Game.Strategy (V.game θ F c)) → SessionIn V q θ F c τ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ) (τ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
@@ -754,8 +755,8 @@ theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (θ F c : B
 /-- **Its hypotheses hold at the honest deployment where they are choices of the deployment**: `K₀ = ⌊ε n⌋ + 1` covers
 the claim's `ε` share (`hK₀`) wherever `ε n ≥ 0`; and where the extracted transcript is correct on every unit and the
 commitment opens it (the honest commitment's case), the target's event is empty, so its conclusion holds at every
-bound. The other hypotheses are code facts and the coupling, each its owner's: `RecursiveKS` (proofs), `HonestHalf`
-(HONESTIV), `hread` and `hcoll` (PRF-202's bridge with ONE-7's `place`), `Sof` and `hdraw` (ONE-4). -/
+bound. The other hypotheses are code facts and the coupling, each its owner's: `RecursiveKS`, `HonestHalf`,
+`hread` and `hcoll` (the bridge, with `place`), `Sof` and `hdraw` (the session's projection). -/
 theorem sampledProofsRecursive_honest (V : Vocab d α) :
     (∀ θ F, 0 ≤ (V.certOf θ).ε * V.units F → ∀ m : ℕ, (V.certOf θ).ε * V.units F < m →
       ⌊(V.certOf θ).ε * V.units F⌋₊ + 1 ≤ m) ∧

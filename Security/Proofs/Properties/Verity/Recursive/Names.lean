@@ -8,7 +8,7 @@ import Proofs.Flock.C3.Reps.AtList
 import VStarRecursive
 
 /-!
-# The statement the recursive component's inputs name, and its reading (ONE-9p, piece B)
+# The statement the recursive component's inputs name, and its reading (piece B)
 
 The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence and blobs; the model verifier
 (`RecDeploy.V`) reads a statement `x`. `Names p e bs x` says `x` is the statement those inputs name:

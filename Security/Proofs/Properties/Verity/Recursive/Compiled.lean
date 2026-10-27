@@ -2,7 +2,7 @@ import Proofs.Properties.SampledProofs
 import VStarRecursive
 
 /-!
-# Piece A of `acc_of_accepts`: what the compiled recursive component's acceptance unfolds to (PRF-202)
+# Piece A of `acc_of_accepts`: what the compiled recursive component's acceptance unfolds to
 
 `VStar.Recursive.checkBlobs` accepting `(p, c, e, bs)` means, step by step through `checkBlobs`, `verdicts`,
 `partVerdicts` and `partVerdicts.partsAt`:

@@ -2,7 +2,7 @@ import Proofs.Properties.Verity.Recursive.ScheduleInner
 import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
-# The recursive verifier's schedule: one V* session (PRF-202, piece F2)
+# The recursive verifier's schedule: one V* session (piece F2)
 
 The converse of `RecDeploy.session_core` and `RecDeploy.sim`, on a run of the compiled recursive verifier
 `RecDeploy.V IV st` that need not accept. Take V* session `s` of the run, at its V* statement `vstarAt` read off the

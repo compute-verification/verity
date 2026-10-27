@@ -4,7 +4,7 @@ import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
-# The compiled part's setup is the model's recursive setup (ONE-9p, piece D2)
+# The compiled part's setup is the model's recursive setup (piece D2)
 
 Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`) sets its session up as
 `flock-verify verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the

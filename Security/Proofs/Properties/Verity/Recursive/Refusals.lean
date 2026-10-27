@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# The compiled component's refusals, as `acc_of_accepts` reads them (ONE-9p, G's `Refusals`)
+# The compiled component's refusals, as `acc_of_accepts` reads them (G's `Refusals`)
 
 `Verity.Recursive.Refusals` is what `acc_of_accepts` reads of the compiled component beyond its setups: Flock's own
 checks on the inner statement (`InnerOkAt`) and the files the parts' statements encode short enough for their length

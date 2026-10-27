@@ -42,7 +42,7 @@ keyed by the component's id. On rejection or undecided nothing is public.
 
 Onsite checks the registration before composing, in its commit phase: `registered "verity/onsite/v0"
 NciCheck.Protocol.protocol SampledProofs.OneStage.protocol.id components`. NCI's check of record is a registration
-check, not a component (Daniel's ruling: onsite has six subprotocols, and NCI is none of them), and the registration it
+check, not a component (onsite has six subprotocols, and NCI is none of them), and the registration it
 checks is the one sampled proofs' one-stage audit commits to: one registration digest in both. Its formats are the
 product's with the registration's beside the components':
 
