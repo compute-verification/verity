@@ -967,7 +967,6 @@ __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
 struct WRing {
   static constexpr int STAGES = V31_WG_STAGES, NCT = 384, CONS = V31_WG_NREG + (V31_WG_NREG - 40) / 2;
   static constexpr uint32_t A_BYTES = TILE * BK;
-  static constexpr uint32_t stage_bytes(int nb) { return (1 + nb) * TILE * BK; }
   static constexpr int SMEM = STAGES * (1 + V31_WG_BN / TILE) * TILE * BK + 32 * STAGES + 1024;
   static_assert(CONS % 8 == 0 && CONS <= 256, "V31_WG_NREG: setmaxnreg's counts are multiples of 8, at most 256");
   static_assert(V31_WG_BN == 128 || V31_WG_BN == 256, "V31_WG_BN: 128 or 256");
@@ -1015,7 +1014,7 @@ template <bool PROTO, int NB>
 __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
   using W = WRing;
   constexpr int ST = W::STAGES;
-  constexpr uint32_t STAGE = W::stage_bytes(NB);
+  constexpr uint32_t STAGE = (1 + NB) * TILE * BK;
   static_assert(NB == 1 || NB == 2, "one or two tiles a CTA");
   extern __shared__ __align__(1024) uint8_t gsm[];
   const uint32_t base = (smem_u32(gsm) + 1023) & ~1023u, bars = base + ST * STAGE;
