@@ -168,7 +168,7 @@ theorem srcOf_read {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
   | some r =>
     cases hrs : repSched r.shape with
     | none => simp [srcOf, hr, hrs] at hs
-    | some rs => exact ⟨r, rs, rfl, rfl⟩
+    | some rs => exact ⟨r, rs, by first | rfl | exact hr, by first | rfl | exact hrs⟩
 
 /-- **A cap's `capIn` reads its level's tops.** -/
 theorem topsAt_of_capIn {src : _root_.VStar.In.Src} {l N : ℕ} {pin : _root_.VStar.In.PartIn}
@@ -216,7 +216,7 @@ theorem capIn_later_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
   subst hsrc
   obtain ⟨src', pin, hs', hpin, -⟩ := portRow_capl (I := I) (x := x) (w := w) (ρ := ρ) (hist := hist) (j := k)
     (e := e) (N := 2 * (rs.getD k default).2.1[e]) (c := c) hr hrs (by omega) hH (by rw [hkR]; exact he)
-    (by rw [hkR]; exact hc) (by rw [hkR]; exact hcp) (by rw [hkR, arrGetD_of_lt _ he]) (by rw [hkR]; exact hd)
+    (by rw [hkR]; simpa only [Nat.add_assoc] using hc) (by rw [hkR]; exact hcp) (by rw [hkR, arrGetD_of_lt _ he]) (by rw [hkR]; exact hd)
   rw [hs] at hs'
   cases hs'
   rw [hkR] at hpin

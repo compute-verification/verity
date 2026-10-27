@@ -264,7 +264,9 @@ import Proofs.Flock.Claims.Recursion.VStarAccept
 import Proofs.Flock.Claims.Recursion.VStarPortNames
 import Proofs.Flock.Claims.Recursion.VStarDense
 import Proofs.Flock.Claims.Recursion.VStarTopsOk
+import Proofs.Flock.Claims.Recursion.VStarRowsFit
 import Proofs.Flock.Claims.Recursion.HonestHalf
+import Proofs.Flock.Claims.Recursion.HonestHalfTops
 import Proofs.Flock.Claims.Recursion.NumsFixedR
 import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
