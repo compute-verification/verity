@@ -255,8 +255,9 @@ theorem weight_mul_le (q : Dep) (V : Vocab d α) {θ F c : ByteArray} {σ : Game
     exact Bool.noConfusion hb₂
   obtain ⟨m, m', hm, hcol⟩ := hcoll p.1 p.2 w₁ w₂ g hR₁ hR₂ hd₁ hd₂ hne
   refine ⟨m, m', ?_, hcol⟩
-  simp only [Dep.bindAt, he₁, he₂]
-  exact hm
+  first
+    | (simp only [Dep.bindAt, he₁, he₂]; exact hm)
+    | simp [Dep.bindAt, he₁, he₂, hm]
 
 /-- **A drawn unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
 at, every unit the draw holds (`hread`), a drawn unit unbound in `X` has a wire where `X` differs from the reading, at
@@ -332,7 +333,8 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
     linarith
   rw [if_neg hD, zero_add]
   -- `RecursiveKSAt` at the session's prover: `PrBad ≤ t' · 2^{-λ}`
-  have hB := Claims.Recursion.bitsLin2On_of_ksLin2On (RecDeploy.sessionAccepts _ _ _) hKS
+  have hB := Claims.Recursion.bitsLin2On_of_ksLin2On ?hS hKS
+  case hS => exact RecDeploy.sessionAccepts _ _ _
   have hcrξ := hcr ξ
   have hbad : Pr (fun s : q.Sample V S ξ =>
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
@@ -360,7 +362,7 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
         by_cases hR : q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1
         · right
           cases hw : (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1 with
-          | none => rw [hw] at hR; exact hR.elim
+          | none => rw [hw] at hR; exact (show False from hR).elim
           | some wt =>
               rw [hw] at hR
               obtain ⟨hcu, hou⟩ := hread ξ wt hR u₀ hu₀d
@@ -422,7 +424,7 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     have := minority_le (weight_nonneg q V S readX g i false) (weight_nonneg q V S readX g i true)
       (weight_mul_le q V S readX collOf dColl hcoll hcr.2 g i) _
       (extract_bit q V S readX g (Finset.mem_range.1 hi))
-    cases h : (q.extract V S readX g).getLsbD i <;> rw [h] at this <;> exact this
+    cases h : (q.extract V S readX g).getLsbD i <;> rw [h] at this <;> first | exact this | simpa using this
   calc ∑ g, Ex (fun ξ => ∑ i ∈ Finset.range ((V.circuitOf F).w g),
           Pr (wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ))
       = ∑ g, ∑ i ∈ Finset.range ((V.circuitOf F).w g),
@@ -493,7 +495,7 @@ theorem sampledProofsRecursive_of (q : Dep) (hG : AccOfAccepts q)
     have hH' : ¬ ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
         (V.certOf θ).ε * V.units F := hH
     rw [hX θ F c σ] at hH'
-    exact lt_of_not_ge hH'
+    exact not_le.mp hH'
   calc Game.prob (fun o => RecVerdict V o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ
       ≤ ENNReal.ofReal (Ex fun ξ => Pr fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) =>
           (fun o => RecVerdict V o ∧ ¬ V.Holds θ F c σ .sampled o) (S.out ξ s)) := S.prob_le _
