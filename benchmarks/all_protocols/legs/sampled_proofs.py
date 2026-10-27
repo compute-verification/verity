@@ -12,14 +12,19 @@ against their pin (``records_audit.py --registered``).
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
 are the ones `SampledProofs.OneStage.check` makes public (the drawn and proved units, the bound on wrong units at δ, each
 template's under a stratified or work law; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
-draw (the records, a check on the registration, the draw) rejects with its codes. An audit that ended with no summary is
-the leg's error, not a verdict.
+draw (the records, a check on the registration, the draw) rejects with its codes; an audit record that doesn't accept,
+with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
+its port). An audit that ended with no summary is the leg's error, not a verdict.
 
-The audit also writes sampled proofs' case for onsite (`a5.write_case`: ``{"commitment": hex(canon(registration
-record)), "evidence": hex(canon(evidence)), "params"}`` as `SampledProofs.OneStage` reads them), which the leg hands on as
-``out/sampled-proofs.case.json``, with whether `OneStage.check`'s Python on that case (``case-python.json``) gives the
-leg's verdict (``out/case-check.json``). Each window's audit listens on a block of ports no other audit of this process
-holds (`ports`), so windows audit at once.
+The audit also writes sampled proofs' case for onsite (`a5.write_case`), whose sampled proofs component is
+``verity/sampled-proofs/v1`` (`VStar.Recursive.Sampled`), here in its one-stage form, the audit on the proofs
+themselves (``verity/sampled-proofs/one-stage/v2``, `SampledProofs.OneStageZk`): ``{"blobs", "commitment", "evidence",
+"params"}``, the params and the evidence each naming ``"form": "one-stage"``, the evidence naming the session's files by SHA-512 in place of verdicts and ``blobs`` the paths
+of those files, which the leg hands on as ``out/sampled-proofs.case.json``. v2 verifies one table's ``--zk`` sessions, so
+an audit of several drawn members or of plain sessions has none (``case-check.json``'s ``v2_error``), and onsite
+rejects integrity there. The v1 case (``out/sampled-proofs.v1.case.json``) stays beside it, with whether `OneStage.check`'s
+Python on it (``case-python.json``) gives the leg's verdict (``out/case-check.json``). Each window's audit listens on a
+block of ports no other audit of this process holds (`ports`), so windows audit at once.
 """
 from __future__ import annotations
 
@@ -44,7 +49,8 @@ ROOT = Path(__file__).resolve().parents[3]
 RECORDS_AUDIT = ROOT / "benchmarks" / "prove_path" / "records_audit.py"
 #: the δ a window's audit record is decided at when its ``period.json`` names none
 DELTA = "1/100"
-#: the ports one audit's sessions may listen on, from its base (a session per drawn member, at most k)
+#: the ports one audit's sessions may listen on, from its base (a session per member with a proved unit, its drawn ones
+#: and a work draw's closure); records_audit refuses a draw that needs more (``--ports``, `a5.port_refusal`)
 SPAN = 128
 PORTS = range(10000, 32000)
 _held: set[int] = set()
@@ -83,8 +89,11 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         raise RuntimeError(f"the records audit wrote no audit record and no refusal under {out}")
     rec = json.loads(rec_file.read_text())
     if rec.get("accepted") is not True:
-        why = _codes(rec.get("checks") or {}) or sorted((summary.get("audit") or {}).get("why") or {}) or ["not accepted"]
-        return _refusal("audit record: " + ", ".join(why), commitment)
+        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items()) if v}
+        why = _codes(rec.get("checks") or {}) or sorted(lean) or ["not accepted"]
+        said = [f"{k}: {v}" for k, v in lean.items()]
+        more = f"; and {len(said) - 3} more" if len(said) > 3 else ""
+        return _refusal("audit record: " + ", ".join(why) + "".join(f"; {s}" for s in said[:3]) + more, commitment)
     fixed = summary.get("fixed_before_draw")
     if fixed is not None and not fixed.get("ok"):
         return _refusal("not fixed before the draw: " + ", ".join(fixed.get("codes") or []), commitment)
@@ -139,15 +148,23 @@ def ports():
 
 
 def case_check(work: Path, ans: Mapping[str, Any], out: Path) -> dict[str, Any] | None:
-    """The audit's case for onsite into ``out/sampled-proofs.case.json``, and whether `OneStage.check`'s Python on it gave
-    the leg's verdict (``out/case-check.json``); None when the audit wrote no case."""
-    case = work / "window" / "case.json"
+    """The audit's case for onsite, `SampledProofs.OneStageZk`'s (``window/case-v2.json``, its blobs the audit's files),
+    into ``out/sampled-proofs.case.json``, or why there is none (``v2_error``); the v1 case beside it
+    (``out/sampled-proofs.v1.case.json``), and whether `OneStage.check`'s Python on that gave the leg's verdict
+    (``out/case-check.json``). None when the audit wrote no case."""
+    window = work / "window"
+    case = window / "case.json"
     if not case.exists():
-        err = work / "window" / "case-error.txt"
+        err = window / "case-error.txt"
         return {"case": None, "error": err.read_text().strip()} if err.exists() else None
-    shutil.copy(case, out / "sampled-proofs.case.json")
-    py = json.loads((work / "window" / "case-python.json").read_text())
-    got = {"case": "sampled-proofs.case.json", "python": {k: py.get(k) for k in ("verdict", "reason")},
+    shutil.copy(case, out / "sampled-proofs.v1.case.json")
+    v2 = window / "case-v2.json"
+    if v2.exists():
+        shutil.copy(v2, out / "sampled-proofs.case.json")
+    v2_error = (window / "case-v2-error.txt").read_text().strip() if (window / "case-v2-error.txt").exists() else None
+    py = json.loads((window / "case-python.json").read_text())
+    got = {"case": "sampled-proofs.case.json" if v2.exists() else None, "v2_error": v2_error,
+           "v1_case": "sampled-proofs.v1.case.json", "python": {k: py.get(k) for k in ("verdict", "reason")},
            "leg": ans["verdict"], "agree": py.get("verdict") == ans["verdict"]
            and (ans["verdict"] != "accept" or (py.get("public") or {}).get("bound") == ans["public"]["bound"])}
     (out / "case-check.json").write_text(json.dumps(got, indent=1, sort_keys=True))
@@ -163,7 +180,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     with ports() as base:
         argv = [sys.executable, str(RECORDS_AUDIT), "audit", "--window", str(period_dir), "--law", p["law"],
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
-                "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
+                "--ports", str(SPAN), "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
                 "--firewall", t["flock-firewall"], "--out", str(work),
                 *(["--registered", p["registered"]] if p.get("registered") else [])]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:

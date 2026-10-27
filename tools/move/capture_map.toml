@@ -1,0 +1,51 @@
+# The capture and its pinned arena up from `engine/` to `observe/`: what
+# `tools/move/layout.py --map tools/move/capture_map.toml` moves and rewrites (the vision's M2 row for `engine/capture.py`
+# and `pinned.py`, note:20261024T0615Z-draft-verity-vllm-vision).
+#
+# `capture.Capture` runs the observer over an engine and writes its log: it imports `observe.events`, `observe.log`,
+# `observe.observer`, `observe.storage` and `observe.triton_adapter`, so in `engine/` those five imports point up. In
+# `observe/` they stay inside the package, and its imports of `engine` (`hooks`, `build`, `run_facts`, `engine_driver`) point
+# down. `pinned` is the capture's host arena, and nothing else in `engine/` reads it.
+# Whole modules move; nothing is split, edited or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"integrations/vllm/verity_vllm/engine/capture.py" = "integrations/vllm/verity_vllm/observe/capture.py"
+"integrations/vllm/verity_vllm/engine/pinned.py" = "integrations/vllm/verity_vllm/observe/pinned.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[split]
+
+[rewrite]
+# defs_map.toml's: records of what was, and files whose bytes a digest pins, are never rewritten.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]
+
+[aliases]
+"engine.capture" = "observe.capture"
+"engine.pinned" = "observe.pinned"
+
+[modules]
+"verity_vllm.engine.capture" = "verity_vllm.observe.capture"
+"verity_vllm.engine.pinned" = "verity_vllm.observe.pinned"

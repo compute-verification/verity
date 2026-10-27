@@ -145,7 +145,7 @@ def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_an
         assert arg.counts in ("kappa", "keyed") or arg.counts in Profile.__dataclass_fields__
 
 
-def test_at_the_server_window_only_the_linear_counts_cap():
+def test_at_the_serving_block_only_the_linear_counts_cap():
     finite = {n for n, arg in CLASSES.items() if arg.allowance(KIMI)(WINDOW) < KIMI.kappa * WINDOW.compute / 2}
     assert finite == {"fanout-priced", "fanout-split"}
 

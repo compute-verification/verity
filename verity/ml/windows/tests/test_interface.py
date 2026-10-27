@@ -1,11 +1,12 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
 commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, a
-wire pattern wires whole members unit by unit under its writers' salts, a registered read's ports are tables of the
-registered rows under the value's salts, and the verifier's window (and its registered reads) is rebuilt from the circuit
-record alone, its members stated by cap, wires and reads. A window written under core's registration, and
-`of_records` against it, are the records audit's tests (`benchmarks/prove_path/tests/test_records_audit.py`), since these
-may not import core."""
+wire pattern wires whole members unit by unit under its writers' salts, a cut port's rows are each wired from their own
+writer, a registered read's ports are tables of the registered rows under the value's salts, every other input row is
+declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
+reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
+core's registration, and `of_records` against it, are the records audit's tests
+(`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
 
 import hashlib
@@ -267,9 +268,12 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
                      ({**doc, "wires": [{**doc["wires"][0], "radix": 2}]}, "radix and step lists"),
                      ({**doc, "wires": [{**doc["wires"][0], "extra": 0}]}, "a wire's record"),
-                     ({**doc, "cap": 3}, "covers part of"), ({**doc, "cap": 0}, "at least one unit")]:
+                     ({**doc, "cap": 0}, "at least one unit")]:
         with pytest.raises(ValueError, match=why):
             I.window_of_record(bad, LAW, by_id)
+    split = I.window_of_record({**doc, "cap": 3}, LAW, by_id).members
+    assert [(m.base, m.n, m.wired) for m in split] == [
+        (0, 2, ()), (2, 2, (("x", "o0", (4, 5)),)), (4, 3, (("x", "o0", (0, 1, 2)),)), (7, 1, (("x", "o0", (3,)),))]
     listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)])))
     assert "cap" not in listed and I.window_of_record(listed, LAW, by_id).members == win.window.members
     with pytest.raises(ValueError, match="stated with a cap"):
@@ -288,10 +292,126 @@ def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once
                       ({"step": (2,)}, "one integer step a digit"), ({"at": True}, "a first reader unit")]:
         with pytest.raises(ValueError, match=why):
             I.Circuit("bad", ((GEMM, 8),), wires=(I.Wire(**{**w, **edit}),))
-    with pytest.raises(ValueError, match="both wire units from 5"):
+    with pytest.raises(ValueError, match="both fill rows of units from 5"):
         I.Circuit("twice", ((GEMM, 8),), wires=(I.Wire(**w), I.Wire(**{**w, "at": 5, "radix": (1, 2)})))
     fan = I.Wire(GID, "x", GID, "o0", at=4, radix=(2, 2), base=1, step=(0, 2))
     assert fan.writers(4, 4).tolist() == [1, 3, 1, 3] and fan.span() == (1, 3)
+
+
+EMB = I.resolve("EmbeddingRead_v1{V=4,H=16}")
+G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
+EID, G8ID = descriptor_id(EMB), descriptor_id(G8)
+WEIGHTS = 512 + 4 * 16
+
+
+def declared(**edit) -> I.Circuit:
+    """Three positions' embedding reads (ingress at step 0 for the first two, the third's token free), each read's row two
+    ``Gemm_v2{K=16, N=8}`` slices of one fan-out, and a ``Gemm_v2{K=16, N=16}`` a position reading its ``x`` cut in two, a
+    row from each slice; every weight a registered read and the table's root, domain and row the registration's."""
+    parts = dict(
+        wires=(I.Wire(G8ID, "x", EID, "o0", at=0, radix=(3, 2), base=0, step=(1, 0)),
+               I.Wire(GID, "x", G8ID, "o0", at=0, radix=(3, 2), base=0, step=(2, 1), cut=(0, 2))),
+        cuts={GID: {"x": 2}},
+        registered=I.Registered(
+            {"weights": WEIGHTS}, (I.Table("embed", "weights", 512, 16, 4),),
+            (I.Read(G8ID, "w", "weights", at=0, radix=(3, 2), base=0, step=(0, 128)),
+             I.Read(GID, "w", "weights", at=0, radix=(3,), base=256, step=(0,))),
+            (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
+            (I.Opening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),)),
+        ingress=(I.Ingress(EID, "tok", 0, 2, 0),))
+    return I.Circuit("declared", ((EMB, 3), (G8, 6), (GEMM, 3)), **{**parts, **edit})
+
+
+def sliced(**edit) -> I.Circuit:
+    """Three positions' rows, each two ``Gemm_v2{K=16, N=8}`` slices, and a ``Gemm_v2{K=16, N=16}`` a position reading its
+    ``x`` cut in two, a row from each slice."""
+    parts = dict(wires=(I.Wire(GID, "x", G8ID, "o0", at=0, radix=(3, 2), base=0, step=(2, 1), cut=(0, 2)),),
+                 cuts={GID: {"x": 2}})
+    return I.Circuit("sliced", ((G8, 6), (GEMM, 3)), **{**parts, **edit})
+
+
+def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
+    """A port cut ``k`` ways is ``k`` rows of its outer elements, and a cut wire's last digit walks a reader unit's rows: each
+    member's ``x#j`` rows are the slices' outputs, and the record states the cuts, from which the verifier derives them."""
+    c = sliced()
+    assert I.unit_rows(GEMM, {"x": 2})[0][:2] == [("x#0", V2, 128, [f"x[{r}]" for r in range(8)]),
+                                                  ("x#1", V2, 128, [f"x[{r}]" for r in range(8, 16)])]
+    ms = I.members(c, 2)
+    assert [(m.template, m.base, m.n, m.wired) for m in ms] == [
+        (G8ID, 0, 2, ()), (G8ID, 2, 2, ()), (G8ID, 4, 2, ()),
+        (GID, 6, 2, (("x#0", "o0", (0, 2)), ("x#1", "o0", (1, 3)))), (GID, 8, 1, (("x#0", "o0", (4,)), ("x#1", "o0", (5,))))]
+    assert ms[-1].rows == (("x#0", 8), ("x#1", 8), ("w", 256))
+    rec = I.descriptor_record(c, 2)
+    assert rec["cuts"] == {GID: {"x": 2}} and rec["statements"][GID]["in_rows"][1][:3] == ["x#1", V2, 128]
+    assert "run" not in rec and I.window_of_record({**rec, "run": RUN, "context": ""}, LAW, I.resolve).members == ms
+    for cuts, why in [({GID: {"x": 3}}, "divides its outer"), ({GID: {"y": 2}}, "names a template's parameter"),
+                      ({}, r"rows \[0, 2\) of x's 1")]:
+        with pytest.raises(ValueError, match=why):
+            sliced(cuts=cuts)
+    for edit, why in [({"radix": (2, 3)}, "its last digit"), ({"cut": (1, 2)}, r"rows \[1, 3\)")]:
+        with pytest.raises(ValueError, match=why):
+            sliced(wires=(replace(c.wires[0], **edit),))
+    with pytest.raises(ValueError, match="both fill rows"):
+        sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
+    with pytest.raises(ValueError, match="cut rows"):
+        I.Window(c, RUN, LAW, 2)
+
+
+def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():
+    """`input_count` counts each kind of input from the circuit's description alone, never its program; the one free row is
+    the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused."""
+    rec = declared().description()
+    words = 3 * (2 + 32 + 32 + 16 + 96 + 64) + 6 * (16 + 128) + 3 * (16 + 256)
+    assert I.input_count(rec, pins={"weights"}) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
+                                                    "registered": 16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176),
+                                                    "ingress": 16 * 2 * 2, "free": 32}
+    assert I.input_count({**rec, "ingress": [{**rec["ingress"][0], "units": 3}]}, pins={"weights"})["free"] == 0
+    c = declared()
+    reg = c.registered
+    for edit, why in [
+        (dict(ingress=(I.Ingress(EID, "tok", 0, 4, 0),)), r"units \[0, 4\)"),
+        (dict(ingress=(I.Ingress(EID, "row", 0, 1, 0),)), "both fill rows"),
+        (dict(ingress=(I.Ingress(EID, "tok", 0, 1, -1),)), "at a step"),
+        (dict(registered=replace(reg, reads=(replace(reg.reads[1], base=WEIGHTS - 255),))), "leaves"),
+        (dict(registered=replace(reg, roots=(I.TableRead(EID, "salt", "embed", "root", 0, 3),))), "64-byte port"),
+        (dict(registered=replace(reg, roots=(I.TableRead(EID, "root", "other", "root", 0, 3),))), "declared table"),
+        (dict(registered=replace(reg, openings=(replace(reg.openings[0], verdict="o2"),))), "verdict"),
+        (dict(registered=replace(reg, tables=(I.Table("embed", "weights", 512, 16, 5),))), "registered parameter's leaves"),
+        (dict(registered=replace(reg, reads=(*reg.reads, I.Read(G8ID, "x", "weights", 0, (1,), 0, (0,))))), "both fill rows"),
+    ]:
+        with pytest.raises(ValueError, match=why):
+            declared(**edit)
+    with pytest.raises(ValueError, match="both fill rows"):
+        I.input_count({**rec, "ingress": [*rec["ingress"], {**rec["ingress"][0], "at": 1}]})
+
+
+def test_a_registered_read_is_registered_only_at_a_root_the_verifier_pinned_before_the_run():
+    """The third token read from ``acts``, a parameter whose root the prover commits in the window, is free; the same read
+    at a pinned root is registered. With no pins every read, table read and opening is free, and so with a name not a set."""
+    reg = declared().registered
+    rec = declared(registered=replace(reg, params={**reg.params, "acts": 2}, reads=(
+        *reg.reads, I.Read(EID, "tok", "acts", at=2, radix=(1,), base=0, step=(0,))))).description()
+    pinned = I.input_count(rec, pins={"weights"})
+    assert (pinned["registered"], pinned["free"]) == (16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176), 32)
+    assert I.input_count(rec, pins={"weights", "acts"}) == {**pinned, "registered": pinned["registered"] + 32, "free": 0}
+    assert I.input_count(rec) == I.input_count(rec, pins="weights") == {**pinned, "registered": 0,
+                                                                         "free": pinned["registered"] + 32}
+
+
+def test_coalesce_merges_runs_of_like_patterns():
+    """Per-unit wires and reads coalesce to the patterns a reader's runs make, and read the same rows."""
+    c = declared()
+    one = [I.Wire(G8ID, "x", EID, "o0", at=u, radix=(1,), base=u // 2, step=(0,)) for u in range(6)]
+    rows = [I.Wire(GID, "x", G8ID, "o0", at=p, radix=(2,), base=2 * p, step=(1,), cut=(0, 2)) for p in range(3)]
+    reads = [I.Read(G8ID, "w", "weights", at=u, radix=(1,), base=128 * (u % 2), step=(0,)) for u in range(6)]
+    assert set(I.coalesce(one + rows)) == set(c.wires)
+    assert I.coalesce(reads) == [c.registered.reads[0]]
+
+    def sources(ps):
+        return {(p.port, p.at + i // p.cut[1], p.cut[0] + i % p.cut[1]): int(p.source(i)) for p in ps for i in range(p.units)}
+
+    gapped = one[:2] + one[3:]
+    assert len(I.coalesce(gapped)) == 3 and sources(I.coalesce(gapped)) == sources(gapped)
 
 
 class Held:
@@ -333,11 +453,12 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
     assert doc["registered"]["reads"] == [{"reader": TID, "port": "wrow", "param": "w", "at": 0, "radix": [6, 2], "base": 0,
                                            "step": [K // 2, 0]}]
     bits = 16 * sum(w for _, w in I.layout(COORD).rows) * 12
-    assert I.input_count(doc, BY_ID.__getitem__) == {"units": 12, "inputs": bits, "wired": 0, "registered": 12 * 8 * K,
-                                                     "ingress": 0, "free": bits - 12 * 8 * K}
+    assert I.input_count(doc, BY_ID.__getitem__, {"w"}) == {"units": 12, "inputs": bits, "wired": 0, "registered": 12 * 8 * K,
+                                                            "ingress": 0, "free": bits - 12 * 8 * K}
+    assert I.input_count(doc, BY_ID.__getitem__, "weights")["registered"] == 0
     assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
     for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),
-                     ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "o0"}]}, "names no parameter"),
+                     ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "frames"}]}, "names no parameter"),
                      ({**doc["registered"], "reads": doc["registered"]["reads"] * 2}, "both fill rows"),
                      ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "x": 0}]}, "a read's record")]:
         with pytest.raises(ValueError, match=why):

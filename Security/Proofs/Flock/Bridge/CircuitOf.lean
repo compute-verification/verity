@@ -2,28 +2,30 @@ import Definitions.Core.Boolean
 import Proofs.Core.Circuit
 import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
+import Properties.Flock.Circuit.CircuitOf
 
 /-!
 # The parsed circuit file as core's circuit, and the sampling relation as its wrong units
 
-The circuit a C-Flock session checks is defined from its circuit file: the descriptor `D` the verifier parses
-(`Flock.Desc.parse`), the unit's rows built from it (`hU : Built D.unroll.unit`, which `parse_built` gives) and the
-population `n` (the public file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and partition
-(`keyCircuit`, `keyPartition`) the session's game and V3 are stated over. Here that circuit is core's:
+The definitions are `Properties.Flock.Circuit.CircuitOf`'s: `Verity.Circuit.ofAudit` and `Verity.Partition.ofAudit` (a
+game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (the key program of the parsed file
+`keyProg D.unroll hU n` as core's circuit and its `n` units), and `circuitOfFile tags cf tables pf`, `unitsOfFile` and
+`partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
 
-* `coreOf C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), through the Boolean profile
-  (`Verity.Boolean.Circuit.toCircuit`): the same gates, one bit each. `corePartition P` is the same partition, and
-  `coreBits xs` a transcript of bits. `wrong_corePartition`: the wrong units are the same, so every statement about the
-  game's wrong units is one about core's.
-* `circuitOf D hU n := coreOf (keyCircuit D hU n)` and `partsOf D hU n := corePartition (keyPartition D hU n)`: the
-  parsed file as core's circuit and its `n` units. `keyCircuit_eq` and `keyPartition_eq` restate the key program's
-  circuit and partition as the ones `circuitOf` and `partsOf` embed (by definition), and `wrong_partsOf` its wrong units
-  as theirs.
+* `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
+  (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
+  `Verity.Partition.wrong_ofAudit` says the wrong units are the game's, so every statement about the game's wrong units
+  is one about core's.
+* `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
+  embed (by definition), and `partsOf_wrong` its wrong units as theirs.
 * The wrong-units bridge, the converse of `Flock.Claims.WrongUnits` (faulty ⇒ wrong): a unit wrong in the wire values a
-  witness opens (`openedOf`) is faulty in the sampling statement (`faulty_of_wrong`), because a unit that is not faulty
+  witness opens (`openedOf`) is faulty in the sampling statement (`wrong_subset_faulty`), because a unit that is not faulty
   is correct on its openings (`correct_of_progCorrect`). So `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer than
   `K₀` wrong units (`card_wrong_lt_of_relS`), at every circuit and every witness, with no side condition, and at the
   parsed file's circuit (`card_wrong_partsOf_lt`).
+* At the committed files: `parsedOf_eq` and `parse_of_parsedOf` relate `parsedOf` to the verifier's parse
+  (`Flock.Desc.parse`, `HmOut.loadPublic`), and `ofFile_iff` restates any statement about the committed files' circuit,
+  units and partition as one about `circuitOf`, `n` and `partsOf` at the parse.
 -/
 
 namespace Flock.Bridge
@@ -31,20 +33,6 @@ namespace Flock.Bridge
 open Claims.Sampling
 
 /-! ## A game circuit as core's -/
-
-/-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → Verity.Boolean.Op N
-  | .input => .input
-  | .and a b => .and a b
-  | .xor a b => .xor a b
-  | .not a => .not a
-  | .row a b => .row a b
-
-theorem args_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).args = o.args := by
-  cases o <;> rfl
-
-theorem isInput_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).isInput = o.isInput := by
-  cases o <;> rfl
 
 theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bool) :
     (coreOp o).apply v = o.apply v := by
@@ -57,81 +45,74 @@ def coreBool (C : FlockSoundness.Audit.Circuit) : Verity.Boolean.Circuit where
   topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
   outputs := C.outputs
 
-/-- **A game circuit as core's**: its Boolean circuit (`coreOf_eq`), one bit a gate, written out so that its gates are
-the game circuit's. -/
-abbrev coreOf (C : FlockSoundness.Audit.Circuit) : Verity.Circuit where
-  N := C.N
-  w _ := 1
-  isInput g := (coreOp (C.op g)).isInput
-  reads g := (coreOp (C.op g)).args.toFinset
-  reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
-  op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
-  op_congr g v v' h := by
-    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
-  outputs := C.outputs
+end Flock.Bridge
 
-section Core
+namespace Verity
+
+open Flock.Bridge (coreOp coreBool args_coreOp isInput_coreOp apply_coreOp)
+
+section OfAudit
 
 variable {C : FlockSoundness.Audit.Circuit}
 
-/-- `coreOf` is the Boolean profile's circuit of the game circuit. -/
-theorem coreOf_eq : coreOf C = (coreBool C).toCircuit := rfl
+/-- `Circuit.ofAudit` is the Boolean profile's circuit of the game circuit. -/
+theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircuit := rfl
 
-theorem coreOf_isInput (g : Fin C.N) : (coreOf C).isInput g = (C.op g).isInput := isInput_coreOp _
-
-theorem coreOf_reads (g : Fin C.N) : (coreOf C).reads g = (C.op g).args.toFinset :=
+theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
   congrArg List.toFinset (args_coreOp _)
 
-theorem coreOf_op (g : Fin C.N) (v : (coreOf C).Transcript) :
-    (coreOf C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
+theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
+    (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
   congrArg BitVec.ofBool (apply_coreOp _ _)
 
-/-- A game partition as core's: the same units. -/
-def corePartition {n : ℕ} (P : FlockSoundness.Audit.Partition C n) : Verity.Partition (coreOf C) n where
-  unit := P.unit
-  input_iff g := (P.input_iff g).trans (by rw [coreOf_isInput])
-
 /-- A transcript of bits as core's. -/
-def coreBits (xs : Fin C.N → Bool) : (coreOf C).Transcript := fun g => BitVec.ofBool (xs g)
+def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
 
 variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 
-theorem corePartition_unit : (corePartition P).unit = P.unit := rfl
+theorem Partition.ofAudit_unit : (Partition.ofAudit P).unit = P.unit := rfl
 
-theorem mem_committed_corePartition (g : Fin C.N) : g ∈ (corePartition P).committed ↔ g ∈ P.committed := by
+theorem Partition.mem_committed_ofAudit (g : Fin C.N) :
+    g ∈ (Partition.ofAudit P).committed ↔ g ∈ P.committed := by
   classical
-  simp only [Verity.Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
-    Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, corePartition_unit]
+  simp only [Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
+    Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, Partition.ofAudit_unit]
 
-theorem localEval_corePartition (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
-    (corePartition P).localEval (coreBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
+theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
+    (Partition.ofAudit P).localEval (Circuit.ofBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
   induction g using WellFoundedLT.induction with
   | _ g ih =>
   by_cases hu : P.unit g = some u
-  · rw [(corePartition P).localEval_of_mem (coreBits xs) (show (corePartition P).unit g = some u from hu), coreOf_op,
-      P.localEval_of_mem xs hu]
+  · rw [(Partition.ofAudit P).localEval_of_mem (Circuit.ofBits xs)
+      (show (Partition.ofAudit P).unit g = some u from hu), Circuit.ofAudit_op, P.localEval_of_mem xs hu]
     congr 1
     exact FlockSoundness.Audit.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
-  · rw [(corePartition P).localEval_of_not_mem (coreBits xs) (show (corePartition P).unit g ≠ some u from hu),
-      P.localEval_of_not_mem xs hu]
+  · rw [(Partition.ofAudit P).localEval_of_not_mem (Circuit.ofBits xs)
+      (show (Partition.ofAudit P).unit g ≠ some u from hu), P.localEval_of_not_mem xs hu]
     rfl
 
 /-- **The wrong units are the game's**: core's partition of a game circuit has the game partition's wrong units, on
 the same bits. -/
-theorem wrong_corePartition (xs : Fin C.N → Bool) : (corePartition P).wrong (coreBits xs) = P.wrong xs := by
+theorem Partition.wrong_ofAudit (xs : Fin C.N → Bool) :
+    (Partition.ofAudit P).wrong (Circuit.ofBits xs) = P.wrong xs := by
   classical
   ext u
-  rw [Verity.Partition.mem_wrong, FlockSoundness.Audit.Partition.mem_wrong]
+  rw [Partition.mem_wrong, FlockSoundness.Audit.Partition.mem_wrong]
   refine not_congr ⟨fun h g hg hu => ?_, fun h g hg hu => ?_⟩
-  · have e := h g ((mem_committed_corePartition P g).2 hg) hu
-    rw [localEval_corePartition] at e
+  · have e := h g ((Partition.mem_committed_ofAudit P g).2 hg) hu
+    rw [Partition.localEval_ofAudit] at e
     have e' := congrArg (fun v : BitVec 1 => v.getLsbD 0) e
-    simpa [coreBits] using e'
-  · rw [localEval_corePartition]
-    exact congrArg BitVec.ofBool (h g ((mem_committed_corePartition P g).1 hg) hu)
+    simpa [Circuit.ofBits] using e'
+  · rw [Partition.localEval_ofAudit]
+    exact congrArg BitVec.ofBool (h g ((Partition.mem_committed_ofAudit P g).1 hg) hu)
 
-end Core
+end OfAudit
+
+end Verity
+
+namespace Flock.Bridge
+
+open Claims.Sampling
 
 /-! ## A unit that is not faulty is correct on its openings -/
 
@@ -258,7 +239,7 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Flo
   exact Option.some_injective _ hrun'
 
 /-- **A unit wrong in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`. -/
-theorem faulty_of_wrong {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
+theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
     (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))) :
     u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w := by
@@ -277,7 +258,7 @@ theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) 
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card ≤
       ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n)).card :=
   Finset.card_le_card_of_injOn Fin.val
-    (by intro u hu; exact Finset.mem_filter.2 ⟨faulty_of_wrong P κ kd desc q roots H Cm w hu, u.isLt⟩)
+    (by intro u hu; exact Finset.mem_filter.2 ⟨wrong_subset_faulty P κ kd desc q roots H Cm w hu, u.isLt⟩)
     (by intro a _ b _ h; exact Fin.ext h)
 
 /-- **The sampling relation bounds the wrong units**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer
@@ -302,49 +283,28 @@ end Opened
 
 /-! ## The parsed file's circuit -/
 
-/-- The key program's circuit at the descriptor `D`, its unit's rows `hU` and the population `n`. -/
-noncomputable abbrev keyCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
-    FlockSoundness.Audit.Circuit :=
-  (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
-
-/-- The key program's partition into its `n` units. -/
-noncomputable abbrev keyPartition (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
-    FlockSoundness.Audit.Partition (keyCircuit D hU n) n :=
-  (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
-    (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
-
-/-- **The parsed circuit file as core's circuit**: the key program of the descriptor `D`, its unit's rows `hU` and the
-population `n`, through the Boolean profile. -/
-noncomputable def circuitOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) : Verity.Circuit :=
-  coreOf (keyCircuit D hU n)
-
-/-- **The parsed circuit file's units**, as core's partition of `circuitOf`. -/
-noncomputable def partsOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
-    Verity.Partition (circuitOf D hU n) n :=
-  corePartition (keyPartition D hU n)
-
 /-- **The transcript the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
 noncomputable def transcriptOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
     (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Transcript :=
-  coreBits (openedOf (keyCircuit D hU n) κ val)
+  Verity.Circuit.ofBits (openedOf (keyCircuit D hU n) κ val)
 
 section Parsed
 
 variable (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
 
 /-- **The key program's circuit restated from `circuitOf`**: `circuitOf` is it, through the Boolean profile. -/
-theorem keyCircuit_eq : circuitOf D hU n = coreOf ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
+theorem circuitOf_eq : circuitOf D hU n = .ofAudit ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
     (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
 
 /-- **The key program's partition restated from `partsOf`.** -/
-theorem keyPartition_eq : partsOf D hU n =
-    corePartition ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
+theorem partsOf_eq : partsOf D hU n =
+    .ofAudit ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
 
 /-- **`partsOf`'s wrong units are the key program's**, on the same bits. -/
-theorem wrong_partsOf (xs : Fin (keyCircuit D hU n).N → Bool) :
-    (partsOf D hU n).wrong (coreBits xs) = (keyPartition D hU n).wrong xs :=
-  wrong_corePartition _ xs
+theorem partsOf_wrong (xs : Fin (keyCircuit D hU n).N → Bool) :
+    (partsOf D hU n).wrong (Verity.Circuit.ofBits xs) = (keyPartition D hU n).wrong xs :=
+  Verity.Partition.wrong_ofAudit _ xs
 
 /-- **The wrong-units bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
 the sampling statement of the key program at constants `κ`, leaves fewer than `K₀` of `partsOf`'s units wrong in the
@@ -355,9 +315,58 @@ theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (
       (partOf (keyPartition D hU n)) w) :
     ((partsOf D hU n).wrong
       (transcriptOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ kd desc q roots)))).card < K₀ := by
-  rw [transcriptOf, wrong_partsOf]
+  rw [transcriptOf, partsOf_wrong]
   exact card_wrong_lt_of_relS _ κ kd K₀ desc q roots H Cm w h
 
 end Parsed
+
+/-! ## The committed files' circuit -/
+
+variable {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pf : ByteArray}
+
+/-- Files the verifier reads parse to their descriptor, its built unit and the public file's population. -/
+theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse tags cf tables = .ok D)
+    (hpub : HmOut.loadPublic tags D.unroll pf = .ok pub) (hU : FlockSoundness.Built D.unroll.unit) :
+    parsedOf tags cf tables pf = some ⟨D, hU, pub.n⟩ := by
+  simp [parsedOf, hD, hpub, hU]
+
+/-- Files that parse are files the verifier reads: the circuit file to the parse's descriptor, and the public file
+to its population. -/
+theorem parse_of_parsedOf {r : Parsed} (h : parsedOf tags cf tables pf = some r) :
+    Flock.Desc.parse tags cf tables = .ok r.D ∧
+      ∃ pub : Flock.Public, HmOut.loadPublic tags r.D.unroll pf = .ok pub ∧ pub.n = r.n := by
+  unfold parsedOf at h
+  split at h
+  · cases h
+  · next D hD =>
+    split at h
+    · cases h
+    · next pub hpub =>
+      split at h
+      · cases h
+        exact ⟨hD, pub, hpub, rfl⟩
+      · cases h
+
+/-- **The committed files' circuit is the parse's**: any statement about `circuitOfFile`, its units and its partition
+is the same statement about `circuitOf`, `n` and `partsOf` at the parse. -/
+theorem ofFile_iff {r : Parsed} (hr : parsedOf tags cf tables pf = some r)
+    (Q : (C : Verity.Circuit) → (n : ℕ) → Verity.Partition C n → Prop) :
+    Q (circuitOfFile tags cf tables pf) (unitsOfFile tags cf tables pf) (partsOfFile tags cf tables pf) ↔
+      Q (circuitOf r.D r.hU r.n) r.n (partsOf r.D r.hU r.n) := by
+  unfold circuitOfFile unitsOfFile partsOfFile
+  rw [hr]
+  exact Iff.rfl
+
+theorem circuitOfFile_eq {r : Parsed} (hr : parsedOf tags cf tables pf = some r) :
+    circuitOfFile tags cf tables pf = circuitOf r.D r.hU r.n := by
+  unfold circuitOfFile
+  rw [hr]
+  rfl
+
+theorem unitsOfFile_eq {r : Parsed} (hr : parsedOf tags cf tables pf = some r) :
+    unitsOfFile tags cf tables pf = r.n := by
+  unfold unitsOfFile
+  rw [hr]
+  rfl
 
 end Flock.Bridge

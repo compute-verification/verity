@@ -147,6 +147,9 @@ Landing:
 
 Protocols and claims:
 
+- (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
+  under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  ties them by a premise or trusts them separately.
 - (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
@@ -159,6 +162,8 @@ Protocols and claims:
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
 - (17 Oct) No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
   bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
+  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; since 26 Oct the bound rests on `SquaringFloor` and
+  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - (12 Oct) Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity

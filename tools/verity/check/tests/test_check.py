@@ -797,6 +797,18 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
 
 
+def test_a_step_killed_by_a_sigterm_the_check_did_not_send_is_stopped_not_failed(tmp_path, monkeypatch):
+    """r20261026-062546-11fc: drive's `research cancel` signalled the run's whole process group, lean-agreement died of it before
+    check's own handler marked it stopped, and it was recorded failed with an empty log, a failure the agreement never found."""
+    ok = _py("pass")
+    _fake_run(monkeypatch, [[("cancelled", _py("import os, signal\nos.kill(os.getpid(), signal.SIGTERM)"), tmp_path)],
+                            [("a", ok, tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
+    by = {s["step"]: s for s in done}
+    assert not passed and by["a"]["status"] == "passed"
+    assert by["cancelled"]["status"] == "stopped" and by["cancelled"]["rc"] == -15 and "did not send" in by["cancelled"]["detail"]
+
+
 def _gone(pid: int) -> None:
     """Return once ``pid`` has exited (its pidfd is readable), or at once when it is gone already."""
     import os
