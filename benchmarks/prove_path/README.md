@@ -156,8 +156,9 @@ vacuous until NET-68's whole-window circuit lands. That is a layout and compiler
 network-accounting, with vllm's compiler part as VLLM-103 under it.
 - The window's circuit becomes the whole window under a step-indexed scan router. `Fits` is structural, and arrival
   steps and prompt lengths stay private (#4087 landed; #4102, #4108 and #4175 are open).
-- The start cadence is fixed slots a network timestep (ASK-122, Daniel, 26 Oct): a timestep of 8 buckets (0.8 s)
-  with 4 Program slots, nothing of the admissions public (`ingress_scan.Class`), and the first token at D = 2.1 s. A
+- The start cadence is fixed slots a network timestep (ASK-122, Daniel, 26 Oct): a timestep of 16 buckets (1.6 s)
+  with 4 Program slots, 8 a link-window, nothing of the admissions public (`ingress_scan.Class`), and the first token
+  at D = 2.7 s (vllm's pick, 26 Oct). A
   first token within 1 s is out under every option.
 
 Until then, vllm's #4061 has `records_audit` label the bound vacuous whenever #`freeInputs` exceeds the declared charge.
@@ -341,7 +342,7 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   - on a TP Commit, `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record.
     On a declared run it emits exactly what a correct compiler emits. I2 doesn't compile a TP rank's Programs yet.
   - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
-    row's declared inputs (`score.phi_of`: the row id, the served workload file, refused unless its digest is the record's, and
+    workload's declared inputs (`score.phi_of`: its row id, the served workload file, refused unless its digest is the record's, and
     the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
     (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
     A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does, and held to

@@ -748,7 +748,7 @@ def test_a_scan_window_is_its_audit_records_answer_and_a_refused_one_a_reject(tm
 def test_a_rows_case_is_the_rows_forms():
     import warden_serve as WS
 
-    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 21, "egress_cells": 65, "every": 8,
+    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 27, "egress_cells": 65, "every": 16,
                 "ingress_buckets": 12, "ingress_cells": 47, "lanes": 4, "queue": 4, "slots": 4, "window": 32}
     dep = {"key": {"params": [64, 1, 6], "public": "ab" * 24, "key_id": "ab" * 16}, "params": schedule,
            "session": "cd" * 32}
@@ -955,7 +955,10 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     for u, (lab, rows) in want.items():
         assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
     circuit = json.loads((d / "circuit.json").read_text())
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
+    pins = {v: e["root"] for v, e in json.loads(weights["pin"].read_text())["values"].items()}
+    roots = IF.registered_roots(json.loads((d / "registration.json").read_text())["window"])
+    assert set(pins) == {"w", "sw"} and roots == pins
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins, roots=roots)["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
 
 

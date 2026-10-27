@@ -4,19 +4,21 @@ harness), carries three warden-form id requests on two lanes, the third queued u
 of id events. The reference's scan of its ingress rows from the empty state, the Programs' rows its responses, holds
 each request's prompt ids at their positions, its head's fields, its admission bucket and its anchor until the anchor
 (two requests anchored at one boundary in their own slots) and its outputs from then until its last egress bucket,
-gives each slot's occupancy word its prompt's length in the state its Program reads and 0 in every other (the token-id
-row, `token_row`, its prompt in order), and reuses a slot only past it; egress bucket t computes the
+gives each slot's occupancy word 1 in the state its Program reads and 0 in every other (the token-id row, `token_row`:
+the occupancy word, the prompt's length and its prompt in order, each where `slot_row` puts it in the state row), and
+reuses a slot only past it; egress bucket t computes the
 warden's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged one) from a
 view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random flips (S_t
 and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
 `END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress
 bucket, an ordinal or a pad byte changed, a phase of EVERY, a Programs' entry off its anchor, an entry for a slot whose
-occupancy word is 0), and computes another
+occupancy word is 0, a Programs' count over KO, a prompt over KI ids), and computes another
 S_t than the scan's, which the state row its o1 opens refuses, from a digit changed or a Programs' entry off its
-outputs; the first bucket's circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its
-reference on the views; `scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63
-class's state is the layout NEG sized (note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs
-N2's view reads."""
+outputs; the same traffic at a KI one below request 3's prompt is refused at the cell that takes it past; a window
+circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
+is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
+`scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63 class's state is the layout
+NEG sized (note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs N2's view reads."""
 from __future__ import annotations
 
 import asyncio
@@ -42,11 +44,12 @@ from verity.core.protocols.certifier.warden import DATA, END, PAD, WardenParams,
 B = 512
 PARAMS = WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                       ingress_buckets=3, egress_cells=9, every=2)
-CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
-UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8)
-FIRST = bind(IS.IngressScanFirst, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8)
+CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
+UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
+FIRST = bind(IS.IngressScanFirst, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 SHAPE = CLS.egress
 EGRESS = bind(EG.EgressBucket, B=B, R=SHAPE.R, r=SHAPE.r, NR=SHAPE.NR, K=SHAPE.K, IB=SHAPE.IB, D=SHAPE.D)
+#: request 3's prompt is KI ids
 PROMPTS = ([1000, 1007, 1014], [2000 + 3 * k for k in range(60)], [131071 - k for k in range(100)])
 #: request 1's three outputs end its egress at 0 + D + 1, so request 3 is admitted at D + 2; request 2's are KO
 RESPONSES = ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43))
@@ -103,7 +106,7 @@ def test_the_scan_holds_each_request_through_its_egress_and_reuses_a_slot_only_p
         assert (slot.done, slot.left, slot.fields, slot.admitted, slot.anchor) == (1, 0, len(prompt), s0, anchor)
         assert (slot.max_tokens, slot.seed, slot.temperature, slot.top_p) == (4 + q, 11 * (q - 1), 700000, 950000)
         assert [slot.ids[IS.position(CLS, p)] for p in range(len(prompt))] == prompt
-        assert slot.occ == len(prompt) and (len(prompt), tuple(prompt)) in IS.token_row(CLS, before)
+        assert slot.occ == 1 and (1, len(prompt), tuple(prompt)) in IS.token_row(CLS, before)
         assert (slot.n, slot.out) == (0, [0] * CLS.KO)
         # S_t is run.states[t + 1]: the request's slot is live in S_{s0} … S_{last}, its outputs from S_{anchor} on
         for t in range(s0, _last(s0, len(out)) + 1):
@@ -114,11 +117,62 @@ def test_the_scan_holds_each_request_through_its_egress_and_reuses_a_slot_only_p
     # a slot is occupied in the state its Program reads, S_{A−1}, and in no other: once a request
     occupied = [(t, s.q) for t, st in enumerate(run.states) for s in st.slots if s.occ]
     assert occupied == [(4, 1), (4, 2), (10, 3)]
-    assert all(IS.token_row(CLS, st)[j] == (0, ()) for t, st in enumerate(run.states) for j, s in enumerate(st.slots)
+    assert all(IS.token_row(CLS, st)[j] == (0, 0, ()) for t, st in enumerate(run.states) for j, s in enumerate(st.slots)
                if (t, s.q) not in occupied or not s.live)
     # request 1's slot is live in S_6, its last egress bucket, and request 3 takes it at 7, the lowest free one
     assert run.states[7].slots[0].q == 1 and run.states[8].slots[0].q == 3
     assert run.states[8].slots[0].n == 0 and [s.q for s in run.states[PARAMS.delay + 3].slots] == [3, 2]
+
+
+def test_a_reader_of_the_state_row_finds_each_slot_s_token_row_at_slot_row_s_bits(run):
+    NP = CLS.C * CLS.K - CLS.K + CLS.K0
+    assert NP >= max(map(len, PROMPTS))
+    seen = 0
+    for st in run.states:
+        bits = IS.encode(CLS, st)
+        for j, (occ, lp, ids) in enumerate(IS.token_row(CLS, st)):
+            got = [sum(bits[o + i] << i for i in range(w)) for o, w in IS.slot_row(CLS, j, NP)]
+            assert got[0] == occ
+            if occ:
+                assert (got[1], got[2:2 + lp]) == (lp, list(ids))
+                seen += 1
+    assert seen == len(PROMPTS)
+
+
+def test_a_prompt_over_KI_ids_is_refused_at_the_cell_that_takes_it_past(run):
+    outputs = {q: xs for q, xs in enumerate(RESPONSES, 1)}
+    assert max(map(len, PROMPTS)) == CLS.KI and IS.scan(CLS, run.rows, outputs) is not None
+    short = replace(CLS, KI=CLS.KI - 1)
+    assert IS.scan(short, run.rows, outputs) is None
+    st, refused = IS.empty(short), None
+    for t, row in enumerate(run.rows):
+        nxt = IS.step(short, row, st, IS.programs(short, st, outputs))
+        if nxt is None:
+            refused = t
+            break
+        st = nxt
+    end = next(t for t, row in enumerate(run.rows) for blk in _blocks(row) for c in blk
+               if c[0] == END and HEADER.unpack_from(c)[1] == 3)
+    assert refused == end and run.states[end + 1].slots[0].fields == CLS.KI
+
+
+def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
+    ch, T = run.chain, PARAMS.window
+    registered = ch.states[1:]
+    assert len(registered) == T and IS.window_state(CLS, registered, 0, T) == ch.states[:T]
+    assert IS.window_state(CLS, registered, 0, T)[0] == IS.encode(CLS, IS.empty(CLS))
+    for t0, n in ((4, 4), (8, 8), (2, T - 2)):
+        rows = IS.window_state(CLS, registered, t0, n)
+        assert rows == ch.states[t0:t0 + n]
+        # boundary a's Programs read row a: S_{t0 + a − 1}, the state bucket t0 + a's unit reads
+        assert [IS.token_row(CLS, IS.decode(CLS, x)) for x in rows] == \
+            [IS.token_row(CLS, run.states[t0 + a]) for a in range(n)]
+    for t0, n, fix in ((1, 4, "multiple of EVERY = 2, not t0 = 1"), (0, 3, "not t0 = 0, buckets = 3"),
+                       (-2, 4, "t0 >= 0"), (0, 0, "buckets >= 1"), (T - 2, 4, f"register {T + 1} rows, not {T}")):
+        with pytest.raises(ValueError, match=re.escape(fix)):
+            IS.window_state(CLS, registered, t0, n)
+    with pytest.raises(ValueError, match=f"a state row is {IS.state_bits(CLS)} bits"):
+        IS.window_state(CLS, [x[:-16] for x in registered], 0, 2)
 
 
 def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_bucket_wrote(run):
@@ -142,9 +196,10 @@ def test_scan_traffic_ticks_the_warden_s_rows(run):
 
 
 def test_the_state_is_the_layout_neg_sized():
-    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=8, WITHIN=12)
-    assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 21, 64, 4, 149_648)
-    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 21))
+    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12)
+    assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 27, 64, 4, 149_648)
+    assert (w63.KI, w63.prompt_room) == (1024, 2082) and replace(w63, KI=2082).KI == 2082
+    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
     lay = IS.layout(w63)
     at = 0
     for name, (o, w) in lay.items():
@@ -154,17 +209,28 @@ def test_the_state_is_the_layout_neg_sized():
     assert lay["3.ids"] == (149_644 - 47 * 45 * 17, 47 * 45 * 17) and lay["3.out"][1] == 64 * 17
     assert lay["3.occ"][1] == 32 and lay["3.n"][0] == lay["3.occ"][0] + 32
     assert [IS.position(w63, p) for p in (0, 11, 12, 56, 57)] == [0, 11, 45, 89, 90]
-    assert [w63.anchor(t, t % 8) for t in (0, 4, 5, 12, 13)] == [16, 16, 24, 24, 32]
-    for bad in ({"B": 256}, {"C": 1 << 16}, {"IDB": 33}, {"EVERY": 0}, {"D": 18}, {"KO": 1 << 16}):
+    row = IS.slot_row(w63, 3, 1024)
+    assert len(row) == 1026 and row[:2] == [lay["3.occ"], lay["3.fields"]]
+    assert row[2 + 11] == (lay["3.ids"][0] + 11 * 17, 17) and row[2 + 12] == (lay["3.ids"][0] + 45 * 17, 17)
+    assert IS.slot_row(w63, 0, 2082)[-1] == (lay["0.ids"][0] + (47 * 45 - 1) * 17, 17)
+    for j, NP in ((4, 1024), (0, 0), (0, 2083)):
+        with pytest.raises(ValueError):
+            IS.slot_row(w63, j, NP)
+    assert [w63.anchor(t, t % 16) for t in (0, 4, 5, 20, 21)] == [16, 16, 32, 32, 48]
+    for bad in ({"B": 256}, {"C": 1 << 16}, {"IDB": 33}, {"EVERY": 0}, {"D": 26}, {"KO": 1 << 16}, {"KI": 0}):
         with pytest.raises(ValueError):
             IS.Class(**{"B": 512, "r": 4, "lanes": 4, "C": 47, **bad})
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=21, ingress_cells=47, ingress_buckets=12,
-                          egress_cells=65, window=32, every=8)
+    with pytest.raises(ValueError, match=re.escape("KI <= 2082, the prompt ids a slot of C = 47 cells holds")):
+        IS.Class(B=512, r=4, lanes=4, C=47, KI=2083)
+    with pytest.raises(ValueError, match=re.escape("KI <= 147")):
+        IS.Class(B=512, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
+    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+                          egress_cells=65, window=32, every=16)
     w63.serves(served)
-    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 16)
-    for bad, fix in (({"delay": 22}, "= D = 21"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
+    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
+    for bad, fix in (({"delay": 28}, "= D = 27"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
                      ({"ingress_cells": 48}, "<= C = 47"), ({"lanes": 5}, "= lanes = 4"),
-                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 16}, "= EVERY = 8")):
+                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16")):
         with pytest.raises(ValueError, match=re.escape(fix)):
             w63.serves(replace(served, **bad))
 
@@ -222,7 +288,14 @@ def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]]]:
     # slot 1 due at 4 with its occupancy word 0: its entry is masked, the honest one refused
     out["prog-empty-slot"] = honest(4, sin=IS.encode(CLS, replace(states[4], slots=[
         states[4].slots[0], replace(states[4].slots[1], occ=0)])))
-    other["prog-outputs"] = 4, honest(4, prog=IS.prog_encode(CLS, [(2, RESPONSES[0][:2]), entries[1]]))
+    # slot 1's Program gives KO + 1 outputs, a request its class can't hold (`SlotEntry_v1`'s n = KO + 1, no ids)
+    out["prog-over-KO"] = honest(4, prog=IS.prog_encode(CLS, [entries[0], (CLS.KO + 1, ())]))
+    # request 3's slot one prompt id further on before its last cell: the cell takes its prompt to KI + 1 ids
+    t, j = next((t, j) for t, st in enumerate(states) for j, s in enumerate(st.slots)
+                if s.live and s.q == 3 and s.fields and not s.done)
+    slots = list(states[t].slots)
+    slots[j] = replace(slots[j], fields=slots[j].fields + 1)
+    out["prompt-over-KI"] = honest(t, sin=IS.encode(CLS, replace(states[t], slots=slots)))
     return out, other
 
 
@@ -250,7 +323,7 @@ def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run
 
 @pytest.mark.slow
 def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_random_flips(run):
-    """Slow (about 15 s: 216,995 and 137,889 ANDs traced, the ingress unit evaluated on about 90 cases, the first
+    """Slow (about 15 s: 217,065 and 137,969 ANDs traced, the ingress unit evaluated on about 90 cases, the first
     bucket's on about 30, and the egress unit on 31)."""
     ch = run.chain
     T = len(run.rows)
