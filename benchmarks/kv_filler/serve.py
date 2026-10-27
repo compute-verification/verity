@@ -284,7 +284,7 @@ def main() -> int:
 
     import torch
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
+    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -315,8 +315,8 @@ def main() -> int:
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t:.1f} s ({a.pool})")
     eng = llm.llm_engine
-    runner = get_model_runner(llm)
-    sched = get_scheduler(llm)
+    runner = handle.model_runner(llm)
+    sched = handle.scheduler(llm)
     cache = eng.vllm_config.cache_config
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)
