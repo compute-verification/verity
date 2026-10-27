@@ -144,7 +144,7 @@ def OnTime (ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω �
 `o`, the capacity coins `x` and the memory challenger's draw `(I, v)`: for each of the 105 rounds, the state `τ` starts
 it from and the program it runs on index `I j`, shown the session commitment (`commitmentOf`, at the designated id,
 bound to the published root), the first round starting from what survived setup. -/
-def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
+noncomputable def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
     (v : ByteArray × ByteArray) :
     List (List Bool × Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
@@ -153,7 +153,7 @@ def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
     (τ.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
 
 /-- The blocks `τ` returns in its trace's rounds, on the period's primitive. -/
-def answers (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
+noncomputable def answers (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
     (v : ByteArray × ByteArray) : List (Bits sch.ℓ) :=
   (P.trace τ o x I v).map fun e => (e.2.run ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)).1
