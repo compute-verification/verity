@@ -28,7 +28,6 @@
 #     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
 #     every Verity package must import from this tree (verity_from_tree, verity_vllm_from_tree,
 #     no_old_tree_on_path); the network/disk/cgroup-memory measurements are advisory and never fail the bootstrap.
-#   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
