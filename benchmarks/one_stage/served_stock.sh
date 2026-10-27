@@ -23,7 +23,7 @@ PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
-ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
+ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 
 serve() {  # under the lease: rep $1's endpoint, its LOADS loads, the endpoint stopped
