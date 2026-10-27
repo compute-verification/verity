@@ -43,7 +43,7 @@ stratified law the Lean verifier's soundness covers:
 
 **Counted sessions.** A session counts toward throughput only if the Lean verifier accepts it (ruling on D12, 17 Oct). The
 sweep before the draw (verifier runs of 17 Oct 08:29–08:31Z) proved the whole staged set with no draw; every check passed
-and the verifier refused it under D12 (`verity/ml/flock/verifier/PROTOCOL.md` §16.15). Those runs are labelled "checks
+and the verifier refused it under D12 (`Flock.ProvedScope`). Those runs are labelled "checks
 pass, refused under D12 (no draw)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
 and `table` and `baseline` read none of them.
 

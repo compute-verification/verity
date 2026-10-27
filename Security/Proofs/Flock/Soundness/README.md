@@ -7,7 +7,7 @@ analysis, the compiled proof, the knowledge extractor, the spec deviations, the 
 and the post-quantum and root-reuse analyses.
 
 The interactive mode only. The Lean development is this directory (namespace `FlockSoundness`). The verifier it is about
-is specified in `../../../../verity/ml/flock/verifier/PROTOCOL.md`. The work is staged along a16z's zkVM security stages (DESIGN.md §7).
+is the Lean package `verity/core/service/flock/` (outlined in `verity/ml/flock/verifier/README.md`). The work is staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
 
