@@ -1618,6 +1618,12 @@
    "owner": "@compute-research",
    "digest": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8"
   },
+  "Pouw.Assumptions.OutsourceWithinEgressPeriod": {
+   "owner": "@compute-research"
+  },
+  "Pouw.Assumptions.RemoteWorkFloor": {
+   "owner": "@compute-research"
+  },
   "Pouw.Assumptions.RootAfterCoin": {
    "owner": "@compute-research",
    "digest": "4b9bb970ba587d1da646ab449cc5fcd19b35a1240412514369b18c357f072979"
@@ -2181,7 +2187,9 @@
   "PouwCommit.Py",
   "PouwCommit.Coins",
   "PouwCommit.Draws",
-  "SampledProofs"
+  "SampledProofs",
+  "Proofs.Pouw.DitherWitness",
+  "Proofs.Pouw.ServedFreed"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
@@ -2801,7 +2809,9 @@
    "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.JointBridge.Guarantees.JointHorizonBlocksDeployed": "the deployed joint guarantee's hypotheses include each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock over Flock.Guarantees.ServerBlocks), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+   "Proofs.Accounting.JointBridge.Guarantees.JointHorizonBlocksDeployed": "the deployed joint guarantee's hypotheses include each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock over Flock.Guarantees.ServerBlocks), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.DitherWitness": "the honest and nontrivial witnesses (LEAN-66) of ServedFreed state their premises and the accept-everything break at RT-LEAN L7's toy instance (`tw`, `twRound`, `twPd`, `twVerdict`, `honest`), which is proof-only; CMP-145",
+   "Proofs.Pouw.ServedFreed": "ServedFreed's witnesses (LEAN-66) read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it; CMP-145"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -10868,6 +10878,15 @@
    "assumptions": [],
    "type_hash": "1e679ec8c0e50fa88bfd9f987eb3de9f651b1316ddbcdafad82b042393c126fb"
   },
+  "Pouw.SecurityProofs.ServedFreed": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.ServedFreed_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.ServedFreed_nontrivial": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.ShaRealize.ExtractOfRealize : Pouw.Guarantees.ShaRealize.ExtractOfRealize"],
@@ -10897,6 +10916,9 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
+   "owner": "@compute-research"
   },
   "RecDeploy.lamLin2_deployed_ge": {
    "owner": "@proofs",
@@ -12289,7 +12311,11 @@
    "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
+   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pouw.SecurityProofs.ServedFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and ImportWithinCertifier, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads (CMP-145, CMP-136).",
+   "Pouw.SecurityProofs.ServedFreed_honest": "completeness: ServedFreed's honest witness (LEAN-66): every premise, RemoteWorkFloor from WorkSound's conclusion and OutsourceWithinEgressPeriod from the per-program premise among them, holds at RT-LEAN L7's toy instance, the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so ServedFreed is not vacuous (CMP-145).",
+   "Pouw.SecurityProofs.ServedFreed_nontrivial": "lemma: ServedFreed's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verdicts that accept everything; a counterexample about no protocol function (CMP-145).",
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod (RT-POOL RP21), one premise's form from another's, about no protocol function's acceptance (CMP-145)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

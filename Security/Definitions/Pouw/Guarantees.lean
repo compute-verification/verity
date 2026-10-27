@@ -10,6 +10,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Definitions.Pouw.Guarantees.PearlCTileCheck
 import Definitions.Pouw.Guarantees.Receipt
 import Definitions.Pouw.Guarantees.RelativeSecurity
+import Definitions.Pouw.Guarantees.ServedFreed
 import Definitions.Pouw.Guarantees.ShaRealize
 import Definitions.Pouw.Guarantees.Window
 
