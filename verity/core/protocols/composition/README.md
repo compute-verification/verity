@@ -1,18 +1,19 @@
 # core_composition: onsite and remote Verity as core protocols
 
 Three Lake packages, each on C-Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on
-their ported components' packages, with no Mathlib:
+their ported subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
-  stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
-- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, the remote bandwidth
-  audit and the network certifier.
+  stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
+- `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, proof of useful space
+  (PoUS), proof of useful bandwidth (PoUB) and network certification.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, for an auditor with
-  no device at the datacenter, so where PoUW's coins are kept confidential there is open ([PoUW](../pouw/README.md)).
+  no device at the datacenter. Dither's challenger then sits outside the datacenter, and it can simply be the network
+  certifier ([PoUW](../pouw/README.md)).
 
-The rule and the formats are written once, over any list of components, and the two products are values
-of it that differ in their id and components. Each product's executable is the core CLI (`onsite id | check | serve`,
+The rule and the formats are written once, over any list of subprotocols, and the two products are values
+of it that differ in their id and subprotocols. Each product's executable is the core CLI (`onsite id | check | serve`,
 `remote id | check | serve`), and its `serve` is what the difftest drives.
 
 ## The protocol
@@ -24,25 +25,25 @@ of it that differ in their id and components. Each product's executable is the c
 | evidence | `{"components":[{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS},...]}`: each component's case (what its own `serve` reads), under its id, in the same order |
 
 All three are canonical JSON or bytes, and an object with a key missing or a key more is refused. The check runs each
-component's `answer` on its case, then decides, reject first:
+subprotocol's `answer` on its case, then decides, reject first:
 
-| the components' answers | onsite / remote |
+| the subprotocols' answers | onsite / remote |
 | --- | --- |
 | any rejects, whatever the others answer | reject |
-| the cases don't fit (a component unknown, missing, repeated or out of order, or a case under other params) | reject |
+| the cases don't fit (a subprotocol unknown, missing, repeated or out of order, or a case under other params) | reject |
 | none rejects, and the commitment isn't the binding of their digests | reject |
 | none rejects, the commitment binds them, and some is undecided | undecided |
 | every one accepts, and the commitment binds them | accept |
 
-On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
-keyed by the component's id. On rejection or undecided nothing is public.
+On acceptance the product makes public each subprotocol's public outputs and keeps each one's profile, both as JSON objects
+keyed by the subprotocol's id. On rejection or undecided nothing is public.
 
 `Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
 states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
 and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
-component accepts its own case, and the commitment is `bind` of the components' digests.
+subprotocol accepts its own case, and the commitment is `bind` of the subprotocols' digests.
 
-## Components
+## Subprotocols
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
@@ -52,13 +53,13 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | the remote bandwidth audit (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 
-Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
+Until its port lands, a subprotocol is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
 replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
-own difftest or its period hook. Every component of both products is ported. The inference-only policy is not yet a
-component of the composites, and neither is the trial's reconciling.
+own difftest or its period hook. Every subprotocol of both products is ported. The inference-only policy is not yet a
+subprotocol of the composites, and neither is the trial's reconciling.
 
 ## The difftest
 
@@ -69,7 +70,7 @@ of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
 the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
 certificates and one-stage's answers, on small signed periods from its `build`), which that component's own difftest
-holds its Lean to; for PoUS and the remote bandwidth audit, their Python verifiers' answers on small periods of their hooks
+holds its Lean to; for PoUS and PoUB, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
@@ -82,11 +83,11 @@ trial's differs, and the reference is changed to match (`verdict`; the trial's, 
   statement has failed, so a prover could hide a rejection by leaving another component undecided. Here any rejection
   rejects. `test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_component` pins the difference,
   and `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the two apart: a reference with the
-  trial's rule disagrees with the Lean, on a case where one component rejects and another is undecided.
-- **Every component counts.** Of the components' statements, the trial's inference-only check (`Nci.verifier`) fails
+  trial's rule disagrees with the Lean, on a case where one subprotocol rejects and another is undecided.
+- **Every subprotocol counts.** Of the subprotocols' statements, the trial's inference-only check (`Nci.verifier`) fails
   the epoch on PoUW's reasons alone (sampled proofs' reach it through them), and PoUS's or the network certifier's
-  reasons only zero their explained usage in the balance. Here each component's rejection rejects; `trial_verdict`
-  already counts every component's.
+  reasons only zero their explained usage in the balance. Here each subprotocol's rejection rejects; `trial_verdict`
+  already counts every subprotocol's.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.

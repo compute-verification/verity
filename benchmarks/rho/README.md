@@ -62,10 +62,10 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   period (`Horizon`). `Units` is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its
   `units.basis`).
 - **Protocol soundness**, the admissible sets (`envelopes.py`, `data/envelopes.toml`): each protocol (PoUW, detection
-  and sampled proofs, the wipe, the certifier) is one admissible set `𝒜_p` with its parameters, the free gates it
+  and sampled proofs, the memory wipe, network certification) is one admissible set `𝒜_p` with its parameters, the free gates it
   leaves (by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_p`, split into `δ_coin` and
   `δ_crypto`. The inference-only policy is the registration (`Policy`), taken as registered in every scenario though
-  it is not yet a component of the composites. A regime is the protocols that run, and builds the server blocks with
+  it is not yet a subprotocol of the composites. A regime is the protocols that run, and builds the server blocks with
   their cuts.
 - **The overhead lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as yields `q(c, k)` of
   a block with budgets `(c, k)`, the attacks as constructions, and the sum over server blocks: each server block's least

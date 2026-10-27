@@ -7,7 +7,7 @@ a protocol with no rounds: the developer registers R = (θ, D, 𝓘), and the ve
 and the registered information alone. In Lean it is `Nci.Complies`, in an older form (below), and its check is
 `NciCheck`.
 
-The inference-only policy is not yet a component of the composites: neither onsite nor remote
+The inference-only policy is not yet a subprotocol of the composites: neither onsite nor remote
 (`verity/core/protocols/composition`) runs its check today.
 
 ## Why it separates inference from training
@@ -17,9 +17,9 @@ divides into inference blocks with a small fresh-input budget (`Nci.Guarantees.I
 rollout) reads an enormous amount, say 1 TB of new parameters, so training that runs through inference blocks gets
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The overhead lower bound sums those yields with free compute, at the hardware's rate,
-and with the server-block yields that the wipe, PoUS and the network certifier bound (`GLOSSARY.md`, "Size, credit and
+and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
 the overhead lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
-scenarios register a policy as if it were a component.
+scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
 

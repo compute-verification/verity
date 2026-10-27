@@ -16,26 +16,26 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | Subprotocol | What an accepted run establishes | Where |
 | --- | --- | --- |
 | Sampled proofs | The auditor draws proof blocks of a committed circuit with live coins, and C-Flock proves each drawn block's values in the committed trace right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
-| Proofs of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
-| Proofs of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
+| Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
+| Proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
 | The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
-| The remote bandwidth audit | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
-| The network certifier | An auditor-trusted device on each node's uplink certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
-| The wipe | A registered server's life is cut into server blocks, each opened by a certified wipe of its memory, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
+| Proof of useful bandwidth (PoUB) | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
+| Network certification | An auditor-trusted device on each node's uplink, the network certifier, certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
+| The memory wipe | A registered server's life is cut into server blocks, each opened by a certified memory wipe, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
 | The inference-only policy | Inference rather than training: the declared circuit divides into inference blocks of c gates, each reading at most k bits of fresh input. A protocol with no rounds, which the verifier checks from the declared circuit and the registered information alone. | [`verity/core/protocols/network/nci`](verity/core/protocols/network/nci/README.md) |
 
 ## The two composite protocols
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every component accepts its own case, and the commitment binds all of theirs.
+every subprotocol accepts its own case, and the commitment binds all of theirs.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, the remote bandwidth audit and the network certifier.
+  PoUS, PoUB and network certification.
 - **Remote** (`verity/core/protocols/remote`), for an auditor with no devices there: sampled proofs and PoUW.
 
-The wipe and the bandwidth audit over PoUS's store are not components of either yet, and the inference-only policy is
-not yet a component of the composites.
+The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
+policy is not yet a subprotocol of the composites.
 
 ## The vLLM integration
 
@@ -81,7 +81,7 @@ Not yet:
 - GLM-5.3 and DeepSeek-V4-Pro through sampled proofs and the Lean verifier.
 - Coverage counted in AND gates, as a share of the served computation.
 - The whole served run's circuit committed and proved, and the weights tied to a checkpoint in zero knowledge.
-- PoUW, PoUS, the bandwidth audits and the network certifier composed on one served engine.
+- PoUW, PoUS, the bandwidth audit, PoUB and network certification composed on one served engine.
 
 ## Where to start
 
@@ -109,7 +109,7 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, network certification and the memory wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
 | vLLM | Llama-3.2-1B in int8, served by vLLM on one H200 through the committing endpoint. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
 
