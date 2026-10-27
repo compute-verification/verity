@@ -31,7 +31,9 @@ computed in the decoder's order (callees first) and shared by every activation:
 * `ret`: its return leaves as segments (`Seg`) of pieces (`Piece`). A piece is `rows` runs `base + r * rowStride +
   t * stride` of the activation's own gates (of one width) or of one parameter's leaves (a pass-through); a strided part
   is one piece of rows. A segment is one piece, or `reps` copies of one batch member's return pieces, each `shift` gates
-  after the one before (a batch's whole members, read as a block);
+  after the one before (a batch's whole members, read as a block). Gate pieces that continue one progression, then runs
+  of one length at one step, are joined (`coalesce`): a body unrolled element by element returns one piece, not one per
+  node, and every read of it is one segment;
 * `used`: per parameter, the leaves some gate of it reads, as intervals (`ivsOf`: a piece of rows as periodic intervals,
   those of one period and count merged, so the rows of a transposed read become runs).
 
@@ -804,6 +806,48 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
       | _ => true
     | none => false
 
+/-- `p` then `q`, gates of one width in one row each, as one row: `q` the next elements of `p`'s progression. At most
+`WALK` elements, so that no run `carryRuns` takes from a joined piece is longer than one it took from the two. -/
+def Piece.join (p q : Piece) : Option Piece :=
+  match p.tgt with
+  | .ref _ _ => none
+  | .gate _ =>
+    let st := if p.len == 1 then q.base - p.base else p.stride
+    if p.tgt == q.tgt && p.rows == 1 && q.rows == 1 && 0 < p.len && 0 < q.len && p.len + q.len ≤ WALK &&
+        (q.len == 1 || q.stride == st) && q.base == p.base + p.len * st then
+      some { p with stride := st, len := p.len + q.len }
+    else none
+
+/-- `p` then `q`, gates of one width, as rows: `q` one row of `p`'s length and stride, one row step after `p`'s last
+row. At most `WALK` elements, as `Piece.join`. -/
+def Piece.stack (p q : Piece) : Option Piece :=
+  match p.tgt with
+  | .ref _ _ => none
+  | .gate _ =>
+    let rs := if p.rows == 1 then q.base - p.base else p.rowStride
+    if p.tgt == q.tgt && 0 < p.rows && q.rows == 1 && 0 < p.len && q.len == p.len &&
+        (p.len == 1 || q.stride == p.stride) && (p.rows + 1) * p.len ≤ WALK && q.base == p.base + p.rows * rs then
+      some { p with rows := p.rows + 1, rowStride := rs }
+    else none
+
+/-- The piece of a segment of one copy of one piece. -/
+def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 then s.ps[0]? else none
+
+/-- `out` then `s`, `s` joined by `f` to `out`'s last segment where both are one copy of one piece and `f` joins them. -/
+def Seg.joinWith (f : Piece → Piece → Option Piece) (out : Array Seg) (s : Seg) : Array Seg :=
+  match out.back?.bind Seg.single, s.single with
+  | some p, some q => match f p q with
+    | some r => out.pop.push (.one r)
+    | none => out.push s
+  | _, _ => out.push s
+
+/-- A return's segments with its gates coalesced, the same positions in the same order: runs of a progression joined
+(`Piece.join`), then runs of one length and stride at one step stacked as rows (`Piece.stack`). A body unrolled element
+by element, one primitive node an element, returns its elements every few gates: one piece, where `down` gives one per
+node (GLM-5.3's FP8 group quantizer: 6,192 return pieces, and as many segments in every read of them). -/
+def coalesce (segs : Array Seg) : Array Seg :=
+  (segs.foldl (Seg.joinWith Piece.join) #[]).foldl (Seg.joinWith Piece.stack) #[]
+
 /-- Definition `d`'s summary, its callees' in `memo`. -/
 def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do
   let defn := P.defs[d]!
@@ -820,7 +864,7 @@ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summar
       for q in s.ps do
         if let .ref true i := q.tgt then
           acc := acc.modify i (·.push q)
-  return { ret := PS.of ret, used := acc.map fun qs => Ivs.norm (ivsOf qs) }
+  return { ret := PS.of (coalesce ret), used := acc.map fun qs => Ivs.norm (ivsOf qs) }
 
 /-- The Definitions the root reaches, each once. -/
 def reached (P : Prog) : Array Bool := Id.run do
