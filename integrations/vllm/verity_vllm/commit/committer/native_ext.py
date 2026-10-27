@@ -24,8 +24,8 @@ def build_source_digest() -> str:
 def ext(build_dir: str | None = None, verbose: bool = False):
     """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
     PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- torch's
-    mtime test is never the arbiter of staleness (record_v5/ship.sh preserves source mtimes; a pod-wide dir warmed by another tree's build
-    was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
+    mtime test is never the arbiter of staleness (a ship that preserves source mtimes would otherwise adopt a pod-wide dir warmed by
+    another tree's build).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
     on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:

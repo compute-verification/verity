@@ -39,9 +39,8 @@ def reads(tp: Any) -> str:
     once per statement) for a ``SPLITS`` part of at least one whole block (T >= BN: inline, step 16's 64-key part's EX2 reads
     are 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
-    622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB, r20261025-072909-38b5; in slots, 314M nonzeros for
-    8,473,952 ANDs, 37 an AND, k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives
-    refused, r20261025-094406-c40b) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
+    622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
+    k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
     from verity_vllm.pipeline import split_rows as SP

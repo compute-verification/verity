@@ -1510,7 +1510,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 mism = (model != D) | err
                 any_mism |= mism
                 fam["models"][mname] = {"mismatches": int(mism.sum()), "domain_errors": int(err.sum())}
-            # compatibility with the WP1 field names: the first (declared) model's count
+            # the legacy bench-result/v1 field names (trust.py reads them): the first (declared) model's count
             fam["mismatches_vs_model"] = fam["models"][model_names[0]]["mismatches"]
             fam["model_domain_errors"] = fam["models"][model_names[0]]["domain_errors"]
             for t, i, j in list(zip(*np.nonzero(any_mism)))[:FIRST_MISMATCHES]:
@@ -1799,7 +1799,7 @@ def main() -> int:
             ap.error("--no-input-d is a tcgen05 mode (sm100.tcgen05.mma.bf16)")
         probe.set_enable_input_d(False)
         identity["enable_input_d"] = 0
-    results["pipeline"] = ins.models[0].pipeline.name  # WP1 field
+    results["pipeline"] = ins.models[0].pipeline.name  # the legacy field trust.py reads
     print("device", json.dumps(identity), flush=True)
     print("layout_check", json.dumps(results["layout_check"]), flush=True)
 

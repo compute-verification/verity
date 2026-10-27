@@ -1,6 +1,7 @@
 #!/bin/sh
 # Every 5 min: bring Neon's `store_private` up to the bucket (`research data index --postgres`, the store README §5.1), and, once
-# store-export.env exists, rebuild `store_public` from the export bucket (`--public`). Code: /data/infra/store-index-src, a
+# store-export.env names the export bucket, rebuild `store_public` from it (`--public`), with store-export.env's key pair if it
+# has one, else r2.env's, which also writes that bucket (fixtures_export.sh). Code: /data/infra/store-index-src, a
 # tools/research tree whose COMMIT file names it. The credentials go only into the environment: r2.env is sourced, and the
 # unquoted lines of store-index.env (its URL has `&`) and store-export.env are read with sed. Log: /data/infra/store-index.log
 LOG=/data/infra/store-index.log
@@ -18,10 +19,12 @@ while :; do
       for v in RESEARCH_EXPORT_BUCKET RESEARCH_EXPORT_ACCESS_KEY_ID RESEARCH_EXPORT_SECRET_ACCESS_KEY RESEARCH_EXPORT_ENDPOINT; do
         x=$(val $v $CONF/store-export.env); [ -n "$x" ] && export "$v=$x"
       done
-      if [ -n "$RESEARCH_EXPORT_BUCKET" ] && [ -n "$RESEARCH_EXPORT_ACCESS_KEY_ID" ] && [ -n "$RESEARCH_EXPORT_SECRET_ACCESS_KEY" ]; then
-        PUBLIC=--public
+      if [ -z "$RESEARCH_EXPORT_BUCKET" ]; then
+        echo "$(date -u +%FT%TZ) store-export.env lacks RESEARCH_EXPORT_BUCKET: no --public"
+      elif [ -n "$RESEARCH_EXPORT_ACCESS_KEY_ID" ] && [ -z "$RESEARCH_EXPORT_SECRET_ACCESS_KEY" ]; then
+        echo "$(date -u +%FT%TZ) store-export.env has RESEARCH_EXPORT_ACCESS_KEY_ID without _SECRET_ACCESS_KEY: no --public"
       else
-        echo "$(date -u +%FT%TZ) store-export.env lacks RESEARCH_EXPORT_BUCKET, _ACCESS_KEY_ID or _SECRET_ACCESS_KEY: no --public"
+        PUBLIC=--public
       fi
     fi
     cd /data/infra/store-index-src && PYTHONPATH=src LC_ALL=C.UTF-8 timeout 3000 \

@@ -141,7 +141,7 @@ def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch():
     assert rep["mismatches"] == {"intermediate": 0, "final": 1, "epilogue": 0, "total": 1} and rep["first_mismatches"][0]["step"] == 47
 
 
-# --- the Hopper synthetic sets (lane b-hopper) ---------------------------------------------------------------------------------------------
+# --- the Hopper synthetic sets ----------------------------------------------------------------------------------------------------------
 
 
 def test_hopper_sets_are_declared_with_their_targets_and_digests():

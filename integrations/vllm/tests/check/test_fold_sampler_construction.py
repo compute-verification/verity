@@ -4,7 +4,7 @@ program_sampler_construction`, passed as `pipeline.match --program-dir`), never 
 A single-request Program's select is specialised on its constant split count (`GumbelTopPTokenSelect_v2{V,S}`, `registry.topp_words`),
 which has no shared-greedy form: it compares as the plain `GumbelTopPTokenSelect_v1{V}` (`split_selects.as_fold_selects`), so its fold
 binds that one.  A Program whose selects read the `splits` Input (every batched component) declares S4's `shared-greedy` and folds to
-`GumbelTopPTokenSelectSharedGreedy_v1{V}`, as before.  Workload 101's fourth Match (r20260928-175437-cfe5) failed on exactly this pair: derived
+`GumbelTopPTokenSelectSharedGreedy_v1{V}`, as before.  Workload 101's fourth Match failed on exactly this pair: derived
 `GumbelTopPTokenSelect_v1` x32, record `GumbelTopPTokenSelectSharedGreedy_v1` x32.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ from verity.ml.definitions.registry import dead_free, topp_words
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 PLAIN, SHARED = "greedy-check-per-stage", "shared-greedy"
-#: workload 101's fourth try (run r20260928-175437-cfe5): its Build (`build_request/`) and its records (the Match's files)
+#: workload 101's fourth try: its Build (`build_request/`) and its records (the Match's files)
 BUILD_101 = "art:7fef3bd2ef46404067d0c4a534cd0fef72e730f4d01c8b7a6a20022eb5edd9f7"
 RECORDS_101 = "art:89aa13c1fa28b559c1928526dedf8175f34587f7a6ae82bd1fb10555ed35999d"
 ROW_101 = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"

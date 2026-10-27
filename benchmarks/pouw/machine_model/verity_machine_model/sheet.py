@@ -350,7 +350,7 @@ def lean(s: Sheet, data: Path) -> str:
     out += [""] + _wrap("Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or "
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
-                        "channels don't list NVLink peer offload (RT-SCOPE-1).", "")
+                        "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
                         "the machine model's tests hold it to that output.", "")
     out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
