@@ -195,7 +195,8 @@ namespace SampledProofs.OneStageZk
 theorem checkBlobs_live {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} (h : checkBlobs p c e bs = .accept pub prof) :
     ∃ vs, OneStage.checkLive p.base c { e.base with verdicts := vs } = .accept pub prof := by
-  unfold checkBlobs at h
+  replace h := _root_.SampledProofs.OneStageZk.checkProofs_of_accept h
+  unfold checkProofs at h
   split at h
   · cases h
   · rename_i r _

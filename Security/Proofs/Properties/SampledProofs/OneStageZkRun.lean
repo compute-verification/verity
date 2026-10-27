@@ -1,4 +1,5 @@
 import Properties.SampledProofs.OneStageZk
+import Proofs.Properties.SampledProofs.OneStageZkPublic
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Claims.KS.ZkAccepts
 import Proofs.Flock.Claims.Recursion.RecRecord
@@ -257,7 +258,8 @@ theorem session_verdict {p : Params} {c : OneStage.Commitment} {e : Evidence} {b
           (coinKeyOf record
             (setupAt (inputsOf tags0 p.own circuitB pubB (Core.Blobs.ofArray blobs)) rd
               (Flock.Witness.recordDraw record))) = .ok () := by
-  unfold checkBlobs at hacc
+  replace hacc := _root_.SampledProofs.OneStageZk.checkProofs_of_accept hacc
+  unfold checkProofs at hacc
   split at hacc
   · cases hacc
   · next r hrun =>

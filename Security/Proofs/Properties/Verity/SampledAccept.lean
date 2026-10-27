@@ -150,7 +150,8 @@ undecided (`OneStage.verdictOf`: no verifier of record), never an acceptance. -/
 theorem session_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} (hacc : checkBlobs p c e bs = .accept pub prof) :
     ∃ s, s ∈ e.sessions := by
-  unfold checkBlobs at hacc
+  replace hacc := _root_.SampledProofs.OneStageZk.checkProofs_of_accept hacc
+  unfold checkProofs at hacc
   split at hacc
   · cases hacc
   · next r hrun =>
@@ -186,6 +187,37 @@ theorem session_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} 
       | exact (hchk _ _ (hne ▸ hacc)).elim
       | exact (hchk _ _ (hne.symm ▸ hacc)).elim
       | (subst hne; exact (hchk _ _ hacc).elim)
+
+/-- **The statement's inputs**: `SessionInputs` with the public file the registration `c` names (`registeredPublic`) in
+place of the evidence's: the statement's tags, and the circuit and public files the blobs hold under the digests the
+parameters and the registration name. It reads no evidence. -/
+def StatementInputs (p : Params) (c : OneStage.Commitment) (blobs : Array ByteArray) (I : Exec.Inputs) : Prop :=
+  ∃ d tags0 circuitB pubB, registeredPublic c = some d ∧ Flock.Tags.find? STATEMENT = some tags0 ∧
+    (Core.Blobs.ofArray blobs).get p.own.circuit "circuit" = .ok circuitB ∧
+    (Core.Blobs.ofArray blobs).get d "public file" = .ok pubB ∧
+    I = sessionI tags0 circuitB pubB (tablesOf (Core.Blobs.ofArray blobs)) p.own
+
+/-- **An accepted session's inputs are the statement's**: where v2 accepts, the evidence's public file is the one the
+registration names (`public_of_accept`: `checkBlobs` refuses any other), so the statement's inputs are the session's. -/
+theorem sessionInputs_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
+    {pub : OneStage.Public} {prof : Core.Integrity}
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) {I : Exec.Inputs}
+    (hI : StatementInputs p c blobs I) : SessionInputs p e blobs I := by
+  obtain ⟨d, tags0, circuitB, pubB, hd, ht, hc, hp, rfl⟩ := hI
+  have he := _root_.SampledProofs.OneStageZk.public_of_accept hacc
+  rw [hd] at he
+  obtain rfl := Option.some.inj he
+  exact ⟨tags0, circuitB, pubB, ht, hc, hp, rfl⟩
+
+/-- **Where v2 accepts, the statement has inputs, and they are the session's.** -/
+theorem statementInputs_of_accept {p : Params} {c : OneStage.Commitment} {e : Evidence} {blobs : Array ByteArray}
+    {pub : OneStage.Public} {prof : Core.Integrity}
+    (hacc : checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof) :
+    ∃ I, StatementInputs p c blobs I ∧ SessionInputs p e blobs I := by
+  obtain ⟨s, hs⟩ := session_of_accept hacc
+  obtain ⟨tags0, circuitB, pubB, _rd, _b, _record, _proofs, ht, hcB, hpB, _⟩ := acceptsZK_of_session hacc hs
+  exact ⟨_, ⟨e.pub, tags0, circuitB, pubB, _root_.SampledProofs.OneStageZk.public_of_accept hacc, ht, hcB, hpB, rfl⟩,
+    tags0, circuitB, pubB, ht, hcB, hpB, rfl⟩
 
 end Properties.SampledProofs.OneStageZk
 

@@ -42,6 +42,16 @@ def InputsAt (V : Vocab d α) (Brk : Outcome → Prop) (I : Exec.Inputs) : Prop 
     _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
     SessionInputs p e o.sent.blobs I
 
+/-- **`InputsAt` from the statement's inputs**: inputs that are the statement's wherever v2 accepts off the break
+(`StatementInputs`, which reads the registration's public file and no evidence) are the session's, since v2 refuses an
+evidence's public file the registration doesn't name (`sessionInputs_of_accept`). -/
+theorem inputsAt_of_statement {V : Vocab d α} {Brk : Outcome → Prop} {I : Exec.Inputs}
+    (h : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
+      _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
+      Properties.SampledProofs.OneStageZk.StatementInputs p c' o.sent.blobs I) :
+    InputsAt V Brk I := fun o hv hb p c' e pub prof hc hacc =>
+  Properties.SampledProofs.OneStageZk.sessionInputs_of_accept hacc (h o hv hb p c' e pub prof hc hacc)
+
 /-- **Where sampled proofs' verdict accepts, session 0 has a transcript.** -/
 theorem sess0_of_verdict {V : Vocab d α} {o : Outcome} (hv : V.Verdict .sampled o) : ∃ t, Sess0 o.sent t := by
   obtain ⟨p, c', e, pub, prof, hcase, hacc⟩ := componentAccepts_sampled hv.2.2
