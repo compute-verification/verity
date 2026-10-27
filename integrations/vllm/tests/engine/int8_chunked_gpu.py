@@ -1,4 +1,4 @@
-"""VLLM-79 (1) on one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served with
+"""On one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served with
 `TargetProfile.int8_exact` (linears and attention) at ``--mnbt`` = vLLM's max_num_batched_tokens, greedy, on PROMPTS: two
 512-token prompts, a 300-token one and a short one, batched, then the first 512-token prompt alone.  At 64 every long prompt is
 prefilled in 64-row chunks (`engine.int8_ops.paged_attention` serves a request's m rows as the last m of its s-token window); at

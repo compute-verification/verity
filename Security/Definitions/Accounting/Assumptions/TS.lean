@@ -11,13 +11,13 @@ instructions (heads, ownership, copies); an assumption over a run is claimed for
 Which form each takes:
 
 * (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, on the rows of the vector
-  its statement names), checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet
+  its statement names), checked by measurement: a corpus program that runs faster than a facet
   falsifies it.
 * (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
   is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
 * (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
   class P and a per-instruction cap `κ` (`q = 2.03`, `q_T = 1.22`, `b_T` from `κ`), rests on Theorem C, which is
-  false as stated (FLOORS r3). The proved count is FLOORS' `Pouw.Guarantees.Eps1.ClassPSlots` (#2436): a class-P
+  false as stated. The proved count is `Pouw.Guarantees.Eps1.ClassPSlots`: a class-P
   program whose writers each create at most `w` incidences costs at least `1 + (32 − w)/(65·d)` issue slots a word,
   `d` words a slot (`1.185` at `w = 8`, `d = 2`). No cap on `w` is proved, class P is a modeling restriction, and a
   table route lies outside `ClassPSlots`, so the floors stay an assumption; they are the model's parameters, so every
@@ -27,11 +27,11 @@ Which form each takes:
   the menu heads a fresh word.
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
-  `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
+  `benchmarks/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds
   below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
   (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
   `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
-  least the menu's routes of `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded (ASK-6 = A): the fold priced
+  least the menu's routes of `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded: the fold priced
   at the words the run folds, `FoldOpt` its case at `N_w`. `FoldOptFoldedAt` is it at one certificate, the one D-ideal
   prices at; the headlines take it at their `π*` (RT2-LOGIC-1), so a run that skips folds is charged through
   `WholeLuckAt`.
@@ -40,7 +40,7 @@ Which form each takes:
   * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words (decision 110), through Lemma B at
     fibre 1;
   * `ReceiptLuckAt`, the receipt luck, which is HMU's B′ case.
-  `WholeLuckAt` is B′ at a unit whose fold the run skips, the whole-unit luck at `p₀` (ASK-9 = A: `½`, B′'s value).
+  `WholeLuckAt` is B′ at a unit whose fold the run skips, the whole-unit luck at `p₀` (`½`, B′'s value).
   `OperandLuckCube` proves the operand luck at ¾ for degree-2 operands on cube bits. Its hypothesis restricts the
   cheater to affine-operand runs (RT-HEADLINE), so it is a proved route, not a premise.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
@@ -123,7 +123,7 @@ the run's fold is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
 def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * Z.Nw * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
-/-- `accounting-ts-fold-opt` (assumed; FOLD-OPT per word folded, ASK-6 = A). **FOLD-OPT_μ per word folded**: at every
+/-- `accounting-ts-fold-opt` (assumed; FOLD-OPT per word folded). **FOLD-OPT_μ per word folded**: at every
 certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, `folded` the words it folds a unit. `FoldOpt`
 is its case at `N_w`. -/
 def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
@@ -196,16 +196,15 @@ It implies the operand luck at `μ` on each positive level of the share, and tha
 `1/μ` outcomes, with the share itself as the view. -/
 def OperandHMu {Ω : Type} [Fintype Ω] {S : ℕ} (μ : ℝ) (G : ReceiptGame Ω S) : Prop := G.OperandPointMass μ
 
-/-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`; ASK-9 = A,
-card 8b00536a: named and conjectured). **The receipt luck at `pr`**: in the ideal game split at the receipt, at every round, whatever the past, a
+/-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`;
+named and conjectured). **The receipt luck at `pr`**: in the ideal game split at the receipt, at every round, whatever the past, a
 deficient round whose deficient words are not all right keeps the honest committed value with probability at most
-`pr` (`ReceiptGame.ReceiptLuck`). The headlines take it at `½`: LEDGER §1.3's case (b), two or more wrong places a set
-(note:20261017T1723Z-draft-ledger), for DUO-CP-W and FX1-CP-W at `KS = 4`. Every real skip is in this case at
-`KS = 4`, because one skipped MMA puts a wrong word into each of 4 chains of a set (PROJ r4,
-note:20261018T0515Z-draft-proj-r4).
+`pr` (`ReceiptGame.ReceiptLuck`). The headlines take it at `½`: LEDGER §1.3's case (b), two or more wrong places a set,
+for DUO-CP-W and FX1-CP-W at `KS = 4`. Every real skip is in this case at
+`KS = 4`, because one skipped MMA puts a wrong word into each of 4 chains of a set.
 
 (H-μ) doesn't imply it. `Accounting.Guarantees.HMu.ReceiptLuckOfCoins` needs a fibre bound at the start state the
-cheater knows, and for two or more places a set that bound fails (PROJ r5, note:20261018T1026Z-draft-proj-r5): two
+cheater knows, and for two or more places a set that bound fails: two
 words of a chain at the served keys, three or more at every key. Case (a), one deficient word a unit, gives 0
 (`Accounting.Guarantees.TS.ReceiptLuckCaseA`), but it restricts the cheater, so it is no premise.
 
@@ -214,13 +213,13 @@ places (`Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel` and `Fx1PairXorNoKernel
 counterexample. A per-state fibre bound for two or more places would retire it. -/
 def ReceiptLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (pr : ℝ) (G : ReceiptGame Ω S) : Prop := G.ReceiptLuck pr
 
-/-- `accounting-ts-receipt-luck` (HMU's B′ at a unit whose fold the run skips; ASK-9 = A at `p₀ = ½`, B′'s value, for
+/-- `accounting-ts-receipt-luck` (HMU's B′ at a unit whose fold the run skips; at `p₀ = ½`, B′'s value, for
 live coins only). **The whole-unit luck at `p₀`**: in the ideal game split at the receipt, every round's unfolded share
 (the share of its words whose fold the run skips, fixed before the round's coins) lies in `[0, 1]`, and at every
 round, whatever the past, a round with a positive unfolded share keeps the honest committed value with probability at
 most `p₀` (`ReceiptGame.WholeLuck`). A unit whose fold is skipped commits a value for its receipt that no word it
 folded determines, so its check passes only on a guess. The headlines take it at `½`. The whole-unit guess bound
-`2^-64` for a 64-bit fold state was proposed and isn't granted: no red team has attacked its value (ASK-9's condition).
+`2^-64` for a 64-bit fold state was proposed and isn't granted until a red team attacks its value, and none has.
 It fails if the cheater's view pins the fold state without the fold: a state that a computed word, or a coin read
 before the skip, determines. -/
 def WholeLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) (Uf : Unfolded Ω S) : Prop :=
@@ -251,7 +250,7 @@ def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S 
     (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → pf.right x (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
-/-- `accounting-ts-proofs-sound` (binding in its fork form, the 8 Oct ruling's; `cr/sha-512` bounds it at a finder that
+/-- `accounting-ts-proofs-sound` (binding in its fork form, as ruled; `cr/sha-512` bounds it at a finder that
 runs the window twice from round `w`). **Binding's fork form at `δ_fork`**: at every round `w`, on a run and on its
 continuation from round `w` on fresh coins, which share round `w`'s commitment, every proof of round `w` is accepted
 and some proof opens round `w`'s leaves differently, with probability at most `δ_fork` over the pair
@@ -278,9 +277,9 @@ def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLa
 **The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation on a path
 are right for their derivations on that path's coins. It is a property of the Definitions the window's proofs pass,
 which no Lean here models. As `ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the drawn
-segment's prefix-word set to the one before, so its window's other sets are free witness. PIN (#2417) added checks that
-recompute every word they absorb (`PouwSegCheck_v3`, `PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2`), and nothing
-states that the served relations are those (RT3-LOGIC-3). -/
+segment's prefix-word set to the one before, so its window's other sets are free witness. `PouwSegCheck_v3`,
+`PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2` recompute every word they absorb, and nothing states that the
+served relations are those. -/
 def ProofsPin {Ω : Type} {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) : Prop := pf.Pins
 
 open Classical in

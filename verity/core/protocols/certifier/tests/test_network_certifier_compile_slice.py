@@ -126,7 +126,7 @@ def test_redteams_phase9_choices_are_refused(slice_):
 
 def test_the_cache_binds_the_hit(slice_):
     """The prefix cache's binding on the corpus: CacheStep_v1's hit pinned to the committed table and its tokens free
-    in the piece alone (`test_network_certifier_cache_step_phase9.py`) are bound in the slice. A made-up first table
+    in the piece alone (`test_network_certifier_cache_step_free_hit.py`) are bound in the slice. A made-up first table
     (request 1's first block under ROOT) gives request 1 a free 16-token hit at step 6, and the unit refuses it by its
     ``cache`` check alone when the prover serves that schedule (its own rows in ``srv``), since the table chains from
     the empty row; made-up tokens (request 1's first block as request 0's) give the same hit through a consistent

@@ -9,7 +9,7 @@ the stand-in `advised_traffic.StandInClocks`; of record, the certifier's signed 
 one (only that window: `test_network_certifier_advised_phase15_window.py`).
 
 The rest stays closed: no release strictly before its request's last ingress frame passes under any δ ≥ 0, the
-ingress-end forgery (`test_network_certifier_advised_phase3.py`) is refused by the tie, a sync outside Σ_sync is
+ingress-end forgery (`test_network_certifier_advised_adversarial.py`) is refused by the tie, a sync outside Σ_sync is
 refused, bucket 0 holds the certifier's own frame within R_in, and the advice digest moves with every input it reads.
 """
 
