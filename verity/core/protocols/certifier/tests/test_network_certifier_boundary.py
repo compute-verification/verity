@@ -326,7 +326,7 @@ def test_the_scans_link_windows_fit(G):
     passes it, and the checker form, its egress frame a parameter row, is refused by name."""
     cls, T = IS.Class(B=512, r=4, lanes=4, C=47), 32
     n, sh = G * T, cls.egress
-    st = {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO")}
+    st = {k: getattr(cls, k) for k in IS.STATICS}
     defs = {"IngressScanFirst": bind(IS.IngressScanFirst, **st), "IngressScanBucket": bind(IS.IngressScanBucket, **st),
             "EgressBucket": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)}
     counts = {"IngressScanFirst": 1, "IngressScanBucket": n - 1, "EgressBucket": n}

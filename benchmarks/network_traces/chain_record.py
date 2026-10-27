@@ -674,8 +674,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                              "pooled_share": {d: k / weights_bits for d, k in pooled.items()},
                              "per_period": per, "per_period_share": per / weights_bits,
                              "per_link_window": count(1, None, reading)})
-    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"], "class": {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY",
-                                                                             "WITHIN", "D", "KO")},
+    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
+            "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": {"NS": NS, "NP": NP, "NV": NV, "egress_row": 8 * cls.egress.R * cls.B},
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
