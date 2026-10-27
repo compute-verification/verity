@@ -245,9 +245,11 @@ import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.LastCallsR
+import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.VerdictRowECommit
+import Proofs.Flock.Claims.Recursion.VerdictRowEInner
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
@@ -299,6 +301,24 @@ import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Claims.Recursion.SideCapPos
 import Proofs.Flock.Claims.Recursion.ResLowJD
 import Proofs.Flock.Claims.Recursion.ResLowerD
+import Proofs.Flock.Claims.Recursion.LabelsFull
+import Proofs.Flock.Claims.Recursion.ResSiteD
+import Proofs.Flock.Claims.Recursion.ResLowerDD
+import Proofs.Flock.Claims.Recursion.KSDec
+import Proofs.Flock.Claims.Recursion.ResAccPorts
+import Proofs.Flock.Claims.Recursion.ResChainW
+import Proofs.Flock.Claims.Recursion.OpenCoefTie
+import Proofs.Flock.Claims.Recursion.ResStepsW
+import Proofs.Flock.Claims.Recursion.OpenLevW
+import Proofs.Flock.Claims.Recursion.AccTies
+import Proofs.Flock.Claims.Recursion.HresAsm
+import Proofs.Flock.Claims.Recursion.ResFrameElems
+import Proofs.Flock.Claims.Recursion.ResFramePorts
+import Proofs.Flock.Claims.Recursion.ResEndsW
+import Proofs.Flock.Claims.Recursion.ResStepsWV
+import Proofs.Flock.Claims.Recursion.ResStepsWD
+import Proofs.Flock.Claims.Recursion.ResNextW
+import Proofs.Flock.Claims.Recursion.ResAccEnd
 import Proofs.Flock.Claims.Recursion.ResLowerDA
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its

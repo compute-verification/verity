@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
+import Proofs.Flock.Claims.Recursion.CapOpens
+import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.Claims.Recursion.DeployPremises
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.DeployScope

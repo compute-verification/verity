@@ -249,12 +249,13 @@ def portCalls (c : Circuit) (nm : String) (q n : ℕ) : List (Msg × List HmNets
 verifier's values, and `out`, its zero rows. -/
 def resPorts : List String := ["v", "out"]
 
-/-- The port check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `dirs`, the
-directions of the positions the verifier drew. -/
-def openPorts : List String := ["dirs"]
+/-- The ports check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `coef`, the
+coefficients at the verifier's coins, and `dirs`, the directions of the positions the verifier drew. -/
+def openPorts : List String := ["coef", "dirs"]
 
 /-- **The rows check 5 holds at part `s`**, with the port's index: at an algebra part (`.inner`), ports `v` and `out`
-(`resPorts`) at each of its two instances; at a `rec-open` part of `n` instances, port `dirs` (`openPorts`) at each. -/
+(`resPorts`) at each of its two instances; at a `rec-open` part of `n` instances, ports `coef` and `dirs` (`openPorts`)
+at each. -/
 def valPorts (r : XR) (s : ℕ) : List (String × ℕ × ℕ) :=
   match (RecVStar.statements r.shape).toOption.bind (·[s]?), r.w.parts[s]?.bind partCircuit with
   | some (.inner _ _ _), some c => resPorts.flatMap fun nm => match c.ports.findIdx? (·.name == nm) with
