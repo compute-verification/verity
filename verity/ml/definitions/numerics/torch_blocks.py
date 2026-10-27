@@ -1,7 +1,7 @@
 """numpy models of the training step's blocks, each composed of its Definitions' models (`torch_kernels`, `mla_check.bmm_rows`):
 `registry.torch_attention`'s `EagerAttentionTorch_v1` and its backward on one sequence, `registry.torch_loss`'s
-`LogSoftmaxRow_v1` and `LogSoftmaxNllBackwardRow_v1` on rows, and `registry.torch_embedding`'s `EmbeddingBackwardTied_v1` and
-`EmbeddingTorch_v1`.
+`LogSoftmaxRow_v1` and `LogSoftmaxNllBackwardRow_v1` on rows, `registry.torch_embedding`'s `EmbeddingBackwardTied_v1` and
+`EmbeddingTorch_v1`, and `registry.torch_clip`'s `ClipGradNorm_v1` with its norms and coefficient.
 Their tests hold each block to its model word for word. `MODELS` are the same models by family, as `program_walk` calls them:
 the statics, then each argument's words with the call's members first (`program_walk.Model`)."""
 from __future__ import annotations
@@ -14,7 +14,7 @@ from verity.ml.definitions.registry import mla_check as MK
 
 from . import torch_kernels as TK
 
-__all__ = ["MODELS", "attention", "attention_backward", "embedding", "heads", "row", "row_backward", "tied", "tokens"]
+__all__ = ["MODELS", "attention", "attention_backward", "clip", "embedding", "heads", "row", "row_backward", "tied", "tokens"]
 
 
 def heads(x, H: int, D: int) -> np.ndarray:
@@ -89,6 +89,18 @@ def embedding(t, w) -> np.ndarray:
     return np.where((t < V)[:, None], w[np.minimum(t, V - 1)], np.uint64(0x7FFF)).astype(w.dtype)
 
 
+def _f64(w) -> float:
+    return float(np.array([w], np.uint64).view(np.float64)[0])
+
+
+def clip(g, max_norm, sizes) -> tuple[np.ndarray, np.ndarray]:
+    """`ClipGradNorm_v1`: (the total, the clipped grads' words in SIZES' order) of the grads' words g, concatenated in that
+    order, at the f64 word max_norm."""
+    parts = np.split(np.asarray(g, np.uint16).reshape(-1), np.cumsum(sizes)[:-1])
+    total, out = TK.clip_grad_norm(parts, _f64(max_norm))
+    return np.array([total], np.uint16), np.concatenate(out)
+
+
 def _each(f: Callable[..., Any]) -> Callable[..., Any]:
     """A one-member model ``f(statics, *args)`` applied to each member, its outputs stacked member first."""
     def model(S: dict, *args: np.ndarray) -> Any:
@@ -104,4 +116,11 @@ MODELS: dict[str, Callable[..., Any]] = {
     "LogSoftmaxNllBackwardRow_v1": lambda S, x, t, mx, ls, g: row_backward(x, t, mx, ls, g),
     "EmbeddingBackwardTied_v1": _each(lambda S, t, g, w: tied(t, g, w)),
     "EmbeddingTorch_v1": _each(lambda S, t, w: embedding(t, w)),
+    "ClipGradNorm_v1": _each(lambda S, g, m: clip(g, m, S["SIZES"])),
+    "ForeachNorm_v1": lambda S, x: TK.foreach_norm(list(x))[1],
+    "LpNormChunk_v1": lambda S, x: np.array([TK.lpnorm_chunks(r, bool(S["ALIGNED"]))[0] for r in x], np.uint32),
+    "LpNormCleanup_v1": lambda S, o: TK.bf16(np.array([TK.lpnorm_cleanup(r) for r in o], np.uint32)),
+    "VectorNormBf16_v1": lambda S, h: np.array([TK.vector_norm(r)[1] for r in h], np.uint16),
+    "ClipCoef_v1": lambda S, t, m: np.array([TK.clip_coef(np.array([a], np.uint16), _f64(b))[0] for a, b in zip(t, m)],
+                                            np.uint16),
 }
