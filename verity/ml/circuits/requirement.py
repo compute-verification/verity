@@ -8,7 +8,7 @@ circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean defi
 
 A gate's operands are `layout.Circuit.gate(i).operands`. It uses all of them, except that a primitive with an
 `evaluate_lazy` (a gather: its index and the word it selects) uses the operands its evaluator fetches, which takes the
-run's values (`inputs`, as `evaluate.py`'s trace holds them). Without them `requirement` refuses a gather, and
+run's values (`inputs`, as the reference's `Trace` holds them). Without them `requirement` refuses a gather, and
 `upper_bound` counts its whole column: an upper bound on what a step reads, which over-counts reads, so it is never
 credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t` the gates of the steps
 before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;

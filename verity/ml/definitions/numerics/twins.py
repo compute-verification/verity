@@ -2,7 +2,7 @@
 
 A *twin* re-implements one registered composite (`verity/ml/definitions/registry/b1.py`) for speed — numpy over whole operands,
 or the numerics lane's C++ models through ctypes — and is admissible only where its output words are IDENTICAL to
-`verity.ml.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
+`verity.ml.circuits.evaluation.reference.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
 declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
 are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
 
