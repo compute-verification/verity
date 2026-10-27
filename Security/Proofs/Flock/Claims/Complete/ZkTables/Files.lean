@@ -48,7 +48,7 @@ level-0 commitment; the record is the honest masked record of the commitments' c
 stream; the sends are the link of the caps, then the streams' rounds in order; and the `j`th proof file and stream are
 table `j / 2`'s rep `j % 2`'s (`RepFileJ`). -/
 theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
-    {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own)
+    {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk)
     (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →

@@ -33,7 +33,7 @@ that decodes to the statement's instances, the statement's draw the one it was s
 JSON object whose `coins` is an object, printable with the prover's nonce put in. -/
 def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
 /-- **What the masked record needs of the prover's pieces**, at every good masked case's table: the masked
@@ -55,7 +55,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 /-- **The honest masked run's record**, at one table: it is the printed honest masked record, `Record.decodeWith`
 reads it as `sessOf` and `liveOf` as its live session, its points the first coin's, the link is its `root_B` and no
 public words, and the sends after the link are its streams' rounds. -/
-theorem RunZk.json (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem RunZk.json (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (o : RunZk H rel) :
     ∃ st rb streams hz ct, o.sts = #[st] ∧ o.spec.tables = #[st.tags.table] ∧ o.tabs = #[Setup.ofCircuit st] ∧
       streams.size = o.spec.repStreams.size ∧ o.proofs.size = o.spec.repStreams.size ∧
@@ -132,7 +132,7 @@ theorem RunZk.mids_eq (o : RunZk H rel) {b : Claims.Msg} {bs : List Claims.Msg} 
   simp [Function.comp_def]
 
 /-- **The record decodes** (S1–S14): the goal `Decodes`. -/
-theorem decodesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem decodesZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : DecodesZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -140,7 +140,7 @@ theorem decodesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Ou
   rw [hdec, ← hsess]
 
 /-- **The record's live session reads**: the goal `LiveReads`. -/
-theorem liveReadsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem liveReadsZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : LiveReadsZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -149,7 +149,7 @@ theorem liveReadsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
 
 /-- **The record is in its canonical text** (S0): the goal `RecordCanonicalZk`, the printed honest record
 (`check_printJ`). -/
-theorem canonicalZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem canonicalZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : RecordCanonicalZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -159,7 +159,7 @@ theorem canonicalZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   exact check_printJ S (good_recordObjZk ht _ hz ct rb _ streams o.proofs (good_draw hdraw))
 
 /-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
-theorem drawMatchesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem drawMatchesZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : DrawMatchesZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -177,7 +177,7 @@ theorem drawMatchesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claim
     exact (drawEq_iff _ _).2 (.some hs)
 
 /-- **Custody: the record's `root_B` is the link message's**: the goal `CustodyRootB`. -/
-theorem custodyRootBZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem custodyRootBZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : CustodyRootBZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -186,7 +186,7 @@ theorem custodyRootBZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Clai
   exact list_bytes_beq_self _
 
 /-- **Custody: the record's public words are the link message's**: the goal `CustodyPublics`. -/
-theorem custodyPublicsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem custodyPublicsZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : CustodyPublicsZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -198,7 +198,7 @@ theorem custodyPublicsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Cl
   exact list_bytes_beq_self _
 
 /-- **Custody: the record's link points are the first coin's**: the goal `CustodyPoints`. -/
-theorem custodyPointsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem custodyPointsZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : CustodyPointsZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -207,7 +207,7 @@ theorem custodyPointsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Cla
   exact beq_self_eq_true _
 
 /-- **Each table's public words are its statement's**: the goal `Publics`. -/
-theorem publicsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem publicsZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : PublicsZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -221,7 +221,7 @@ theorem publicsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Ou
   rfl
 
 /-- **The record's proof digests list exactly the rep streams** (S17): the goal `ProofList`. -/
-theorem proofListZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem proofListZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : ProofListZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -235,7 +235,7 @@ theorem proofListZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   simp
 
 /-- **Each proof file is the one the record's digest names** (S17): the goal `ProofDigests`. -/
-theorem proofDigestsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem proofDigestsZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : ProofDigestsZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -254,7 +254,7 @@ theorem proofDigestsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Clai
   · simp
 
 /-- **The rep's stream is recorded** (S11): the goal `RepStream`. -/
-theorem repStreamZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem repStreamZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : RepStreamZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -273,7 +273,7 @@ theorem repStreamZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   · simp
 
 /-- **The table's extra claims evaluate** at the link's points: the goal `RepExtras`. -/
-theorem repExtrasZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem repExtrasZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : RepExtrasZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
@@ -290,7 +290,7 @@ theorem repExtrasZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   rfl
 
 /-- **Custody: each recorded round is its message and its coin's first `n` elements**: the goal `CustodyRounds`. -/
-theorem custodyRoundsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem custodyRoundsZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : CustodyRoundsZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv,
@@ -317,7 +317,7 @@ theorem custodyRoundsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Cla
   simpa [Array.toList_map, List.flatMap_map, List.map_flatMap] using this
 
 /-- **Custody: the record has one round per round message**: the goal `CustodyCount`. -/
-theorem custodyCountZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem custodyCountZk_goal (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : CustodyCountZk H rel := by
   intro o
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv,

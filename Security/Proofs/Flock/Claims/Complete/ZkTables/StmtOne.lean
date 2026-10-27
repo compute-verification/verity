@@ -154,7 +154,7 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
 set_option maxHeartbeats 4000000 in
 /-- The public file's header is a parsed object. -/
 private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
-    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ t, Json.parse t = .ok pop.header) ∧ ∃ m, pop.header = .obj m := by
+    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ t, Flock.JsonParse.parse t = .ok pop.header) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -322,7 +322,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts))
     (hdr : s.read.draw.isSome = true) (h1 : sts.size = 1) :
     0 < spec.sigma.size ∧ DrawOk spec ∧ spec.unitDraw = s.read.draw ∧
-      ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+      ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
         m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   obtain ⟨st, -, hspec, hst⟩ := setupOne_of hsc hs h1
   obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt hst
@@ -385,7 +385,7 @@ theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
 prover (`(deployZk Readable.relation).P`, `honestPR`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
 at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) being `Claims.Complete`'s own
 antecedent. -/
-theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
@@ -405,7 +405,7 @@ theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64
 prover at the record's error, at any number of tables: `completeJRelS`, from the one-table premises and the same
 three at several tables (`ProverRunsJ`, `RepShapedJ`, `LgInnerJ`), with `Out64` `Claims.Complete`'s own
 antecedent. -/
-theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)

@@ -96,7 +96,7 @@ theorem keep_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v
 
 /-- **The honest record's checks pass at a value alike it** (S1–S14): what `decode_recordObj` proves after parsing,
 at any `j` alike the honest record. -/
-theorem decodeJ_same (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+theorem decodeJ_same (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)

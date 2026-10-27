@@ -21,7 +21,7 @@ open Flock Transcript FlockDeploy
 table and the table's level-0 commitment of it, from the rep's first send on and its own transcript's start, returns
 the decoded proof. -/
 theorem _root_.FlockComplete.Run.walkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {r : ℕ} (hr : r < 2) : RepWalkP o 0 r := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
@@ -115,34 +115,34 @@ theorem _root_.FlockComplete.Run.walkP {H : Claims.Msg → Claims.Msg} {rel : Re
 
 /-- **The session walk on the packed table at every rep** (`RepWalkP`). -/
 theorem _root_.FlockComplete.Run.repWalkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) : RepWalkP o i r := by
   obtain rfl : i = 0 := by have := o.tabs_size_one; omega
   exact o.walkP S h64 hP hr
 
 /-- **Ligerito's final identity at the deployed relation** (`LgFinal`), from the honest Ligerito's (`Lg.Honest`), at the
 record's JSON and the oracle's 64-byte outputs. -/
-theorem lgFinal_walk (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H)
+theorem lgFinal_walk (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H)
     (hH : Lg.Honest) : LgFinal H Readable.relation :=
   lgFinal_relation H (fun o _ hi _ hr => o.repWalkP S h64 (proverOk h64) hi hr) hH
 
 /-- **Flock's completeness at the deployed plain verifier**, at the deployed relation and the record's error, from the
 record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`) and the honest Ligerito's final identity
 (`Lg.Honest`). -/
-theorem complete_plain_honest (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_plain_honest (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
     (h64 : Claims.Out64 H) (hH : Lg.Honest) : Claims.Flock.Complete H (deployPlain Readable.relation) :=
   complete_plain H S h64 (lgFinal_walk H S h64 hH)
 
 /-- **Ligerito's final identity at the deployed relation** (`LgFinal`), at the record's JSON and the oracle's 64-byte
 outputs. -/
-theorem lgFinal_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) :
+theorem lgFinal_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) :
     LgFinal H Readable.relation :=
   lgFinal_walkP H fun o _ hi _ hr => o.repWalkP S h64 (proverOk h64) hi hr
 
 /-- **Flock's completeness at the deployed plain verifier**, at the deployed relation, of the record's reference prover
 (`honestP`) at the record's error (`δc H`), from the record's JSON (`JsonSpec`) alone: the oracle's 64-byte outputs
 (`Out64`) are `Claims.Complete`'s own antecedent. -/
-theorem complete_plain_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) :
+theorem complete_plain_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) :
     Claims.Flock.Complete H (deployPlain Readable.relation) := fun h64 =>
   complete_plain H S h64 (lgFinal_json H S h64) h64
 

@@ -24,7 +24,7 @@ namespace FlockComplete.Replay
 open Flock Transcript FlockDeploy
 
 /-- **`complete_plain`'s goals**, at the record's JSON and the oracle's 64-byte outputs. -/
-theorem goals_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) :
+theorem goals_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) :
     Goals H Readable.relation := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
   have hW : SchemeWidths H Readable.relation := schemeWidths h64
@@ -80,7 +80,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 /-- **The honest run's record, read as a value**: `Run.json`'s single table, streams, rounds and session, the printed
 record printable, and every value alike it decoding as `sessOf`. -/
-theorem run_recordJ (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel)
+theorem run_recordJ (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel)
     (o : Run H rel) :
     ∃ st rb streams, o.sts = #[st] ∧ o.spec.tables = #[st.tags.table] ∧
       streams.size = o.spec.repStreams.size ∧
@@ -151,7 +151,7 @@ theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
 
 /-- **The verdict passes on the honest proofs at the reader's record**, at the record's JSON (`JsonSpec`): at every plain
 completeness run and the deployed verifier's coins, `verifyJPWith` at `jAt` of `recJ` accepts. -/
-theorem honestVerdict (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) : HonestVerdict sha512 := by
+theorem honestVerdict (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon) : HonestVerdict sha512 := by
   intro o cs hcs spec' sts' hs
   have h64 := out64_sha512
   have g := FlockComplete.Replay.goals_plain sha512 S h64

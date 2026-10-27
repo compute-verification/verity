@@ -73,7 +73,7 @@ theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
 /-- **Masked completeness from its parts**: `complete_jsonT` from level 0's four premises (`Level0`), the rest of
 `RepShapedT` and `ProverRunsT`, and the mask-rank bound; `LigeritoT` and `InnerT` follow from `Level0.Verifier`
 (`ligeritoRest`, `innerRest`). -/
-theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon)
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
     (gS : ShapeRest H) (gR : RunsRest H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=

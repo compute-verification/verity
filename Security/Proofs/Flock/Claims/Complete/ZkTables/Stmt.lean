@@ -16,7 +16,7 @@ import Proofs.Flock.Verifier.Hash
   count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
   stratified one has exactly `law`, `population`, `units`, `k` and `strata`, so it is printable
   (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's draw is JSON that
-  `Json.parse` read, so it is well formed.
+  `Flock.JsonParse.parse` read, so it is well formed.
 * A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
   a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
   printable with the prover's nonce put in (`good_of_same`, `good_insert`).
@@ -69,7 +69,7 @@ theorem good_coins (ct : CoinTree.Spec) (nonce : String) : Good (ct.coins nonce)
 theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × Json)} {hello : String}
     (hh : canon (Json.mkObj L) = .ok hello) (hd : Distinct L) (hg : ∀ p ∈ L, Good p.2)
     (hc : ("coins", ct.coins "") ∈ L) :
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hgj := good_mkObj hd hg
   obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ hgj hh
@@ -101,7 +101,7 @@ theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × J
 nonce put in, is printable. -/
 theorem hello_ok (S : JsonSpec) {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.Spec}
     {names : Array String} {hello : String} (hh : Flock.helloOf tags sigma mPts (.tree ct) names = .ok hello) :
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hlink : Good (Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts),
       ("points", Lean.toJson (2 : ℕ))]) := by

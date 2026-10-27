@@ -168,7 +168,7 @@ theorem targets_of_rows (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
 
 /-- **Every target from rows R, D and E, under the JSON library's specification** (`S`, the locked completeness
 assumption): `targets_of_rows` with `TargetDecode` from `DecodeAt.decode_at`. -/
-theorem targets_of_rowsJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP) {Q : Type}
+theorem targets_of_rowsJ (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP) {Q : Type}
     (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hR : TargetRDep rd (RowsHold rows holds) (accR rd chainAt))

@@ -184,7 +184,7 @@ theorem _root_.Claims.Flock.complete_mapCols {Coin Col T : Type} [Fintype Coin] 
 `Flock.complete_mapCols`). `hKS` (E4) is what remains. -/
 theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployPlainTrim Readable.relation))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) :
+    (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon) :
     Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
       Claims.Flock.KS H (deployPlainTrim Readable.relation) ∧
       Claims.Flock.Bits H (deployPlainTrim Readable.relation) ∧
@@ -203,7 +203,7 @@ theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
 `flock_plain_assembled_relation` with KS from the live sessions' bound with escapes on accepted runs at the statements
 some run accepts (`FlockDeploy.KS.plain_KS_of_liveAcc`). The record's JSON (`JsonSpec`) and that bound are what
 remain. -/
-theorem flock_plain_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+theorem flock_plain_assembled_trim (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon)
     (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → FlockDeploy.KS.PlainLiveAcc x) :
     Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
       Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) ∧
@@ -261,7 +261,7 @@ bound (`FlockComplete.MaskRank.MaskRankBound`). `hKS` (E4), those premises and `
 hypotheses are what remains. -/
 theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZkTrim Readable.relation))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+    (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon)
     (hPR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
     (hR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
     (hLI : ∀ o : FlockComplete.ZkTables.Run H Readable.relation,
@@ -297,7 +297,7 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
 `flock_zk_assembled_relation` with KS, which holds with no premise (`FlockDeploy.KS.zk_KS`). The record's JSON
 (`JsonSpec`), the honest masked run's premises, the mask slots' rank bound and `Flock.zk_deployZk_of_models`'
 hypotheses, `hT1` its named assumption, are what remain. -/
-theorem flock_zk_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+theorem flock_zk_assembled_trim (S : Claims.JsonSpec Flock.JsonParse.parse FlockComplete.printJ Flock.canon)
     (hPR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
     (hR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
     (hLI : ∀ o : FlockComplete.ZkTables.Run sha512 Readable.relation,

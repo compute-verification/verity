@@ -40,7 +40,7 @@ that decodes to the statement's instances, the statement's draw the one it was s
 an object with a `coins` object and prints. -/
 def StmtAt (c : Case H rel) : Prop :=
   0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
 variable (H rel) in

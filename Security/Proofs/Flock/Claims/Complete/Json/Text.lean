@@ -148,7 +148,7 @@ theorem printJ_same {a b : Json} (h : Claims.Json.Same a b) : printJ a = printJ 
     exact key _ _ (List.getElem_mem h1) (List.getElem_mem h2) hfst
 
 /-- **S0 accepts the honest record**: the text `printJ` prints of a printable value. -/
-theorem check_printJ {canon : Json → Except String String} (S : Claims.JsonSpec printJ canon) {j : Json}
+theorem check_printJ {canon : Json → Except String String} (S : Claims.JsonSpec Flock.JsonParse.parse printJ canon) {j : Json}
     (hg : Claims.Json.Good j) : Flock.RecordText.check (printJ j) = .ok () := by
   obtain ⟨j', hp, hs⟩ := S.parse_print j hg
   exact Flock.RecordText.check_of hp (by rw [← printJ_eq, printJ_same hs])

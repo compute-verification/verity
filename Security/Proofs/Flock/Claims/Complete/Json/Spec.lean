@@ -8,10 +8,10 @@ import Proofs.Flock.Claims.Complete.Prover.Print
 /-!
 # What the record's round trip needs from the JSON library
 
-`Json.parse` and `Json`'s `==` are `partial` definitions: Lean runs them, and no proof unfolds them (the verifier's
-`canon` is total, and the spec's two fields on it are proved: `Canon.lean`). So the session record's round trip (the
+`Json`'s `==` is a `partial` definition: Lean runs it, and no proof unfolds it (the verifier's parser
+`Flock.JsonParse.parse` and its `canon` are total, and the spec's two fields on `canon` are proved: `Canon.lean`). So the session record's round trip (the
 prover's `printJ`, a total printer of `Json.compress`'s bytes, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s
-`parse`) is proved from their specification, the spec's `Claims.JsonSpec printJ canon`, a named assumption the record's
+`parse`) is proved from their specification, the spec's `Claims.JsonSpec Flock.JsonParse.parse printJ canon`, a named assumption the record's
 theorems take as a hypothesis, over alike (`Same`), printable (`Good`) and well-formed (`Wf`) values
 (`Definitions/Claims/Json.lean`). Here are the lemmas on alike values the proofs read: alike leaves are equal, and alike
 objects have alike values at each key (`Same.getObjVal`) and the same missing keys (`Same.getObjVal_none`), and alike
@@ -103,7 +103,7 @@ printer and the oracle's 64-byte outputs by these; a statement the lock lists re
 and `Claims.Out64`. -/
 
 /-- `Claims.JsonSpec` at the honest prover's printer `printJ` and the verifier's `canon`. -/
-abbrev JsonSpec : Prop := Claims.JsonSpec printJ Flock.canon
+abbrev JsonSpec : Prop := Claims.JsonSpec Flock.JsonParse.parse printJ Flock.canon
 
 /-- `Claims.Out64`: the oracle's outputs are 64 bytes. -/
 abbrev Out64 (H : Claims.Msg → Claims.Msg) : Prop := Claims.Out64 H
