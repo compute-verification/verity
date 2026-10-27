@@ -734,12 +734,12 @@ source = "θ nvls.red (DS NVLink 900 GB/s; 450e9 / 4 · 7 / (132 · 1518 MHz)); 
 ops = ["LDGMC"]
 devices = ["sm_120"]
 what = "multimem.ld_reduce (ptxas emits LDGMC for sm_120a)"
-mark = "coarse"
+mark = "covered"
 envelope = "M"
 rate = "hbm"
 cost = "one M unit a word"
-argument = "a multicast object needs NVLink or an NVSwitch, which the card lacks (θ nvlink.reduce absent): with no multicast object every address is unicast, and a reduction over one copy is that copy, a load; multimem.red lowers to a plain REDG...STRONG.SYS on sm_120a, an L2 reduction"
-source = "θ nvlink.reduce (absent); lowering probe; sass_census/multimem.sh (README 'Coverage')"
+argument = "the card has no multicast object (no NVLink or NVSwitch, θ nvlink.reduce absent; the driver refuses one), so no address is a multimem one, and LDGMC on any other address faults: it ends the kernel and writes nothing. multimem.red lowers to a plain REDG...STRONG.SYS, which adds once at the L2 (the RED row)"
+source = "sass_census/multimem.sh, r20261027-000210-ac40: 'CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED = 0; cuMulticastGetGranularity: CUDA_ERROR_NOT_SUPPORTED; cuMulticastCreate: CUDA_ERROR_NOT_SUPPORTED' and 'verdict: hypothesis held: multicast unsupported; LDGMC on unicast memory faults; multimem.red on unicast memory adds once (an L2 reduction)'; lowering probe"
 
 [[row]]
 ops = ["ATOMS", "REDS"]
