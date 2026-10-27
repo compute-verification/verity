@@ -1,7 +1,8 @@
 """numpy models of `registry.torch_step`'s own nodes, as `program_walk` calls them (`program_walk.Model`): F.linear's three
 GEMMs along the routes `cublas_bf16.train_route` names (`bf16_gemm_check.cublas_route_rows`), `torch_train`'s transpose, RMSNorm
-forward, backward and weight gradient and SiLU forward and backward, and the residual stream's bf16 add and multiply, each in
-its kernel's order on bf16 (u16) and f32 (u32) words, with `torch_kernels`' NaNs and roundings.
+forward, backward and weight gradient and SiLU forward and backward, the residual stream's bf16 add and multiply, and the
+optimizer's widening, AdamW step and bf16 copy, each in its kernel's order on bf16 (u16) and f32 (u32) words, with
+`torch_kernels`' NaNs and roundings.
 
 `MODELS` are these by family. `STEP_MODELS` adds `torch_blocks.MODELS`, so it models every node of `TrainStep_v1`'s body
 that is past the walk's bit budget, and a GEMM's shared weight is read once rather than once per token.
@@ -21,7 +22,7 @@ from verity.ml.definitions.registry import torch_train as TT
 from . import torch_blocks as TB
 from . import torch_kernels as TK
 
-__all__ = ["MODELS", "STEP_MODELS", "linear", "rms_backward", "rms_forward", "row_sum", "silu", "silu_backward",
+__all__ = ["MODELS", "STEP_MODELS", "adamw", "linear", "rms_backward", "rms_forward", "row_sum", "silu", "silu_backward",
            "weight_grad"]
 
 U32 = np.uint32
@@ -143,6 +144,30 @@ def silu_backward(dy: np.ndarray, x: np.ndarray, contract: bool) -> np.ndarray:
     return TK.bf16(TK.mul(TK.mul(TK.f32(dy), s), t))
 
 
+def adamw(p: np.ndarray, g: np.ndarray, m: np.ndarray, v: np.ndarray, k: np.ndarray,
+          lerp_fma: bool) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`torch_optim.adamw_element` on f32 words, runs (R, N) of p, g, m and v with each run's seven scalars k (R, 7):
+    (p2, m1, v2)."""
+    a, w, b2, c2, s2, e, st = (np.asarray(k, U32)[:, i:i + 1] for i in range(7))
+    p1 = TK.mul(p, a)
+    d = TK.add(g, TK.neg(m))
+    om = TK.add(ONE, TK.neg(w))
+    small = (w & U32(0x7FFFFFFF)) < U32(0x3F000000)
+    if lerp_fma:
+        m1 = np.where(small, TK.fma(w, d, m), TK.fma(TK.neg(d), om, g))
+    else:
+        m1 = np.where(small, TK.add(m, TK.mul(w, d)), TK.add(g, TK.neg(TK.mul(d, om))))
+    one = c2 == ONE
+    v2 = TK.fma(np.where(one, g, c2), np.where(one, g, TK.mul(g, g)), TK.mul(v, b2))
+    dd = TK.add(TK.div(TK.sqrt(v2), s2), e)
+    return TK.fma(st, TK.div(m1, dd), p1), m1, v2
+
+
+def _adamw(S: dict, p, g, m, v, k):
+    out = adamw(p, g, m, v, k, bool(S["LERP_FMA"]))
+    return (*out, TK.bf16(out[0])) if S["BF16"] else out
+
+
 def _require(S: dict, key: str, family: str) -> None:
     if _family(S[key]) != family:
         raise ValueError(f"torch_step model: {key} = {_family(S[key])}, modelled only for {family}")
@@ -181,5 +206,8 @@ MODELS: dict[str, Callable[..., Any]] = {
     "SiluTorchBackward_v1": _silu_backward,
     "Bf16AddF2fp_v2": lambda S, a, b: TK.bf16_add(a, b),
     "Bf16MulBf16_v2": lambda S, a, b: TK.bf16_mul(a, b),
+    "Bf16ToF32_v2": lambda S, a: TK.f32(a),
+    "F2fpBf16_v2": lambda S, a: TK.bf16(a),
+    "AdamWForeach_v1": _adamw,
 }
 STEP_MODELS: dict[str, Callable[..., Any]] = {**TB.MODELS, **MODELS}

@@ -1,17 +1,21 @@
 """A decoder language model's training step as one Program root: `TrainStep_v1{L, B, S}`, L layers over B sequences of S tokens
-(M = B·S), as torch 2.14 eager computes it on CUDA with bf16 parameters: HF transformers' Llama decoder with a tied embedding,
-eager attention and the causal-LM cross-entropy, at smollm2-135m's shape (`CONFIG`: hidden 576, 9 query heads on 3 KV heads of
-64, MLP 1536, vocabulary 49152). Every node of its body is one call or batch of a training Definition on bits.
+(M = B·S), as torch 2.14 eager computes it on CUDA with bf16 parameters and an f32 master copy under AdamW: HF transformers'
+Llama decoder with a tied embedding, eager attention and the causal-LM cross-entropy, at smollm2-135m's shape (`CONFIG`: hidden
+576, 9 query heads on 3 KV heads of 64, MLP 1536, vocabulary 49152), then the gradient clip and the optimizer step. Every node
+of its body is one call or batch of a training Definition on bits.
 
     LinearTorch_v1{M, K, N}     (x: Array<M, Array<K, BF16>>, w: Array<N, Array<K, BF16>>) -> Array<M, Array<N, BF16>>
     LinearTorchDx_v1{M, K, N}   (dy: Array<M, Array<N, BF16>>, wt: Array<K, Array<N, BF16>>) -> Array<M, Array<K, BF16>>
     LinearTorchDw_v1{M, K, N}   (dyt: Array<N, Array<M, BF16>>, xt: Array<K, Array<M, BF16>>) -> Array<N, Array<K, BF16>>
     TrainStep_v1{L, B, S}       (ids, labels: Array<M, U32>, n: Array<S, U16> of kind position, cs: Array<S, Array<D, BF16>>,
-                                 embed.w: Array<V, Array<H, BF16>>, layer i's weights l{i}.NAME.w (`LAYER`),
-                                 norm.w: Array<H, BF16>) -> Tuple<loss: F32, each weight's gradient in the parameters' order>
+                                 each weight W.w (bf16), then each weight's W.master, W.exp_avg, W.exp_avg_sq (f32, its
+                                 shape), step: F32, lr, beta1, beta2, eps, wd, max_norm: F64)
+                                -> Tuple<loss: F32, total_norm: BF16, step: F32, ok: BIT, then each weight's new
+                                         (W.w, W.master, W.exp_avg, W.exp_avg_sq)>
 
-The weights are in HF's ``named_parameters`` order, and a weight's name is its node's with ``.w``, so a walk's values name
-both apart (`program_walk`).
+The weights W are `weights(L)`: embed, layer i's l{i}.NAME (`LAYER`) and norm, in HF's ``named_parameters`` order. A weight's
+parameter is its node's name with ``.w``, so a walk's values name both apart (`program_walk`). step is the optimizer's step
+count before this step, the same for every tensor; the hyperparameters are private values.
 
 `LinearTorch`, `LinearTorchDx` and `LinearTorchDw` are F.linear's three GEMMs at x (M, K), W (N, K): the forward, dX = dY·W and
 dW = dYᵀ·X, each `cublas_bf16.train_linear`'s row GEMM batched over its first operand's rows with the second shared. A
@@ -43,6 +47,13 @@ act), ``up.dx``/``.dw``, ``act.dx`` (SiluTorchBackward_v1), ``gate.dx``/``.dw``,
 k's), ``qkv.dx`` (that plus q's), ``ln1.dx``/``.dw`` and ``x.grad`` (h2's gradient plus ln1's dx), the gradient of the layer's
 input; and ``embed.dw``, EmbeddingBackwardTied_v1 of layer 0's input gradient and lm_head's dW.
 
+**The optimizer**, the recipe's ``clip_grad_norm_(params, max_norm, foreach=True)`` on the bf16 gradients, then
+``master.grad = p.grad.float()``, ``AdamW(masters, foreach=True).step()`` and ``p.copy_(master)``: ``clip``
+(ClipGradNorm_v1 over every gradient in the parameters' order: the total norm and the clipped gradients), ``adamw.scalars``
+(AdamWScalars_v1, once a step: the kernels' seven f32 scalars, the incremented step and ok, the conjunction of what would make
+torch raise), and per weight W ``W.grad`` (Bf16ToF32_v2 on each element), ``W.adamw`` (AdamWForeach_v1 on each run of ADAM_N
+elements, LERP_FMA 1 as the sm_120 SASS has it) and ``W.copy`` (F2fpBf16_v2, cvt.rn.bf16.f32, on each element).
+
 The rotary table cs (each position's cos and sin halves, bf16) and n (row i sees n[i] = i + 1 keys, the causal mask) are
 inputs: the rotary embedding's f32 products and cos/sin have no Definition yet.
 """
@@ -52,7 +63,9 @@ from typing import Any
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.ops.boolean import cast as CA
 from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BMU
 from verity.ml.circuits.ports import In, Ports
 from verity.ml.circuits.refs import Coll, Explicit, concat, strided_view, tuple_of
@@ -60,13 +73,16 @@ from verity.ml.circuits.types import Array, Tuple
 
 from . import cublas_bf16 as CB
 from . import torch_attention as TA
+from . import torch_clip as TC
 from . import torch_embedding as TE
 from . import torch_loss as TL
+from . import torch_optim as TO
 from . import torch_train as TT
 
-__all__ = ["ACT_N", "CONFIG", "EPS", "LAYER", "LinearTorch", "LinearTorchDw", "LinearTorchDx", "TrainStep", "params"]
+__all__ = ["ACT_N", "ADAM_N", "CONFIG", "EPS", "HYPER", "LAYER", "LinearTorch", "LinearTorchDw", "LinearTorchDx", "STATE",
+           "TrainStep", "params", "weights"]
 
-BF16, F32, U16, U32 = (Array(w, BL.BIT) for w in (16, 32, 16, 32))
+BF16, F32, F64, U16, U32 = (Array(w, BL.BIT) for w in (16, 32, 64, 16, 32))
 #: the model's shape
 CONFIG = {"H": 576, "NH": 9, "KVH": 3, "D": 64, "I": 1536, "V": 49152}
 #: rms_norm_eps, 1e-5, as its f32 word
@@ -77,6 +93,12 @@ ACT_N = 512
 #: name -> (rows, columns)
 LAYER = {"q": ("NH·D", "H"), "k": ("KVH·D", "H"), "v": ("KVH·D", "H"), "o": ("H", "NH·D"), "gate": ("I", "H"),
          "up": ("I", "H"), "down": ("H", "I"), "ln1": (None, "H"), "ln2": (None, "H")}
+#: AdamW's f32 state of a weight, as its parameters' suffixes: the master copy, exp_avg and exp_avg_sq
+STATE = ("master", "exp_avg", "exp_avg_sq")
+#: the private hyperparameters, f64 each: AdamW's (lr, beta1, beta2, eps, weight_decay), then the clip's max_norm
+HYPER = ("lr", "beta1", "beta2", "eps", "wd", "max_norm")
+#: elements of one AdamWForeach_v1 proof block, a run of one tensor
+ADAM_N = 64
 #: -100, HF's ignore index, as the low 32 bits of its int64 label
 IGNORE = 0xFFFFFF9C
 #: the loss's gradient seed, 1.0
@@ -137,19 +159,31 @@ LinearTorchDw = CompositeDefinition(
     refuse=_route_refusal("dW"))
 
 
+def weights(L: int) -> tuple[tuple[str, int | None, int], ...]:
+    """The weights in HF's ``named_parameters`` order, each (node name, rows or None for a vector, columns)."""
+    c, d = CONFIG, _dims()
+    out = [("embed", c["V"], c["H"])]
+    for i in range(L):
+        out += [(f"l{i}.{k}", None if rows is None else d[rows], d[cols]) for k, (rows, cols) in LAYER.items()]
+    return (*out, ("norm", None, c["H"]))
+
+
+def _typed(rows: int | None, cols: int, elem: Any) -> Array:
+    return Array(cols, elem) if rows is None else Array(rows, Array(cols, elem))
+
+
 def params(L: int, B: int, S: int) -> tuple[tuple[str, Any], ...]:
     """`TrainStep_v1{L, B, S}`'s parameters, in order."""
-    c, d, M = CONFIG, _dims(), B * S
-    out: list[tuple[str, Any]] = [("ids", Array(M, U32)), ("labels", Array(M, U32)), ("n", Array(S, U16)),
-                                  ("cs", _mat(S, c["D"])), ("embed.w", _mat(c["V"], c["H"]))]
-    for i in range(L):
-        out += [(f"l{i}.{k}.w", Array(d[cols], BF16) if rows is None else _mat(d[rows], d[cols]))
-                for k, (rows, cols) in LAYER.items()]
-    return (*out, ("norm.w", Array(c["H"], BF16)))
+    c, M, ws = CONFIG, B * S, weights(L)
+    return (("ids", Array(M, U32)), ("labels", Array(M, U32)), ("n", Array(S, U16)), ("cs", _mat(S, c["D"])),
+            *((f"{w}.w", _typed(r, k, BF16)) for w, r, k in ws),
+            *((f"{w}.{s}", _typed(r, k, F32)) for w, r, k in ws for s in STATE),
+            ("step", F32), *((h, F64) for h in HYPER))
 
 
-def _ret(L: int, B: int, S: int) -> Tuple:
-    return Tuple(F32, *(t for name, t in params(L, B, S) if name not in ("ids", "labels", "n", "cs")))
+def _ret(L: int) -> Tuple:
+    return Tuple(F32, BF16, F32, BL.BIT, *(t for _, r, k in weights(L)
+                                          for t in (_typed(r, k, BF16), *(_typed(r, k, F32),) * len(STATE))))
 
 
 def _shape(S: Any) -> str | None:
@@ -173,7 +207,7 @@ def _signature(S: Any):
     why = _shape(S)
     if why:
         raise ValueError(why)
-    return params(S.L, S.B, S.S), _ret(S.L, S.B, S.S)
+    return params(S.L, S.B, S.S), _ret(S.L)
 
 
 def _field(c: Coll, j: int) -> Coll:
@@ -331,15 +365,37 @@ class _Step:
             dh = self.add(n + "x.grad", dh2, dln1)
             grads |= {f"l{i}.{k}.w": d[k] for k in LAYER}
         grads["embed.w"] = B.call(bind(TE.EmbeddingBackwardTied, M=M, V=V, H=H), p["ids"], dh, dlm_w, name="embed.dw")
-        names = [name for name, _ in params(self.L, self.nb, self.s) if name not in ("ids", "labels", "n", "cs")]
-        return tuple_of(loss[0], *(grads[name] for name in names))
+
+        names = [w for w, _, _ in weights(self.L)]
+        g = [_flat(grads[f"{w}.w"]) for w in names]
+        clip = B.call(bind(TC.ClipGradNorm, SIZES=tuple(x.type.n for x in g)), tuple_of(*g), p["max_norm"], name="clip")
+        sc = B.call(TO.AdamWScalars, *(p[h] for h in HYPER[:5]), p["step"], name="adamw.scalars")
+        new = [c for j, w in enumerate(names) for c in self.adamw(w, clip[1][j], sc[0])]
+        return tuple_of(loss[0], clip[0], sc[1], sc[2], *new)
+
+    def adamw(self, w: str, g: Coll, k: Coll) -> list[Coll]:
+        """The weight w's optimizer step from its clipped gradient g and the step's scalars k: the gradient widened to f32
+        (``master.grad = p.grad.float()``), AdamW on the master copy, and the master's bf16 copy (``p.copy_(master)``) ->
+        (the bf16 weight, master, exp_avg, exp_avg_sq)."""
+        B, p = self.B, self.p
+        t, n = p[f"{w}.master"].type, g.type.n
+        if n % ADAM_N:
+            raise ValueError(f"TrainStep: {w} has {n} elements, not a multiple of ADAM_N = {ADAM_N}")
+        runs = Array(n // ADAM_N, Array(ADAM_N, F32))
+        g32 = B.batch(CA.Bf16ToF32, g, axes=(0,), name=f"{w}.grad")
+        o = B.batch(bind(TO.AdamWForeach, N=ADAM_N, LERP_FMA=1, BF16=0), p[f"{w}.master"].reshape(runs), g32.reshape(runs),
+                    p[f"{w}.exp_avg"].reshape(runs), p[f"{w}.exp_avg_sq"].reshape(runs), k, axes=(0, 0, 0, 0, None),
+                    name=f"{w}.adamw")
+        master, m, v = (_field(o, j).reshape(t) for j in range(len(STATE)))
+        copy = B.batch(BG.F2fpBf16, _flat(master, F32), axes=(0,), name=f"{w}.copy").reshape(p[f"{w}.w"].type)
+        return [copy, master, m, v]
 
 
 TrainStep = CompositeDefinition(
     "TrainStep", 1, ("L", "B", "S"), _signature, lambda B, S, *a: _Step(B, S, a).build(),
     doc="a decoder's training step on B sequences of S tokens through L layers, torch 2.14 eager with bf16 parameters: the "
-        "embedding, each layer's norms, attention and MLP, the final norm, the tied head and the cross-entropy, then autograd's "
-        "backward to every parameter's gradient",
+        "embedding, each layer's norms, attention and MLP, the final norm, the tied head and the cross-entropy, autograd's "
+        "backward to every parameter's gradient, the gradient clip, and AdamW on the f32 master copy with its bf16 copy-back",
     conformance="exact-model-tested in its blocks: each node's Definition is held to the GPU's words in its own module's tests; "
                 "the root's call-by-call walk against a step's GPU dump is program_walk's",
     refuse=_refuse_step, ports=_POSITION)
