@@ -472,8 +472,6 @@
     {"file": "benchmarks/torch_gpu/s8_linear/bench.py", "rule": "F821", "count": 4},
     {"file": "benchmarks/torch_gpu/s8_linear/tests/test_roofline.py", "rule": "RUF100", "count": 2},
     {"file": "benchmarks/torch_gpu/s8_linear/tests/test_twin.py", "rule": "RUF100", "count": 1},
-    {"file": "benchmarks/torch_gpu/s8_simple/check.py", "rule": "F821", "count": 16},
-    {"file": "benchmarks/torch_gpu/s8_simple/tests/test_s8_simple.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/torch_gpu/sha512_rows/bench.py", "rule": "E402", "count": 2},
     {"file": "benchmarks/torch_gpu/sha512_rows/check.py", "rule": "E402", "count": 7},
     {"file": "benchmarks/torch_gpu/sha512_rows/tests/test_engine.py", "rule": "E402", "count": 3},

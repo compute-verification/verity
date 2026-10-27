@@ -4,8 +4,8 @@
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
 #   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
 #          expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch), s8_simple.py (#4472's) as the bench's plain arm, and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h,
-#          sass_gate.py, wgmma.py and configs.py (#4520's) as its wgmma arm, built here by that build.sh. Fixtures not
+#          launch), and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h, sass_gate.py, wgmma.py and configs.py (#4520's) as
+#          the bench's wgmma arm, built here by that build.sh (its plain arm is this tree's s8_linear/int_mm.py). Fixtures not
 #          sent are computed here, the fallback not sent is built here (BUILD_REF=0: not) and with no h1u_*.so sent
 #          h1u_build makes the arms H1U_ARMS names from this tree (BUILD_H1U=0: not), all before the lease, as are the
 #          operands, in a scratch directory removed at exit.
@@ -143,7 +143,6 @@ case $WHAT in
     $PY "$D/check.py" --fixtures "$FIX" --out "$OUT" --scratch "$S" --operands-only ${CHECK_ARGS:-} > "$OUT/operands.out" 2>&1
     echo "operands rc $?" >> "$OUT/rc.txt"
     BA=${BENCH_ARGS:-}
-    [ -f "$LIBS/s8_simple.py" ] && BA="--s8-simple $LIBS/s8_simple.py $BA"
     if [ -f "$LIBS/s8_wgmma.cu" ]; then
       W8=$(s8_build 2> "$OUT/s8-build.out"); echo "s8 build rc $?" >> "$OUT/rc.txt"; tail -5 "$OUT/s8-build.out"
       [ -f "$OUT/s8ship/s8_wgmma.cubin" ] && { export S8_WGMMA_CUBIN=$OUT/s8ship/s8_wgmma.cubin; BA="--wgmma $W8 $BA"; }
