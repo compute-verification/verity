@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The drawn-unit replay bundle proved (prove_bundle.py; PRF-171's M1, and with PB_K M3's rehearsal): the torch loop's window
+# The drawn-unit replay bundle proved (prove_bundle.py; M1, and with PB_K M3's rehearsal): the torch loop's window
 # and its tampered twin written under the fixture's test key, and the bundle made from the window (`prove_bundle.py make`).
 # Without PB_K the draw is the fixture's FIXTURE_DRAW under its registered subset:4; with PB_K=K the windows register
 # subset:K, the challenger logs its receipt of the window's registration, and Lean `flock-verify draw --registration`
