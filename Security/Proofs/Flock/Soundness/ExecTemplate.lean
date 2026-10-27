@@ -388,7 +388,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           leafCuts := hlc (hkeys "leaf_cuts" (by simp [HmRow.TEMPLATE_DERIVED]))
           v1 := fun ht => rowPorts_typed (ht ▸ hrp) }
 
-/-- **What `parseTyped` accepted** (#307): `Typed.read`'s class `k` and block, then `parse` on the block, a template's
+/-- **What `parseTyped` accepted**: `Typed.read`'s class `k` and block, then `parse` on the block, a template's
 (`tmpl`) or a flat class's unit net (`pre`), with the class recorded as `cls`. -/
 theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parseTyped tags bytes tables = .ok c) :

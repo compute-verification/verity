@@ -20,7 +20,7 @@ read:
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
 * `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdCover`, `RecDeploy.bdDeployed` at
-  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight (ASK-72); its element-level
+  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight; its element-level
   Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
   replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the

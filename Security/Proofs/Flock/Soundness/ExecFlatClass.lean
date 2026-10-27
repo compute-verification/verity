@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.ExecTemplateSetup
 # A typed flat class's unit, placed (1e for flat classes)
 
 A typed statement whose unit has no placed parts, no reads and no Δ but its constant's copy of `one` (`Typed.isFlat`) is
-a flat class (#307): `parseTyped` parses the file with the unit's net first (`HmRow.parse`'s `pre`), the net
+a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.parse`'s `pre`), the net
 `Typed.netOfD` builds from `derive`'s rows, where an untyped statement has its `CIRCUIT unit` section.
 
 - `setupH_flatLayout`: the statement `Stmt.setupH` accepted has the layout an untyped one has (`Layout`), its unit net

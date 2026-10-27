@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Types.Parts
 /-!
 # A typed template's unit, placed (1e for templates, T3)
 
-A template statement (#277) places its unit `u = done[unit]` by parts: the root net (`Typed.rootOf u`, the unit's own
+A template statement places its unit `u = done[unit]` by parts: the root net (`Typed.rootOf u`, the unit's own
 rows without their part columns) one slot per template instance, each placed layout's net one slot per part, and Δ
 (`delta_typed`): the flat entries, then per template instance each input's copy of its message bit, each part's bound
 inputs, and the root rows' entries at part columns (`crossOf`). Unit column `x` of template instance `g` is at

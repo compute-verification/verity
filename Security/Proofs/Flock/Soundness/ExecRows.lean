@@ -8,8 +8,8 @@ import Proofs.Flock.Soundness.SparseRows
 /-!
 # The rows the verifier parses, as the audit's `Rows`
 
-The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to #144's order
-(`Net.checkOrder`, PR #147): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
+The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to an order
+(`Net.checkOrder`): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
 the constant or an earlier column that is not input padding (`RowOrder`). `checkOrder_ok` turns an
 accepted check into that property, and `Rows.ofOrdered` builds the audit's `Rows` from rows that
 have it, with `topo` proved: what #144 named, the parser now checks.

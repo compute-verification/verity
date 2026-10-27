@@ -4,7 +4,7 @@ import Proofs.Flock.Level3.Placed
 /-!
 # An instance's rows, placed by the statement the verifier accepted
 
-The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifier's `FlockLevel3.Placed`, PR #156): column
+The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifier's `FlockLevel3.Placed`): column
 `j`'s entries come from the last range covering `j`, rows in the same slot only, plus Δ's pairs. This file proves
 `Placement` for an instance's stacked rows (`Rows.stack`, `placement_stack`) from the layout facts `Layout` names:
 - **the ranges:** their spans are pairwise disjoint (`HmRow.check`'s pairwise test), a net range's slots are its net's

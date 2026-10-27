@@ -133,7 +133,7 @@ the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt an
 (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
 salts and the coin tree's nonce. C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf, from the operating system
 (the tap, or `getrandom(2)` unfirewalled), as the recursive audit's firewall and a registrant (`os.urandom`) do for their
-commitments' salts (Daniel, 9 Oct, decisions 4(a) and 4(c)). So the masks and the Reed–Solomon padding are inside A3's
+commitments' salts. So the masks and the Reed–Solomon padding are inside A3's
 scope, as the salts are, and no premise on a stream generator is left on them. `Discharge.ZkView.OsSalts` reads 192
 bytes as one salt and takes the hiding theorems to them; `Claims.ZKServer.OsTape` reads the server's tape.
 
