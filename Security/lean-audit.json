@@ -1528,7 +1528,7 @@
   },
   "Pous.Period.RingDevice": {
    "owner": "@lean",
-   "digest": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
+   "digest": "07dbf213c59177a8609f33e7e0b844c23ad68ae00b8041337ea9d794a4e447be"
   },
   "Pous.Prog.Bounded": {
    "owner": "@memory-accounting",
@@ -24220,9 +24220,8 @@
    "guarantees": ["Pous.SecurityProofs.BackgroundRebuildExcluded"]
   },
   "Definitions.Pous.Assumptions.P2": {
-   "digest": "3a122223925c622722d540c8f208f5995dea847e0208677e03234f52a8cf5dc5",
+   "digest": "053d94346e44c5502d44d2eabef70672acede035519d291ac582fc1cf58fe476",
    "definitions": {
-    "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53",
     "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a",
@@ -39977,9 +39976,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod"]
   },
   "Proofs.Accounting.JointBridge.Guarantees.JointHorizonBlocksDeployed": {
-   "digest": "6faab49dbfa260830af1755e8bf3e666766227695ce94e1465876619946fc8ab",
+   "digest": "6ca70f07c279662d2455b5b3c3ee8df063f9fb4691f809cd2a6daa47c1572ad9",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocksDeployed": "e95c361deadc35e71d88e98052aab2b29e13905faffd95818b665d3034ee8786",
+    "Accounting.Guarantees.JointHorizonBlocksDeployed": "114df87d1a1935716250c569e52416b203e0ba27cffdd5e3032e98902b052524",
     "Accounting.Guarantees.JointHorizonBlocksDeployedA": "c5906ee49d6bb985439b17967b9bd77e6b34d11adc4d6792fee174925ff3c52b"
    },
    "guarantees": [
@@ -50846,7 +50845,7 @@
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
   },
   "Properties.Pous.EndToEnd": {
-   "digest": "535ddc1145df96468a2d1394d98d0e11912f8aa4fa4ed3fc12a7c79774aecd53",
+   "digest": "e4dff131f8c38f64ffc2b78d94544a5c347afcb2d16f4a93ed6d4e9e15a006e3",
    "definitions": {
     "Pous.EndToEnd.Accepted": "2e4b9d66656d37af29ef1ab265dc6df753e5bf2485cd55f953c568f3e18e6ddb",
     "Pous.EndToEnd.AnsweredOnTime": "c2870b618539d7df4b0ed74c56d7a427ea19457463d0c6ec11753c881fc1bdf8",
@@ -50854,12 +50853,12 @@
     "Pous.EndToEnd.Bytes": "9aa452329501006f98b36b457f3d66a29927a48138d9151293a78432ab9c7629",
     "Pous.EndToEnd.HmCoins": "9cc2b3d73fb1a88f92eb44225361d5e138cea7c92b48db4656c899cb48beb066",
     "Pous.EndToEnd.LIMIT_NS": "11584def18b720ba5bccd123f38bd2d93fa3a595b1853297f494f79dd7f99af8",
-    "Pous.EndToEnd.Passes": "13e9ddd0b6b6312c4120640d8a774562cd954aa3d8c78d12013c45cac9689cf2",
+    "Pous.EndToEnd.Passes": "20497d3278e0c37aeb5e44a0b6e7cf91ff5cec108ff5691ae28e422fd98faac4",
     "Pous.EndToEnd.RunBreak": "c1a4d535c19acb0c42c4245484c32895a7c02f3480e318baaf05e641f9f4514f",
     "Pous.EndToEnd.S": "5fd15b8e1093c3e86c0645f56f2a2e2d845be1a944f7f8e8ea741edeef0e0bd8",
-    "Pous.EndToEnd.Server": "e706220cebed59ed039f899be9e67aaeca1081543a73eea7ed780df53b340e10",
+    "Pous.EndToEnd.Server": "0f89681683185a5cdcb07a9e8f2dffadefd71dc85c3dbb6634b3d681f4b28732",
     "Pous.EndToEnd.Server.pre": "19017563e1eaac00c3aebb7cc8bf0a82c78924e57f6077b6b99e5daaf7ee7329",
-    "Pous.EndToEnd.Server.step": "0e10b276b3fc9991e269e17ee9b4d63d13bda64ab25f0c5aec4447b4147b47d3",
+    "Pous.EndToEnd.Server.step": "68420d78ec9ddd4d92909c16ebba0f4485b6b269327fa478a4dfb8a99d313959",
     "Pous.EndToEnd.Streams": "7c059106a0d82756ef3e40cf54b425661e4193335a9660f53a6f1a0e5645be13",
     "Pous.EndToEnd.TableBreak": "32f889f8007524389584767ce4b85f48c2f9a562ceb77201249e990a212818ab",
     "Pous.EndToEnd.answers": "ef4fa0ce9649115d77f7d0bf23ce5e7ef808589e3b79e53e926cd9003dae18eb",
@@ -50868,7 +50867,6 @@
     "Pous.EndToEnd.bytesOf": "1bf6f26565e95dea60346de6431520966589eacd73df0320410d7d747c226223",
     "Pous.EndToEnd.coinKey": "9540c153e5c2897fb03cd7c41aa0ceedb261028f72ee3732fda73917fd95c6d0",
     "Pous.EndToEnd.coinView": "84f8a78ecaac791c71b62f5bb089305d4dc092b21b7dfcf6febc9fd7c1ce3700",
-    "Pous.EndToEnd.commitmentOf": "02ca7be6f758ad1d1b799a8f0a6826b1c117d98b3cf376b7b7719997f24815b4",
     "Pous.EndToEnd.flat": "36aaa534d20cdef95ad1ab95df0150cd6906aa5604a5f8e6536deff630573404",
     "Pous.EndToEnd.leafInput": "906fa4b0121a2eff546a362ebd7a4ffe8c753775559f66bb16661d85cfeec5aa",
     "Pous.EndToEnd.q": "62f6160eff44113e913056c82541f99919de20f246e8c2f03498b1888538f445",
@@ -50909,7 +50907,7 @@
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
   },
   "Properties.Pous.Period": {
-   "digest": "ef2b0327a8e6ad299ff1e1fe203926e6fd118fca2c704fd88547d9dade359250",
+   "digest": "3cb55f908d57b04f280411b524655fc19bef47356d5e65d254772244f5c2434f",
    "definitions": {
     "Pous.Period.Audits": "2abf0c7472eb8e703a45f56b3d6b562f9d35a136af62f541ffb09bc1913aa97e",
     "Pous.Period.Audits.Accepts": "9c59a62ff9f63e44a0a428705d76fa30ccfb0d8ad8075c50591f2bc4c108c803",
@@ -50924,7 +50922,7 @@
     "Pous.Period.Audits.sid": "36d8bc762d9ddf145d62d7d65c3e0e0bf12f15168114673abfabe22bc514ac4a",
     "Pous.Period.Audits.store": "48c5ed32a90b4013cec8cece8b54fbf47e8f6e42ac2dfc78780a55f232add1f8",
     "Pous.Period.Audits.trusted": "b17da66a5d8acb82246074cec18a14315b812993923ce16038faa44d919ae0f1",
-    "Pous.Period.RingDevice": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
+    "Pous.Period.RingDevice": "07dbf213c59177a8609f33e7e0b844c23ad68ae00b8041337ea9d794a4e447be"
    },
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
   },
