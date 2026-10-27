@@ -28,7 +28,7 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
   are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
   with a size and an owner, with no `sorry` outside them.
-- **Definitions a guarantee or property reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the
+- **Definitions a guarantee or property reads go in `Definitions/`**, not in a proof file (`reads` in the
   lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
   definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
   proof-only definitions is not a guarantee.
@@ -102,7 +102,7 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in its area's `Models/<Area>/Assumptions` (C-Flock's in
+- **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (C-Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
   and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to the docstring. Never an `axiom`, a `sorry` on
