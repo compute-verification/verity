@@ -110,14 +110,14 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
     return [c for c in cs if c["name"] in QUICK] if quick else cs
 
 
-#: Llama-3.2-1B's heads (32 query heads over 8 KV heads) prefilling the window class of record's 1,024-id prompt, beside a 200-id and a
-#: 17-id prompt (VLLM-127)
-LLAMA_1B_PREFILL = _case("prefill_llama1b", 32, 8, [1024, 200, 17], [1024, 200, 17])
+#: the H200 window class of record's attention heads (32 query heads over 8 KV heads) prefilling its 1,024-id prompt, beside a 200-id
+#: and a 17-id prompt (VLLM-127)
+GQA4_PREFILL = _case("prefill_1024_gqa4", 32, 8, [1024, 200, 17], [1024, 200, 17])
 
 
 def prefill_cases(quick: bool = False) -> list[dict[str, Any]]:
-    """The FA3 launches with a prefill row (some sequence's seqlen_q above 1) that the decode-shaped check reads, and `LLAMA_1B_PREFILL`."""
-    return [c for c in cases(3, quick) if max(c["seqlens_q"]) > 1] + [LLAMA_1B_PREFILL]
+    """The FA3 launches with a prefill row (some sequence's seqlen_q above 1) that the decode-shaped check reads, and `GQA4_PREFILL`."""
+    return [c for c in cases(3, quick) if max(c["seqlens_q"]) > 1] + [GQA4_PREFILL]
 
 
 def decode_tile(D: int, g: int) -> tuple[int, int]:
@@ -130,7 +130,7 @@ def decode_shaped(doc: dict[str, Any]) -> dict[str, Any]:
     """A record's prefill rows against the decode-shaped Definitions (its cases' `out_vs_decode`): `exact` when every row is evaluated and
     equals `Attention_v4` at the one-row decode's tile; the mismatched rows (those whose every score is special apart) and the fewest keys
     a mismatched row sees."""
-    es = [e["out_vs_decode"] for e in doc.get("cases") or [] if e.get("out_vs_decode")]
+    es = [e["out_vs_decode"] for e in doc["cases"] if e.get("out_vs_decode")]
     total = {k: sum(e.get(k, 0) for e in es) for k in ("rows", "heads", "mismatch", "mismatch_rows", "special_mismatch_rows", "unevaluated")}
     least = [e["min_T_mismatch"] for e in es if e.get("min_T_mismatch") is not None]
     return {**total, "cases": len(es), "min_T_mismatch": min(least) if least else None,

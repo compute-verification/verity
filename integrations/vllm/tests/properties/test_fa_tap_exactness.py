@@ -286,13 +286,13 @@ def test_the_edge_cases_name_query_tokens_of_their_own_launch():
             assert len(set(toks)) == len(toks) and max(toks) < sum(c["seqlens_q"])
 
 
-def test_the_prefill_cases_are_fa3s_with_a_prefill_row_and_llama_3_2_1b_whose_prompt_tile_is_not_its_decodes():
+def test_the_prefill_cases_are_fa3s_with_a_prefill_row_and_the_class_of_records_whose_prompt_tile_is_not_its_decodes():
     names = [c["name"] for c in X.prefill_cases()]
-    assert names == [c["name"] for c in X.cases(3) if max(c["seqlens_q"]) > 1] + ["prefill_llama1b"] and "decode_gqa" not in names
+    assert names == [c["name"] for c in X.cases(3) if max(c["seqlens_q"]) > 1] + ["prefill_1024_gqa4"] and "decode_gqa" not in names
     assert [c["name"] for c in X.prefill_cases(quick=True)] == ["prefill_short", "prefill_256", "edge_rows", "smallq_onewg",
-                                                                 "prefill_llama1b"]
-    llama = X.LLAMA_1B_PREFILL
-    assert (X.geometry(3, llama, 64)["kBM"], X.geometry(3, llama, 64)["BN"]) == (192, 128) and X.decode_tile(64, 4) == (64, 192)
+                                                                 "prefill_1024_gqa4"]
+    gqa4 = X.GQA4_PREFILL
+    assert (X.geometry(3, gqa4, 64)["kBM"], X.geometry(3, gqa4, 64)["BN"]) == (192, 128) and X.decode_tile(64, 4) == (64, 192)
     for D in (64, 128):
         decode = X._case("d", 32, 8, [1], [1000])
         assert X.decode_tile(D, 4) == (X.geometry(3, decode, D)["kBM"], X.geometry(3, decode, D)["BN"])
