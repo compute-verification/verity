@@ -261,7 +261,7 @@ def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofL
 **Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation on the path
 (the round's coin and the words keyed by it that its proof gives there) with probability at most `δ_ZK` over the
 window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover making `t` hash calls, so it gives
-`δ_ZK` only for a cheater whose hash calls over the window are capped. Its "wrong" is against the committed transcript
+`δ_ZK` only for a cheater whose hash calls over the window are capped. Its "wrong" is against the committed trace
 fixed at registration, and its statement leaves out the rows link: that the committed inputs and the program's outputs
 on them are the rows the public file commits "is not stated here" (`Proofs/Flock/EndToEndHidden/Statement.lean`).
 `ProofLayer.rel` reads exactly that link (the Definition with the leaves' rows among its outputs), so C-Flock's bound

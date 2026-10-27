@@ -55,7 +55,7 @@ cones over its honest runs, with no obliviousness; what needs the padding is iso
 opening before it reads it, so the slot is ⊥ in its view (or the run holds a collision), and its writer and readers are
 wrong; ⊥ is weakly dominated by a short wrong value, and the determinacy, egress, leakage and skipped-work
 theorems hold over `Option V` with `|V| + 1` for `|V|`.
-`NecessitySkeleton`: tier 1 (a transcript committed before the coins and a draw fixed before it, local checks, robust
+`NecessitySkeleton`: tier 1 (a trace committed before the coins and a draw fixed before it, local checks, robust
 determinacy) gives the sampling certificate, and an accepted run's damaged egress lies in its wrong units' cone with
 probability at least `1 − (1 − ε)^k`; a policy is inferable from the certificate exactly when its amplification is
 bounded (`inference_iff`), and each tier-1 item has a counterexample family.

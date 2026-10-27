@@ -35,7 +35,7 @@ files = ["Security/Definitions/Core/Circuit.lean", "Security/Definitions/Core/Pa
          "Security/Proofs/Flock/Bridge/CircuitOf.lean",
          "Security/Definitions/Accounting/JointLive.lean", "Security/Definitions/Accounting/JointPeriod.lean",
          "Security/Definitions/Accounting/JointBlocks.lean", "Security/Definitions/Accounting/Guarantees/JointLive.lean",
-         "Security/Definitions/Accounting/Guarantees/JointPeriod.lean", "Security/Definitions/Accounting/TS/ProofLayer.lean",
+         "Security/Definitions/Accounting/TS/ProofLayer.lean",
          "Security/Proofs/Accounting/JointLive.lean", "Security/Proofs/Accounting/JointBridge/HonestH200.lean",
          "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
          "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
@@ -57,10 +57,14 @@ files = ["Security/Definitions/Core/Circuit.lean", "Security/Definitions/Core/Pa
 # Files that also speak of C-Flock's or PoUW's transcript: the circuit's committed values by phrase.
 [[words_in]]
 files = ["Security/Definitions/Core.lean", "Security/Definitions/Accounting/Assumptions/TS.lean",
-         "Security/Proofs/Flock/EndToEnd/Joint/Statement.lean", "Security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean"]
+         "Security/Proofs/Flock/EndToEnd/Joint/Statement.lean", "Security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean",
+         "Security/Definitions/Population.lean", "Security/Proofs/Population.lean"]
 [words_in.words]
 "a circuit, its transcripts" = "a circuit, its traces"
 "committed transcript fixed at" = "committed trace fixed at"
+"against the committed transcript" = "against the committed trace"
+"transcript before the coins" = "trace before the coins"
+"a transcript committed before the coins" = "a trace committed before the coins"
 
 # The locks' prose and keys outside their records name the field by its full name.
 [[words_in]]
