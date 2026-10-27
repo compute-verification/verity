@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
+#: The Glossary's second file, at the root only: no directory holds a glossary (Daniel, 26 Oct).
+ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
@@ -96,6 +98,7 @@ def _tracked() -> list[str]:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
+                 and p not in ROOT_ONLY_MD
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
                  and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (
