@@ -1,5 +1,5 @@
 {
- "about": "Llama-3.2-1B's request Programs as the pinned vLLM traced them on vy-dc-h200 (CPU, on meta, H200 target): each trace's Program digest, three of its rows' names, and `test_naming.pins` of its Build (names, params, the correspondence record as recorded_names reads it, the record's inputs/weights/rank/body, the cached-prefix layout). source: the research run and the Build dir under it.",
+ "about": "Llama-3.2-1B's request Programs as the pinned vLLM traced them on vy-dc-h200 (CPU, on meta, H200 target), and as the served window w0 of r20261027-035845-afe2 holds them (its prefill-only request, out/served/builds): each trace's Program digest, three of its rows' names, and `test_naming.pins` of its Build (names, params, the correspondence record as recorded_names reads it, the record's inputs/weights/rank/body, the cached-prefix layout). source: the research run and the Build dir under it.",
  "config": "llama32-1b.config.json",
  "cases": [
   {
@@ -71,6 +71,43 @@
     "names": "0c0096f00aa961e49e89a3f559d7a5b43d725d1f23c448998762e3921997e4fa",
     "params": "2a4f3dcc901a6fa6619f61f44af8c3b72ec1d459363d39b5441b54d214da6d1b",
     "recorded": "17811ec135aa06289570b47d73f1aab1eabf96614a3fedebe956920b7b61f184",
+    "record": "935eacebc408371b168ee30a3cd648e69d0b5f3989327e41b0fe619615ac32e0",
+    "prefix": null
+   },
+   "slow": false
+  },
+  {
+   "trace": "int8-LP22_T0_greedy",
+   "source": "r20261027-052834-039a:out/served/builds/build_request_LP22_T0_greedy",
+   "model": "verity-int8/Llama-3.2-1B-INT8",
+   "revision": "15b0976d400d796ee589e7737d03a919526bf800",
+   "target": {
+    "compute_capability": [
+     9,
+     0
+    ],
+    "num_sms": 132,
+    "batch_invariant": true,
+    "vllm_revision": "d9105ea80",
+    "numerics_profile": "b1-eager-v3",
+    "int8_exact": "linears"
+   },
+   "sampling": {
+    "kind": "greedy"
+   },
+   "LP": 22,
+   "T": 0,
+   "C": 0,
+   "digest": "88230255201c4a8a51c352964378e77be2189538c7b9bfed2d522aa10fd705137f8284f4d2eb6b1811ad76aff72498a6f5b53c70e7485d9e26c6cdbd86b609f3",
+   "names": {
+    "0": "model.model.embed_tokens/embedding[0]",
+    "132": "model.model.layers.0.self_attn.attn/unified_attention_with_output[t=0]",
+    "4742": "argmax[0]"
+   },
+   "pins": {
+    "names": "faed894b6541e836bf6975f7e3c603982aeb1dbe20c08c0d9fa14351d1c2fb62",
+    "params": "2a4f3dcc901a6fa6619f61f44af8c3b72ec1d459363d39b5441b54d214da6d1b",
+    "recorded": "404fabd5965a3385a83750614a1e298e9e8961277092b899296224f60715e772",
     "record": "935eacebc408371b168ee30a3cd648e69d0b5f3989327e41b0fe619615ac32e0",
     "prefix": null
    },
