@@ -2101,6 +2101,22 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Verity.Assumptions.ChannelAuthentic": {
+   "owner": "@memory-accounting",
+   "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145"
+  },
+  "Verity.Assumptions.ChannelHides": {
+   "owner": "@memory-accounting",
+   "digest": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4"
+  },
+  "Verity.Assumptions.ImprintPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "d3c6cdef413c5b207c32fca89ffc3487b977bddaed45d6d1fa541a9d37aef9d3"
+  },
+  "Verity.Assumptions.WitnessPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "7211db5b6769910c2045e9162e1a61fe000dd06de27495cbbdf9b318f4e08d58"
   }
  },
  "meaning": [
@@ -11074,7 +11090,10 @@
    "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
   },
   "Verity.SecurityProofs.ImprintRootHidden": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.ImprintRootHidden : Verity.Guarantees.ImprintRootHidden"],
+   "assumptions": [],
+   "type_hash": "daf89ed0fc0655a143f405f84607e1efa3e709bfe7bc1e6844022a04ee5454c2"
   },
   "Verity.SecurityProofs.IsZeroGadget": {
    "owner": "@proofs",
@@ -11167,10 +11186,16 @@
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
   },
   "Verity.SecurityProofs.TransportDelivers": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.TransportDelivers : Verity.Guarantees.TransportDelivers"],
+   "assumptions": [],
+   "type_hash": "bf1b8fdb1ce0b562c7e6d604fc2df5d29ddbba81cc340d67077f00c631abb901"
   },
   "Verity.SecurityProofs.TransportPassiveZk": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.TransportPassiveZk : Verity.Guarantees.TransportPassiveZk"],
+   "assumptions": [],
+   "type_hash": "1b0a0ef1bddcb8f90de1275827ce9eafd0faa27cfe6fe397cecfff2b02182e7b"
   }
  },
  "shape": {
@@ -18945,6 +18970,20 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
    ]
   },
+  "Definitions.Core.Assumptions.Transport": {
+   "digest": "20ee200e7b6916a8a49a46107d81a5673ec5ac96e1740c1fe8ffb864eebfe5e7",
+   "definitions": {
+    "Verity.Assumptions.ChannelAuthentic": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
+    "Verity.Assumptions.ChannelHides": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4",
+    "Verity.Assumptions.ImprintPathPrivate": "d3c6cdef413c5b207c32fca89ffc3487b977bddaed45d6d1fa541a9d37aef9d3",
+    "Verity.Assumptions.WitnessPathPrivate": "7211db5b6769910c2045e9162e1a61fe000dd06de27495cbbdf9b318f4e08d58"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ImprintRootHidden",
+    "Verity.SecurityProofs.TransportDelivers",
+    "Verity.SecurityProofs.TransportPassiveZk"
+   ]
+  },
   "Definitions.Core.Circuit": {
    "digest": "4b89f6ddf9d7d0b8a14ef45007686901fdfd61ea19bbc81c3f68df13cca94eec",
    "definitions": {
@@ -19233,7 +19272,7 @@
    ]
   },
   "Definitions.Core.Game": {
-   "digest": "456c6ad264ea1597da91427148d9c0ed4fc8aaab61cfa323971b1090b3669f03",
+   "digest": "8bb8e802207a2427a470c733d0120368232876cdcbf5be38ad7fd49ec0ca1539",
    "definitions": {
     "Verity.Game": "dbf3d91129d029b645b41c73b9f2a122f0c318d56e8a77991cca09d48a3fe45b",
     "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
@@ -19250,6 +19289,7 @@
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
     "Verity.Game.casesOn": "d1338feec6ad7d2d0c77fc3d6cc4842abdd9db79d5d8d8e624582571b2b793ff",
     "Verity.Game.coin": "4540142afd525a891bba84d91a6d1f5f4bc0b78456e7cb7e5220db9c18febdaa",
+    "Verity.Game.draw": "2c73f92b3862e836756fb55a8f32bff15bf37734e51c53db599f1fb6a7671628",
     "Verity.Game.interleave": "8cc579f2e14080866cf44bdf92a1ad8006e6594e7f085ec58b2d64b67e3c5164",
     "Verity.Game.interleaveWith": "397c914cdff84b1aea6f1f1d28a609d6dc69b580a3d1564ffc6a7e0202beefd9",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
@@ -19268,12 +19308,14 @@
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Verity.SecurityProofs.ImprintRootHidden",
     "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
     "Verity.SecurityProofs.SoundInterleave",
-    "Verity.SecurityProofs.SoundMono"
+    "Verity.SecurityProofs.SoundMono",
+    "Verity.SecurityProofs.TransportPassiveZk"
    ]
   },
   "Definitions.Core.Guarantees.Circuit": {
@@ -19374,6 +19416,19 @@
     "Verity.SecurityProofs.IsZeroGadget",
     "Verity.SecurityProofs.PackSoundComplete",
     "Verity.SecurityProofs.RangeGadget"
+   ]
+  },
+  "Definitions.Core.Guarantees.Transport": {
+   "digest": "89189ba88b6162139f990a58c7bb928fd7bd3687948578daa0b7e89cc948caae",
+   "definitions": {
+    "Verity.Guarantees.ImprintRootHidden": "e135f6b4b2e50df7c495ae5c001e8f2625ade292588fd0ab51ff15319a664a5e",
+    "Verity.Guarantees.TransportDelivers": "8abd2ff063ff6f7b13cc8877aead2a6231f49d7d1b38773e5b3a7c4452ee37f0",
+    "Verity.Guarantees.TransportPassiveZk": "884c078df1f77ee00f2f8ce8141d9693081d6e3b82a122b57a1d3d23aba3c71c"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ImprintRootHidden",
+    "Verity.SecurityProofs.TransportDelivers",
+    "Verity.SecurityProofs.TransportPassiveZk"
    ]
   },
   "Definitions.Core.NaiveStrassen": {
@@ -19874,6 +19929,24 @@
     "Verity.SecurityProofs.HopperUnitSoundZero",
     "Verity.SecurityProofs.PackSoundComplete"
    ]
+  },
+  "Definitions.Core.Transport": {
+   "digest": "365e418e12c19ec54914a1d8553f41a260131ad2acb74c9b6d0f7124069ab6f7",
+   "definitions": {
+    "Verity.Transport.Channel": "062f67d743fd13e80ae3a55ce9bebda653a5300c1189f668aafb3eea375eb74c",
+    "Verity.Transport.Channel.party": "e3ce45f3f4e1102fec91d3fc8e9244992cc22dbe1a657ac5bbb52d9ff420296c",
+    "Verity.Transport.Channel.readsImprint": "eac6cf208ecf29ac34d5082e59def5e8d2fc7ae0b3f29c3c31f482f5e32a98af",
+    "Verity.Transport.Channel.readsPrivate": "5313436fd134a1e976df015f19f6dc97afe9c0cc7986b599b066ef507372ffde",
+    "Verity.Transport.Close": "d7c93db41330cd42b0ce78786b7fa4c9b469f94a756906465db82594a765e715",
+    "Verity.Transport.PathPrivate": "2c3b358630ec7295be20b525d2d3d264ae6510ce304e09b0a234b80774af2d41",
+    "Verity.Transport.Site": "0dff52ce4114e5743e933c909d569df3a91d953b20a9dcf540cbc08305b8eda2",
+    "Verity.Transport.Site.Confined": "706394d4a5733f1982f20bc1dd0fa7dce8d2e1013774c034b3ad2bbb003e030c",
+    "Verity.Transport.Site.developer": "89d21e75a8610a67154581a4397568b9e8d147d9f895d3a438d0045a7d9d989b",
+    "Verity.Transport.ViewIsRecord": "906b909f33f42b786b10c5c1b28fd1d0940bf70aea5147e255196c7c1f9befed",
+    "Verity.Transport.outside": "d74c8f9eeeea572204a151d6019e69455f7f1046b30586c677b905d7f85a1ca6",
+    "Verity.Transport.seen": "6365e76b633ed3a89da61e3befc26c66fd1a26435ed495ec6dc031643c88bda5"
+   },
+   "guarantees": ["Verity.SecurityProofs.ImprintRootHidden", "Verity.SecurityProofs.TransportPassiveZk"]
   },
   "Definitions.Flock.Accounting.Bound": {
    "digest": "40380563a6f220d81b45b9de171e5e25a85ce5d74ea1f18d5500831d646c11e1",
