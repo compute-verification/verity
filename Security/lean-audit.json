@@ -1538,6 +1538,10 @@
    "owner": "@memory-accounting",
    "digest": "4eaccdb39e04a3ffda69506389dd61a81c05aa0e86791800a88890739da925ec"
   },
+  "Pous.StreamedWipe.OperatingPoint": {
+   "owner": "@memory-accounting",
+   "digest": "dd0cf3e8e25b901bad8ccee319cabf7102fb4191dddef1781fc13d38ebbe4ce4"
+  },
   "Pous.TimedINC": {
    "owner": "@memory-accounting",
    "digest": "0880c3a8f7cc9c2b2af5da033afc3c3a8c096db4fc04620931a57a008181be0d"
@@ -2184,7 +2188,7 @@
   "SampledProofs"
  ],
  "claims": {
-  "modules": ["Definitions.Claims"],
+  "modules": ["Definitions.Claims", "Definitions.Pous.Claims"],
   "witnesses": {
    "Claims.Bits": {
     "fails": "Claims.Bits_fails",
@@ -2396,6 +2400,22 @@
    "Claims.Recursion.BitsLin2": {
     "fails": "Claims.Witness.Recursion.BitsLin2_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsReadsTight": {
+    "fails": "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsReadsTight_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsServer": {
+    "fails": "Pous.Claims.StreamedWipeMeetsServer_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsServer_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsServer5GB": {
+    "fails": "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsServer5GB_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsServerH200": {
+    "fails": "Pous.Claims.StreamedWipeMeetsServerH200_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsServerH200_meets"]
    }
   },
   "not": {
@@ -9104,6 +9124,113 @@
    "assumptions": [],
    "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
+  "Pous.Claims.StreamedWipeMeetsReadsTight_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsReadsTight_fails :",
+    "  Not (Pous.Claims.StreamedWipeMeetsReadsTight fun {N k b q M E} => Pous.StreamedWipe.acceptAll)"
+   ],
+   "assumptions": [],
+   "type_hash": "7e6c681d98c5d5ab9a94b8878dfe0b8a479682ca89df96ddd3120035f95d9e05"
+  },
+  "Pous.Claims.StreamedWipeMeetsReadsTight_meets": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsReadsTight_meets :",
+    "  And (instLTNat.lt 0 Pous.StreamedWipe.h200.r)",
+    "    (And",
+    "      (instLENat.le",
+    "        (instHMul.hMul (instHPow.hPow (instHSub.hSub Pous.StreamedWipe.h200.r 1) Pous.StreamedWipe.h200.k)",
+    "          (instHPow.hPow 2 129))",
+    "        (instHPow.hPow Pous.StreamedWipe.h200.r Pous.StreamedWipe.h200.k))",
+    "      (And (instLTNat.lt 0 Pous.StreamedWipe.h200.n)",
+    "        (Eq Pous.StreamedWipe.h200.Ms",
+    "          (instHAdd.hAdd (instHMul.hMul Pous.StreamedWipe.h200.n 512) Pous.StreamedWipe.h200.R))))"
+   ],
+   "assumptions": [],
+   "type_hash": "b8b4644876b9efe8ac5a9f6251aaf2cf542003cc7b60fe5201b7c6c2f84a8686"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer5GB_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsServer5GB_fails :",
+    "  Not (Pous.Claims.StreamedWipeMeetsServer5GB fun {N k b q M E} => Pous.StreamedWipe.acceptAll)"
+   ],
+   "assumptions": [],
+   "type_hash": "e2af5d4ec11b90c301d5559001685370f7fb831da698b41e8a3bddbc00c865ac"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer5GB_meets": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsServer5GB_meets :",
+    "  And",
+    "    (Eq Pous.StreamedWipe.h200.Ms (instHAdd.hAdd (instHMul.hMul 512 Pous.StreamedWipe.h200.n) Pous.StreamedWipe.h200.R))",
+    "    (And (instLTNat.lt 0 Pous.StreamedWipe.h200.n)",
+    "      (And (instLTNat.lt 0 Pous.StreamedWipe.h200.r)",
+    "        (And",
+    "          (instLENat.le",
+    "            (instHMul.hMul (instHPow.hPow (instHSub.hSub Pous.StreamedWipe.h200.r 1) Pous.StreamedWipe.h200.k)",
+    "              (instHPow.hPow 2 129))",
+    "            (instHPow.hPow Pous.StreamedWipe.h200.r Pous.StreamedWipe.h200.k))",
+    "          (Pous.StreamedWipe.OperatingPoint Pous.StreamedWipe.h200.n Pous.StreamedWipe.h200.r Pous.StreamedWipe.h200.k",
+    "            Pous.StreamedWipe.h200.R))))"
+   ],
+   "assumptions": [],
+   "type_hash": "92a421155120544bbf4cfcdcc60922305dad37a754a4cce30e19ff0a18717d7c"
+  },
+  "Pous.Claims.StreamedWipeMeetsServerH200_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsServerH200_fails :",
+    "  Not (Pous.Claims.StreamedWipeMeetsServerH200 fun {N k b q M E} => Pous.StreamedWipe.acceptAll)"
+   ],
+   "assumptions": [],
+   "type_hash": "ba22ca3dd6d9d4ca25e33ba42a54fb469b32cee2f35fc8bf53bee86c86697542"
+  },
+  "Pous.Claims.StreamedWipeMeetsServerH200_meets": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsServerH200_meets :",
+    "  And",
+    "    (Eq Pous.StreamedWipe.h200.Ms (instHAdd.hAdd (instHMul.hMul 512 Pous.StreamedWipe.h200.n) Pous.StreamedWipe.h200.R))",
+    "    (And (instLTNat.lt 0 Pous.StreamedWipe.h200.n)",
+    "      (And (instLTNat.lt 0 Pous.StreamedWipe.h200.r)",
+    "        (And",
+    "          (instLENat.le",
+    "            (instHMul.hMul (instHPow.hPow (instHSub.hSub Pous.StreamedWipe.h200.r 1) Pous.StreamedWipe.h200.k)",
+    "              (instHPow.hPow 2 129))",
+    "            (instHPow.hPow Pous.StreamedWipe.h200.r Pous.StreamedWipe.h200.k))",
+    "          (Pous.StreamedWipe.OperatingPoint Pous.StreamedWipe.h200.n Pous.StreamedWipe.h200.r Pous.StreamedWipe.h200.k",
+    "            Pous.StreamedWipe.h200.R))))"
+   ],
+   "assumptions": [],
+   "type_hash": "92a421155120544bbf4cfcdcc60922305dad37a754a4cce30e19ff0a18717d7c"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsServer_fails :",
+    "  Not (Pous.Claims.StreamedWipeMeetsServer fun {N k b q M E} => Pous.StreamedWipe.acceptAll)"
+   ],
+   "assumptions": [],
+   "type_hash": "3e288bc6e9f020bf15ae38f0217a9fd3917a8985db10c545825ed84684300c82"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer_meets": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Claims.StreamedWipeMeetsServer_meets :",
+    "  And",
+    "    (Eq Pous.StreamedWipe.h200.Ms (instHAdd.hAdd (instHMul.hMul 512 Pous.StreamedWipe.h200.n) Pous.StreamedWipe.h200.R))",
+    "    (And (instLTNat.lt 0 Pous.StreamedWipe.h200.n)",
+    "      (And (instLTNat.lt 0 Pous.StreamedWipe.h200.r)",
+    "        (instLENat.le",
+    "          (instHMul.hMul (instHPow.hPow (instHSub.hSub Pous.StreamedWipe.h200.r 1) Pous.StreamedWipe.h200.k)",
+    "            (instHPow.hPow 2 129))",
+    "          (instHPow.hPow Pous.StreamedWipe.h200.r Pous.StreamedWipe.h200.k))))"
+   ],
+   "assumptions": [],
+   "type_hash": "695bcec7bedf6a52c4ae8f8ddd8fa5844e56da969afb94cb9db0f9408d0c253a"
+  },
   "Pous.SecurityProofs.BackgroundRebuildExcluded": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded"],
@@ -9451,6 +9578,50 @@
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads"],
    "assumptions": [],
    "type_hash": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight"],
+   "assumptions": [],
+   "type_hash": "8a49cf1cd6bc038083f46f503c9d0c48e1783f53288309186a2a45615d02a9c1"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsServer": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer"],
+   "assumptions": [],
+   "type_hash": "382d5ccff3a06e4e7d07fc92c9b58f739668175d8124f2ff02a1d9a826985d79"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsServer5GB": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer5GB : Pous.Guarantees.StreamedWipeMeetsServer5GB"],
+   "assumptions": [],
+   "type_hash": "fef39696ec0fc39f5753e24cff3467284db50b30844bb991e0472f282a53be5e"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer8H200 : Pous.Guarantees.StreamedWipeMeetsServer8H200"],
+   "assumptions": [],
+   "type_hash": "802c01703d13135f027747672be44f2465a6bf2f84cfa2e370ddb9a03b082a06"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBM"],
+   "assumptions": [],
+   "type_hash": "cb7104e2380aaad0826c74ad18b6c0628359e6b986e04126b81b5132f23762f9"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBMRAM"
+   ],
+   "assumptions": [],
+   "type_hash": "2fcec4ab1ff8fdfc1e629f28e55e09fa2306a8512d6b86a0b3b84c6e35814b0b"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsServerH200": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServerH200 : Pous.Guarantees.StreamedWipeMeetsServerH200"],
+   "assumptions": [],
+   "type_hash": "6d52bba05419a102487e5c42fdb09b253307186f9ac6328693929fe349dae5d8"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
    "owner": "@compute-accounting",
@@ -12289,7 +12460,14 @@
    "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
+   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, with the count of the missing labels' sets (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServer": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R, at its threshold B(n, r, k, R) (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServer5GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R at the 5 GB point, B(n, r, k, R) <= 4e10 bits (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on one H200 as measured on vy-dc-h200-2 (r20261026-003454-bfd2), a 148.48 GB fill with 2.276 GB outside it, at the deployed r = 62 and k = 5500 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM, a 1,128 GB fill with 3.9 GB outside it, at r = 1050 and k = 93,843 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM and host RAM, a 3,128 GB fill with 3.9 GB outside it, at r = 2922 and k = 261,229 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on a whole 8xH200 server, a 15,128 GB fill of every tier with 3.9 GB outside it, at r = 14,183 and k = 1,268,143 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -24248,6 +24426,25 @@
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
    ]
   },
+  "Definitions.Pous.Claims.StreamedWipeServer": {
+   "digest": "e97ff87e58babd6b667a63953722c323216ae99c32daf4c8ecd05a85d71d3683",
+   "definitions": {
+    "Pous.Claims.StreamedWipeMeetsReadsTight": "c4d031e27c9190b02543fe38362514599241e7800b45d353d6a940011098ccb8",
+    "Pous.Claims.StreamedWipeMeetsServer": "4ae61ad62d6d67e7820c103de43a9e287e2ef9f1992b9268fea1281ffc7506b3",
+    "Pous.Claims.StreamedWipeMeetsServer5GB": "ed578a21dd85d4bd601021e9361da251b5fdddb913192c6924303b8089b487dd",
+    "Pous.Claims.StreamedWipeMeetsServerH200": "09f651e3681643b4e107b7b9582c1df094e92b6b0abc6291e4919bc54a813492"
+   },
+   "guarantees": [
+    "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
+    "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
+    "Pous.Claims.StreamedWipeMeetsServerH200_fails",
+    "Pous.Claims.StreamedWipeMeetsServer_fails",
+    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB",
+    "Pous.SecurityProofs.StreamedWipeMeetsServerH200"
+   ]
+  },
   "Definitions.Pous.Game.Oracle": {
    "digest": "4cf5b7b7641eba2ca7012b4375ce50072a4af4dd1f88a94e924031bbb2842444",
    "definitions": {
@@ -24461,6 +24658,10 @@
     "Bandwidth.SecurityProofs.HonestPasses",
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
+    "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
+    "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
+    "Pous.Claims.StreamedWipeMeetsServerH200_fails",
+    "Pous.Claims.StreamedWipeMeetsServer_fails",
     "Pous.SecurityProofs.BackgroundRebuildExcluded",
     "Pous.SecurityProofs.BandChainMeets64",
     "Pous.SecurityProofs.BandChainMeets64D12",
@@ -24518,7 +24719,14 @@
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily",
-    "Pous.SecurityProofs.StreamedWipeMeetsReads"
+    "Pous.SecurityProofs.StreamedWipeMeetsReads",
+    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM",
+    "Pous.SecurityProofs.StreamedWipeMeetsServerH200"
    ]
   },
   "Definitions.Pous.Guarantees": {
@@ -24676,6 +24884,27 @@
     "Pous.Guarantees.StreamedWipeMeetsReads": "0a36a70da47be9c52663087b4373ad8a41f51d28ed4116e3037324b6045057de"
    },
    "guarantees": ["Pous.SecurityProofs.StreamedWipeMeets141GB5", "Pous.SecurityProofs.StreamedWipeMeetsReads"]
+  },
+  "Definitions.Pous.Guarantees.StreamedWipeServer": {
+   "digest": "0108d8965151b15f65dadaa9b75139cdabbcec39bc0804408deec1ba1759a35a",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeetsReadsTight": "5f7eb9e3224a36ef5b4958f109c51b41f45021d462122ea1a3c2ae5f6b99f9dc",
+    "Pous.Guarantees.StreamedWipeMeetsServer": "becb61e592a47378d8d509b2386f7990e39a6ff236afa2025b7c417bbb2d2fde",
+    "Pous.Guarantees.StreamedWipeMeetsServer5GB": "41d3ba0f64e442f8c5df7d8890a6d52d5ec443c23b81c6edfaaf8f1c6673255d",
+    "Pous.Guarantees.StreamedWipeMeetsServer8H200": "7328e2454506b080a6088ae077c9280f5fc28b45adb66dd4f6fd5f8a9374c163",
+    "Pous.Guarantees.StreamedWipeMeetsServer8H200HBM": "a9bda4dfa948696d19196a52c4d749438a94771e51a1ed47e27fb08a2941dffe",
+    "Pous.Guarantees.StreamedWipeMeetsServer8H200HBMRAM": "3bf2ce0b344a91248734bc3094307c2a6871cf52ec44ad27095c15653eb4f3aa",
+    "Pous.Guarantees.StreamedWipeMeetsServerH200": "06fedd3cbf664bcf45278399ed0cf2b74765bcbf392c44682971b5047f2b087f"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM",
+    "Pous.SecurityProofs.StreamedWipeMeetsServerH200"
+   ]
   },
   "Definitions.Pous.Model.Audit": {
    "digest": "ae9ed577afee6873bd59d0b44e3a7daa4019bdf0958b65f2ec852459c09a026e",
@@ -25336,13 +25565,59 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
+    "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
+    "Pous.Claims.StreamedWipeMeetsServerH200_fails",
+    "Pous.Claims.StreamedWipeMeetsServer_fails",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets141GB",
     "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily",
-    "Pous.SecurityProofs.StreamedWipeMeetsReads"
+    "Pous.SecurityProofs.StreamedWipeMeetsReads",
+    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM",
+    "Pous.SecurityProofs.StreamedWipeMeetsServerH200"
+   ]
+  },
+  "Definitions.Pous.Model.StreamedWipeServer": {
+   "digest": "59f9209fb81725e45ff96c305c51c5fc5812520550a421cb1ce9bfc7e621f311",
+   "definitions": {
+    "Pous.StreamedWipe.Deployment": "5d412723bd6d0d70a56608338f400aab6d9200f46688d828c3e5ac669b81cee4",
+    "Pous.StreamedWipe.Deployment.Ms": "bcb77d02962b7d0dcfcad54de9596ec9d07cd5a23eb770ffed5cc3bbf17dd57e",
+    "Pous.StreamedWipe.Deployment.R": "51a9677b6d3c813c1fc6707616f2d766fd93b796853d5bbc0edbf6f77e8e7ed4",
+    "Pous.StreamedWipe.Deployment.k": "8ad3f8e48e83578e55da83679ded41290537f00f3e75c27538d1a672e6705eb5",
+    "Pous.StreamedWipe.Deployment.n": "01e1be3dbd7e9775184e1fb5d1eff862b189025bfd4da49d4cae065480a043ab",
+    "Pous.StreamedWipe.Deployment.r": "488fc12ecbebd0c71f3df731618e09c5fb9aaef914d51e1cc64feb68de69ee24",
+    "Pous.StreamedWipe.OperatingPoint": "dd0cf3e8e25b901bad8ccee319cabf7102fb4191dddef1781fc13d38ebbe4ce4",
+    "Pous.StreamedWipe.Verdict": "ca133829d8610b7f2cd6f27cbacaf17f299b85cdca046393be197257f72fc24f",
+    "Pous.StreamedWipe.acceptAll": "ef5e42ad8ae66fd2a3d830d11034ba8b4e1e55de274266d9c01add18a6004805",
+    "Pous.StreamedWipe.countBits": "37916adbb7e5a29aab4c4a4e39f0d0e7f8725620817262dd5b69b6f1ec756234",
+    "Pous.StreamedWipe.fillShare": "8af9f44f2a1e81ad30e8b9e866a47b08ba982e4ba681b28f246945fb65b03add",
+    "Pous.StreamedWipe.h200": "f8d15ef74cce2449df7bf4751edf0adefeb040c5c8c44742442496ccf5970a15",
+    "Pous.StreamedWipe.missing": "44ac814668da6b9c87a5de104ba5081e074c1c6a5e220ac7380a46fb0b1a2192",
+    "Pous.StreamedWipe.serverBound": "c1800b00cf5c4a242b5878257bb087b3e4a10f135b9a0985ebef700931f16b54",
+    "Pous.StreamedWipe.winRealBy": "22f2be332267e7756123896f73e2ab1f471aecccc7b8543c63007fa1242f4b13",
+    "Pous.StreamedWipe.wipeDistinguisherBy": "673e39724f39fc7597beccd58408989ba86a12a7a99932e087c66f85be848bc5"
+   },
+   "guarantees": [
+    "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
+    "Pous.Claims.StreamedWipeMeetsReadsTight_meets",
+    "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
+    "Pous.Claims.StreamedWipeMeetsServer5GB_meets",
+    "Pous.Claims.StreamedWipeMeetsServerH200_fails",
+    "Pous.Claims.StreamedWipeMeetsServerH200_meets",
+    "Pous.Claims.StreamedWipeMeetsServer_fails",
+    "Pous.Claims.StreamedWipeMeetsServer_meets",
+    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer",
+    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB",
+    "Pous.SecurityProofs.StreamedWipeMeetsServerH200"
    ]
   },
   "Definitions.Pous.P2.Cost": {
