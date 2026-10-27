@@ -13,7 +13,7 @@
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP and L
-# (default 512 and 4096): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
+# (default 512 and 16384: S = 1 at every layer): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
 # kernels' share of the GPU's time); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
@@ -26,7 +26,7 @@ export PYTHONPATH=.
 GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
 TORCH_PY=${TORCH_PY:-uv run -q --no-project --with torch --with numpy --with safetensors --with tokenizers --with pyarrow python}
 CKPT=${CKPT:-/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7}
-ROW=${ROW:-8192} LP=${LP:-512} L=${L:-4096} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
+ROW=${ROW:-8192} LP=${LP:-512} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
 COINS=${COINS:-local} MAIN=${MAIN:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt}
 W=$(mktemp -d /dev/shm/highutil.XXXXXX)
 export W

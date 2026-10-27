@@ -137,6 +137,26 @@ def test_a_skipping_prover_is_refused(small):
     assert r["verdict"].startswith("REFUSE")
 
 
+def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path):
+    """The run's setting, L past every layer's K (S = 1, the output's low 16 bits the only words): an honest period is
+    accepted and a skipping prover refused, as at S > 1."""
+    cfg = tmp_path / "cfg"
+    assert P.main(["prep", str(cfg), "--small", "--L", "2048"]) == 0
+    prep = json.loads((cfg / "prep.json").read_text())
+    try:
+        P.configure(prep)
+        assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1, 1]
+        secret = b"\x07" * 64
+        per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
+                       prep["row"], prep["source"], secret, tmp_path, _Serial())
+        r = per.proto("t-s1", P.Plan(2, 2, 12))
+        assert r["accepted"], r["verdict"]
+        r = per.proto("t-s1-skip", P.Plan(2, 2, 64), "skip:1")
+        assert not r["accepted"] and r["failed"] > 0, r["verdict"]
+    finally:
+        P.configure(json.loads((small.cfg / "prep.json").read_text()))
+
+
 def test_a_tampered_root_is_refused(small, monkeypatch):
     """A root the GPU didn't commit (here the first call's, altered after the block) fails every pick of that call."""
     real = small.drv.block

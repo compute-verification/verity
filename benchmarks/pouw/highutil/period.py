@@ -33,7 +33,7 @@ the coins are 64-byte session coins expanded here, not the challenger's streamed
 (the challenger's release log records what each coin opened after); and the checks run in the clear, the stand-in for
 the Definition and C-Flock --zk.
 
-    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--L 4096] [--nb 32]   the weights and shapes
+    period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--L 16384] [--nb 32]   the weights and shapes
     capture.py CFG --checkpoint DIR                                           the activations (on the GPU)
     period.py diag CFG LIB OUT                                                one step's GPU openings against the answers'
     period.py run CFG LIB|ref OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
@@ -46,6 +46,7 @@ import json
 import math
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -75,7 +76,7 @@ from verity.ml.randomness import derive  # noqa: E402
 LAYERS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, L = 512, 4096   # the noise period L' and the word interval L (t = L / L' = 8; S = 1 at K = 4,096)
+LP, L = 512, 16384   # the noise period L' and the word interval L: S = ceil(K / L) = 1 at every layer's K (4,096 and 14,336)
 TILE = v31.TILE
 SCHEME = "verity/highutil/period/v1"
 OPERANDS_TAG = "verity/highutil/operands/v1"
@@ -226,9 +227,9 @@ def cmd_prep(a: argparse.Namespace) -> int:
     d = Path(a.cfg)
     d.mkdir(parents=True, exist_ok=True)
     if a.small:
-        configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": 512})
+        configure({"layers": [["a", 256, 1024], ["b", 128, 2048]], "m": 256, "nb": 2, "lp": 128, "L": a.L or 512})
     else:
-        configure({"layers": [list(x) for x in LAYERS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L})
+        configure({"layers": [list(x) for x in LAYERS], "m": M, "nb": a.nb, "lp": a.lp, "L": a.L or L})
     if a.checkpoint:
         ck = Path(a.checkpoint)
         if ck.name != CHECKPOINT["revision"]:
@@ -369,20 +370,16 @@ def _split_cheat(cheat: str) -> tuple[str, int | None]:
     return kind, int(at) if at else None
 
 
-def _path(levels, width: int, depth: int, pos: int) -> bytes:
-    """Leaf pos's siblings, leaf level first, from a tree's levels laid out flat (leaves first, 64 bytes a node)."""
-    return b"".join(bytes(levels[64 * x:64 * x + 64]) for x in
-                    (2 * width - 2 * (width >> d) + ((pos >> d) ^ 1) for d in range(depth)))
-
-
 # --------------------------------------------------------------------------------------------------------- the drivers
 class GpuDriver:
     """V31-GPU's no-fold prover (v31lib's Prover over libv31.so, built from hu_lib.cu: one Prover a layer, every call on
     the binding's shared streams in issue order, each commit beside the next call's compute) and plain cuBLASLt
     (torch._int_mm) on the same calls. Both operands of every block sit on the GPU; step g's calls read block g mod NB
     (hu_point_b, no copy). One thread drives every Prover, as the binding requires: a step's four calls are issued, then
-    the step before's roots and tree levels are read (each call's levels copied to host memory before its layer's call
-    two after it is issued), for the openings after the block's check coin."""
+    the step before's tree levels are queued for copy to page-locked host memory behind their commits (hu_levels_async,
+    before each layer's call two after is issued), so the host never waits on the device inside a block but in v31's own
+    wait for call c - 2's commit; the roots (each tree's last node) and the paths for the openings after the block's check
+    coin are read from those copies once the block is done."""
 
     def __init__(self, lib: str, cfg: Path, row: int, rmax: int) -> None:
         import ctypes
@@ -393,6 +390,8 @@ class GpuDriver:
         self.lib = v31lib.Lib(lib)
         self.point_b = ctypes.CDLL(lib).hu_point_b
         self.point_b.argtypes, self.point_b.restype = [ctypes.c_void_p, ctypes.c_void_p], ctypes.c_int
+        self.levels_async = ctypes.CDLL(lib).hu_levels_async
+        self.levels_async.argtypes, self.levels_async.restype = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_void_p], ctypes.c_int
         self.params = Path(tempfile.mkdtemp(prefix="highutil-params-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
         self.ps, self.A, self.B, self.out, self.geom = [], [], [], [], []
         for name, n, k in LAYERS:
@@ -406,15 +405,20 @@ class GpuDriver:
                 dst.append(torch.from_numpy(x).cuda())
             self.out.append(torch.empty((M, n), dtype=torch.int32, device="cuda"))
             assert f.S == p.info()["S"]
+        # each layer's trees of one block, rmax steps, as native u64 words (8 a node), page-locked for hu_levels_async
+        self.levels = [torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
+                       for w, _, _ in self.geom]
         torch.cuda.synchronize()
-        self.levels: list[np.ndarray] = [np.empty((0, 0), np.uint8)] * len(LAYERS)
         self.keys: dict[tuple[int, int], bytes] = {}
         self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {os.environ.get('V31_LTW', '0')}"]
 
     def _mhz(self) -> int:
+        uuid = os.environ.get("GPU_LEASE_UUID")
         try:
-            return int(self.torch.cuda.clock_rate())
-        except Exception:
+            got = subprocess.run(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits", *(["-i", uuid] if uuid else [])],
+                                 capture_output=True, text=True, check=True).stdout.split()
+            return int(got[0])
+        except (OSError, subprocess.CalledProcessError, ValueError, IndexError):
             return 0
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
@@ -435,16 +439,13 @@ class GpuDriver:
             return {"gpu_ms": e0.elapsed_time(e1), "host_ms": 1e3 * (time.monotonic() - t0), "flags": 0, "sm_mhz": self._mhz()}
         rec = seeds.read_bytes()
         kind, at = _split_cheat(cheat)
-        got: list[bytes] = [b""] * (steps * NL)
-        self.levels = [np.empty((steps, g[2]), np.uint8) for g in self.geom]
         self.keys = {}
 
         bad = [kind if kind != "none" and at in (None, li) else "none" for li in range(NL)]
 
         def collect(s: int, li: int, c: int) -> None:
             p = self.ps[li]
-            got[s * NL + li] = p.root(c)
-            self.lib.check(self.lib.levels(p.h, c, self.levels[li][s].ctypes.data))
+            self.lib.check(self.levels_async(p.h, c, self.levels[li][s].ctypes.data))
             self.keys[(s, li)] = v31.call_key(p.ks, c)
 
         torch.cuda.synchronize()
@@ -462,8 +463,10 @@ class GpuDriver:
             prev = cur
         for x in prev:
             collect(*x)
+        for p in self.ps:
+            p.sync()
         ms = 1e3 * (time.monotonic() - t0)
-        roots.write_bytes(b"".join(got))
+        roots.write_bytes(b"".join(self.levels[li][s][-8:].byteswap().tobytes() for s in range(steps) for li in range(NL)))
         return {"gpu_ms": ms, "host_ms": ms, "flags": 0, "sm_mhz": self._mhz()}
 
     def key(self, b: int, step: int, layer: int) -> bytes:
@@ -473,8 +476,14 @@ class GpuDriver:
         recs = np.frombuffer(picks_file.read_bytes(), dtype="<u4").reshape(-1, 3)
         with open(out, "wb") as f:
             for s, li, pos in recs.tolist():
-                width, depth, _ = self.geom[li]
-                f.write(_path(self.levels[li][s], width, depth, pos))
+                f.write(self.path(li, s, pos))
+
+    def path(self, li: int, s: int, pos: int) -> bytes:
+        """Leaf pos's siblings in step s's tree of layer li, leaf level first (64 big-endian bytes a node)."""
+        width, depth, _ = self.geom[li]
+        lv = self.levels[li][s]
+        return b"".join(lv[8 * x:8 * x + 8].byteswap().tobytes() for x in
+                        (2 * width - 2 * (width >> d) + ((pos >> d) ^ 1) for d in range(depth)))
 
     def open_now(self, li: int, c: int, positions: list[int]):
         """The GPU's own openings of call c (one of its layer's last two calls): rows, salts and paths."""
@@ -807,12 +816,12 @@ def cmd_diag(a: argparse.Namespace) -> int:
         seeds, key, root = v31.fill_seeds_from(rec[li]), drv.key(0, 0, li), roots[64 * li:64 * li + 64]
         pos = sorted({0, f.leaves - 1, *(int(x) for x in rng.integers(f.leaves, size=4))})
         gpu = drv.open_now(li, 0, pos)
-        width, depth, _ = drv.geom[li]
+        depth = drv.geom[li][1]
         dom, cmt = f.domain(), Commitment(root, f.leaves)
         bad = []
         for p, (grow, gsalt, gpath) in zip(pos, gpu):
             mine = leaf_row(f, str(operand_file(cfg, "A", name)), str(operand_file(cfg, "B", name)), t, seeds, p)
-            path = _path(drv.levels[li][0], width, depth, p)
+            path = drv.path(li, 0, p)
             if grow != mine:
                 bad.append(f"leaf {p}: the GPU's row isn't the recomputed one")
             if gsalt != v31.cref.prf_salt(key, p):
@@ -880,7 +889,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("cfg")
     p.add_argument("--row", type=int, default=8192, help="leaf row bytes")
     p.add_argument("--lp", type=int, default=LP, help="the noise period L'")
-    p.add_argument("--L", type=int, default=L, help="the word interval L")
+    p.add_argument("--L", type=int, help=f"the word interval L (default {L}; --small's 512)")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--checkpoint", help=f"{CHECKPOINT['repo']}'s snapshot directory at {CHECKPOINT['revision'][:10]} (B; "
                                         "capture.py writes A)")
