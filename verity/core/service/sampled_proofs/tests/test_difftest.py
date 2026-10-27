@@ -613,9 +613,9 @@ def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
     return draw_coins(ChallengerKey.from_json(ch["key"]), p["window_root"], ch["label"], c[1], e.get("coins"), lms_verify)
 
 
-def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool:
+def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | ValueError:
     """`OneStage.coinsReason`: the draw's units are not the ones `src` draws under the law (`coins.draw_first` read in
-    order), or a coin opened was not read."""
+    order, its refusal the problem), or a coin opened was not read."""
     n = rec.get("population")
     if not _nat(n):
         return True
@@ -628,8 +628,8 @@ def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool:
         return b
     try:
         units = draw_first(OwnRandomness(source), mine, n)["units"]
-    except ValueError:
-        return True
+    except ValueError as refused:
+        return refused
     drawn = [u for u in draw["units"] if _nat(u)] if isinstance(draw.get("units"), list) else []
     return list(units) != drawn or -(-read // COIN_BYTES) != len(src) // COIN_BYTES
 
