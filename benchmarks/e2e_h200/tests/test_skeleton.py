@@ -82,7 +82,7 @@ def test_a_draw_covers_every_family(shaped):
 def test_driver_rows_equal_cpu_step(shaped):
     """The replay lane's `cpu_step` (16-bit unit forms, written apart from the driver) at the shape's map's RMSNorm chunks
     and groups: the same bytes out, and every residual row and logit row equal."""
-    from verity_torch_loop import weights as SW
+    from e2e_h200 import served_weights as SW
     shape, _, d, results = shaped
     st = CS.Step(shape, lambda n: SW.generate(shape, SW.TEST_SEED, n), batch=BATCH, forms=FORMS[shape.name])
     out = CS.decode(st, [b"hi", b"ok"], STEPS - 1)

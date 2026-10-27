@@ -907,3 +907,112 @@ def test_at_a_chunked_k_the_program_wraps_the_zy_unit_and_refuses_whole_rows_and
     assert HW._tile_of(Fake(), 14336) is real.bindings["TILE"]
     with pytest.raises(ValueError, match="the chunk lanes"):
         HW.leaf_unit(Fake(), 14336, LL.LANE)
+
+
+def _chunk_sig_j10r(S):
+    params, ret = _chunk_sig(S)
+    return (*params, ("call", Array(64, BIT)), ("blocks", Array(2, Array(64, BIT)))), ret
+
+
+ChunkTileJ10r = _test_tile("H1WindowTestChunkTileJ10r", sig=_chunk_sig_j10r)
+#: a J10-R window of a leaf of four lanes at K = 8192, its rows 2 chunk leaves each, and a whole K = 64
+J10R_LINEARS = (("q_proj", 64, 32), ("down_proj", 8192, 16))
+J10R_CALLS = tuple((lin, s) for s in range(2) for lin in ("q_proj", "down_proj"))
+
+
+def _j10r_window():
+    return HW.program(J10R_LINEARS, J10R_CALLS, HW.slot(5, LEAF), LEAF, prefix="h1/w/",
+                      unit=lambda k: bind(ChunkTileJ10r if W.chunks(k) > 1 else TestTileJ10r, K=k, R=LEAF[0], C=LEAF[1]))
+
+
+def test_a_j10r_windows_drawn_leaf_reads_its_chunk_rows_carries_and_ok_rows_at_its_place():
+    """Under J10-R a drawn leaf at a chunked K is its lanes' chunks (`leaf_lanes`' J10-R leaf): chunk c of lane l reads
+    its A and B rows' chunk c, the tile's own chunk rows (`table_reads`' leaf n row + c), what chunk c - 1 handed on, and
+    its statement's ok row, and the combine every ok row; the carries and ``oks`` are the leaf's own from row 0, like
+    the partials. At a whole K a lane reads whole rows and its ok row."""
+    prog = _j10r_window()
+    tp = P.evaluate(prog, HW.query(prog))
+    (r, c), units = LEAF, HW.call_units(prog)
+    for steps in (1, 2):
+        for ci, (u0, n_units) in enumerate(units):
+            k = dict((name, kk) for name, kk, _n in J10R_LINEARS)[J10R_CALLS[ci][0]]
+            n = W.chunks(k)
+            for u in (u0, u0 + n_units - 1):
+                at, tr = HW.place(prog, u, steps), HW.table_reads(prog, tp, u, steps)
+                assert {v: at[v] for v in LL.produced_values(r, c, k, j10r=True)} == {
+                    v: (v, 0) for v in LL.produced_values(r, c, k, j10r=True)}
+                assert (LL.OKS in at) and (("carry0" in at) == (n > 1))
+                for st in LL.statements(r, c, j10r=k):
+                    got = HW.leaf_reads(prog, u, *st, steps=steps)
+                    assert got == {p: (at[v][0], at[v][1] + row) for p, (v, row) in LL.reads(r, c, *st, j10r=k).items()}
+                    if st[0] == LL.COMBINE:
+                        continue
+                    ch = st[2] if st[0] == LL.CHUNK else 0
+                    assert [got[f"a{s}"] for s in range(4)] == [tr[f"a_k{k}[{n * i + ch}]"] for i in LL.lane_rows(r, c, st[1])]
+                    assert [got[f"b{t}"] for t in range(8)] == [tr[f"b_k{k}[{n * j + ch}]"] for j in LL.lane_cols(r, c, st[1])]
+                    assert got[LL.OK] == (LL.OKS, LL.statements(r, c, j10r=k).index(st))
+
+
+def test_a_j10r_windows_leaf_files_and_known_rows():
+    """`leaf_reads_file` of a J10-R leaf's statement holds every port the verifier's own, the carries and ok rows at the
+    entries it is given (``produced``), each carry and ok-row read marked read in full and no ``o0``; its known rows are
+    each lane's ``pub`` with the unit's call and blocks (`j10r_inputs`), which it needs the unit for, and the combine's
+    ``o0``. A produced value whose entry it isn't given is refused."""
+    prog, window, steps = _j10r_window(), "cd" * 64, 2
+    (r, c), k = LEAF, 8192
+    u = next(u for u in range(16) if J10R_CALLS[HW.call_of(prog, u)[0]][0] == "down_proj")
+    at = HW.place(prog, u, steps)
+    roots = {v: f"{i + 1:02x}" * 64 for i, (v, _row) in enumerate(at.values())}
+    vals = LL.produced_values(r, c, k, j10r=True)
+    entry = {v: {"leaves": rows, "words": w, "word_bits": 16, "domain": f"{i + 0xa0:02x}" * 64}
+             for i, (v, (rows, w)) in enumerate(vals.items())}
+    partials, produced = entry.pop(LL.PARTIALS), entry
+    calls, blocks = HW.j10r_inputs(prog)
+    for st in LL.statements(r, c, j10r=k):
+        rows = HW.leaf_known_rows(prog, *st, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)), u=u)
+        assert rows == LL.known_rows(r, c, *st, admit=[1] * r, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)),
+                                     j10r=k, call=calls[u], blocks=blocks[u])
+        known = {p: {"value": v, "row": w} for p, (v, w) in rows.items()}
+        ch = st[2] if st[0] == LL.CHUNK else None
+        file = HW.leaf_reads_file(prog, u, st[0], st[1], roots, partials, known, window=window, steps=steps, ch=ch,
+                                  produced=produced)
+        assert set(file["ports"]) == LL.own(r, c, *st, j10r=k) and file[LL.COMPLETE] is True
+        for port, (value, _row) in LL.reads(r, c, *st, j10r=k).items():
+            e = file["ports"][port]
+            assert e.get(HW.READ_IN_FULL, False) is (LL.read_in_full(value) and port != LL.OK), (st, port)
+            if value in vals:
+                assert {x: e[x] for x in entry.get(value, partials)} == entry.get(value, partials)
+    with pytest.raises(ValueError, match="its unit u's"):
+        HW.leaf_known_rows(prog, LL.COMBINE, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)))
+    with pytest.raises(ValueError, match="whose entry the verifier does not hold"):
+        HW.leaf_reads_file(prog, u, LL.CHUNK, 0, roots, partials, {}, steps=steps, ch=0)
+
+
+def test_a_j10r_leafs_statements_are_v5s_lane_chunks_and_combine_v2():
+    """Over J10-R's PouwH1Tile_v5 at a chunked K, `leaf_unit` derives each lane chunk (`h1zy.lane_chunk` at
+    `weights.chunks`(K)) and the combine (`PouwH1Combine_v2`), and refuses a whole lane there and a chunk past the
+    lane's; at a whole K a lane and no chunk. v1's leaf stays refused at a chunked K."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
+
+    def fake(k, d):
+        unit = HW._chunked(k, HW.tile_unit(k, (32, 32), d))
+
+        class Fake:
+            fn = type("Fn", (), {"bindings": {"TILES": ((k, HW.template(k, unit)),)}})()
+        return Fake(), (unit.bindings["UNIT"] if unit.defn in Z.CHUNKED else unit).bindings["TILE"]
+
+    prog, t = fake(8192, H.PouwH1Tile5)
+    for ch in range(2):
+        assert HW.leaf_unit(prog, 8192, LL.CHUNK, ch).id == Z.lane_chunk(t, 2, ch).id
+    assert HW.leaf_unit(prog, 8192, LL.COMBINE).defn is Z.PouwH1Combine2
+    assert HW.leaf_template(prog, 8192, LL.CHUNK, 1).defn is HW.PouwH1WindowLane
+    for kind, ch in ((LL.LANE, None), (LL.CHUNK, 2), (LL.CHUNK, None)):
+        with pytest.raises(ValueError, match="the chunk lanes"):
+            HW.leaf_unit(prog, 8192, kind, ch)
+    whole, tw = fake(448, H.PouwH1Tile5)
+    assert HW.leaf_unit(whole, 448, LL.LANE).id == Z.lane(tw).id
+    with pytest.raises(ValueError, match="whole"):
+        HW.leaf_unit(whole, 448, LL.CHUNK, 0)
+    v1, _ = fake(8192, H.PouwH1Tile)
+    with pytest.raises(ValueError, match="J10-R's PouwH1Tile_v5 only"):
+        HW.leaf_unit(v1, 8192, LL.COMBINE)

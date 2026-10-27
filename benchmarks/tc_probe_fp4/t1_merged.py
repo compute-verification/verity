@@ -3,7 +3,7 @@
 ``mma.sync m16n8k64`` NVF4 atoms from C = H (the first from H, the second from the first's D), on the operands
 ``fp4_emulation.py routes`` feeds its merged-k128 route.
 
-Operands.  ``fp4_emulation_1ad1aaa2.py`` is bc-f5bf55c8's ``benchmarks/pouw/fp4_emulation.py`` at commit 1ad1aaa2, verbatim
+Operands.  ``fp4_emulation_1ad1aaa2.py`` is ``benchmarks/pouw/fp4_emulation.py`` at commit 1ad1aaa2, verbatim
 (``EMULATION``; ``emulation_gate`` checks its bytes).  Each family draws what ``routes`` draws, in its order (``family`` and then
 Pearl-C4's row-relative noise for A, then for B, from one generator seeded ``--seed``), at routes' size (``ROUTES``).  Two changes
 make every aligned 128-span one the sparse instruction takes; both are this capture's shortcut, and the simulation's rates on
@@ -22,7 +22,7 @@ each ``--hot-bits``, and ``cold``: C = +0, the control):
 * ``chain``: the whole k from C, 64 sparse instructions against 128 dense atoms (the simulation's measure);
 * ``emulation``, the same operands word for word: ``native`` (the pinned atom chain) against the dense hardware, a check that
   must hold on every word; ``merged_k128`` (one align-add over 8 groups of 16, the simulation's model of the k128 instruction:
-  ``sparse.logical_g16``, which the 06:21Z capture refuted) and ``gather4`` (four groups of 32 logical k:
+  ``sparse.logical_g16``, which a sparse capture refuted) and ``gather4`` (four groups of 32 logical k:
   ``sparse.gather_dense``, that capture's finding) against the sparse hardware; ``merged_k128`` against ``native``, the
   simulation's rate on these operands; and ``merged_k128`` against ``gather4``, where the two k128 models part (a hot H's
   window keeps every group term on the grid, and there they are the same sum);
@@ -319,7 +319,7 @@ class FakeDenseT1:
 
 
 class FakeSparseT1:
-    """CPU stand-in for the sparse row: ``gather4`` (the 06:21Z finding) or ``merged_k128`` (the simulation's model)."""
+    """CPU stand-in for the sparse row: ``gather4`` (that sparse capture's finding) or ``merged_k128`` (the simulation's model)."""
 
     tcgen05 = False
 

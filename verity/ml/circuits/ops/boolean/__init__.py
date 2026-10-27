@@ -15,8 +15,18 @@
     sqrt         sqrt.rn.f32 as a circuit over `forms` (PoUW's `PouwF32SqrtRn_v2` is traced from it) and its digit-by-digit root
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
                  (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
-    rowwise      CMP-92's row ops split so that each Definition outputs at most 16 bits: a bf16 row's softmax (its max, a
-                 16-bit half of its reciprocal sum, one output) and the embedding's coordinate
+    rowwise      the e2e demo's row ops split so that each Definition outputs at most 16 bits: a bf16 row's softmax (its max,
+                 a 16-bit half of its reciprocal sum, one output) and the embedding's coordinate
+    softmax_row  a head's attention scores and their softmax as one Definition, one proof block a head writing its
+                 probability row
+    rmsnorm      a bf16 row's RMSNorm: one proof block a row where the row fits, and a two-level form where it doesn't
+    rows         `ops.rows`'s composites on bits: the residual add and the greedy argmax, one proof block a row
+    argmax       `ops.argmax`'s chunk and combine Definitions on bits
+    quant        `ops.quant`'s per-row s8 quantizer on bits
+    s8split      a W8A8 coordinate split along K into Definitions that each output at most 16 bits
+    shared_row   a proof block's output written as a segment of a shared committed row, and an input read from one
+    gf2k         GF(2^128) and GF(2^256) products as C-Flock's verifier has them, and the sums of products its algebra reduces
+                 to once its coins are values
 
 The builders live elsewhere: `forms`, `gather` and `trace` in `verity.ml.circuits.boolean`; `fp`, `fp4` and `tc_step` in
 `verity.ml.circuits.silicon`; the universal unit in `verity.ml.private_circuits.universal`; `sha512` and `merkle` in
