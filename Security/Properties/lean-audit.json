@@ -251,6 +251,18 @@
   }
  },
  "meaning": [
+  "Properties.Flock.Circuit.CircuitOf",
+  "Properties.Flock.Circuit.Keyed",
+  "Properties.Flock.Circuit.Outs",
+  "VStar.Algebra",
+  "VStar.Cap",
+  "VStar.Compose",
+  "VStar.Holo",
+  "VStar.InnerRepCheck",
+  "VStar.Parts",
+  "VStar.Residuals",
+  "VStar.Stage",
+  "VStar.Unit",
   "Properties.Pouw",
   "PouwWindow.Grid",
   "PouwWindow.Draw",
@@ -346,7 +358,7 @@
  ],
  "layers": {
   "Properties.Composition": {
-   "imports": ["CoreComposition.Product"],
+   "imports": ["CoreComposition.Product", "CoreComposition.Registered"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -604,7 +616,9 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): PoUW's check reads its `V`, `canon`, `hexOf` and `Sha512.hash`, the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
-  "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
+  "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)",
+  "CoreComposition.Blobs": "the composition over blobs (`registeredB`, `BlobProtocol.onBlobs`, `Protocol.withoutBlobs`) is onsite's compiled verifier itself, which `Verity.soundness_of_subprotocols` and `Verity.soundness_at` are stated against (ONE3B's single onsite, #4772): the composition's lock declares no spec layer for `CoreComposition.Blobs`, so its definitions are recorded here as read",
+  "CoreProtocol.Blobs": "the core interface's blob protocols (`BlobProtocol`, its `answer`, `checkBlobs`, `toProtocol`), the type of onsite's compiled verifier and its components, which `Verity.soundness_of_subprotocols` and `Verity.soundness_at` read: the interface's lock declares no spec layer for `CoreProtocol.Blobs`, so its definitions are recorded here as read"
  },
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
@@ -2434,17 +2448,17 @@
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
   },
-  "Verity.soundness_of_subprotocols": {
-   "owner": "@proofs",
-   "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
-   "assumptions": [],
-   "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
-  },
   "Verity.overhead": {
    "owner": "@training"
   },
   "Verity.overhead_nontrivial": {
    "owner": "@training"
+  },
+  "Verity.soundness_of_subprotocols": {
+   "owner": "@proofs",
+   "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
+   "assumptions": [],
+   "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
   }
  },
  "shape": {
