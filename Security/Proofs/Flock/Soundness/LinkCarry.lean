@@ -94,10 +94,12 @@ variable {V : Type} [Fintype V] [DecidableEq V] (rd : (i : ι) → τ i → Fins
 /-- The mixture's readings: trial `i`'s. -/
 def rdSig : (Σ i, τ i) → Finset V := fun x => rd x.1 x.2
 
+omit [Fintype V] [DecidableEq V] in
 theorem pRd_mixG (v : V) :
     pRd (mixG T) (mixStrat T s) (rdSig rd) v = (∑ i, pRd (T i) (s i) (rd i) v) / Fintype.card ι :=
   expect_mixG T s _
 
+omit [Fintype V] [DecidableEq V] in
 theorem sRd_mixG : sRd (mixG T) (mixStrat T s) (rdSig rd) = (∑ i, sRd (T i) (s i) (rd i)) / Fintype.card ι :=
   expect_mixG T s _
 
@@ -212,6 +214,7 @@ noncomputable def opMix (x : Σ i, τ i) (w : V) : Σ i, O i := ⟨x.1, op x.1 x
 /-- The mixture's collision from two openings, from whichever sampling blocks they came. -/
 def colMix (o o' : Σ i, O i) : List UInt8 × List UInt8 := col o.1 o'.1 o.2 o'.2
 
+omit [Fintype ι] [Nonempty ι] [(i : ι) → DecidableEq (Val i)] [Fintype V] in
 /-- **Every success of the mixture's finder outputs a collision**, given each sampling block's openings of its
 readings and a collision between any two openings of the carried leaf whose values differ in `V`. -/
 theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he : ∀ i, Function.Injective (e i))
