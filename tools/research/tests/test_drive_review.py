@@ -1401,6 +1401,59 @@ def test_a_cut_below_a_lean_change_under_a_passed_lean_check_waits_for_a_lean_ch
     assert f"research queue drive: landed #1 #3 on `main` at {_main(world)[:12]} (check {again})" in world.logs, world.logs
 
 
+def test_a_failed_lean_check_below_a_passed_one_lands_nothing_on_a_check_of_another_lean(world, monkeypatch):
+    """CI-194: #1 and #3 change pkg's lock, #4 is unreviewed; the check of #1 + #2 (#1's Lean) failed and the one of #1..#4
+    passed, and drive landed #1 alone on the latter, telling @ci each Lean change below #2 had a passed Lean check."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}, base=one))
+    world.gh.put(3, world.change({"pkg/lean-audit.json": '{"a": 1, "b": 2}'}, base=one))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3, 4]
+    assert [c for c, *_ in h.launched] == [chain[1].commit, chain[3].commit], world.logs
+    low, high = h.lean_ids()
+    h.run_state[low] = ("done", 1, None)
+    h.run_state[high] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, low, {LEAN_STEP: "failed"}), _steps_run(world.tmp, high, {LEAN_STEP: "passed"})]
+    below = _main(world)
+    out = h.tick()
+    assert not out.startswith("landed") and _main(world) == below, (out, world.logs)
+    assert h.launched[2] == (chain[0].commit, "m1", False), world.logs                     # #1's own commit, blamed on its own
+    assert not any("each Lean change below it has a passed Lean check" in x for x in world.logs), world.logs
+    (own,) = h.lean_ids()[2:]
+    h.run_state[own] = ("done", 0, None)
+    h.evidence = [*h.evidence, _steps_run(world.tmp, own, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert out.startswith("landed #"), (out, world.logs)
+    assert _git(world.origin, "show", "main:pkg/lean-audit.json") == '{"a": 1, "b": 2}'
+    assert f"research queue drive: landed #1 #2 #3 on `main` at {_main(world)[:12]} (check {high})" in world.logs, world.logs
+
+
+def test_a_lean_change_below_a_failed_lean_check_waits_for_no_running_check_of_another_lean(world, monkeypatch):
+    """CI-194 (a): the check of #1 + #2 failed while the one of #1..#4 ran; #3 changes the lock between them, so that one's pass
+    can't cover #1, and #1 waited for it before its own check launched."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}, base=one))
+    world.gh.put(3, world.change({"pkg/lean-audit.json": '{"a": 1, "b": 2}'}, base=one))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    chain = h.q.chain()
+    low, high = h.lean_ids()
+    h.run_state[low] = ("done", 1, None)
+    h.evidence = [_steps_run(world.tmp, low, {LEAN_STEP: "failed"})]
+    out = h.tick()
+    assert not out.startswith("landed"), (out, world.logs)
+    assert h.launched[2] == (chain[0].commit, "m1", False), world.logs
+    assert h.q.load_state()["drive"]["lean"][chain[3].commit]["state"] is None              # still running: nothing cancels it
+
+
 def test_drives_own_pushes_of_main_refuse_off_drive_and_in_shadow_too(world, monkeypatch):
     """CI-191 (a): `_land` and `_revert` push `main` whoever calls them; off drive they refuse before anything, `--shadow` too,
     which never reaches them."""

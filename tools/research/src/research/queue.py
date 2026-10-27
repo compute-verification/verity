@@ -142,7 +142,7 @@ there reached its owner only when the VM that ran the sync pushed its notes, ins
 held notes carried conflict handoffs for ci's and circuits' PRs).
 
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
-with no effect on them; its `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
+with no effect on them; its `sync`, `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
@@ -1197,8 +1197,9 @@ class Queue:
     def _drive_only(self, ref: str, verb: str, dry_run: bool) -> None:
         """Refuse a push of `main` or `next` (`merge.DRIVE_ONLY`) here unless this is drive (`merge.on_drive`), whatever the caller:
         GitHub's rulesets don't stop verity-agents[bot] (26 Oct 19:42Z: a VM's `research queue eject 4573` force-pushed a rebuild
-        of `next` that dropped two running Lean checks, as on 23 Oct 07:07Z).  `--shadow` gets no pass: it pushes only
-        `queue-shadow`, so its syncs go through, and its landing and drive refuse off drive though they never push `main`."""
+        of `next` that dropped two running Lean checks, as on 23 Oct 07:07Z).  `--shadow` gets no pass: its push of
+        `queue-shadow` passes here, but `research queue sync`, `land` and `drive` refuse off drive with it as without, though
+        it never pushes `main` or `next`."""
         from .merge import DRIVE_ONLY, off_drive, on_drive
 
         if not dry_run and ref in DRIVE_ONLY and not on_drive():

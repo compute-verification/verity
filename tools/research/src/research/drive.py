@@ -2736,8 +2736,8 @@ class Driver:
     def land_reviewed(self, drive: dict, dry_run: bool) -> tuple[Member | None, str]:
         """Land `next`'s longest prefix whose every member has a land verdict at its head and no hold (`queue.unreviewed`, by none
         of `_owners`), cut below a Lean change no passed Lean check holds (`_lean_gate`) and below a member whose Python doesn't
-        compile (`_compiles`), the gate then run again on what is left below that cut: a fast-forward of `main` to its top,
-        through `_land`.  (the member landed or None, what the tick did)"""
+        compile (`_compiles`), the gate run again on what is left below any cut, until it lands what it ran on: a fast-forward
+        of `main` to its top, through `_land`.  (the member landed or None, what the tick did)"""
         q = self.q
         base, chain = self._chain()
         if not chain:
@@ -2750,14 +2750,18 @@ class Driver:
         stop = f"#{chain[k].pr} at {chain[k].head[:8]}: {why}" if k < len(chain) else ""
         if not k:
             return None, f"nothing reviewed lands: {stop}"
-        t, rid = self._lean_gate(drive, chain, k, dry_run)
+        g, ok = k, -1
+        t, rid = self._lean_gate(drive, chain, g, dry_run)
         t = self._past_failed(drive, chain, t)
-        while t >= 0 and (cut := self._compiles(drive, chain, base, t)) < t:
-            # the gate's cover read the trees of `chain[:k]`: a Lean check above the cut covers what lands only while no Lean
-            # change lies between them (CI-191: #1 landed alone on a check of #1 + #2, both changing one lock)
-            t, rid = self._lean_gate(drive, chain, cut + 1, dry_run) if cut >= 0 else (-1, "")
+        while t >= 0 and (cut := t if t == ok else self._compiles(drive, chain, base, t)) < g - 1:
+            # the gate's cover read the trees of `chain[:g]`: a Lean check above what lands covers it only while no Lean change
+            # lies between them, so whatever cut the landing below `g` runs the gate again on what lands (CI-191: a compile cut
+            # landed #1 alone on a check of #1 + #2, both changing one lock; CI-194: a failed Lean check)
+            ok, below = (-1, True) if cut < t else (cut, False)
+            t, rid = self._lean_gate(drive, chain, g := cut + 1, dry_run, k) if cut >= 0 else (-1, "")
             t = self._past_failed(drive, chain, t)
-            self._drop_passed_above(drive, chain, cut)
+            if below:
+                self._drop_passed_above(drive, chain, cut)
         if t < 0:
             return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} waits (see above)"
         m, members = chain[t], chain[: t + 1]
@@ -2826,13 +2830,14 @@ class Driver:
             self._lean_of[m.commit] = lean_change(self.repo, m.commit)
         return self._lean_of[m.commit]
 
-    def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool) -> tuple[int, str]:
+    def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool, reviewed: int | None = None) -> tuple[int, str]:
         """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
         holds its Lean changes, or ""): every Lean change below it (`queue.lean_change`) has a passed lean-audit of a commit of
-        `next` at or above it (`_cover`); one whose check regenerated locks lands exactly at that commit, its locks on top
-        (`_land`).  For the lowest Lean change without one, a Lean check is launched, or waited for (`_lean_check`).  Nothing at
-        or above a commit whose Lean check failed lands, but for one below a passed check of ``chain[:k]``, which checked the tree
-        that lands (`_past_failed`), and when no Lean change's own commit is that one, `CI` is told."""
+        `next` at or above it (`_cover`) whose Lean is the Lean of what may land; one whose check regenerated locks lands exactly
+        at that commit, its locks on top (`_land`).  For the lowest Lean change without one, a Lean check is launched, or waited
+        for (`_lean_check`).  Nothing at or above a commit whose Lean check failed lands, but for one below a passed check of
+        ``chain[:k]``, which checked the tree that lands (`_past_failed`), and when no Lean change's own commit is that one, `CI`
+        is told.  ``reviewed``: the reviewed prefix's length, when a cut below it (`land_reviewed`) runs the gate on ``k``."""
         lean = drive["lean"]
         self._rekey_lean(drive, chain)
         pos = {m.commit: i for i, m in enumerate(chain)}
@@ -2841,13 +2846,16 @@ class Driver:
         over = max((pos[c] for c, rec in lean.items() if rec.get("state") == "passed" and pos.get(c, k) < k), default=-1)
         bad = min((pos[c] for c, rec in lean.items() if rec.get("state") == "failed" and over < pos.get(c, -1)), default=k)
         t, rid = min(k, bad) - 1, ""
+        # nothing at or above `bad` lands, so a check above it covers only across no Lean change from `bad` up (CI-194: #1 landed
+        # on a pass of #1..#4, #3 changing its lock, though the check of #1 + #2, #1's Lean, failed)
+        top, cut = min(k, bad), min(k, bad) < (reviewed or k)
         for i in range(k):
             if i > bad:
                 break
             if not self._lean_change(chain[i]):
                 continue
-            if (got := self._cover(drive, chain, i, k)) is None:
-                self._lean_check(drive, chain, k, i, dry_run)
+            if (got := self._cover(drive, chain, i, top)) is None:
+                self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
             commit, run = got
             if (regen := self._regenerated(drive, run)) is None:
@@ -2855,12 +2863,12 @@ class Driver:
             if regen and lean.get(commit, {}).get("rekeyed_from"):
                 # `_land` builds the locks on ``commit``, and its lock gate takes only a run of that very commit
                 del lean[commit]
-                self._lean_check(drive, chain, k, i, dry_run)
+                self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
             if regen:
                 if pos[commit] > t:
                     if bad == k:
-                        self._lean_check(drive, chain, k, i, dry_run)
+                        self._lean_check(drive, chain, k, i, dry_run, cut)
                     return min(i - 1, t), rid
                 return pos[commit], run
             rid = run
@@ -2873,7 +2881,7 @@ class Driver:
                                                      f"(#{chain[bad].pr}'s merge, which changes no Lean) failed ({rec.get('why')}), "
                                                      "and each Lean change below it passed a Lean check below it: drive drops it, "
                                                      "and the after-landing run checks the rest")
-                return self._lean_gate(drive, chain, k, dry_run)
+                return self._lean_gate(drive, chain, k, dry_run, reviewed)
             self.refuse(drive, f"lean-next:{c}", f"the Lean check {_ids(rec)} of `{self.q.branch}` {c[:12]} (#{chain[bad].pr}"
                                                  f"'s merge, which changes no Lean) failed ({rec.get('why')}), and each Lean change "
                                                  "below it has a passed Lean check: it and every PR above it wait until it leaves "
@@ -2882,9 +2890,10 @@ class Driver:
         return t, rid
 
     def _cover(self, drive: dict, chain: list[Member], i: int, k: int) -> tuple[str, str] | None:
-        """(a commit of `next` at or above ``chain[i]``, its passed lean-audit's run): drive's own Lean checks first (one of
-        ``chain[:k]``, the highest), then any recorded run in the store whose lean-audit passed on a commit of ``chain[i:k]`` (a
-        full check, or a hand `train.sh COMMIT MACHINES --deferred lean-audit`).  A store that can't be read covers nothing."""
+        """(a commit of `next` at or above ``chain[i]``, its passed lean-audit's run), for a landing within ``chain[:k]``: drive's
+        own Lean checks first (one of ``chain[:k]``, the highest, else the lowest above it with no Lean change from ``chain[k]``
+        up to it), then any recorded run in the store whose lean-audit passed on a commit of ``chain[i:k]`` (a full check, or a
+        hand `train.sh COMMIT MACHINES --deferred lean-audit`).  A store that can't be read covers nothing."""
         pos = {m.commit: j for j, m in enumerate(chain)}
         ok = sorted(((pos[c], c, rec["run"]) for c, rec in drive["lean"].items() if rec.get("state") == "passed" and pos.get(c, -1) >= i
                      and not any(self._lean_change(m) for m in chain[k:pos[c] + 1])),      # what lands is the tree it checked
@@ -2920,9 +2929,10 @@ class Driver:
         self._regen[run] = None if held else bool(locks)
         return self._regen[run]
 
-    def _lean_check(self, drive: dict, chain: list[Member], k: int, i: int, dry_run: bool) -> None:
+    def _lean_check(self, drive: dict, chain: list[Member], k: int, i: int, dry_run: bool, cut: bool = False) -> None:
         """A Lean check for ``chain[i]``, the lowest Lean change no passed one holds: wait for a running one of a commit at or
-        above it; after a failed one of its own commit, tell `CI` and the owner, and wait for that commit to leave `next` (a new
+        above it (after a ``cut`` below the reviewed prefix's top, only one whose pass `_cover` would take for ``chain[:k]``);
+        after a failed one of its own commit, tell `CI` and the owner, and wait for that commit to leave `next` (a new
         head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
         check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
         that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`, and cut
@@ -2930,7 +2940,8 @@ class Driver:
         stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
         q, m, lean = self.q, chain[i], drive["lean"]
         pos = {x.commit: j for j, x in enumerate(chain)}
-        mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i}
+        mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i and not (
+            cut and rec.get("state") is None and any(self._lean_change(x) for x in chain[k:pos[c] + 1]))}
         if c := next((c for c, rec in mine.items() if rec.get("state") is None), None):
             q.log(f"research queue drive: #{m.pr}'s Lean change waits for the Lean check {_ids(lean[c])} of {c[:12]}")
             return
