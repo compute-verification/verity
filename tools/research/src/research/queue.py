@@ -22,9 +22,11 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
-                                                   lock against `main` unless a records run or Lean check of it in the store
-                                                   passed that package, naming the run to start; then, in about a minute, the
-                                                   preflight (`Preflight`) refuses, with the fix, a head that conflicts with a
+                                                   lock against `main` unless a records run or Lean check in the store passed
+                                                   that package, of the head or of a commit whose trees of the package, the
+                                                   packages it requires and lean-toolchain are the head's, naming the run to
+                                                   start; then, in about a minute, the preflight (`Preflight`) refuses, with
+                                                   the fix, a head that conflicts with a
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
                                                    (naming it), fails a landing gate of drive.toml at `main` (with
                                                    the gate's fix), or, merged onto `next` in a temporary worktree, fails `pins.py
@@ -123,8 +125,9 @@ gate).  `--no-preflight` skips it, for the lander.
 
 Records gate.  On 26 Oct three marks of heads whose own records run had printed `AUDIT: FAIL` for Security each failed a train's
 Lean check (TOP-90 row 58).  So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
-unless the store holds a records run or a Lean check of that head that passed each such package on its lock, or vouches for it
-through a head that only merged `main` or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
+unless the store holds a records run or a Lean check of that head that passed each such package on its lock, or of a commit whose
+trees of the package's inputs (it, the packages it requires, `lean-toolchain`) are the head's, or vouches for it through a head
+that only merged `main` or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
 and refuses when it can't; `--no-preflight` doesn't skip it.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
@@ -2917,6 +2920,12 @@ RECORDS_WALK = 8
 #: the attempts `RecordsGate` lists from the store's remote: those started after the oldest commit it may read, less the skew of a
 #: machine's clock, and never more than the lookback before now (an older run the catalog here lacks isn't seen)
 RECORDS_SKEW_S, RECORDS_LOOKBACK_S = 3600, 3 * 86400
+#: the repository's files besides the packages' own that a records run reads as an input: the toolchain they may share
+RECORDS_SHARED = ("lean-toolchain",)
+#: the most commits with runs in the window, records runs' first and then the newest, that `RecordsGate` fetches when this clone
+#: lacks them, in its search for a run on the same inputs (one the clone can't read vouches for nothing)
+RECORDS_FETCH = 64
+_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 def _slug(pkg: str) -> str:
@@ -2973,9 +2982,17 @@ class RecordsGate:
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
     for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
+    A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): the git tree
+    of the package's directory, lock included, of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
+    `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and `RECORDS_SHARED`, each the same id there as at the
+    head.  A PR that carries another PR's Lean change needs no run of its own for the packages that change passed in.  The
+    candidates are the commits of the attempts in the window read (`RECORDS_FETCH` of them fetched when this clone lacks them);
+    a commit that can't be read vouches for nothing.
+
     The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts since the oldest commit the walk may
-    read); a store with no usable remote, or one that can't be listed, refuses: the gate never fails open.  `--no-preflight`
-    doesn't skip it: the lander marks heads whose locks were checked like any other's."""
+    read or the newest that changed those inputs was written, and never more than `RECORDS_LOOKBACK_S` back); a store with no
+    usable remote, or one that can't be listed, refuses: the gate never fails open.  `--no-preflight` doesn't skip it: the lander
+    marks heads whose locks were checked like any other's."""
 
     def __init__(self, repo: Path, remote: str, store, *, log: Callable[[str], None] = print,
                  now: Callable[[], float] = time.time, lock_merge: Path | None = None):
@@ -2983,6 +3000,8 @@ class RecordsGate:
         self.lock_merge = lock_merge or self.repo / "tools" / "verity" / "lean" / "merge.py"
         self._runs: dict[str, tuple[list[RecordsRun], list[str]]] = {}
         self._merges: dict[str, bool] = {}
+        self._since = ""
+        self._candidates: list[str] | None = None
         self.notes: list[str] = []
 
     def __call__(self, pr: PR) -> str | None:
@@ -2994,15 +3013,21 @@ class RecordsGate:
                     f"this again once the remote can be read")
         if not locks:
             return None
+        inputs: dict[str, list[str]] = {}
+        for pkg in locks:
+            try:
+                inputs[pkg] = self._inputs(pr.head, pkg)
+            except (QueueError, ValueError, TypeError, AttributeError) as e:   # no search on the same inputs for it; the rest stands
+                self.notes.append(f"{pkg}'s inputs at {pr.head[:12]} can't be read ({type(e).__name__}: {e})")
         try:
-            self._read(pr.head)
+            self._read(pr.head, sorted({p for ps in inputs.values() for p in ps}))
         except Exception as e:  # noqa: BLE001  (no store, no remote, a failed listing: refuse, never answer from what's here)
             return (f"it changes the Lean lock of {', '.join(locks)}, and the store's records runs can't be read "
                     f"({type(e).__name__}: {e}), so the records gate refuses: it never fails open. Run this where the store's remote "
                     f"is usable (R2_ENDPOINT and R2_BUCKET, or ~/.research/store.toml)")
         missing = []
         for pkg in locks:
-            if how := self._vouch(pr.head, pkg, 0):
+            if how := self._vouch(pr.head, pkg, 0) or (pkg in inputs and self._same_inputs(pr.head, pkg, inputs[pkg])):
                 self.log(f"research queue: records gate: {pkg}: {how}")
             else:
                 missing.append(pkg)
@@ -3017,7 +3042,8 @@ class RecordsGate:
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
         return (f"it changes the Lean lock of {', '.join(missing)} against `main`, and the store holds no records run of "
                 f"{pr.head[:12]} in which {'it' if len(missing) == 1 else 'each'} passed on the head's own lock, nor a Lean check of "
-                f"it, nor such a run below a head that only merged `main` or committed the record a run regenerated{notes}:\n  - "
+                f"it, nor such a run below a head that only merged `main` or committed the record a run regenerated, nor at a "
+                f"commit whose inputs for it are the head's{notes}:\n  - "
                 + "\n  - ".join(lines) + "\n  (`--no-preflight` doesn't skip this gate)")
 
     def _locks(self, pr: PR) -> dict[str, str]:
@@ -3030,15 +3056,91 @@ class RecordsGate:
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
                 and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
-    def _read(self, head: str) -> None:
-        """Bring this store's attempts up to date from its remote, from the oldest commit the walk may read."""
+    def _read(self, head: str, inputs: list[str]) -> None:
+        """Bring this store's attempts up to date from its remote, from the oldest commit the walk may read or the write of the
+        newest that changed ``inputs`` (an author's date, which a rebase keeps), whichever is older."""
         if self.store.remote is None:
             raise QueueError("this machine's store has no remote, so the runs other machines published aren't here")
         times = [int(t) for t in _out(self.repo, "log", "--first-parent", f"-{RECORDS_WALK + 1}", "--format=%ct", head).split()]
+        if inputs:
+            times += [int(t) for t in _out(self.repo, "log", "-1", "--format=%at", head, "--", *inputs).split()]
         start = max(min(times) - RECORDS_SKEW_S, self.now() - RECORDS_LOOKBACK_S)
-        rep = self.store.refresh(attempts_only=True, since=time.strftime("r%Y%m%d-%H%M%S", time.gmtime(start)))
+        self._since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(start))
+        rep = self.store.refresh(attempts_only=True, since=self._since)
         if errs := rep.get("errors"):
             self.notes.append(f"{len(errs)} attempt(s) on the remote couldn't be read, e.g. {errs[0]}")
+
+    def _inputs(self, head: str, pkg: str) -> list[str]:
+        """The paths whose git trees decide ``pkg``'s records at ``head``: the package, each in-repo Lake package it requires by
+        path (its `lake-manifest.json`'s and `lakefile.toml`'s, transitively) or its lock names under `proved_in`, and
+        `RECORDS_SHARED`.  Raises on a file it can't parse or a path outside the repository."""
+        seen: list[str] = []
+        todo = [pkg]
+        while todo:
+            p = todo.pop()
+            if p in seen:
+                continue
+            seen.append(p)
+            at = (lambda f: f) if p == "." else (lambda f: f"{p}/{f}")
+            named: list = []
+            if (b := _blob(self.repo, head, at("lake-manifest.json"))) is not None:
+                named += [d.get("dir") for d in json.loads(b).get("packages") or [] if d.get("type") == "path"]
+            if (b := _blob(self.repo, head, at("lakefile.toml"))) is not None:
+                named += [r.get("path") for r in tomllib.loads(b.decode()).get("require") or [] if "path" in r]
+            if (b := _blob(self.repo, head, at(LEAN_LOCK))) is not None:
+                named += list(json.loads(b).get("proved_in") or [])
+            for d in named:
+                q = posixpath.normpath(posixpath.join(p, d)) if isinstance(d, str) else ""
+                if not q or posixpath.isabs(q) or q == ".." or q.startswith("../"):
+                    raise QueueError(f"{p} names {d!r}, which isn't a package of this repository")
+                todo.append(q)
+        return sorted({*seen, *RECORDS_SHARED})
+
+    def _trees(self, commits: list[str], paths: list[str]) -> dict[str, tuple[str, ...] | None]:
+        """{commit: the object id of each of ``paths`` there (`-` where it's absent)}, None for a commit this clone can't read;
+        one `git cat-file --batch-check` for all of them."""
+        specs = [s for c in commits for s in (f"{c}^{{commit}}", *(f"{c}^{{tree}}" if p == "." else f"{c}:{p}" for p in paths))]
+        r = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"], cwd=self.repo, capture_output=True,
+                           text=True, input="".join(s + "\n" for s in specs), env=git_env(), check=False)
+        lines = r.stdout.splitlines()
+        if r.returncode or len(lines) != len(specs):
+            raise QueueError(f"git cat-file --batch-check: {r.stderr.strip()[-300:]}")
+        out, n = {}, 1 + len(paths)
+        for i, c in enumerate(commits):
+            got = [ln.split() for ln in lines[i * n:(i + 1) * n]]
+            out[c] = None if got[0][-1] != "commit" else tuple(g[0] if g[-1] != "missing" else "-" for g in got[1:])
+        return out
+
+    def _commits(self) -> list[str]:
+        """The clean commits of the attempts since the window's start, those with a records run first, then the newest."""
+        if self._candidates is None:
+            rows = self.store.index.sql(
+                "SELECT source_commit, MAX(manifest_json LIKE '%--records%'), MAX(id) FROM attempts WHERE id > ? AND "
+                "source_dirty = 0 AND source_commit IS NOT NULL GROUP BY source_commit ORDER BY 2 DESC, 3 DESC", (self._since,))
+            self._candidates = [c for c, _, _ in rows if _SHA.fullmatch(str(c))]
+        return self._candidates
+
+    def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
+        """Why a pass of ``pkg`` at another commit whose ``inputs`` have the head's trees vouches for it, or None."""
+        try:
+            want = self._trees([head], inputs)[head]
+            cands = [c for c in self._commits() if c != head]
+            got = self._trees(cands, inputs)
+            lacking = [c for c in cands if got[c] is None][:RECORDS_FETCH]
+            if lacking:
+                if _git(self.repo, *STALL, "fetch", "-q", self.remote, *lacking, check=False).returncode:
+                    for c in lacking:
+                        _git(self.repo, *STALL, "fetch", "-q", self.remote, c, check=False)
+                got.update(self._trees(lacking, inputs))
+                if unread := sum(got[c] is None for c in cands):
+                    self.notes.append(f"{unread} commit(s) with runs can't be read here or from {self.remote}")
+        except Exception as e:  # noqa: BLE001  (a search that can't finish vouches for nothing)
+            self.notes.append(f"the trees of {pkg}'s inputs can't be compared ({type(e).__name__}: {e})")
+            return None
+        for c in cands:
+            if want is not None and got[c] == want and (how := self._passed(c, pkg)):
+                return f"a {how[0]} of {c[:12]} ({how[1]}) with identical inputs"
+        return None
 
     def _at(self, commit: str) -> tuple[list[RecordsRun], list[str]]:
         """(the records runs of ``commit``, the ids of its attempts whose result's `lean-audit` step passed), newest first."""
@@ -3097,14 +3199,12 @@ class RecordsGate:
 
     def _vouch(self, commit: str, pkg: str, depth: int) -> str | None:
         """Why ``pkg``'s lock at ``commit`` passed its records, or None."""
-        runs, checks = self._at(commit)
-        for run in runs:
-            if self._audited(run, pkg)[0] and not (run.pkg == pkg and run.kept_record()):
-                return (f"records run {run.id} of {commit[:12]} passed it" +
-                        (" (`path: reused`: its records passed on the same inputs)" if run.path == "reused" else ""))
-        for rid in checks:
-            if self._checked(rid, pkg):
+        if how := self._passed(commit, pkg):
+            kind, rid, path = how
+            if kind == "Lean check":
                 return f"the Lean check {rid} of {commit[:12]} passed it"
+            return (f"records run {rid} of {commit[:12]} passed it" +
+                    (" (`path: reused`: its records passed on the same inputs)" if path == "reused" else ""))
         if depth >= RECORDS_WALK:
             return None
         parents = _out(self.repo, "rev-list", "--parents", "-n", "1", commit).split()[1:]
@@ -3126,6 +3226,18 @@ class RecordsGate:
         for run in self._at(below)[0]:
             if run.pkg == pkg and run.kept_record() == sha and self._audited(run, pkg)[0]:
                 return f"{commit[:12]} commits the record records run {run.id} of {below[:12]} regenerated, where {pkg} passed"
+        return None
+
+    def _passed(self, commit: str, pkg: str) -> tuple[str, str, str] | None:
+        """(`records run` or `Lean check`, its id, a records run's `path`) of the first run of ``commit`` that passed ``pkg`` on
+        the commit's own lock, or None."""
+        runs, checks = self._at(commit)
+        for run in runs:
+            if self._audited(run, pkg)[0] and not (run.pkg == pkg and run.kept_record()):
+                return "records run", run.id, run.path
+        for rid in checks:
+            if self._checked(rid, pkg):
+                return "Lean check", rid, ""
         return None
 
     def _checked(self, rid: str, pkg: str) -> bool:
@@ -3227,7 +3339,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (16 Oct: #2174, re-marked at its ejected head, failed a second train on the same line).  Before any of it,
-    ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run of it passed,
+    ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
     marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head.  A PR based
@@ -3630,7 +3743,8 @@ def main(argv: list[str]) -> int:
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else with --on on {PREFLIGHT_LEAN_ON}); the records gate (a changed Lean lock needs a records "
-                         "run of the head that passed it) still runs")
+                         "run that passed it, of the head or of a commit whose trees of its package, the packages it requires "
+                         "and lean-toolchain are the head's) still runs")
     ap.add_argument("--max-running", type=int, help="drive: the most checks of `next` its launches keep running at once (default 2); "
                                                     "report: of merge groups")
     ap.add_argument("--train-size", type=int, help="drive: PRs per checked train on `next` (default 4)")

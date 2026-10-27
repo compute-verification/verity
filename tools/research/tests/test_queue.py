@@ -2189,6 +2189,38 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
 
 
+def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
+        world, capsys):
+    """CI-207: a PR that carries another PR's Lean change re-ran records at its own head, 1-2 h of queue on a full node, though the
+    package's inputs were byte-identical to a head where it passed.  A pass at any commit whose trees of the package, the packages
+    it requires by path and the toolchain are the head's vouches for it; a commit this clone lacks is fetched, and one that can't
+    be read vouches for nothing."""
+    world.with_store_remote()
+    _move_main(world, {"pkg/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../lib", "name": "lib"}]}),
+                       "lib/lakefile.toml": 'name = "lib"\n', "lib/L.lean": "def l := 1\n", "lean-toolchain": "v1\n"})
+    other = world.tmp / "other"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(other))
+    (other / LOCK).write_text(_lock(A="2"))
+    (other / "c.txt").write_text("the other PR's\n")
+    _git(other, "commit", "-q", "-am", "the other PR's Lean change")
+    c = _git(other, "rev-parse", "HEAD")
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()})
+
+    h = world.change({LOCK: _lock(A="2"), "a.txt": "carries it\n"})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1                                     # c is on no remote: nothing vouches
+    err = capsys.readouterr().err
+    assert "1 commit(s) with runs can't be read here or from" in err and "--records pkg --update" in err
+    _git(other, "push", "-q", "origin", f"{c}:refs/dev/other")
+    assert _mark(world, 1, h) == 0
+    assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+    for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"})):
+        capsys.readouterr()
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
+        assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
+
+
 #: `tools/verity/lean/merge.py` as the gate runs it on a lock both sides changed: ours, with each entry theirs changed
 LOCK_MERGE = """\
 import json, sys
