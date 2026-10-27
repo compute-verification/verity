@@ -1,7 +1,6 @@
 {
   "rule": "Recorded outcomes (in check/ and commit/, a caught exception is recorded, never dropped)",
   "entries": [
-    {"file": "verity_vllm/check/c2_rules.py", "kind": "silent-except", "symbol": "_batch_attribution_note", "detail": "except (TypeError, ValueError): return None"},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "silent-except", "symbol": "_query_checks", "detail": "except RecordError: return None"},
     {"file": "verity_vllm/check/checkpoint_words.py", "kind": "silent-except", "symbol": "mla_moe_sources", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return None"},
     {"file": "verity_vllm/check/commit_rules.py", "kind": "silent-except", "symbol": "_int", "detail": "except (TypeError, ValueError): return default"},

@@ -2,8 +2,9 @@
 `RecVStar.checkParsed` on R's opening part over row ports `m0` and `acc0` (V*'s rows `m0`, `acc0`, `v` of 64 words
 and `out` of 128): a circuit carrying V*'s META passes; one with two units per VU, a leaf cut, input leaves off V*'s,
 output leaves off V*'s (permuted, short or missing), or a row port off V*'s by name, words or bits, a bit row
-(`sha512/row/v2`) even of V*'s bits, or one too few or too many, is refused. V*'s own `rec-cap/n128` file states its output leaves as the check requires them, its output words in
-order (read off its META, as `HmRow.parse` reads `leaves_out`).
+(`sha512/row/v2`) even of V*'s bits, or one too few or too many, is refused. V*'s own `rec-cap/n128` file states its
+output leaves as the check requires them, its output words in order (read off its META, as `HmRow.parse` reads
+`leaves_out`).
 -/
 import Flock.RecVStar
 

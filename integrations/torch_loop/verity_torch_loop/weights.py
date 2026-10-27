@@ -27,14 +27,15 @@ No torch: memory-accounting's encoder, the loop and the all-protocols runner run
   u16 & 0x7F`` (bf16 of magnitude in [0.5, 1)).
 * **The registration** (`root`, `entries`), one per reading program: every tensor is the registered value of the program's
   root parameter of its name (core's ``Registered.commit``), its bytes cut into rows of `Tensor.words` u16 words
-  (little-endian, the reading port's row, as CIR-100's units read them: an s8 linear ``row_codes`` codes, the K-part
-  ``S8AccumulatorPart{K=row_codes}`` reads; a scale 2 words; ``tok`` one coordinate's V words; a gain and ``pos`` 1 word), in
+  (little-endian, the reading port's row: an s8 linear ``row_codes`` codes, at `H200` the 8,192 codes of the part
+  ``ScaledMmS8CoordinateRows_v2``'s ``wrow{r}`` reads on circuits' FAMILIES map (``quant_chunk``); a scale 2 words; ``tok`` one coordinate's V words; a gain and ``pos`` 1 word), in
   ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, row/v2 by default; ``EmbeddingRead_v1``'s
   ``hm96-sha512/row-seg/v1`` with ``tok_rows="token"``), under the
   domain the verifier derives (``registered.registered_entries``, the value held across windows):
   ``registered.domain(program_digest(program), name, words, leaves, word_bits)``, the word width the parameter's leaf
   width rounded up to 16 or 32 bits (an f32 scale read as one 32-bit leaf is 1 word of 32 bits, the same row bytes; a
-  program named by its digest alone reads each tensor at its elements' width, `Tensor.word_bits`). Row
+  program named by its digest alone reads each tensor at `Tensor.word_bits`, 16: a Boolean program's one-bit leaves, as
+  the served step's Program reads them). Row
   i's salt is ChaCha20 blocks 3i .. 3i+2 under the prover's 32-byte salt key at the tensor's index as nonce (C-Flock's
   ``hm96_salt``; the key salts these rows only). At `H200` every tensor's row count is a power of two, so no tree has a
   pad. **The registration digest** (`registration_digest`) is SHA-512 of ``verity/seeded-weights/registration/v1`` and
@@ -102,8 +103,9 @@ class Shape:
     tok_rows: str = "coordinate"
 
 
-#: the H200 demo's frozen shape (compute-accounting, 25 Oct 23:00Z)
-H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 256)
+#: the H200 demo's frozen shape (compute-accounting, 25 Oct 23:00Z); a linear's row the 8,192 codes a FAMILIES ``wrow``
+#: part reads
+H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 8192)
 #: Phase 1's CPU model (ALLP-XFMR, CMP-92): its linears read whole 128-code rows, its down projection in K = 128 parts
 PHASE1 = Shape("cmp92-phase1-h128-l2", 128, 2, 2, 64, 2, 512, 256, 32, 128)
 #: the smallest shape the tests commit whole
@@ -135,8 +137,9 @@ class Tensor:
 
     @property
     def word_bits(self) -> int:
-        """Its leaves' width when its reader is named by digest alone: its elements' width rounded up to 16 or 32 bits."""
-        return 32 if self.dtype == "f32" else 16
+        """Its leaves' width when its reader is named by digest alone: 16, a Boolean program's one-bit leaves rounded up
+        (the served step's Program reads every tensor so, an f32 scale as two 16-bit words)."""
+        return 16
 
     @property
     def row_bytes(self) -> int:
@@ -394,23 +397,33 @@ def _row_digests(t: Tensor, data: bytes) -> bytes:
     return bytes(out)
 
 
+def chunk_levels(t: Tensor, dom: Any, data: bytes, row_salts: bytes, j0: int, bits: int) -> list[list[bytes]]:
+    """The levels of `t`'s subtree over rows ``[j0, j0 + 2^bits)`` under domain `dom`, leaves first, from those rows'
+    bytes `data` and salts `row_salts` (rows past the tensor's are pads); its root is the last level's one node."""
+    rb = 2 * t.words
+    n = len(data) // rb
+    if len(data) != n * rb or len(row_salts) != n * _INST.salt_bytes or n > 1 << bits:
+        raise ValueError(f"{t.name}: {len(data)} bytes and {len(row_salts)} of salts are not as many rows of {rb} bytes")
+    level = []
+    if n:
+        tl = hm96_batch.tree_leaves(_INST, _INST.default_key, _row_digests(t, data), row_salts)
+        level = [dom.leaf(j0 + k, j0 + k, t.schema, tl[k]) for k in range(n)]
+    level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
+    levels, g = [level], j0
+    for d in range(bits):
+        level = [dom.node(d, (g >> 1) + k // 2, level[k], level[k + 1]) for k in range(0, len(level), 2)]
+        levels.append(level)
+        g >>= 1
+    return levels
+
+
 def subtree(shape: Shape, seed: bytes, salt_key: bytes, r: Reader, index: int, chunk: int, bits: int) -> bytes:
     """The subtree root over rows ``[chunk << bits, (chunk + 1) << bits)`` of the tensor at `index`, pads included."""
     t = tensors(shape)[index]
-    dom, rb = domain(t, r), 2 * t.words
-    j0 = chunk << bits
+    rb, j0 = 2 * t.words, chunk << bits
     n = max(0, min(1 << bits, t.leaves - j0))
-    level = []
-    if n:
-        data = tensor_bytes(shape, seed, t.name, j0 * rb, (j0 + n) * rb)
-        tl = hm96_batch.tree_leaves(_INST, _INST.default_key, _row_digests(t, data), salts(salt_key, index, j0, n))
-        level = [dom.leaf(j0 + k, j0 + k, t.schema, tl[k]) for k in range(n)]
-    level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
-    g = j0
-    for d in range(bits):
-        level = [dom.node(d, (g >> 1) + k // 2, level[k], level[k + 1]) for k in range(0, len(level), 2)]
-        g >>= 1
-    return level[0]
+    data = tensor_bytes(shape, seed, t.name, j0 * rb, (j0 + n) * rb) if n else b""
+    return chunk_levels(t, domain(t, r), data, salts(salt_key, index, j0, n) if n else b"", j0, bits)[-1][0]
 
 
 def _task(args: tuple) -> tuple[int, int, bytes]:
@@ -654,8 +667,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.choices["root"].add_argument("--salt-key", type=_bytes_arg, required=True,
                                      help="the prover's 32-byte salt key: file:PATH, never on a command line in the demo")
     sub.choices["root"].add_argument("--program", required=True,
-                                     help="the reading program's digest (128 hex digits); each tensor read at its "
-                                          "elements' width (Tensor.word_bits)")
+                                     help="the reading program's digest (128 hex digits); each tensor read at "
+                                          "Tensor.word_bits, 16")
     sub.choices["root"].add_argument("--tensors", help="comma-separated tensor names (default all)")
     a = ap.parse_args(argv)
 

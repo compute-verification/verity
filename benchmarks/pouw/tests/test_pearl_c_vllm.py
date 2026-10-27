@@ -2390,7 +2390,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     for _ in range(3):
         full.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
     assert [(n, st) for n, st, *_ in kernel.dev.log if st in sides and n.startswith("pd_")] == [
-        (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_979", tree), ("pd_tiles_979", tiles))]
+        (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_851", tree), ("pd_tiles_979", tiles))]
     by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "form_s5_ep",
                                                                           "gemm_pearlc_d", "pd_tiles_851")}
     ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
@@ -2527,7 +2527,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     run.begin()
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(64, 1024).to(torch.bfloat16), weights[0], None)
-    (tree,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_tree_979"]
+    (tree,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_tree_851"]
     assert tree[1] == (64, 0, 0, 64) and tree[0][12] == 0
 
 

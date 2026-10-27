@@ -205,7 +205,7 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
             wp_why = wp.get("why") if isinstance(wp, dict) else "not run (no --weights-of-record / --checkpoint-dir)"
             return False, (f"weights unpinned (MAN-09): the served weights were not compared with the checkpoint of record -- {wp_why}; "
                            "the committed weights root is self-consistency, not authentication")
-        _att = C2._batch_attribution_note(bnd, _oc)
+        _att = C2._batch_attribution_note(C2._requests_n(commit), _oc)
         if _att is not None:
             c2_notes.append(_att)
         # [R17-3 / reqval] the population of record is Q(P): the replay's reach reconciled against the required manifest is stated on

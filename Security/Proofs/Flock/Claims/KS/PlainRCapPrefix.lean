@@ -639,7 +639,7 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
     generalize (cutLens (repLens spec sts) rss₂).getD r [] = B at hh ⊢
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, hh]
   rw [hrJ] at hel₁
-  have hvv := hel₁.vals_eq hel₂ (by first | rfl | simp)
+  have hvv := FlockDeploy.RowsAt.vals_eq hel₁ hel₂ (by simp only [List.length_cons, List.length_nil])
   have hkf : kFr q₁.ligerito.messages[capMsg sch.k0 ℓ]! = kFr q₂.ligerito.messages[capMsg sch.k0 ℓ]! := by
     simp only [List.cons.injEq, and_true] at hvv
     obtain ⟨e1, e2, e3, e4⟩ := hvv

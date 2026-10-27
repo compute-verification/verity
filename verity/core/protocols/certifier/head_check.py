@@ -1,7 +1,7 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v5, one per end),
+certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
 which runs on every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its
 circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier of
 record reads its output from the unit's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
@@ -401,7 +401,7 @@ def gate_of(d, digest: str | None, what: str) -> PrimitiveDefinition:
 
 @lru_cache(maxsize=None)
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
-    """`unit(L, T, counts)` as one gate of N2's proof unit (`service.LinkWindows.unit`), whose id names the Definition and
+    """`unit(L, T, counts)` as one gate of N2's proof block (`service.LinkWindows.unit`), whose id names the Definition and
     its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
     unit's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and a
     proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest

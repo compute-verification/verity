@@ -145,13 +145,42 @@ def lane_pools(slots_file: Path) -> list[Path]:
     return out
 
 
+#: where a Nebius node caps each login session's memory (deploy.toml's 50-vy-job-memory.conf; research.telemetry.cgroup reads the
+#: same files)
+SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
+
+
+def session_cap(dropins: Path | None = None) -> str | None:
+    """The MemoryMax= every login session scope gets here (the last one set, as systemd reads the drop-ins), or None."""
+    cap = None
+    try:
+        files = sorted((dropins or SESSION_DROPINS).glob("*.conf"))
+    except OSError:
+        return None
+    for f in files:
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            k, _, v = line.strip().partition("=")
+            if k.strip() == "MemoryMax":
+                cap = v.strip() or None
+    return None if cap in (None, "infinity") else cap
+
+
 def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
-    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over)."""
+    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over). On a node that
+    caps each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
+    to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
+    a scoped check (exit 75, 26 Oct)."""
     unit = f"check-{slot}-{run_id}"
-    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", *cmd], unit
+    cap = session_cap()
+    props = [f"--property=MemoryMax={cap}"] if cap else []
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", *cmd], unit
 
 
 def scope_refusal(run=subprocess.run) -> str | None:

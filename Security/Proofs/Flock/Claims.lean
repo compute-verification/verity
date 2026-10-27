@@ -20,7 +20,6 @@ import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 import Proofs.Flock.Claims.Recursion.DeployInputs
 import Proofs.Flock.Claims.Recursion.DeployOuter
 import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.RowsShared
 import Proofs.Flock.Claims.Recursion.DeployComplete
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeployFacts
@@ -172,7 +171,6 @@ import Proofs.Flock.Claims.Recursion.VerdictAssembly
 import Proofs.Flock.Claims.Recursion.DecodeAt
 import Proofs.Flock.Claims.Recursion.CapPieces
 import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.RestLive
@@ -219,31 +217,18 @@ import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.RowDMerkle
 import Proofs.Flock.Claims.Recursion.RowDAccept
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+import Proofs.Flock.Claims.Recursion.CapLower
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainRCapPrefix
 import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
-import Proofs.Flock.Claims.Recursion.LastCallsR
 import Proofs.Flock.Claims.Recursion.KSFlockLinR
 import Proofs.Flock.Claims.Recursion.VerdictFramed
-import Proofs.Flock.Claims.Recursion.CapPieces
-import Proofs.Flock.Claims.Recursion.RestVerdictDraw
 import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.RestReadR
-import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.DecompBDeployed
 import Proofs.Flock.Claims.Recursion.VerdictRowRDep
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainRCapPrefix
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 import Proofs.Flock.Claims.Recursion.HonestIVStarR
 import Proofs.Flock.Claims.Recursion.HonestPartsR
 import Proofs.Flock.Claims.Recursion.HonestRepR
@@ -285,8 +270,6 @@ import Proofs.Flock.Claims.Recursion.HonestHalfTops
 import Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture
 import Proofs.Flock.Claims.Recursion.HonestHalfFixture
 import Proofs.Flock.Claims.Recursion.NumsFixedR
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Recursion.LabelsFull
@@ -342,25 +325,24 @@ import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Claims.Recursion.SideCapPos
 import Proofs.Flock.Claims.Recursion.ResLowJD
 import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.LabelsFull
+import Proofs.Flock.Claims.Recursion.ResLowerDA
 import Proofs.Flock.Claims.Recursion.ResSiteD
 import Proofs.Flock.Claims.Recursion.ResLowerDD
 import Proofs.Flock.Claims.Recursion.KSDec
 import Proofs.Flock.Claims.Recursion.ResAccPorts
 import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.OpenCoefTie
 import Proofs.Flock.Claims.Recursion.ResStepsW
+import Proofs.Flock.Claims.Recursion.ResEndsW
 import Proofs.Flock.Claims.Recursion.OpenLevW
 import Proofs.Flock.Claims.Recursion.AccTies
 import Proofs.Flock.Claims.Recursion.HresAsm
 import Proofs.Flock.Claims.Recursion.ResFrameElems
 import Proofs.Flock.Claims.Recursion.ResFramePorts
-import Proofs.Flock.Claims.Recursion.ResEndsW
 import Proofs.Flock.Claims.Recursion.ResStepsWV
 import Proofs.Flock.Claims.Recursion.ResStepsWD
 import Proofs.Flock.Claims.Recursion.ResNextW
 import Proofs.Flock.Claims.Recursion.ResAccEnd
-import Proofs.Flock.Claims.Recursion.ResLowerDA
+import Proofs.Flock.Claims.Recursion.OpenCoefTie
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

@@ -76,7 +76,7 @@ def test_a_units_row_opens_the_signed_root_and_a_forged_byte_does_not(tmp_path):
 
 @pytest.mark.parametrize("word_bits,schema,words", [(32, G.SCHEMA_V2, 1), (16, G.SCHEMA_SEG, 48)])
 def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_binds_it(tmp_path, word_bits, schema, words):
-    """A load's f32 scale (one 32-bit leaf a row) and a token's embedding (a row-seg row longer than one SHA-512 block):
+    """A value of one 32-bit leaf a row and a token's embedding (a row-seg row longer than one SHA-512 block):
     `Registered.commit`'s commitment at that width and format, its head binding both, read by the verifier at its own
     width and format alone, and each row opening the signed root under that format."""
     rng = random.Random(3)

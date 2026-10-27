@@ -373,6 +373,7 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     honest = prove(opening, "honest")
     v = verdict(honest)
     assert v["accepted"] and v["public"] == {"verdict": 1, "deadline": 1} and v["decided_by"] == "proof"
+    assert v["by"] == SVC.OF_RECORD["plain"] == "lean" and v["reference"] == {"accepted": True}
     assert "clear" not in v and verdict(honest, opening=opening)["clear"] == {"accepted": True}
     assert set(honest.salts) == {"pub", "o0"} and honest.output == 0b11
     eg, ig = opening.records
@@ -390,8 +391,8 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     assert prove(off, 6).output == 0b10
     for k, (delivered, kw) in enumerate(cases):
         v = verdict(delivered, **kw)
-        assert v["accepted"] is False and v["public"]["verdict"] == 0, k
-        assert set(v) == {"of_record", "decided_by", "accepted", "digest", "sessions", "public"}, k
+        assert v["accepted"] is False and v["public"]["verdict"] == 0 and v["reference"] == {"accepted": False}, k
+        assert set(v) == {"of_record", "decided_by", "by", "accepted", "digest", "sessions", "public", "reference"}, k
 
 
 def _accepts_every_head(B, S_, *args):
@@ -676,6 +677,44 @@ def test_a_link_without_an_egress_profile_has_no_verdict(tmp_path):
         with pytest.raises(ValueError, match="egress end has no occupancy profile"):
             run.lw.clear(opening, draw, SYNCS)
         assert run.lw.stand_in(opening, draw, FRAMES, SYNCS)
+
+
+WARDEN_DIGEST = bytes(range(64))
+
+
+def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
+    """A warden link (`WardenProfile`) is the plain unit on the warden's records: its public items are `PUBLIC_WARDEN`
+    and its charge 0, a window whose two records the warden certified under its parameters digest is accepted with no
+    sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window
+    whose egress record was certified under the certifier's digest instead is a reject. It takes no occupancy profile,
+    and its two ends are one grid."""
+    run = Run(tmp_path)
+    run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, WARDEN_DIGEST))
+    run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
+                           clock=run.clock)
+    assert lw.spec.public == SVC.PUBLIC_WARDEN and lw.charge == 0.0 and lw.windows == 3
+    assert lw.kind == "warden" and SVC.OF_RECORD[lw.kind] == "lean"
+    items = {p.item for p in lw.spec.public}
+    assert items >= {"warden", "parameters"} and not items & {"charge", "occupancy"}
+    assert lw.spec.digest() != replace(lw, warden=SVC.WardenProfile(3, bytes(64))).spec.digest()
+    warden = lambda d, r: run.issuer.certify(r, d, PARAMS, WARDEN_DIGEST)
+    honest = lw.commit(0, warden(EGRESS, egress_records()[0]), warden(INGRESS, ingress_records()[0]), SALTS[0])
+    out = standin.decide(lw, run.stream, run.stream.select(run.register(honest)), honest, (), tmp_path / "p0")
+    assert out.accepted and out.public == {"verdict": 1, "deadline": 1}
+    verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
+    assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": True}
+    other = lw.commit(1, run.egress(egress_records()[1]), warden(INGRESS, ingress_records()[1]), SALTS[1])
+    assert reject(standin.decide(lw, run.stream, run.stream.select(run.register(other)), other, (), tmp_path / "p1"))
+    verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
+    assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
+    with pytest.raises(ValueError, match="counts are its schedule's"):
+        replace(lw, occupancy=honest_occupancy())
+    with pytest.raises(ValueError, match="one grid"):
+        replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))
+    with pytest.raises(ValueError, match="one or more windows"):
+        SVC.WardenProfile(0, WARDEN_DIGEST)
+    with pytest.raises(ValueError, match="64 bytes"):
+        SVC.WardenProfile(3, bytes(32))
 
 
 def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
