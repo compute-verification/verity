@@ -5,8 +5,8 @@
 Two arms in ONE process on ONE engine (vLLM d9105ea80, eager, bf16, VLLM_BATCH_INVARIANT=1, the adapter's declared profile):
   control       Verity disabled entirely — no observer, no hooks, no wrapped runner methods; the loop below is the only code around
                 `engine.step()` (the same loop runs the instrumented arm, so it is in both numerator and denominator)
-  instrumented  a committer installed for the run (`--committer native_host` = the naturally-materialised reference path; the sibling
-                lanes' engines plug in through the same `Committer` interface), uninstalled afterwards; the harness asserts the engine
+  instrumented  a committer installed for the run (`--committer native_host` = the naturally-materialised reference path; other
+                committers plug in through the same `Committer` interface), uninstalled afterwards; the harness asserts the engine
                 is pristine again before the next control run.
 Pairs are interleaved (control, instrumented) with the order alternating per pair; ≥ 5 pairs.  Warm-up: two control passes and one
 instrumented pass on throwaway prompts of the same shape (Triton JIT, allocator, pinned pool), reported separately.  Weight registration
@@ -627,7 +627,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     # the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
     # Every consumer below counts on it: the required population, the composition, engine_schedule's expected steps.  The first B>=2
-    # record with an EOS stop (OLMoE B2 i32/o32 mixedstop, cp-moe 18:45Z) had r0 committed over 12 = 11 + 1 steps and r1 over 32, and the
+    # record with an EOS stop (OLMoE B2 i32/o32 mixedstop) had r0 committed over 12 = 11 + 1 steps and r1 over 32, and the
     # cap-shaped population required r0's 20 unexecuted steps (bound 13808/19988).  A problem (early stop without a declared EOS / LAG, a
     # non-EOS last token, served > cap) leaves the population the cap's and fails coverage by name.
     served_by_rid = None if served_tokens is None else {_logical(str(k)): [int(t) for t in v] for k, v in served_tokens.items()}
@@ -842,7 +842,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             com.learn_only = False              # a replay is a record run: a learning step over budget fails by name, never a placeholder
         if getattr(com, "windowed", False) and getattr(com, "win_bytes", 0):
             # windowed replay: keep ONLY the windows that hold a challenged/forced leaf (a chunk never straddles a window: W is a multiple
-            # of the chunk) -- the whole raw stream on host is what the pod's cgroup cannot take at B>=64 (188 GB measured)
+            # of the chunk) -- the whole raw stream on host is what the pod's 188 GB cgroup cannot take at B>=64
             com.retain = "sample"
             Wb = int(com.win_bytes)
             com.retain_windows = {(st, (idx * frozen.chunk) // Wb) for st, idx in picks}
@@ -948,7 +948,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         com.pool = com.pool.fresh()             # ... and FREE their pinned blocks now: `reset()` only returns them to the pool's free list, and
     #                                             the frozen view + its pool sit in a reference cycle (committer <-> C++ collector) that the
     #                                             cyclic GC frees on ITS schedule -- at B=32 the replay's 99 GB survived into the next pair's
-    #                                             replay -> 198 GB > the pod's 188 GB cgroup -> SIGKILL (08:25Z).  Collect explicitly.
+    #                                             replay -> 198 GB > the pod's 188 GB cgroup -> SIGKILL.  Collect explicitly.
     del frozen, values_from
     import gc
 
@@ -1060,7 +1060,7 @@ class Options:
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
     weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees " "on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows; vllm-v1's pos_leaf leaves by " "native_leafhash.cu, verity_vllm.commit.committer.leafhash), device-checked (both, each tensor's device root compared with its host " "root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
-    hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
+    hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     pinned_populate_threads: int | None = option("--pinned-populate-threads", env="VERITY_PINNED_POPULATE_THREADS", type=int, default=None, help="helper threads that fault a fresh exact pinned block's pages in (MADV_POPULATE_WRITE) before the caller registers it (default: commit.committer.pinned_pool.POPULATE_THREADS; recorded as pinned_populate_threads); 0 = the registration faults them in")
     openings: int = option("--openings", type=int, default=64)
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
@@ -1075,7 +1075,7 @@ class Options:
     batch_copy: bool = option("--batch-copy", default=False, action="store_true", help="native_host: batch the D2D snapshots of not-overwritten tensors into one _foreach_copy_ per step")
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
-    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
     tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
@@ -1132,7 +1132,7 @@ class Options:
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
     padded_finalize: bool = option("--padded-finalize", default=False, action="store_true", help="the padded Commit: at finalize, every identity the required manifest names " "for a request OUTSIDE its executed prefix of record (declared LAG + declared EOS + served tokens; never inferred) is MATERIALISED as the " "canonical bot of its lifted width -- a step nobody executed becomes a padding step, a mixed step (B>1) is refolded from the retained leaf " "digests + the padding leaves -- so the ONE run root is over S = cap steps and the map (padded-binding-map/1) binds the full cap " "population (activity active / bot-by-enablement).  Requires --required-manifest.  Off = today's executed-steps-only Commit")
     moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
-    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="[circuits 21:10Z] served = the "
+    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
                                 "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
@@ -1947,7 +1947,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     # the placement below ran at B >= 2 ONLY (`len(reqs) > 1`):
                     # at B=1 the cap-length manifest (row_pod's Program of record at Commit is the CAP-shape build_request on this tree, the
                     # served-shape rule retired there) was required IN FULL and the never-executed steps of an EOS-stopped request were
-                    # 'uncovered' instead of the named class -- measured cp-dev2 sync twin r17_2350: 8,295 identities of r0's steps 11..31
+                    # 'uncovered' instead of the named class -- measured: 8,295 identities of r0's steps 11..31
                     # {fa2_hidden_m1_stream 630, instance_outputs 7,623, ids 21+21}, COMMIT FAIL at MANIFEST COVERAGE.  The single request
                     # is r0 (index order, the manifest's request_id), the same executed_prefix_of_record / request_steps_of_record /
                     # restrict_* run -- as at B >= 2, nothing new; a request that ran to its cap drops nothing.
@@ -2408,7 +2408,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     verdict = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
                "runs_failed": len(fails), "first_fail_reason": (fails[0][2] if fails else None),
                "required_classes": list(required_classes), "required_classes_source": (
-                   f"program/query manifest {required_manifest['manifest_digest']} (MAN-01; classes kept as a secondary check)" if required_manifest is not None else
+                   f"program/query manifest {required_manifest['manifest_digest']} (R14 MAN-01; classes kept as a secondary check)" if required_manifest is not None else
                    "cli" if args.required_classes is not None else
                    (f"default for FA{fa_version} + moe_block_stream (MOE-03: MoE source attached; REL-02 interim fallback)" if moe_attached else
                     f"default for FA{fa_version} (REL-02 interim fallback: counts+classes, not the Program/query manifest)")),

@@ -162,7 +162,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
         return {"schema": "verity/workload-program/v1/lag", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.async_scheduling_declaration()
     out = {"schema": "verity/workload-program/v1/lag", **decl,
-           "rule": "LAG is a required declared specialization parameter of the workload Program (static `lag` of Workload_v1, in the "
+           "rule": "R17-1: LAG is a required declared specialization parameter of the workload Program (static `lag` of Workload_v1, in the "
                    "digest), coupled to the serving profile's RESOLVED async_scheduling; Build and GM-01 consume this declaration, the "
                    "record header must attest the same resolved value (G1), never inferred from the trace; the post-EOS step under LAG=1 "
                    "is active internal computation whose sampled token is not a served output",
@@ -229,10 +229,10 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
         return {"schema": "verity/workload-program/v1/moe_construction", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.moe_construction_declaration()
     out = {"schema": "verity/workload-program/v1/moe_construction", **decl,
-           "rule": "the fused-MoE construction is a declared-and-bound Program static (TargetProfile.moe_construction; "
+           "rule": "R17-42 / R17-45 (a): the fused-MoE construction is a declared-and-bound Program static (TargetProfile.moe_construction; "
                    "indexed-read = MOE-01, padded = MoeFfnFixedL_v1 per token with the hand-authored lift LMoeFfnL_v1 of record); the Build "
                    "binds the declared construction only, the digest differs by construction on the same trace, GP-01 refuses components of "
-                   "another construction by name; never attested by the record, never inferred from it",
+                   "another construction by name; never attested by the record, never inferred from it (moe M-1066 (2a))",
            "components": {}, "moe_block_present": False, "refusal": None}
     own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], {s for v in _MOE_CONSTRUCTION_SPECS.values() for s in v} - set(_MOE_CONSTRUCTION_SPECS[decl["value"]])
     for s, d in sorted(shapes.items()):
