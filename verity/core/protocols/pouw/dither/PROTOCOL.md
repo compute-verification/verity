@@ -317,9 +317,11 @@ The challenger issues every live coin, in each replica's one sequence of runs; u
 certifier device (see "The boundary"). Before the monitoring period it draws a random coin c for each draw and commits
 to them in one root (see "The coin commitment"). Once the receipt a draw follows is in, it opens that draw's c against
 the root and derives the draw's coins from c and the receipt, inside the challenger,
-as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the coin and the receipt, as
-v3.2's RP25 and RP26 derive them), where:
-- c is opened only to the certifiers, never to the prover first;
+as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the domain tag, the coin and
+the receipt, as v3.2's RP25 and RP26 derive them, under tags distinct from PoUW's noise-seed tags), where:
+- c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
+  root before its last root, and receives the paths and the root at close (@proofs, 27 Oct, 04:16Z; ONE-4's withheld
+  mode, #4888): opening draw j to it early would hand it the root before later blocks' roots;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
 - ctx = {period, replica, sampling block index, receipt}, where receipt is the digest of the certifier's signed receipt
   of what the coin follows: the registration for `weights`, the block's operand roots for `seeds`, and its value roots
@@ -331,8 +333,9 @@ repeated junk root would repeat its "not selected", and repeated operands would 
 ε_skip to the credited share. This is the premise POOL-THM's `IndependentCoins` rests on, with SHA-512 as the
 derivation's random oracle.
 
-Only expanded coins enter the boundary, never a c. A c sent in for local expansion would make a whole block's
-outsourcing cost one coin's bits, and P18's β would fail.
+Only expanded coins enter the boundary, never a c, which is stricter than ONE-4's withheld mode, where the prover gets the
+raw coin. A c sent in for local expansion would make a whole block's outsourcing cost one coin's bits, and P18's β would
+fail.
 
 **The coin commitment** (soundness's ruling, Daniel, 26 Oct, 6:15 PM PDT; settled 27 Oct, 03:45Z). The challenger
 commits to its coins c before the monitoring period, and the commitment reaches the prover only after the prover has
@@ -340,8 +343,8 @@ committed, so no soundness statement takes a hiding premise on it.
 - The public configuration names each replica's drawing challenger, its identity and LMS key, and never its coin root.
 - Before the monitoring period, the challenger sends its committed root to the network certifiers over their private
   links (`WitnessPathPrivate`), never to the prover first.
-- A draw's c opens against the root only after the receipt the draw follows, and the draw's coins are derived from c
-  and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
+- A draw's c opens against the root, to the certifiers, only after the receipt the draw follows, and the draw's coins
+  are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
   can't know them before it sends the roots.
 - A multi-server replica has one draw, from the challenger on its lowest-numbered server. Each server's certifier exempts
   from k_infil only the coin frames derived from a c that opened against that root, with the receipt they name, and
@@ -520,10 +523,8 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     through the period, each fixed before its own run's challenge phase but after earlier answers' releases, so the rule
     is to be read per statement for a stream (RS6).
 - **τ_ans**, from a passing measured run (see "Timing").
-- **The coin root** (see "Coins"): @proofs, the challenger's owner, is asked to confirm the derivation from an opened c
-  and its receipt (27 Oct, in the coin-commitment thread); if they disagree, it stays open here. When the prover
-  receives the root, and how a certifier checks a forwarded frame's derivation, are the challenger's spec, as remote
-  bandwidth's are on #4968 and the network certifier's coin link's on #4946.
+- **The coin root** (see "Coins"): how a certifier checks a forwarded frame's derivation from its opened c is the
+  challenger's spec, as remote bandwidth's is on #4968 and the network certifier's coin link's on #4946.
 - **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price** (Daniel's open Ask).
