@@ -11,8 +11,10 @@ import Proofs.Pous.P2.RingTrunc
 (`not_p2RingAuditSecure_trunc`, at `t = 168`, `m = 501,819`: `(501819/2^19)^105 ≈ 0.01006`), far above `RING_L = 2^64`.
 At `t = 167` its `m = 501,788` gives `(501788/2^19)^105 ≈ 0.009996 < 1%`, so `2^169` is where that family starts.
 
-The honest period (`periodHeldHonest`): `RingDevice` holds because the capacity account holds `FULL > S₀` bits at tick
-`0` of the window, so no capacity coin meets its antecedent; `63,000,000 · 105 + 2^30 + 437,248,000 = 8,125,989,824 ≤
+The honest period (`periodHeldHonest`): the honest strategy is the lookup strategy (`periodHeld_honest`), which keeps
+its state and runs a `ret` every round (`seqRounds_ret`), so each answer takes no round or query, and its state is
+`C`'s `FULL` bits, which the capacity account holds at tick `0` of the window; the code's draw never fails at a
+32-byte id (`coinView_some`, `uniformOn_split`), and a lookup returns the challenged block; `63,000,000 · 105 + 2^30 + 437,248,000 = 8,125,989,824 ≤
 S₀ = 8,169,621,180`; `⌊854,000 · 349 / 36,155⌋ = 8,243 ≤ 16,446`; and `16,447 · 36,155 / 349 ≥ 1.995 · 854,000`.
 The empty period has probability 1 of the accept-all event, and the honest one held `105 · FULL` bit-ticks
 (`periodHeldNontrivial`).
@@ -26,8 +28,8 @@ open scoped ENNReal
 set_option exponentiation.threshold 20000
 
 theorem periodHeldDeployed : PeriodHeldDeployed := by
-  intro hH hP
-  exact periodHeld hH RING_D RING_Q RING_L hP
+  intro hP
+  exact periodHeld RING_D RING_Q RING_L hP
 
 /-! ## The budget -/
 
@@ -93,16 +95,10 @@ theorem held_periodRun (m : ℕ) (hm : m ≤ FULL)
 
 theorem periodHeldHonest : PeriodHeldHonest := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · intro P o B hB
-    have hBF : B < FULL := by
-      have := Pous.EndToEnd.SecurityProofs.stateBound_lt
-      omega
-    refine ⟨⟨fun _ _ _ _ _ => false, fun _ _ _ _ σ _ => .ret (fun _ => false, σ),
-      fun _ _ _ _ _ _ => PousP2Ring.ringBounded_ret _ _ _ _⟩, fun x hx _ => ?_⟩
+  · intro P hs
     have h0 : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
       simp [honestRun, periodRun, Accounting.Window.ticks, K]
-    have h1 : FULL ≤ B := hx 0 h0
-    omega
+    exact periodHeld_honest honestRun P RING_D RING_Q RING_L 1 hs fun _ => ⟨0, h0, le_rfl⟩
   · show (0 : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
     norm_num [HONEST_S, K]
   · rw [S_eq]
