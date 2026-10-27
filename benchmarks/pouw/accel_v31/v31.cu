@@ -1322,10 +1322,10 @@ static std::string env_str(const char* name, const char* dflt) {
 // columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
-// the bench's timing-only gemm_no* arms.
+// the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
-      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0);
+      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1358,8 +1358,8 @@ struct Ctx {
   Committer cm;
   Params params;
   cudaStream_t s0, s1;
-  cudaEvent_t ev_comp[2], ev_done[2];
-  int ovl = 0;
+  cudaEvent_t ev_comp[2], ev_done[2], ev_formed;
+  int ovl = 0, pend = -1;   // pend: the buffer whose commit V31_SCHED 1 hasn't issued yet
   Knobs kn;
   u32* gctr = nullptr;
   u32 gbase = 0;
@@ -1443,6 +1443,7 @@ struct Ctx {
       CK(cudaEventCreateWithFlags(&ev_done[b], cudaEventDisableTiming));
       CK(cudaEventRecord(ev_done[b], s1));
     }
+    CK(cudaEventCreateWithFlags(&ev_formed, cudaEventDisableTiming));
   }
   void set_seeds(const uint8_t* b) {
     for (int s = 0; s < 5; s++)
@@ -1536,18 +1537,38 @@ struct Ctx {
     leaves_nodes(st, b);
   }
   // the overlapped call: compute on s0 once the commit that last read buffer b is done; its commit on s1, the salts
-  // ahead of the compute they don't read
-  void call_ovl(cudaStream_t st) {
-    const int b = nb == 2 ? (ovl++ & 1) : 0;
-    CK(cudaStreamWaitEvent(st, ev_done[b]));
-    compute(st, b);
-    CK(cudaEventRecord(ev_comp[b], st));
+  // ahead of the compute they don't read. V31_SCHED 1 (two copies only): the previous call's commit, salts and all, waits
+  // for this call's form, so it runs beside this call's GEMMs rather than its coins and form
+  void commit_ovl(int b) {
     salts(s1);
     CK(cudaStreamWaitEvent(s1, ev_comp[b]));
     leaves_nodes(s1, b);
     CK(cudaEventRecord(ev_done[b], s1));
   }
+  void call_ovl(cudaStream_t st) {
+    const int b = nb == 2 ? (ovl++ & 1) : 0;
+    CK(cudaStreamWaitEvent(st, ev_done[b]));
+    if (kn.sched == 1 && nb == 2) {
+      coins(st);
+      form(st);
+      CK(cudaEventRecord(ev_formed, st));
+      if (pend >= 0) {
+        CK(cudaStreamWaitEvent(s1, ev_formed));
+        commit_ovl(pend);
+      }
+      wrap(st);
+      gemm(st, b, true);
+      CK(cudaEventRecord(ev_comp[b], st));
+      pend = b;
+      return;
+    }
+    compute(st, b);
+    CK(cudaEventRecord(ev_comp[b], st));
+    commit_ovl(b);
+  }
   void ovl_drain(cudaStream_t st) {
+    if (pend >= 0) commit_ovl(pend);
+    pend = -1;
     for (int b = 0; b < nb; b++) CK(cudaStreamWaitEvent(st, ev_done[b]));
   }
   int flags() const {
@@ -1791,11 +1812,12 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
            "\"leaves\": %llu, \"gpu\": \"%s\", \"sms\": %d, \"grid\": %d, \"copies\": %d, \"wrap_rate_A\": %.6f, \"wrap_rate_B\": %.6f, "
            "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, "
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
-           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"arms\": {",
+           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, "
+           "\"sched\": %d, \"arms\": {",
            name, m, n, k, lp, t, row, c.S, c.dz, c.dy, (unsigned long long)c.leaves, prop.name, c.nsm, c.grid, c.nb,
            (double)wa / ((double)m * k), (double)wbn / ((double)n * k), lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand,
            cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw,
-           c.kn.ccta, c.kn.pf, V31_MAXNREG);
+           c.kn.ccta, c.kn.pf, V31_MAXNREG, c.nb == 2 ? c.kn.sched : 0);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, ", med[7] / med[0],

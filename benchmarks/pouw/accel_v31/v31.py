@@ -754,7 +754,8 @@ D6 = {
 def cmd_table(a: argparse.Namespace) -> int:
     """`v31 bench`'s JSON lines beside D6's predictions: gamma overlapped (and serial, and the GEMM alone) and the ratio,
     with the variant (ROW, the commit stream's priority, the carveout, the GEMM's tile counter, the wrap kernel and its
-    columns a CTA, the commit's CTAs an SM, the GEMM's register cap, and pN when rows are prefetched; a line without them
+    columns a CTA, the commit's CTAs an SM, the GEMM's register cap, pN when rows are prefetched and sN the overlapped
+    calls' order when it isn't 0; a line without them
     ran wrap_kernel and the small path at 208) and the arms' ms, the commit's parts among them (salt, leaf: leaves and
     nodes, and the leaves' compressions without their rows' loads). Gamma is over cuBLASLt's GEMM; CUTLASS's fastest
     (where the line timed it) and gamma overlapped over it beside."""
@@ -771,7 +772,8 @@ def cmd_table(a: argparse.Namespace) -> int:
         ms = r["arms"]
         wrap = f"w{r['wrap']}/{r['wcw']}" if r.get("wrap", 1) >= 2 else "w1"
         variant = (f"r{r.get('row', '?')} {r.get('cprio', 'hi')} c{r.get('carve', -1)} d{r.get('dyn', 0)} {wrap} "
-                   f"k{r.get('ccta', 0)} n{r.get('maxnreg', 208)}" + (f" p{r['pf']}" if r.get("pf") else ""))
+                   f"k{r.get('ccta', 0)} n{r.get('maxnreg', 208)}" + (f" p{r['pf']}" if r.get("pf") else "")
+                   + (f" s{r['sched']}" if r.get("sched") else ""))
         parts, commit = (", ".join(f"{ms[x]['ms']:.3f}" if x in ms else "-" for x in xs)
                          for xs in (("form", "wrap", "gemm", "commit"), ("salt", "leaf", "leaf_nomem")))
         cut, gcut = ((f"{ms['cutlass']['ms']:.3f}", f"{r['gamma_ovl_cutlass']:.2f}") if "cutlass" in ms else ("-", "-"))
