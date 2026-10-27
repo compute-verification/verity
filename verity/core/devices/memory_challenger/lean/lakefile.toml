@@ -23,6 +23,10 @@ name = "lms"
 path = "../../../primitives/lms/lean"
 
 [[require]]
+name = "core_attest"
+path = "../../../attest/lean"
+
+[[require]]
 name = "core_protocol"
 path = "../../../protocols/interface"
 

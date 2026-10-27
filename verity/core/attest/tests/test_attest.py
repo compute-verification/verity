@@ -1,6 +1,6 @@
 """`verity.core.attest`: the period tree held to `verity.ml.commitments.merkle`, and a party's period under a small HSS key
 (H = 4): its liveness records verify in the clear, its signed root and each record's opening are what
-`MemoryChallenger.Attest.check` accepts (here the Python it is held to), and every misuse is refused."""
+`Attest.check` accepts (here the Python it is held to), and every misuse is refused."""
 from __future__ import annotations
 
 import hashlib
@@ -65,7 +65,7 @@ def party(tmp_path) -> lms.PartyKey:
 
 
 def _accepts(party: lms.PartyKey, s: A.SignedPeriod, reads: list[A.Read]) -> bool:
-    """`MemoryChallenger.Attest.check`, in the Python it is held to."""
+    """`Attest.check`, in the Python it is held to."""
     sig = lms.HssSignature.decode(SMALL, s.signature)
     m = lms.period_root_message(sig.lower[:16], DEPLOYMENT, "memory-challenger", s.attachment, s.link, s.period, s.count,
                                 s.root)

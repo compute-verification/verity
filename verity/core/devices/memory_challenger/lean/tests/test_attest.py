@@ -1,4 +1,4 @@
-"""A device's HSS role digests and checks in Lean (`Lms.Hss`, `MemoryChallenger.Attest`, served by
+"""A device's HSS role digests and checks in Lean (`Lms.Hss`, `Attest.Period`, served by
 `memory-challenger-difftest`) against `verity.ml.crypto.lms` and `verity.core.attest`: the three role digests, two-level
 verification, the period tree's root, the period check a period's proof runs and the liveness check, each on drawn inputs
 around a real device's signatures (a small identity, H = 2) that include what both sides must refuse."""

@@ -14,8 +14,9 @@ commits every sampling block's records, each a byte string, as the leaves of one
 block, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs the root once
 (`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
-prover opens the records a proof reads (`SignedPeriod.read`), and the proof runs `MemoryChallenger.Attest.check` (Lean,
-package ``core_memory_challenger``): two LMS verifications for the two HSS levels, then each read's path to the root.
+prover opens the records a proof reads (`SignedPeriod.read`), and the proof runs `Attest.check` (Lean, this
+directory's ``lean/``, package ``core_attest``): two LMS verifications for the two HSS levels, then each read's path to
+the root.
 
 Stdlib only, as a core unit with no ml edge is: the tree is written out here, and its test holds it to
 `verity.ml.commitments.merkle`, the signer is injected (`Signer`; `lms.PartyKey` is one).
@@ -93,7 +94,7 @@ def path(records: Sequence[bytes], position: int) -> tuple[bytes, ...]:
 
 def verify_opening(root_: bytes, count: int, position: int, record: bytes, siblings: Sequence[bytes]) -> bool:
     """Whether ``record`` at ``position`` climbs ``siblings`` to ``root_`` in a period tree of ``count`` records
-    (`MemoryChallenger.Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
+    (`Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
     if len(root_) != 64 or not 0 <= position < count or len(siblings) != _depth(count):
         return False
     if any(len(s) != 64 for s in siblings):
@@ -117,7 +118,7 @@ class Signer(Protocol):
 
 @dataclass(frozen=True)
 class Read:
-    """One record a period's proof reads: its position, its bytes and its path to the root (`MemoryChallenger.Attest.Read`)."""
+    """One record a period's proof reads: its position, its bytes and its path to the root (`Attest.Read`)."""
 
     position: int
     record: bytes

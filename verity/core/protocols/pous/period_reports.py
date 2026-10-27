@@ -9,7 +9,7 @@ and the closed period (its records, root and two-level signature) goes to the pr
 
 `period_verify` is `PERIOD`'s verification of a session against its closed period, in the clear: the session's record
 opens to the period's root, whose signature verifies under the device's identity for the party, and its liveness record
-is its block's. A period's proof runs the same check in zero knowledge (`MemoryChallenger.Attest.check`), which
+is its block's. A period's proof runs the same check in zero knowledge (`Attest.check`), which
 `Properties.Attest.PeriodSigned` is about. `PERIOD` is not in `memory_challenger.SCHEMES`: the run protocol's Lean
 (`PousCheck.RunProtocol`) still reads S1's per-session signatures.
 """

@@ -1,0 +1,12 @@
+{
+ "roots": [
+  "Attest"
+ ],
+ "layers": {
+  "Attest": {
+   "imports": ["Flock", "Randomness", "Lms.Hss", "Attest"],
+   "except": [],
+   "why": "the period and liveness checks are code: Lean core, C-Flock's hashes and bytes, core's randomness and LMS's HSS only, no Mathlib and nothing of Security; the attest guarantees' statements read them, so they are spec"
+  }
+ }
+}

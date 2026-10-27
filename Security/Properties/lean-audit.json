@@ -333,6 +333,7 @@
   "PousCheck",
   "Properties.Pous.MemoryChallenger",
   "MemoryChallenger",
+  "Attest",
   "Properties.Attest",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
@@ -3611,11 +3612,11 @@
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
-    "function": "MemoryChallenger.Attest.check",
+    "function": "Attest.check",
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
-    "function": "MemoryChallenger.Attest.check",
+    "function": "Attest.check",
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {

@@ -1,5 +1,5 @@
 import Lms.Hss
-import MemoryChallenger.FrameV3
+import Attest.FrameV3Sha512
 
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
@@ -15,7 +15,7 @@ party (`Lms.hssVerify`, two LMS verifications), and each record it reads opens t
 liveness record per sampling block (`Lms.verifyLiveness`).
 -/
 
-namespace MemoryChallenger.Attest
+namespace Attest
 
 open Flock
 
@@ -77,4 +77,4 @@ def checkLiveness (p : Lms.Params) (identity deployment : ByteArray) (party : St
     (link : String) (period block : Nat) (sig : ByteArray) : Lms.E Bool := do
   Lms.verifyLiveness p identity deployment party attachment link period block (← Lms.HssSignature.decode p sig)
 
-end MemoryChallenger.Attest
+end Attest

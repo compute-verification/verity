@@ -1,6 +1,6 @@
 import Difftest
 import Lms.Sign
-import MemoryChallenger.Attest
+import Attest.Period
 import MemoryChallenger.Protocol
 import MemoryChallenger.WipeJudge
 
@@ -10,7 +10,7 @@ import MemoryChallenger.WipeJudge
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
 `MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
-signed message and egress count, and a device's HSS role digests and checks (`Lms.Hss`, `MemoryChallenger.Attest`: the
+signed message and egress count, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
 period tree's root, the period check and the liveness check). `memory-challenger-difftest` serves them
 (`Difftest.serve`). Each verdict's own difftest drives the executable its callers run, `memory-challenger-verdict` and
 `streamed-wipe-verdict`.

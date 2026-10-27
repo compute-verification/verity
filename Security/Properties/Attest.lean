@@ -1,4 +1,4 @@
-import MemoryChallenger.Attest
+import Attest.Period
 import Properties.Pous.MemoryChallenger
 import Definitions.Claims
 import Definitions.Accounting.Assumptions.Parties
@@ -8,7 +8,7 @@ import Definitions.Accounting.Assumptions.Parties
 
 An auditor party (the memory challenger; a network certifier) holds a lower HSS key its device's identity certified for
 it, commits each certification period's records as the leaves of one frame-v3-sha512 tree and signs the root once, and
-signs one liveness record per sampling block (`MemoryChallenger.Attest`, `verity.core.attest`). The records, the root
+signs one liveness record per sampling block (`Attest.Period`, `verity.core.attest`). The records, the root
 and its signature go to the prover only, as witness; a period's proof runs `Attest.check` on them; the liveness records
 are public, checked in the clear (`Attest.checkLiveness`).
 
