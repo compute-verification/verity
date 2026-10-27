@@ -1,4 +1,4 @@
-"""`Q_word_v1{X,W,R=no-recompute}`: every Call's circuit cut into proof units whose committed outputs are at most X bits, or one value
+"""`Q_word_v1{X,W,R=no-recompute}`: every Call's circuit cut into proof blocks whose committed outputs are at most X bits, or one value
 of at most W bits, over values serving commits.
 
 The rule (no recomputes):

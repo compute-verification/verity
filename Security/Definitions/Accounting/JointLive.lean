@@ -21,6 +21,9 @@ Soundness's rulings on the one theorem's form (26 Oct, LEAN-62 and LEAN-64):
   C-Flock's plurality over the strategy's runs (`XplurZC`). The break is no event of the run: it is the probability
   that the subprotocol's finder `B` (`PeriodLive.finder`), built from the strategy, outputs a collision of the hash
   (`Claims.Finder.Pr`), so `ecr/sha-512` (`Claims.ExpectedCR`, stated of a `Claims.Finder`) is asked of `B` only.
+  A subprotocol's error at a strategy is `PeriodLive.error` (`δ` plus its reduction's loss at that probability) or,
+  while its reduction takes its finders' collision resistance as a premise, `condError` (`δ` where the finders meet a
+  quantitative bound, `⊤` elsewhere); either way `δ` may read the strategy's cost.
 
 `E` and `B` are fields of the period, fixed before the strategy is: a statement over `PeriodLive` holds at every `E`
 and `B`, and the statement that instantiates it (the one theorem's vocabulary, `Verity.Vocab`) names them. At an `E`
@@ -118,14 +121,24 @@ noncomputable def error (H : Claims.Msg → Claims.Msg) (a : Audit) (δ : ℝ≥
     (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
   δ + loss (r.collides H a s)
 
-/-- **A subprotocol's per-period guarantee over the causal game**, at hash `H`, certificates `c`, error `δ` and the
-reduction's loss `loss`: at every strategy `s`, the probability over the coins the game draws that subprotocol `a`
-accepts while its claim fails on the extractor's values is at most its error at `s`. -/
-def Sound (H : Claims.Msg → Claims.Msg) (c : Certificates) (a : Audit) (δ : ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞) : Prop :=
+/-- **A subprotocol's per-period guarantee over the causal game**, at certificates `c` and the error `err s` at each
+strategy `s`: at every strategy `s`, the probability over the coins the game draws that subprotocol `a` accepts while
+its claim fails on the extractor's values is at most `err s`. The error is a function of the strategy, as `error` and
+`condError` are: its `δ` may read the strategy's cost, and its finder term the finder built from it. -/
+def Sound (c : Certificates) (a : Audit) (err : Verity.Game.Strategy G → ℝ≥0∞) : Prop :=
   ∀ s : Verity.Game.Strategy G,
-    Verity.Game.prob (fun o => r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤ r.error H a δ loss s
+    Verity.Game.prob (fun o => r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤ err s
 
 end PeriodLive
+
+open Classical in
+/-- **An error conditional on its finders' collision resistance**: `δ s` at a strategy `s` where `P s` holds, `⊤`
+(no bound) elsewhere. With `P s` a quantitative bound on the probability that the finders built from `s` output a
+collision (`Claims.Finder.Pr`), this is the conditional form of the one theorem (the 21:55Z ruling); with `P` true it is
+`δ`. -/
+noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Strategy G → Prop)
+    (δ : Verity.Game.Strategy G → ℝ≥0∞) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
+  if P s then δ s else ⊤
 
 /-- The wipe that opens a server-time block, read off the run: the bits of device memory its fill covers, the memory
 challenger's verdict, and `kept`, the bits of foreign content beyond the committed carried state that the block can
