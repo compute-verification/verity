@@ -139,19 +139,14 @@ the standing rulings stated nowhere else.
     profile.
   - A protocol carries no policy parameter. It surfaces what its draw established (ε at δ), and the model's size is
     public.
-- **One hash: SHA-512 with its whole output, everywhere.**
-  - Commitments are hm96 rows in frame-v3-sha512 trees.
-  - Signatures are hash-based (LMS, n = 64).
-  - BLAKE3 leaves the served path for `archive/`. There are three named exceptions:
-    - Pearl's FP8 scheme, as Pearl defines it.
-    - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
-      bind under the named premise H-μ⁺, the premise ledger's row R1
-      (`note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
-    - ML-KEM-1024, for transport key agreement only (claim `ind-cca/ml-kem-1024`, the `cryptography` dependency;
-      Daniel, 26 Oct 6:42 PM PDT). Only a remote party with no cable to its device uses it, and always combined with
-      the SHA-512 chain key, the session key the XOR of two PRF outputs, so security never drops below hash-only. It
-      never runs on pair links. An onsite device holds an imprint key instead: a shared secret installed over the cable
-      once per auditor device, then a SHA-512 ratchet (`verity.ml.crypto.transport`).
+- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees,
+  signatures are hash-based (LMS, n = 64), and BLAKE3 leaves the served path for `archive/`. Three named exceptions:
+  - Pearl's FP8 scheme, as Pearl defines it.
+  - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They bind
+    under the named premise H-μ⁺, the premise ledger's row R1 (`note:20261016T0219Z-report-premise-ledger`), not yet
+    in a lock.
+  - ML-KEM-1024, for a cableless remote party's transport only, its key always XORed with a SHA-512 one (never below
+    hash-only), never on pair links (`ind-cca/ml-kem-1024`; Daniel, 26 Oct).
 - **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
@@ -233,9 +228,9 @@ An agent VM does no work beyond editing (Daniel, 18 Oct): it is 16 GB, shared by
 out-of-memory kill takes all of them down. Locally, run only git (`git merge-tree` included), reading and editing,
 messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
-remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
-60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots, or in vy-nebius-cpu-1's `research`
-pool when it starts sooner there (`research/auto.py`): every suite (`suites.py`),
+remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the
+cluster queue as an `agent-test` job (its defaults in `research --help`), outside the check slots, or in a `research` pool
+of `research/auto.py`'s `SPILL` when one starts sooner: every suite (`suites.py`),
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
@@ -496,8 +491,6 @@ over and archived as `infra/cursor/README.md` says.
   `environment: "cloud"`; Daniel's ruling, 18 Oct 10:20 AM PDT) or as a detached `research run`. A local subagent is only
   for a short read-only lookup. A coordinator's foreground local Task is refused (#2510), and heavy work never runs on an
   agent VM (the shell hook refuses it).
-- **No step waits long.** No tool call blocks for more than about 20 minutes: launch detached, end the step, and check
-  back on the run.
 - **Workers restart from notes.** Each brief asks for a checkpoint note before long work and every 3 to 4 hours, and
   words red-team work neutrally. A worker resumed twice, or whose base branch was deleted, is relaunched fresh from its
   last note.
