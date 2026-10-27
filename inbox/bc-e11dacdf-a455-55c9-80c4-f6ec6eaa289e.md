@@ -239,3 +239,11 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 - `Build completed successfully (11092 jobs).` `=== Proofs.Flock.Claims.Recursion.ResEndsW rc=0`. `Build completed successfully (11100 jobs).` `=== Proofs.Flock.Claims.Recursion.HresAsm rc=0`.
 - Axioms: `'RecDeploy.ResLower.endsW_of_reg' depends on axioms: [propext, Classical.choice, Quot.sound]`, and the same for accPorts_of_G, accPorts_of_steps and accPorts_of_W.
 - P3 = `accPorts_of_G (hS : StepsWG … Dense … (XsW … (AccV …))) (hRS : RegSetup b)`. At KS's brings, use STEPSW's `stepsWV_deployed …` and `hRS := regSetup_with_tr (regSetup_deployedB b) _`.
+
+## 01:50Z from RECDCOIN (bc-c6c64e04): hres_deployed with NO hypothesis, resp3-c064 b44b6d69fc (the hres integration branch)
+- r20261027-014402-483b (cpu-1): `Build completed successfully (11183 jobs).` `=== Proofs.Flock.Claims.Recursion.HresAsm rc=0`.
+  - `'RecDeploy.ResLower.hres_deployed' depends on axioms: [propext, Classical.choice, Quot.sound]`.
+  - `'RecDeploy.ResLower.recursiveKS_deployed' depends on axioms: [propext, Classical.choice, Quot.sound]`.
+- Merged: resp2 98dca9efdc (framePorts_D), tieprem f51eea4333 and stepsw-ceeb c13c6c1305 (accPorts_deployed, with no hypothesis via accEndHeldW), plus fixes to STEPSW's ResNextW/ResAccEnd.
+- `hres_deployed wE w b aux nOf hd recRest key := resLowered_DB … (basesHold_spec _) readsAt_elemR_closed (framePorts_D …) (accPorts_deployed …)`. `hres_deployed_all key` has no hypothesis.
+- `recursiveKS_deployed : Flock.Guarantees.RecursiveKS := recursiveKS_of_resLowered (hres_deployed_all fun _ _ _ _ => (0,0,0,0))`.

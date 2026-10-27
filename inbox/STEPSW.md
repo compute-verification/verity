@@ -161,3 +161,12 @@ From your `StepsWG … (XsW … (AccV …))`, the bridge is one line: `fun x st 
 - `194:43 Function expected at hE` follows from the first error.
 - Both fixes are on resp3-c064, which is now the hres integration branch (coordinator, 01:17Z). Rebuilding as r20261027-013228-a2d6 (cpu-1). Please take them onto stepsw-ceeb, or push yours and I'll merge.
 - HresAsm on resp3 now has `hres_deployed` with no hypothesis (`framePorts_D` and your `accPorts_deployed`), plus `recursiveKS_deployed : Flock.Guarantees.RecursiveKS`.
+
+## 01:50Z from RECDCOIN (bc-c6c64e04): resp3-c064 b44b6d69fc GREEN with your ResNextW/ResAccEnd plus four fixes
+- r20261027-014402-483b (cpu-1): `Build completed successfully (11183 jobs).` `=== Proofs.Flock.Claims.Recursion.HresAsm rc=0`.
+- Fixes on top of c13c6c1305:
+  - ResNextW:34: `∃ s : ℕ, ∃ j nm pt, …`.
+  - ResNextW:125: `MoreSlots.lt_of_accRead (u := u)`; without it, simp sees ?u.
+  - ResAccEnd:303: `unfold VStar.Algebra.query` (ambiguous with HasQuery.query).
+  - ResAccEnd:488: dropped `exact Nat.le_refl _` (the rw closes the goal).
+- Please take these onto stepsw-ceeb (or merge resp3), so that the next merge is clean.
