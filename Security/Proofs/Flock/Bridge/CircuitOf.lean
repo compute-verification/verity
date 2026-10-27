@@ -13,7 +13,7 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 `partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
-  (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
+  (`FlockSoundness.Audit.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
   `Verity.Partition.wrong_ofAudit` says the wrong units are the game's, so every statement about the game's wrong units
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
@@ -28,42 +28,23 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
   units and partition as one about `circuitOf`, `n` and `partsOf` at the parse.
 -/
 
-namespace Flock.Bridge
-
-open Claims.Sampling
-
-/-! ## A game circuit as core's -/
-
-theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bool) :
-    (coreOp o).apply v = o.apply v := by
-  cases o <;> rfl
-
-/-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : FlockSoundness.Audit.Circuit) : Verity.Boolean.Circuit where
-  N := C.N
-  op g := coreOp (C.op g)
-  topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
-  outputs := C.outputs
-
-end Flock.Bridge
-
 namespace Verity
 
-open Flock.Bridge (coreOp coreBool args_coreOp isInput_coreOp apply_coreOp)
+/-! ## A game circuit as core's -/
 
 section OfAudit
 
 variable {C : FlockSoundness.Audit.Circuit}
 
 /-- `Circuit.ofAudit` is the Boolean profile's circuit of the game circuit. -/
-theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircuit := rfl
+theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = C.toCircuit := rfl
 
-theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
-  congrArg List.toFinset (args_coreOp _)
+theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset := rfl
+
+theorem Circuit.ofAudit_outputs : (Circuit.ofAudit C).outputs = C.outputs := rfl
 
 theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
-    (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
-  congrArg BitVec.ofBool (apply_coreOp _ _)
+    (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) := rfl
 
 /-- A transcript of bits as core's. -/
 def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
@@ -76,7 +57,8 @@ theorem Partition.mem_committed_ofAudit (g : Fin C.N) :
     g ∈ (Partition.ofAudit P).committed ↔ g ∈ P.committed := by
   classical
   simp only [Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
-    Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, Partition.ofAudit_unit]
+    Finset.mem_univ, true_and, Circuit.ofAudit_isInput, Circuit.ofAudit_reads, Circuit.ofAudit_outputs,
+    List.mem_toFinset, Partition.ofAudit_unit]
 
 theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
     (Partition.ofAudit P).localEval (Circuit.ofBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
