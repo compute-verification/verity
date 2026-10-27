@@ -50,7 +50,7 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
-    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-unit cut, which no verifier reads
+    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
     # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
@@ -100,11 +100,10 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), the differential test of the Lean against
-#: its Python (``verity_difftest``, which their tests import, on Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is
-#: run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
+#: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
+#: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "core/difftest", "core/protocols/pous/check")
+SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
