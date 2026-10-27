@@ -12,11 +12,9 @@
 # seed`, as prof.sh), compile caches off, and checked against them after the run (`served-pin check` -> $OUT/pin_check.txt):
 # by curve.py's rules a compiled ratio counts only when the winners are the Build's.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --timeout 1h \
-#     --env VERITY_BENCH_VENV=/workspace/jobs/venv312 --env SPEC=llama31-8b-fp8-rtx-served-arm \
-#     --env SEED_ARGS="--arms stock-fp8,stock-fp8@compiled,commit-rows-4k-eager \
-#       --arm-module served_commit.served_arm:EAGER_ROWS_4K_FP8" -- \
-#     /workspace/pouw/infra/bin/gpu-lease 1 --wait --max-min 60 --mem-gb 64 -- bash benchmarks/served_commit/served_arm.sh
+# From the source tree's root on one RTX PRO 6000 (VERITY_BENCH_VENV names the pinned-vLLM environment, as run.sh's):
+#   SPEC=llama31-8b-fp8-rtx-served-arm SEED_ARGS="--arms stock-fp8,stock-fp8@compiled,commit-rows-4k-eager \
+#     --arm-module served_commit.served_arm:EAGER_ROWS_4K_FP8" bash benchmarks/served_commit/served_arm.sh
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 d=$(mktemp -d /tmp/served-arm.XXXXXX)
