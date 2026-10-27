@@ -50,8 +50,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
-  (`examples/README.md`), among them `one_stage/`, the one-stage audit end to end.
+- `examples/`: one directory per example: its workload, placement, commands and level of doneness; a milestone is a set of
+  (example, level) pairs, which top keeps (`examples/README.md`). Among them is `one_stage/`, the one-stage audit end to
+  end.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
   - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes.
