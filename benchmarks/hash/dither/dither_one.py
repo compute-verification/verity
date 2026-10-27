@@ -36,7 +36,8 @@ the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is t
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
 engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
-lane's rendering of CA's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
+harness's rendering of the credit's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not
+`forms.FORM_A`.
 """
 from __future__ import annotations
 
@@ -51,7 +52,9 @@ import dither_fused as DF
 import forms as F
 from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
+from verity_config.settings import of
 
+settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
 # the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
@@ -64,14 +67,14 @@ PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DI
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
-# a form per call: (wide, narrow), wide where the call's column blocks outnumber the SMs (a second block an SM pays only
+# a form per call: (wide, narrow), wide where the call's column tiles outnumber the SMs (a second block an SM pays only
 # past one wave: qkv and gate_up at decode), narrow elsewhere
 MIX_FORMS = {"mix": ("block2", "split")}
 # "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
-# ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
+# the per-call challenger round, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
-# "1" (dither_so's -aom/-aomn without -ov; CA's ruling of 23 Oct, core's form not yet landed): one A table a K a step,
+# "1" (dither_so's -aom/-aomn without -ov; the credit's form, not yet in core): one A table a K a step,
 # a/<K>@<s> (`a_step_fields`), its rows every call of that K's slots in call order (call c's slot r at row c T + r: the K
 # slots' buffer and their scales' rows of `scale_all`), built once after the forward; the a-step leaf of call w is the
 # root of its K's table.  Past K = 4096 a row is n = `weights.chunks` (K) leaves (SPLITK): leaf n i + c its codes
@@ -165,10 +168,10 @@ class Window:
                           lab=("r/", f"/{w}")))
         self.rset = self.c.set(rt)
         self.o = C.CDLL(h1o_path)
-        self.units_form = os.environ.get(UNITS_ENV, "block")
+        self.units_form = settings.get(UNITS_ENV)
         if self.units_form not in UNITS_FORMS and self.units_form not in MIX_FORMS:
             raise RuntimeError(f"{UNITS_ENV}={self.units_form}: one of {sorted(UNITS_FORMS) + sorted(MIX_FORMS)}")
-        self.peel = os.environ.get(PEEL_ENV) == "1"
+        self.peel = settings.get(PEEL_ENV)
         if self.peel and self.units_form == "warp":
             raise RuntimeError(f"{PEEL_ENV}=1: the warp form serves the dithered product only")
         self.captures = CAPTURES + (("fault_xa",) if self.peel else ())
@@ -191,7 +194,7 @@ class Window:
         if self.o.h1o_init():
             raise RuntimeError("h1o_init refused")
         self.percall = None
-        pc = os.environ.get(PERCALL_ENV)
+        pc = settings.get(PERCALL_ENV)
         if pc:
             ns = [0] if pc == "0" else [int(x) for x in open(pc).read().split()]
             if self.o.h1o_percall_init(L, (C.c_longlong * len(ns))(*ns), len(ns)):
@@ -240,7 +243,7 @@ class Window:
         self.tree_streams: tuple | None = None
         # called on the serving stream after the z tables and before the step trees (an arm's leaves of its own)
         self.before_mid: list = []
-        self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
+        self.nvtx = settings.DITHER_NSYS == "prof"
         self.phase_open = False
         self._epoch()
 
@@ -513,7 +516,7 @@ def _window(dev) -> Window:
     return WIN
 
 
-# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: #2684's trace counts an op without a
+# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: the credit gate's trace counts an op without a
 # Python definition as one GEMM, and its two fresh results, z and y, as written by it.
 _LIB = torch.library.Library(LIB, "DEF")
 _LIB.define("one_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int idx) -> (Tensor, Tensor)")
@@ -541,7 +544,7 @@ CG = None
 
 
 def credit_doc() -> dict:
-    """#2684's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
+    """The credit gate's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
     return {"calls": CREDIT.get("calls", 0), "credited": CREDIT.get("credited", 0),
             "reasons": dict(CREDIT.get("reasons", {})), "kernels": dict(CREDIT.get("kernels", {})),
             "sample": CREDIT.get("sample", [])}
@@ -549,7 +552,7 @@ def credit_doc() -> dict:
 
 def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = False, credit: str | None = None) -> None:
     """Every int8-exact linear through ``dither1::one_mm`` (call before the engine is built, in its process).  ``credit``,
-    the path of #2684's `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
+    the path of `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
     op's z) is tallied in `CREDIT` (an eager engine: a compiled one never runs `apply` per call)."""
     from collections import Counter
 
@@ -609,8 +612,8 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
 
 
 def hook(llm) -> Window:
-    from verity_vllm.engine import engine_profile as prof
-    runner = prof.get_model_runner(llm)
+    from verity_vllm.engine import handle
+    runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 
@@ -727,7 +730,7 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 def a_chunks(k: int) -> int:
     """A_STEP_ENV's leaves a row of K = k: `weights.chunks` (k), or 1 under A_CHUNKS_ENV=0."""
     from verity.core.protocols.pouw import weights as WT
-    return 1 if os.environ.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
+    return 1 if settings.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
 
 
 def a_step_fields(win: Window, k: int, s: int) -> dict:
@@ -790,9 +793,9 @@ def h1v3_itself(units: list[dict]) -> dict:
     import subprocess
     import sys
     import tempfile
-    tree = os.environ.get("DITHER_H1V3_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    tree = settings.DITHER_H1V3_TREE or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))))
-    sha = os.environ.get("DITHER_H1V3_SHA") or os.environ.get("RESEARCH_SOURCE_SHA") or "source"
+    sha = settings.DITHER_H1V3_SHA or settings.RESEARCH_SOURCE_SHA or "source"
     with tempfile.TemporaryDirectory() as td:
         src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
         with open(src, "w") as f:
@@ -835,7 +838,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     # commitments against commit.py
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
-    a_cpu, s_cpu, z_cpu, cm = {}, {}, {}, []
+    a_cpu, s_cpu, z_cpu = {}, {}, {}
     for w in range(L):
         n, k = win.nk[w]
         q, sc = g["a"][w].cpu().numpy(), g["sa"][w].cpu().numpy()
@@ -952,7 +955,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                  "density": float(cnt.sum() / ent.sum()),
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
     # the activation wrap's entries (A = 127 and b = 1) each call's live units hold, by h1o_ref's own noise, and the
-    # A = 127 entries of the call's live rows (each such entry meets every unit of its row block)
+    # A = 127 entries of the call's live rows (each such entry meets every unit of its row tile)
     a127 = [int((g["a"][w][:m] == 127).sum()) for w in range(L)]
     doc["xa"] = {"entries": int(cnt[:, 2].sum()), "by_call": cnt[:, 2].tolist(), "calls_without": int((cnt[:, 2] == 0).sum()),
                  "min": int(cnt[:, 2].min()), "max": int(cnt[:, 2].max()),
@@ -977,7 +980,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
             eq += int(torch.equal(yt, yk))
             rel.append(float((yk - yt).norm() / yt.norm().clamp_min(1e-30)))
         doc["y_vs_today"] = {"calls_equal": eq, "rel_l2_median": float(np.median(rel)), "rel_l2_max": float(np.max(rel))}
-    # CA's definition on the CPU, a few units of row block 0
+    # CA's definition on the CPU, a few units of row tile 0
     units_doc, h1v3_in, kernel_out = [], [], []
     if which == "gate":
         rng = np.random.default_rng(s)

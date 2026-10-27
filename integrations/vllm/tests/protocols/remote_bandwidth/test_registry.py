@@ -10,7 +10,7 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, RemoteBandwidthReceipt, Store, TagReceipt, chain
+from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, KindReceipt, RemoteBandwidthReceipt, Store, chain
 from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
 WORD = 64
@@ -406,14 +406,27 @@ def test_openings_of_subtrees_and_the_tail_verify_as_the_drivers():
                               CODEC.decode, None)
 
 
-def test_identity_codec_and_tag_receipts():
-    from verity.core.protocols.bandwidth import tags
-    s = Store()
-    raw = np.arange(2 * BLOCK, dtype=np.uint8)
+@pytest.mark.parametrize("kind", rb.KINDS)
+def test_identity_codec_and_the_drivers_receipt_kinds_of_the_block_alone(kind):
+    """`KindReceipt` (the binder's default without tiles, at sketch-sha512): a receipt is `rb.receipter`'s of the block
+    under the whole 64-byte pass seed, a z it is handed left out; the pass's root is the driver's (`rb.tree`), and an
+    opening verifies."""
+    s, rec = Store(salt_key=bytes(32)), KindReceipt(kind)
+    raw = np.random.default_rng(3).integers(0, 256, 3 * rb.BLOCK_BYTES, np.uint8)
     b = ArrayBacking(raw.copy())
-    rec = TagReceipt(tags.get("ro-blake3/v1"))
-    s.register("w", "hbm", "weights", b, block_bytes=BLOCK, codec=IDENTITY, receipt=rec, source="arange")
-    assert b.read(0, b.nbytes) == raw.tobytes()
-    _, w = _window(s, SIGMA, [((), None)])
+    s.register("w", "hbm", "weights", b, block_bytes=rb.BLOCK_BYTES, codec=IDENTITY, receipt=rec, source="rng")
+    assert b.read(0, b.nbytes) == raw.tobytes() and s.region("w").receipt == kind
+    (pc,), _ = _window(s, SIGMA, [((), None)])
+    block = raw[rb.BLOCK_BYTES:2 * rb.BLOCK_BYTES].tobytes()
+    want = rb.receipter(kind, pc.seed)(1, block)
+    assert len(pc.seed) == 64 and len(want) == rb.DIGEST_BYTES == rec.receipt_bytes
+    assert rec.keyed(pc.seed)(1, block, b"z") == want
+    assert pc.root == _driver_root(s, {"w": b}, pc, rec)
     o = s.open([(0, 1)])[0]
-    assert verify_opening(s.region("w"), w.passes[0], s.plan(0), o, rec, IDENTITY.decode, raw.tobytes()[BLOCK:])
+    assert o.receipt == want
+    assert verify_opening(s.region("w"), pc, s.plan(0), o, rec, IDENTITY.decode, block)
+
+
+def test_a_receipt_kind_the_driver_does_not_name_is_refused():
+    with pytest.raises(ValueError, match="a receipt kind is one of"):
+        KindReceipt("ro-blake3/v1")

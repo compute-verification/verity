@@ -11,7 +11,8 @@ import pytest
 
 from verity_vllm import glue as G
 from verity_vllm.config import UsageError
-from verity_vllm.engine.profiles import dense_generic, generic
+from verity_vllm.engine.profiles import dense_generic
+from verity_vllm.observe.fold.profiles import generic
 
 GLM = "zai-org/GLM-5.3"
 DSV4 = "deepseek-ai/DeepSeek-V4-Pro"

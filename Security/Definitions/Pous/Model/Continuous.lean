@@ -5,10 +5,10 @@ import Definitions.Pous.Model.Audit
 /-!
 # The continuous audit: a memory challenger, and a responder that runs on its clock
 
-Added on 3 Oct 2026, with `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`; the arrivals and the
-memory at every time (the last section) with `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed. It replaces
-PR #896's round-structured draft, which assumed three requirements on the protocol (no pipelining, a hard deadline,
-every answer past `Δ` counted late). Here the memory challenger is explicit and enforces each rule. The responder may
+Its guarantees are `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`, and, over the arrivals and the
+memory at every time (the last section), `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed. A round-structured
+model would have to assume three requirements on the protocol (no pipelining, a hard deadline, every answer past `Δ`
+counted late). Here the memory challenger is explicit and enforces each rule. The responder may
 try to break any of them, and no statement takes a hypothesis about its timing.
 
 **Time.** One unit is one round of parallel queries to the primitive (`Prog.depth`), as in the sequential audit. `D`

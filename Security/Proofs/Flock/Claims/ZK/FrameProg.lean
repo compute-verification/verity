@@ -3,9 +3,9 @@ import Proofs.Flock.Claims.ZK.FrameSched
 import Proofs.Flock.Claims.ZK.FrameState
 
 /-!
-# The loop's frame state is the deployed frame's check's (Stage B, `ProgChecks`)
+# The loop's frame state is the deployed frame's check's (`ProgChecks`)
 
-Toward `ofLoop_progChecks` (`note:20261022T0001Z-report-zkfin-stageb`): at a scheduled round the loop's frame state after
+Toward `ofLoop_progChecks`: at a scheduled round the loop's frame state after
 it is the placeholder frame's check of the placeholder's scheduled round against itself, and the deployed frame's check
 of any device round, at the tape's draws and its scheduled round, leaves the same state but for `stopped`:
 

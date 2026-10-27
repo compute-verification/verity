@@ -6,6 +6,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
 from research.clone import RECORD_DRIVER
 
 from . import _ratchet as R
@@ -36,6 +37,49 @@ def test_two_prs_that_each_retire_a_neighbouring_entry_merge_and_an_entry_change
     assert why == ["verity_vllm/b.py [module] <module>: lines: changed on both sides, differently"]
     _, why = MA.merge(base, _doc(A, C, D), _doc(A, _entry("verity_vllm/b.py", 800), C, D))
     assert why == ["verity_vllm/b.py [module] <module>: lines: removed on one side and changed on the other"]
+
+
+def _pair(file: str, rule: str, count: int) -> dict:
+    return {"file": file, "rule": rule, "count": count}
+
+
+def _ruff_doc(*entries: dict) -> dict:
+    return {"rule": "ruff (ruff.toml)", "entries": list(entries)}
+
+
+def test_the_repositorys_ruff_list_merges_per_file_and_rule_and_a_count_changed_two_ways_takes_the_larger():
+    """Its counts may run above what a tree finds, so the larger of two changes allows what either side's tree finds: one
+    side fixed a finding (5 -> 4) and the other two (5 -> 3); one moved a file's entry and the other fixed one there."""
+    e, f, g = _pair("tools/e.py", "E731", 5), _pair("tools/f.py", "F401", 2), _pair("tools/g.py", "UP017", 1)
+    merged, why = MA.merge(_ruff_doc(e, f, g), _ruff_doc(e, g), _ruff_doc(e, f))
+    assert why == [] and merged == _ruff_doc(e)
+    merged, why = MA.merge(_ruff_doc(e, f), _ruff_doc({**e, "count": 4}, f), _ruff_doc({**e, "count": 3}, f))
+    assert why == [] and merged == _ruff_doc({**e, "count": 4}, f)
+    moved = _pair("tools/sub/e.py", "E731", 5)
+    merged, why = MA.merge(_ruff_doc(e, f), _ruff_doc(f, moved), _ruff_doc({**e, "count": 3}, f))
+    assert why == [] and merged == _ruff_doc(f, moved, {**e, "count": 3})
+    assert MA.dump(merged).splitlines()[3] == '    {"file": "tools/f.py", "rule": "F401", "count": 2},'
+    with pytest.raises(ValueError, match="ours: malformed entry"):
+        MA.merge(_ruff_doc(e), _ruff_doc({**e, "symbol": "s"}), _ruff_doc(e))
+
+
+def _env_doc(*entries: dict) -> dict:
+    return {"rule": "direct environment reads (tests/lint/test_repo_env_reads.py)", "entries": list(entries)}
+
+
+def test_the_repositorys_environment_read_list_merges_per_file_and_a_registry_mark_like_any_entry():
+    """Per-file counts merge as the ruff list's do (a count changed two ways takes the larger); a settings registry mark
+    added on one side is kept, and one removed on one side and kept on the other is removed."""
+    a, b = {"file": "tools/a.py", "count": 3}, {"file": "tools/b.py", "count": 1}
+    mark = {"file": "tools/x/config.py", "registry": True}
+    merged, why = MA.merge(_env_doc(a, b), _env_doc({**a, "count": 2}, b, mark), _env_doc({**a, "count": 1}))
+    assert why == [] and merged == _env_doc({**a, "count": 2}, mark)
+    merged, why = MA.merge(_env_doc(a, mark), _env_doc(a), _env_doc(a, mark))
+    assert why == [] and merged == _env_doc(a)
+    assert MA.dump(_env_doc(a, mark)).splitlines()[4] == '    {"file": "tools/x/config.py", "registry": true}'
+    for bad in ({"file": "tools/a.py", "registry": False}, {"file": "tools/a.py", "count": True}):
+        with pytest.raises(ValueError, match="ours: malformed entry"):
+            MA.merge(_env_doc(a), _env_doc(bad), _env_doc(a))
 
 
 def test_the_keep_map_merges_by_module():

@@ -476,9 +476,8 @@ def _child(e: Entry, out: Path) -> None:
         os._exit(code)
 
 
-#: the GiB a binding's process is counted at in `built_apart` when `heavy.json` (`cache.HEAVY`) lists none for it: 482 of the 543
-#: grew less than 1.5 GiB past the process they were forked from, and it lists the 19 that grew past 3 GiB, by 3.2 to 23.9 GiB
-#: (r20261025-205455-6022)
+#: the GiB a binding's process is counted at in `built_apart` when `heavy.json` (`cache.HEAVY`) lists none for it: most bindings
+#: grow less than 1.5 GiB past the process they were forked from, and it lists those that grow past 3 GiB
 APART_GB = 2.0
 
 

@@ -1,17 +1,20 @@
 """N2, the egress side of the step-indexed scan (note:network-accounting/20261025T0830Z-report-net68-scan-router; the
 cells as note:network-accounting/20261025T0720Z-draft-n2-egress-encoder renders them): each egress bucket's cells
-computed from the scan's slot state before it and held, inside the unit, to the warden's registered row for that
-bucket. Nothing here is in a Spec yet.
+computed, as the unit's gates, from the scan's slot state, the generator form. Nothing here is in a Spec yet.
 
-**One unit a link ℓ and bucket t** (`EgressBucket`). It reads two rows, both registered reads of input ports (which
-`Flock.Registered.checkPort` accepts): ``state``, the egress view of the slot state S_t the scan's ingress step t
-wrote, and ``row``, the warden's egress row t of link ℓ (`warden_rows.bucket_port`: unit `reads_from + t` reads row
-t), whose bit 8k + i is bit i of byte k. Its one output is a u16 verdict whose bit 0 is 1 (`ACCEPT`) exactly when the
-cells the state renders are the row bit for bit, and the other 15 bits are 0; a proof unit's outputs are at most 16
-bits. Every switch is computed from the state, none is witness, so the unit adds nothing to c, and bucket t's egress
-reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no egress gate of step t depends on an
-ingress gate of a step t' > t) holds by construction. It reads S_t rather than S_{t−1} because the warden's egress
-row of a connection's admission bucket already holds its lane, a `PAD` on its q.
+**One unit a link ℓ and bucket t** (`EgressBucket`). It reads one row, ``state``, the egress view of the slot state
+S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t), and computes the row of R B-byte
+cells the state renders. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when the state renders a
+row and whose other 15 bits are 0, and ``o1``, the row, bit 8k + i bit i of byte k. The row is gates of the circuit,
+never an input: the unit's statement commits o1 under the salt of the warden's egress row t of link ℓ and registers it
+as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output statement's output row, the verifier's
+PROTOCOL.md §16.13; `warden_rows.bucket_port`: unit `reads_from + t` reads row t), so the proof opens the warden's
+registered row only when the row the state renders is it, bit for bit. Only o0 is public: a unit proof's public output
+is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
+nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
+egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
+reads S_t rather than S_{t−1} because the warden's egress row of a connection's admission bucket already holds its
+lane, a `PAD` on its q.
 
 **The state's egress view** (`Shape`'s offsets) is a row of u16 words, bit 16w + i bit i of word w, each field least
 significant bit first: b, the bucket the state is read at (the state step t writes holds b = t), then NR request
@@ -24,15 +27,15 @@ live, q and admitted, the anchored Programs n and the ids (the scan note's §1).
 ⌊n_j / r⌋, ranked by (q, j) as ρ, lane ρ rank ρ's. Slot ρ·r + i of the row is a `PAD` on q_j before admitted_j + D;
 else, with k = (b − admitted_j − D)·r + i, the `DATA` cell of output k's id on q_j for k < n_j, the `END` on q_j for
 k = n_j and a `PAD` on q_j past it. The lanes past the live ones are B zero bytes (a `PAD` on 0). More live slots than
-R / r lanes, or a `DATA` cell of an output k ≥ K, renders no row, and the verdict is 0.
+R / r lanes, or a `DATA` cell of an output k ≥ K, renders no row, and o0 is 0; o1 is then what the gates compute
+(`computed`: the first R / r live slots' lanes, and in such a `DATA` cell the id the mux picks).
 
 **The gates**: one comparison of q a pair of request slots for the ranks; for each slot and cell its output k's id by
 a mux over the slot's K ids, k computed from b and the slot's admitted; each lane's fields the XOR of the slots'
 masked by "of that rank" (the live ranks are distinct, so this is exact and needs no mux); a cell a select of its
-kind, every byte a constant of the kind but q and `DATA`'s ten id characters (`b"%10d" % id`, by double dabble); then
-one AND a row bit for the equality.
+kind, every byte a constant of the kind but q and `DATA`'s ten id characters (`b"%10d" % id`, by double dabble).
 
-    EgressBucket{B, R, r, NR, K, IB, D}(state: Array<Shape.state_words, u16>, row: Array<R·B, Byte>) -> u16
+    EgressBucket{B, R, r, NR, K, IB, D}(state: Array<Shape.state_words, u16>) -> (u16, Array<R·B, Byte>)
 
 Every u16 and u32 is `Array<w, BIT>`, least significant bit first. B is even (a slot is whole u16 words) and at least
 `io_tie.CELL_USED`; r divides R; K < 2^32 − 2; 1 <= IB <= 32; D < 2^32.
@@ -42,8 +45,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import NamedTuple, Sequence
 
-from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, maj, or_reduce
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, add, maj, or_reduce
+from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.io_tie import (CELL_USED, EMPTY, END_ENTRY, HEADER, ID_AT, ID_DIGITS, _eq, _lt,
@@ -51,7 +54,7 @@ from verity.core.protocols.certifier.io_tie import (CELL_USED, EMPTY, END_ENTRY,
 
 BIT, BYTE = HC.BIT, HC.BYTE
 U16 = Array(16, BIT)
-#: the verdict word of a bucket whose row is the one its state renders
+#: o0 of a bucket whose state renders a row
 ACCEPT = 1
 #: a slot's fields' bit offsets in the state: live (a u16), q, admitted and n (u32s), then the K ids
 LIVE, Q, ADMITTED, N, IDS = 0, 16, 48, 80, 112
@@ -190,33 +193,55 @@ def _slots(sh: Shape, state: State) -> list[Slot]:
     return out
 
 
-def rendered(sh: Shape, state: State) -> bytes | None:
-    """The row bucket b's cells are under the state (`bucket_map`'s records rendered: a `PAD` on q for `EMPTY`, the
-    `END` on q, the `DATA` cell of request slot j's output e), or None when it renders none: more live slots than
-    lanes, or a `DATA` record of an output e ≥ K."""
+def _pick(ids: Sequence[int], k: int, K: int) -> int:
+    """The id `_select`'s mux tree picks of K ids at index k: ids[k mod 2^L] for L = (K − 1).bit_length(), 0 when
+    that is K or more."""
+    i = k % (1 << (K - 1).bit_length())
+    return ids[i] if i < K else 0
+
+
+def computed(sh: Shape, state: State) -> tuple[bytes, bool]:
+    """The row `EgressBucket` computes from the state and whether the state renders it: `bucket_map`'s records rendered
+    (a `PAD` on q for `EMPTY`, the `END` on q, the `DATA` cell of request slot j's output k). It renders the row unless
+    more slots are live than lanes (the row's lanes are then the first R / r live slots') or a `DATA` cell is of an
+    output k ≥ K (which holds `_pick`'s id)."""
     slots = _slots(sh, state)
     live = [Request(s.q, s.admitted, s.n) if s.live & 1 else None for s in slots]
-    records, over = bucket_map(_u32("b", state.b), live, sh.R, sh.r, sh.D)
-    if over:
-        return None
-    cells = []
-    for q, j, e in records:
+    b = _u32("b", state.b)
+    records, over = bucket_map(b, live, sh.R, sh.r, sh.D)
+    cells, renders = [], not over
+    for at, (q, j, e) in enumerate(records):
         if e == EMPTY:
             cells.append(pad_cell(sh.B, q))
-        elif e == END_ENTRY:
+            continue
+        s = slots[j]
+        # from k, not e: a `DATA` record of an output k = `END_ENTRY` < n reads as the `END`
+        k = (b - s.admitted - sh.D) * sh.r + at % sh.r
+        if k == s.n:
             cells.append(end_cell(q, sh.B))
-        elif e >= sh.K:
-            return None
         else:
-            cells.append(data_cell(slots[j].ids[e], q, sh.B))
-    return b"".join(cells)
+            renders = renders and k < sh.K
+            cells.append(data_cell(_pick(s.ids, k, sh.K), q, sh.B))
+    return b"".join(cells), renders
 
 
-def verdict(sh: Shape, state: State, row: bytes) -> int:
-    """`EgressBucket`'s verdict word: `ACCEPT` when the row is the one the state renders, else 0."""
-    if len(row) != sh.R * sh.B:
-        raise ValueError(f"a row is R·B = {sh.R * sh.B} bytes, not {len(row)}")
-    return ACCEPT if rendered(sh, state) == row else 0
+def rendered(sh: Shape, state: State) -> bytes | None:
+    """The row bucket b's cells are under the state, or None when it renders none (`computed`)."""
+    row, renders = computed(sh, state)
+    return row if renders else None
+
+
+def outputs(sh: Shape, state: State) -> tuple[int, bytes]:
+    """`EgressBucket`'s outputs: o0, `ACCEPT` when the state renders a row and 0 otherwise, and o1, the row it
+    computes."""
+    row, renders = computed(sh, state)
+    return (ACCEPT if renders else 0), row
+
+
+def output_bits(sh: Shape, state: State) -> list[int]:
+    """`EgressBucket`'s outputs as its leaves' bits: o0's 16, then the row's, bit 8k + i bit i of byte k."""
+    word, row = outputs(sh, state)
+    return HC._int_bits(word, 16) + [x >> i & 1 for x in row for i in range(8)]
 
 
 def state_bits(sh: Shape, state: State) -> list[int]:
@@ -235,18 +260,16 @@ def state_words(sh: Shape, state: State) -> list[int]:
     return [sum(b << i for i, b in enumerate(bits[w:w + 16])) for w in range(0, len(bits), 16)]
 
 
-def bucket_arguments(sh: Shape, state: State, row: bytes) -> list[list[int]]:
-    """`EgressBucket`'s arguments in its signature's order, each its leaves' bits: the state's row and the warden's."""
-    if len(row) != sh.R * sh.B:
-        raise ValueError(f"a row is R·B = {sh.R * sh.B} bytes, not {len(row)}")
-    return [state_bits(sh, state), [x >> i & 1 for x in row for i in range(8)]]
+def bucket_arguments(sh: Shape, state: State) -> list[list[int]]:
+    """`EgressBucket`'s arguments in its signature's order, each its leaves' bits: the state's row."""
+    return [state_bits(sh, state)]
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
 
 def _sig_bucket(S):
     sh = _shape(S)
-    return (("state", Array(sh.state_words, U16)), ("row", Array(sh.R * sh.B, BYTE))), U16
+    return (("state", Array(sh.state_words, U16)),), Tuple(U16, Array(sh.R * sh.B, BYTE))
 
 
 def _const(c: int, w: int) -> list:
@@ -315,8 +338,7 @@ def _xor(xs: Sequence):
 def _build_bucket(C, S, *els):
     sh = _shape(S)
     r, NR, K, IB, D, B = sh.r, sh.NR, sh.K, sh.IB, sh.D, sh.B
-    sb = [w[i] for w in els[:sh.state_words] for i in range(16)]
-    row = els[sh.state_words:]
+    sb = [w[i] for w in els for i in range(16)]
     b = sb[:32]
     W, w = 32 + r.bit_length(), max(1, (NR - 1).bit_length())
     q, live, cells = [], [], []
@@ -358,7 +380,7 @@ def _build_bucket(C, S, *els):
     tmpl = (pad_cell(B), data_cell(0, 0, B), end_cell(0, B))
     digit_at = range(ID_AT, ID_AT + ID_DIGITS)
     assert all(tmpl[0][k] == tmpl[2][k] == 0 for k in digit_at) and HEADER.size == 9
-    eqs = []
+    out = []
     for rho in range(lanes):
         sel = [C.AND(live[j], _eq(C, rank[j], _const(rho, w))) if rho < NR else ZERO for j in range(NR)]
         sq = [_xor(C.AND(s, v[t]) for s, v in zip(sel, q)) for t in range(32)]
@@ -368,7 +390,6 @@ def _build_bucket(C, S, *els):
             bad.append(past)
             pad = (data ^ end).inv()
             chars = _id_chars(C, tid + [ZERO] * (32 - IB))
-            got = row[(rho * r + i) * B:(rho * r + i + 1) * B]
             for k in range(B):
                 if 1 <= k <= 4:
                     # q is u32 big-endian at bytes 1 … 4: byte k's bit t is q's bit 8·(4 − k) + t
@@ -377,21 +398,22 @@ def _build_bucket(C, S, *els):
                     byte = [C.AND(data, c) for c in chars[k - ID_AT]]
                 else:
                     byte = [_xor(kind for kind, t in zip((pad, data, end), tmpl) if t[k] >> u & 1) for u in range(8)]
-                eqs += [(v ^ g).inv() for v, g in zip(byte, got[k])]
-    ok = and_reduce(C, eqs + [or_reduce(C, bad).inv()])
-    return [ok] + [ZERO] * 15
+                out.append(byte)
+    return [[or_reduce(C, bad).inv()] + [ZERO] * 15] + out
 
 
 EgressBucket = _part(
     "EgressBucket", ("B", "R", "r", "NR", "K", "IB", "D"), _sig_bucket, _build_bucket,
-    "the verdict of one egress bucket: 1 in bit 0 exactly when its row of R B-byte cells is the one its state "
-    "renders. The state, b then NR request slots of (live u16, q, admitted, n u32s, K ids of IB bits) each padded to "
-    "whole u16s: the live slots at b, bit 0 of live 1, admitted <= b <= admitted + D + floor(n / r), ranked by (q, j) "
-    "as rho; slot rho·r + i a PAD on q before admitted + D, else with k = (b − admitted − D)·r + i the DATA cell of id "
-    "k for k < n, the END for k = n, a PAD past it; the lanes past the live ones B zero bytes; no row when more than "
-    "R / r slots are live or a DATA cell has k >= K. u16 and u32 LSB first, the row's bit 8k + i bit i of byte k")
+    "one egress bucket's row of R B-byte cells computed from its state, and 1 in bit 0 of the first output exactly "
+    "when the state renders it. The state, b then NR request slots of (live u16, q, admitted, n u32s, K ids of IB "
+    "bits) each padded to whole u16s: the live slots at b, bit 0 of live 1, admitted <= b <= admitted + D + "
+    "floor(n / r), ranked by (q, j) as rho; slot rho·r + i a PAD on q before admitted + D, else with "
+    "k = (b − admitted − D)·r + i the DATA cell of id k for k < n, the END for k = n, a PAD past it; the lanes past "
+    "the live ones B zero bytes; no row rendered when more than R / r slots are live (the first R / r's lanes) or a "
+    "DATA cell has k >= K (the id at k mod 2^bitlen(K − 1), 0 past K). u16 and u32 LSB first, the row's bit 8k + i "
+    "bit i of byte k")
 
 
 __all__ = ["ACCEPT", "ADMITTED", "EgressBucket", "FREE", "IDS", "LIVE", "N", "Q", "Record", "Request", "Shape",
-           "Slot", "State", "UNHELD", "bucket_arguments", "bucket_map", "rendered", "state_bits", "state_words",
-           "verdict"]
+           "Slot", "State", "UNHELD", "bucket_arguments", "bucket_map", "computed", "output_bits", "outputs",
+           "rendered", "state_bits", "state_words"]

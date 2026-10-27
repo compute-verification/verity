@@ -14,7 +14,7 @@ FA2_KERNEL_SOURCE = ("vllm-project/flash-attention 506341a143fcabd4bb79052a7605a
 
 
 def fa2_kernel_geometry(attention_consts: dict, D: int) -> dict:
-    """[E7 D54 2026-09-13] The block geometry of the attention kernel a SEMANTIC PROFILE declares, at head dim ``D``.
+    """The block geometry of the attention kernel a SEMANTIC PROFILE declares, at head dim ``D``.
 
     ``attention_consts`` is the profile's attention node ``consts`` (`manifests/semantic-profiles/*.json`,
     `layer_nodes[op_type == "attention"].consts`: `backend`, `fa_version`, `num_splits`, `head_size`, ...) -- the pinned

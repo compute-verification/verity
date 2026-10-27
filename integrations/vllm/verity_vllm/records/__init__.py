@@ -20,4 +20,7 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
   writer's `delta-tp/v1` and a sealed serving window's), as the verdict reads it; `load` refuses an unknown top-level field.
 * `commit_binding` -- its `binding` block: the identity coverage, the executed prefix of record with its two account links, the rows
   past the stop and the population, as the Commit's rules and the not-executed class's facts read them.
+* `weights_registration` -- the committer's weights registration (`verity-vllm/weights-registration/v1`): each weight
+  parameter's hiding root, as the verifier's pins and a window's registration read it; its `of` refuses an unknown field
+  and `dump` writes it back.
 """

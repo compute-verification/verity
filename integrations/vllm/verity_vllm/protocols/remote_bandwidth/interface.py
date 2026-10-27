@@ -62,7 +62,7 @@ class Codec(Protocol):
 
 @runtime_checkable
 class Receipt(Protocol):
-    """A receipt construction (the bandwidth audit's `Tag` with the optional bound input ``z``).  ``binds`` names what a
+    """A receipt construction (the driver's receipt kinds, with the optional bound input ``z``).  ``binds`` names what a
     receipt reads beside the block: ``()`` for sketch-then-hash, ``("z",)`` for one bound to the prior tile's output.
     The driver's leaves are of 64-byte receipts."""
 

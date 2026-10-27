@@ -1,4 +1,4 @@
-"""One live registration a node, the red team's KB-4 (note:20261017T1859Z-report-property-redteam §R4.2): each
+"""One live registration a node, the red team's KB-4: each
 registration draws a fresh codec seed, so a prover that registered R times and kept the key that suits it would choose
 log₂ R bits of it, a retry that redraws.  The verifier's `Registry` refuses a second registration while one is live,
 and a registration ends only when the verifier closes it, counting its sessions, a failed or unended one as failed."""

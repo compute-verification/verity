@@ -8,7 +8,8 @@ import Proofs.Flock.Recursive.PadsAt
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.Holo
+import Definitions.Flock.Recursive.Holo
+import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.Recursive.StageRead

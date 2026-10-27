@@ -12,9 +12,9 @@ let through as negatives; d1's K is #4404's horizon count over the compute audit
 network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
 honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
-period answer, an accepted report writes the block record's certifier entry by #4404's `block_leg`, in the block
-record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link, session
-and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
+period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
+block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
+session and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
 doesn't give, other audits, another registration, a link-window N2 didn't register, a missing case, no verifier, a
 refused or scan-only chain or no server."""
@@ -37,7 +37,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = HERE.parent / "e2e_demo" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
 
 
 def _load(name: str):
@@ -282,6 +282,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     """certifier/v0 cases from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest), which
     also re-decides them here in the Lean executable's place."""
     import jsonschema
+    from block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
     case = period.case("accept", 1, "clock")
     answer = period.reference(case)
@@ -290,12 +291,13 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["block"]["written"] is True, got["block"]
     entry = got["block"]["entry"]
-    assert entry == cr._allp().block_leg(answer, server="node-1", runs=["r-chain", "c1"])
+    assert entry == block_leg(answer, server="node-1", runs=["r-chain", "c1"])
     schema = json.loads(BLOCK_SCHEMA.read_text())
     jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
                                      "$ref": "#/$defs/leg"}).validate(entry)
-    assert (f"K = {answer['public']['K']} bits over 1 link-windows, error {answer['public']['eps']} (quantity.eps); "
-            "at δ = 1/100: not established") in cr.markdown(got)
+    K, eps = answer["public"]["K"], answer["public"]["eps"]
+    at = f"K = {K}" if Fraction(eps) <= Fraction(1, 100) else "not established"
+    assert f"K = {K} bits over 1 link-windows, error {eps} (quantity.eps); at δ = 1/100: {at}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
                     "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,
@@ -411,14 +413,14 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_520, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
-    assert doc["terms"]["b"] == 154_352 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
+    assert doc["widths"] == {"NS": 149_648, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
     assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
     assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
-        5 * (154_352 + math.log2(lw * 64 + 1)))
+        5 * (154_480 + math.log2(lw * 64 + 1)))
     with pytest.raises(SystemExit, match="drew 16 of 64"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))

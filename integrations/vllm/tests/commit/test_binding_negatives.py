@@ -133,8 +133,8 @@ def test_honest_run_covers_population_and_openings_correspond():
 
 def test_map_leaves_are_the_committers_leaves():
     """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
-    map in 256 B units sent its population draws past each step's stream: `identity_of` raised IndexError on every rank
-    (r20261021-041907-b7a8)."""
+    map in 256 B units sent its population draws past each step's stream: `identity_of` raised IndexError on every
+    rank."""
     rows = 1024
     stream = produce()
     c = NativeHostCommitter(None, run_id="run", chunk=rows, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())

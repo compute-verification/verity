@@ -22,17 +22,16 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   carries is a `root_B` node (`linkR_rootB`), which `rec-cap` holds.
 * **A rep's proof** (`FitsRep`, `readRep`): rep `k`'s rounds are the schedule's (`RecDeploy.repSchedAt`); round `j`'s
   rows are its committed tops' node rows, then, where it absorbs, one row of the element values its squeeze answers (`vals`
-  of the `j`-th chunk of `repFrames`, `T` among them), zero-padded to whole 128-byte blocks as the deployed prover writes
-  it (`padRow`; the frames' skeleton fixes how many values the row holds). The proof's cap is round 0's nodes for its table, its recursive
+  of the `j`-th chunk of `repFrames`, `T` among them), padded to whole 128-byte blocks by bytes no check reads (the
+  deployed prover writes zeros, `padRow`; the frames' skeleton fixes how many values the row holds). The proof's cap is round 0's nodes for its table, its recursive
   caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
   (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, with
   the last message's openings and the unabsorbed fields as V\* takes them (`absorbedFrom`, `repFrames_absorbedFrom`):
   what it reads of the last message changes no absorbed value (`readRep_last`). The nonces are absorbed
   (`.bytes (le64 n)`) but no opened row carries one, so the fit fixes them at `0`, the only nonce a deployed prover
   sends: every grinder ignores its bits (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the
-  firewall device's is `0`), and the inner proofs of
-  `art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3` carry only zeros
-  (`art:f8e2b70befdb81f371d17105e824e9ffa68f4f51cded57826217f94d46ae9456`). A proof with another nonce is decided by
+  firewall device's is `0`), and the recorded inner proofs carry only
+  zeros. A proof with another nonce is decided by
   no fit. An honest prover's rounds read back (some fit exists, and it is the prover's proof), which `RecursiveKS` at
   `nextR` needs to be non-vacuous: `NextRHonest.lean` states it (`RepReadsBack`, `ReadsBack`) and `NextRFits.lean`
   proves it (`readsBack`).
@@ -221,11 +220,35 @@ theorem padRow_inj {l l' : List UInt8} (h : padRow l = padRow l') (hl : l.length
   rwa [List.take_left' rfl, List.take_left' hl.symm] at e
 
 /-- **Round `s`'s opened rows hold the values `vs` its squeeze answers**: its committed tops' nodes, then, where it
-absorbs, one row of `vs`, padded to whole blocks (`padRow`); a round that absorbs nothing answers no value. -/
+absorbs, one row of `vs` padded to whole blocks by any bytes (`rec_residuals`: a row port's words after its elements
+are unread; the honest prover's zeros are `padRow`, `rowsAt_padRow`); a round that absorbs nothing answers no
+value. -/
 def RowsAt (s : RecVStar.SchedRound) (rs : List ByteArray) (vs : List F128) : Prop :=
   rs.length = s.2.1.toList.sum + (if s.2.2.2 then 1 else 0) ∧
-    rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(padRow (colBytes vs)).toArray⟩ : ByteArray)] else []) ∧
+    (∃ pad : List UInt8, pad.length = (128 - (colBytes vs).length % 128) % 128 ∧
+      rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(colBytes vs ++ pad).toArray⟩ : ByteArray)] else [])) ∧
     (s.2.2.2 = false → vs = [])
+
+/-- **The honest prover's rows hold the values**: rows whose value row is `padRow`'s. -/
+theorem rowsAt_padRow {s : RecVStar.SchedRound} {rs : List ByteArray} {vs : List F128}
+    (h1 : rs.length = s.2.1.toList.sum + (if s.2.2.2 then 1 else 0))
+    (h2 : rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(padRow (colBytes vs)).toArray⟩ : ByteArray)] else []))
+    (h3 : s.2.2.2 = false → vs = []) : RowsAt s rs vs :=
+  ⟨h1, ⟨_, List.length_replicate .., h2⟩, h3⟩
+
+/-- **A round's rows fix the values it absorbs**, at their count: the value row holds them first. -/
+theorem RowsAt.vals_eq {s : RecVStar.SchedRound} {rs : List ByteArray} {vs vs' : List F128} (h : RowsAt s rs vs)
+    (h' : RowsAt s rs vs') (hl : vs.length = vs'.length) : vs = vs' := by
+  cases hb : s.2.2.2
+  · rw [h.2.2 hb, h'.2.2 hb]
+  · obtain ⟨pad, -, hd⟩ := h.2.1
+    obtain ⟨pad', -, hd'⟩ := h'.2.1
+    have e := hd.symm.trans hd'
+    rw [ite_eq_left hb, ite_eq_left hb] at e
+    have e' : colBytes vs ++ pad = colBytes vs' ++ pad' := by
+      simpa using congrArg Array.toList (ByteArray.mk.inj (List.cons.inj e).1)
+    exact FlockSoundness.Refine.colBytes_inj (List.append_inj e'
+      (by rw [FlockSoundness.Refine.Frame.colBytes_length, FlockSoundness.Refine.Frame.colBytes_length, hl])).1
 
 /-- The tops the rounds commit, in order: each round's first rows, cut at its tops' node counts, each row's node. -/
 def topGroups (sched : List RecVStar.SchedRound) (rows : List (List ByteArray)) : List (List ByteArray) :=

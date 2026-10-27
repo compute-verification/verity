@@ -1,5 +1,5 @@
-"""A head's attention scores and their softmax as one Boolean Definition, one proof unit a head writing its probability row:
-the attention of CMP-92's transformer (`sampled_proofs.one_stage.partition`'s size classes: T bf16 outputs, class 16·T rounded
+"""A head's attention scores and their softmax as one Boolean Definition, one proof block a head writing its probability row:
+the attention of the e2e demo's transformer (`sampled_proofs.one_stage.partition`'s size classes: T bf16 outputs, class 16·T rounded
 up).
 
     QkSoftmaxRow_v1{T, D, DOT}   (q: Array<D, Array<16, Value<1>>>, k: Array<T, Array<D, Array<16, Value<1>>>>)
@@ -11,7 +11,7 @@ up).
 
 `QkSoftmaxRow` is `SoftmaxRow{N=T}` of the T scores ``x_j = GemmCoordinate_v3{K=D, DOT}(q, k_j)`` (`gemm.Gemm_v3` over the key
 rows; `gemm.GEMM_HOPPER` binds the H200's step). Its q row is 16·D bits and each key row as long, so at D = 64 every row it
-reads is over C-Flock's 111-byte floor, which a unit of short rows alone (a softmax row at T <= 55) doesn't reach. A score
+reads is over C-Flock's 111-byte floor, which a proof block of short rows alone (a softmax row at T <= 55) doesn't reach. A score
 scale is folded into q's producer, as a power of two.
 
 `SoftmaxRow` is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity.ml.definitions.registry.ref_prims`) on the GPU's operations, so a kernel

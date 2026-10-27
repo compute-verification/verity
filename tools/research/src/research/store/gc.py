@@ -16,8 +16,10 @@ are never deleted: an expired id still resolves, and `fetch` reports its blob ab
 
 Deletion is two-phase, for uploads in flight.  An upload skips a blob the remote already holds (`S3Remote.put` HEADs first), so a
 new artifact can come to hold an old blob before its manifest is listed.  `apply` therefore deletes only a blob that has been a
-candidate since a pass at least `GRACE_S` ago (`state`, the marks) and still is in this one, after listing `manifests/` once
-more just before deleting.  `GRACE_S` covers a custody upload (its key lives at most 24 h, README §10.1).
+candidate since a pass at least `GRACE_S` ago (`state`, the marks) and still is in this one.  It deletes `BATCH` blobs at a
+time, each batch after a fresh listing of `manifests/`, so a blob a new manifest holds is kept unless that manifest appears while
+its own batch is being deleted; the listing after the last batch reports any such blob that is now absent as `lost` (the pass
+exits 1).  `GRACE_S` covers a custody upload (its key lives at most 24 h, README §10.1).
 
 Fails closed: a manifest, label or attempt it can't read, or a citing tree it can't scan, stops the pass before anything is
 deleted.  Remote objects are immutable, so `cache` keeps every manifest, label and attempt it read, by key.  Memory stays small on
@@ -51,6 +53,7 @@ TTL_DAYS: dict[str, float] = {
 GRACE_S = 24 * 3600
 STRONG = ("cited", "named", "cited run")
 JOBS = 32
+BATCH = 1000                   # deletes between two listings of the manifests (apply)
 ART_TEXT = re.compile(r"art:([0-9a-f]{8,64})(?![0-9a-f])")
 RUN_TEXT = re.compile(r"(?<![0-9A-Za-z])(r\d{8}-\d{6}-[0-9a-f]{4})(?![0-9a-f])")
 SCAN_MAX_BYTES = 8 << 20
@@ -391,19 +394,41 @@ def save_marks(path: Path, marks: dict[str, float], now: float) -> None:
     os.replace(tmp, path)
 
 
+def list_manifests(remote: Any) -> list[str]:
+    """Every key under `manifests/`, its 16 hex prefixes listed at once: one listing of the whole prefix took 90 s (26 Oct)."""
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        return [k for keys in ex.map(remote.list, [f"manifests/{x:x}" for x in range(16)]) for k in keys]
+
+
 def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s: float = GRACE_S, jobs: int = JOBS,
-          log: Callable[[str], None] | None = None) -> dict[str, Any]:
+          batch: int = BATCH, log: Callable[[str], None] | None = None) -> dict[str, Any]:
     """Delete the blobs `p` names that were marked at least `grace_s` before `now` and that no manifest listed since `p` holds; mark
-    the rest.  Returns {deleted, deleted_bytes, marked, rescued, errors, error_count}."""
+    the rest.  The deletes go `batch` at a time, each after a fresh listing of the manifests, so a put that reuses a blob while
+    the deletes run rescues it unless it lands inside one batch's deletes.  A last listing follows the last batch; a blob already
+    deleted that a newly listed manifest holds, and that its put didn't upload again, is `lost`: the artifact must be put again.
+    Returns {deleted, deleted_bytes, marked, rescued, lost, lost_count, listings, errors, error_count}."""
     say = log or (lambda s: None)
     marks = load_marks(state)
-    due = {b for b, t in marks.items() if b in p.candidates and now - t >= grace_s}
-    new = [k for k in remote.list("manifests/") if (m := MANIFEST_KEY.fullmatch(k)) and m.group(1) not in p.listed]
+    due = sorted(b for b, t in marks.items() if b in p.candidates and now - t >= grace_s)
+    rd = Reader(remote, cache, jobs)
+    seen = set(p.listed)
     rescued: set[str] = set()
-    for _, parsed in Reader(remote, cache, jobs).each(new, _parse_manifest):
-        rescued |= {d.hex() for d, _ in parsed[5]} & p.candidates.keys()
-    due -= rescued
-    say(f"{len(new)} manifests listed since the plan; {len(rescued)} candidates they hold are kept; deleting {len(due)} blobs")
+    lost: set[str] = set()
+    deleted: list[str] = []
+    done: set[str] = set()
+    errors: list[str] = []
+    listings = 0
+
+    def fresh() -> set[str]:
+        """The blobs every manifest listed for the first time now holds."""
+        nonlocal listings
+        new = [k for k in list_manifests(remote) if (m := MANIFEST_KEY.fullmatch(k)) and m.group(1) not in seen]
+        listings += 1
+        held: set[str] = set()
+        for k, parsed in rd.each(new, _parse_manifest):
+            seen.add(k[len("manifests/"):-len(".json")])
+            held |= {d.hex() for d, _ in parsed[5]}
+        return held
 
     def gone(b: str) -> tuple[str, BaseException | None]:
         try:
@@ -412,16 +437,34 @@ def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s
             return b, None
         except Exception as e:  # noqa: BLE001  one failure must not stop the rest; it stays marked
             return b, e
-    deleted: list[str] = []
-    errors: list[str] = []
-    with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(due) or 1))) as ex:
-        for b, e in ex.map(gone, sorted(due)):
-            (errors.append(f"{b}: {type(e).__name__}: {e}") if e else deleted.append(b))
-    done = set(deleted)
-    save_marks(state, {b: marks.get(b, now) for b in p.candidates if b not in done and b not in rescued}, now)
+
+    try:
+        with ThreadPoolExecutor(max_workers=max(1, min(jobs, batch))) as ex:
+            i = 0
+            while True:
+                held = fresh()
+                lost |= {b for b in held & done if remote.head(f"objects/sha256/{b}") is None}
+                rescued |= (held & p.candidates.keys()) - done
+                if i >= len(due):
+                    break
+                chunk = [b for b in due[i:i + batch] if b not in rescued]
+                i += batch
+                for b, e in ex.map(gone, chunk):
+                    if e:
+                        errors.append(f"{b}: {type(e).__name__}: {e}")
+                    else:
+                        deleted.append(b)
+                        done.add(b)
+    finally:
+        save_marks(state, {b: marks.get(b, now) for b in p.candidates if b not in done and b not in rescued}, now)
+    say(f"{len(seen) - len(p.listed)} manifests listed since the plan ({listings} listings); {len(rescued)} candidates they hold "
+        f"are kept; {len(deleted)} of {len(due)} due blobs deleted")
+    if lost:
+        say(f"LOST: {len(lost)} deleted blob(s) a manifest put during the deletes holds, e.g. {sorted(lost)[0]}")
     return {"deleted": len(deleted), "deleted_bytes": sum(p.candidates[b] for b in deleted),
-            "marked": len(p.candidates) - len(done) - len(rescued),
-            "rescued": len(rescued), "errors": errors[:20], "error_count": len(errors)}
+            "marked": len(p.candidates) - len(done) - len(rescued), "rescued": len(rescued),
+            "lost": sorted(lost)[:20], "lost_count": len(lost), "listings": listings,
+            "errors": errors[:20], "error_count": len(errors)}
 
 
 def clock() -> float:

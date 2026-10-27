@@ -2,6 +2,7 @@ import Flock.TmplSplit
 import Flock.NetAt
 import Flock.TmplAt
 import Flock.ProvedScope
+import Flock.KnownRead
 
 /-!
 `flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
@@ -30,8 +31,10 @@ its own line, `HmOut.metaOf`; its template lines, `Tmpl.parse`, `layoutM`, `unro
 `HmRow.parse`'s own work timed apart: its SHA-512, UTF-8 check, line split and META parse, the file's sections' `Net.parse`
 and `HmNets.check`'s comparison with the verifier's `sha512x3` and `hm96` nets, which `HmRow.parse` built (what is left of
 it is their build); then `checkRows`), then what decides
-which of the scope check's walks run (`ProvedScope.wiresFeed`), the unit's rows built (`Tmpl.unitNet`'s, which the
-verifier never reads), and the walks (`portReadsB`, `outReads`, `wiresAcyclic`) on the unit timed.
+which of the scope check's walks run (`ProvedScope.wiresFeed`), the input columns the description surely reads
+(`KnownRead.sureReads`, timed, and whether it dispatched), the unit's rows built (`Tmpl.unitNet`'s, which the verifier
+never reads), the columns they read (`RecResiduals.readIns`), which must include every surely read one (`sure_not_read`
+0, else exit 1), and the walks (`portReadsB`, `outReads`, `wiresAcyclic`) on the unit timed.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
 -/
 
@@ -361,11 +364,27 @@ def main (args : List String) : IO UInt32 := do
     let t0 ← IO.monoNanosNow
     let .ok () := HmOut.checkRows c | report "check_rows" t0 [("error", Json.str "refused")]; return 1
     report "check_rows" t0
+    let c := { c with tmpl := some tu }
     report "scope" t0 [("in_groups", toJson c.unit.inGroups.size), ("out_is_unit", toJson (c.outNet == c.unitNet)),
       ("wires", toJson c.wires.size), ("wires_feed", toJson (ProvedScope.wiresFeed c)), ("nets", toJson c.nets.size),
       ("unit_log", toJson c.unit.unitLog), ("ranges", toJson c.ranges.size)]
     let t0 ← IO.monoNanosNow
+    let sure := tu.t.readsSure
+    report "sure_reads" t0 [("columns", toJson sure.size), ("read", toJson (sure.filter id).size),
+      ("dispatched", toJson (KnownRead.sureReads c).isSome)]
+    let t0 ← IO.monoNanosNow
     report "rows" t0 [("nnz", toJson (c.unit.a.data.size / 4 + c.unit.b.data.size / 4))]
+    let t0 ← IO.monoNanosNow
+    let rd := RecResiduals.readIns c.unit
+    let mask := ProvedScope.portMask c.unit.inGroups (c.unit.inWords * WORD)
+    let cols := List.range (max rd.size sure.size)
+    let extra := cols.filter fun y => sure.getD y false && !rd.getD y false
+    let missed := cols.filter fun y => mask.getD y false && rd.getD y false && !sure.getD y false
+    report "read_ins" t0 [("columns", toJson rd.size), ("read", toJson (rd.filter id).size),
+      ("port_bits_read", toJson (cols.filter fun y => mask.getD y false && rd.getD y false).length),
+      ("sure_not_read", toJson extra.length), ("read_not_sure", toJson missed.length),
+      ("first_missed", toJson (missed.take 8))]
+    if !extra.isEmpty then return 1
     let t0 ← IO.monoNanosNow
     report "port_reads" t0 [("ok", toJson (ProvedScope.portReadsB c.unit))]
     let t0 ← IO.monoNanosNow

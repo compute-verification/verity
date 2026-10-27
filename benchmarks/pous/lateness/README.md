@@ -3,12 +3,9 @@
 How late an honest answer to a timed PoUS challenge arrives, p(τ) = P(answer later than τ after the challenge was sent),
 with the challenger on the prover's node (the lower bound) and on another machine (the deployed shape: the memory
 challenger is auditor hardware and never runs on the prover's node). It also measures the wire's floor, the fastest an
-answer of a given size can cross the path, which bounds a timed read from below: on 17 Oct, 42 µs for a 4 KiB answer on
-vy-nebius-1's path to vy-nebius-2 and 79 µs on vy-nebius-cpu-1's. `lat.cu` is the tree's only UDP challenger and responder,
-with one challenge datagram and a per-challenge answer datagram size; the memory challenger
-(`verity/core/devices/memory_challenger`) has no network transport yet. The results, p(τ) per condition at τ = 50, 100, 150,
-300 and 840 µs and what dominates each tail, are note:20261017T0740Z-report-pous-honest-lateness, and its evidence is
-art:ab5bfa92c4b5674f0400d82e281d5c7f8861fa9923cc029eba8ac59545d55c93.
+answer of a given size can cross the path, which bounds a timed read from below. `lat.cu` is the tree's only UDP
+challenger and responder, with one challenge datagram and a per-challenge answer datagram size; the memory challenger
+(`verity/core/devices/memory_challenger`) has no network transport yet.
 
 Measuring:
 
@@ -32,7 +29,7 @@ Analyzing (numpy and scipy; the plots need matplotlib):
 - `table.py`: p(τ) table rows pooled over runs, from `analyze.py`'s JSON.
 - `align.py`: concurrent series aligned in wall time and binned (1 s and 10 s), with each machine's sampled CPUs.
 - `bins_irqpin.py`: an `irqpin.py` run's on and off flows in 10 s bins.
-- `model_awake.py`: each GPU condition's on-node server time convolved with the network leg measured with both ends'
+- `model_awake.py`: each GPU condition's on-node server time convolved with the network path measured with both ends'
   receive CPUs awake. `model_mined.py`: the same for the mined P2 sweep's server times.
 - `plot.py`, `plot_net.py`: survival curves.
 
@@ -58,24 +55,7 @@ research run --on vy-nebius-2 --cwd source --env OMP_NUM_THREADS=2 -- \
 
 To analyze a run, fetch its `out/` from its run record (`research data show RUN --json` names the `run_record`
 artifact; `research data fetch ART --path 'out/*' --to D`) and keep each tree under its run id, since `analyze.py`
-names cells by the tree's directory: `python analyze.py runs/r20261017-080153-93da ... --json gpu-runs.json`.
-
-The runs of 17 Oct, all at commits of this directory's history:
-
-| run | what | command after `lateness/` |
-|---|---|---|
-| r20261017-075609-b40c | test | `job.py --conditions quiet,pcie,vllm --pings 2000 --rounds-local 20000 --rounds-remote 20000 --rounds-quiet-cpu1 20000 --rounds-node1 10000` |
-| r20261017-080153-93da | loads in their own processes | `job.py` |
-| r20261017-082910-d675 | loads in the responder's process (its `vllm` cell ran during vLLM's start-up: not used) | `job.py --conditions quiet,gemm-in,hbm-in,pcie-in,vllm --rounds-quiet-cpu1 600000 --max-s-quiet-cpu1 150` |
-| r20261017-084702-1a17 | vLLM, the SM path under in-process PCIe, 1 MiB copies | `job.py --conditions quiet,vllm,pcie-in-sm,pcie1m-in --rounds-quiet-cpu1 600000 --max-s-quiet-cpu1 150` |
-| r20261017-085851-8c77 | network variants | `net.py` |
-| r20261017-091835-86b0, r20261017-093157-8438 | three paths at once (8438 with each machine's CPUs sampled) | `net.py --only ping-series-concurrent` |
-| r20261017-094651-6c4c | pings, challenger on or off its receive-interrupt CPU | `irqpin.py` |
-| r20261017-100427-881e | the same with 4 KiB answers in 1,472-byte datagrams (fragmented) | `irqpin.py --ops 2 --seconds 150` |
-| r20261017-101331-a890 | the same in 1,422-byte datagrams (whole): the both-awake leg | `irqpin.py --ops 2 --dgram 1422 --seconds 150` |
-
-Run r20261017-095551-61bf is void (the previous run's responder still held cpu-1's port), and r20261017-093126-4d37
-and r20261017-075242-169d failed at launch.
+names cells by the tree's directory: `python analyze.py runs/RUN ... --json gpu-runs.json`.
 
 ## Wire format (UDP, little-endian)
 

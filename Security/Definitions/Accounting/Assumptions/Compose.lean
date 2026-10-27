@@ -4,25 +4,23 @@ import Definitions.Accounting.Assumptions.TS
 /-!
 # The compiled circuit's named assumptions (trusted)
 
-The premises the composed theorem (`Definitions.Accounting.Guarantees.Compose`,
-note:compute-accounting/20261018T1758Z-draft-compose-r6) adds to the tensor–scalar model's, the data sheet's,
-sampled (I8)'s and the headlines' (#2482), each a `Prop` taken as a hypothesis, never an `axiom`. Under live coins
+The premises the composed theorem (`Definitions.Accounting.Guarantees.Compose`) adds to the
+tensor–scalar model's, the data sheet's, sampled (I8)'s and the headlines', each a `Prop` taken as a hypothesis, never an `axiom`. Under live coins
 none is about a hash: binding is charged to `δ_bind` per committed position (RT-I8's B1, decision 114), a per-play
 term. Under seeded coins the window's coins are SHA-512's answers to the cheater's queries for its seeds, read as one
-uniform oracle, and that reading is one named premise, `SeedExtractedAt` (`random-oracle`, card 9cd57182), taken once
+uniform oracle, and that reading is one named premise, `SeedExtractedAt` (`random-oracle`), taken once
 for the window beside GRIND's premise (`SeedLuckAt`), which reads its queries per round; neither assumes the hash
 collision resistant.
 
-The logical layer (decision 113; `CircuitWork`) rests on four claims, the headlines' (#2482), sampled (I8)'s (#2466)
-and its own:
+The logical layer (`CircuitWork`) rests on four claims, the headlines', sampled (I8)'s and its own:
 
 * (H-μ), `Accounting.Assumptions.TS.OperandHMu`, and B′, `Accounting.Assumptions.TS.ReceiptLuckAt`, taken per tile at
   its stage folded (`PerTile`): a folded tile keeps its honest checked values at `μ + (1 − μ)·r_B`, `7/8` at `¾` and
   `½` (`Accounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`. Compose states no H-μ of its own (round 2's
   `HMu` is gone): it takes the headlines' definition, so the premise is one Lean statement, counted once;
 * `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole, a condition at whatever bound a kind's
-  `Scheme.guess` names: the live line reads it at B′'s `½` (ASK-9, card 8b00536a), and `2^-64` isn't granted;
-* the fixed-words claim, #2466's `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
+  `Scheme.guess` names: the live line reads it at B′'s `½`, and `2^-64` isn't granted;
+* the fixed-words claim, `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
   at the run's modes (`Accounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
   `Declared.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
   isn't credited (RT-COMPOSE r2's R2-B1), and its fold clause is round 2's `UnitFolded`.
@@ -51,7 +49,7 @@ operands and skips after querying later rounds' seeds):
 
 The physical layer's (`CreditOfWork`):
 
-* `Accounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate (B1, ASK-6 = A), the
+* `Accounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate, the
   headlines' premise, asked at the certificate `lam` each credit statement prices at. `FoldOptFolded` is it at every
   certificate, which a bit-exact fold falsifies (RT2-LOGIC-1), and `FoldOpt` is it at `N_w` words, which a sampled
   cheater that skips whole units falsifies.
@@ -61,12 +59,12 @@ namespace Accounting.Assumptions.Compose
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
-/-- `accounting-compose-guess-luck` (the whole-unit guess bound; a claim, Daniel's to rule on). **A unit skipped whole
+/-- `accounting-compose-guess-luck` (the whole-unit guess bound; a claim, to be ruled on). **A unit skipped whole
 keeps its honest checked values only by guessing them**: in the ideal game split at the receipt, at every round,
 whatever the past, a deficient round passes with probability at most `p0` (`Accounting.TS.RoundGame.LuckAt` of its
 game). Taken per tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold
 are both skipped keeps its checked values, the fold state its proof pins, with probability at most `p0`. It is a
-condition at the `p0` it is given, and nothing here takes it as a fact. ASK-9 (card 8b00536a, decided 20:23Z) reads it
+condition at the `p0` it is given, and nothing here takes it as a fact. The ruling reads it
 at B′'s `½` for the live line until a red team attacks a smaller value: `2^-64` for a 64-bit fold state was proposed
 and isn't granted. It replaces round 2's `luck0 = 0`, which a guess falsifies
 (RT-COMPOSE r2's R2-B3). It fails if the cheater's view pins the fold state without the fold: a state that a computed
@@ -74,7 +72,7 @@ word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
   Accounting.TS.RoundGame.LuckAt p0 G.game
 
-/-- `random-oracle` (the random-oracle card, 9cd57182: PoUW only, each use a named premise; this one at the window's
+/-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; this one at the window's
 seeds). **The seed each round's accepted proofs derive is the
 oracle's answer at a committed input**: on the window's oracle answers `a` (round `r`'s `T_q` seed queries' answers its
 `r`-th coin, `Fin T_q → B`, all uniform and independent), `sq a r` is the query of round `r` whose answer its drawn
@@ -155,7 +153,7 @@ the whole rate (`wholeTheta`, from `Scheme.wholeRate`), not the folded one: at t
 is `guess·e^{K/8}` (`e^{467}` at `K = 4096`), past `1` for `K ≥ 355` at `guess = 2^-64` (RT-COMPOSE r6). At the
 guess bound's rate, `x₀ = 44.34` nats a tile at `2^-64` and `κ₀ = 0.092`, it follows from `WholeEntropyAt` at
 `h = 64·ln 2` a tile (`Guarantees.Compose.WholeLuckOfEntropy`); at the folded rate it would need `WholeEntropyAt` at
-`K/8` nats a tile (to within `e^{−κ₀·K/8}`; RT-COMPOSE r6's fix (b), not taken). Neither is granted: ASK-9 decides
+`K/8` nats a tile (to within `e^{−κ₀·K/8}`; proposed, not taken). Neither is granted: the ruling decides
 `½` for the live line only. Read per query, `½` (`WholeEntropyAt` at `h = ln 2`) has moment
 `½e^{x₀} + ½e^{−κ₀x₀} ≤ 1` only for `κ₀ > 1`, and then `x₀ < ln 2` a tile, about 177 tiles a seed group at
 `T_q = 2^128`, which leaves the seeded pair's small-batch decode line above 50%.
@@ -177,7 +175,7 @@ def SeedLuckAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ
       ∀ a q, ¬ Break a → sq a r = some q → roundGain rd r.val R w s κ a ≤ g q a
 
 open Classical in
-/-- `accounting-compose-whole-entropy` (optional, proposed: RT-COMPOSE r6's fix (b) at `h = K/8`, card 8b00536a's
+/-- `accounting-compose-whole-entropy` (optional, proposed: RT-COMPOSE r6's fix (b) at `h = K/8`, the ruling's
 seeded reading at `h = 64·ln 2`; read only by `Guarantees.Compose.WholeLuckOfEntropy`). **A tile skipped whole keeps
 its checked values with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the
 cheater's view**: on the window's oracle answers `a`, at every round `r` there are, per query `q`, a set `Wh q a` of

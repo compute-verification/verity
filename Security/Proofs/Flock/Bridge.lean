@@ -3,6 +3,7 @@ import Proofs.Flock.Bridge.PopMatches
 import Proofs.Flock.Bridge.Targets
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.Bridge.Count
+import Proofs.Flock.Bridge.CircuitOf
 import Proofs.Flock.Bridge.Canon
 import Proofs.Flock.Bridge.OpeningsCanon
 import Proofs.Flock.Bridge.Assembly

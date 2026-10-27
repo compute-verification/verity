@@ -66,7 +66,7 @@ mismatched words (the moved pairs' among them), every reference evaluation equal
 back from the driver's cache.  The forced cases are at a moe block of 8: forcing one at 922 tokens would compare about 4.6e10
 coordinate-k steps per candidate config (its w13 and w2 launches), against about 2.2e8 a second on 14 workers.
 
-Replay determinism (run r20261014-065141-a1ec, schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
+Replay determinism (schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
 NO-GO on that comparison alone, while every one of run1's 242,460,672 words matched the twin at run1's recorded assignment.  The
 launch is a function of its call: the k-slice fold is lock-serialized in slice order (marlin_template.h:2162-2170 at the pin,
 `barrier_acquire(&locks[locks_off], slice_idx)` before each `global_reduce_fp32`), and `replay` now checks that directly.  What

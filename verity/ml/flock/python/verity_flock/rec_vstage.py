@@ -355,6 +355,24 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
     return {"format": "verity/registered-reads/v0", "ports": ports}
 
 
+def staged_shared_rows(v: Path) -> dict:
+    """The one shared rows file (`--rec-rows`) that every V* part of the statements staged under ``v`` is verified against,
+    and whose SHA-512 `flock-verify rec-compose` holds every part's verdict to: `shared_rows` of the algebra's parts, R's
+    levels, and the levels and caps that read the tops; without the algebra, the first level's ``acc`` as ``acc0``, the one
+    `rec-acc` registration every part's chain must be (`RecVStar.checkAcc`)."""
+    v = Path(v)
+    rows = shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
+                       [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
+                        if (d / "registered.json").is_file()])
+    if "acc0" not in rows["ports"]:
+        for d in sorted(v.glob("L[0-9]*")):
+            ports = json.loads((d / "registered.json").read_text())["ports"] if (d / "registered.json").is_file() else {}
+            if "acc" in ports:
+                rows["ports"]["acc0"] = ports["acc"]
+                break
+    return rows
+
+
 @_without_gc
 def stage_cap(inner: Path, out: Path, evaluate: bool = True, levels: list[int] | None = None) -> dict:
     """RecCap alone at every level (or at ``levels``) over the inner session ``inner`` (`rec_cap.stage`: level 0 under

@@ -59,6 +59,8 @@ import Flock.RecordText
 import Flock.Keccak
 import Flock.RecCoins
 import Flock.RecSetup
+import Flock.RecBudget
+import Flock.RecCompose
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll

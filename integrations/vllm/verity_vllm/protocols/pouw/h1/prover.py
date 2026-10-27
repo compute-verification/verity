@@ -1,20 +1,20 @@
-"""An H1 window's private prover state (DRAWN1, PRF-131): what opening a drawn unit's committed values needs after the
+"""An H1 window's private prover state (DRAWN1): what opening a drawn proof block's committed values needs after the
 window's close, kept in a directory of the prover's own (`pouw_h1.H1Run`'s ``prover``), owner-only (0700, each file 0600),
 never under a run's ``$OUT`` or any published path. The serving node keeps it (`research keep`), and its holder alone reads it.
 
 * **What it keeps.** `keep_key`: the run's hm96 salt key (`KEY`, 32 bytes), from which the salt of every hiding leaf of
   the window is drawn: its request, slot, A and z tables' (`pouw_h1_requests.hiding_rows`) and its served trees' rows
   (`audit.hm96_salt` at `pouw_h1_served.nonce`). `keep_call`: each served call's m s8 rows, their f32 scales and its z/y
-  records (`pouw_h1_records`, one a unit), as ``calls/<index>.npz``. An empty call keeps nothing: its A table is T zero
+  records (`pouw_h1_records`, one a proof block), as ``calls/<index>.npz``. An empty call keeps nothing: its A table is T zero
   rows and its z table zero records. A handed-off window (`pouw_h1_handoff`) also keeps its saved state in `STATE`: its
   round log, request entries, slot owners, and each call's A codes and each linear's weight codes (the window's ``a/<K>``
   and ``b/<K>`` rows).
-* **Opening a drawn unit.** Unit u of the window is unit u - base of the call whose manifest row has base ≤ u < base +
+* **Opening a drawn proof block.** Proof block u of the window is proof block u - base of the call whose manifest row has base ≤ u < base +
   units (`locate`). `open_call` rebuilds that call's A table and z table from the kept rows, scales and records under the
   key, the Program salt (from the record's salt coin, `pouw_h1_challenger.program_salt_of`) and the call's
   nonces, and refuses either whose root isn't the one its manifest row carries, which its round's root commits. Then
-  ``z.open(u - base)`` is the unit's record (z then y) with its salt and path, and ``a.open(i)`` slot i's A row and scale
-  (the unit's row block is slots 32·r .. 32·r + 31). Its ``a/<K>`` rows are its call's block of the window's A value
+  ``z.open(u - base)`` is the proof block's record (z then y) with its salt and path, and ``a.open(i)`` slot i's A row and scale
+  (the proof block's row tile is slots 32·r .. 32·r + 31). Its ``a/<K>`` rows are its call's block of the window's A value
   (`pouw_h1_served.layout`), its codes the A table's padded to the Program's slot, and its ``b/<K>`` rows its linear's weight
   rows, each salted at `pouw_h1_served.nonce`; their trees are the ones the record's ``served`` entries name.
 """
@@ -67,7 +67,7 @@ def keep_call(directory: str | Path, index: int, a: np.ndarray, s_a: np.ndarray,
 
 
 def locate(rows: Sequence[Mapping[str, Any]], unit: int) -> tuple[int, int]:
-    """Unit `unit` of the window as (its call's index, its leaf in that call's z table), from the manifest `rows`."""
+    """Proof block `unit` of the window as (its call's index, its leaf in that call's z table), from the manifest `rows`."""
     for row in rows:
         if row["base"] <= unit < row["base"] + row["units"]:
             return int(row["index"]), unit - int(row["base"])

@@ -382,31 +382,31 @@ run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
 # The Lean check cache's caps (#3033): lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
-# used (cpu-2's / filled with them, INF-151). lean_audit.py loads common.py by its repository path, so both keep that layout.
+# used, or one per `build` Lean slot where lean-slots has more (cpu-2's / filled with them, INF-151). lean_audit.py loads common.py by its repository path, so both keep that layout.
 # After installing, `sudo systemctl enable --now vy-lean-prune.timer`.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py"
 src = "tools/verity/lean/lean_audit.py"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
 src = "tools/verity/check/common.py"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-lean-prune.service"
 src = "tools/research/src/research/pods/nebius/vy-lean-prune.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-lean-prune.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-lean-prune.timer"
 src = "tools/research/src/research/pods/nebius/vy-lean-prune.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-lean-prune.timer"]
 owner = "infra"
 

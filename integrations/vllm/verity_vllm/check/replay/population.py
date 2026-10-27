@@ -75,7 +75,7 @@ def _lifetime(engine_step: int, ring_slots: int | None) -> str:
 def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict[str, Any]:
     """[FLUSH-03 fact of record] per (request, step, MoE layer) with BOTH planes committed: the committed `up` bytes differ
     from the committed `down` bytes.  Before FLUSH-03 the gather collector committed the same layer's down plane under the up name (vLLM's
-    TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the block's two
+    TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the layer's two
     GEMM launches the staged up view was read after the w2 launch had overwritten it -- 22/22 same-layer pairs identical
     on the int-1 OLMoE records).  The comparison is over the COMMON PREFIX of the two request-local slices (min(len) bytes): when
     2I == H (OLMoE) that is the whole plane; when the widths differ the alias would still show as identical leading bytes (one base pointer,
@@ -222,7 +222,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             continue
         d = pi.describe(r)
         if d is not None and d.get("plane_error"):
-            # [MAN-06f v3] a fused-MoE block row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
+            # [MAN-06f v3] a fused-MoE layer row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
             # ordinal outside the plane, a name index that disagrees with Program order): NAMED, class `mapping` -- a fault of the record's
             # Program shape, never a guess at another pair's words and never carried on a PASS.
             _not_ev(f"MoE plane row -> plane slice mapping failed: {d['plane_error']}", "mapping", fam)
@@ -283,7 +283,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     return vus, not_ev, not_ev_fam
 
 
-#: [COORD R17-27 / Daniel, verbatim] the scope of the class -- on the rule, on every record that carries it, in the C2 schema doc
+#: the scope of the class, verbatim on the rule, on every record that carries it, and in the C2 schema doc
 NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                       "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
                       "there is no not-required-because-not-executed category.")
@@ -404,10 +404,10 @@ def _stratum_spec(fam: str, spec: str, statics: dict[str, Any]) -> str:
     """The spec as the STRATUM key.  An attention row's spec carries its history length T (one value per token of
     the request), so 'spec incl. shape' would make every attention row of the run its own stratum -- an exhaustive replay of the family
     (~0.1 ms x T per row; B8 1024/128: 8 x 32k rows x up to 1152 committed reads each), not a sample.  The stratum keeps the numerical
-    MECHANISM the length selects -- NB = ceil(T / BN), the number of key blocks visited, and `last=full|partial`: whether
-    the last block is FULL (T mod BN == 0: no masked lane) or PARTIAL (masked lanes -> exact zeros through exp2 and the lane sums) -- three
-    chains (single block / multi-block / partial last block) that NB alone does not keep apart: measured on llama L40S B8 256/32, 32 of 80
-    NB-only strata mixed the one full-block row (T = 128) with 127 partial ones, so the full-block chain was picked with probability
+    MECHANISM the length selects -- NB = ceil(T / BN), the number of key tiles visited, and `last=full|partial`: whether
+    the last tile is FULL (T mod BN == 0: no masked lane) or PARTIAL (masked lanes -> exact zeros through exp2 and the lane sums) -- three
+    chains (single tile / multi-tile / partial last tile) that NB alone does not keep apart: measured on llama L40S B8 256/32, 32 of 80
+    NB-only strata mixed the one full-tile row (T = 128) with 127 partial ones, so the full-tile chain was picked with probability
     per_stratum / 128 where the spec-as-stratum key had made it certain.  The phase axis keeps prefill / first-decode / mid / last:
     `Attention_v2{NB=9,last=partial,NH=..,...}` x request x phase x module x lifetime; <= +1 stratum per formerly mixed stratum.  Every
     other family's spec is its own key (Gemm{K,N}, RMSNorm{N}, ... carry no per-row length)."""

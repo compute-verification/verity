@@ -1,4 +1,4 @@
-"""The PyTorch demo's standard workload (CMP-92, Daniel 25 Oct): a 2-layer decoder-only transformer in plain PyTorch on CPU,
+"""The PyTorch demo's standard workload: a 2-layer decoder-only transformer in plain PyTorch on CPU,
 an integration of Verity's (`verity.ml.windows.interface`) beside the two-layer MLP of `loop`.
 
 * **The model** (:class:`Model`, seeded random weights): width ``H`` = 128, ``HEADS`` = 2 heads of ``D`` = 64, MLP width

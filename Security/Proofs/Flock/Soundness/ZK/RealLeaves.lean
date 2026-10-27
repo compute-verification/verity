@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.ZK.SHVZK
 import Proofs.Flock.Soundness.ZK.Hiding
-import Proofs.Flock.Soundness.ZK.RealView
+import Definitions.Flock.ZK.RealView
 
 /-!
 # Zero knowledge: Lemma B with real hm96 leaves

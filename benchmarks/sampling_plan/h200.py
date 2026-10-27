@@ -1,5 +1,5 @@
 """The sampling plan for the end-to-end demo on one H200 (PRF-170, PRF-166): the frozen MQA shape (compute-accounting,
-CMP-92 23:00Z) on circuits' partition (CMP-92, DEMOWL's section 1b), every op a proof unit, one unit a row for row ops.
+CMP-92 23:00Z) on circuits' partition (CMP-92, DEMOWL's section 1b), every op a proof block, one unit a row for row ops.
 
 A block is one lockstep window: `batch` requests of `context` bytes (`prompt` given, the rest generated greedily, the
 last never fed back), each from its first byte to its last, so a block runs `positions` = context - 1 decode steps and
@@ -328,7 +328,7 @@ def render(o: dict) -> str:
     lines += ["", "| cut | sampling blocks | proving GPU-s a block |", "|---|---|---|",
               f"| as planned (tiles {o['tiles']}, padded {o['pad']}) | {len(o['windows'])} | {c['proving']:.4g} |"]
     lines += [f"| {k} | {v['windows']} | {v['proving']:.4g} |" for k, v in o["alternatives"].items()]
-    lines += ["", "faulty units over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "
+    lines += ["", "faulty proof blocks over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "
               "delta split over the S templates; each block is IntegrityPeriodLog at delta / (S blocks)):", "",
               "| period | fleet | blocks | pooled at 1% | at 1e-6 | each block at 1% | at 1e-6 |",
               "|---|---|---|---|---|---|---|"]

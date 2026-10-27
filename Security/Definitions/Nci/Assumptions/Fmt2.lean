@@ -4,7 +4,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 /-!
 # NCI over threads, each value charged once over its copies: the named assumption
 
-`WeightsSupportFmt` is false at the deployed point (compute-accounting's NCI-FALSIFY, 19 Oct 2026): on weights a few
+`WeightsSupportFmt` is false at the deployed point: on weights a few
 AdamW steps past the checkpoint, on a weight's fprop and dgrad copies, and at llama-3-405b's fan-out.
 `WeightsSupportFmt2` restates it with weights charged per source, a fan-out bound in place of the margin, `e` per model,
 and the counted multiplications off weights fewer than `k₀` steps from the baseline. It is not signed off.

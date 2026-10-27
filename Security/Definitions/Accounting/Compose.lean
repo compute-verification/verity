@@ -6,9 +6,7 @@ import Definitions.Pouw.Window
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
 
-The vocabulary of `Definitions.Accounting.Guarantees.Compose`
-(note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5), restated after RT-COMPOSE r4
-(note:compute-accounting/20261018T1522Z-draft-rt-compose-r4) under decisions 107, 109–114, 117, 119 and 122. The
+The vocabulary of `Definitions.Accounting.Guarantees.Compose`. The
 compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn
 after its operands are committed, one coin a round (decision 122). The service then draws one uniform subset of the
 window's grid-padded tiles, one a proof unit, and proves each drawn tile with the generation of its own noise.
@@ -51,7 +49,7 @@ The logical layer:
   them) before its first reader's round's coin (where `LayerCommitted` says the service commits it), and every
   other value (glue, the KV cache) with its writing gate's round, before that round's coin or, when it depends on it,
   after; a read is late when its operand's cut is past the reader's coin; a unit writes another late when one of its
-  gates is read late by one of the other's, and its late cone is closed under that per unit, as #2466's
+  gates is read late by one of the other's, and its late cone is closed under that per unit, as
   `DrawnLayer.Late` is.
 * `LayerCommitted`, `Declared.atDraw`, `Declared.atIR`: the service commits every value the prover writes by its IR
   cut, or a computed value only its own unit reads (a receipt) by the draw (protocol structure, in `Scope`, which
@@ -74,7 +72,7 @@ The logical layer:
   (W4, `0` for every Program COMPILE accepts), and `F` per kind: the most tiles one late cone of a kind holds (`1` for
   every kind served: decision 106's units hold whole K).
 * `SplitStages`, `modeAt`, `sameAt`, `SplitStages.LuckAt`, `EveryStage`, `share`, `stageShare`, `tileMode`: a window's
-  stages, one a round, with a unit's mode #2466's `Accounting.TS.Mode` (paid; folded, its product skipped and its
+  stages, one a round, with a unit's mode `Accounting.TS.Mode` (paid; folded, its product skipped and its
   committed words folded; or whole, product and fold skipped), each stage's tiles' deficient words right or not
   (`right`) and their checked values honest or not (`same`, which a receipt-lucky skipped tile meets); and the modes as
   the window's proofs read them, which `DrawnLayer.Good` and `UnitFixed` take.
@@ -82,7 +80,7 @@ The logical layer:
   every round's coin at once, which the seeded statements take (a cheater may choose a round's skips after querying
   the oracle for later rounds' seeds); a split-stage window is one, and the proofs read its modes as `tileMode` does.
 * `tileGame`, `PerTile`: a tile's stage as the ideal game split at the receipt (`ReceiptGame`), in each skipped mode,
-  and a claim of every credited tile at its stage, whatever the past: what #2482's `OperandHMu` and `ReceiptLuckAt` and
+  and a claim of every credited tile at its stage, whatever the past: what `OperandHMu` and `ReceiptLuckAt` and
   `Assumptions.Compose.GuessLuckAt` are taken of.
 * `jointGame`, `serviceGame`, `drawOf`: the window as one round on coins `A × (Equiv.Perm (Fin N) × Ξ)`: the rounds'
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
@@ -335,7 +333,7 @@ IR cut there (`StageCuts`, `Proofs.Accounting.Compose.layer_stageCuts`), and the
 
 The second case is the ring of depth `D` (a receipt of step `s` under the root of round `s + D − 1`, so its off-node
 live coins, about 100 ms a round trip, are hidden behind `D` steps: about 104 ms a token at `D = 2`, 0.09 ms at
-`D = 6`, kernels' #3003). A value read only inside its own unit is in that unit's late cone and in no other unit's:
+`D = 6`). A value read only inside its own unit is in that unit's late cone and in no other unit's:
 a layer late edge it makes ends in its own unit, which that unit's cone already holds (`reaches_of_slot`,
 `Proofs.Accounting.Compose.ServiceCovers`), so committing it late leaves no reader whose skip goes uncharged, and the
 draw, at coin `rounds`, still follows every commitment. It is a computed value, its gates' function of what its unit
@@ -414,8 +412,8 @@ def SeedNamed {ι : Type} (Cd : Declared ι) : Prop :=
 
 /-- **The form of a template's proved operand luck**, at a skip pattern's word span:
 * `cube bind`: `¾` while the span is within the receipt's binding `bind` (`Accounting.Guarantees.TS.LuckCaseACube`,
-  `OperandLuckCube`, for degree-2 cube operands; #2447's `Pouw.Guarantees.Receipt.DuoWindowNoKernel` binds four
-  words), and `1` past it (#2447's `DuoLongRunKernel`: no receipt binds every length);
+  `OperandLuckCube`, for degree-2 cube operands; `Pouw.Guarantees.Receipt.DuoWindowNoKernel` binds four
+  words), and `1` past it (`DuoLongRunKernel`: no receipt binds every length);
 * `coins b Z`: `Z(span)·C(b, ⌊b/2⌋)/2^b` for `b` fresh bits at the fibre `Z(span)` the receipt has at that span
   (`Accounting.Guarantees.HMu.CoinPointMass`, `ReceiptLuckOfCoins`);
 * `pinned`: `0`, a value the proof pins (`Accounting.Guarantees.FillerLuck.PinnedFillLuckAt`);
@@ -437,11 +435,11 @@ noncomputable def LuckForm.value : LuckForm → ℕ → ℝ
 operands (decision 109; `0` where the noise proves none, as one-sided noise proves none), whether the kind is credited
 (a word of an uncredited kind counts in no `N_w` and no floor), the span a skip pattern has before the receipt's next
 checkpoint (W6), the form of the operand luck its template proves, and the three lucks the window is held to:
-* `mu`: (H-μ)'s point mass at a folded unit's deficient words (#2482's `OperandHMu`, `¾` in the headlines);
-* `rB`: the receipt's luck when they are not all right (#2482's `ReceiptLuckAt`, HMU's B′, card 8b00536a, `½`);
+* `mu`: (H-μ)'s point mass at a folded unit's deficient words (`OperandHMu`, `¾` in the headlines);
+* `rB`: the receipt's luck when they are not all right (`ReceiptLuckAt`, HMU's B′, `½`);
 * `guess`: a unit skipped whole keeps its honest checked value only by a guess of its fold state
-  (`Assumptions.Compose.GuessLuckAt`, a condition at this value: `½`, B′'s, for the live line under ASK-9, card
-  8b00536a, decided at 20:23Z, where `2^-64` for a 64-bit state was proposed and isn't granted);
+  (`Assumptions.Compose.GuessLuckAt`, a condition at this value: `½`, B′'s, for the live line as ruled,
+  where `2^-64` for a 64-bit state was proposed and isn't granted);
 * `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
   `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight;
@@ -693,7 +691,7 @@ structure ProofRun (C B : Type) (m s Np : ℕ) (V : Type) where
   rel : Paths (Paths C m × B) 1 → Fin 1 → Fin Np → (ℕ → V) → Prop
   right : Paths (Paths C m × B) 1 → Fin 1 → Fin Np → (ℕ → V) → Prop
 
-/-- **The window's proofs as the IR defines them** (#2466's `DrawnLayer`, at one service round): positions are the
+/-- **The window's proofs as the IR defines them** (`DrawnLayer`, at one service round): positions are the
 circuit's gates and slots are numbered, and
 * `draw`: the service's (`drawOf`, the first `K_d` images of a uniform permutation of the `N_p` tiles);
 * `pos t k`: tile `t`'s `k`-th slot (`Declared.slots`), its first slot past the list (no position for a tile of no

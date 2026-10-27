@@ -1,4 +1,4 @@
-"""One-stage audit, run A7: the requirement's two proof units (I4), sampled in one audit and wired to the remote bandwidth
+"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to the remote bandwidth
 audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
 `PlanMatches`) and
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural

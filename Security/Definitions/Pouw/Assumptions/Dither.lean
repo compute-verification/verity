@@ -116,7 +116,8 @@ A node that forwards a call's `b` (`m K` bits) and gets back only the root has t
 `m K N` MACs, so `β = n_max · H/macs` with `n_max = N` for a static call and `d_v` for PV, `H = H_mm + H_sha + H_o`
 (the outside machine returns the root, so it saves the round's hashing too: RT-PROTO-2 P18's addition). `SAKMatmul` and
 `ShaSpeed` are stated over programs that exchange nothing, and this premise carries their bound to every program at
-`β` a bit (WORKSOUND-INST-2's form, on every program type). -/
+`β` a bit (WORKSOUND-INST-2's form, on every program type). It is per program: an answer that sends a later block's
+coins out is a different program from that block's work, which is in `WorkSound`'s Open (RT-POOL RP21). -/
 def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ {I O : Type} (f : G.Mc.Alg I O), ∃ f' : G.Mc.Alg I O, ∀ i,
     G.Mc.eval f' i = G.Mc.eval f i ∧ G.ext f' i = 0 ∧ G.cost μ f' i ≤ G.cost μ f i + β * G.ext f i
@@ -125,14 +126,14 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
 service's verdict accepts only periods whose rounds' checks pass** on the registered instances `reg`, but with
 probability `κ_S` over the oracle and the verifier's coins, for every prover: the rounds' checks run inside C-Flock's
 zero-knowledge proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each round's
-commitment (`trusted-nebius-host`). The verdict reads the transcript and the devices' readings, never the prover's
+commitment (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
 def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ≤ κS
 
-/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-nebius-host`). **An accepted
+/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted
 period exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
 verdict reads its signed count and refuses a period past `K`. The certifier's own coin stream isn't counted

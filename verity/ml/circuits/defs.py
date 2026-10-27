@@ -166,7 +166,9 @@ def _static_key(v: StaticValue):
         return ("fn", v.id)
     if isinstance(v, (list, tuple)):
         return ("tuple",) + tuple(_static_key(x) for x in v)
-    if isinstance(v, (int, str, bool)) or v is None:
+    if isinstance(v, bool):  # True == 1 and hash(True) == hash(1): untagged, FLAG=1 would hit FLAG=True's entry
+        return ("bool", v)
+    if isinstance(v, (int, str)) or v is None:
         return v
     if isinstance(v, float):
         return ("float", v.hex())
@@ -226,7 +228,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
-    same id is a conflict (ruling §8.1), not a silent reuse of the first body."""
+    same id is a conflict, not a silent reuse of the first body."""
     if isinstance(F, SpecializedDefinition):
         merged = dict(F.bindings)
         merged.update(kw)

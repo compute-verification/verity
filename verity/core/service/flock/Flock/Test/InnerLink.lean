@@ -221,4 +221,15 @@ def c3i : Inner :=
   offWhy i25 "Hello names no one table"
 #guard why (checkSchedule { i25 with m := 6 } (onSched i25)) == offWhy { i25 with m := 6 } "the shape has no schedule"
 
+/-! Below k_log 6 `SchedRound`'s absorb flag reads a 2-element round as z_partial's 64-element one, so `checkSchedule`
+alone passes a record on that misread schedule; `statements`, which every V* session's setup runs (`RecSetup.checks`,
+`checkStmt`, `check`), refuses the shape first. -/
+
+def i5 : Inner := { i25 with kLog := 5 }
+#guard why (checkSchedule i5 (onSched i5)) == none
+#guard why (statements i5) == some ("the inner session's shape (m 25, k_log 5, claims 8) is not V*'s: a fast100 " ++
+  "schedule, k_log at least 6, claims at least 2")
+#guard why (statements { c3i with kLog := 5 }) == some ("the inner session's shape (m 25, k_log 5, claims 8) is not " ++
+  "V*'s: a fast100 schedule, k_log at least 6, claims at least 2")
+
 end Flock.Test.InnerLink

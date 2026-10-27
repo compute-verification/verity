@@ -1,5 +1,5 @@
 """The sampling plan for the end-to-end demo's transformer under C-Flock (PRF-166): CMP-92's decoder block, small (the
-CPU reference) or scaled onto one RTX PRO 6000 (compute-accounting's Phase 2 model), every operation a proof unit.
+CPU reference) or scaled onto one RTX PRO 6000 (compute-accounting's Phase 2 model), every operation a proof block.
 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
 the rest generated greedily, the last one never fed back, so `positions` = context - 1 run), through `layers` pre-norm
@@ -24,14 +24,14 @@ and its units, from the finest up:
   (`recomputed`); ReLU is a coordinate or a chunk of at most 16,384. The planner chooses (`candidates.cuts`).
 
 The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
-plan's certificate means the same whatever the cut, where a count of faulty units falls as the cut coarsens; the
-faulty units (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock's, fitted from its zero-knowledge
+plan's certificate means the same whatever the cut, where a count of faulty proof blocks falls as the cut coarsens; the
+faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
 (`Serving.replay`). A plan is a stratified law, k units of each subcircuit; the chosen one is the cheapest certifying at
 most `TARGET_SHARE` of the block's ANDs wrong. `recertify` recomputes its certificate from the sizes alone through
-core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the faulty units over a monitoring period of many
+core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the faulty proof blocks over a monitoring period of many
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
 window under the `work:1` law.
 
@@ -390,7 +390,7 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
-    faulty units (screened by `density_bound`)."""
+    faulty proof blocks (screened by `density_bound`)."""
     dag = Dag(m)
     objective = Objective(delta)
     cm = costs(m, s)
@@ -411,7 +411,7 @@ def law(plan: Plan, cands: list[Candidate]) -> Stratified:
 
 
 def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: bool = True) -> dict:
-    """The plan's certificate from its sizes alone: faulty ANDs (each unit's credited work) and faulty units by core's
+    """The plan's certificate from its sizes alone: faulty ANDs (each unit's credited work) and faulty proof blocks by core's
     `Stratified.harm_bound` (and units by `count_bound`, exact, when `exact_count`), and the optimizer's own `certify`
     and `density_bound` of the ANDs."""
     chosen_ = [c for c in cands if c.template in plan.sizes]
@@ -426,8 +426,8 @@ def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: 
 
 
 def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, ands: bool = False) -> float:
-    """Faulty units (or their ANDs) over `blocks` blocks, each drawn by the plan's law on its own live coins and all
-    accepted, except with probability `delta`: a set of x_{b,s} faulty units escapes with at most
+    """Faulty proof blocks (or their ANDs) over `blocks` blocks, each drawn by the plan's law on its own live coins and all
+    accepted, except with probability `delta`: a set of x_{b,s} faulty proof blocks escapes with at most
     prod exp(-k_s x_{b,s} / n_s), never once x_{b,s} > n_s - k_s, so the total is the knapsack `density_bound` over
     `blocks` copies of each stratum, which the period's length doesn't move (each stratum's rate k_s / n_s is a
     block's).  This relaxation is the optimizer's, not a Lean guarantee; `IntegrityHorizon` (#4358) proves the
@@ -437,13 +437,13 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
-    """`IntegrityHorizon`'s bound on the faulty units over any number of windows, each a subcircuit's window of a block
+    """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
     (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
     return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
 
 
 def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int = SERVERS) -> list[dict]:
-    """Per monitoring period (one server, and `servers` of them), at each delta: the pooled bound on faulty units and
+    """Per monitoring period (one server, and `servers` of them), at each delta: the pooled bound on faulty proof blocks and
     their ANDs, and beside it each block's own at delta / blocks, so the period's total error is delta."""
     rows = []
     for fleet, count in (("1 server", 1), (f"{servers:,} servers", servers)):
@@ -623,7 +623,7 @@ def render(out: dict) -> str:
         lines.append(f"| {v['template']} | {v['op'].split('{')[0]} | {v['units']:,} | {v['k']:,} | {v['statement']:,} | "
                      f"{v['work']:,} | {v['ands']:,} |")
     lines += ["", "a block, recertified from the sizes (`Stratified.harm_bound`; `count_bound` exact, small model only):", "",
-              "| delta | faulty ANDs | share | faulty units | count_bound | certify (ANDs) |", "|---|---|---|---|---|---|"]
+              "| delta | faulty ANDs | share | faulty proof blocks | count_bound | certify (ANDs) |", "|---|---|---|---|---|---|"]
     for r in out["recertified"]:
         lines.append(f"| {r['delta']:g} | {r['ands']:.4g} | {r['ands'] / out['work']:.3g} | {r['units']:.4g} | "
                      f"{r.get('count_bound', '-')} | {r['certify']:.4g} |")

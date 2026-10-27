@@ -508,7 +508,7 @@ def dot_overhead_panels(now: datetime, errors: list) -> list[dict]:
 
 
 def vllm_points(path: Path | None = None) -> list[dict]:
-    """The vLLM proof-unit-weighted overhead points: attempts labelled `ov.ws prover`, `ov.metric overhead` and an `ov.config`
+    """The vLLM proof-block-weighted overhead points: attempts labelled `ov.ws prover`, `ov.metric overhead` and an `ov.config`
     of `vllm/<model>/<all|prefill|decode>/<zk|m0>`; the latest assertion of each key wins."""
     path = path or N1_STORE
     if not path.exists():
@@ -555,7 +555,7 @@ def vllm_overhead_panels(now: datetime, errors: list) -> list[dict]:
         latest[(p["config"], p["attempt"])] = p
     attempts = sorted({a for _, a in latest})
     when = max((p["when"] for p in pts if p["when"]), default=None) or iso(now)
-    out = [panel("prover-overhead-vllm", "vLLM prover overhead, weighted over every proof unit of the run", "line",
+    out = [panel("prover-overhead-vllm", "vLLM prover overhead, weighted over every proof block of the run", "line",
                  ["attempt", *configs] if configs else ["attempt", "no points yet"],
                  [[a, *[sig(latest[(c, a)]["value"]) if (c, a) in latest else None for c in configs]] for a in attempts],
                  unit="× native", y_scale="log", updated_at=when, source=src,

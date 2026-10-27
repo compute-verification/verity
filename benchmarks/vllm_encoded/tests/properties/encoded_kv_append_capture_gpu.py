@@ -260,7 +260,7 @@ def main() -> int:
 
     import serve as VS  # vllm_encoded's
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
     from vllm import LLM, SamplingParams
 
@@ -285,7 +285,7 @@ def main() -> int:
     import stack as S   # the module Install imported
 
     capture = Capture(a.out, att, (0, att.nl - 1), torch)
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     model = VS.unwrap(runner.model)
     for _name, m in model.named_modules():
         ks, vs = getattr(m, "_k_scale", None), getattr(m, "_v_scale", None)

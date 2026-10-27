@@ -21,6 +21,12 @@ record)), "evidence": hex(canon(evidence)), "params"}`` as `SampledProofs.OneSta
 ``out/sampled-proofs.case.json``, with whether `OneStage.check`'s Python on that case (``case-python.json``) gives the
 leg's verdict (``out/case-check.json``). Each window's audit listens on a block of ports no other audit of this process
 holds (`ports`), so windows audit at once.
+
+A period whose ``period.json`` names ``challenger`` (``{"mode": "local" | "loopback:HOST:PORT" | "gate:USER@HOST",
+"main": FILE, ...}``) is drawn on that challenger's coins (``records_audit --challenger``, `a5_coins`), not the verifier's
+own: ``local`` is a development session the audit opens itself under an LMS key made for it, ``loopback:HOST:PORT`` that
+session on the challenger party's host (`challenger_party.py`), and ``gate:USER@HOST`` vy-challenger-1's (with
+``peer``, ``challenger_key`` and ``gate_key``). Without it the draw is on the verifier's in-process coins.
 """
 from __future__ import annotations
 
@@ -62,6 +68,32 @@ def _codes(checks: Mapping[str, Any]) -> list[str]:
     return sorted(c for c, v in checks.items() if not (v.get("ok") if isinstance(v, Mapping) else v))
 
 
+#: a refused member's verdicts, said in this order: its live session's verifier of record first, whose rejection leaves
+#: no proof files, then the Lean replay that finds none, then the draw check
+SAID = ("m0-verifier/", "lean-verify/", "lean-draw/")
+
+
+def _said_first(kv: tuple[str, Any]) -> tuple[int, str]:
+    k = kv[0]
+    return next((i for i, p in enumerate(SAID) if k.startswith(p)), len(SAID)), k
+
+
+def unproved(rec: Mapping[str, Any]) -> str:
+    """The audit record's drawn units its statement doesn't prove (its ``proved`` check), by the draw's template
+    strata: `` (drawn units not proved: T u0-u1, ...)``, or nothing."""
+    units = (((rec.get("checks") or {}).get("proved") or {}).get("detail") or {}).get("units") or {}
+    missing = sorted(set(units.get("drawn") or ()) - set(units.get("statement") or ()))
+    if not missing:
+        return ""
+    named = []
+    for s in (rec.get("draw") or {}).get("strata") or []:
+        got = [u for u in missing if any(lo <= u < hi for lo, hi in s["units"])]
+        if got:
+            named.append(f"{s['template']} {got[0]}-{got[-1]}" if got == list(range(got[0], got[-1] + 1))
+                         else f"{s['template']} {','.join(map(str, got))}")
+    return f" (drawn units not proved: {'; '.join(named) or ','.join(map(str, missing))})"
+
+
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the draw ran). On acceptance its public ``bound`` is the most of the profile's
@@ -85,11 +117,12 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         raise RuntimeError(f"the records audit wrote no audit record and no refusal under {out}")
     rec = json.loads(rec_file.read_text())
     if rec.get("accepted") is not True:
-        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items()) if v}
+        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items(), key=_said_first) if v}
         why = _codes(rec.get("checks") or {}) or sorted(lean) or ["not accepted"]
         said = [f"{k}: {v}" for k, v in lean.items()]
         more = f"; and {len(said) - 3} more" if len(said) > 3 else ""
-        return _refusal("audit record: " + ", ".join(why) + "".join(f"; {s}" for s in said[:3]) + more, commitment)
+        return _refusal("audit record: " + ", ".join(why) + unproved(rec) + "".join(f"; {s}" for s in said[:3]) + more,
+                        commitment)
     fixed = summary.get("fixed_before_draw")
     if fixed is not None and not fixed.get("ok"):
         return _refusal("not fixed before the draw: " + ", ".join(fixed.get("codes") or []), commitment)
@@ -159,8 +192,23 @@ def case_check(work: Path, ans: Mapping[str, Any], out: Path) -> dict[str, Any] 
     return got
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """The window's integrity audit (module docstring) into ``out``; its answer."""
+def challenger_argv(ch: Mapping[str, Any] | None) -> list[str]:
+    """``records_audit``'s flags for the period's ``challenger`` (module docstring); none for the verifier's own coins."""
+    if not ch:
+        return []
+    mode = ch["mode"]
+    if mode != "local" and not mode.startswith(("gate:", "loopback:")):
+        raise ValueError(f"the period's challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {mode!r}")
+    argv = ["--challenger", mode, "--main", str(ch["main"])]
+    if mode.startswith("gate:"):
+        argv += ["--peer", ch["peer"], "--challenger-key", str(ch["challenger_key"]),
+                 *(["--gate-key", str(ch["gate_key"])] if ch.get("gate_key") else [])]
+    return argv
+
+
+def leg(period_dir: Path, node: str, out: Path, challenger: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The window's integrity audit (module docstring) into ``out``; its answer. ``challenger`` (the verifier's, as
+    ``period.json``'s ``challenger``) takes the place of the period's."""
     p = json.loads((period_dir / "period.json").read_text())
     t, work = p["tools"], period_dir.parent / f"{period_dir.name}-sampled-proofs"
     delta = Fraction(p.get("delta") or DELTA)
@@ -170,7 +218,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
                 "--ports", str(SPAN), "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
                 "--firewall", t["flock-firewall"], "--out", str(work),
-                *(["--registered", p["registered"]] if p.get("registered") else [])]
+                *(["--registered", p["registered"]] if p.get("registered") else []),
+                *challenger_argv(challenger or p.get("challenger"))]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:
             subprocess.run(argv, cwd=ROOT, env=env, stdout=log, stderr=err, check=False)
     keep(work, out / "audit")
@@ -183,4 +232,4 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return ans
 
 
-__all__ = ["DELTA", "PROTOCOL", "answer", "case_check", "keep", "leg", "ports"]
+__all__ = ["DELTA", "PROTOCOL", "answer", "case_check", "challenger_argv", "keep", "leg", "ports"]

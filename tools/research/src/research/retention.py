@@ -30,7 +30,8 @@ record covers it (its own or an ancestor's), that record and every record beneat
 the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A sealed
 run dir (store.sealed) is the one read-only path either command deletes: whole, by `sudo -n vy-seal-runs delete` once every check
 here passed, which redoes custody's as root; a path inside one is refused. A path no
-record covers has nobody to say yes, so it is never deleted. A path that is, holds or lies under a `passes` directory (PASSES) also
+record covers has nobody to say yes, so it is never deleted. A path that is, holds or lies under a `passes` directory (PASSES; not a Python package of that name, nor anything inside a
+venv, `_holds_passes`) also
 needs its covering record's `preserved` artifact to hold that record's whole path, PRESERVED on the remote (`store_check`, just
 before --apply deletes): a yes alone never deletes retained passes. Each record is read again just before --apply deletes, and every
 decision of an --apply goes to the node's deletion log, `<root>/LOG`, with who deleted, the approver and --ref. A dry run (the
@@ -824,13 +825,29 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
     return None
 
 
+CODE_DIRS = frozenset({".venv", "venv", "site-packages", "dist-packages", "node_modules", ".lake", "__pycache__"})
+"""Directories that hold code, never a retained pass: not walked for PASSES (INF-264: torch's and vLLM's `passes` packages in every
+venv refused proofs' twelve approved trees on cpu-1, 4.47M inodes)."""
+
+
+def _pass_dir(d: Path) -> bool:
+    """A PASSES directory that holds passes: not a Python package of that name (`torch/fx/passes`, `vllm/compilation/passes`)."""
+    return d.name == PASSES and not (d / "__init__.py").exists()
+
+
 def _holds_passes(path: Path, root: Path) -> bool:
-    """Whether `path` is, holds or lies under a PASSES directory."""
-    if PASSES in relative(path, root).split("/"):
+    """Whether `path` is, holds or lies under a PASSES directory that holds passes (`_pass_dir`), outside CODE_DIRS."""
+    parts = relative(path, root).split("/")
+    if any(x == PASSES and not set(parts[:i]) & CODE_DIRS and _pass_dir(root.joinpath(*parts[:i + 1]))
+           for i, x in enumerate(parts)):
         return True
     if not os.path.isdir(path) or os.path.islink(path):
         return False
-    return any(PASSES in dirs for _base, dirs, _files in os.walk(path, onerror=_raise))
+    for base, dirs, _files in os.walk(path, onerror=_raise):
+        dirs[:] = [d for d in dirs if d not in CODE_DIRS]
+        if any(_pass_dir(Path(base) / d) for d in dirs if d == PASSES):
+            return True
+    return False
 
 
 def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | str = DEFAULT_ROOT, apply: bool = False,

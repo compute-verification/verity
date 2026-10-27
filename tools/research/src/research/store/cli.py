@@ -1359,7 +1359,8 @@ def cmd_gc(argv: list[str]) -> int:
     if ns.report:
         Path(ns.report).write_text(json.dumps({**out, "expired": p.expired}, sort_keys=True) + "\n")
     _dump(out)
-    return 1 if (out.get("applied") or {}).get("error_count") else 0
+    applied = out.get("applied") or {}
+    return 1 if applied.get("error_count") or applied.get("lost_count") else 0
 
 
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten

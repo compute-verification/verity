@@ -43,6 +43,12 @@ own `--program` is refused (`refused: a session without the verifier's program (
 `Flock.ProvedScope.programHeld`), with or without `--zk`: a verifier that cannot read the Program cannot know what it
 verifies, and the agreement check compares a session refused for that alone as accepted (`agree.py`'s `NO_PROGRAM`).
 
+A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
+(`rec_part`) and the SHA-512 of the shared rows file it checked (`rec_rows_sha512`). `flock-verify rec-compose
+--rec-inner F --rec-rows F LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there
+is one log per V* statement and every part is accepted at the one rows file the prover staged (`acc0`, the tops, the
+`rec-c<k>` rows). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
+
 ## Build and run
 
 ~~~text

@@ -41,7 +41,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 _STEPS: list[dict] = []
 _CUR: dict | None = None
 _PHASE: dict = {"name": "start", "rep": -1}
@@ -87,7 +90,7 @@ def _patch_engine(llm) -> None:
     ``exec|TOKENS|REQUESTS`` and ``sample_tokens`` a range ``sample``, both on the runner instance, so outside the PoUW
     option's class-level hook (`pouw_pass.hook_steps`)."""
     import torch
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     eng = llm.llm_engine
     step = eng.step
 
@@ -105,7 +108,7 @@ def _patch_engine(llm) -> None:
             _STEPS.append(rec)
 
     eng.step = stepped
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     execute = runner.execute_model
 
     def execute_model(so, *a, **kw):
@@ -151,6 +154,7 @@ def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.arms import resolve_arms
     from verity_bench.vllm.presets import load_spec, served
     from verity_bench.vllm.runner import _VllmEngine, arm_execution
+    from verity_vllm import settings as vllm_settings
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
     spec = load_spec(spec_name)
     preset, eager = served(spec.preset, spec.eager)
@@ -158,7 +162,7 @@ def _engine(spec_name: str, arm_id: str):
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     arm, reserved = _live(next(x for x in arms if x.id == arm_id))
     preset, eager = arm_execution(arm, preset, eager)
-    if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
+    if preset.engine_settings.get("serving_defaults") and not vllm_settings.get(INDUCTOR_DIR_MARK):
         import tempfile
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="served_step_inductor_")
         os.environ[INDUCTOR_DIR_MARK] = "1"
@@ -211,7 +215,7 @@ def run(a) -> int:
         _PHASE.update(name="end", rep=-1)
         doc = {"schema": "verity-pouw/served-step/v1", "spec": spec.id, "arm": arm.to_json(), "point": point.to_json(),
                "identity": dict(engine.identity), "gate": gate, "reps": reps,
-               "numa": json.loads(os.environ["DITHER_NUMA_RECORD"]) if os.environ.get("DITHER_NUMA_RECORD") else None}
+               "numa": settings.DITHER_NUMA_RECORD}
         (out / "reps.json").write_text(json.dumps(doc, indent=1, default=str))
         (out / "steps.json").write_text(json.dumps(_STEPS))
         print(json.dumps({"arm": arm.id, "point": point.id, "gate": bool(gate.get("passed")),

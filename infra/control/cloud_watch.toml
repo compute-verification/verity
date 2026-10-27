@@ -50,6 +50,13 @@ pattern = '^(\S+Z) pass rc=0 '
 period_s = 360                       # 5 min of sleep and a ~1 min pass
 
 [[loop]]
+name = "Store GC"
+started_by = "/data/infra/store_gc.sh"
+file = "/data/infra/store-gc.log"
+pattern = '^(\S+Z) pass rc=0 '
+period_s = 25200                     # 6 h of sleep and a pass of up to ~1 h (README §7.4's deletes in batches)
+
+[[loop]]
 name = "Fixture export"
 started_by = "/data/infra/fixtures_export.sh"
 file = "/data/infra/fixtures-export.log"

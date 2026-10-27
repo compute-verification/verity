@@ -25,7 +25,7 @@ before anything is timed: no .FTZ and no FP32 MUFU outside ptxas's pinned IEEE s
 approximate div/sqrt build, and only from a pinned toolkit.
 
 The record may also name the arm's reference ``verifier`` (v0.4), which `verify.py` runs after timing, in the same run, on
-the transcripts the timed code emitted (panel rule (b), 08:35Z: a measured panel row needs the verifier's acceptance of its own
+the transcripts the timed code emitted (panel rule (b): a measured panel row needs the verifier's acceptance of its own
 run's transcript). ``ctx["out_dir"]`` is the run's directory, and ``ctx["transcripts_dir"]`` its ``transcripts/``, where an
 arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention). The declaration (`check_verifier`):
 
@@ -37,7 +37,7 @@ arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention
   ``per: "run"`` once for the run (identical commands of several arms run once).
 - ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
 - ``control`` (optional, v0.5): the negative control's transcript, like ``transcript`` (``{arm}`` and ``{shape}``): what the
-  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, 11:50Z).
+  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (a panel rule).
 
 An arm with ``dump(dev, call, shape, dir)`` (v0.5) lets the harness make its transcripts (`bench.poison_dump`, after the
 timed items): the harness fills every buffer of ``call.transcript_buffers`` (default ``call.outputs``; name what a setup

@@ -21,7 +21,7 @@ The indexer's per-token work (`deepseek_v32/attention.py`, `model_executor/layer
    `cooperative_topk` on H200 (num_rows <= 64, sparse_attn_indexer.py:615-642; else `persistent_topk`).  A row of at most 2048 keys
    takes each kernel's shortcut (sampler.cu:388-412, cooperative_topk.cuh:494-501): `DsaTopKShortRow_v1`.  A longer row is a radix
    selection whose output order the kernels leave to their atomics: the order is a value and `dsa_topk.DsaTopKOrder` checks in
-   gates that it is a permutation of the top-2048 set under its tie rule (decode past 2048 keys, circuits' ruling of 18 Oct).
+   gates that it is a permutation of the top-2048 set under its tie rule.
 
 The ue8m0 quantisation (`_fp8_ue8m0_quantize`, kernels.py:50-60), in the PTX of both Triton kernels:
 

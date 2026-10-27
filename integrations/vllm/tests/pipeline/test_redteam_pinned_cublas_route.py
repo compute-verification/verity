@@ -1,15 +1,15 @@
-"""Red-team repro (circuits W6, claim 1): a served cuBLAS route that departs from the pin passes a TP Commit, digest equality intact.
+"""Red-team repro: a served cuBLAS route that departs from the pin passes a TP Commit, digest equality intact.
 
-A switched row's AOT Program equals its traced Build because both read the same pin: the Build's binding
+A switched workload's AOT Program equals its traced Build because both read the same pin: the Build's binding
 (`program/frontend/rules/vllm_bindings/bf16_gemm.py`), the fold (`observe/fold/patterns/cublas.py`) and the predictor
-(`predict/dsa.py` on cursor/aot-frontier-21f3) each take the split count of a bf16 GEMM from `bf16_gemm_check.default_cublas_route`,
+(`predict/dsa.py`) each take the split count of a bf16 GEMM from `bf16_gemm_check.default_cublas_route`,
 a table of what cuBLAS chose on the capture box.  The serving process's cuBLAS decides its own route, and two environment variables
 and two torch flags it inherits from whoever starts it move that route.  The capture of record (`glm53_bf16_gemm_capture`,
-art:5fcc5a49..., H200 run r20261016-234133-bbc8) measured it: GLM-5.3's MoE gate at M 17 runs `nvjet_tss_64x8_64x16_2x4_h_bz_splitK_TNT`
+H200 run r20261016-234133-bbc8) measured it: GLM-5.3's MoE gate at M 17 runs `nvjet_tss_64x8_64x16_2x4_h_bz_splitK_TNT`
 plus `cublasLt::splitKreduce_kernel` (split 4) at vLLM's default, and `nvjet_tss_64x8_64x16_2x4_h_bz_TNT` (no split, word-exact against
 `GemmF32Out_v1`) under CUBLAS_WORKSPACE_CONFIG=:16:8, CUBLASLT_WORKSPACE_SIZE=1 and the reduced-precision flags off.
 
-GLM-5.3 B1 TP8's Commit of record (r20261016-213336-6c35, the row's record art:440154ed...) commits 153,600 rows of
+GLM-5.3 B1 TP8's Commit of record (r20261016-213336-6c35) commits 153,600 rows of
 `CublasSplitKGemmF32Out_v1` (the prefill router) and 48,216 of `CublasSplitKGemm_v1` that its replay lists `unreplayable`, "no registered
 evaluator"; its oracle compares only the TP partials, against the Match run the same prover served under the same switches; the
 engine facts the replay measures (`engine_facts_of_record`) are recorded and read by no gate; `records.check_capture` accepts any

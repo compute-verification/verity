@@ -23,7 +23,8 @@ here, and its theorem is below it.
   `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw `partDraw` of part `j`.
 
 The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per draw, registration and table: at one table
-it is `DecodesOn`'s, which [wave2-dec-zl] discharges for #828's tables, and its coin half is [wave2-plays-coin]'s.
+it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
+coin half is `decodesOnOfRuns`'s.
 -/
 
 namespace FlockSoundness.Discharge.Tables
@@ -182,7 +183,8 @@ def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
       Lean.toJson))]
 
 /-- **flock-verify's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
-outputs: the tag allows several tables and `count ≤ 64`; the record's draw, when there is one, is a subset draw, whose
+outputs: the tag allows several tables and `count ≤ 64`; the record's draw, when there is one, is a subset or stratified
+draw, whose
 population and units are the session's (without one, the population's every unit); the units split into `count`
 nonempty equal parts; and table `j` is `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw of
 part `j`. -/
@@ -193,7 +195,8 @@ def AcceptsTables : Prop :=
       I.tags.manyTables.isSome ∧ I.count ≤ Flock.Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
         (∀ d, recordDraw t.record = some d → ∃ u, Flock.Draw.UnitDraw.ofJson d = .ok u ∧
-          (∃ k', u.law = .subset k') ∧ u.population = population ∧ u.units = units) ∧
+          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+          u.population = population ∧ u.units = units) ∧
         (recordDraw t.record = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % I.count = 0 ∧ sts.size = I.count ∧
         ∀ (j : ℕ) (hj : j < sts.size),

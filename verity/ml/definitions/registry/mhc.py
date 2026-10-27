@@ -24,7 +24,7 @@ What nvcc makes of TileLang's expressions, in the CUDA and its PTX: `a + b * c` 
 (`F32Fmaxf_v1`); a bf16 store is `cvt.rn.bf16.f32` (`F2fpBf16_v1`).  `a - b` is `sub.f32`, written `add(a, neg(b))`: the same
 word but for a NaN's payload.  Each `T.reduce_*` / reducer finalisation and each `warp_reduce` is TileLang's xor butterfly (lane
 t takes `op(v[t], v[t ^ h])` for h = n/2 .. 1: `dsa.halving_tree`), each accumulator and each cross-warp sum a chain from +0
-in index order (`chain`).  A NaN word is IR's (0x7FC00000) where a leaf's is, and the GPU's 0x7FFFFFFF elsewhere; no output reads
+in index order (`chain`).  A NaN word is the evaluator's (0x7FC00000) where a leaf's is, and the GPU's 0x7FFFFFFF elsewhere; no output reads
 a NaN's payload on finite operands.
 
 The Sinkhorn normalisation (tilelang_kernels.py:247-266, and :410-429 in the broadcast), on the 4 x 4 logits x[r][c] = `fma(mixes[8 + 4r + c], scale[2],
@@ -38,7 +38,7 @@ from shared memory), both operands rounded RNE to TF32, from a zero accumulator,
 `HopperTf32WgmmaDot8_v1`.  A's conversion is unobservable here because widened bf16 has thirteen zero low bits.  The squared sum
 of each block: thread lane e < 4 of a quad adds `fma(x[k], x[k], x[k+4] * x[k+4])`, k = 64 st + 8 i + e, into its own chain
 from +0, and the quad's shuffles add `(v0 + v2) + (v1 + v3)`; these are GPU FMUL/FFMA/FADD operations, whose NaN result is
-0x7FFFFFFF.  Run r20261013-115825-580e's H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
+0x7FFFFFFF.  An H200 probe fitted `HopperTf32WgmmaDot8_v1` alone: the Hopper BF16 step's adder on
 TF32 products.  Core's instruction catalog remains `unprobed` because it has no core-owned model to pin;
 tests/properties/dsv4_mhc_capture_gpu.py reruns the gate.
 

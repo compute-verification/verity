@@ -277,7 +277,7 @@ def _theta(data: Path) -> str | None:
 
 SECTIONS = {"vectors": ("Vectors", _vectors), "epochs": ("Epochs and their census", _epochs),
             "rows": ("Rows", _rows), "floors": ("Floors", _floors), "designs": ("Designs", _designs),
-            "honest": ("Honest kernels", _honest), "units": ("Proof units", _units), "forms": ("MMA forms", _forms),
+            "honest": ("Honest kernels", _honest), "units": ("Proof blocks", _units), "forms": ("MMA forms", _forms),
             "table": ("The table route", _route), "headline": ("The per-family headline's designs", _headline),
             "attacks": ("Attack families", _attacks), "devices": ("Devices", _devices),
             "theta": ("θ: rates, capacities, clocks and exact paths, with sources", _theta)}

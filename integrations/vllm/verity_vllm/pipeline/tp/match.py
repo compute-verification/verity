@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.engine.collectives import fused_norm as FN
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
 from verity_vllm import settings
@@ -441,7 +441,7 @@ def match_record(match_dir: str, request_ids: dict[str, str], world: int) -> tup
 @dataclass(frozen=True, kw_only=True)
 class Options:
     arm: str = option("--arm", choices=("capture", "control", "check"))
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)

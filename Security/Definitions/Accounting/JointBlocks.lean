@@ -16,8 +16,8 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   (`Pous.EraseMeets`, which `Pous.Guarantees.SecureErasureMeetsFamily` proves at `f = 1/19`, `ε = 2^-128`): at most
   `f · fill + 2λ` bits (`λ = 128`) survive, plus the state the fill leaves out (`BlockWipe.unfilled`, the on-chip
   state and the device memory the fill doesn't reach).
-* **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07` (Daniel's
-  ruling, ASK-132): at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`
+* **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07`, as
+  ruled: at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`
   bits of weights that the capacity account doesn't hold (`BlocksRun.undeclared`), is at most `0.07 · U + S_chip + c`,
   where `c = ∑_i cap_i · T_read` is what the side channels bring in over the read deadline `T_read`. It is stated at
   the challenge times only, until the continuous audit (`Pous.Guarantees.ContinuousAudit`) is tied in.
@@ -86,7 +86,7 @@ def undeclared (b : Fin B) (ξ : (i : I) → Ω i) (t : ℕ) : ℝ :=
 /-- What the side channels bring in over the read deadline (c): `∑_i cap_i · T_read` bits. -/
 def sideBits [Fintype ι] : ℕ := ∑ i, d.cap i * s.readDeadline
 
-/-- **Block `b`'s memory term** (ASK-132, PoUS over the weights at a share of `0.07`), at the coins `ξ`: at each of its
+/-- **Block `b`'s memory term** (PoUS over the weights at a share of `0.07`), at the coins `ξ`: at each of its
 PoUS challenge times, its undeclared memory is at most `0.07 · U + S_chip + c`. -/
 def MemoryTerm [Fintype ι] (b : Fin B) (ξ : (i : I) → Ω i) : Prop :=
   ∀ t ∈ s.chal b ξ, s.undeclared b ξ t ≤ 7 / 100 * s.weights b + d.chip + s.sideBits

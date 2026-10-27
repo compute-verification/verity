@@ -1,4 +1,4 @@
-// R10 acq-native: native acquisition at the EXISTING hook boundaries (Daniel's brief §4, primary bet).
+// Native acquisition at the EXISTING hook boundaries.
 //
 // One `Collector` per committer.  Per step the serving thread calls `begin_step(plan_key, arena_ptr, arena_bytes)` once, then
 // `collect(name_id, tensor)` once per acquired tensor IN HOOK ORDER, then `end_step()`.  The collector keeps one PLAN per step-shape class

@@ -64,7 +64,7 @@ def test_a_name_outside_the_grammar_is_refused_by_what_is_wrong(name, why):
 
 
 def test_the_formats_are_h0_and_sha512_h3():
-    """One hash, SHA-512 (Daniel, 2026-10-06): h3's trees are hm96-sha512 and its rows seed on their SHA-512 digests; h0 is
+    """One hash, SHA-512: h3's trees are hm96-sha512 and its rows seed on their SHA-512 digests; h0 is
     the unhashed default."""
     assert list(HASH_FORMATS) == ["h0", "h3"]
     h0, h3 = HASH_FORMATS["h0"], HASH_FORMATS["h3"]

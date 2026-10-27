@@ -392,7 +392,7 @@ theorem honestRows_fit : ∀ (sched : List RecVStar.SchedRound) (chs : List (Lis
     · intro j hj
       cases j with
       | zero =>
-        refine ⟨?_, List.drop_left' hsum, fun hb => vals_nil_of_anyV (h1.1.trans hb)⟩
+        refine rowsAt_padRow ?_ (List.drop_left' hsum) fun hb => vals_nil_of_anyV (h1.1.trans hb)
         simp only [List.getD_cons_zero, List.length_append, hsum]
         cases b <;> rfl
       | succ j => exact l4 j (by simpa using hj)

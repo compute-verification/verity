@@ -2,7 +2,7 @@
 ``verity_bench.vllm.commit_arm:COMMIT`` (``commit``, eager) or ``verity_bench.vllm.commit_arm:COMMIT_COMPILED``
 (``commit@compiled``, at vLLM's compiled serving defaults) in ``arm_modules`` and the arm's id in ``arms``.
 
-``sampled-proofs:vllm-v1`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
+``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
 proofs refuses (`protocol_options.sampled_proofs.refusals`: it runs in a row's Commit stage). So these arms install the Commit's
 committer on the served engine themselves, configured as a row's Commit stage runs it (`config.CommitConfig`,
 `pipeline.commit.make_committer`): ``native_collect_v2b`` (gather windows, size-adaptive blocks, native worker, GPU tree, fast
@@ -38,10 +38,11 @@ fails. The custom gate reads every run so far.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+from verity_vllm.engine.env import apply_target
 
 #: the row Commit's staging (`config.CommitConfig`): 256 MiB windows, 8 slots; learning bounded, nothing raw retained
 ENV = {"VERITY_WINDOW_MB": "256", "VERITY_WINDOW_SLOTS": "8", "VERITY_STAGING_BOUNDED": "1", "VERITY_RETAIN": "none"}
@@ -80,12 +81,12 @@ def committer_engine(llm: Any) -> SimpleNamespace:
     harness's ``target.engine`` (``verity_vllm.LLM``, or for a local checkpoint the runner's stand-in, which has no pin):
     the ``vllm.LLM``, its in-process model runner, the served model, and the checkpoint's repo and revision (into its
     geometry digest), which are the pin's, or for a local checkpoint vLLM's model path with no revision."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
 
     pin = getattr(llm, "pin", None)
     mc = llm.vllm.llm_engine.vllm_config.model_config
     cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
-    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model, cp=cp)
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class CommitArm:
@@ -110,7 +111,7 @@ class CommitArm:
     def ready(self, target: Any) -> None:
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-        os.environ.update(ENV)
+        apply_target(ENV)
         engine = self.engine(target)
         com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
                                      native_hooks=True, auto_blocks=True, native_worker=True)

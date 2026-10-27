@@ -1,4 +1,4 @@
-"""DERIVE-VLLM-1 step (4)-(5): export a wrapper around the ACTUAL pinned vLLM model class and derive it with
+"""Export a wrapper around the ACTUAL pinned vLLM model class and derive it with
 `verity_vllm.program.frontend.derive` + the per-op vLLM bindings. Wrappers (`vllm_meta.make_wrapper`): `step` (one engine step, M tokens at
 pos0), `request` (prefill LP + T decode steps, flat), `padded` (the fixed padded rectangle prefill | decode 1..D_MAX with liveness
 values). Writes the derive report (provenance: every rule application), the program's descriptor + digest, a per-spec histogram,
@@ -23,7 +23,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity_vllm.config import RowConfig, option
+from verity_vllm.config import RowConfig, option, workload_arg, workload_file
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
@@ -154,7 +154,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
 
     vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split`, whose keep set depends
     on its split count S.  vLLM picks S from the live sampler batch, so a request's batch-mates would pick its nucleus at top_p < 1
-    (CIR-87: `circuit-check --batch`).  The served engine runs every launch at the registered S instead
+    (as `circuit-check --batch` shows).  The served engine runs every launch at the registered S instead
     (`topp_geometry.registered_splits` = SplitsFor_v1(1, num_SMs), from the target's SM count, never hard-coded; `engine.topp_pin`),
     so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
     holds every launch's S to it."""
@@ -176,7 +176,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     wl = sampling.get("workload")
     if wl:
         try:
-            w = json.load(open(wl))
+            w = json.loads(workload_file(wl).read_text())
             reqs = list(w.get("requests") or [])
         except Exception as e:  # noqa: BLE001
             return refuse(f"cannot read the workload manifest {wl!r} for the sampler batch: {e!r}", reason="sampler_geometry")
@@ -716,7 +716,7 @@ class Options:
                                 help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
     sampling: str | None = option("--sampling", default=None,
                                   help="[X-05] the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="[X-05] the row's workload manifest; its sampling policy becomes the structural input `sampling`")
     tp: int = option("--tp", type=int, default=1,
                      help="[R13 tp] tensor-parallel world size (structural input); the Program describes ONE rank")

@@ -13,63 +13,42 @@ description: >
 
 # Writing runs
 
-`research run` starts the workload in its run dir unless you pass `--cwd`. On a machine, custody publishes that dir to the
-store's remote once the workload exits. Every byte the workload leaves there is a byte custody reads, and it may upload it
-too. Run `r20260930-080414-bae0` started a build in its run dir, and custody spent 54 minutes on 9.5 GiB before it was
-killed. Whoever writes the job decides what to keep.
+`research run` starts the workload in its run dir unless you pass `--cwd`. On a machine, custody reads every byte left
+there when the workload exits and publishes to the store:
 
-A local `research run` (no `--on`, as in a pod) publishes only its telemetry and the files its `result.json` lists, unless it
-passes `--run-record`. With it, the attempt carries the same selection custody's run record does. The Nebius Sky templates
-with a free-form `CMD` (`port-capture`, `prover-bench`, `prover-dev`) pass it.
+- always, the run's logs and records (`custody.RUN_FILES`) and all of `$OUT` (`$RESEARCH_RUN_DIR/out`, whatever the cwd);
+- each `--declared-output GLOB` (quote it; `fnmatch` on paths relative to the run dir, so `*` crosses `/`);
+- other files in path order up to 256 MiB in all (`custody.UNDECLARED_CAP_BYTES`, kept for older launches; it drops to 0
+  once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
+  `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
 
-## What custody keeps
-
-- **Always uploaded:** the run's own files, meaning the logs, `job.json`, `status.json`, `events.jsonl`, `result.json` and
-  the other records the harness writes (`custody.RUN_FILES`).
-- **`$OUT`, always, in full:** the harness creates the run dir's `out/` before the workload starts and gives the workload its
-  path as `$OUT`. Custody uploads everything under it, as if every launch passed `--declared-output 'out/*'`.
-- **Declared outputs, beside `out/`:** each `--declared-output GLOB` is matched against paths relative to the run dir, and
-  every matching file is uploaded. The glob uses `fnmatch`, so `*` also matches across `/`: `res/*` is all of `res/`,
-  and `*` is everything.
-- **Everything else is trimmed:** undeclared files are uploaded in path order while their total stays within 256 MiB
-  (`custody.UNDECLARED_CAP_BYTES`). The rest are listed in the run record's `meta.trimmed` with path, size and sha256, and
-  no bytes. Custody still pins a trimmed file by its hash, so changing it afterwards breaks `.custody`.
-
-Custody prints `custody trimmed N undeclared file(s)` when it trims. The cap exists only so that runs launched before this
-rule keep working. Once lanes declare their outputs it drops to 0, and undeclared files are never uploaded.
+A local `research run` (no `--on`) publishes only its telemetry and the files its `result.json` lists, unless
+`--run-record` gives it custody's selection; the Nebius Sky templates with a free-form `CMD` (`port-capture`,
+`prover-bench`, `prover-dev`) pass it.
 
 ## The norms
 
-1. **Run from a directory you chose.** Use `--cwd source` (or `source/SUB`) for a command that reads the checkout, `--cwd clone`
-   (or `clone/SUB`) for one that writes into it (a build, a Lean `.lake`): on a machine every run of the commit shares the
-   source tree, and a clone is the run's own, removed when it ends; the workload imports the tree's Python from it too. Locally
-   only the cwd moves: an editable install still imports from, and writes beside `__file__` in, the invoking checkout. Or pass
-   an absolute `--cwd`. A relative path in the command
-   that resolves against the run dir is the failure above.
-2. **Put what you want kept in `$OUT`.** The workload finds it in `$OUT` whatever its cwd is (it is
-   `$RESEARCH_RUN_DIR/out`), and custody always sends all of it to the store, so the launch declares nothing. A result that must
-   live elsewhere in the run dir needs `--declared-output GLOB`; quote the glob so your shell doesn't expand it.
-3. **Keep outputs small:** the numbers, JSON, logs and the digests of big things. An artifact that must survive but is
-   large (a model, a proof, a trace over about 100 MiB) goes in `$OUT` too: custody is the only way a node run's bytes reach
-   the store (a node holds no store write key, so `research data put` inside a job fails; TOP-90 row 51), and the run's
-   attempt cites them as its `run_files`. Cite it as the run id and its path under `out/`. An uncited run record leaves the
-   store 7 days after its upload (the store README §7.4), so a label or a note naming the run id is what keeps it. Don't
-   copy into `$OUT` what the commit regenerates (a circuit, a build): 26 Oct's 476 GiB of run records were mostly that.
-4. **Put scratch in a `mktemp -d` directory that you delete,** as in the example, or elsewhere outside the run dir. A job's
-   `$TMPDIR` may be unset (queued jobs on vy-nebius-1 have none), so `$TMPDIR/x` can become `/x`. Caches, build trees
-   (`target/`, `.lake/`, `node_modules/`), downloaded datasets and checkpoints never go in the run dir.
-5. **Record what a job retains outside its run dir, and delete it only through `research retention rm`.** A job that keeps
-   data on the node (PoUW's passes) runs `research keep DIR --owner @LANE --expires never --priority keep` as soon as `DIR`
-   exists; lowering it takes top's yes. A brief that deletes says `research retention rm PATH --approved-by
-   @OWNER --ref THREAD --apply`, never `rm -rf`, so a stale step fails closed. A worker that hits "Permission denied" or a
-   refusal stops and reports it: someone made that path read-only or kept it on purpose. On 6 Oct a stale step ran
-   `chmod -R u+w` and `rm -rf` on serve `r20261006-201412-b28d`'s cited passes, about 27 GB on each node, and they are gone.
-   `retention rm` deletes passes only once their record names a preserved artifact.
+1. **Pick the cwd:** `--cwd source` (or `source/SUB`) to read the checkout, `--cwd clone` (or `clone/SUB`) to write into
+   it (a build, a Lean `.lake`), or an absolute path; never a relative path that resolves against the run dir. On a machine
+   every run of a commit shares the source tree, while a clone is the run's own, removed when it ends, and the workload
+   imports its Python from it. Locally only the cwd moves: an editable install imports from, and writes beside `__file__`
+   in, the invoking checkout.
+2. **Keep results in `$OUT`, small:** numbers, JSON, logs, digests of big things. A large artifact that must survive (a
+   model, a proof, a trace past about 100 MiB) goes there too: a node holds no store write key, so `research data put` in
+   a job fails. Cite it as the run id and its path under `out/`; an uncited run record leaves the store 7 days after upload
+   (the store README §7.4), and a label or note naming the run keeps it. Don't copy in what the commit regenerates (a circuit, a build).
+3. **Scratch, caches, build trees (`target/`, `.lake/`, `node_modules/`), datasets and checkpoints stay out of the run
+   dir**, in a `mktemp -d` directory you delete. `$TMPDIR` may be unset (queued jobs on vy-nebius-1): `$TMPDIR/x` is `/x`.
+4. **Data kept outside the run dir** is registered once it exists, `research keep DIR --owner @LANE --expires never
+   --priority keep` (lowering it takes top's yes), and deleted only by `research retention rm PATH --approved-by @OWNER
+   --ref THREAD --apply`, never `rm -rf`, so a stale step fails closed; it deletes passes only once their record names a
+   preserved artifact. On "Permission denied" or a refusal, stop and report it: someone made the path read-only or kept
+   it on purpose.
 
 ~~~bash
 research run --on M --cwd source -- \
   bash -c 'd=$(mktemp -d); trap "rm -rf $d" EXIT; python bench.py --scratch "$d" --out "$OUT"'
 ~~~
 
-Before a long run on a machine, try the same command there for a minute (`--timeout 2m --wait`), never on an agent VM
-(AGENTS.md "Lanes"). Check that `ls` of the run dir shows only your output directory beside the harness's files.
+Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
+"Tests"), and check that the run dir holds only your output directory beside the harness's files.

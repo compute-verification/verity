@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Recursion.VStarCross
 /-!
 # (P4) modulo what `E*` reads, and `LastCoinFree`, at the deployed reader (`nextR`)
 
-`StepsBase` reads, beside `KSFlockLin` and `StepsLogFree`, two facts of the bound record's last step: that it reads no
+`StepsBase` reads, beside `KSFlockLin`, two facts of the bound record's last step: that it reads no
 last coin (`Bound.LastCoinFree`) and that it binds its last message modulo what `E*` reads (`Bound.LastBindsEC`). Here
 they are at `bdDeployed` with the deployed reader's steps `nextR rd`, its columns `colsRV rd` for `LastBindsEC`
 (`FlockDeploy.KS.bdR`), and any columns for `LastCoinFree`.
@@ -167,7 +167,7 @@ def RColsBind (H : Msg → Msg) (rd : Msg → Option FinalP) : Prop :=
 
 /-- **The deployed reader binds its last message's calls**: two last messages it accepts after the same rounds and
 coins, where it answered each earlier round with that round's coin, whose decisions call SHA-512 on different sets,
-show a collision among those calls. The calls are compared as sets (ASK-76), as at the plain verifier. -/
+show a collision among those calls. The calls are compared as sets, as at the plain verifier. -/
 def RCallsBind (H : Msg → Msg) (rd : Msg → Option FinalP) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →

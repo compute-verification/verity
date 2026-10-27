@@ -2,7 +2,7 @@
 
 The registry is the TOML files under `data/`, one per layer. A leaf is either a bare value (a choice, such as a kind or a
 name) or a parameter: an inline table with `value` and optionally `unit`, `low` and `high` (the plausible range that
-sweeps and tornados span), `source` (a datasheet, an `art:` or `note:` id, a Lean name, a ruling) and `status`
+sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a ruling) and `status`
 (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`)::
 
     [location.h200-hgx]
@@ -76,7 +76,7 @@ class Registry:
         return self.param(key).value
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._params[key].value if key in self._params else default
+        return self.param(key).value if key in self._params else default
 
     def param(self, key: str) -> Param:
         try:
@@ -106,10 +106,10 @@ class Registry:
             raise KeyError(f"no table {prefix!r} in the registry (data/*.toml)")
         return {k[len(prefix) + 1:]: self.param(k).value for k in keys}
 
-    def fields(self, cls: type, prefix: str, **given: Any) -> Any:
+    def fields(self, cls: type, prefix: str, skip: Iterable[str] = (), **given: Any) -> Any:
         """An instance of dataclass `cls` from table `prefix`: each field from the table (or `given`), and no other keys
-        in the table than fields, `kind` and `name`."""
-        table = self.table(prefix)
+        in the table than fields, `kind`, `name` and `skip` (the keys a caller reads and converts itself)."""
+        table = {k: v for k, v in self.table(prefix).items() if k not in set(skip)}
         names = {f.name for f in fields(cls)}
         stray = set(table) - names - {"kind", "name"}
         if stray:
@@ -120,10 +120,12 @@ class Registry:
         return cls(**values)
 
     def override(self, values: Mapping[str, Any]) -> Registry:
-        """A registry with these values in place of the old (each key must exist: a typo is an error, not a no-op)."""
+        """A registry with these values in place of the old (each key must exist: a typo is an error, not a no-op). A
+        `Param` replaces the whole parameter: its range, source and status with its value."""
         params = dict(self._params)
         for key, value in values.items():
-            params[key] = replace(self.param(key), value=value)
+            old = self.param(key)
+            params[key] = replace(value, key=key) if isinstance(value, Param) else replace(old, value=value)
         return Registry(params, index=self._tables())
 
 

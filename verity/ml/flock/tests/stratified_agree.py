@@ -8,6 +8,8 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
 - the draw: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
 - U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted draw;
+- one draw over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
+  take it and the same refusal where both refuse;
 - on a small program, each unit's inclusion frequency over OS draws against `k_s / n_s`;
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
@@ -155,7 +157,7 @@ def main() -> int:
         members = [(T[rng.randrange(4)], rng.randint(1, 40)) for _ in range(rng.randint(1, 6))]
         n = sum(c for _, c in members)
         cases.append((f"random{r}", members, sorted({rng.randint(1, n) for _ in range(3)})))
-    bad, checked, mutations, refusals = [], 0, 0, 0
+    bad, checked, mutations, refusals, tables_checked = [], 0, 0, 0, 0
     res: dict = {}
     for label, members, ks in cases:
         prog = P.mixed_population_program(members)
@@ -191,6 +193,16 @@ def main() -> int:
             got = _lines(p, "DRAW")
             if not got or not D.check_draw(got[0], {"population": n}, law).ok:
                 bad.append((label, k, "the OS draw", p.stderr.strip()[-300:]))
+            for tables in (2, 3):
+                p = subprocess.run([a.lean, "draw", *flags, "--stratified", str(k), "--tables", str(tables),
+                                    "--stream-file", str(out / "stream.bin")], capture_output=True, text=True)
+                tables_checked += 1
+                why = D.tables_problem(law, tables)
+                got = _lines(p, "DRAW")
+                if why is None and (not got or got[0] != d or not D.check_draw(got[0], {"population": n}, law, tables).ok):
+                    bad.append((label, k, tables, "tables: Lean refuses or draws otherwise", p.stderr.strip()[-300:]))
+                if why is not None and (got or why not in p.stderr):
+                    bad.append((label, k, tables, "tables: Lean takes what core refuses", why, p.stderr.strip()[-300:]))
             if label == "a4" and k == 1024:
                 core = audit.core_law(D.law_of(d), n)
                 res["a4"] = {"k_s": [s["k"] for s in d["strata"]], "drawn": len(d["units"]),
@@ -262,6 +274,7 @@ def main() -> int:
     lax["strata"][0]["k"] = True
     res["core_takes_a_boolean_stratum_k"] = D.check_draw(lax, {"population": a4["population"]}, D.law_of(a4)).ok
     res.update({"programs": len(cases), "draws": checked, "mutations": mutations, "refusals": refusals,
+                "tables": tables_checked,
                 "os_draws": a.os_draws, "frequency_worst_sd": round(worst, 2), "disagree": bad[:20]})
     print(json.dumps(res))
     return 0 if not bad else 1

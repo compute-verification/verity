@@ -38,17 +38,12 @@ import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt, Store, TagReceipt
+from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, RemoteBandwidthReceipt, Store
 
 if TYPE_CHECKING:
     from verity.core.protocols.remote_bandwidth.audit import Tiles
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
-
-
-def default_receipt() -> Receipt:
-    from verity.core.protocols.bandwidth import tags
-    return TagReceipt(tags.get("ro-blake3/v1"))
 
 
 class TorchBacking:
@@ -240,8 +235,8 @@ class Binder:
     `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
-    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
-    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`).
+    (`RemoteBandwidthReceipt`); without them, its default kind, sketch-sha512, of the block alone (`KindReceipt`).
+    With ``passes=False`` the binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
     unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`).  With ``kv=False``
     the KV pool stays outside the registration (counted unregistered): its pages' hooks reach no store, and a step
@@ -254,7 +249,7 @@ class Binder:
                  on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
                  passes: bool = True, weight_blocks: int | None = None, kv: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec, self.kv = store, block_bytes, kv_codec, kv
-        self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
+        self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else KindReceipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
         self.weight_blocks = weight_blocks

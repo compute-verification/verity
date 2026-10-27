@@ -54,7 +54,8 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
       .ok (spec, sts)) :
     tags.manyTables.isSome ∧ count ≤ Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
-        (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ (∃ k', u.law = .subset k') ∧
+        (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
+          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (draw = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % count = 0 ∧ sts.size = count ∧
@@ -95,11 +96,14 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     obtain ⟨hpos, hmod⟩ := Tables.splits_ok (by assumption)
-  · obtain ⟨hD1, hD2⟩ := Tables.draw_subset (by assumption) (by assumption) (by assumption)
-    exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz, hall⟩
-  · have hdn := Tables.draw_none (by assumption)
-    exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
-      fun _ => rfl, hpos, hmod, hsz, hall⟩
+  all_goals first
+    | (have hdn : draw = none := Tables.draw_none ‹draw.mapM Draw.UnitDraw.ofJson = .ok none›
+       exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
+         fun _ => rfl, hpos, hmod, hsz, hall⟩)
+    | (have hdu : draw.mapM Draw.UnitDraw.ofJson = .ok (some _) := ‹_›
+       obtain ⟨hD1, hD2⟩ := Tables.draw_split hdu
+         (by first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, _, by assumption⟩) (by assumption)
+       exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz, hall⟩)
 
 end Parts
 

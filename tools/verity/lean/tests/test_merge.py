@@ -393,6 +393,69 @@ def test_a_lean_file_whose_sides_only_add_imports_merges_and_any_other_conflict_
     assert left == 1 and "<<<<<<< ours" in text and "import G.Actual\nimport G.Memory\n" in text
 
 
+def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(tmp_path):
+    """Ours removes `G.B` and adds `G.F`; theirs moves `G.B` to the end.  Git sees the removal on both sides where `G.B` was
+    and two additions at the end, so a merge of that hunk alone brings `G.B` back (#4690 onto `next`)."""
+    imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
+    text, left = _lean(tmp_path, imports("A", "B", "C", "D", "E"), imports("A", "C", "D", "E", "F"), imports("A", "C", "D", "E", "B"))
+    assert left == 0 and text == imports("A", "C", "D", "E", "F")
+
+
+def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tmp_path):
+    imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
+    text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "C"), imports("A", "Y", "C"))
+    assert left == 0 and text == imports("A", "Y", "X", "C"), "both added: the union; both removed B: gone"
+    text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "B", "C"), imports("A", "Y", "B", "C"))
+    assert left == 0 and text == imports("A", "Y", "X", "B", "C")
+
+
+def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
+    """`Security/Definitions/Accounting.lean` as git gave it to the driver when drive merged #4690 onto `next` (5534d5ccd4,
+    26 Oct): the merge kept the import of the module #4690 retired, and Security stopped building (ci's check 83067ace)."""
+    sides = json.loads((FIXTURES / "accounting-4690-onto-next.json").read_text())
+    text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
+    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
+    assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
+    assert gone not in text
+    assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(
+        sides["base"]))
+
+
+def test_a_lakefile_root_or_require_one_side_removed_stays_removed_where_the_other_side_moved_it():
+    """As for imports: ours removes a root (a require) and appends another, theirs moves it to the end."""
+    import tempfile
+    import tomllib
+    tmp = Path(tempfile.mkdtemp())
+    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    text, left = _lakefile(tmp, roots("A", "B", "C", "D", "E"), roots("A", "C", "D", "E", "F"), roots("A", "C", "D", "E", "B"))
+    assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == ["A", "C", "D", "E", "F"], text
+    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns)
+    text, left = _lakefile(tmp, req("a", "b", "c"), req("a", "c", "d"), req("a", "c", "b"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "d"], text
+    text, left = _lakefile(tmp, req("a", "c"), req("a", "c", "x"), req("a", "c", "y"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "x", "y"], "both added: both"
+
+
+def test_a_root_or_require_one_side_removed_stays_removed_where_git_merges_the_other_side_s_move_cleanly(tmp_path):
+    """ci's case against ef47f3bd (#4814): roots A..H, ours removes B, theirs moves B after D.  Git merges that without a
+    conflict, to [A, C, D, B, E, F, G, H]; the whole merged file is held to `kept`, so B stays removed.  Requires alike."""
+    import tomllib
+    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns) + \
+        '\n[[lean_lib]]\nname = "P"\n'
+    for side, (o, a, b) in {"roots": (roots(*"ABCDEFGH"), roots(*"ACDEFGH"), roots(*"ACDBEFGH")),
+                            "require": (req(*"abcdefgh"), req(*"acdefgh"), req(*"acdbefgh"))}.items():
+        for n, t in (("base", o), ("ours", a), ("theirs", b)):
+            (tmp_path / n).write_text(t)
+        clean = subprocess.run(["git", "merge-file", "-p", *(str(tmp_path / n) for n in ("ours", "base", "theirs"))],
+                               capture_output=True, text=True)
+        assert clean.returncode == 0 and tomllib.loads(clean.stdout) != tomllib.loads(a), "git alone brings it back"
+        text, left = _lakefile(tmp_path, o, a, b)
+        assert left == 0 and text == a, text
+    text, left = _lakefile(tmp_path, req(*"abcd"), req(*"acd"), req(*"acdbx"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "d", "x"], text
+
+
 def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installed_driver(tmp_path, monkeypatch):
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():

@@ -10,7 +10,7 @@
 //   (h1c_a_call) the call's A slot rows (rows < m xq's bytes and scales, rows >= m the canonical empty row) and their
 //                table, its root where the units' seeds read it (h1c.cu; its row-independent parts once a step)
 //   h1o_units    a warp a unit (`h1r_unit<2, OutEpi>`): its seed_j and σ_R, the receipt, then z and y of the unit's cells;
-//                A rows >= m read as the canonical empty row (zero); a dead unit (its row block holds no admitted row)
+//                A rows >= m read as the canonical empty row (zero); a dead unit (its row tile holds no admitted row)
 //                writes zero receipts and zero z and y.  `h1o_unitsb` is the same in the block form (`h1b_unit<OutEpi>`,
 //                a unit a block of five warps), for decode, where a call's units would leave most SMs idle, and
 //                `h1o_unitss` in the split form (`h1s_unit<OutEpi>`, six warps: the hashing a chunk ahead of the
@@ -399,7 +399,7 @@ H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
 // h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2) and 3 block with the rows read in the
 // segment loop (NoEpi::BAND 1), 1 split and 2 split2 (staged), 4 block2 and 5 block staged (BAND 2); mode 0 the band-rows
 // pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone, 3 mode 0 with the units launched as
-// the pass's programmatic dependents (their seeds, midstates and column blocks overlap the pass; band_wait before the rows)
+// the pass's programmatic dependents (their seeds, midstates and column tiles overlap the pass; band_wait before the rows)
 static int band_J(int units, int ncb, int k, int g) {
   const long long nrb = units / ncb, nl = (ncb + g - 1) / g, RB = (k >> 9) + 1;
   int J = 1;
@@ -515,7 +515,7 @@ extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seed
   return (int)cudaGetLastError();
 }
 
-// ASK-64's perCall measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
+// The per-call challenger round's measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
 // root to the host, a host function that holds the stream one challenger round, and a 64-byte coin back to the device,
 // all three on the caller's stream, so a captured graph keeps them (memcpy nodes and a host node).  The round is
 // simulated: the host function spins for the next of the waits h1o_percall_init took (the measured round trips, replayed

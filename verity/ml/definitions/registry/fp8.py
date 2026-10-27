@@ -247,10 +247,10 @@ def QuantLinearFp8(B, S, x, w, sw, *bias):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [R15 fp8] the BLOCK-SCALED FP8 linear of a pre-quantised checkpoint (Qwen3-4B-Instruct-2507-FP8: `weight_block_size = [128, 128]`,
+# the BLOCK-SCALED FP8 linear of a pre-quantised checkpoint (Qwen3-4B-Instruct-2507-FP8: `weight_block_size = [128, 128]`,
 # `weight` e4m3 [N, K], `weight_scale_inv` f32 [N/128, K/128]) on Hopper — `Fp8LinearMethod` -> `CutlassFp8BlockScaledMMKernel`
 # (`VLLM_USE_DEEP_GEMM=0`; the DeepGEMM JIT needs nvcc >= 12.3 and is not the panel's path).  Two kernels, both pinned bit for
-# bit on the H100 (out/gen/sweep/evidence/fp8/FINDINGS.md; probe_block_gemm.py + check_block_gemm.py, adversarial_cases.py):
+# bit on the H100:
 #
 # 1. `_C.per_token_group_fp8_quant(x, x_q, x_s, 128, eps=1e-10, -448, 448, use_ue8m0=False, column_major_scales=True, tma_aligned=False)`
 #    (`per_token_group_quant_8bit_kernel`, csrc/quantization/fp8/per_token_group_quant.cu): per 128-element group of a bf16 row,

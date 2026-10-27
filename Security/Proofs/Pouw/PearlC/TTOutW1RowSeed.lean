@@ -1,4 +1,6 @@
 import Definitions.Pouw.PearlC.W1
+-- `W1.Instr.exec`'s equation lemmas, realized there first: two modules that each realize them don't import together
+import Proofs.Pouw.PearlC.W1BudgetAbort
 import Proofs.Pouw.PearlC.RowSeedGamma
 
 /-!

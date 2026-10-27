@@ -1,6 +1,6 @@
 """Committed bytes by buffer category from a served_commit run's out/layouts.jsonl (prof_arm.RootsArm): every compiled-mode buffer
 of every step put in a category and a decoder layer, then per token and layer (prefill and decode), per run, and under the
-fused-epilogue units a proof could take instead, each with the hashing time it would leave at the rows-sha512 floor.  Reads
+fused-epilogue proof blocks a proof could take instead, each with the hashing time it would leave at the rows-sha512 floor.  Reads
 JSON only; measurement only.
 
     python layout_bytes.py RUN/out/layouts.jsonl [--json OUT.json]   (--rate-256, --rate-4k: the floor in GB/s at 256-byte and
@@ -14,14 +14,14 @@ layer's block is one extern call (vLLM's fused-MoE custom op, `extern` or `moe_*
 place, and its router and experts are inside it.  Where the norm after o_proj comes as a pair of [T, hidden] buffers (a fused
 add + RMSNorm), the first is the post-attention residual, `residual_attn`.
 
-Units (what a proof unit would take as its inputs and outputs, so what is left to commit):
-  norm-folded      RMSNorm inside the next GEMM's unit, which recomputes it from the committed residual stream: no norm output.
-  residual-folded  the residual add inside o_proj's and down's units, whose outputs are the sums: down's (or the MoE block's)
+Proof blocks (what each would take as its inputs and outputs, so what is left to commit):
+  norm-folded      RMSNorm inside the next GEMM's proof block, which recomputes it from the committed residual stream: no norm output.
+  residual-folded  the residual add inside o_proj's and down's proof blocks, whose outputs are the sums: down's (or the MoE block's)
                    output is not committed beside the post-MLP residual, nor o_proj's beside a post-attention residual (where
                    none is committed, o_proj's output becomes it, same bytes).
-  act-folded       silu(gate) * up inside the gate/up unit: the activation is committed, gate/up's output is not.
+  act-folded       silu(gate) * up inside the gate/up proof block: the activation is committed, gate/up's output is not.
   all-three        the three together.
-  per-layer        one unit a decoder layer: the residual stream between layers and the KV values (k and v) only.
+  per-layer        one proof block a decoder layer: the residual stream between layers and the KV values (k and v) only.
 """
 from __future__ import annotations
 

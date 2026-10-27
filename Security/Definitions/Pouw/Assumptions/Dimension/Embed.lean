@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
 /-!
 # M4090 and the embedding theorem (trusted statements; draft semantics)
 
-**Draft semantics, S-1 to S-11 pending Daniel's review** (`barrier-assets/embed/DESIGN.md` §5).
+**Draft semantics, S-1 to S-11 pending review** (`barrier-assets/embed/DESIGN.md` §5).
 
 `M4090` makes W1 (`docs/pouw/problem-statement.md` §3.1) precise for straight-line programs over 32-bit words, on the
 noise grid. Registers are SSA and hold functions of the noise (the int32 reading of each 32-bit pattern); every
@@ -16,7 +16,7 @@ register ever written is an output, and the inputs are the noise coordinates. Th
   is exactly FFMA, FADD and FMUL with their operand modifiers, the only opcodes W1 prices at 8 by measured throughput
   (S-3).
 * `int f`, `dd f`, `subword f`: an INT32 or other instruction, a data-dependent access or guard (H5), a sub-word
-  extraction (Daniel, 03:35Z), each one register at 16, computing any function of the noise. `int` includes FSEL, SEL,
+  extraction (by ruling), each one register at 16, computing any function of the noise. `int` includes FSEL, SEL,
   FMNMX and the half2 family (HFMA2, HADD2, HMUL2, HMNMX2), which the 4090 runs at 16.1–16.6 per register written
   (`internal/pouw/gpu-constants.md` §9, Round 4), and FSET: FSET.BF runs on the ALU at 16.4 per register, 16.6 with a
   data-dependent predicate, and `set.*.u32.f32` lowers to FSETP + SEL (§11, Round 6). It also includes atomics and
@@ -48,7 +48,7 @@ namespace Pouw.Dimension.Embed
 
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions Pouw.Dimension.OpenPipe
 
-/-- An `M4090` instruction over the grid `G` (draft semantics, S-1 to S-11 pending Daniel's review). -/
+/-- An `M4090` instruction over the grid `G` (draft semantics, S-1 to S-11 pending review). -/
 inductive Op (G : Type) where
   /-- A tensor-core instruction at its full shape's price, writing the accumulator registers `outs`. -/
   | mma (outs : List (G → ℚ)) (price : ℕ)
@@ -112,7 +112,7 @@ def regs (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P : List (Op G)) (L : Li
 /-- A program's W1 cost: the sum of its prices. -/
 def cost4090 (P : List (Op G)) : ℕ := (P.map Op.price).sum
 
-/-- **`M4090`** as a machine (draft semantics, S-1 to S-11 pending Daniel's review): its programs are the well-formed
+/-- **`M4090`** as a machine (draft semantics, S-1 to S-11 pending review): its programs are the well-formed
 straight-line programs on the noise coordinates, at their W1 cost, outputting their registers. -/
 def m4090 (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : Machine (Noise N m n k) where
   Prog := {P : List (Op (Noise N m n k)) // ∀ o ∈ P, o.WF}
@@ -137,9 +137,9 @@ open Classical in
 noncomputable def canonNaN (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (a b c : ℚ) : ℚ :=
   if NaNGap (fpSem κ a b c) then 2147483647 else fpSem κ a b c
 
-/-! ## Pinned statements (draft semantics, S-1 to S-11 pending Daniel's review) -/
+/-! ## Pinned statements (draft semantics, S-1 to S-11 pending review) -/
 
-/-- **The embedding theorem** (draft semantics, S-1 to S-11 pending Daniel's review): for every FP32 semantics, every
+/-- **The embedding theorem** (draft semantics, S-1 to S-11 pending review): for every FP32 semantics, every
 well-formed `M4090` program on inputs in `V₀` maps to an `OpenQuadPipe 16 8` program whose slots contain every
 register outside `V₀`, at no greater cost except 8 for each non-quadratic FP32 instruction. -/
 def EmbedM4090 : Prop :=
@@ -149,7 +149,7 @@ def EmbedM4090 : Prop :=
       (∀ r ∈ regs fpSem P L, r ∈ V0 N m n k ∨ r ∈ slots P' L) ∧
       cost P' ≤ cost4090 P + 8 * nonQuad fpSem P L
 
-/-- **The exact embedding into the FP32 pipe** (draft semantics, S-1 to S-11 pending Daniel's review): every
+/-- **The exact embedding into the FP32 pipe** (draft semantics, S-1 to S-11 pending review): every
 well-formed `M4090 fpSem` program on inputs in `V₀` maps to an `FpPipe fpSem` program whose slots contain every
 register outside `V₀`, at no greater cost. -/
 def EmbedFp : Prop :=
@@ -159,7 +159,7 @@ def EmbedFp : Prop :=
       (∀ r ∈ regs fpSem P L, r ∈ V0 N m n k ∨ r ∈ slots P' L) ∧ cost P' ≤ cost4090 P
 
 /-- **The per-word cost in `M4090`, less the non-quadratic FP32 instructions** (no A1, no A2; draft
-semantics, S-1 to S-11 pending Daniel's review): under checkpoint independence and MinRank ≥ 5, a well-formed program
+semantics, S-1 to S-11 pending review): under checkpoint independence and MinRank ≥ 5, a well-formed program
 on inputs in `V₀` whose registers include the non-final checked words at `S ⊆ U × [0, nonFinal)` has
 `16·|S| ≤ cost + 8·nonQuad`. -/
 def PerWordM4090 : Prop :=
@@ -169,7 +169,7 @@ def PerWordM4090 : Prop :=
     (∀ o ∈ P, o.WF) → ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, word k m n N R A B x.1 x.2 ∈ regs fpSem P L) →
       16 * S.card ≤ cost4090 P + 8 * nonQuad fpSem P L
 
-/-- **`A1_fp` is the per-word cost of `M4090`** (draft semantics, S-1 to S-11 pending Daniel's review): under
+/-- **`A1_fp` is the per-word cost of `M4090`** (draft semantics, S-1 to S-11 pending review): under
 checkpoint independence and MinRank ≥ 5, for every FP32 semantics and `γ`, `A1_fp`'s conclusion for an instance is
 equivalent to `PerWordCost γ (M4090 fpSem)` for its non-final checked words. One way is `EmbedFp`; the other maps an
 FP32-pipe program into `M4090` at no greater cost (a big instruction to `int`, an FP32 step to one `operand` or
@@ -179,7 +179,7 @@ def A1fpIff : Prop :=
     (B : ℕ → Mat) (U : Finset ℕ), CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     (A1fpOn fpSem γ k m n N R A B U ↔ PerWordCost γ (m4090 N m n k fpSem) (word k m n N R A B) U)
 
-/-- **`A1_fp` gives the per-word cost of `M4090`** (draft semantics, S-1 to S-11 pending Daniel's review):
+/-- **`A1_fp` gives the per-word cost of `M4090`** (draft semantics, S-1 to S-11 pending review):
 `A1_fp(fpSem, γ)` implies `PerWordCost γ (M4090 fpSem)` for the non-final checked words, under checkpoint
 independence and MinRank ≥ 5. -/
 def PerWordOfA1fp : Prop :=
@@ -188,7 +188,7 @@ def PerWordOfA1fp : Prop :=
       CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
       PerWordCost γ (m4090 N m n k fpSem) (word k m n N R A B) U
 
-/-- **TT_NCP for `M4090` from `A1_fp`** (draft semantics, S-1 to S-11 pending Daniel's review): if `A1_fp(fpSem, γ₂)`
+/-- **TT_NCP for `M4090` from `A1_fp`** (draft semantics, S-1 to S-11 pending review): if `A1_fp(fpSem, γ₂)`
 holds, `R` is checkpoint independent with MinRank ≥ 5, an `M4090` program outputs the non-final checked words, and
 `1 − γ₀ ≤ (1 − γ₂)·(1 − 16/(3k))`, then TT_NCP's event fails for that program. -/
 def TTNCPM4090OfA1fp : Prop :=
@@ -207,7 +207,7 @@ def A1fpHalf : Prop := ∀ fpSem : ℕ → ℚ → ℚ → ℚ → ℚ, A1fp fpS
 `QuadStep`, so the FP32 pipe is an open quadratic pipe, which pays 16 per checked word (`theorem1Open`). -/
 def A1fpFadd : Prop := A1fp faddSem 0
 
-/-- **`TTNCPM4090OfA1fp`'s hypotheses hold together** (draft semantics, S-1 to S-11 pending Daniel's review), at the
+/-- **`TTNCPM4090OfA1fp`'s hypotheses hold together** (draft semantics, S-1 to S-11 pending review), at the
 tight `γ₂ = 0` and `γ₀ = 16/(3k)`: for every `k ≥ 1024` with `16 ∣ k`, every shape, `A = g(F₁)`, `B` and unit set, one
 `R` and one `M4090 faddSem` program satisfy all of them, with `A1_fp faddSem 0`. -/
 def M4090ChainConsistent : Prop :=
@@ -223,7 +223,7 @@ def M4090ChainConsistent : Prop :=
 def CanonicalNaNSat : Prop := ∀ fpSem : ℕ → ℚ → ℚ → ℚ → ℚ, CanonicalNaN (canonNaN fpSem)
 
 /-- **`A1_fp` at `γ = 0` from a range gap** (red team R14-1, `a1fpOn_of_rangeGap`; draft semantics, S-1 to S-11
-pending Daniel's review): under checkpoint independence, if at some grid point each non-final checked word takes a
+pending review): under checkpoint independence, if at some grid point each non-final checked word takes a
 value that `fpSem` never outputs, every FP32-pipe program that outputs the words at `S` costs at least `16·|S|`: no
 FP32 step can be a word, so each word is a distinct big instruction. -/
 def A1fpOnRangeGap : Prop :=
@@ -234,7 +234,7 @@ def A1fpOnRangeGap : Prop :=
     A1fpOn fpSem 0 k m n N R A B U
 
 /-- **The per-word cost of every `M4090` program from a range gap** (red team R14-1; no A1, no A2, no MinRank; draft
-semantics, S-1 to S-11 pending Daniel's review): under checkpoint independence, if at some grid point each non-final
+semantics, S-1 to S-11 pending review): under checkpoint independence, if at some grid point each non-final
 checked word takes a value that `fpSem` never outputs, a well-formed program on inputs in `V₀` whose registers include
 the checked words at `S ⊆ U × [0, nonFinal)` has `16·|S| ≤ cost`. -/
 def PerWordM4090Gap : Prop :=
@@ -247,7 +247,7 @@ def PerWordM4090Gap : Prop :=
       16 * S.card ≤ cost4090 P
 
 /-- **TT_NCP for `M4090` with no A1** (red team R14-1, `ttNCPM4090_of_nanGap`, here with no MinRank; draft semantics,
-S-1 to S-11 pending Daniel's review): under `CanonicalNaN fpSem` and checkpoint independence, on an instance where each
+S-1 to S-11 pending review): under `CanonicalNaN fpSem` and checkpoint independence, on an instance where each
 non-final checked word takes a value in the range gap somewhere on the grid, TT_NCP's event fails for every
 `M4090 fpSem` program that outputs the words, at `1 − γ₀ ≤ 1 − 16/(3k)`. -/
 def TTNCPM4090NanGap : Prop :=

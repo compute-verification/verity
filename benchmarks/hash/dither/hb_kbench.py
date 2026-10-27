@@ -32,7 +32,6 @@ import argparse
 import ctypes
 import json
 import math
-import os
 import statistics
 import sys
 import time
@@ -41,6 +40,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from verity_config.settings import of
+
+settings = of(__file__)
 
 LINEARS = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}
 MS = (1, 32, 256, 2048, 8192)
@@ -121,7 +123,7 @@ class Clock:
         try:
             import pynvml as nv
             nv.nvmlInit()
-            uuid = os.environ.get("GPU_LEASE_UUID")
+            uuid = settings.GPU_LEASE_UUID
             self.h = nv.nvmlDeviceGetHandleByUUID(uuid) if uuid else nv.nvmlDeviceGetHandleByIndex(0)
             self.nv = nv
             self.name = nv.nvmlDeviceGetName(self.h)

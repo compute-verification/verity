@@ -69,6 +69,7 @@ class Host:
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n"
                                     "vy-auditor-1 challenger@10.0.0.3\n")
+        (root / "coin-ports").write_text("vy-nebius-1 7811-7854\nvy-auditor-1 7855-7899\n")
         (root / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
         self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
@@ -89,11 +90,9 @@ class Host:
                                                    active=lambda s: False))
 
     def start(self, session: str) -> None:
-        """The session's unit: serve.py on a port of its own (no tunnel), returning once it listens."""
+        """The session's unit: serve.py on a port of its own, returning once it listens."""
         body = A.sessions_of(A.read_ledger(self.host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(self.host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv = [sys.executable, str(LIVE / "tests" / "stub_serve.py"), *argv[2:], "--params", "4,4",
                 "--keygen-workers", "1"]
@@ -291,7 +290,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         (tmp_path / "served").mkdir()
         source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
     pace = verifier.pace_of("1:4:160:2", 1.0)
-    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source, verdict="python",
+    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
     w = honest["windows"]
     end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
@@ -319,8 +318,8 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
     sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")),
-                               challenger=host.gate(out / "challenger", peer=peer), verdict="python",
-                               defer_openings=defer_openings, groups_per_coin=groups_per_coin,
+                               challenger=host.gate(out / "challenger", peer=peer), defer_openings=defer_openings,
+                               groups_per_coin=groups_per_coin,
                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     return sessions, got["reg"], desc
 

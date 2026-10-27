@@ -41,7 +41,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROW_ID_PATTERN, row_tokens
+from verity_vllm.config import ROW_ID_PATTERN, row_tokens, workload_file
 from verity_vllm.engine.profiles.admission_calibration import (CALIBRATION, DENSE_DEFAULT, DEFAULT_MODEL, MODELS, uncalibrated_model_note,
                                                                unknown_model_note)
 
@@ -940,7 +940,7 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
                              host_limit_bytes: int | None = None, snapshot_steps: str | None = None, snapshot_max_bytes: int | None = None,
                              stages: str = "build,match,commit") -> RowConfig:
     """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T."""
-    w = workload_path if isinstance(workload_path, dict) else json.loads(Path(workload_path).read_text())
+    w = workload_path if isinstance(workload_path, dict) else json.loads(workload_file(workload_path).read_text())
     sw = w.get("sweep") or {}
     row = row_id or sw.get("row_id") or ("" if isinstance(workload_path, dict) else Path(workload_path).stem)
     reqs = w.get("requests") or []

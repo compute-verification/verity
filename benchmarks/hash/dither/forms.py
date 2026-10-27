@@ -1,7 +1,6 @@
-"""Every dither arm's label, from one function (`form_of`; RT4-INT-39 as RT4-INT narrowed it 14:44Z, and CA's check of
-#3003 at 16:27Z): form=ASK-71 A (provisional) only for a dither-a arm in the statement's order (-so<D>, RT4-INT-12) with
--zy, whose served epilogue commits #3018's per-unit z/y records under round s's root before coin s, and only on a form
-that is ruled in (J10-R's units on credit's layout among them, `j10r_part`, with #3574 in the basis); form=beside
+"""Every dither arm's label, from one function (`form_of`): form=`FORM_A` (provisional) only for a dither-a arm in the
+statement's order (-so<D>) with -zy, whose served epilogue commits the per-unit z/y records under round s's root before
+coin s, and only on a form that is ruled in (J10-R's units on credit's layout among them, `j10r_part`); form=beside
 (unadopted arm) for an arm in that order on a form nobody has ruled in (-ab/-abn's per-step A tables, -ov's rounds
 beside the next forward, J10-R's units off credit's layout); form=beside for everything else: dither_a's own arms (outside
 the order, or z the row tables, or no z), dither_one's (dither-1s) and dither_fused's (dither, dither-side).  An arm
@@ -36,7 +35,7 @@ ADOPTED_PARTS = {"j10r": ("DITHER_SO_UNITS=j10r: the units under J10-R's call-sc
                           "(#3574: a J10-R unit's public row holds its call's first position and its blocks, which credit "
                           "derives from the window's layout at its slot M; PouwH1Tile_v5's receipt, every row block "
                           "computed)")}
-# the arms of the other two families, which aren't ASK-71 A's form at all
+# the arms of the other two families, which aren't `FORM_A`'s form at all
 FAMILIES = {"dither-1s": ("dither_one: the served product is H1V3's noised mainloop and z the window's row tables, its "
                           "noise from a coin drawn before its own A and z went under a round (outside RT4-INT-12's "
                           "order); not ASK-71 A"),
@@ -46,7 +45,7 @@ FAMILIES = {"dither-1s": ("dither_one: the served product is H1V3's noised mainl
 
 def j10r_part(rows_mode: str, skip_dead: bool, t: int) -> str:
     """A J10-R arm's part: "j10r" (ADOPTED_PARTS) when its units' layout rows are the window's T ("slot"), T is a slot
-    (a power of two, at least 32) and every row block is computed, else "j10r-off" (UNADOPTED_PARTS)."""
+    (a power of two, at least 32) and every row tile is computed, else "j10r-off" (UNADOPTED_PARTS)."""
     return "j10r" if rows_mode == "slot" and not skip_dead and t >= 32 and t & (t - 1) == 0 else "j10r-off"
 
 

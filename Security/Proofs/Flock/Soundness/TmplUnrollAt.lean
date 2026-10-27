@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.TmplWf
 import Flock.TmplAt
 
 /-!
-# A templated unit's committed net exists, checked on its description (PRF-133)
+# A templated unit's committed net exists, checked on its description
 
 `Tmpl.unrollAt` (the rows, `Net.ofRows`' checks, then `Net.ofRowsAt`'s at `posMap`'s positions) succeeds on a template
 that passes `Tmpl.unrollOk` at `layoutM`'s layouts (`unrollAt_ok`), so a verifier that checks the description knows the

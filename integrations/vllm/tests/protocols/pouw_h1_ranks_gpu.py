@@ -14,7 +14,7 @@ call's (index, step, linear, module, m, k, n, base, rows) equal in count and ord
 every round's root and coin, the calls root and the draw root equal. Across TPs the linears are shards, so it holds the
 window's MACs a step equal instead (each linear's shard n·K summed over the ranks).
 
-``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks, VLLM-81 item 2) serves the window with ``served`` and the Commit on every
+``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks) serves the window with ``served`` and the Commit on every
 rank (`pouw_h1_ranks.install`'s ``commit``) in place of the bare one, each window into ``<out>/<name>/``, and holds each to
 core's ROOTS1 steps (`pouw_h1_gpu.core_tie`: one manifest under calls_root, each table committed by its round, each the
 Commit's value of its rows). With ``--negatives`` each `NEGATIVES` window hands H1 other codes than the arm's on rank

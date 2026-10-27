@@ -4,6 +4,7 @@
   "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "escapes": {
+  "Core.BlobProtocol.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.BlobsExample's guards cover BlobProtocol.case, which it runs on each line",
   "Core.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.Example's guards cover Protocol.case, which it runs on each line"
  },
  "layers": {

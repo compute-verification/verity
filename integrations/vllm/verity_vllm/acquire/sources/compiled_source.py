@@ -69,9 +69,9 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
             vc = getattr(runner, "vllm_config", None)
         if vc is None and llm is not None:
             try:
-                from verity_vllm.engine import engine_profile as prof
+                from verity_vllm.engine import handle
 
-                vc = getattr(prof.get_model_runner(llm), "vllm_config", None)
+                vc = getattr(handle.model_runner(llm), "vllm_config", None)
             except Exception:  # noqa: BLE001
                 vc = None
         if vc is not None:
@@ -139,7 +139,7 @@ def _install_inductor_lowering(op) -> None:
     def handler(x, id):
         return fallback(x, id)
 
-    handler._is_fallback_handler = True     # noqa: SLF001
+    handler._is_fallback_handler = True
     L.register_lowering(op, type_promotion_kind=None)(handler)
 
 
@@ -260,7 +260,7 @@ class CompiledGraphSource:
                 __orig(self_, *a, **kw)
                 try:
                     me.wrap_model(self_.get_model(), self_)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     me.errors.append(f"wrap_model: {e!r}"[:300])
                     raise
 

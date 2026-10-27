@@ -1,4 +1,4 @@
-"""The word-granular production P v1.1 at the k the MVP uses (red-team Phase 10b).
+"""The word-granular production P v1.1 at the k the MVP uses.
 
 Its repairs guarantee clause 1 of the rejection rule and no cycle of π² inside a step.  The rule's other two clauses and
 λ₃ ≥ 16 (the edge connectivity of the step multigraph, which gives MinRank 16 under the MinRank argument's hypotheses)
@@ -12,7 +12,7 @@ import pytest
 
 from verity.core.protocols.pouw.schemes.ncp import D, admissible_perm, perm_digest, word_perm
 
-# The red team's own generator, 28 Sep 07:48Z; k = 4096 and 11008 are v1 unchanged.
+# An independent generator's vectors; k = 4096 and 11008 are v1 unchanged.
 DIGESTS = {
     1088: "536757a293b17fdbecab9cca20d9a4ed76331d12424f6f47855190345b92546f",
     2048: "7f00a9b74d4bd8b36019e74ee31ae12d918dd65861957c94cfc8af8699139732",

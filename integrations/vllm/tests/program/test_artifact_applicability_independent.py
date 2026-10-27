@@ -1,6 +1,6 @@
-"""CB-TEST (R10 owner 9): INDEPENDENT black-box tests of Bet A's artifact applicability contract (R10 brief §5).
+"""Independent black-box tests of the artifact applicability contract.
 
-Written from the contract BEFORE reading owner 8's implementation (`lane/r10-cb-fix`). The contract (brief §5, Daniel's ruling):
+Written from the contract BEFORE reading the implementation. The contract:
 
   1. one authoritative target/profile input rather than duplicated literals;
   2. the reported manifest describes the facts actually used during construction;
@@ -545,7 +545,7 @@ def builds(harness: Harness) -> dict[str, Build]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# (v) the Program digest of B0 request 8/4 is unchanged by the patch (Daniel: identical digests across targets are not the bug)
+# (v) the Program digest of B0 request 8/4 is unchanged by the patch (identical digests across targets are not the bug)
 # ---------------------------------------------------------------------------------------------------------------------------------
 @needs_builder
 def test_v_program_digest_unchanged_by_the_patch(builds):

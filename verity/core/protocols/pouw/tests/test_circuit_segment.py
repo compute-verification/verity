@@ -1,5 +1,5 @@
-"""The receipt spot checks (`verity.core.protocols.pouw.circuit.segment`): LEDGER's meet-in-the-middle
-(note:20261017T1723Z-draft-ledger) opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
+"""The receipt spot checks (`verity.core.protocols.pouw.circuit.segment`): the meet-in-the-middle check
+opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
 witness, and `PouwSegCheck_v3`, which recomputes every absorbed word, refuses the same committed data; each new check
 on bits is its word view, 1 on an honest instance and 0 once one receipt bit changes; and census/v1 counts the segment dots
 on bits as unserved `tc:int8` steps."""

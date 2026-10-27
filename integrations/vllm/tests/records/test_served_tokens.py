@@ -2,7 +2,7 @@
 write is missing, and read by GM-01's chronology check (`check.match.chronology`, G6) to the same document as the parsed JSON.
 
 `data/served_tokens.json` is a real record: the one-process capture's `match/capture/tokens.json` of the regression row
-`llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager` (`tests/regression/fixtures.toml`, sha256
+`llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager` (`tests/regression/files.toml`, sha256
 c83936017d07...), byte for byte.  The G6 runs are GM-01's toy (`tests.check.test_global_match`), with the driver's record rewritten
 to each writer's field set and to the claims G6 holds it to.
 """

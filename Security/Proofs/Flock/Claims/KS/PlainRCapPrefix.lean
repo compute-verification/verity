@@ -637,13 +637,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
     generalize (cutLens (repLens spec sts) rss₁).getD r [] = A at hh ⊢
     generalize (cutLens (repLens spec sts) rss₂).getD r [] = B at hh ⊢
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, hh]
-  unfold RowsAt at hel₁ hel₂
   rw [hrJ] at hel₁
-  have hd := hel₁.2.1.symm.trans hel₂.2.1
-  simp only [habs, ↓reduceIte, List.cons.injEq, and_true] at hd
-  have hcb := congrArg (fun b : ByteArray => b.data.toList) hd
-  simp only at hcb
-  have hvv := colBytes_inj (padRow_inj hcb (by simp only [Frame.colBytes_length, List.length_cons, List.length_nil]))
+  have hvv := FlockDeploy.RowsAt.vals_eq hel₁ hel₂ (by simp only [List.length_cons, List.length_nil])
   have hkf : kFr q₁.ligerito.messages[capMsg sch.k0 ℓ]! = kFr q₂.ligerito.messages[capMsg sch.k0 ℓ]! := by
     simp only [List.cons.injEq, and_true] at hvv
     obtain ⟨e1, e2, e3, e4⟩ := hvv

@@ -1,6 +1,6 @@
 """Queries over a Program and the values they require (vLLM integration v2, Draft 3.1 §12; Phase 2).
 
-A *query* ``Q`` partitions the Calls of a Program ``P`` into *proof units*; the values a verifier must be able to
+A *query* ``Q`` partitions the Calls of a Program ``P`` into *proof blocks*; the values a verifier must be able to
 open are the values that cross a unit boundary, plus what the protocol prescribes beside them::
 
     Q(P)                      -> a sequence of VerificationUnit (a stable id + a set of Call ids)
@@ -24,7 +24,7 @@ The Program is read through the :class:`Program` protocol so an integration can 
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
-the Program lists in ``inputs``), exactly as the IR gives ``Input`` gates their own canonical references.
+the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates their own canonical references.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ class VerificationUnit:
 
     def __post_init__(self) -> None:
         if not self.calls:
-            raise ValueError(f"unit {self.id!r}: a proof unit has at least one Call")
+            raise ValueError(f"unit {self.id!r}: a proof block has at least one Call")
 
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.

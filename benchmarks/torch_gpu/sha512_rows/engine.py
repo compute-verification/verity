@@ -16,10 +16,10 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
 of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` draws row ``salt_row``'s y in slot s as ChaCha20
-blocks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
+chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
 
-The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 blocks), so the
+The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 chunks), so the
 tests hold each call to its compressions a digest.
 
 Builds are cached by a hash of the sources, flags and compiler version under ``~/.cache/verity/sha512_rows``
@@ -44,6 +44,7 @@ import numpy as np
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+from verity_config.settings import of
 
 __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "device_lib", "digests", "host_lib", "words"]
 
@@ -53,8 +54,9 @@ DEVICE_SOURCES = (POUW_SHA, HERE / "sha512x.cuh", HERE / "rows.cuh", HERE / "row
 HOST_SOURCES = (HERE / "sha512x.cuh", HERE / "rows.cuh", HERE / "rows_host.cpp")
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-lineinfo", "-Xptxas", "-v")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
-BUILD_DIR = Path(os.environ.get("SHA512_ROWS_BUILD") or Path.home() / ".cache" / "verity" / "sha512_rows")
-DEFAULT_VARIANT = os.environ.get("SHA512_ROWS_V", "0000")
+settings = of(__file__)
+BUILD_DIR = Path(settings.SHA512_ROWS_BUILD or Path.home() / ".cache" / "verity" / "sha512_rows")
+DEFAULT_VARIANT = settings.SHA512_ROWS_V
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -63,17 +65,17 @@ ROOT_SCHEMA = "frame-v3-sha512/root/v1"
 MAX_SCHEMA = 64
 
 ROW_SPEC = np.dtype([("a", "<u8"), ("a_stride", "<u8"), ("b", "<u8"), ("b_stride", "<u8"), ("a_len", "<u4"), ("b_len", "<u4"),
-                     ("nbytes", "<u4"), ("a16", "<u4"), ("mid", "<u8", (8,))])
+                     ("nbytes", "<u4"), ("a16", "<u4"), ("mid", "<u8", (8,)), ("kw", "<u8", (80,))])
 LEAF_ROW = np.dtype([("rank", "<u8"), ("position", "<u8"), ("did", "<u4"), ("salt_row", "<u4"), ("q", "<u4"), ("pad_", "<u4"),
                      ("mid", "<u8", (8,)), ("tail", "<u8", (16,))])
-assert ROW_SPEC.itemsize == 112 and LEAF_ROW.itemsize == 224
+assert ROW_SPEC.itemsize == 752 and LEAF_ROW.itemsize == 224
 
 u32, u64, vp = ctypes.c_uint32, ctypes.c_uint64, ctypes.c_void_p
 
 
 class LeafArgs(ctypes.Structure):
     _fields_ = [("rows", vp), ("x", vp), ("out", vp), ("T", vp), ("salts", vp), ("key", u32 * 8), ("nonce0", u64),
-                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("pad_", u32),
+                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("sms", u32),
                 ("frames", vp), ("dest", vp), ("units_out", vp), ("units", u32), ("pad2_", u32)]
 
 
@@ -186,7 +188,7 @@ def hankel_table(key: bytes = KEY) -> np.ndarray:
 
 @dataclass(frozen=True)
 class SaltKey:
-    """Salts from a 32-byte key: row r's y in slot s is ChaCha20 blocks 3r .. 3r + 2 with nonce ``nonce0 + s``."""
+    """Salts from a 32-byte key: row r's y in slot s is ChaCha20 chunks 3r .. 3r + 2 with nonce ``nonce0 + s``."""
 
     key: bytes
     nonce0: int = 0
@@ -292,7 +294,7 @@ class Engine:
 
     def counts(self, reset: bool = False) -> dict[str, int]:
         """The host twin's hashing since its last reset: compressions, those over a constant schedule (``kw``) and ChaCha20
-        blocks."""
+        chunks."""
         if not self.host:
             raise ValueError("only the host twin counts")
         out = np.zeros(3, dtype=np.uint64)
@@ -300,7 +302,7 @@ class Engine:
         return {"compressions": int(out[0]), "kw": int(out[1]), "chacha": int(out[2])}
 
     def midstate(self, block: bytes) -> np.ndarray:
-        """The chaining value after one 128-byte block from the IV."""
+        """The chaining value after one 128-byte chunk from the IV."""
         if len(block) != 128:
             raise ValueError("a midstate is of one 128-byte block")
         out = np.zeros(8, dtype=np.uint64)
@@ -423,9 +425,10 @@ class Engine:
         return run
 
     def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None, minb: int = 0, frames: LeafTable | None = None,
-               dest: Any = None, run: Any = None) -> Any:
+               dest: Any = None, run: Any = None, sms: int = 0) -> Any:
         """(G, S, 8): each row's frame leaf over hm96's tree leaf of x (``row_digests``) under salt y. ``minb`` is the leaf
-        kernel's blocks an SM (1 or 2; 0, the build's default, 1).
+        kernel's CTAs an SM (1 or 2; 0, the build's default, 1), and ``sms`` the SMs its persistent grid fills (0, the
+        device's; a green context of fewer runs a grid of the device's in waves): the same bytes either way.
 
         With ``frames`` (``frame_table``, a unit each), ``dest`` (G,) uint32 on the device and ``run`` (S, units, 8): a row
         whose ``dest`` d is below the units is unit d alone, so its leaf is the unit's root, and the unit's frame leaf over it
@@ -449,7 +452,9 @@ class Engine:
                 raise ValueError(f"salts are (G, S, 192) bytes, not {tuple(salts.shape)}")
             a.salts = self._ptr(salts)
         a.ms_salt[:], a.ms_leaf[:] = [int(v) for v in self.ms_salt], [int(v) for v in self.ms_leaf]
-        a.G, a.S, a.minb = G, S, minb
+        if sms < 0:
+            raise ValueError("a leaf grid fills a positive number of SMs, or 0 for the device's")
+        a.G, a.S, a.minb, a.sms = G, S, minb, sms
         if frames is not None:
             a.frames, a.dest, a.units_out, a.units = self._ptr(frames.rows), self._ptr(dest), self._ptr(run), frames.G
         self._ok(self.lib.sxr_leaves(self._stream(), ctypes.byref(a)), "leaves")

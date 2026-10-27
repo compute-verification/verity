@@ -2,7 +2,10 @@
 
 * **Run definitions.**  ``manifests/`` (checkpoint pins, semantic profiles) and ``workloads/`` (row workloads) sit beside
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
-  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``.
+  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``; a row id finds its file through
+  :func:`row_file`, which also reads the directories ``$VERITY_WORKLOADS`` names.  A workload's bytes are a fixture in the
+  evidence store: the tree keeps its name, its digest (``workloads/SHA256SUMS``) and its art id (``fixtures/artifacts.json``),
+  and every reader takes the file through :func:`workload_file`, which fetches it by that id and checks the digest.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
   :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
   cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
@@ -20,15 +23,19 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
+import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.records import workload as workload_record
 
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
@@ -42,6 +49,11 @@ RECORDS = MANIFESTS / "records.json"
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
 VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
+#: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
+#: POUS encodes with (`protocols.pous`).
+P2_POUS = ROOT.parent.parent / "benchmarks" / "pous"
+#: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
+P2_STAGE = ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -192,8 +204,9 @@ def row_target(row: str) -> str | None:
 #: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
 #: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
-#: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
-DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:vllm-v1",)
+#: The set a row runs when its target declares none: sampled proofs alone, the Commit under its committer's scheme
+#: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
+DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
 _SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
 
 
@@ -298,6 +311,94 @@ VLLM = "d9105ea80"
 #: ``records.workload.Workload``.
 WORKLOAD_SCHEMA = workload_record.SCHEMA
 
+
+#: The repository root: its ``fixtures/artifacts.json`` registers each stored workload file by its art id.
+REPO = ROOT.parent.parent
+#: A workload directory's digests, ``<sha256>  <name>`` a line (``sha256sum``'s format): each file it lists is a fixture in the
+#: evidence store, gitignored here, and every reader takes it through :func:`workload_file`.
+DIGESTS = "SHA256SUMS"
+
+
+def stored_workloads(d: Path = WORKLOADS) -> dict[str, str]:
+    """{file name: SHA-256} of the workloads the directory ``d`` keeps in the store (its ``SHA256SUMS``); {} without one."""
+    p = Path(d) / DIGESTS
+    if not p.is_file():
+        return {}
+    pairs = [line.split(None, 1) for line in p.read_text().splitlines() if line.strip()]
+    return {name.strip().lstrip("*"): h for h, name in pairs}
+
+
+def _fetch(paths: list[Path]) -> None:
+    """Fetch ``paths`` with ``research data fetch-fixtures`` in the repository holding each (the nearest ancestor with a registry),
+    by that tree's own ``research``."""
+    by_repo: dict[Path, list[Path]] = {}
+    for p in paths:
+        repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)
+        by_repo.setdefault(repo, []).append(p)
+    for repo, ps in by_repo.items():
+        rels = [os.path.relpath(p.resolve(), repo) for p in ps]
+        env = settings.environ()
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
+        r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json", *rels],
+                           capture_output=True, text=True, env=env)
+        if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
+            raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
+                               f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
+                               "is reachable, or name the public export with $RESEARCH_PUBLIC_URL")
+
+
+def workload_file(path: str | Path) -> Path:
+    """``path``, made present and checked when its directory's ``SHA256SUMS`` lists it: an absent file is fetched by the art id
+    ``fixtures/artifacts.json`` gives its path (``research data fetch-fixtures``), and a file whose SHA-256 is not the listed one is
+    refused.  A file its directory doesn't list is returned as it is."""
+    p = Path(path)
+    want = stored_workloads(p.parent).get(p.name)
+    if want is None:
+        return p
+    if not p.is_file():
+        _fetch([p])
+    if (got := hashlib.sha256(p.read_bytes()).hexdigest()) != want:
+        raise RuntimeError(f"{p}: SHA-256 {got} is not the {want} its {DIGESTS} lists: a changed workload is a new fixture "
+                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in fixtures/artifacts.json, "
+                           f"its digest in {DIGESTS}); `research data fetch-fixtures PATH` restores the stored one")
+    return p
+
+
+def workload_arg(s: str) -> str:
+    """The ``type`` of an option naming a workload file: ``s`` as given, its file made present and checked (:func:`workload_file`;
+    its refusal a :class:`UsageError`)."""
+    try:
+        workload_file(s)
+    except RuntimeError as e:
+        raise UsageError(str(e)) from e
+    return s
+
+
+def workload_files(d: Path = WORKLOADS) -> list[Path]:
+    """Every workload of the directory ``d``, its stored ones (``SHA256SUMS``) and any other ``*.json`` in it, each through
+    :func:`workload_file`; the absent stored ones are fetched in one call."""
+    names = sorted({*stored_workloads(d), *(p.name for p in Path(d).glob("*.json"))})
+    if absent := [p for n in names if not (p := Path(d) / n).is_file()]:
+        _fetch(absent)
+    return [workload_file(Path(d) / n) for n in names]
+
+
+def row_file(row: str) -> Path:
+    """Row id ``row``'s file: ``<dir>/<row>.json`` in ``WORKLOADS`` or in a directory ``$VERITY_WORKLOADS`` names (rows that live
+    outside the integration, which it finds only there), else ``WORKLOADS/<row>.json``; a stored one is fetched and checked
+    (:func:`workload_file`).  A row id with a file in two is refused."""
+    dirs = (WORKLOADS, *map(Path, settings.VERITY_WORKLOADS))
+    found = list(dict.fromkeys(p.resolve() for d in dirs if (p := d / f"{row}.json").is_file() or p.name in stored_workloads(d)))
+    if len(found) > 1:
+        raise UsageError(f"row {row} has a file in more than one of workloads/ and $VERITY_WORKLOADS: {', '.join(map(str, found))}")
+    return workload_file(found[0]) if found else WORKLOADS / f"{row}.json"
+
+
+def row_path(row: str) -> str:
+    """:func:`row_file` from ``ROOT``, where a row's Build, Match and Commit run: ``workloads/<row>.json`` for a row of the
+    integration's own."""
+    return os.path.relpath(row_file(row), ROOT)
+
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
 #: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
 #: public; the EOS a request samples there is a value, which decides no step.
@@ -350,7 +451,7 @@ class RowEngine:
     ``model``), the ``vllm`` commit, the engine ``args``, the ``env`` its engines run under (kernel selection: ``VLLM_BATCH_INVARIANT``,
     ``NCCL_P2P_DISABLE``), the declared ``target`` (``TargetProfile`` fields; None: the device's) and ``reasons``: why the row sets a
     switch away from vLLM's default, by the switch's name (``engine.served.DEFAULTS``; a served Commit refuses one without).  The κ
-    profile a Match folds with is the role's (``engine.profiles.generic.module_name``), never a field."""
+    profile a Match folds with is the role's (``observe.fold.profiles.generic.module_name``), never a field."""
 
     revision: str | None = None
     vllm: str = VLLM
@@ -420,9 +521,9 @@ class RowConfig:
 
     @classmethod
     def load(cls, row_or_path: str | Path) -> RowConfig:
-        """A row's config by row id (``WORKLOADS/<row>.json``) or by file."""
+        """A row's config by row id (:func:`row_file`) or by file (:func:`workload_file`)."""
         p = Path(row_or_path)
-        return cls.of(json.loads((p if p.suffix == ".json" else WORKLOADS / f"{row_or_path}.json").read_text()))
+        return cls.of(json.loads((workload_file(p) if p.suffix == ".json" else row_file(str(row_or_path))).read_text()))
 
     @property
     def row(self) -> str | None:
@@ -582,7 +683,8 @@ class CommitConfig:
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
-                                           "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
+                                           "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
+                                           "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "

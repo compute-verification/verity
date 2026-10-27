@@ -27,8 +27,8 @@ from tests.engine import ppl_oracle  # noqa: F401  (puts benchmarks/ppl on sys.p
 from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
 from verity_vllm.engine import int8_k_scales as K
 
-import methodology  # noqa: E402
-import windows as W  # noqa: E402
+import methodology
+import windows as W
 
 
 class Calibrator:

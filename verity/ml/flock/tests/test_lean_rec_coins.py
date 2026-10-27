@@ -196,9 +196,13 @@ def _acc_rows(dst: Path, level: Path) -> Path:
 
 
 def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
-                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    """Its VERDICT names its part (`rec_part`) and the SHA-512 of the shared rows file it read (`rec_rows_sha512`), which
+    `rec-compose` holds every part to."""
+    rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
+    assert v["rec_rows_sha512"] == hashlib.sha512(rows.read_bytes()).hexdigest(), v
+    assert str(v["rec_part"]) == _own(forged, shape)[1], v
 
 
 def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path):

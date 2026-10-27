@@ -224,7 +224,7 @@ def test_a_session_that_never_listens_or_fails_otherwise_raises():
     def refused(address, secret):
         raise ConnectionRefusedError(111, "Connection refused")
 
-    with pytest.raises(ConnectionRefusedError):
+    with pytest.raises(AC.Ch.CoinError, match="nothing listened"):
         AC.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
     assert len(slept) == 4
 

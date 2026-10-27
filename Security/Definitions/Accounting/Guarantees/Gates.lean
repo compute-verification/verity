@@ -163,7 +163,7 @@ def FoolingCap : Prop :=
     (∀ s ∈ F, ∀ s' ∈ F, s ≠ s' → ∃ o ∈ out, ¬ val C (x s) o ≡ val C (x s') o [ZMOD 2 ^ j]) →
     F.card ≤ 2 ^ (j * out.length)
 
-/-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3 and R4.1;
+/-- **Re-normalization** (the red team's Lemma R;
 unproved): a square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit
 whose window is proven, with no run input, whose registered inputs are fixed and whose coin inputs are bytes of `a` or
 fixed (so units count what reads `a`), that on more than `ε ≥ 2^−t` of the `a ∈ [0, p)` holds its declared intervals
