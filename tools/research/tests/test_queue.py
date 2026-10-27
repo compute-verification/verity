@@ -271,7 +271,7 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
 
 
 def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_then_admission_order(world):
-    """26 Oct (Daniel: "CI runs at breakneck speed"): a member above a Lean change waits for that change's Lean check, ~1 h, though
+    """A member above a Lean change waits for that change's Lean check, ~1 h, though
     it changes no Lean itself.  What a sync merges goes non-Lean first, `--first`'s order then admission's within each part; a PR
     that contains a Lean change stays above it, and one stacked on a member already on `next` is judged by its own change."""
     world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
@@ -2850,7 +2850,7 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
 
 
 def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):
-    """No tool call may block more than 20 minutes (Daniel, 19 Oct), and a quick tier may wait hours for a check slot: `ready --on`
+    """No tool call may block more than 20 minutes, and a quick tier may wait hours for a check slot: `ready --on`
     leaves its run going, marks nothing, names `judge RUN`, and exits STILL_GOING; `judge` marks the PR once the run passed."""
     from research import queue as Q
 

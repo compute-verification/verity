@@ -1,6 +1,6 @@
-"""The review landing (`land = "review"`; Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after
-landing).  A tick lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner,
-a Lean change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
+"""The review landing (`land = "review"`: PRs land on an eyeball review, and the full check runs after landing).  A tick
+lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner, a Lean
+change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
 `main` passed that step before, bisecting when several PRs are implicated."""
 from __future__ import annotations
 
@@ -142,7 +142,7 @@ def test_a_lean_change_without_a_lock_change_waits_for_a_lean_check_and_the_afte
         world, monkeypatch):
     """A PR that changes a guarantee's statement, or a definition it reads, without its lock would land unchecked if only a
     changed lean-audit.json held it, and the after-landing lean-audit, passing on regenerated records nothing commits, would
-    leave `main`'s lock stale and Daniel's DM unsent."""
+    leave `main`'s lock stale and the spec-change DM unsent."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"other/X.lean": "-- no lock in other/\n"}))
     world.gh.put(2, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
@@ -485,7 +485,7 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
 
 
 def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
-    """Daniel, 25 Oct 11:19 PM PDT: Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    """Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
     after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))

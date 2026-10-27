@@ -1,7 +1,6 @@
 """`research queue`: the merge queue (infra plan change 5).  `next` is `main` plus every admitted PR, one merge commit each, in the
 order they were admitted.  Drive (`research.drive`) fast-forwards `main` to the top of the longest prefix of `next` whose every
-member has a reviewer's land verdict at its head (Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs
-after landing).
+member has a reviewer's land verdict at its head: PRs land on an eyeball review, and the full check runs after landing.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
@@ -89,7 +88,7 @@ after landing).
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
-no change waits on a per-head grant (Daniel, 8 Oct).  A PR based on another branch is never admitted: `ready` marks it and says so,
+no change waits on a per-head grant.  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -154,7 +153,7 @@ names the PR it contains and why that one is out, judging each PR after those it
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `main` (no new merge commit), and checks `main` after each landing, reverting
 what that check fails; it tells `@ci` what it refuses.  A push refused because `main` moved leaves `main` alone; the next sync
-rebuilds `next` on the new `main`.  A landing that changes what a guarantee says DMs Daniel what changed (`spec_alert`).
+rebuilds `next` on the new `main`.  A landing that changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
 drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
@@ -380,8 +379,7 @@ class DriveFlags:
     marked_after: str | None = None
     regenerate_locks: bool = False
     first: tuple[int, ...] = ()
-    #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`;
-    #: Daniel, 24 Oct 06:05Z)
+    #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`)
     land: str = "review"
     #: the after-landing run reuses no pass but circuit-check's per-target ones (`check.py --no-cache --circuit-cache`)
     after_landing_no_cache: bool = False
@@ -391,7 +389,7 @@ class DriveFlags:
     #: the most Lean checks of the review landing running at once: a lower one and those stacked above it (`drive.lean_stack`)
     max_lean_checks: int = 2
     #: what a sync merges onto `next` anyway goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
-    #: Lean change for its Lean check (Daniel, 26 Oct 06:04Z: "CI runs at breakneck speed")
+    #: Lean change for its Lean check
     nonlean_first: bool = True
     #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
     #: owner once a day), and before drive closes it; 0 is off
@@ -642,7 +640,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 
 #: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked after
-#: landing, a failure reverting it (Daniel, 25 Oct 11:19 PM PDT); Lean anywhere else runs as code (C-Flock's verifier and the ZK
+#: landing, a failure reverting it; Lean anywhere else runs as code (C-Flock's verifier and the ZK
 #: server, the PoUS grader, the certifier program, the NCI check, the remote audit's verifier) and keeps its Lean check first
 LEAN_PROOFS_TREE = "Security/"
 
@@ -1758,7 +1756,7 @@ SLOT_NOT_STARTED = 75
 SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review)
 LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 
