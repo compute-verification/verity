@@ -24,9 +24,10 @@ K. Each rank ships each call's A rows and scales, its z/y records and, once, its
 slices the pinned checkpoint into shards yet.
 
 With ``commit`` (ROOTS1, VLLM-81) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
-``worker_extension_cls`` then: the committer and the int8 source on the rank's model), and the rank's tap (`RankTap`)
-ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to the window's name of the linear (``…qkv_proj@tp1/row_quant``),
-and the embedding's input ids. The holder's one `pouw_h1_commit.CommitTap` takes them before the calls (`feed`), so its
+``worker_extension_cls`` then: the rows-sha512 committer, the int8 source and the step-input port on the rank's model),
+and the rank's tap (`RankTap`) ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to
+the window's name of the linear (``…qkv_proj@tp1/row_quant``), and the port's input ids, cut to the step's scheduled
+tokens. The holder's one `pouw_h1_commit.CommitTap` takes them before the calls (`feed`), so its
 AROW of each (step, K) is every rank's calls' rows, call after call, as the window's A table is. The input ids are the
 first rank's (the one holding linear 0), one ``ids@<s>`` a round for the window; another rank's ids at the same engine
 step that differ are refused."""
@@ -104,17 +105,17 @@ class RankRun(PH.H1Run):
 @dataclass
 class RankTap(CT.CommitTap):
     """A rank's tap on its Commit (`acquire.h1_commit.RankCommit.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
-    the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the embedding's input ids, copied
-    to the host with the engine step, each site under the window's name of its linear (``names``: the rank's module name,
-    or a routed expert's H1 name ``prefix.expert.projection``, to the window's), kept until the holder's next pull
-    (`drain`)."""
+    the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the port's input ids, its first
+    ``n`` (None with no count of the step's scheduled tokens), copied to the host with the engine step, each site under the
+    window's name of its linear (``names``: the rank's module name, or a routed expert's H1 name
+    ``prefix.expert.projection``, to the window's), kept until the holder's next pull (`drain`)."""
 
     names: dict[str, str] = field(default_factory=dict)
-    out: list[tuple[str, int, np.ndarray]] = field(default_factory=list)
+    out: list[tuple[str, int, np.ndarray | None]] = field(default_factory=list)
 
-    def take(self, name: str, t: Any, step: int) -> None:
-        if self.embed is not None and name == f"{self.embed}/in":
-            self.out.append((name, int(step), np.array(CT._host(t))))
+    def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
+        if self.port is not None and name == self.port:
+            self.out.append((name, int(step), None if n is None else np.array(CT._host(t)).reshape(-1)[:n]))
             return
         op, _, port = name.rpartition("/")
         module = op.removesuffix("/row_quant")
@@ -128,13 +129,14 @@ class RankTap(CT.CommitTap):
 
 def feed(tap: CT.CommitTap, acquired: Sequence[tuple[str, int, Any]], first: bool) -> None:
     """One rank's acquisitions (`RankTap.drain`) into the window's tap, in the order the rank acquired them: its sites' x_q
-    and s_a, and with ``first`` (the rank holding linear 0) the input ids, which every other rank's at the same engine
-    step must equal (refused otherwise)."""
-    ids = f"{tap.embed}/in"
+    and s_a, and with ``first`` (the rank holding linear 0) the port's input ids, which every other rank's at the same
+    engine step must equal (refused otherwise)."""
     for name, step, t in acquired:
-        if name != ids or first:
+        if name != tap.port:
             tap.take(name, t, int(step))
-        elif (got := tap._ids.get(int(step))) is None or not np.array_equal(got, np.asarray(t).reshape(-1).astype(np.int64)):
+        elif first:
+            tap.take(name, t, int(step), None if t is None else len(t))
+        elif t is None or (got := tap._ids.get(int(step))) is None or not np.array_equal(got, np.asarray(t).astype(np.int64)):
             tap.refused.append(f"engine step {step}: a rank's input ids are not the first rank's")
 
 
@@ -202,7 +204,8 @@ class RankExtension:
     def h1rank_release(self) -> dict[str, Any] | None:
         """With the Commit, the rank's committer finalized and closed, then its hooks removed: newest first, as the Commit's
         source wraps a routed expert's ``apply`` over H1's (`hooks.Patch.uninstall`). Returns the rank's Commit (its run
-        root, tensors and errors), else None."""
+        root and scheme, `pouw_h1_commit.committed`, which refuses any but rows-sha512's, its tensors and errors), else
+        None."""
         st = getattr(self, "_h1rank", None)
         if st is None:
             return None
@@ -212,8 +215,7 @@ class RankExtension:
                 com, tap = commit
                 try:
                     rc = com.finalize()
-                    out = {"lo": st["run"].lo, "run_root": rc.run_root.hex(), "name": com.name,
-                           **{k: rc.extra.get(k) for k in ("expected_tensors", "committed_tensors", "errors_n")},
+                    out = {"lo": st["run"].lo, **CT.committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
                            "errors": [str(e)[:300] for e in (rc.extra.get("errors") or [])][:8]}
                 finally:
                     com.close()
@@ -390,10 +392,10 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     run = PH.H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
                    draw=draw, admission=admission, coin_source=source, opener=opener, served=served)
     if commit is not None:
-        embeds = {o["embed"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
-        if len(embeds) != 1:
-            raise RuntimeError(f"{entry}: the ranks' Commits acquire input ids at {sorted(map(str, embeds))}, not one module")
-        served.tap = CT.CommitTap(embed=embeds.pop())
+        ports = {o["port"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
+        if len(ports) != 1:
+            raise RuntimeError(f"{entry}: the ranks' Commits acquire input ids under {sorted(map(str, ports))}, not one port")
+        served.tap = CT.CommitTap(port=ports.pop())
     run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source, **commits,
                        ranks=[{"pp": o["pp"], "tp": o["tp"], "first_linear": los[(o["pp"], o["tp"])],
                                "linears": len(o["shapes"])} for o in layout])

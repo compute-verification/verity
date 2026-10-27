@@ -258,6 +258,29 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (k, d, g)
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_over_several_tables_has_a_count_they_split():
+    """`draw --tables J` refuses a law whose unit count the J tables can't split evenly: a Bernoulli draw (its count is random),
+    a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one draw of 4 units."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def draw(*args):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args],
+                           capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+    rc, out, err = draw("--p", "1/2", "--tables", "2")
+    assert rc == 2 and not out and "tables: several tables need a subset or stratified draw" in err
+    rc, out, err = draw("--k", "3", "--tables", "2")
+    assert rc == 2 and not out and "3 units do not split into 2 equal tables" in err
+    for j in ("0", "65"):
+        rc, out, err = draw("--k", "4", "--tables", j)
+        assert rc == 2 and not out and "1 ≤ J ≤ 64" in err
+    for j in ("1", "2", "4"):
+        rc, out, _ = draw("--k", "4", "--tables", j)
+        assert rc == 0 and len(json.loads(out[5:])["units"]) == 4
+
+
 def _ir_tests() -> Path:
     """The circuits' `tests`, inside the `verity.ml.circuits` the import system finds (whichever member ships it): the vectors the
     Lean verifier agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""

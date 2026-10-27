@@ -1332,37 +1332,67 @@ theorem ratio_lt_iff (num den size novel : ℕ) (hden : 0 < den) :
 
 /-! ## `evaluate` -/
 
+theorem decodeProgram_ok (s : String) (P : Prog) :
+    decodeProgram s = .ok P ↔ Flock.Program.decode s.toUTF8 = .ok P ∧ ¬ Reinterprets P := by
+  unfold decodeProgram Reinterprets
+  rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> dsimp only
+  · simp
+  · rcases hr : Widths.reinterpretation P' with _ | m <;> dsimp only
+    · constructor
+      · intro hh
+        cases hh
+        exact ⟨rfl, fun hn => hn hr⟩
+      · rintro ⟨hh, -⟩
+        cases hh
+        rfl
+    · constructor
+      · intro hh
+        cases hh
+      · rintro ⟨hh, hn⟩
+        cases hh
+        exact absurd (by rw [hr]; simp) hn
+
+/-- `decodeProgram`'s refusal or what follows on its Program, as the decoder and `Reinterprets` read it. -/
+theorem decodeProgram_cases (s k : String) (X Y : Prog → Prop) (hXY : ∀ P, X P ↔ Y P) :
+    (decodeProgram s = .error k ∨ ∃ P, decodeProgram s = .ok P ∧ X P) ↔
+      ((∃ e, Flock.Program.decode s.toUTF8 = .error e) ∧ k = "program") ∨
+        ∃ P, Flock.Program.decode s.toUTF8 = .ok P ∧ ((Reinterprets P ∧ k = "program") ∨ ¬ Reinterprets P ∧ Y P) := by
+  unfold decodeProgram Reinterprets
+  rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> dsimp only
+  · simp [eq_comm]
+  · rcases hr : Widths.reinterpretation P' with _ | m <;> dsimp only
+    · simp [hr, hXY]
+    · simp [hr, eq_comm]
+
 theorem evaluate_ok (j out : Json) : evaluate j = .ok out ↔ ∃ i P c dv, parse j = .ok i ∧
-    Flock.Program.decode i.program.toUTF8 = .ok P ∧ circuitOf P = .ok c ∧ divisionOf c i.theta i.owner = .ok dv ∧
+    decodeProgram i.program = .ok P ∧ circuitOf P = .ok c ∧ divisionOf c i.theta i.owner = .ok dv ∧
     out = verdict c.N (ius c dv) (failure i.gamma i.num i.den (ius c dv)) := by
   unfold evaluate
   rcases h1 : parse j with e | i
   · simp only [h1]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp
-  rcases h2 : Flock.Program.decode i.program.toUTF8 with e | P <;>
-    have h2' : Flock.Program.decode i.program.toByteArray = _ := h2
-  · simp only [h1, h2, h2']; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2']
+  rcases h2 : decodeProgram i.program with e | P
+  · simp only [h1, h2]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2]
   rcases h3 : circuitOf P with e | c
-  · simp only [h1, h2, h2', h3]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2', h3]
+  · simp only [h1, h2, h3]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2, h3]
   rcases h4 : divisionOf c i.theta i.owner with e | dv
-  · simp only [h1, h2, h2', h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2', h3, h4]
-  simp only [h1, h2, h2', h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
-  simp [h2', h3, h4, eq_comm]
+  · simp only [h1, h2, h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2, h3, h4]
+  simp only [h1, h2, h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
+  simp [h2, h3, h4, eq_comm]
 
 theorem evaluate_error (j : Json) (k : String) : evaluate j = .error k ↔ parse j = .error k ∨
-    ∃ i, parse j = .ok i ∧ (((∃ e, Flock.Program.decode i.program.toUTF8 = .error e) ∧ k = "program") ∨
-      ∃ P, Flock.Program.decode i.program.toUTF8 = .ok P ∧
+    ∃ i, parse j = .ok i ∧ (decodeProgram i.program = .error k ∨
+      ∃ P, decodeProgram i.program = .ok P ∧
         (circuitOf P = .error k ∨ ∃ c, circuitOf P = .ok c ∧ divisionOf c i.theta i.owner = .error k)) := by
   unfold evaluate
   rcases h1 : parse j with e | i
   · simp only [h1]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp
-  rcases h2 : Flock.Program.decode i.program.toUTF8 with e | P <;>
-    have h2' : Flock.Program.decode i.program.toByteArray = _ := h2
-  · simp only [h1, h2, h2']; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2']; exact ⟨Eq.symm, Eq.symm⟩
+  rcases h2 : decodeProgram i.program with e | P
+  · simp only [h1, h2]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2]
   rcases h3 : circuitOf P with e | c
-  · simp only [h1, h2, h2', h3]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2', h3]
+  · simp only [h1, h2, h3]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2, h3]
   rcases h4 : divisionOf c i.theta i.owner with e | dv
-  · simp only [h1, h2, h2', h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2', h3, h4]
-  simp only [h1, h2, h2', h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
-  simp [h2', h3, h4]
+  · simp only [h1, h2, h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]; simp [h2, h3, h4]
+  simp only [h1, h2, h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
+  simp [h2, h3, h4]
 
 end NciCheck.Properties.SecurityProofs

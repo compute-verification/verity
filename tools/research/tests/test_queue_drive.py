@@ -838,6 +838,21 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
         assert q.handle(pr) == want
 
 
+def test_a_pr_waiting_on_a_contained_pr_that_didnt_merge_is_told_once_per_head(world, monkeypatch):
+    """26 Oct: S1's #4373 and #4436 sat off `next` for six hours behind their contained #4326 and #4349, and no one was told."""
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append((text, to)) or True
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    two = world.change({"a.txt": "two\n"})
+    world.gh.put(2, two)
+    world.gh.put(3, world.change({"b.txt": "three\n"}, base=two))
+    h.tick()
+    h.tick()
+    told = [text for text, _ in sent if "#3 at" in text]
+    assert told == [f"@ci queue: #3 at {world.gh.prs[3].head[:8]} is out of `next`: contains #2, which didn't merge"]
+
+
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
     """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
     was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
@@ -1106,6 +1121,20 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.tick()
     assert len(calls) == 1 and any("branch sweep: 2 deleted (on main), 1 archived" in x for x in world.logs)
     h.clock += BRANCH_SWEEP_S + 1
+    h.tick()
+    assert len(calls) == 2
+
+
+def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypatch):
+    """A sweep pushes at most `SWEEP_LIMIT` deletions: 26 Oct, 900 branches; the rest go on the ticks after, not a day later."""
+    from research.merge import SWEEP_LIMIT
+
+    h = Harness(world, monkeypatch)
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or ((SWEEP_LIMIT, 0) if len(calls) == 1 else (3, 0)))
+    h.tick()
+    assert any(f"at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" in x for x in world.logs)
+    h.tick()
     h.tick()
     assert len(calls) == 2
 

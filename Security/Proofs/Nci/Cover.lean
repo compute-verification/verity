@@ -40,8 +40,8 @@ and their witness (`PartialSumWitness`). `Bits` translates a declaration's gates
 the block of a set of gates, what it computes and what it is handed. `Sum` adds the per-block bounds over a division at
 the NCI policy's rate. `Training` joins them to a declaration that complies with the NCI policy
 (`Definitions.Nci.Guarantees.CoverTraining`), `Aligned` gives its variant on whole-word activations, and `Checked` carries it
-to a verdict of the NCI check: the gate-level check's, and the check of record's given `DescAgrees`'s open statement
-(`Novel.ReadsExact`). `Chained` is the same join counting the covering bound's chained multiplication blocks on the reference
+to a verdict of the NCI check: the gate-level check's, and the check of record's (`SecurityProofs.DescAgrees`).
+`Chained` is the same join counting the covering bound's chained multiplication blocks on the reference
 circuit's bits as a declaration (`Definitions.Nci.Guarantees.CoverChained`), with its witness (`ChainedWitness`), and
 `CheckedChained` carries it to a verdict as `Checked` does.
 -/

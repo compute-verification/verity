@@ -3,21 +3,23 @@ import Definitions.Hash
 /-!
 # The hash area's guarantee statements
 
-Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Security/Proofs/Hash/`. Both are
+Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Security/Proofs/Hash/`. All are
 deterministic and assume nothing about the hash (Daniel, 8 Oct): each conclusion is the property, or a collision among
-the messages the two openings' checks themselves hashed, never an advantage bound. So neither proof takes an assumption.
+the messages the two openings' checks themselves hashed, never an advantage bound. So no proof takes an assumption.
 
 * `RowBinding`: two openings of one root at one rank, in the hm96 bit-row leaf format the verifier holds (frame-v3-sha512
   tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1` or `sha512/row/v2` row digest),
   carry the same row, or the checks hashed a collision. It covers row-seg and row/v2 leaves, not `hm96-sha512/row/v1`.
 * `TreeBinding`: two openings of one frame-v3 root at one rank carry the same leaf digest, or the path checks hashed a
   collision of node messages.
+* `EmbeddingReadBinding`: when `EmbeddingRead_v1` returns ok for a token in the vocabulary, the row it returns is the
+  registered table's row at that token, or the checks hashed a collision. It is `RowBinding` at rank `tok`.
 
 SHA-512 is the served hash (Daniel's ruling on the hash card, 18 Oct: BLAKE3 not adopted). A probability read from
-either statement is per prover: the collision comes from that prover's (extracted) openings, so it is a bound on that
+any of them is per prover: the collision comes from that prover's (extracted) openings, so it is a bound on that
 prover's link finders under `ecr/sha-512` (`FlockSoundness.Assumptions.SHA512CRExpected`), never one `δ_bind` for every
-prover, which is false at SHA-512 (a prover that hard-codes one collision opens one leaf two ways). In particular neither
-statement discharges a constant over all provers such as `Pouw.Assumptions.ServiceSoundStaged`'s `δb`.
+prover, which is false at SHA-512 (a prover that hard-codes one collision opens one leaf two ways). In particular
+none of them discharges a constant over all provers such as `Pouw.Assumptions.ServiceSoundStaged`'s `δb`.
 -/
 
 namespace Hash.Guarantees
@@ -70,5 +72,30 @@ def TreeBinding : Prop :=
   ∀ (H : Msg → Digest) (D : Tree.Domain) (root : Digest) (rank : ℕ) (l₁ l₂ : Digest) (sibs₁ sibs₂ : List Digest),
     Tree.accepts H D root rank l₁ sibs₁ → Tree.accepts H D root rank l₂ sibs₂ →
     l₁ = l₂ ∨ CollisionIn H (Tree.hashed H D rank l₁ sibs₁ ++ Tree.hashed H D rank l₂ sibs₂)
+
+/-- **The embedding's row read binds its row, as a break tied to the run.** When `EmbeddingRead_v1` (`EmbeddingRead.ok`)
+returns ok on the witness opening `o` for a token `tok` in the vocabulary, the row it returns (`EmbeddingRead.h`) is the
+row of any opening `o₀` accepted at rank `tok` against the same root under the read's verifier (the registered table's
+row at `tok`), or two different messages that `H` hashed in the two checks have one digest, or two different messages
+that `G` hashed in the two row digests have one digest.
+
+Scope:
+* **What it is about.** The reference's outputs (`Definitions/Hash/EmbeddingRead.lean`), not the gates; #4227's tests
+  hold the gates to the reference.
+* **What the unit's wiring supplies.** `root`, `domain` and `key` are the registered table's: the root and domain id are
+  registered reads of the table's root in the unit that holds the read, the domain's count is `V`, and the key is hm96's
+  pinned key, which the table's registration uses. `RowBinding`'s note on domains applies: the domain's binding says it
+  is a rows domain.
+* **A token outside the vocabulary** returns the fill and ok whatever the witness, and the statement says nothing there. -/
+def EmbeddingReadBinding : Prop :=
+  ∀ (H G : Msg → Digest) (domain : Tree.Domain) (key : Msg) (root : Digest) (vocab words tok : ℕ)
+    (o : RowLeaf.Opening),
+    EmbeddingRead.ok H G domain key root vocab tok o →
+    ∀ o₀ : RowLeaf.Opening, tok < vocab → RowLeaf.accepts H G (EmbeddingRead.verifier domain key) root tok o₀ →
+      EmbeddingRead.h vocab words tok o = o₀.row ∨
+        CollisionIn H (RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok o ++
+          RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok o₀) ∨
+        CollisionIn G (RowLeaf.innerHashed G (EmbeddingRead.verifier domain key) o ++
+          RowLeaf.innerHashed G (EmbeddingRead.verifier domain key) o₀)
 
 end Hash.Guarantees

@@ -34,7 +34,7 @@
                  "properties": {"verdict": {"$ref": "#/$defs/verdict"}, "reason": {"type": ["string", "null"]},
                                 "commitment": {"type": ["string", "null"]}, "public": {}}},
       "quantity": {"type": "object", "required": ["symbol", "value", "unit"],
-                   "properties": {"symbol": {"enum": ["integrity bound", "W_cert", "S_cert", "Q_cert", "K", "f·M"]},
+                   "properties": {"symbol": {"enum": ["integrity bound", "W_cert", "S_cert", "Q_cert", "K", "foreign_bits"]},
                                   "value": {"$ref": "#/$defs/nat"}, "unit": {"type": "string"}}},
       "error": {"$ref": "#/$defs/frac"},
       "error_from": {"type": "string"},

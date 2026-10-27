@@ -1,7 +1,7 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
 The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
-proof units, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
+proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
 Definitions (`verity/ml/circuits/PROTOCOL.md`):
 
@@ -31,7 +31,7 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
 one is registered, a Boolean Definition's word Definition's among them; bit-sliced otherwise); `register` commits the
 registered inputs before any run, bound to the occupancy profiles the developer may choose from (`profile_digest`), and
 `commit` gives the hiding commitment a run's values sit under: the census values,
-which are what can cross between devices (a Call's own wires are witness of its proof units). Both are hm96-sha512 rows,
+which are what can cross between devices (a Call's own wires are witness of its proof blocks). Both are hm96-sha512 rows,
 one per element, in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
 """
 from __future__ import annotations
@@ -389,7 +389,7 @@ _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
     """The rows a run commits: the census values' elements (`rows`), what the Program's nodes pass each other, each once
-    in value order. A Call's own wires are witness of its proof units, whose commitments are the proof service's."""
+    in value order. A Call's own wires are witness of its proof blocks, whose commitments are the proof service's."""
     if program not in _committed:
         seen: dict[tuple[int, ...], tuple[int, ...]] = {}
         for v in values(program):

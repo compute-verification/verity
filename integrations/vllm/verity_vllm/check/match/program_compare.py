@@ -34,6 +34,7 @@ import re
 import time
 from dataclasses import dataclass
 
+from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.instance_sequence import Prog
 from verity_vllm.check.match.program_loaders import load_derived, load_oracle
@@ -284,6 +285,8 @@ def main(a: Options) -> int:
     A = load_derived(a.a, a.label_a, compact=cp)
     B = load_oracle(a.b, a.label_b, compact=cp) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b, compact=cp)
     res = {"schema": "cb-a/compare/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "a_dir": a.a, "b_dir": a.b, "unfold_a": a.unfold_a}
+    if B.oracle_rows is not None:
+        res["fold_form"] = CF.fold_in_form(B, [a.a])
     res["digests"] = {"a": A.digest, "b": B.digest, "equal": A.digest == B.digest}
     res["histograms"] = {"a": spec_histograms(A), "b": spec_histograms(B)}
     ha, hb = res["histograms"]["a"]["T_normalised"], res["histograms"]["b"]["T_normalised"]

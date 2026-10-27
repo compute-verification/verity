@@ -4,10 +4,11 @@ of 256) in the id form the warden frames, so that the gate's `warden-rehearse --
 against it as against the demo's loop, and the loop's endpoint builds against it.
 
     python demo_stub.py serve [--host 127.0.0.1] [--port 0] [--prompt-ids 8] [--tokens 24] [--vocab 256] [--id-payload 503]
+        [--out DIR [--window-steps 64] [--run-id ID]]
     python demo_stub.py prompts [--count 4] [--prompt-ids 8] [--vocab 256]
 
 `serve` prints ``{"listening": URL, "model": NAME}`` once it listens, then serves until it is stopped, one request a
-connection, each answered whole and the connection closed:
+connection, each answered and the connection closed:
 
 - ``GET /v1/models``: its one model, ``demo-stub/p{prompt_ids}-g{tokens}-v{vocab}``, which the rehearsal names in
   every request (`certifier_serve.served_model`).
@@ -24,8 +25,21 @@ connection, each answered whole and the connection closed:
   serve is a visible failure, never a silent stand-in's answer.
 
 Its generated ids are SHA-512's, not a model's: byte k of the counter-mode stream (`_stream`) of
-``verity/demo-stub/v1/outputs``, 0x00, then the prompt's bytes, mod ``--vocab``. `prompts` prints ``--count`` prompts of
-the class (`prompts`), the JSON array the gate's `--prompts` reads off its stdin:
+``verity/demo-stub/v1/outputs``, 0x00, then the prompt's bytes, mod ``--vocab``.
+
+**With ``--out``** it keeps the records a `verity-vllm serve-openai` endpoint writes, the ones network accounting's
+endpoint step binds to the certified I/O (`network_e2e/chain.py`'s ``served_advice``, through `verity-vllm advice`): a
+class request goes through `demo_endpoint`'s scheduler (`Toy`, the class's outputs as its engine: vLLM V1's synchronous
+FCFS as network-e2e's derivation models it, each request one prefill row of its prompt, then a decode row a step), and
+each id goes to its connection as an id event as its step samples it, the trailer after the last. The bytes are the
+same as without ``--out``. Under DIR: ``serve.json``, ``advice_trace.jsonl``, ``requests.jsonl`` (each request's
+engine id, ``user``, the warden's release headers on it, its prompt and streamed ids, its finish and the clock at its
+arrival, first id and finish), ``windows.jsonl`` and ``served_rows/`` (`demo_endpoint`'s Commit windows, at most
+``--window-steps`` steps each), and at SIGTERM or SIGINT, once the open window is closed, ``summary.json``. Its EOS id
+is ``--vocab``, which no answer holds, so every answer is ``--tokens`` ids long: the chain takes it as the model's EOS
+ids (chain_record.sh's ``CR_EOS_IDS``).
+
+`prompts` prints ``--count`` prompts of the class (`prompts`), the JSON array the gate's `--prompts` reads off its stdin:
 
     python demo_stub.py prompts --count 4 | ssh -i KEY research@vy-challenger-1 warden-rehearse --peer PEER \
         --port PORT --minutes 4 --requests 8 --height 10 --scan --prompts --tokens 24
@@ -38,6 +52,8 @@ import dataclasses
 import hashlib
 import json
 import re
+import secrets
+from pathlib import Path
 
 from verity.core.protocols.certifier import active as A, io_tie as IT, release as REL
 
@@ -119,33 +135,88 @@ def answer(prompt: list[int], shape: Shape = Shape()) -> bytes:
     return b"".join(IT.id_event(t, shape.payload) for t in outputs(prompt, shape)) + IT.TRAILER
 
 
-class Endpoint:
+class Toy:
+    """The class's outputs as `demo_endpoint`'s engine: a sampling row's next id is the next of its prompt's `outputs`.
+    Its context is a class request's prompt and outputs, and its EOS id ``vocab``, an id it never emits."""
+
     def __init__(self, shape: Shape = Shape()) -> None:
-        self.shape = shape
+        self.shape, self.name, self.vocab = shape, shape.name, shape.vocab
+        self.context, self.eos = shape.prompt_ids + shape.tokens, shape.vocab
+
+    def next_tokens(self, seqs: list[list[int]]) -> list[int]:
+        P = self.shape.prompt_ids
+        return [outputs(list(s[:P]), self.shape)[len(s) - P] for s in seqs]
+
+
+class Endpoint:
+    """The stand-in's HTTP side. With ``sched`` (a `demo_endpoint.Scheduler` over `Toy`, ``--out``'s), a class request
+    is answered id by id as the scheduler's steps sample them (`run_engine`, or a test's `step`), the trailer after the
+    last; without it, whole at once."""
+    protocol = "ids (the demo stand-in's: an io_tie.id_event a token, then io_tie.TRAILER, no HTTP head)"
+
+    def __init__(self, shape: Shape = Shape(), sched=None) -> None:
+        self.shape, self.sched = shape, sched
+        self.wake, self.served, self.refused = asyncio.Event(), 0, 0
 
     async def __call__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
-            writer.write(await self.respond(reader))
+            fields, release, reply = await self.read(reader)
+            if reply is not None:
+                writer.write(reply)
+            elif self.sched is None:
+                writer.write(answer(fields["prompt"], self.shape))
+            else:
+                await self.stream(fields, release, writer)
             await writer.drain()
         except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, ConnectionError):
             pass
         finally:
             writer.close()
 
-    async def respond(self, reader: asyncio.StreamReader) -> bytes:
-        """The whole answer to the connection's one request."""
+    async def read(self, reader: asyncio.StreamReader) -> tuple[dict | None, list | None, bytes | None]:
+        """The connection's one request: a class request's fields and the warden's release headers on it ([N, run
+        hex], `release.release_of`), or the whole answer to anything else."""
         head = await reader.readuntil(b"\r\n\r\n")
         if head.startswith(b"GET /v1/models "):
-            return http(200, {"object": "list", "data": [{"id": self.shape.name, "object": "model"}]})
+            return None, None, http(200, {"object": "list", "data": [{"id": self.shape.name, "object": "model"}]})
         n = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         raw = await reader.readexactly(int(n.group(1))) if n else b""
         fields = warden_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
-        if fields is None:
-            return http(400, {"error": f"a warden's id request (active.id_request in {self.shape.payload + 9}-byte "
-                                       "cells from their first byte) to POST /v1/completions"})
-        if (why := refusal(fields, self.shape)) is not None:
-            return http(400, {"error": why})
-        return answer(fields["prompt"], self.shape)
+        why = (f"a warden's id request (active.id_request in {self.shape.payload + 9}-byte cells from their first "
+               "byte) to POST /v1/completions") if fields is None else refusal(fields, self.shape)
+        if why is not None:
+            self.refused += 1
+            return None, None, http(400, {"error": why})
+        released = REL.release_of(head)
+        return fields, None if released is None else [released[0], released[1] and released[1].hex()], None
+
+    async def stream(self, fields: dict, release: list | None, writer: asyncio.StreamWriter) -> None:
+        queue: asyncio.Queue = asyncio.Queue()
+        self.sched.add(fields, queue, release=release)
+        self.wake.set()
+        finish = None
+        while finish is None:
+            tok, finish = await queue.get()
+            writer.write(IT.id_event(tok, self.shape.payload))
+            await writer.drain()
+        writer.write(IT.TRAILER)
+        self.served += 1
+
+    def step(self) -> None:
+        """One engine step, each id it samples to its request's connection."""
+        for q, tok in self.sched.step():
+            q.queue.put_nowait((tok, q.finish))
+
+    async def run_engine(self) -> None:
+        """Step while a request is waiting or running; when none is, close the open Commit window and wait."""
+        while True:
+            if not self.sched.busy():
+                self.sched.idle()
+                self.wake.clear()
+                await self.wake.wait()
+                continue
+            self.step()
+            await asyncio.sleep(0)
 
 
 def http(status: int, doc: dict) -> bytes:
@@ -174,13 +245,28 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--port", type=int, default=0)
     s.add_argument("--tokens", type=int, default=TOKENS, help="a response's generated ids, exactly (max_tokens)")
     s.add_argument("--id-payload", type=int, default=ID_PAYLOAD, help="P: an id event's bytes, the cells' B - 9")
+    s.add_argument("--out", type=Path, help="keep serve-openai's endpoint records here (the module's docstring)")
+    s.add_argument("--window-steps", type=int, default=64, help="--out: engine steps a Commit window holds at most")
+    s.add_argument("--run-id", default=f"demo-stub-{secrets.token_hex(4)}", help="--out: the endpoint's run id")
     p.add_argument("--count", type=int, default=4)
     a = ap.parse_args(argv)
     if a.cmd == "prompts":
         print(json.dumps(prompts(a.count, Shape(a.prompt_ids, vocab=a.vocab)), separators=(",", ":")))
         return 0
-    asyncio.run(serve(a.host, a.port, Endpoint(Shape(a.prompt_ids, a.tokens, a.vocab, a.id_payload))))
+    shape = Shape(a.prompt_ids, a.tokens, a.vocab, a.id_payload)
+    if a.out is None:
+        asyncio.run(serve(a.host, a.port, Endpoint(shape)))
+        return 0
+    import demo_endpoint as DE
+    stopped = asyncio.run(DE.serve(endpoint_args(a), Toy(shape), lambda sched: Endpoint(shape, sched)))
+    print(json.dumps({"stopped": stopped}), flush=True)
     return 0
+
+
+def endpoint_args(a: argparse.Namespace) -> argparse.Namespace:
+    """`demo_endpoint.serve`'s arguments for ``serve --out``'s ``a``: its scheduler's defaults, the toy's EOS id."""
+    return argparse.Namespace(out=a.out, engine="demo_stub.Toy", seed=0, eos=str(a.vocab), host=a.host, port=a.port,
+                              max_num_seqs=8, max_num_batched_tokens=2048, window_steps=a.window_steps, run_id=a.run_id)
 
 
 if __name__ == "__main__":

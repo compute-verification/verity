@@ -193,8 +193,7 @@ class FoldResult:
     #: the memory-access journal (D82: exhaustive provenance).  Every read and write the fold made, in order, as plain
     #: dicts: {"seq", "event", "step", "kind": "alloc"|"free"|"root"|"read"|"write", "view": ViewDesc|None, "alloc": int,
     #: "rows": [row indices]|None (GatherMany), "refs": [(space, idx, lo, hi), ...] (reads: what the memory model
-    #: answered; writes: what was stored), "what": str}.  An independent checker (`verity_vllm/check/operand_provenance.py`) replays
-    #: the allocs/writes with its own last-writer map and must reproduce every read's refs.
+    #: answered; writes: what was stored), "what": str}.
     accesses: list[dict] = field(default_factory=list)
     #: [R17 D90] tensor-parallel rank log: {"rank", "world"} (None on a TP1 log); one record per collective the fold executed
     #: ({step, k, kind, site, rows, N, rank, world, event, own_view, fields:[{request, param, field, ordinal, rows, offset}]}); and the
@@ -968,7 +967,7 @@ class _Fold:
         # A primary claims the whole subtree (min = the root) and `also`/`before` members claim nothing, so every
         # pre-existing pattern still stamps `root.id`; a D70 Group part that claims its own nested op (a scope such
         # as `vllm.moe_forward` whose intermediates are only snapshotted under the nested kernels' event ids) is
-        # stamped with that op, so `SnapshotStore.find(view, at=event)` in compare/replay/vu_query reaches its snapshot.
+        # stamped with that op, so `SnapshotStore.find(view, at=event)` (`fold_compare.Values`) reaches its snapshot.
         event = min(c.consumed) if c.consumed else root.id
         outs: list[tuple[Coll, dict]] = []
         for i, colls in enumerate(rows):

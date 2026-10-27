@@ -32,6 +32,7 @@ import sys
 import tarfile
 from collections import defaultdict
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -306,7 +307,7 @@ def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
-    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token")
+    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
     for t in A.TAMPERS:
         args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
         assert args.strategies.split(",") == [t]
@@ -314,6 +315,17 @@ def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_
                                          "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
                                          "--challenger-key", "k.json", "--session", "00", "--tamper", t])
         assert served.tamper == t
+
+
+def test_the_byte_shim_changes_one_output_byte_of_a_hex_response_and_keeps_it_hex():
+    data = bytes([0xa5, 0x00, 0xff]) * 8
+    got = cs.ar.other_hex(data.hex().encode())
+    changed = bytes.fromhex(got.decode())
+    assert changed[0] == 0xb5 and changed[1:] == data[1:]
+    assert cs.ar.other_hex(b"\0\0f0") == b"\0\0e0"
+    with pytest.raises(ValueError, match="no output byte"):
+        cs.ar.other_hex(b"\0\0")
+    assert cs.ar.adversary_plan({"sessions": [["s.0", "s.1"]]}, None, "byte")["byte"] == "s.0"
 
 
 def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_every_flag_it_was_given(tmp_path):
@@ -335,6 +347,11 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
         "u")[2:])
     assert (plain.tokens, plain.rate, plain.prompt_range, plain.seed, plain.eos_ids, plain.in_flight, plain.profile,
             plain.strategies) == (64, A.CERTIFIER_VARIED_RATE, "16:1024", 0, None, 4, cs.PROFILES[0], "honest")
+    assert (plain.margin, plain.prompts_file) == (2.0, None)
+    given = cs.parser().parse_args(A.certifier_command(
+        {k: req[k] for k in ("run", "requests", "traffic", "temperature", "top_p", "tamper")}
+        | {"margin": 4.0, "prompts": {"count": 3, "ids": 4}}, tmp_path / "out", "u")[2:])
+    assert (given.margin, given.prompts_file, given.out) == (4.0, tmp_path / A.WITNESS / A.PROMPTS, tmp_path / "out")
 
 
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
@@ -515,6 +532,112 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
     lw = LinkWindows(cs.N2_LINK, e, setup.sync_set, key, "r-clocks", SESSION, ingress=i, certified_clocks=clocks)
     assert lw.clock_source.syncs(cs.N2_LINK) == tuple(syncs) and lw.clock_source.refused == ()
     assert cs.read_clocks(tmp_path / "absent.jsonl") == []
+
+
+def _egress_record(window: int, text: bytes, frame_bytes: int = 4096):
+    """An egress record whose canonical events carry `text`, 64 bytes an event, then a padding slot and an id event."""
+    def frame(kind, body):
+        return (active.HEADER.pack(kind, active.CANONICAL_STREAM, len(body)) + body).ljust(frame_bytes, b"\0")
+
+    slots = [frame(active.DATA, active.event(text[i:i + active.TOKEN_BYTES]))
+             for i in range(0, len(text), active.TOKEN_BYTES)]
+    return SimpleNamespace(window=window, grid=[slots, [None, frame(active.PAD, b""),
+                                                        frame(active.DATA, active.id_event(0, 7))]])
+
+
+def _out_shape(words: int, rows: int, program: str = "cd" * 64):
+    from verity.core.protocols.certifier import out_commit as OC
+
+    return OC.OutShape(program, "out", words, rows)
+
+
+def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_its_own_session(tmp_path):
+    """`--out-shape`'s commitment (`certify_out`): the output an egress record's canonical events carry, as the hex
+    of u16 little-endian words, cut into the shape's rows and committed under the running issuer, which signs its head
+    in the certifier's session for the link-window: the public record `check_out` pins under the certifier's key, and
+    the witness (each row and its salt) apart, for the prover. A record whose text isn't that commits nothing, one
+    that isn't the shape's rows is an ``out-shape`` line, and a refused signature is the link-window under
+    ``refused``, with no witness."""
+    from verity.core.protocols.certifier import out_commit as OC
+
+    words = [0x0102, 0xfffe, 7, 0]
+    text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode() * 40
+    shape = _out_shape(1, 160)
+    signer = cs.signer(tmp_path / "key", 4)
+    try:
+        issuer, key = Issuer(signer, SESSION), signer.public_key()
+        assert cs.out_words(_egress_record(2, text)) == words * 40
+        assert cs.out_rows(words * 40, shape) == [[w] for w in words] * 40
+        got = cs.certify_out(tmp_path, _egress_record(2, text), issuer, shape)
+        assert cs.certify_out(tmp_path, _egress_record(3, b"not hex " * 8), issuer, shape) is None
+        assert cs.certify_out(tmp_path, _egress_record(3, b"abc"), issuer, shape) is None
+        assert cs.certify_out(tmp_path, _egress_record(4, text), Issuer(signer, bytes(32)), shape) is None
+        assert cs.certify_out(tmp_path, _egress_record(5, text[:-4]), issuer, shape) is None
+    finally:
+        signer.close()
+    records = [json.loads(x) for x in (tmp_path / cs.OUT_RECORDS).read_text().splitlines()]
+    assert records[0] == got.public and records[1] == {"refused": [OC.LINK, "egress", 4]}
+    assert records[2:] == [{"out-shape": [OC.LINK, "egress", 5], "detail": "159 words, not 160 rows of 1"}]
+    assert OC.check_out(records[0], key, SESSION, shape, window=2) == got.root
+    witness = [json.loads(x) for x in (tmp_path / cs.OUT_WITNESS).read_text().splitlines()]
+    assert witness == [{"window": 2, "program": shape.program, "rows": [[w] for w in words] * 40,
+                        "salts": [s.hex() for s in got.salts]}]
+    assert not any(s.hex() in json.dumps(records) for s in got.salts)
+
+
+def test_the_out_value_is_committed_at_the_registered_width_in_the_records_order(tmp_path):
+    """At a wide shape (the wired toy's: one row of h words a response step) the words go into rows in the record's
+    order, ``shape.words`` a row, so response j's step s is row ``j·S + s`` (`out_rows`); the record pins at that
+    shape and is ``out-width`` at the per-coordinate one, and words that aren't whole rows of it, or more rows than
+    it holds, are ``out-shape``, never padded."""
+    from verity.core.protocols.certifier import out_commit as OC
+
+    words = list(range(1, 4 * 8 + 1))
+    text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode()
+    wide, narrow = _out_shape(8, 4), _out_shape(1, 32)
+    assert cs.out_rows(words, wide) == [words[i:i + 8] for i in range(0, 32, 8)]
+    assert cs.out_rows(words[:-1], wide) is None and cs.out_rows(words + words[:8], wide) is None
+    signer = cs.signer(tmp_path / "key", 4)
+    try:
+        issuer, key = Issuer(signer, SESSION), signer.public_key()
+        got = cs.certify_out(tmp_path, _egress_record(0, text), issuer, wide)
+        assert cs.certify_out(tmp_path, _egress_record(1, text + text[:32]), issuer, wide) is None
+    finally:
+        signer.close()
+    records = [json.loads(x) for x in (tmp_path / cs.OUT_RECORDS).read_text().splitlines()]
+    assert (got.head.words, got.head.rows) == (8, 4) and OC.check_out(records[0], key, SESSION, wide, window=0) == got.root
+    with pytest.raises(OC.OutRefused, match="out-width"):
+        OC.check_out(records[0], key, SESSION, narrow, window=0)
+    assert records[1] == {"out-shape": [OC.LINK, "egress", 1], "detail": "40 words, not 4 rows of 8"}
+    witness = [json.loads(x) for x in (tmp_path / cs.OUT_WITNESS).read_text().splitlines()]
+    assert [w["rows"] for w in witness] == [cs.out_rows(words, wide)]
+
+
+def test_the_out_shape_reaches_each_rehearsed_serve_and_is_an_out_shape(tmp_path, monkeypatch):
+    shape = _out_shape(128, 4).doc()
+    path = tmp_path / "shape.json"
+    path.write_text(json.dumps(shape))
+    serve = ["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o", "--link", "h:1",
+             "--reveal", "h:2", "--key", "k", "--challenger-key", "c", "--session", "00"]
+    assert cs.parser().parse_args(serve).out_shape is None
+    assert cs.parser().parse_args(["rehearse", "--out", "o", "--out-shape", str(path)]).out_shape == shape
+    for bad in ({**shape, "program": shape["program"].upper()}, {**shape, "words": 0}, {"program": shape["program"]}):
+        path.write_text(json.dumps(bad))
+        with pytest.raises(SystemExit):
+            cs.parser().parse_args([*serve, "--out-shape", str(path)])
+    with pytest.raises(SystemExit):
+        cs.parser().parse_args([*serve, "--out-shape", str(tmp_path / "absent.json")])
+    seen = []
+
+    def popen(argv, **_):
+        seen.append(argv)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cs.subprocess, "Popen", popen)
+    with pytest.raises(KeyboardInterrupt):
+        cs.rehearse_one(tmp_path, "honest", url="u", certifier_dir=tmp_path / "k", challenger_dir=tmp_path / "c",
+                        api_key_env=None, start_in=1.0, out_shape=shape)
+    assert cs.parser().parse_args(seen[0][2:]).out_shape == shape
 
 
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
@@ -1049,6 +1172,53 @@ def test_a_varied_request_is_an_id_request_in_frames_its_prompts_length_fixes(le
     assert active.request_frame_count(len(raw), cs.FRAME_BYTES) == active.id_request_frames(length, cs.FRAME_BYTES)
     assert active.id_request_fields(raw, cs.FRAME_BYTES) == fields | {"user": "varied.99999"}
     assert json.loads(raw.partition(b"\r\n\r\n")[2]) == cs.varied_body(fields["model"], q) | {"user": "varied.99999"}
+
+
+def test_given_prompts_are_sent_in_turn_at_the_same_seeds_arrivals_max_tokens_and_seeds(monkeypatch):
+    """With `prompts` (`--prompts-file`, the gate's `--prompts`) request j's prompt is the (j mod n)-th of the n and
+    nothing is tokenized; its arrival, `max_tokens`, seed and session are what the same seed gives the chat turns."""
+    monkeypatch.setattr(cs, "tokenize", lambda url, model, text, key=None: list(text.encode()))
+    prompts = [[70001, 3], [5], [7]]
+    turns = cs.varied_requests("u", "m", 7, rate=0.2, prompt_tokens=(8, 8), max_tokens=24, seed=5, name="r")
+    monkeypatch.setattr(cs, "tokenize", lambda *a, **k: pytest.fail("tokenized given prompts"))
+    given = cs.varied_requests("u", "m", 7, rate=0.2, prompt_tokens=(8, 8), max_tokens=24, seed=5, name="r",
+                               prompts=prompts)
+    assert [q["prompt"] for q in given] == [prompts[j % 3] for j in range(7)]
+    assert [{k: v for k, v in q.items() if k != "prompt"} for q in given] == \
+        [{k: v for k, v in q.items() if k != "prompt"} for q in turns]
+    assert len({tuple(q["prompt"]) for q in turns}) == 1
+    for bad in ([], [[1], []]):
+        with pytest.raises(ValueError, match="prompts: at least one"):
+            cs.varied_requests("u", "m", 7, prompts=bad)
+
+
+def test_the_varied_plan_takes_the_prompts_file_and_its_timing_widens_with_the_margin(tmp_path, monkeypatch):
+    """`plan_of` on varied traffic reads `--prompts-file` for the requests' prompts and plans at `--margin`: a larger
+    margin waits longer for each request's first frame (Δ0) and plans a slower rate (ρ0), the plan recording both;
+    fixed traffic refuses the file. The probes are the toy engine's: a token every 0.33 s after 0.4 s."""
+    (tmp_path / "prompts.json").write_text(json.dumps([[1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15, 16]]))
+
+    def probe(url, model, requests, key, clock, sleep):
+        return {"url": url, "model": model, "upstream_fields": cs.UPSTREAM_FIELDS, "responses": [
+            {"session": q["session"], "max_tokens": q["max_tokens"], "prompt_tokens": len(q["prompt"]),
+             "tokens": q["max_tokens"], "token_s": [0.4 + 0.33 * k for k in range(q["max_tokens"])],
+             "finish": "length", "last": 1} for q in requests]}
+    monkeypatch.setattr(cs, "probe_varied", probe)
+    monkeypatch.setattr(cs, "tokenize", lambda *a, **k: pytest.fail("tokenized given prompts"))
+    plans = {}
+    for margin in (2.0, 4.0):
+        args = argparse.Namespace(model="toy", api_key_env=None, traffic="varied", requests=6, rate=0.2,
+                                  prompt_range="16:1024", tokens=24, seed=0, probes=4, eos_ids="0", margin=margin,
+                                  prompts_file=tmp_path / "prompts.json")
+        _, _, plans[margin] = cs.plan_of(args, "u")
+    for margin, plan in plans.items():
+        assert [q["id_request"]["prompt"][0] for q in plan["requests"]] == [1, 9, 1, 9, 1, 9]
+        assert plan["varied"]["margin"] == margin and plan["varied"]["prompt_tokens"] == [8, 8]
+    two, four = plans[2.0]["varied"], plans[4.0]["varied"]
+    assert four["delta0_buckets"] > two["delta0_buckets"] and Fraction(four["rho0"]) < Fraction(two["rho0"])
+    fixed = argparse.Namespace(model="toy", api_key_env=None, traffic="fixed", prompts_file=tmp_path / "prompts.json")
+    with pytest.raises(SystemExit, match="--prompts-file: varied traffic's"):
+        cs.plan_of(fixed, "u")
 
 
 def _no_sleep(seconds: float) -> None:

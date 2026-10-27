@@ -89,6 +89,7 @@ import Proofs.Flock.Soundness.TmplValue
 import Proofs.Flock.Soundness.TmplValueUnit
 import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplComputes
+import Proofs.Flock.Soundness.TmplReads
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup
@@ -193,11 +194,13 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec
 import Proofs.Flock.Soundness.Discharge.HiddenDec
 import Proofs.Flock.Soundness.Discharge.HdecCor
 import Proofs.Flock.Soundness.Discharge.Hidden
+import Proofs.Flock.Soundness.Discharge.Pinned
 import Proofs.Flock.Soundness.Discharge.ZkCoins
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit
 import Proofs.Flock.Soundness.Discharge.ZkHidden
 import Proofs.Flock.Soundness.Discharge.Composed
 import Proofs.Flock.Soundness.Discharge.PlainJ
+import Proofs.Flock.Soundness.Discharge.PlainHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg
 import Proofs.Flock.Soundness.Discharge.PlainReg
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin

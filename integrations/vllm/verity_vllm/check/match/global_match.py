@@ -86,6 +86,7 @@ from dataclasses import dataclass
 
 from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
 from verity_vllm.check.match import instance_sequence as SEQ
@@ -198,16 +199,18 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     G = {r["request_id"]: r for r in gp["requests"]}
 
     # ---------------------------------------------------------------- the fold (meta channel of the record) + canonical request ids
+    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
+    comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # [R17-28 P1] shapes derived at Match time (--derived)
     B = _loaded.get("oracle")
     if B is None:
         B = _loaded["oracle"] = ops.load_oracle(oracle_dir, "oracle")
+        CF.fold_in_form(B, comp_dirs)
+    res["fold_form"] = getattr(B, "fold_form", None)
     mark("load_fold")
     alias = request_aliases(gp)
     # ---------------------------------------------------------------- X-09 evidence (whole run, as row_pod runs it)
     # Runs on the RAW fold, before canonicalize_record renames the fold rows' request ids to r<k> IN PLACE below: X-09 attributes
     # instances by the record's own ids (RunHeader.workload UUIDs) and now shares this process's decoded fold instead of decoding its own.
-    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
-    comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # [R17-28 P1] shapes derived at Match time (--derived)
     if run_x09:
         try:
             x = BD.decompose(oracle_dir, comp_dirs, log_path, within_step=within_step, oracle=B,   # X-09 evidence under the same criterion

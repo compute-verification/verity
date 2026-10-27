@@ -75,7 +75,7 @@ def test_h200_sizes():
     assert layer_s8 == 139_695_489_024 and f"{layer_s8 / 2**30:.2f}" == "130.10"
     assert all(t.leaves & (t.leaves - 1) == 0 for t in ts), "a tree with pads"
     assert [t.offset for t in ts] == [sum(u.nbytes for u in ts[:i]) for i in range(len(ts))]
-    assert W.tensor(W.H200, "l0.wup").words == 128 and W.tensor(W.H200, "l0.wup").leaves == 65536 * 64
+    assert W.tensor(W.H200, "l0.wup").words == 4096 and W.tensor(W.H200, "l0.wup").leaves == 65536 * 2
 
 
 def test_stream_and_write(tmp_path):

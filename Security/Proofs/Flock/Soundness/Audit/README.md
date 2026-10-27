@@ -7,7 +7,7 @@ partition, any sampling design, and any per-unit proof system. The derivations a
 **The model.** The prover registers `R` (its roots); the verifier draws units from its own randomness after registration;
 one batched session proves the drawn units (`audit`). The **committed trace** `X` is an analysis function of the
 prover's state at registration (its registration and its session strategy for every draw), so the draw is independent of
-its faulty units; nobody computes it. A unit is **faulty** in `X` (the Lean's `wrong`) when its committed outputs differ
+its faulty proof blocks; nobody computes it. A unit is **faulty** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
 design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`LinkSound`) is the
@@ -34,7 +34,7 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
   this is the lifetime union bound, with every term against a prover that took part in all the audits;
 - `Partition.audit_cone`: for committed wires $T$ fixed before the draw, $\Pr[\text{accept} \wedge X_T \ne
   \mathrm{eval}_C(a)_T] \le \max_{u \in \mathrm{cone}(T)} (1 - \pi_u) + \varepsilon_{ks} + \delta_{link} + \delta_{in}$;
-- `Partition.audit_cone_count`: at least $j$ faulty units in a cone;
+- `Partition.audit_cone_count`: at least $j$ faulty proof blocks in a cone;
 - `Partition.audit_covered`: a cone inside the draw, for wires chosen even after the draw: $\varepsilon_{ks} +
   \delta_{link} + \delta_{in}$;
 - `Partition.oracle_count`, `oracle_profile`, `oracle_drawn`, `oracle_cone`: the same at the oracle layer, from
@@ -73,7 +73,9 @@ $\sigma$'s (`ExecStrata`), misses $B$ with probability at most `Law.stratified`'
 over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
 (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
 (`ExecStrataOf.lean`): the strata of a draw file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
-stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. `drawOS_subset_escape_le`,
+stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
+neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
+(`liveStrata_of_ofJson`: non-empty at an accepted draw file's law). `drawOS_subset_escape_le`,
 `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live draw**: `Flock.Draw.drawOS`,
 which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
 with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
@@ -121,7 +123,7 @@ $C$ (`choose_div_anti`: the hypergeometric acceptance probability falls as the d
 $B$ of units doing $W_B$ of the work has acceptance probability at most $((W - W_B)/W)^K$, from the per-stratum
 hypergeometric and weighted AM-GM over the work shares. `audit_work` and `extraction_audit_work` bound
 $\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus the per-unit terms. `record_sizing` and
-`audit_work_of_record`: at $K = 27{,}713$, faulty units doing at least 0.1% of the work have acceptance probability at
+`audit_work_of_record`: at $K = 27{,}713$, faulty proof blocks doing at least 0.1% of the work have acceptance probability at
 most $2^{-40}$; `record_sizing_one_fewer`: $K = 27{,}712$ does not reach it under this bound. `Law.widen` and
 `escape_widen_le`, the seam for closure draws: proving more units than are drawn, on the same coins, never raises an
 acceptance probability. `FlockWork.lean`'s `workRule_eq_draw` and `countRule_eq_draw`: the executable's
@@ -141,7 +143,7 @@ duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`strat
 `le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.
 
 **Theorems, the cumulative harm budget** (`Audit/HarmBudget.lean`, `Audit/HarmBudgetLife.lean`), over a run of adaptive
-rounds (`Adaptive.Play`): each round's faulty units $B_t$ and sampling design are fixed by the history before that
+rounds (`Adaptive.Play`): each round's faulty proof blocks $B_t$ and sampling design are fixed by the history before that
 round's own coins, and the prover may stop after any round. A sampling design meets the **design condition**
 (`Law.Design L π`) when every $B$ fixed before the coins has acceptance probability at most $\exp(-\sum_{u \in B}
 \pi_u)$: `bernoulli_design` ($\pi_u = q$), `subset_design` ($k/n$), `stratified_design` ($k_s/n_s$, the closed form of
@@ -149,7 +151,7 @@ round's own coins, and the prover may stop after any round. A sampling design me
 with $\lambda h_u \le \pi_u$, $\Pr[\text{accept} \wedge \sum_t h(B_t) \ge H] \le e^{-\lambda H} + \sum_t
 \mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s draw hits $B_t$ and the round still
 passes (`Play.Drawn`, indexed by the rounds left after it); `harm_budget_rate` takes $\lambda = \min_{h_u > 0} \pi_u /
-h_u$. `harm_count`: under Bernoulli($q$) draws, an accepted run with $K$ or more faulty units summed over its rounds has
+h_u$. `harm_count`: under Bernoulli($q$) draws, an accepted run with $K$ or more faulty proof blocks summed over its rounds has
 probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
 gives $1 - p + \sum_t \mathrm{err}_t$ at $k^*(p) = \ln(1/(1-p)) / (-\ln(1-q))$. `life_harm_budget` is the instance over
 a lifetime of $N$ one-stage audits (`life`): after each accepted audit the prover chooses whether to go on, and a
@@ -161,14 +163,14 @@ the whole run.
 **Theorems, closure draws** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each drawn unit proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
-whose closure meets $B$, so a faulty unit that is never drawn on its own is charged to the units above it. `unsoundWork`
-is the work of $B \cup \mathrm{unsound}(B)$: a closure map need not list a unit in its own closure, so the faulty units'
+whose closure meets $B$, so a faulty proof block that is never drawn on its own is charged to the units above it. `unsoundWork`
+is the work of $B \cup \mathrm{unsound}(B)$: a closure map need not list a unit in its own closure, so the faulty proof blocks'
 own work is counted explicitly (`workOf_le_unsoundWork`). `harm_le_unsoundWork`: a
-faulty unit's harm (its own work and that of the units whose closure holds it) is in the unsound work, drawn or not;
+faulty proof block's harm (its own work and that of the units whose closure holds it) is in the unsound work, drawn or not;
 `unsoundWork_le_harm` (coverage) and `unsoundWork_singleton`. `audit_work_closure` and `extraction_audit_work_closure`:
 under the work sampling design's closure draw, at any floors $f_s \ge 1$,
 $\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le ((W - T)/W)^K$ plus the per-unit terms, for
-$B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a faulty unit's harm; `audit_work_closure_of_record`:
+$B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a faulty proof block's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
 **Theorems, windows of calls** (`Audit/Window.lean`; X-SPC-105, X-SPC-106): a window is one stratified sampling design
@@ -214,17 +216,17 @@ evaluation on every committed wire) and `compose_cone` (the same for a consumer'
 circuit's other outputs, such as commitments and leaves, are not delivered. $K$ **separates** the units $B$ from $D$
 (`Separates K B D`, a downstream cut) when every gate path from a unit of $B$ to a wire of $D$ meets $K$.
 
-- `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose faulty units lie in
+- `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose faulty proof blocks lie in
   $B$, and that agree on a committed separator $K$ of $B$, deliver the same values on $D$;
 - `card_delivered_le`: so they deliver at most $2^{|K|}$ values on $D$;
-- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay unit's exports); `Separates.mono`,
+- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay block's exports); `Separates.mono`,
   `Separates.union`;
-- `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the faulty units inside some set of
+- `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the faulty proof blocks inside some set of
   acceptance probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$
   members;
 - `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
   \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
-  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$
+  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay blocks, with $e_{\text{eff}}$
   and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
@@ -237,7 +239,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
   `verity.core.protocols.sampled_proofs.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
-  `W.lemma47` applies the influence cap to two different traces that both have a faulty unit, with a separator
+  `W.lemma47` applies the influence cap to two different traces that both have a faulty proof block, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
   meets `card_influenceSet_le_harm`'s on any partition and sampling design, with the exits as separators and each unit's

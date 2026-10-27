@@ -57,4 +57,26 @@ def RecordCustodyZKHJLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs)
     (L : Audit.Law n) : Prop :=
   Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ ∀ ω, Discharge.ZkHidden.DrawOkZKHJ I dj mPts (L.draw ω)
 
+/-- **The record is the live session's, at `J` tables** (`live-verifier`'s record half, `RecordCustodyZKHJLaw`'s first
+conjunct): V*'s sessions carry it apart from the draw half (`DrawCustodyZKHJ`), as `ZkOuter.hRec`. -/
+def RecordsCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
+    (Jf : Finset (Fin n) → Reg → ℕ)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript) :
+    Prop :=
+  Discharge.Composed.RecordsLiveZKJ I dj Jf wr
+
+/-- **The draw file proves the drawn units, at the live law's draws, at `J` hidden-output tables** (`live-verifier`'s
+draw half, `RecordCustodyZKHJLaw`'s second conjunct): V*'s sessions carry it as `ZkOuterD.hDraw` and `ZkOuterR.hDraw`. -/
+def DrawCustodyZKHJ {n : ℕ} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
+    (L : Audit.Law n) : Prop :=
+  ∀ ω, Discharge.ZkHidden.DrawOkZKHJ I dj mPts (L.draw ω)
+
+/-- **The draw file proves the drawn units at one draw `S`, at `J` tables** (`live-verifier`'s draw half at one draw,
+`Discharge.Composed.DrawOkZKJ`), as `setupZJ_of_acceptsZK` takes it. -/
+def DrawAtZKJ := @Discharge.Composed.DrawOkZKJ
+
+/-- **The draw file proves the drawn units at one draw `S`, at `J` hidden-output tables** (`DrawAtZKJ` with
+`Discharge.ZkHidden.DrawOkZKHJ`'s hidden-output setup). -/
+def DrawAtZKHJ := @Discharge.ZkHidden.DrawOkZKHJ
+
 end FlockSoundness.Assumptions.Zk

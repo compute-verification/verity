@@ -20,8 +20,25 @@ with at least one digit and no leading zero, each id is below V and ``max_tokens
 digit's is its value), so on a body that isn't in the schema the ids are still that sum: `reference` is the function exactly.
 The body is written once over its steps (`parse`); `boolean_io_shell.IngressPrompt_v2` is it on gates.
 
+`TokenFeed_v1{NP, FIRST}` feeds a request Program of a window class, whose prompts are at most NP ids, one token a position: the
+prompt's id while the position is in the prompt, else the token the previous position selected, so a Program's units are the
+class's whatever the prompt's length. It carries the slot from position to position: at position p the slot is
+(lp − p, ids[p], …, ids[NP − 1], 0, …), NP + 1 i32s, lp the prompt's length. The first position's (FIRST) takes the prompt's
+first id (a prompt has at least one); every other takes ``slot[1]`` while ``slot[0] − 1`` (mod 2^32) is non-negative, which is
+``slot[0]`` positive on every slot but ``slot[0]`` = −2^31, else ``sel``: the sign of the count it carries on, so the count's one
+carry chain is the test. Each outputs its token and the next position's slot.
+
+A window has a fixed number of slots, each a class Program whether or not it carries a request (ASK-122), so whether a slot
+is occupied is a private word of its ingress row. `SlotRow_v1{NP}` opens that row, (occupancy, lp, ids[0], …, ids[NP − 1]),
+NP + 2 i32s, into its occupancy word and the first position's `TokenFeed_v1` slot (a copy, no gates). `SlotMask_v1` is a
+slot's output at a position: the token selected there while the slot is occupied (its occupancy word's low bit is 1), else
+`EMPTY`, which is no token id, so an empty slot's outputs are masked by its occupancy word wherever they are read.
+
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
+  TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
+  SlotRow{NP}                (row: NP + 2 i32) -> (occ: i32, slot: NP + 1 i32)
+  SlotMask                   (occ: i32, tok: i32) -> i32
 """
 from __future__ import annotations
 
@@ -198,4 +215,71 @@ def IngressPrompt(B, S, body):
     return Coll(ret, concat([ok.refs, *[v.refs for v in ids], m.refs]))
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt]
+def feed_refuse(S: dict) -> str | None:
+    n, first = S.get("NP", 1), S.get("FIRST", False)
+    if not (type(n) is int and n >= 1 and type(first) is bool):
+        return f"NP must be at least 1 and FIRST a bool (got NP={n!r}, FIRST={first!r})"
+    return None
+
+
+def feed_sig(S):
+    slot = ("slot", Array(S.NP + 1, WORDS.I32))
+    return ((slot,) if S.FIRST else (slot, ("sel", WORDS.I32))), Tuple(WORDS.I32, Array(S.NP + 1, WORDS.I32))
+
+
+def feed_reference(slot: list[int], sel: int | None, NP: int) -> tuple[int, list[int]]:
+    """`TokenFeed_v1`'s function on i32 encodings (``sel`` None: FIRST): (its token, the next position's slot)."""
+    left, ids = (slot[0] - 1) & 0xFFFFFFFF, slot[1:]
+    return (ids[0] if sel is None or not left >> 31 else sel), [left, *ids[1:], 0]
+
+
+@composite("TokenFeed", 1, ["NP", "FIRST"], feed_sig, refuse=feed_refuse,
+           conformance="vLLM's input id at a position: the prompt's below its length, else the previous position's sample")
+def TokenFeed(B, S, slot, sel=None):
+    """A class Program's token at a position and the slot it carries to the next (the module docstring)."""
+    o = word_ops(B)
+    left, ids = o.iadd(slot[0], o.word(0xFFFFFFFF)), [slot[1 + i] for i in range(S.NP)]
+    tok = ids[0] if S.FIRST else o.isel(B.call(bit_at(32), left, o.word(31)), sel, ids[0])
+    _, ret = feed_sig(S)
+    return Coll(ret, concat([tok.refs, left.refs, *[x.refs for x in ids[1:]], o.word(0).refs]))
+
+
+#: an empty slot's output at every position: no token id, every id being below V ≤ 2^31
+EMPTY = 0xFFFFFFFF
+
+
+def row_refuse(S: dict) -> str | None:
+    n = S.get("NP", 1)
+    return None if type(n) is int and n >= 1 else f"NP must be at least 1 (got NP={n!r})"
+
+
+def row_sig(S):
+    return ((("row", Array(S.NP + 2, WORDS.I32)),), Tuple(WORDS.I32, Array(S.NP + 1, WORDS.I32)))
+
+
+def mask_sig(S):
+    return (("occ", WORDS.I32), ("tok", WORDS.I32)), WORDS.I32
+
+
+def mask_reference(occ: int, tok: int) -> int:
+    """`SlotMask_v1`'s function on i32 encodings."""
+    return tok if occ & 1 else EMPTY
+
+
+@composite("SlotRow", 1, ["NP"], row_sig, refuse=row_refuse,
+           conformance="a window slot's ingress row as ASK-122's fixed slots carry it: occupancy, prompt length, ids")
+def SlotRow(B, S, row):
+    """A slot's ingress row opened into its occupancy word and its first position's slot (the module docstring)."""
+    _, ret = row_sig(S)
+    return Coll(ret, concat([row[i].refs for i in range(S.NP + 2)]))
+
+
+@composite("SlotMask", 1, [], mask_sig,
+           conformance="a slot's egress at a position: the token served there, none for an empty slot")
+def SlotMask(B, S, occ, tok):
+    """A slot's output at a position: ``tok`` while ``occ``'s low bit is 1, else `EMPTY` (the module docstring)."""
+    o = word_ops(B)
+    return o.isel(B.call(bit_at(32), occ, o.word(0)), tok, o.word(EMPTY))
+
+
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, SlotRow, SlotMask]

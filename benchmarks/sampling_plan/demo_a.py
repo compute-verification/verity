@@ -24,7 +24,7 @@ and about 257 bits of receipt committed a chunk. Drawn lanes share their chunks'
 
 **Budget.** Daniel (6:05 PM PDT): proving within 1% of the block's compute. Serving's overhead is beside it, never in it
 (Daniel, 6:36 PM PDT): the commits (HASH-20's 1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
-block's 1% is less than one statement's fixed cost, so the plan of record is given for sampling blocks (the proof units
+block's 1% is less than one statement's fixed cost, so the plan of record is given for sampling blocks (the proof blocks
 one draw covers, committed and registered before it) of the least length whose 1% affords a plan, a week, a month and a
 year: one draw over all their units, its statements shared per subcircuit. M3's live draw (`m3`) is a uniform 8 of one
 block's units (and, for its reservation, 8 of its tile lanes), given as its cost against the block's GPU time and its 1%
@@ -88,7 +88,7 @@ TILE = "PouwH1LaneZy_v2"
 K_LOG_MAX = 27
 #: M3's live draw (PRF-171): a uniform subset of this many of one block's units
 M3_UNITS = 8
-#: PoUW's proof unit (CMP-126, compute-accounting 08:00Z): J10-R's per-call lane unit `PouwH1LaneZy_v2` over
+#: PoUW's proof block (CMP-126, compute-accounting 08:00Z): J10-R's per-call lane unit `PouwH1LaneZy_v2` over
 #: `PouwH1Tile_v5`, 1,024 outputs over the call's whole K, traced on its Boolean form: at each K its ANDs and its
 #: statements, one `PouwH1LaneZyChunk_v2` of 131,072 MACs each and the combine, each statement's output the one bit `ok`
 TILE_OUTPUTS = 1024

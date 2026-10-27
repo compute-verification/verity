@@ -1,9 +1,10 @@
 """`wipe_store`, the streamed wipe's prover keeping the fill in device memory, here on its host-memory stand-in: it keeps
 each frame where its labels go and answers each read from there, its gate writes both sides of every power-of-two byte
 boundary and refuses a store whose addresses wrap, its cheat keeps prior content in the first labels' places and is
-rejected one label past f·M, a host without the CUDA driver is refused by name, and the leg runs whole on it against a
-challenger side of its own host that streams natively, recording the prover's, the session's and the streamer's figures
-and the store in the placement, and against a simulated placement's side on the cheat, rejecting."""
+rejected one label past the published threshold, a host without the CUDA driver is refused by name, and the leg runs
+whole on it against a challenger side of its own host that streams natively, recording the prover's, the session's and
+the streamer's figures and the store in the placement, and against a simulated placement's side on the cheat,
+rejecting."""
 
 from __future__ import annotations
 
@@ -97,12 +98,12 @@ def test_the_cheat_keeps_prior_content_in_place_of_the_first_labels() -> None:
         WS.StoreProver(SMALL, WS.HostMemory(), foreign=65)
 
 
-def test_a_store_keeping_prior_content_past_f_m_is_rejected() -> None:
-    """The GPU store's cheat one label past f·M, on host memory: like `Keeping`, it misses a read with probability at
-    least `1 − (18/19)^2152`; on these coins it misses one."""
+def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
+    """The GPU store's cheat one label past the published threshold, on host memory: like `Keeping`, it misses a read
+    with probability `1 − (1 − n/N)^2152`, past `1 − 2^-128`; on these coins it misses one."""
     params = W.params_for()
-    n = W.foreign_labels("fM", params)
-    assert (n - 1) * sw.LABEL_BITS <= -(-W.memory_bits(params) // 19) < n * sw.LABEL_BITS
+    n, threshold = W.foreign_labels("fM", params), W.certify(params, 0)["foreign_bits"]
+    assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
     store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(), foreign=n)
     w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), coin_secret=b"coins", egress_bits=0,

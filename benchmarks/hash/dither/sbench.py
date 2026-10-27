@@ -333,9 +333,9 @@ DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "Cutlas
 
 def kernels_of(llm) -> dict:
     """The linear kernels the engine's layers really run: class name -> layers."""
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import handle
     seen: dict = {}
-    for _, mod in prof.get_model_runner(llm).get_model().named_modules():
+    for _, mod in handle.model_runner(llm).get_model().named_modules():
         k = getattr(getattr(mod, "scheme", None), "kernel", None)
         q = getattr(mod, "quant_method", None)
         name = type(k).__name__ if k is not None else (type(q).__name__ if q is not None and hasattr(mod, "weight") else None)
@@ -466,7 +466,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         sys.path.insert(0, str(vllm_dir))
         from tests.engine import int8_exact_gpu as G
         from verity_vllm.engine.build import build_engine
-        from verity_vllm.program.frontend.target_profile import TargetProfile
+        from verity_vllm import TargetProfile
         target = TargetProfile.from_device().with_overrides(int8_exact="all")
         ns = argparse.Namespace(checkpoints=str(vllm_dir / "manifests" / "checkpoints.json"), role="LLAMA31_8B_INT8",
                                 base_role="LLAMA31_8B", repo="verity-int8/Llama-3.1-8B-INT8",
