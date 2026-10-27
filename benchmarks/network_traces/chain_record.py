@@ -121,8 +121,8 @@ WARDEN_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, and no run has measured the offsets a
-#: receiver can tell apart (NET-7)
+#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, though NET-7's probe found the client's
+#: offsets tell a prover-chosen write phase apart at D_j = 1 (`note:network-accounting/20261027T0813Z-finding-jitter-j`)
 JITTER = "assumed (J)"
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -696,8 +696,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "and the server can't move an admission (not met today)",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                f"the jitter term is 0 at D_j = 1, {JITTER}: no run has measured the timing offsets a receiver can "
-                "tell apart (NET-7)",
+                f"the jitter term is 0 at D_j = 1, {JITTER}: NET-7's probe found the client's offsets tell a "
+                "prover-chosen write phase apart at D_j = 1 (note:network-accounting/20261027T0813Z-finding-jitter-j)",
                 "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
 
 

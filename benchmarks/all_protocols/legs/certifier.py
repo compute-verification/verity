@@ -90,8 +90,9 @@ input-row bits, less the rows wires feed or ``external`` names) and its Program 
 population program rebuilt from its records, off which the period check reads its units and the bits each commits),
 the observation horizon the link's (its link-windows' buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1
 (N2 holds the planned profile's egress counts exactly, so no count moves; that no offset within a bucket tells a
-receiver more is J's, assumed and unmeasured, `JITTER`), and no connection through the network certifier but the
-link, whose counts the profile fixes (``cells`` empty).
+receiver more is J's, assumed, `JITTER`, though NET-7's probe found the client's offsets tell a prover-chosen write
+phase apart, `note:network-accounting/20261027T0813Z-finding-jitter-j`), and no connection through the network
+certifier but the link, whose counts the profile fixes (``cells`` empty).
 
 **The block record**: a period's accepted answer, of either path, is the certifier leg of ``verity/block-record/v1``
 by `benchmarks/network_traces/block_certifier.py`'s ``block_leg``, which also holds `check`.
@@ -127,8 +128,10 @@ SESSION = "certifier-session"
 #: the δ a period's certificate holds at: its answer's, then the one written beside it, each split across the case's
 #: terms (`term_delta`)
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
-#: K's jitter term, 0 at the case's jitter bound 1: J (`NetTiming.JitterBounded`) assumes it, and no run has measured
-#: the offsets a receiver can tell apart (NET-7); each answer's row in ``summary.json`` says so (``jitter_term``)
+#: K's jitter term, 0 at the case's jitter bound 1: J (`NetTiming.JitterBounded`) assumes it, though NET-7's probe
+#: found the client's offsets tell a prover-chosen write phase apart at that bound
+#: (`note:network-accounting/20261027T0813Z-finding-jitter-j`); each answer's row in ``summary.json`` says so
+#: (``jitter_term``)
 JITTER = "assumed (J)"
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40

@@ -28,7 +28,8 @@ every machine of a census deployment, the pooled total first and the per-window 
     the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
     cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
     none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. The jitter term is 0 at jitter bound 1,
-    assumed (J) (`NetTiming.JitterBounded`, unmeasured, NET-7), and each K says so (`jitter_term`). Its `share` is
+    assumed (J) (`NetTiming.JitterBounded`, which NET-7's probe found does not hold at that bound:
+    `note:network-accounting/20261027T0813Z-finding-jitter-j`), and each K says so (`jitter_term`). Its `share` is
     K over the period's output bits, 16 a unit; `fleet` is the deployment's machines joined by a union bound at
     δ/machines each (not in Lean); each window's own `K` stands beside it. #4367 is conditional on two per-window
     inputs not yet discharged (proofs' `SampledKSLive` and the live `SampledLeakAccepted`), so this K is cited as
