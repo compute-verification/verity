@@ -107,9 +107,9 @@ verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean
 Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
 (one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), every case hands
 the components the same blobs (sampled proofs' circuit and public file), and the composition's inputs, its blobs or the case
-itself are often broken. Integrity accepts only on a session's proof, which no case carries (its cases are audits with no
+itself are often broken. Sampled proofs accept only on a session's proof, which no case carries (its cases are audits with no
 session, undecided when their draw drew nothing, and audits whose sessions' files are in no blob), so no product
-accepts in the difftest until a v2 case with a proof does. The port follows top's rule where the
+accepts in the difftest until a v2 case with a proof does. The port follows the rule above where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
 - **Reject dominates.** In the trial a missing statement leaves the product with no verdict even when another component's
@@ -117,7 +117,7 @@ trial's differs, and the reference is changed to match (`verdict`; the trial's, 
   rejects. `test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_component` pins the difference,
   and `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the two apart: a reference with the
   trial's rule disagrees with the Lean, on a case where one component rejects and another is undecided.
-- **Every component counts.** Of the components' statements, the trial's NCI fails the epoch on work's reasons alone
+- **Every component counts.** Of the components' statements, the trial's NCI fails the epoch on PoUW's reasons alone
   (sampled proofs' reach it through them), and PoUS's or the network certifier's reasons only zero their explained usage in the
   balance. Here each component's rejection rejects; `trial_verdict` already counts every component's.
 
