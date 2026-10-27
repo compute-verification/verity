@@ -1,4 +1,0 @@
-order = 260
-path = "`stage_cost/`, `stage_ovl/`"
-runs_on = "RTX PRO 6000"
-what = "What decision 36's stage coins and deferred edit cost at Llama-3.1-8B's shapes, and their overlap in prefill with the committer. One σ a request (decision 72) retired both, so these are the measurements of record; the committer's latency and overlap still apply"

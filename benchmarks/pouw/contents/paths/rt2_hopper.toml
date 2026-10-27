@@ -1,4 +1,0 @@
-order = 75
-path = "`rt2_hopper/`"
-runs_on = "H200 (build on a CPU node)"
-what = "li's fold on sm_90a (RT2-HOPPER): `sm90_clock.cu`'s `exact` runs the fold bit for bit with six checkpoint placements (LI-CP-W's REDUX a segment, a set's, and the lane XOR in memory by `red.global.xor`), checked through `segment.py` by `ref_check.py`; `lirate` and `lirmix` time each placement with the lane alone on every SM (the atomic unit's rate, `lirate_analyze.py`); `clock` reads the SM clock in the kernel under the honest mixed load; `roles` times wg_spec's two roles each on its own clock (the JP*90 rows' points, `roles_analyze.py`); `msp90.cu` times `mma.sp m16n8k32` for (M′); `li_window_sat.py` (`sat.sh`) asks z3 whether a window of li's half steps fits in fewer instructions. `clock.sh build` on a CPU node, then `clock.sh time` under `gpu-lease 1`"
