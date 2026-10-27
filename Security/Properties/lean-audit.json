@@ -50,6 +50,10 @@
   "Properties.RemoteAudit.Component",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.SampledProofs.OneStageZk",
+  "Properties.Composed",
+  "Properties.Onsite",
+  "Properties.Remote",
   "Properties.Flock.Circuit",
   "Properties.Composition",
   "Properties.Nci.Protocol",
@@ -338,8 +342,13 @@
   "Definitions.Pouw.Game.Defs",
   "Properties.Composition",
   "CoreComposition",
+  "CoreProtocol.Blobs",
+  "Properties.Onsite",
   "Properties.Verity",
-  "CoreOnsite"
+  "CoreOnsite",
+  "Properties.Composed",
+  "Properties.Remote",
+  "CoreRemote"
  ],
  "layers": {
   "Properties.Composition": {
@@ -590,6 +599,21 @@
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.Onsite": {
+   "imports": ["CoreOnsite", "Properties.Composed"],
+   "except": [],
+   "why": "onsite's properties are stated against onsite's own protocol and the conclusions `Properties.Composed` states, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Remote": {
+   "imports": ["CoreRemote", "Properties.Composed"],
+   "except": [],
+   "why": "remote's properties are stated against remote's own protocol and the conclusions `Properties.Composed` states, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Composed": {
+   "imports": ["CoreComposition.Product", "CoreComposition.Registered", "Properties.SampledProofs.OneStageZk"],
+   "except": [],
+   "why": "a composition's sampled proofs conclusions are stated in the composition's decoders' terms (`product`'s and `registered`'s) and one-stage v2's property, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
@@ -1632,6 +1656,12 @@
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
   },
+  "Properties.Onsite.sampledProofsAccepts": {
+   "owner": "@proofs"
+  },
+  "Properties.Onsite.sampledProofsRegistered": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"],
@@ -2014,6 +2044,12 @@
    "signature": ["Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"],
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
+  },
+  "Properties.Remote.sampledProofsAccepts": {
+   "owner": "@proofs"
+  },
+  "Properties.Remote.sampledProofsRegistered": {
+   "owner": "@proofs"
   },
   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
    "owner": "@memory-accounting",
@@ -2404,6 +2440,9 @@
    "signature": ["Properties.Requirement.topological : Properties.Requirement.Topological"],
    "assumptions": [],
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5"
+  },
+  "Properties.SampledProofs.OneStageZk.acceptMeans": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
    "owner": "@proofs",
@@ -3601,6 +3640,26 @@
    },
    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
     "function": "RemoteAudit.Protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Onsite.sampledProofsAccepts": {
+    "function": "Core.BlobProtocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.OneStageZk.acceptMeans": {
+    "function": "SampledProofs.OneStageZk.checkBlobs",
+    "outcome": "accept"
+   },
+   "Properties.Onsite.sampledProofsRegistered": {
+    "function": "Core.BlobProtocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.Remote.sampledProofsAccepts": {
+    "function": "Core.BlobProtocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.Remote.sampledProofsRegistered": {
+    "function": "Core.BlobProtocol.answer",
     "outcome": "accept"
    }
   },
