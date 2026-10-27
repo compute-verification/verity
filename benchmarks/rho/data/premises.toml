@@ -86,7 +86,7 @@ standing = "supported"
 beyond = "supported"
 credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.Cube.Wide: the accumulation entries' width, a property of the recipe's shapes", status = "derived" }
 
-[premise.theta-registered]
+[premise.baseline-registered]
 lean = "Nci.Assumptions.ThetaRegistered"
 standing = "supported"
 beyond = "supported"
