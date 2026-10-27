@@ -13862,7 +13862,7 @@
    ]
   },
   "SampledProofs.ChallengerRecord": {
-   "digest": "d97f33bfd7daabb7f66ea583a0874bf5f2cf6074c90aeff95cb77dcbdece0d48",
+   "digest": "e249c1b12089223a141ab941384209ae48fbb7d535dfa2fd2e17b7ffa0c0a5eb",
    "definitions": {
     "SampledProofs.Challenger.COMMITMENT_TAG": "8b95940769fd17632e2a36a5efd775b7c9a146f08ee07112b7288534437981c5",
     "SampledProofs.Challenger.ChallengerKey": "309134e2bd585eef9904e8701ce782eb5694cb378509a2425eaa8ee07e2f2868",
@@ -13884,7 +13884,8 @@
     "SampledProofs.Challenger.field": "a0820e06cb7182273a52ab9cce3bc549a5dc00629ca8c4c036d38538b20b0c58",
     "SampledProofs.Challenger.isHost": "0f9031f8c39625ad2eef3342dc7a0cb8ac2f5d23b6cc4ab80883adb74a6b179f",
     "SampledProofs.Challenger.recordMessage": "1e380f986b1f523a2bae2aea21b64313d50aff70092af4f5f458e54816163ee0",
-    "SampledProofs.Challenger.recordReason": "54100fa3d883622910e0ae5ff888cc4ead510d18d85d71ff6a1716ffec38a32a",
+    "SampledProofs.Challenger.recordReason": "f2239031f15742361e5275e61c4d253b0d71ef297920187d8991f47a7581646f",
+    "SampledProofs.Challenger.verifies": "d666567ccc81b8e0ef8cce3dba12e4fa82336be788e8dc3ced1d2d313b5523f8",
     "_private.SampledProofs.ChallengerRecord.0.SampledProofs.Challenger.hexOf?": "a023d8e581ba3716b2a5dcbe4d1e72a9b90dd8db74b18cdd1ca1bcf556b9a6b9",
     "_private.SampledProofs.ChallengerRecord.0.SampledProofs.Challenger.hexOf?._sparseCasesOn_1": "1a17f35f5b069009e84ec6d65f79026154b3c2bf14b6bc75a148865543afe4a3"
    },
@@ -13911,7 +13912,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "6b4b08d2e1400d302b737b62b25a46e480b9a3f165b519535592eb40ed90c21d",
+   "digest": "fa806256159d392f90cfdf162f0a70ef3ae548e7ff1217398b5d4f436beec584",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.commitment": "468002e4d32fd36d92c016491502672fbffc8b638777f35e073eb3b379bd9b63",
@@ -13991,7 +13992,7 @@
     "SampledProofs.Challenger.ZERO": "baab14c603e8c5c06ca3ab4b224a31b3089af1dc631ac07600b27d030ebba497",
     "SampledProofs.Challenger.auditedOpen": "280c02bea47d3390683214a737e67a082d78fc6f6b7c75050d95dad9e42aa947",
     "SampledProofs.Challenger.auditedSession": "c11aee02c4ac7c235d8a00bb5c3eda93b5c80fc763aee3142b480db67a0434ac",
-    "SampledProofs.Challenger.checked": "dd3765be37fdd0b1fa5e3f18f9bce0299f256e053678aeb146dfdf89f01367e8",
+    "SampledProofs.Challenger.checked": "d2329293f21d7b0686cb0760a2afe58c51b668c6a28c07e0c83f19284e69f405",
     "SampledProofs.Challenger.closeMessage": "46b75ba121839ec4361e3e2a0df14a4d0c7e0d95c1b8967ac1ac8e8def086188",
     "SampledProofs.Challenger.event": "be4476225052930e5213d68e407b034ada60824989e7e0e50bc61ec006d3d50f",
     "SampledProofs.Challenger.event._sparseCasesOn_1": "ff42de9044ae37b1abdc1c7990a9e1e2b9149f6c371720dc27a0117ee23afb4c",
@@ -14019,20 +14020,20 @@
     "SampledProofs.Challenger.logDigest": "6d06248e8115e687377bb0f9515d3cdea1ad643c3426b7a06ab0754872b2fecf",
     "SampledProofs.Challenger.pinOf?": "0b7e120c32207eb91609929482f4b059bae247492352d0180a1494fd8163db66",
     "SampledProofs.Challenger.pinnedSession": "7f508d9b13dff0dd4f734a3b3a452b08345b2c8d1bdd9b1a463d07e8455682fc",
-    "SampledProofs.Challenger.pinsReason": "88428870e51def37ee5544d9031e80379c12375371099b186cd8a99d83c38363",
+    "SampledProofs.Challenger.pinsReason": "14a231110c59726d9c868f24287692813ad6b8c1c9343cecd8d968a4d0aed91e",
     "SampledProofs.Challenger.releasedRootsOf": "8601aa4f030541ba41775195e9f64476cde340b5605ab93126969953d0dc2a62",
-    "SampledProofs.Challenger.sessionNamed": "8d51af66aadbeb45e5e0a727a2f6218fe0a9269cde9149b810092e25cb2d22a3",
-    "SampledProofs.Challenger.sessionOf": "d1ef2639d2ed7131fb69e54208c3f3d1a2f6b04e9be1421f1b19db9b9b112249",
-    "SampledProofs.Challenger.sessionOf._sparseCasesOn_7": "08acc862549ea1df070ea969d8be299ba1ce6ddbfae9b8d95f5014e54e50eff4",
+    "SampledProofs.Challenger.sessionNamed": "fd70778da506041cef19fede293dd0ee10fe96c65c4a942f820fdbdf4c9d8063",
+    "SampledProofs.Challenger.sessionOf": "eee662123df2c7a40cf17bdfa5b9a34297ef39a63a01561b33a1b4d630486a40",
+    "SampledProofs.Challenger.sessionOf._sparseCasesOn_5": "f589b4640a1d24380a93d5ae8b6fe2ad40133f65422f50ae8135af91f1301494",
     "SampledProofs.Challenger.trustedSessionOf": "061ca5db8347e0b12d4a8260ee07f5c8d4ce78e16f8e3d55e115366be9d86b9f",
-    "SampledProofs.Challenger.verifyLedger": "3d6f23a5f63d38b06270537ca7ec2c4acac39a2298874acd9a4de15516637fd1",
+    "SampledProofs.Challenger.verifyLedger": "3348b776f2e23a7e4e302881cba50d687b86137cb5cfdcd59b791ca772032dd3",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.daysIn": "f0bcae0f0bbe94665da1d282ba3c726220f54de0907083f1ead3417b065f7ad1",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.digitsAt": "639c715b425005b2035e12f8df883deb120633d444fee4addd4f286f5a13318f",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.escapesSurrogate": "c03ebd6b8cb57131028344cdce357e2e402b9ec485301eae29cbc0753465680a",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.hexAt?": "9308cda87bb74454c7f4a9cdc6b71a37c18bcdccb4cd79f5b86cf3cd79328f93",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.hexAt?._sparseCasesOn_1": "845d21727e941af4090e52dad99b61148c69689e0834e7ea953fbe6c193bc5e0",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.inReserve": "60de668aa594b3c73d1193f4f9f4c8cb3f7b445bfe3313e3aca445f9de50aa35",
-    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isBodyOf": "5af2e886a1f52135599c0f762c8118cd8e02ae92350325c62be7f4bdfa3e86d2",
+    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isBodyOf": "4b17f3fe3a31bee40c878a918d5fb23e11ddbe125b69eafb1f6c5c1a236baa9f",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isBodyOf._sparseCasesOn_3": "e61a9c850a339d1471b0520dd1da1a8a79649f07896997296249815c30b7c239",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isDigest": "1697bf5d3805b9a1fd6b9916a2666621d5f8f9afbc1f719a5d219be740879b3f",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isLedgerName": "a99b08296bc033f4220c43dc5cfa8b9a8255c0bea03b3439d87eb1529a85729e",
@@ -14050,8 +14051,7 @@
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.pad": "0513869c19ba237c92fb5bd4d45342edcb0a8b6fb4ec67465fd69c71b14ba6b5",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.pairs": "ec7de710ab3a92d2bc4aa63141812566447094b136d70dab8486f295dfda8edc",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.pairs._sparseCasesOn_1": "6302f0fc8acfe61ace265b1de801c8d5e9fdc7ebaa799d8b93282b9370ae7db6",
-    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.strOf": "cfa6c52e58391a6848ec180ac6911db0e835d1910764ce9390d18c4c00d4ac82",
-    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.verifies": "b9b71e2ff104e74e2e67b4b245b1ae12ae7baca0dfbf59acd8fb67572395a007"
+    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.strOf": "cfa6c52e58391a6848ec180ac6911db0e835d1910764ce9390d18c4c00d4ac82"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
