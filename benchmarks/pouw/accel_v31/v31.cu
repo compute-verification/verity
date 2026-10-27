@@ -120,9 +120,10 @@ __global__ void noise_kernel(Seeds sd, int which, u64 count, int8_t* __restrict_
     if (16 * b + i < count) out[16 * b + i] = (int8_t)((int)(((u64)dword(st, i) * (2 * NOISE + 1)) >> 32) - NOISE);
 }
 // pi_tau: Fisher-Yates over L' with word tau L' + c of the P stream (c from L' - 1 down to 1), a CTA of PERM_THREADS(L')
-// threads a tile and 6 L' bytes of shared memory
-__host__ __device__ constexpr int PERM_THREADS(int lp) { return lp < 1024 ? lp : 1024; }
-__global__ void perm_kernel(Seeds sd, int lp, uint16_t* __restrict__ perm) {
+// threads a tile and 6 L' bytes of shared memory (at most 512 threads: its SHA-512 takes 90 registers, and a 1024-thread CTA
+// of those doesn't launch)
+__host__ __device__ constexpr int PERM_THREADS(int lp) { return lp < 512 ? lp : 512; }
+__global__ void __launch_bounds__(512) perm_kernel(Seeds sd, int lp, uint16_t* __restrict__ perm) {
   extern __shared__ u32 pw[];
   uint16_t* p = reinterpret_cast<uint16_t*>(pw + lp);
   const int tau = blockIdx.x;
@@ -2979,6 +2980,8 @@ int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, co
   f.set_seeds(seeds);
   *call = f.calls;
   f.issue(off, static_cast<const int8_t*>(a_dev), ch);
+  const cudaError_t e = cudaGetLastError();
+  if (e != cudaSuccess) return fail("call " + std::to_string(*call) + ": a launch failed: " + cudaGetErrorString(e));
   return 0;
 }
 
