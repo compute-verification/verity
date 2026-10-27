@@ -2876,6 +2876,23 @@
   "Definitions.Accounting.HeadlineDc.Sm90Measured": ["Accounting.TS.Headline.Sm90Measured.rowNames"],
   "Definitions.Accounting.JointBridge.CreditedWords": ["Accounting.receiptUnitMacs", "Accounting.receiptWordMacs"],
   "Definitions.Accounting.JointBridge.H200": ["Accounting.h200S8Price", "Accounting.w1Price"],
+  "Definitions.Accounting.Overhead": [
+   "Accounting.Overhead.Class",
+   "Accounting.Overhead.Reads",
+   "Accounting.Overhead.Succeeds",
+   "Accounting.Overhead.Task",
+   "Accounting.Overhead.Task.game",
+   "Accounting.Overhead.Task.prob",
+   "Accounting.Overhead.busy",
+   "Accounting.Overhead.cost",
+   "Accounting.Overhead.envelope",
+   "Accounting.Overhead.overhead",
+   "Accounting.Overhead.physClass",
+   "Accounting.Overhead.restricted",
+   "Accounting.Overhead.serverTime",
+   "Accounting.Overhead.success",
+   "Accounting.Overhead.threshold"
+  ],
   "Definitions.Accounting.Physical": [
    "Accounting.Annotation",
    "Accounting.Feasible",
