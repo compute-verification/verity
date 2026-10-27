@@ -74,10 +74,8 @@ research msg read --thread <ts>                                                #
 - **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
   Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
   the unanswered; take a linked ask on its issue.
-- **Work items are Linear-first.** The brief, done-condition and pointers go in the issue, filed into the owner's team;
-  `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner. Taking an issue out of the backlog
-  is the sign it was seen; Done is the owner's move (merging a PR doesn't close it). Comment with `research msg linear
-  comment ISSUE 'TEXT' --as ME`, which rings the team's handle and the names it starts with; other comments ring no one.
+- **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
+  is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`).
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 - **Retract** a post sent by mistake: `research msg retract --as NAME --ts TS [--thread ROOT] [--why W]` (needs
   `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy).

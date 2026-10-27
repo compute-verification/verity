@@ -438,9 +438,9 @@ Never print a secret's value.
 
 ## Where writing goes
 
-- **Work items** are Linear issues (Daniel, 14 Oct). The full brief — context, done-condition, pointers — lives in the
-  issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
-  is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
+- **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
+  by Goal, are the campaign map (Daniel, 14 and 26 Oct). Slack carries rings and conversation, never the brief or status.
+  How: the coordinating skill.
 - **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
   `ARCHITECTURE.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
   - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
@@ -466,8 +466,6 @@ Never print a secret's value.
   - Tables and reports are rendered on demand from code plus the store.
 - **Findings and claims about a run** are labels, never edits to a shared table:
   `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
-- **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
-  team (the using-slack skill).
 - **Architecture decisions** and Daniel's decisions log go in Notion.
 
 ## Lanes (worker agents)
@@ -565,3 +563,4 @@ over and archived as `infra/cursor/README.md` says.
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
 - Creating or modifying a skill (at most 16 KB: current rules, not their history): `.agents/skills/authoring-skills/SKILL.md`.
+- Filing, tracking and reporting work in Linear, and how long each message is: `.agents/skills/coordinating/SKILL.md`.
