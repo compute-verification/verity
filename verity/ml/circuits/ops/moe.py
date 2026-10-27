@@ -1,4 +1,4 @@
-"""The routed expert GEMMs of a padded static MoE layer as IR composites: one unit per (token slot, top-k slot) pair, the expert
+"""The routed expert GEMMs of a padded static MoE layer as composites: one proof block per (token slot, top-k slot) pair, the expert
 a value.
 
     MoeSelectBf16x{E}_v1              (e: i32, column: Array<E, bf16>) -> bf16: column[e] for 0 <= e < E (signed), else 0x7FFF
@@ -11,8 +11,8 @@ a value.
 The served Program of an MoE layer is shaped by public parameters alone (batch slots, top_k, E, H, I): pair (t, k) is one
 `MoePairGemm_v1` over x[t], e = topk_ids[t, k] and the whole expert bank w13, one `MoePairGemmW_v1` over its activation,
 e, g = topk_weights[t, k] and w2, and every one of them is wired the same whatever the router picks. Which expert's weights
-a coordinate reads is decided inside its unit, by a select over the E experts' words of its slab column (`MoeSelectBf16x{E}`
-per k), so no unit reads another's output through a value-dependent index.
+a coordinate reads is decided inside its proof block, by a select over the E experts' words of its slab column (`MoeSelectBf16x{E}`
+per k), so no proof block reads another's output through a value-dependent index.
 
 This is Triton `fused_moe_kernel`'s row function, so a pair's words are the served kernel's whatever tile its row shared:
 with SPLIT_K = 1 the kernel's accumulator for row (t, k) is one f32 chain of `tl.dot` k16 steps in ascending k from zero
@@ -101,7 +101,7 @@ def _row(B, S, e, slab):
            refuse=G.GemmCoordinate.refuse)
 def MoePairCoordinate(B, S, x, e, slab):
     """One output word of the w13 launch of a pair routed to expert e: `GemmCoordinate_v2{K, DOT}(x, slab[e])`, the row
-    selected inside the unit (`MoeSelectBf16x{E}_v1` per k over the column's E experts)."""
+    selected inside the proof block (`MoeSelectBf16x{E}_v1` per k over the column's E experts)."""
     return B.call(bind(G.GemmCoordinate, K=S.K, DOT=S.DOT), x, _row(B, S, e, slab))
 
 

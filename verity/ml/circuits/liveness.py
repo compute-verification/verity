@@ -1,4 +1,4 @@
-"""Dead gates of a `Program`: hierarchical liveness over the typed IR (frontend rulings, §8.6).
+"""Dead gates of a `Program`: hierarchical liveness over the typed Program.
 
 A gate is *dead* when no other gate consumes its value and it is not protected (not a root output). Dead
 gates are legal in every mode; they are counted toward the described computation, they are **not** boundary

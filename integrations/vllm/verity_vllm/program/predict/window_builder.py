@@ -17,23 +17,24 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry.b1_tp2 import AllGather
 from verity.ml.windows import interface as IF
+from verity_vllm.check import weights_of_record as WR
 
 from .build import Unexpressible
 
-WEIGHTS = "weights"
+WEIGHTS = WR.PARAM
 
 
 def weight_param(label: str, words: int) -> str:
     """The registered parameter of weight ``label`` (its name in the weights record) read in rows of ``words`` u16 words:
     one registration a weight and row width, so every read's base and steps are whole rows of it (`interface._reads_of`)
-    and its pin is a root over the weight's own rows (`interface.registered_reads`). A pin of `WEIGHTS` pins them all
-    (`interface.input_count`)."""
+    and its pin is a root over the weight's own rows (`interface.registered_reads`), the committer's hiding root for it
+    (`window_weights.weights_registration`); a pin of `WEIGHTS` pins none of them (`interface.input_count`)."""
     return f"{WEIGHTS}/{label}@{words}"
 
 
 @dataclass(frozen=True)
 class Grain:
-    """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
+    """The units' size (Llama-3.2-1B's by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
     // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
     `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (C-Flock's
     composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256: a gather

@@ -36,9 +36,10 @@ class Assumption:
 @dataclass(frozen=True)
 class Device:
     """A device, by its limits: `rate` is work per second in each unit of work it can do (a unit is whatever the
-    audits credit: Boolean gates, tensor-core multiply-adds), `memory` its bits of state, `bandwidth` the bits a second it
-    reads from that memory, `on_chip` its bits of SRAM, registers and caches, and `residual` the bits a verified wipe
-    can't reach (secure-firmware flash, the labeller's own working memory)."""
+    audits time: Boolean gates, tensor-core multiply-adds), `memory` its bits of state, `bandwidth` the bits a second it
+    reads from that memory, `write` the bits a second a wipe can write into it (None: its links'), `on_chip` its bits
+    of SRAM, registers and caches, and `residual` the bits a verified wipe can't reach (secure-firmware flash, the
+    labeller's own working memory)."""
 
     name: str
     kind: Kind
@@ -47,6 +48,7 @@ class Device:
     bandwidth: Assumption | None = None
     on_chip: Assumption | None = None
     residual: Assumption | None = None
+    write: Assumption | None = None
 
     @property
     def trusted(self) -> bool:
@@ -210,7 +212,7 @@ class Datacenter:
         """Every named premise the declaration makes, once each."""
         out: dict[str, Assumption] = {self.cadence.tick.name: self.cadence.tick}
         for d in self.devices.values():
-            for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual]:
+            for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual, d.write]:
                 if a is not None:
                     out[a.name] = a
         for l in self.links:

@@ -1,4 +1,4 @@
-"""Lane B200-FP8: capture and score the B200's (sm_100a) ``tcgen05.mma`` FP8 step, ``kind::f8f6f4`` and ``kind::mxf8f6f4``.
+"""Capture and score the B200's (sm_100a) ``tcgen05.mma`` FP8 step, ``kind::f8f6f4`` and ``kind::mxf8f6f4``.
 
 Three phases, so that only the capture holds a GPU (``f8_sm100.sh`` runs them in order under ``research run``)::
 
