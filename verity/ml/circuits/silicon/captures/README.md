@@ -13,7 +13,7 @@ pointer and the store its bytes.
 
 `vectors/` holds the FP8 draft targets' reference vectors (`verity/tc-reference-vector/v0`: `fp8-{hopper-wgmma,ada-mma}-k{32,1536}`),
 model replays of `GemmAccumulator<K>` on `HOPPER_E4M3_K32` / `ADA_E4M3_M16N8K32` from a recorded seed and recipe -- not
-hardware captures; `archive/sp1/tests/proofs/test_fp8_targets.py` replays and regenerates them.
+hardware captures. Their replay, D-SP1's `test_fp8_targets.py`, was deleted with the archive in `2091252fe3`.
 
 Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) are not
 replicated, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `verity/ml/circuits/silicon/discrepancy_log.json`
