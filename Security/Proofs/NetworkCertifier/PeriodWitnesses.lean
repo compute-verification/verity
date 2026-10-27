@@ -17,7 +17,9 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
   (`trusted-host`), a named assumption.
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512
   (`tapD_bound_fails`).
-* `HorizonLeakAccepted_honest`: its one premise that is no named assumption, the format's `fits`, at `fxQueue`.
+* `HorizonLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
+  sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone, since the witnesses rule
+  reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
 * `HorizonLeakAccepted_nontrivial`: its bound fails at an audit that always accepts (`horizon_bound_fails`). There its
   conditional escape (`hesc`) holds only at `q = 0`, which its `hF` refuses at `δ < 1`.
 -/
@@ -65,10 +67,16 @@ theorem PeriodLeakAccepted_nontrivial :
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
 
-/-- **`HorizonLeakAccepted`'s premise at the deployed instance**: the fixture `fxQueue`'s schedule fits its rows
-format. -/
-theorem HorizonLeakAccepted_honest : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched :=
-  fxQueue_fits
+/-- **`HorizonLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
+each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
+theorem HorizonLeakAccepted_honest :
+    (∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits s) ∧
+      ∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
+  refine ⟨fun s hs => ?_, fun s hs c => ?_⟩
+  · rw [Set.mem_singleton_iff.1 hs]
+    exact fxQueue_fits
+  · rw [Set.mem_singleton_iff.1 hs]
+    fin_cases c <;> decide
 
 /-- **`HorizonLeakAccepted`'s bound fails at an audit that always accepts**, at one window whose faulty set holds its
 one unit, `Fmax = 1`, `δ = 1/2` and `e = e' = 0` (`horizon_bound_fails`). -/
