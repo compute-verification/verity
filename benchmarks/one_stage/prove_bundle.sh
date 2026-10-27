@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The drawn-unit replay bundle proved (prove_bundle.py; M1): the bundle PB_BUNDLE (its .bin beside it) of the
 # window PB_WINDOW; without PB_WINDOW, the store's art:d0b6e81f (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
-# tampered twin and e2e_demo's bundle of four drawn units under the window's registered subset:4, a fixture's draw).
+# tampered twin and the H200 interfaces' bundle of four drawn units under the window's registered subset:4, a fixture's draw).
 # Each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
 # member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall
@@ -55,7 +55,7 @@ if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   log "build only: $O/bin, stamp $STAMP"
   exit 0
 fi
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/benchmarks/e2e_demo:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/examples/h200/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
 # (prove_path/run.sh)

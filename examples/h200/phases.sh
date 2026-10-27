@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `bash examples/h200/phases.sh PHASE [--dry-run] [FLAG...]`: one phase of Demo A's M3 proper on the demo H200
-# (benchmarks/e2e_h200, its interfaces in benchmarks/e2e_demo; once #4903 moves them here, run.py is the step driver).
+# (its interfaces in examples/h200/interfaces; run.py is the step driver).
 # Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin drawn only after the registration is in the challenger's ledger. Each phase below starts its job by `research run`
 # on its machine (or, for `register`, here on the CPU) with the variables it names; --dry-run prints the command and starts
 # nothing, and further FLAGs go to `research run`. Its run of record in M3 proper, of record in the drawn blocks' tree
@@ -45,7 +45,7 @@ have() {
 named() { [ "$(basename "$1")" = "$2" ] || { echo "h200 phases $PHASE: $1 must be named $2 (the job reads inputs/$2)" >&2; exit 2; }; }
 main_txt() { T=$(mktemp -d); git rev-list --first-parent origin/main > "$T/main.txt"; echo "$T/main.txt"; }
 RR=(research run --project verity --source .)
-JOB=benchmarks/e2e_h200/m3proper_job.sh BR=cursor/m3-proper-1de3
+JOB=examples/h200/m3proper_job.sh BR=cursor/m3-proper-1de3
 case $PHASE in
   commit)
     have $JOB $BR
@@ -57,26 +57,26 @@ set -euo pipefail
 uv sync -q --all-packages --extra torch-cpu
 ST=/workspace/research/lanes/compute-accounting/h200-weights/$(basename "$RESEARCH_RUN_DIR")
 mkdir -p "${ST%/*}"
-PYTHONPATH=benchmarks/e2e_h200 uv run --no-sync python -m e2e_h200.weights_commit commit --shape h200 \
+PYTHONPATH=examples/h200 uv run --no-sync python -m e2e_h200.weights_commit commit --shape h200 \
   --seed demo --program "$PROGRAM" --state "$ST" --workers "$(nproc)" --out "$OUT/registration.json" | tee "$OUT/summary.json"
 uv run --no-sync research keep "$ST" --owner @compute-accounting --expires 30d --priority high \
   --why "the H200 weights registration state and its 0600 OS-salt witness (prover-private), for the opens" || echo "keep failed" >&2') ;;
   register)
-    have benchmarks/e2e_h200/m3stepreg.py $BR
+    have examples/h200/m3stepreg.py $BR
     need ROOTS WEIGHTS_REG PROGRAM COMMIT_RUN
-    CMD=(uv run python benchmarks/e2e_h200/m3stepreg.py --roots "$ROOTS" --weights "$WEIGHTS_REG" --program "$PROGRAM"
+    CMD=(uv run python examples/h200/m3stepreg.py --roots "$ROOTS" --weights "$WEIGHTS_REG" --program "$PROGRAM"
          --run "$COMMIT_RUN" --out "${REG_OUT:-out/h200/registration}") ;;
   coin)
-    have benchmarks/e2e_h200/m3coin.py $BR
+    have examples/h200/m3coin.py $BR
     need REG; named "$REG" step-registration.json
     CMD=("${RR[@]}" --on "$CPU" --send "$REG" --send "$(main_txt)" "$@" -- bash -c 'uv sync -q && uv run --no-sync python \
-benchmarks/e2e_h200/m3coin.py --registration "$RESEARCH_RUN_DIR/inputs/step-registration.json" --gate-key \
+examples/h200/m3coin.py --registration "$RESEARCH_RUN_DIR/inputs/step-registration.json" --gate-key \
 "$HOME/.ssh/vy-gate-compute-accounting" --peer '"$CPU"' --minutes 20 --main "$RESEARCH_RUN_DIR/inputs/main.txt" --out "$OUT/coin"') ;;
   open)
-    have benchmarks/e2e_h200/m3bundle.py $BR
+    have examples/h200/m3bundle.py $BR
     need REG DRAW WEIGHTS_STATE; named "$REG" step-registration.json; named "$DRAW" draw.json
     CMD=("${RR[@]}" --on "$WNODE" --send "$REG" --send "$DRAW" --env WEIGHTS_STATE="$WEIGHTS_STATE" "$@" -- bash -c 'uv sync -q \
---all-packages --extra torch-cpu && uv run --no-sync python benchmarks/e2e_h200/m3bundle.py weights --state "$WEIGHTS_STATE" \
+--all-packages --extra torch-cpu && uv run --no-sync python examples/h200/m3bundle.py weights --state "$WEIGHTS_STATE" \
 --seed demo --registration "$RESEARCH_RUN_DIR/inputs/step-registration.json" --draw "$RESEARCH_RUN_DIR/inputs/draw.json" \
 --out "$OUT/weights-open.json"') ;;
   replay)

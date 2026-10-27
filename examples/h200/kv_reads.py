@@ -6,7 +6,7 @@ rows: each is the committed row of that step's ``l<i>.wk.gather`` (``l<i>.wv.gat
 Every opening is then checked (`replay_bundle.check_reads`) against a registration naming every step's root
 (`replay_bundle.steps_provenance`), and refused against one whose step root differs, with a path or a word tampered.
 
-    python benchmarks/e2e_h200/kv_reads.py --out OUT [--phase all|replay|open --private DIR] [--secret FILE]
+    python examples/h200/kv_reads.py --out OUT [--phase all|replay|open --private DIR] [--secret FILE]
         [--registered ROOTS.json] [--slots K] [--blocks N] [--workers W] [run flags as m3draw.py's]
 
 ``--phase replay`` (the GPU's part: the run, keeping the drawn slots' committed rows as each group closes, the root check
@@ -36,7 +36,7 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "e2e_demo"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "interfaces"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run as RUN
 from e2e_h200.commit import Committer, StepTables, fixture_salt, fixture_secrets

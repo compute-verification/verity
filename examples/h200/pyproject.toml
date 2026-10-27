@@ -1,4 +1,4 @@
-# The H200 walking skeleton's step driver, run by `verity bench e2e_h200`, and its CPU replay of drawn units
+# The H200 walking skeleton's step driver, run by `verity example h200`, and its CPU replay of drawn units
 # (`replay.py`, `cpu_step.py`). Not a package: its tests run in the workspace environment (torch from the workspace's
 # torch-cpu extra), and `run.py` puts this directory on its path.
 [tool.pytest.ini_options]
@@ -28,5 +28,5 @@ inputs = [
     "benchmarks/pous/p2_v1/__init__.py",
     "benchmarks/pous/p2_v1/reference.py",
     # the drawn-unit bundle's cross-step reads `kv_reads.py` opens and checks (`replay_bundle.open_reads`, `check_reads`)
-    "benchmarks/e2e_demo/verity_e2e_demo",
+    "examples/h200/interfaces/verity_e2e_demo",
 ]

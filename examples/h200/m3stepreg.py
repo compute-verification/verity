@@ -1,7 +1,7 @@
 """M3 proper's step registration (PRF-172, CMP-161): the H200 step's commit-slots roots as DRAWPROVE's ``--step`` reads them
 (`replay_bundle.step_registration`, ``read_steps``), registered before the coin.
 
-    python benchmarks/e2e_h200/m3stepreg.py --roots ROOTS.json --weights REGISTRATION.json --program HEX --run RUN --out DIR
+    python examples/h200/m3stepreg.py --roots ROOTS.json --weights REGISTRATION.json --program HEX --run RUN --out DIR
 
 ``--roots``: m3draw commit's ``roots.json`` (every step's root and slot roots). Each step root is derived again from its slot
 roots under the run's context and the layout (`commit.layout`), and the layout's digest must be the file's. ``--weights``:
@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(HERE.parent / "e2e_demo")]
+sys.path[:0] = [str(HERE), str(HERE / "interfaces")]
 from e2e_h200.commit import _slots, layout  # noqa: E402
 from e2e_h200.shape import SHAPES  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402

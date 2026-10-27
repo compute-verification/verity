@@ -1,7 +1,7 @@
 """M3's registration of one H200 step (PRF-172): the step's committed roots and a ``subset:K`` law over its whole partition,
 fixed before any coin. The live coin's session binds the digest as its root (`m3coin.py`).
 
-    python benchmarks/e2e_h200/m3reg.py --roots roots.json --run RUN_ID --step 31 --k 8 --out DIR
+    python examples/h200/m3reg.py --roots roots.json --run RUN_ID --step 31 --k 8 --out DIR
 
 The roots are `m3draw.py commit`'s: the step's commit-slots root over its slot roots, recomputed here from the slot
 roots under the step's domain (context, layout digest, step, slots), so a roots file whose step root isn't its slots'

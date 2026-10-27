@@ -4,7 +4,7 @@
 # values and salts, drawn.bin, beside the secret, never under $OUT) and checks them on CPU (m3check.py against
 # inputs/registration.json, the coin's session in inputs/coin.tgz, inputs/challenger-key.json and inputs/main.txt).
 #   research run --on vy-dc-h200-3 --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
-#     -- gpu-lease 1 --wait --mem-gb 0 -- bash benchmarks/e2e_h200/m3draw_job.sh
+#     -- gpu-lease 1 --wait --mem-gb 0 -- bash examples/h200/m3draw_job.sh
 set -euo pipefail
 PHASE=${PHASE:?}
 SECRET_DIR="$HOME/.local/state/m3draw-1de3"
@@ -21,13 +21,13 @@ FLAGS=(--shape h200 --seed demo --device cuda --batch 512 --steps 32 --prompt-by
        --run-id e2e-h200-m3-b512-record)
 if [ "$PHASE" = commit ]; then
   mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
-  uv run --no-sync python benchmarks/e2e_h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET_DIR/salt.secret" --new-secret "${FLAGS[@]}"
+  uv run --no-sync python examples/h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET_DIR/salt.secret" --new-secret "${FLAGS[@]}"
 else
   PRIVATE="$SECRET_DIR/open-$RESEARCH_RUN_ID"
-  uv run --no-sync python benchmarks/e2e_h200/m3draw.py open --out "$OUT/m3" --secret "$SECRET_DIR/salt.secret" \
+  uv run --no-sync python examples/h200/m3draw.py open --out "$OUT/m3" --secret "$SECRET_DIR/salt.secret" \
     --registered "$RESEARCH_RUN_DIR/inputs/roots.json" --draw "$RESEARCH_RUN_DIR/inputs/draw.json" --private "$PRIVATE" "${FLAGS[@]}"
   COIN=$(mktemp -d); tar -xzf "$RESEARCH_RUN_DIR/inputs/coin.tgz" -C "$COIN"
-  uv run --no-sync python benchmarks/e2e_h200/m3check.py --drawn "$OUT/m3" --payload "$PRIVATE/drawn.bin" \
+  uv run --no-sync python examples/h200/m3check.py --drawn "$OUT/m3" --payload "$PRIVATE/drawn.bin" \
     --registration "$RESEARCH_RUN_DIR/inputs/registration.json" --coin "$COIN/coin/coin.json" \
     --key-record "$RESEARCH_RUN_DIR/inputs/challenger-key.json" --main "$RESEARCH_RUN_DIR/inputs/main.txt" --out "$OUT/m3/check.json"
   ls -la "$PRIVATE"
