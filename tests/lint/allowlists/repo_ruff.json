@@ -825,7 +825,6 @@
     {"file": "verity/ml/circuits/ops/tests/test_boolean_shared_row.py", "rule": "B008", "count": 1},
     {"file": "verity/ml/circuits/ops/tests/test_census_products.py", "rule": "RUF100", "count": 1},
     {"file": "verity/ml/circuits/ops/tests/test_gemm.py", "rule": "E731", "count": 2},
-    {"file": "verity/ml/circuits/ops/tests/test_relation.py", "rule": "BLE001", "count": 2},
     {"file": "verity/ml/circuits/ops/tests/test_wgmma_bf16.py", "rule": "BLE001", "count": 1},
     {"file": "verity/ml/circuits/partition.py", "rule": "B008", "count": 5},
     {"file": "verity/ml/circuits/program.py", "rule": "F401", "count": 1},
