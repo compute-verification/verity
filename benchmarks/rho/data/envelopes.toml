@@ -14,7 +14,7 @@ kind = "unmonitored"
 [regime.remote]
 kind = "remote"
 residual = { value = 0.323, low = 0.01, high = 1, source = "benchmarks/nci/tiers.py DEFAULTS residual: the floor credit at the locked clock, honest kernels at 1.72x the floor (run r20261017-123922-e558); low: best plausible design; high: nothing credited, as in a training window today", status = "measured" }
-clock_share = { value = 0.064, low = 0, high = 0.3, source = "benchmarks/nci/tiers.py DEFAULTS clock_share: 2,597 MHz against the credited 2,430 (C4 dossier, RTX PRO 6000); low: credit at the true maximum or an auditor-read clock offset", status = "measured" }
+clock_share = { value = 0, low = 0, high = 0.3, source = "CMP-165 MODEL-COVER (r20261027-032043-e2d1): every RTX PRO 6000 on vy-nebius-1 is the Server Edition (900-2G153-0000-000), max = application = default = boost SM clock 2,430 MHz, so crediting at 2,430 is crediting at the firmware maximum; the C4 dossier's 2,597 MHz is not a clock this SKU reports; high: a clock credited below the maximum", status = "measured" }
 host = { value = 1, low = 0, high = 1, source = "benchmarks/nci/tiers.py audited_residual: the host CPUs count at their INT8 datasheet peak until something credits or bounds them; low: credited or bounded", status = "assumed" }
 eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "benchmarks/nci/tiers.py DEFAULTS eps_w (CircuitCredit, draft #2638); low: best plausible design (C7 dossier); high: CircuitCredit at r = 4 (exposure.RANGES)", status = "derived" }
 eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg: per-window failure 3 x 2^-40 at the theorem's delta 2.7e-8 (Markov over the windows)", status = "derived" }
