@@ -22,11 +22,13 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   tree.
 - **Own a subdirectory and namespace** with one aggregator module, imported once by the area's root, so parallel lanes
   don't edit one root file.
-- **Parallel proof work runs against fixed statements**: the final theorem's and each open piece's are on the branch
-  before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each with a size and an
-  owner, and no `sorry` outside them.
-- **Definitions a guarantee or property reads go in `Definitions/` or `Models/`** (keep its `reads` short); a statement
-  over proof-only definitions is a lemma, not a guarantee.
+- **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
+  are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
+  with a size and an owner, with no `sorry` outside them.
+- **Definitions a guarantee or property reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the
+  lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
+  definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
+  proof-only definitions is not a guarantee.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine gets its own worktree, its dependencies copied (never symlinked) from a
   checkout with the same manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages
@@ -76,11 +78,12 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") lives in its area's `Models/<Area>/Assumptions` (C-Flock's in
-  `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), listed in the lock with its owner. Its docstring
-  opens with its claim id (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every
-  premise a guarantee takes that this repository defines, and every assumption a premise mentions, with a digest, so
-  strengthening a premise is a record change.
+- **An assumption is a named `Prop`** in its area's `Models/<Area>/Assumptions` (C-Flock's in
+  `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
+  and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
+  (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
+  takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
+  premise is a record change. AGENTS.md "Lean" has the rest.
 - **Statement first, then red team, then a card to Daniel for each new premise, then the proof.** State the guarantee on
   a `sorry` stub in your lane branch, list it and run `--update`, so the record shows if it moves. Never make a guarantee
   easier: no stronger input relation, weaker output relation, smaller challenge space, unmotivated hypothesis, or
