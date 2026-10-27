@@ -10,7 +10,7 @@ route's price a word beside its measured cost.
 
 This file holds no table of the data. `machine-model render` prints every one as Markdown, read from `data/` (or a
 device's directory) alone: the vectors, the epochs and their census, the rows, the floors, the designs with their noise
-legend, the honest kernels, the proof units, the MMA forms, the table route, the attack families, the devices and θ.
+legend, the honest kernels, the proof blocks, the MMA forms, the table route, the attack families, the devices and θ.
 `tests/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
 
 ~~~bash
@@ -73,11 +73,11 @@ The data, each kind of thing a file or a line of its own:
   them.
 - `data/designs/NAME.toml`: one design of the registry ("Designs" below): its name, title and aliases, the noise on each
   product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a
-  word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and
+  word by class), plain (unfolded) MMAs beside its work, the proof block, the coins, its perplexity arm, and ε_skip's and
   ε_mand's parts with sources.
-- `data/designs.toml`: what every design reads unless its file sets it: honest's profile, L, the proof unit, the coins,
+- `data/designs.toml`: what every design reads unless its file sets it: honest's profile, L, the proof block, the coins,
   the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's.
-- `data/adapt.toml`: the proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision
+- `data/adapt.toml`: the proof blocks ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision
   72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced.
 - `data/forms.toml`: the MMA forms the cheater's tensor route mixes: each census kind's shape, split, sparsity, why its
   product is exact, and its SASS.
@@ -233,7 +233,7 @@ first are copies, credited only by copy luck.
 A design is one file, `data/designs/NAME.toml`, under decision 79's name. The names tonight's notes, data and
 perplexity arms used are its `aliases`, and every command takes either. It is read on top of its `base` (the design it
 varies, if it names one) and of `data/designs.toml`, which holds what every design shares: honest's profile, L, the
-proof unit, the coins, the fold, ε_clock, Theorem S's budget, the baseline and the routes. Each top-level key a file
+proof block, the coins, the fold, ε_clock, Theorem S's budget, the baseline and the routes. Each top-level key a file
 sets replaces the inherited one whole, and `name`, `title`, `summary` and `aliases` are never inherited.
 `uv run machine-model designs` prints the registry (`--json` too), `uv run machine-model render designs` prints it as a
 Markdown table with the noise leaves (`NOISE` in `eps.py`) and the peel sums kernels (`SUMS`) as legends, and `eps
@@ -261,7 +261,7 @@ Beside its names, a design file has these keys:
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse:
 
 - an alias that names two designs;
-- a noise leaf or a proof unit that isn't defined;
+- a noise leaf or a proof block that isn't defined;
 - a `[skip]` that isn't `eps_budget.py`'s number for the design's noise, or a noise leaf it can't price;
 - an arm that isn't a spec;
 - a filler off lanes.
@@ -274,7 +274,7 @@ operand verified, has the core ε (`--checking full`, the default):
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
 
 The sampling compiler adds ε_sample = ε_luck + ε_adapt, on its own line and in its own columns (`--checking sampled`).
-It is a function of the proof unit, its budget and its selection rule, and 0 at 100% sampling. The two layers meet only
+It is a function of the proof block, its budget and its selection rule, and 0 at 100% sampling. The two layers meet only
 in `Eps.total()`, for the record, never to compare designs. The core ε under the floor credit (decision 74) is the
 guarantee's real-time reading. τ, the price vectors' real-time factor, and Theorem O's every-run floor were the reading
 before it (decision 23). `solve` still prints τ as a vector's record, but τ is no longer the headline. Every term is a
@@ -293,10 +293,10 @@ fraction of honest time:
 - **ε_luck**: Theorem S (sampling layer): an accepted cheater leaves d̄ = ln(1/δ)/((1 − p)·S) of the words wrong, still
   folded. Set by `[luck]`: δ = 2⁻⁴¹, p = ¾, S = 48,000.
 - **ε_adapt**: sampling layer: what steering instances in unproved regions gains under one σ a request (SPEC's Theorem
-  D). Set by the proof unit (`data/adapt.toml`).
-- **Fan**: a proof unit's fan-out, the adaptive MACs per MAC that fails for certain. ε_luck + ε_adapt ≤ max(1/(1 − p),
+  D). Set by the proof block (`data/adapt.toml`).
+- **Fan**: a proof block's fan-out, the adaptive MACs per MAC that fails for certain. ε_luck + ε_adapt ≤ max(1/(1 − p),
   1 + Fan)·(ln(1/δ)/S)·N_w·w*/B(H), so adaptivity is free while Fan ≤ 3 at p = ¾. Whole dot products have Fan 14 at
-  gate/up and 17.9 at 8B's lm_head. Set by the proof unit's `source`.
+  gate/up and 17.9 at 8B's lm_head. Set by the proof block's `source`.
 - **credit**: what ε is a fraction of: `H`, honest's kernel; `model`, its model bound B(H)/f_max; `floor`, the floor
   program ♭'s bound at f_max (adopted, decision 74). Under `floor`, ε_sched, ε_clock and honest's overhead above ♭ go
   to γ. Set by `--credit`.
@@ -355,7 +355,7 @@ The other options:
   and the joint `JI…_0` row). The census left that out from VF3 to VF3o-16, and PREDICT's u16s_l7qs measured it at
   0.92 (r20261017-045133-67bf). With it, the uniform route closes and a filler gains nothing there. From VF3p-16
   (decision 73) the census charges it itself, and `--uni-issue` changes nothing.
-- `--checking sampled`: charges ε_adapt for the design's own proof unit (`unit`, whole dot products: +0.35%).
+- `--checking sampled`: charges ε_adapt for the design's own proof block (`unit`, whole dot products: +0.35%).
   `--adapt UNIT` charges another (`data/adapt.toml`): `segment`, the spot check decision 72 replaced (≈ 21%), or
   `whole-recompute` and `per-stage` (0). The Python `eps()` charges none unless given one.
 
@@ -459,7 +459,7 @@ designs and honest kernels. The directory follows these rules:
     `solve` reads stay out.
   - `vectors/NAME.toml`: its rows.
   - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
-  - `designs.toml` and `designs/`: each design at each L, read on the device's `designs.toml` (the proof unit and the
+  - `designs.toml` and `designs/`: each design at each L, read on the device's `designs.toml` (the proof block and the
     coins), with the device's honest kernel, operand floor φ_del, clock and ε_clock, luck budget and baseline. The
     noise, ε_skip and ε_mand are sm_120's design's, and its title is that design's at L.
   - `table.toml`: the table route at the device's SMs and f_max. Without an `l2`, the L2 isn't measured, and the route
