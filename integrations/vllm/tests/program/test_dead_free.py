@@ -467,3 +467,67 @@ def test_attention_head_v19_is_v18_with_its_calls_inlined_at_llama_geometry(D, B
         assert {(n.form, n.fn.base_id) for n in new.body.nodes} <= {("call", f) for f in (*V19_STEPS, "AttnBlock_v5")}
         assert len(new.body.nodes) == nb + 1
         assert _inlined(new, V19_STEPS) == _inlined(old)
+
+
+#: the k16 steps the first block runs: Hopper's (FA3, and FA2 on sm_90 and sm_120) and Ampere's (FA2 on sm_80 and sm_89)
+FIRST_DOTS = pytest.mark.parametrize("DOT", [hopper.HopperBF16WgmmaDot16, P.AmpereBF16TcDot16], ids=["hopper", "ampere"])
+
+
+def _first_blocks(D: int, NVIS: int, BN: int, VS: int, DOT=FA2["DOT"]):
+    return (bind(DF.AttnBlockFirstV2, D=D, NVIS=NVIS, BN=BN, DOT=DOT, VS=VS),
+            bind(DF.AttnBlockFirstV1, D=D, NVIS=NVIS, BN=BN, DOT=DOT))
+
+
+@FIRST_DOTS
+@pytest.mark.parametrize("VS", [16, 8, 4, 1])
+@pytest.mark.parametrize("NVIS,BN", [(1, 32), (8, 32), (15, 32), (16, 32), (17, 32), (31, 32), (32, 32), (16, 16), (5, 128)])
+def test_attn_block_first_v2_equals_v1(NVIS, BN, VS, DOT):
+    """A first block of 1 ... BN keys, its V rows padded to a k-step or not, each key's value in 1 to D slices: v2's circuit is
+    v1's node for node over the same leaves of v in the same order, and the two agree word for word on edge words, random words
+    and normals, and all -inf keys."""
+    new, old = _first_blocks(16, NVIS, BN, VS, DOT)
+    assert _dead(new) == 0
+    assert _inlined(new) == _inlined(old)
+    for q, k, v in _attention_cases(16, NVIS):
+        _same(new, old, q, k, v)
+
+
+@FIRST_DOTS
+@pytest.mark.parametrize("NVIS", [1, 15, 16, 17, 35, 128])
+def test_attn_block_first_v2_equals_v1_at_llama_geometry(NVIS, DOT):
+    """Llama-3.2-1B's heads (D 64, kBlockN 128) with a key's value in 4 slices of 16 columns."""
+    new, old = _first_blocks(64, NVIS, 128, 16, DOT)
+    assert _inlined(new) == _inlined(old)
+    for q, k, v in _attention_cases(64, NVIS):
+        _same(new, old, q, k, v)
+
+
+@pytest.mark.parametrize("VS", [0, -16, 3, 128, 16.0, True])
+def test_attn_block_first_v2_refuses_a_slice_width_not_dividing_d(VS):
+    with pytest.raises(ValueError, match="VS must be a positive divisor of D"):
+        bind(DF.AttnBlockFirstV2, D=64, NVIS=4, BN=128, DOT=FA2["DOT"], VS=VS)
+
+
+def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
+    """At 4,32,4 (35 positions: a head's one key block of kBlockN 128 holds 1 ... 35 keys) a Llama-3.2-1B head's first block
+    reads q as RoPE's one row, k as RoPE's row a key, and v as the value projection's `Gemm_v2{2048, n}` slices at the window's
+    grain, 64 / n a key.  v2's v cut once an element is those rows, n words each, where v1's v has only NVIS elements to cut; with
+    its 3 outputs a unit is 5·NVIS + 4 rows in and out, within the grain's cap.  q's row and each k row (128 B) hash past one
+    SHA-512 block, which C-Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
+    from verity.ml.windows import interface as IF
+    from verity_flock.circuit import Port
+    from verity_vllm.program.predict.window_builder import Grain
+    from verity_vllm.program.predict.window_circuit import WindowClass
+
+    grain = Grain()
+    n = grain.gemm_words // 2048
+    S = 64 // n
+    assert (n, S) == (16, 4)
+    for NVIS in range(1, WindowClass(4, 32, 4).positions + 1):
+        new, old = _first_blocks(64, NVIS, 128, n)
+        lay = IF.layout(new)
+        assert (lay.outer[1:], IF.layout(old).outer[1:]) == ((NVIS, S * NVIS), (NVIS, NVIS))
+        rows = lay.cut({"k": NVIS, "v": S * NVIS})
+        assert [(p.partition("#")[0], w) for p, w, _ in rows] == [("q", 64)] + [("k", 64)] * NVIS + [("v", n)] * (S * NVIS)
+        assert len(rows) + len(lay.outs) == 5 * NVIS + 4 <= grain.rows
+        assert [Port(p, w, bits=16 * w).comps for p, w, _ in rows] == [1] * (1 + NVIS) + [0] * (S * NVIS)
