@@ -2,16 +2,17 @@
 (`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
 `of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
-framing broken, a period in each form the period's guarantee doesn't cover, and a period with its filler windows, honest
-or with one mutation aimed at every refusal of `fill._period_outcomes`), compared outcome for outcome, its reason
-included: the reason is the refusal `credit.period_credit` or `fill._period_outcomes` names, so agreeing on it holds which
-rule refused the period."""
+framing broken, a period in each form the period's guarantee doesn't cover, a period with its filler windows, honest
+or with one mutation aimed at every refusal of `fill.period_fill`, and a period read against a capacity and floor),
+compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`, `fill.period_fill`
+or the floor (``idle``) names, so agreeing on it holds which rule refused the period."""
 from __future__ import annotations
 
 import json
 import random
 import shutil
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -63,7 +64,7 @@ def test_pouw_period(server):
     assert set(swept) == {"accept", "reject"}, dict(swept)
     assert {"accept", "reject params", "reject commitment", "reject evidence", "reject form", "reject period",
             "reject window", "reject circuit", "reject missing", "reject order", "reject coin",
-            "reject budget", "reject fill"} <= set(RULES), RULES
+            "reject budget", "reject fill", "reject idle"} <= set(RULES), RULES
 
 
 def test_an_honest_period_is_its_credit():
@@ -109,14 +110,27 @@ def test_a_fill_is_credited_beside_work():
 @pytest.mark.parametrize("name", fill_cases.NAMES)
 def test_a_fill_mutation_is_refused_by_its_rule(name):
     """Each of `pouw_fill_cases`' mutations rejects the whole period with the refusal it aims at (``fill`` naming the
-    refused filler window's own code), and v6 filler units are refused by name as an uncovered form."""
+    refused filler window's own code)."""
     for seed in range(2):
         got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
         assert got["verdict"] == "reject", (name, got)
         code, _, why = got["reason"].partition(": ")
-        if name == "fill-v6":
-            assert code == "form" and why.startswith("filler window ") and PC.GUARANTEE in why, (name, got["reason"])
-            continue
         assert code == fill_cases.AIMS[name], (name, got["reason"])
         if name in fill_cases.INNER:
             assert f" the fill earns nothing: {fill_cases.INNER[name]}: " in why, (name, got["reason"])
+
+
+def test_coverage_is_served_plus_fill_against_capacity():
+    """With a capacity the credit gains ``covered``: W_cert, the served work and the fill's together, and W_cert/C; a
+    floor the period meets leaves it accepted, one it misses rejects it (``idle``), and a malformed capacity or floor is
+    refused as a parameter."""
+    for seed in range(4):
+        a = PC.case(cases.instance(random.Random(f"covered/{seed}"), "covered"))
+        assert a["verdict"] == "accept", a["reason"]
+        pub, cov = a["public"], a["public"]["covered"]
+        assert cov["certified"] == sum(pub["work"]) + sum(pub.get("fill", {}).get("work", []))
+        assert Fraction(cov["share"]) == Fraction(cov["certified"], cov["capacity"])
+        got = PC.case(cases.instance(random.Random(f"idle/{seed}"), "idle"))
+        assert got["verdict"] == "reject" and got["reason"].startswith("idle: the period certified "), got["reason"]
+        got = PC.case(cases.instance(random.Random(f"params-floor/{seed}"), "params-floor"))
+        assert got["verdict"] == "reject" and got["reason"].startswith("params: "), got["reason"]

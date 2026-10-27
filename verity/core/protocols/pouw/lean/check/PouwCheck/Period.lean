@@ -12,10 +12,12 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
 
-    {"key": challenger key, "main": [commit, …], "name": period}
+    {"key": challenger key, "main": [commit, …], "name": period[, "capacity": C[, "floor": "n/d"]]}
 
 the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`), its own copy of main's first-parent
-history (newest first) and the name of the period it credits, a string.
+history (newest first) and the name of the period it credits, a string; optionally the period's monitored capacity C
+in MACs, a positive integer, and with it the floor, the least certified share of C the verifier accepts, a fraction in
+[0, 1] (IDLE-COVERED, CMP-67). The floor is the verifier's input, never the protocol's.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
 period's open commits the period's circuit, its draw K, its table rows T, its weights' root and model and its fixed
@@ -28,17 +30,20 @@ record, round log, draw, descriptor, registered entries, each drawn unit's proof
 `{"fills": [filler window, …], "pins": pins, "windows": [window, …]}`, with each filler window of the period's fill
 period too, in its close's order (`Fill.FILL_KEYS`).
 
-**The check** first refuses, by name (`form: why`, `form`), every window, served or filler, in a form the period's proved guarantee
+**The check** first refuses, by name (`form: why`, `form`), every served window in a form the period's proved guarantee
 (`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
 `Credit.periodCredit` on them, and with filler windows `Fill.periodFill` on those, all or nothing: it accepts with the
-period's credit, or rejects with the first refusal, `code: why`. It never leaves a period undecided.
+period's credit, or rejects with the first refusal, `code: why`. With a capacity C and a floor n/d, it then rejects a
+period whose certified work W_cert (the served work and the fill's together) is below n/d of C (`idle: why`). It never
+leaves a period undecided.
 
 **Public**, on acceptance: `Credit.PeriodCredit.toJson`, each window's credited calls, its credited served work, the K
 the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it; with filler windows, and `fill`
-(`Fill.FillCredit.toJson`: each filler window's work, the fill period's K, the δ and each filler window's ε). The served
-credit is the same with or without them.
+(`Fill.FillCredit.toJson`: each filler window's work, the fill period's K, the δ and each filler window's ε); with a
+capacity, and `covered` (`{capacity, certified, share}`: C, W_cert and W_cert/C). The served credit is the same with or
+without them, and a guarantee over a period reads it (`Credited.served`).
 
 **Profile**: the period's name and its number of windows, and its number of filler windows when it has them.
 
@@ -55,6 +60,9 @@ open Flock (V)
 def protocolId : String := "verity/pouw/period/v1"
 def commitmentTag : String := "verity/pouw/period/ledger/v1"
 def paramsKeys : List String := ["key", "main", "name"]
+/-- The parameters of a verifier that reads the period's coverage: its monitored capacity, and optionally its floor. -/
+def coveredKeys : List String := ["capacity", "key", "main", "name"]
+def floorKeys : List String := ["capacity", "floor", "key", "main", "name"]
 def evidenceKeys : List String := ["pins", "windows"]
 /-- The evidence of a period that presents its filler windows too (`Fill`). -/
 def fillEvidenceKeys : List String := ["fills", "pins", "windows"]
@@ -63,6 +71,9 @@ structure Params where
   key : Json
   main : Json
   name : String
+  capacity : Option Nat := none
+  /-- The floor `n/d` as written, its numerator and its denominator. -/
+  floor : Option (String × Nat × Nat) := none
 
 structure Commitment where
   ledger : Json
@@ -78,20 +89,45 @@ structure Profile where
   windows : Nat
   fills : Option Nat := none
 
-/-- A credited period's public output: its served credit and, when it presents filler windows, its fill. -/
+/-- A credited period's public output: its served credit and, when it presents filler windows, its fill; with a
+capacity, its coverage (the capacity and the certified work, served and fill together). -/
 structure Credited where
   served : Credit.PeriodCredit
   fill : Option Fill.FillCredit := none
+  covered : Option (Nat × Nat) := none
 
 def Credited.toJson (c : Credited) : Json :=
-  match c.fill with
-  | none => c.served.toJson
-  | some f => c.served.toJson.setObjVal! "fill" f.toJson
+  let j := match c.fill with
+    | none => c.served.toJson
+    | some f => c.served.toJson.setObjVal! "fill" f.toJson
+  match c.covered with
+  | none => j
+  | some (cap, cert) => j.setObjVal! "covered" (Json.mkObj [("capacity", Lean.toJson cap), ("certified", Lean.toJson cert),
+      ("share", .str (toString (mkRat cert cap)))])
+
+/-- A canonical natural's digits: `0`, or no leading zero. -/
+def digits? (s : String) : Option Nat :=
+  if !s.isEmpty && s.all Char.isDigit && (s == "0" || !s.startsWith "0") then s.toNat? else none
 
 def paramsOf (j : Json) : V Params := do
-  unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
+  unless keys j == some paramsKeys || keys j == some coveredKeys || keys j == some floorKeys do
+    throw s!"keys are not {", ".intercalate paramsKeys}, with capacity and then floor optional"
   let some name := str? (get j "name") | throw "name is not a string"
-  pure { key := get j "key", main := get j "main", name }
+  let capacity ← if keys j == some paramsKeys then pure none else
+    match nat? (get j "capacity") with
+    | some c => if 1 ≤ c then pure (some c) else throw capacityForm
+    | none => throw capacityForm
+  let floor ← if keys j != some floorKeys then pure none else
+    let some f := str? (get j "floor") | throw floorForm
+    match f.splitOn "/" with
+    | [a, b] => match digits? a, digits? b with
+      | some n, some d => if 1 ≤ d && n ≤ d then pure (some (f, n, d)) else throw floorForm
+      | _, _ => throw floorForm
+    | _ => throw floorForm
+  pure { key := get j "key", main := get j "main", name, capacity, floor }
+where
+  capacityForm := "capacity is not a positive integer, the period's monitored capacity in MACs"
+  floorForm := "floor is not a fraction n/d in [0, 1], n and d canonical naturals"
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let ledger ← Core.canonicalJson b
@@ -179,23 +215,35 @@ def form (nm : String) (windows : Json) : Option String := Id.run do
     if let some why := windowForm nm i w then return some why
   return none
 
-/-- The first window in a form the period's guarantee doesn't cover (`form`), served then filler, else the period's
-credit (`Credit.periodCredit`) and, with filler windows, its fill (`Fill.periodFill`), or the first refusal. -/
+def idle (certified capacity : Nat) (floor : String) : String :=
+  s!"the period certified {certified} of its capacity's {capacity} MACs, a share below the verifier's floor " ++
+  s!"{floor}: every monitored GPU-hour not served is certified filler or the period is uncovered (IDLE-COVERED)"
+
+/-- The first served window in a form the period's guarantee doesn't cover (`form`), else the period's credit
+(`Credit.periodCredit`) and, with filler windows, its fill (`Fill.periodFill`), or the first refusal; with a capacity,
+its coverage, and under a floor a period whose certified share of its capacity is below it is refused (`idle`). -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credited Profile :=
-  match form p.name e.windows, e.fills.bind (form (Fill.periodName p.name)) with
-  | some why, _ => .reject s!"form: {why}"
-  | none, some why => .reject s!"form: filler {why}"
-  | none, none =>
+  match form p.name e.windows with
+  | some why => .reject s!"form: {why}"
+  | none =>
     match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
     | .error (code, why) => .reject s!"{code}: {why}"
     | .ok pc =>
       let profile : Profile := { period := p.name, windows := pc.windows.length }
-      match e.fills with
-      | none => .accept { served := pc } profile
-      | some fills =>
-        match Fill.periodFill p.key c.ledger e.pins p.main p.name fills with
-        | .error (code, why) => .reject s!"{code}: {why}"
-        | .ok f => .accept { served := pc, fill := some f } { profile with fills := some f.work.length }
+      let fill : Except (String × String) (Option Fill.FillCredit) := match e.fills with
+        | none => .ok none
+        | some fills => some <$> Fill.periodFill p.key c.ledger e.pins p.main p.name fills
+      match fill with
+      | .error (code, why) => .reject s!"{code}: {why}"
+      | .ok f =>
+        let profile := { profile with fills := f.map (·.work.length) }
+        let certified := pc.work.foldl (· + ·) 0 + ((f.map fun f => f.work.foldl (· + ·) 0).getD 0)
+        let covered := p.capacity.map fun cap => (cap, certified)
+        match p.capacity, p.floor with
+        | some cap, some (fs, n, d) =>
+          if certified * d < n * cap then .reject s!"idle: {idle certified cap fs}"
+          else .accept { served := pc, fill := f, covered } profile
+        | _, _ => .accept { served := pc, fill := f, covered } profile
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj ([("period", .str pr.period), ("windows", toJson pr.windows)] ++
@@ -217,7 +265,12 @@ def protocol : Core.Protocol where
   profileJson := profileJson
 
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
-#guard (protocol.answer "{}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason == some "params: keys are not key, main, name"
+#guard (protocol.answer "{}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason ==
+  some "params: keys are not key, main, name, with capacity and then floor optional"
+#guard (protocol.answer "{\"capacity\":0,\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "[]".toUTF8
+  "{}".toUTF8).reason == some "params: capacity is not a positive integer, the period's monitored capacity in MACs"
+#guard (protocol.answer "{\"capacity\":1,\"floor\":\"2/1\",\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8
+  "[]".toUTF8 "{}".toUTF8).reason == some "params: floor is not a fraction n/d in [0, 1], n and d canonical naturals"
 #guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":1}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason ==
   some "params: name is not a string"
 #guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "{}".toUTF8 "{}".toUTF8).reason ==

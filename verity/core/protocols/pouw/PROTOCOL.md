@@ -285,17 +285,24 @@ is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epo
 so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
 Its Lean port is open.
 
-**Filler periods** (`fill`, CMP-172; Daniel's card 5d4997de, option (a); Lean `PouwCheck.Fill`). Filler windows run H1's
-window Program on tensor pipes the served windows leave idle, and count toward the served period's companion
-``<name>:fill``, whose open commits its circuit, K, and the registry's weights' root and model as a served period's does.
-A period's credit carries their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each
-filler window's session holds one salt coin and one draw coin (`fill.FILL_FAMILIES`): its salt coin opens after
-`fill.open_root` (the weights' root, `fill.FILL_REQUESTS` and the session), its Program salt is that coin's
-(`h1tile.live_salt`), each K's A rows are the verifier's public pad (`fill.pad_entry`), and its draw coin opens after
-`fill.draw_root` over the salt and every registered entry, so every value is fixed before the draw. Every drawn unit
-must be accepted, and one refused filler window refuses the whole fill. The fill is each window's M·n·K a call at the
-fill period's K, with its ε at `credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not
-under it yet. The ledger holds one open period a lane, so a fill period opens after its served period closes, and
+**Filler periods** (`fill`, CMP-172, CMP-67; Lean `PouwCheck.Fill`). Filler windows run Dither calls
+(`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its per-call pad (`dither.fill_seeds`)
+and its B a published checkpoint's s8 weights, its proof units `PouwDitherBlock_v1` blocks. They count toward the served
+period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, the call count
+and B's checkpoint digest) and K. A period's credit carries their ``fill`` beside ``work``, whose rule is unchanged
+(`period_check`, given ``fills``). Each filler window's root is `fill.open_root` of its circuit and session, and its
+session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
+after the root, the window's salt is the salt coin's (`h1tile.live_salt`), call c's seeds are `dither.fill_seeds` of
+that salt and call coin c, and the draw coin opens after `fill.draw_root` over the salt and every call's value root, so
+every value is fixed before the draw. The draw is over one stratum of every call's blocks; every drawn block must be
+accepted on its own statement (`fill.statement`) with its values opened at its call's value root, and one refused filler
+window refuses the whole fill. The fill is each window's m·n·K a call at the fill period's K, with its ε at
+`credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not under it yet.
+
+**Coverage** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
+parameter), the credit carries ``covered``: W_cert, the served work and the fill's together, and W_cert/C. Given a floor
+too (``floor``, ``n/d``, the verifier's parameter and never the protocol's), a period whose W_cert/C is below it is
+refused (``idle``). The ledger holds one open period a lane, so a fill period opens after its served period closes, and
 filler windows can't yet run while that period's served windows do. `benchmarks/pouw/fill_period` runs one filler period
 on a development gate.
 

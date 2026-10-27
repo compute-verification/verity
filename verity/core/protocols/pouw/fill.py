@@ -1,86 +1,84 @@
-"""PoUW's filler windows and the ``fill`` a period credits beside its ``work`` (CMP-172; Daniel's card 5d4997de, option
-(a)): the Python the Lean `PouwCheck.Fill` is held to through ``pouw-period`` (`period_check`, the difftest
-``lean/check/tests/test_period_difftest.py``).
+"""PoUW's filler windows and the ``fill`` a period credits beside its ``work`` (CMP-172, CMP-67): the Python the Lean
+`PouwCheck.Fill` is held to through ``pouw-period`` (`period_check`, the difftest ``lean/check/tests/test_period_difftest.py``).
 
-A filler window is an H1 window the prover runs on tensor pipes its served windows leave idle. It is the served window's
-Program (``h1window.program(linears, calls, m, tile)``, its descriptor's layout, `credit.layout_of`) at one round, its
-units J10-R tiles of the period's template, and its credit is every unit's work, M·n·K a call: there are no served rows,
-since every row of its A is the pad. It counts toward the companion period ``<name>:fill`` (`period_name`), which the
-auditor's ledger opens and closes as it does a served period: its open commits the circuit, the draw K (`credit.K_FIELD`),
-the weights' root and model (`credit.WEIGHTS_FIELD`, `credit.MODEL_FIELD`) and, for statements, the circuit files.
-`work` and its rule (`credit.window`, `credit.period_credit`) are unchanged.
+A filler window is Dither calls (`circuit.dither`) the prover runs on tensor pipes its served windows leave idle, each a
+call whose A is its per-call pad (`dither.fill_seeds`, `dither.pad_rows`) and whose B is a published checkpoint's s8
+weights, committing its T_1 .. T_S (`dither.Shape` with ``o=False``). Its proof units are `PouwDitherBlock_v1` blocks,
+one cell and one segment each. It counts toward the companion period ``<name>:fill`` (`period_name`), which the
+auditor's ledger opens and closes as it does a served period: its open commits the circuit (the SHA-512 of the filler
+descriptor, `descriptor_of`) and the draw K (`credit.K_FIELD`). `work` and its rule (`credit.period_credit`) are unchanged.
 
-* **The pad is the verifier's** (`pad_entry`): K's A table ``<PREFIX>a/<K>@0`` holds M rows for each call of K, row i
-  its K int8 codes SHAKE-256(`PAD_TAG` ‖ u64be(K) ‖ u64be(i)) and the f32 scale 1.0 (`PAD_SCALE`), each row
-  `weights.chunks` (K) leaves as the served A tables' (`credit.registered_file` reads them so), under the public salts
-  `pad_salt` of the window's open root, registered binding it. The verifier builds that registration itself and the
-  window's entry must be it, so the A rows a filler unit reads are public structure, dense and never a served block, and
-  a unit can't make its tile cheap by choosing its A (zero rows prove trivially).
-* **The salt is the window's live coin** (`_coins`): the window's challenger session (`FILL_FAMILIES`: one salt coin and
-  one draw coin) is read through the auditor's ledger (`challenger.trusted_session_of`); its log shows the window's open
-  root as the one root its salt coin followed, and the window's Program salt is that coin's round-0 salt after it
-  (`h1tile.live_salt`), so every unit's noise is drawn after its operands are fixed and no salt serves two windows.
-* **The open root binds the weights and the session** (`open_root`): `salt.window_open_root` of the weights' root, the
-  constant `FILL_REQUESTS` in the request table's place, and the session. `credit._period_weights` holds each K's
-  ``<PREFIX>b/<K>`` to it and to the weights' root the fill period's open signed, so a filler unit reads the period's
-  registered B rows.
-* **Every value is fixed before the draw** (`entries_root`, `draw_root`): the draw root is over the Program salt and the
-  digest of every registered entry (each unit's z/y record table ``<PREFIX>zy@<c>`` and receipt table
-  ``<PREFIX>receipt@<c>`` among them); the challenger's log shows it as the one root the draw coin followed, and the draw
-  is `credit._window_drawn`'s over the window's strata at the fill period's K.
-* **No partial credit**: every drawn unit has exactly one proof outcome and it is an accept (`credit._proved`), each
-  verified against the committed circuit and opening its K's pad and weights at their registered roots
-  (`credit._registration`), and a refused window refuses the whole fill period. The credit is ``{work, k, delta, eps}``:
-  each window's work (`work`, every unit's R·C·K), the fill period's K, `credit.DELTA` and the ε its draw established
-  over all of it (`eps`).
+* **The circuit is public structure** (`descriptor_of`): the descriptor is canonical JSON ``{L, calls, checkpoint, k, lp,
+  m, n, row, unit}``, the Dither filler's shape, its call count, the SHA-512 `dither.checkpoint_digest` of B and the unit
+  ``PouwDitherBlock_v1``. The window's open root is `open_root` of the circuit and the window's session, so it is fixed
+  before every coin and no two windows share one.
+* **The pad and noise are live coins** (`_coins`): the window's challenger session (`families`: one salt coin, one call
+  coin a call, one draw coin) is read through the auditor's ledger (`challenger.trusted_session_of`); its log shows the
+  open root as the one root its salt coin and every call coin followed. The window's salt is the salt coin's round-0
+  salt after it (`h1tile.live_salt`), and call c's seeds are `dither.fill_seeds` of that salt and call coin c, so a
+  call's A and noise are drawn after its circuit and B are fixed, and the prover can table nothing ahead of them.
+* **Every value is fixed before the draw** (`receipts`, `draw_root`): each call's value root (``roots``) is under the
+  draw root, over the window's salt and `receipts` of the roots, and the challenger's log shows it as the one root the
+  draw coin followed. The draw is `credit._window_drawn`'s over one stratum (`stratum`) of every call's blocks at the fill
+  period's K, block (c, i, j, s) unit c·m·n·S + (i·n + j)·S + s − 1 (`block_of`), each block L MACs.
+* **No partial credit**: every drawn block has exactly one proof outcome and it is an accept (`credit._proved`), each
+  verified against its block's statement (`statement`: the circuit, the salt, its call's coin and the block) with its
+  ``t`` port opened at its call's value root (`registered`), and a refused window refuses the whole fill period. The
+  credit is ``{work, k, delta, eps}``: each window's work (`work`, m·n·K a call), the fill period's K, `credit.DELTA`
+  and the ε its draw established over all of it (`eps`).
 
-A filler window's evidence is `FILL_KEYS` (each drawn unit's proof outcome, the Lean's form) or `FILL_STATEMENT_KEYS`
-(its statements' proof files, which `fill_period` verifies with the verifier of record, `credit._runner`)."""
+A filler window's evidence is `FILL_KEYS`, each drawn block's proof outcome the verifier of record's verdict."""
 from __future__ import annotations
 
 import hashlib
-import struct
+from fractions import Fraction
 from typing import Any
 
-from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import dither as D
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.pouw.weights import chunks, row_bytes, row_words
 from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 #: the companion period a served period's filler windows count toward: ``<name>:fill``
 SUFFIX = ":fill"
-#: a filler window's coin layout: its salt coin, then its draw coin
-FILL_FAMILIES = ((Wd.SALT, 1), (Wd.DRAW, 1))
-#: what stands in a filler window's open root for a served window's round-0 request table's root
-FILL_REQUESTS = hashlib.sha512(b"verity/pouw/fill/requests/v1\0").digest()
-DRAW_TAG = "verity/pouw/fill/draw/v1"
-ENTRIES_TAG = "verity/pouw/fill/entries/v1"
-PAD_TAG = b"verity/pouw/fill/pad/v1\0"
-PAD_SALT_TAG = b"verity/pouw/fill/pad-salt/v1\0"
-#: every pad row's scale s_a, an f32 little-endian
-PAD_SCALE = struct.pack("<f", 1.0)
-FILL_KEYS = ("descriptor", "draw", "entries", "opening", "proofs", "salt", "session", "window")
-FILL_STATEMENT_KEYS = ("descriptor", "draw", "entries", "opening", "salt", "session", "statements", "window")
+#: a filler window's call coins, one a call, between its salt coin and its draw coin
+CALL = "pouw/fill/call"
+UNIT = "PouwDitherBlock_v1"
+DESCRIPTOR_KEYS = ("L", "calls", "checkpoint", "k", "lp", "m", "n", "row", "unit")
+OPEN_TAG = "verity/pouw/fill/open/v2"
+ROOTS_TAG = "verity/pouw/fill/roots/v1"
+DRAW_TAG = "verity/pouw/fill/draw/v2"
+STATEMENT_TAG = "verity/pouw/fill/statement/v1"
+#: the one stratum of a filler window's draw
+TEMPLATE = "dither"
+FILL_KEYS = ("calls", "descriptor", "draw", "opening", "proofs", "roots", "salt", "session", "window")
 FILLS_FORM = ("the period's filler windows are not a list of each filler window's evidence {" + ", ".join(FILL_KEYS)
               + "}, in the order its fill period's close lists them")
-FILL_EPOCH = "the coin commitment's coins are not a filler window's: its salt coin, then its draw coin"
+DESCRIPTOR_HEX = "the filler window's descriptor is not the bytes in lowercase hex of the circuit its fill period committed"
+DESCRIPTOR_FORM = ("the filler window's descriptor is not canonical JSON {" + ", ".join(DESCRIPTOR_KEYS) + "}: the "
+                   f"Dither filler's shape and call count as positive integers, B's checkpoint digest (128 lowercase "
+                   f"hex) and the unit {UNIT}")
+SHAPE = (f"the filler window's shape is not a Dither filler's: m and n whole tiles of {D.TILE}, lp a multiple of 32 "
+         f"dividing k, L a multiple of lp dividing k, k below {D.K_LIMIT}, and row a multiple of 16 dividing "
+         f"{D.TILE_WORD_BYTES}")
+OPEN = ("the filler window's open root is not open_root of its circuit and its session: open each filler window on "
+        "its own root, after the circuit is fixed")
+FILL_EPOCH = ("the coin commitment's coins are not a filler window's: its salt coin, a call coin for each of its "
+              "calls, then its draw coin")
 SALT_NOT_RECEIVED = "the challenger's log does not show the filler window's open root as the one root its salt coin followed"
-FILL_SALT = ("the filler window's Program salt is not its live salt coin's round-0 salt after its open root "
-             "(h1tile.live_salt): seed its units from the coin the challenger opened")
-ENTRIES_FORM = ("the filler window's registered entries are not a list of one-stage's {value, root, leaves, words, "
-                "domain}")
-RECEIPTS = ("the filler window's draw receipts are not the digest of its registered entries (entries_root): register "
-            "every table before the draw coin and draw over them")
-DRAW_ROOT = "the filler window's draw root is not over its Program salt and its registered entries (draw_root)"
-CHANGED = ("the draw root over the filler window's Program salt and registered entries is not the one root the "
-           "challenger's log shows its draw coin followed: a value changed after the draw coin")
+FILL_SALT = ("the filler window's salt is not its live salt coin's round-0 salt after its open root (h1tile.live_salt): "
+             "seed its calls from the coin the challenger opened")
+CALLS_FORM = "the filler window's calls are not a list of each call's coin opening, one a call of its descriptor"
+CALLS_NOT_RECEIVED = ("the challenger's log does not show the filler window's open root as the one root each of its call "
+                      "coins followed: open every call coin after the open root, before the call's values")
+ROOTS_FORM = "the filler window's roots are not a list of each call's value root (SHA-512 digests), one a call"
+RECEIPTS = ("the filler window's draw receipts are not the digest of its calls' value roots (receipts): commit every "
+            "call's values before the draw coin and draw over them")
+DRAW_ROOT = "the filler window's draw root is not over its salt and its calls' value roots (draw_root)"
+CHANGED = ("the draw root over the filler window's salt and its calls' value roots is not the one root the challenger's "
+           "log shows its draw coin followed: a value changed after the draw coin")
 
 
 def period_name(name: str) -> str:
@@ -88,232 +86,207 @@ def period_name(name: str) -> str:
     return name + SUFFIX
 
 
-def fill_epoch_reason(c: Ch.LiveCommitment) -> str | None:
-    """Why `c` is not a filler window's coin commitment (`window.LIVE_SCHEME`, `FILL_FAMILIES`); None when it is."""
-    if c.scheme != Wd.LIVE_SCHEME:
-        return f"the coin commitment's scheme is {c.scheme}, not {Wd.LIVE_SCHEME}"
-    return None if tuple(c.families) == FILL_FAMILIES else FILL_EPOCH
+def families(calls: int) -> tuple[tuple[str, int], ...]:
+    """A filler window's coin layout: its salt coin, `calls` call coins, then its draw coin."""
+    return (Wd.SALT, 1), (CALL, calls), (Wd.DRAW, 1)
 
 
-def open_root(weights_root: bytes, session: str) -> bytes:
-    """A filler window's open root: `salt.window_open_root` of its weights' root, `FILL_REQUESTS` and its session."""
-    return PS.window_open_root(weights_root, FILL_REQUESTS, session)
+def descriptor_of(raw: bytes) -> tuple[tuple[D.Shape, int] | None, tuple[str, str] | None]:
+    """The filler shape and call count the descriptor `raw` names, and None; or None and the refusal (``descriptor``)."""
+    try:
+        ok, j = Cr._loads(raw.decode())
+    except UnicodeDecodeError:
+        ok, j = False, None
+    if not (ok and isinstance(j, dict) and sorted(j) == list(DESCRIPTOR_KEYS) and j["unit"] == UNIT
+            and Cr._digest(j["checkpoint"]) is not None
+            and all(Cr._nat(j[x]) and j[x] >= 1 for x in ("L", "calls", "k", "lp", "m", "n", "row"))):
+        return None, ("descriptor", DESCRIPTOR_FORM)
+    try:
+        sh = D.Shape(j["m"], j["n"], j["k"], j["lp"], j["L"], j["row"], o=False)
+    except ValueError:
+        return None, ("descriptor", SHAPE)
+    if j["k"] % j["L"]:
+        return None, ("descriptor", SHAPE)
+    return (sh, j["calls"]), None
 
 
-def pad_codes(k: int, row: int) -> bytes:
-    """Pad row `row`'s K int8 codes at K = `k`."""
-    return hashlib.shake_256(PAD_TAG + k.to_bytes(8, "big") + row.to_bytes(8, "big")).digest(k)
+def descriptor(sh: D.Shape, calls: int, checkpoint: bytes) -> bytes:
+    """The filler descriptor of `calls` calls of shape `sh` against the checkpoint whose digest is `checkpoint`."""
+    return Cr._canonical({"L": sh.L, "calls": calls, "checkpoint": checkpoint.hex(), "k": sh.k, "lp": sh.lp, "m": sh.m,
+                          "n": sh.n, "row": sh.row, "unit": UNIT}).encode()
 
 
-def pad_leaves(k: int, rows: int) -> list[list[int]]:
-    """The leaves of `rows` pad rows at K = `k`: row i's x = `weights.chunks` (K) leaves, chunk c its K/x codes then
-    `PAD_SCALE`, as u16 words."""
-    x = chunks(k)
-    kc = k // x
-    out = []
-    for i in range(rows):
-        codes = pad_codes(k, i)
-        out += [row_words(row_bytes(codes[c * kc:(c + 1) * kc], PAD_SCALE)) for c in range(x)]
-    return out
+def open_root(circuit: bytes, session: str) -> bytes:
+    """A filler window's open root: `tagged` of its circuit (its descriptor's SHA-512) and its session."""
+    return tagged(OPEN_TAG, circuit, session)
 
 
-def pad_salt(window: str, leaf: int) -> bytes:
-    """Pad leaf `leaf`'s public hm96 salt in the window whose open root is `window` (hex): SHAKE-256 of `PAD_SALT_TAG` ‖
-    window ‖ 0 ‖ u64be(leaf), `core_check.SALT_BYTES` bytes."""
-    return hashlib.shake_256(PAD_SALT_TAG + window.encode() + b"\0" + leaf.to_bytes(8, "big")).digest(CC.SALT_BYTES)
+def receipts(roots: list[bytes]) -> bytes:
+    """The digest of a filler window's calls' value roots, in call order."""
+    return tagged(ROOTS_TAG, *roots)
 
 
-def pad_rows(layout: dict) -> dict[int, int]:
-    """Each K of `layout` (one `credit.strata` accepted) and its pad table's rows: M for each call of K."""
-    ks = {name: k for name, k, _n in layout["linears"]}
-    out: dict[int, int] = {}
-    for lin, _blk in layout["calls"]:
-        out[ks[lin]] = out.get(ks[lin], 0) + layout["m"]
-    return out
+def draw_root(salt: bytes, receipts_: bytes) -> bytes:
+    """A filler window's draw root, over its salt and `receipts` of its calls' value roots."""
+    return tagged(DRAW_TAG, salt, receipts_)
 
 
-def pad_entry(program: str, prefix: str, window: str, k: int, rows: int) -> dict:
-    """K's pad table ``<prefix>a/<K>@0`` of `rows` rows as the filler window whose open root is `window` registers it,
-    under the circuit whose descriptor's SHA-512 is `program`."""
-    leaves = pad_leaves(k, rows)
-    v = f"{prefix}a/{k}@0"
-    return G.Registered.commit(program, v, leaves, [pad_salt(window, i) for i in range(len(leaves))], G.WORD_BITS,
-                               G.SCHEMA_V2, window=window).entry()
+def blocks(sh: D.Shape) -> int:
+    """A call's proof blocks: m·n cells of S segments each."""
+    return sh.m * sh.n * sh.S
 
 
-def entries_root(entries: list[dict]) -> bytes:
-    """The digest of a filler window's registered entries, in order: `tagged` of each one's canonical JSON."""
-    return tagged(ENTRIES_TAG, *(Cr._canonical(e).encode() for e in entries))
+def block_of(sh: D.Shape, u: int) -> tuple[int, int, int, int]:
+    """Unit `u`'s block (c, i, j, s): call c, cell (i, j), segment s."""
+    c, r = divmod(u, blocks(sh))
+    cell, s = divmod(r, sh.S)
+    i, j = divmod(cell, sh.n)
+    return c, i, j, s + 1
 
 
-def draw_root(salt: bytes, receipts: bytes) -> bytes:
-    """A filler window's draw root, over its Program salt and `entries_root` of its entries."""
-    return tagged(DRAW_TAG, salt, receipts)
+def stratum(sh: D.Shape, calls: int) -> list[dict]:
+    """The draw's one stratum: every call's blocks, L MACs each."""
+    return [{"template": TEMPLATE, "units": [[0, calls * blocks(sh)]], "work": sh.L, "floor": 1}]
 
 
-def work(layout: dict) -> int:
-    """A filler window's work: every unit's R·C·K, M·n·K a call."""
-    return sum(size * w for size, w in Cr.call_work(layout))
+def statement(circuit: bytes, salt: bytes, coin: bytes, block: tuple[int, int, int, int]) -> bytes:
+    """The statement a drawn block's proof is verified against: its circuit, the window's salt, its call's coin and the
+    block (c, i, j, s), from which the verifier of record derives its public inputs (its pad row, its noise and its
+    Definition)."""
+    return tagged(STATEMENT_TAG, circuit, salt, coin, *block)
 
 
-def eps(layout: dict, k: int) -> Any:
+def registered(c: int, root: bytes) -> dict:
+    """A block proof's registered finding: its ``t`` port's words opened at call c's value root."""
+    return {"t": {"root": root.hex(), "value": f"fill/T@{c}"}}
+
+
+def work(sh: D.Shape, calls: int) -> int:
+    """A filler window's work: m·n·K MACs a call."""
+    return calls * sh.m * sh.n * sh.k
+
+
+def eps(sh: D.Shape, calls: int, k: int) -> Fraction | None:
     """The ε a draw of K = `k` establishes at `credit.DELTA` over the whole of a filler window's work (`window.eps_at`),
     or None when it establishes none."""
     try:
-        return Wd.eps_at(k, Cr.DELTA, work(layout), work(layout), 1)
+        return Wd.eps_at(k, Cr.DELTA, work(sh, calls), work(sh, calls), 1)
     except ValueError:
         return None
 
 
-def _coins(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, opening: Any, draw: Any,
-           entries: Any, verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when the filler window's salt and draw coins are live, read through its challenger's session; else the
-    refusal (``coin``, ``salt``, ``fill`` or ``draw``)."""
+def _live(c: Ch.LiveCommitment, doc: Any, label: str, index: int, after: bytes, what: str) -> tuple[str, str] | None:
     try:
-        k = Ch.ChallengerKey.from_json(key)
-    except Ch.CoinError as e:
-        return "coin", f"the verifier's challenger key is malformed: {e}"
-    r = Cr._digest(window.get("root")) if isinstance(window, dict) else None
-    if r is None:
-        return "fill", Cr.WINDOW_ROOT_FORM
-    try:
-        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
-    except Ch.CoinError as e:
-        return "coin", f"the challenger's session is not trusted: {e}"
-    why = fill_epoch_reason(c)
-    if why is not None:
-        return "coin", why
-    if tuple(received.get(Wd.SALT, ())) != (r,):
-        return "salt", SALT_NOT_RECEIVED
-    try:
-        o = Ch.LiveOpening.from_json(opening)
-    except Ch.CoinError as e:
-        return "coin", f"the salt's {e}"
-    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
-    if why is not None:
-        return "coin", f"the salt's {why}"
-    if salt != HT.live_salt(c, o.coin, 0, r).hex():
-        return "salt", FILL_SALT
-    if not (type(entries) is list and all(Cr._entry(e) for e in entries)):
-        return "fill", ENTRIES_FORM
-    receipts = entries_root(entries)
-    if not (isinstance(draw, dict) and draw.get("receipts") == receipts.hex()):
-        return "draw", RECEIPTS
-    root = draw_root(bytes.fromhex(salt), receipts)
-    if draw.get("root") != root.hex():
-        return "draw", DRAW_ROOT
-    got = tuple(received.get(Wd.DRAW, ()))
-    if not got:
-        return "draw", Cr.NO_DRAW
-    if got != (root,):
-        return "draw", CHANGED
-    try:
-        why = Ch.live_reason(c, Ch.LiveOpening.from_json(draw.get("coin")), Wd.DRAW, 0, root)
+        why = Ch.live_reason(c, Ch.LiveOpening.from_json(doc), label, index, after)
     except Ch.CoinError as e:
         why = str(e)
-    return None if why is None else ("coin", f"the draw coin: {why}")
+    return None if why is None else ("coin", f"{what}: {why}")
 
 
-def no_pad(v: str) -> str:
-    return (f"the filler window registers no pad table {v}, or registers it twice: each K's A rows are its one pad "
-            "table, which the verifier builds (pad_entry)")
-
-
-def other_pad(v: str) -> str:
-    return (f"the filler window's {v} is not the pad (pad_entry: each row its public codes and scale 1.0 under the "
-            "public pad salts of the window's open root, registered binding it): a filler unit's A rows are the pad")
-
-
-def other_value(v: str, prefix: str) -> str:
-    return (f"the filler window registers {v}, which is none of its values: a filler window registers each K's pad "
-            f"{prefix}a/<K>@0 and weights {prefix}b/<K>, and each call's {prefix}zy@<c> and {prefix}receipt@<c>, "
-            "nothing else")
-
-
-def _pad(entries: list[dict], layout: dict, program: str, prefix: str, window: str) -> tuple[str, str] | None:
-    """None when the filler window's `entries` register each K's pad table (`pad_entry`) once, and no value but those,
-    each K's weights and each call's z/y and receipt tables; else the refusal (``pad``)."""
-    rows = pad_rows(layout)
-    pads = {f"{prefix}a/{k}@0": k for k in rows}
-    others = {f"{prefix}b/{k}" for k in rows} | {f"{prefix}{t}@{c}" for t in ("zy", "receipt")
-                                                  for c in range(len(layout["calls"]))}
-    names = [e["value"] for e in entries]
-    for v in names:
-        if v not in pads and v not in others:
-            return "pad", other_value(v, prefix)
-    for v, k in pads.items():
-        if names.count(v) != 1:
-            return "pad", no_pad(v)
-        if entries[names.index(v)] != pad_entry(program, prefix, window, k, rows[k]):
-            return "pad", other_pad(v)
-    return None
-
-
-#: what a filler window's drawn units' proof outcomes are, given its layout, descriptor, drawn units and round count
-Proved = Cr.Proved
-
-
-def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, opening: Any, draw: Any,
-            descriptor: Any, entries: Any, proved: Proved, k: Any, verify: Ch.Verify
-            ) -> tuple[dict | None, tuple[str, str] | None]:
-    """A filler window's layout and None, or None and the refusal of the first step that refuses: `_coins`, the layout
-    of its circuit (`credit.layout_of` of `descriptor`), its weights (`credit._period_weights` at `open_root`), `_pad`,
-    the draw at the fill period's committed K `k` (`credit._window_drawn`), each drawn unit's one accepted outcome
-    (`credit._proved`) and its registration (`credit._registration`, one round)."""
-    why = _coins(key, ledger, pins, main, window, session, salt, opening, draw, entries, verify)
+def _coins(key: Any, ledger: Any, pins: Any, main: Any, window: dict, w: dict, calls: int, verify: Ch.Verify
+           ) -> tuple[list[bytes] | None, tuple[str, str] | None]:
+    """Each call's coin, and None, when the filler window's salt, call and draw coins are live, read through its
+    challenger's session; else None and the refusal (``coin``, ``salt``, ``calls`` or ``draw``)."""
+    k = Ch.ChallengerKey.from_json(key)
+    r = bytes.fromhex(window["root"])
+    try:
+        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, w["session"], verify)
+    except Ch.CoinError as e:
+        return None, ("coin", f"the challenger's session is not trusted: {e}")
+    if c.scheme != Wd.LIVE_SCHEME:
+        return None, ("coin", f"the coin commitment's scheme is {c.scheme}, not {Wd.LIVE_SCHEME}")
+    if tuple(c.families) != families(calls):
+        return None, ("coin", FILL_EPOCH)
+    if tuple(received.get(Wd.SALT, ())) != (r,):
+        return None, ("salt", SALT_NOT_RECEIVED)
+    why = _live(c, w["opening"], Wd.SALT, 0, r, "the salt's coin")
     if why is not None:
         return None, why
-    if not (type(descriptor) is str and Cr._HEX.fullmatch(descriptor)):
-        return None, ("layout", Cr.DESCRIPTOR_HEX)
-    raw = bytes.fromhex(descriptor)
-    layout, why = Cr.layout_of(raw)
+    if w["salt"] != HT.live_salt(c, bytes.fromhex(w["opening"]["coin"]), 0, r).hex():
+        return None, ("salt", FILL_SALT)
+    if not (type(w["calls"]) is list and len(w["calls"]) == calls):
+        return None, ("calls", CALLS_FORM)
+    if tuple(received.get(CALL, ())) != (r,) * calls:
+        return None, ("calls", CALLS_NOT_RECEIVED)
+    coins = []
+    for i, o in enumerate(w["calls"]):
+        why = _live(c, o, CALL, i, r, f"call {i}'s coin")
+        if why is not None:
+            return None, why
+        coins.append(bytes.fromhex(o["coin"]))
+    roots = w["roots"]
+    if not (type(roots) is list and len(roots) == calls and all(Cr._digest(x) is not None for x in roots)):
+        return None, ("roots", ROOTS_FORM)
+    rc = receipts([bytes.fromhex(x) for x in roots])
+    draw = w["draw"]
+    if not (isinstance(draw, dict) and draw.get("receipts") == rc.hex()):
+        return None, ("draw", RECEIPTS)
+    root = draw_root(bytes.fromhex(w["salt"]), rc)
+    if draw.get("root") != root.hex():
+        return None, ("draw", DRAW_ROOT)
+    got = tuple(received.get(Wd.DRAW, ()))
+    if not got:
+        return None, ("draw", Cr.NO_DRAW)
+    if got != (root,):
+        return None, ("draw", CHANGED)
+    why = _live(c, draw.get("coin"), Wd.DRAW, 0, root, "the draw coin")
+    return (None, why) if why is not None else (coins, None)
+
+
+def other_statement(u: int) -> str:
+    return (f"drawn block {u}'s proof was verified against another statement than its own (statement: the circuit, the "
+            "window's salt, its call's coin and the block): verify every drawn block against its own statement")
+
+
+def other_registered(u: int, c: int) -> str:
+    return (f"drawn block {u}'s proof opened something other than its t port at call {c}'s value root fill/T@{c}: "
+            "verify every drawn block with its call's values registered")
+
+
+def _window(key: Any, ledger: Any, pins: Any, main: Any, w: dict, session: str, circuit: bytes, k: int,
+            verify: Ch.Verify) -> tuple[tuple[D.Shape, int] | None, tuple[str, str] | None]:
+    """A filler window's shape and call count and None, or None and the refusal of the first step that refuses: its
+    root's form, its descriptor (`descriptor_of`), its open root (`open_root`, ``open``), `_coins`, the draw at the
+    fill period's committed K `k` (`credit._window_drawn` over `stratum`), each drawn block's one accepted outcome
+    (`credit._proved`), its statement (``statement``) and its registered finding (``registered``)."""
+    window = w["window"]
+    if not (isinstance(window, dict) and sorted(window) == ["root"] and Cr._digest(window["root"]) is not None):
+        return None, ("fill", Cr.WINDOW_ROOT_FORM)
+    got, why = descriptor_of(bytes.fromhex(w["descriptor"]))
     if why is not None:
         return None, why
-    program, prefix = hashlib.sha512(raw).hexdigest(), Cr._prefix(raw)
-    (sid, _period), why = Cr._period_weights(key, ledger, window, [{"requests": FILL_REQUESTS.hex()}], layout, entries,
-                                             program, prefix, verify)
+    sh, calls = got
+    if window["root"] != open_root(circuit, session).hex():
+        return None, ("open", OPEN)
+    coins, why = _coins(key, ledger, pins, main, window, w, calls, verify)
     if why is not None:
         return None, why
-    ss, _ = Cr.strata(layout)
-    why = _pad(entries, layout, program, prefix, window["root"])
-    if why is not None:
-        return None, why
-    units, why = Cr._window_drawn(window, draw, ss, k)
-    proofs = None
+    units, why = Cr._window_drawn(window, w["draw"], stratum(sh, calls), k)
     if why is None:
-        proofs, why = proved(layout, raw, units, 1)
-    if why is None:
-        why = Cr._proved(units, proofs)
-    if why is None:
-        why = Cr._registration(window["root"], program, prefix, entries, ss, layout, 1, proofs, sid)
-    return (None, why) if why is not None else (layout, None)
+        why = Cr._proved(units, w["proofs"])
+    if why is not None:
+        return None, why
+    salt = bytes.fromhex(w["salt"])
+    for p in w["proofs"]:
+        u = p["unit"]
+        b = block_of(sh, u)
+        if p["program"] != statement(circuit, salt, coins[b[0]], b).hex():
+            return None, ("statement", other_statement(u))
+        if p["registered"] != registered(b[0], bytes.fromhex(w["roots"][b[0]])):
+            return None, ("registered", other_registered(u, b[0]))
+    return got, None
 
 
-def fill_period(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: Any, verify: Ch.Verify,
-                run: Cr.Run = PF.verify) -> tuple[dict | None, tuple[str, str] | None]:
-    """Served period `name`'s fill and None, or None and the refusal: `_period_outcomes`' rules, each filler window's
-    evidence (`FILL_STATEMENT_KEYS`) carrying its statements' proof files, which the verifier of record `run` verifies on
-    the circuit files the fill period's open committed (`credit.committed_files`)."""
-    return _period_of(key, ledger, pins, main, name, fills, verify, run)
-
-
-def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: Any, verify: Ch.Verify
-                     ) -> tuple[dict | None, tuple[str, str] | None]:
-    """`fill_period` on each drawn unit's proof outcome (`FILL_KEYS`), the form the Lean `PouwCheck.Fill.periodFill`
-    reads. The fill ``{work, k, delta, eps}`` of served period `name`, and None; or None and the refusal. Its windows are
-    exactly the close's of the fill period (`period_name`, `credit.period`), whose open committed K (``budget``) and
-    signed the weights' root (``weights``); each window's session ran a commit the host's pins log `pins` records on
-    main's first-parent history `main`, the window proves the circuit the fill period's open committed (``circuit``,
-    `challenger.credited_session`) within its freshness floor (``pin``), and `_window` credits it (``fill``). A refused
-    window refuses the fill."""
-    return _period_of(key, ledger, pins, main, name, fills, verify, None)
-
-
-def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: Any, verify: Ch.Verify,
-               run: Cr.Run | None) -> tuple[dict | None, tuple[str, str] | None]:
-    keys = FILL_KEYS if run is None else FILL_STATEMENT_KEYS
+def period_fill(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: Any, verify: Ch.Verify
+                ) -> tuple[dict | None, tuple[str, str] | None]:
+    """Served period `name`'s fill ``{work, k, delta, eps}`` and None, or None and the refusal, the form the Lean
+    `PouwCheck.Fill.periodFill` reads. Its windows are exactly the close's of the fill period (`period_name`,
+    `credit.period`), whose open committed K (``budget``); each window's session ran a commit the host's pins log `pins`
+    records on main's first-parent history `main`, the window proves the circuit the fill period's open committed
+    (``circuit``, `challenger.credited_session`) within its freshness floor (``pin``), and `_window` credits it
+    (``fill``). A refused window refuses the fill."""
     if not (type(name) is str and type(fills) is list
-            and all(isinstance(w, dict) and sorted(w) == list(keys) for w in fills)):
+            and all(isinstance(w, dict) and sorted(w) == list(FILL_KEYS) for w in fills)):
         return None, ("fill", FILLS_FORM)
     nm = period_name(name)
     why = Cr.period(key, ledger, nm, [w["window"].get("root") if isinstance(w["window"], dict) else None for w in fills],
@@ -321,44 +294,36 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, fills: An
     if why is not None:
         return None, why
     big_k, why = Cr.committed_k(ledger, nm)
-    if why is None:
-        _, why = Cr.committed_weights(ledger, nm)
     if why is not None:
         return None, why
     period_pin, floor = Cr.committed_pin(ledger, nm), Cr.committed_floor(ledger, nm)
-    files = None
-    if run is not None:
-        files, why = (Cr._lean_committed_files if V.RECORD_VERDICT == "lean" else Cr.committed_files)(ledger, nm)
-        if why is not None:
-            return None, why
     k = Ch.ChallengerKey.from_json(key)
     out, eps_ = [], []
     for i, w in enumerate(fills):
         if not (type(w["descriptor"]) is str and Cr._HEX.fullmatch(w["descriptor"])):
-            return None, ("circuit", f"filler window {i} of period {nm}: {Cr.DESCRIPTOR_HEX}")
+            return None, ("circuit", f"filler window {i} of period {nm}: {DESCRIPTOR_HEX}")
+        raw = bytes.fromhex(w["descriptor"])
         try:
-            audited = Ch.credited_session(ledger, w["window"], k, pins, main, bytes.fromhex(w["descriptor"]), verify)
+            audited = Ch.credited_session(ledger, w["window"], k, pins, main, raw, verify)
         except Ch.CoinError as e:
             return None, ("circuit", f"filler window {i} of period {nm} doesn't count toward it, so the fill earns "
                                      f"nothing: {e}")
         why = Cr._pin_hygiene(nm, i, main, audited.pinned, period_pin, floor)
         if why is not None:
             return None, why
-        proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
-                  else Cr._runner(w["statements"], files, w["entries"], w["window"], w["salt"], run))
-        layout, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["opening"], w["draw"],
-                              w["descriptor"], w["entries"], proved, big_k, verify)
+        got, why = _window(key, ledger, pins, main, w, audited.session, hashlib.sha512(raw).digest(), big_k,
+                            verify)
         if why is not None:
             return None, ("fill", f"filler window {i} of period {nm} is refused, so the fill earns nothing: {why[0]}: "
                                   f"{why[1]}")
-        out.append(work(layout))
-        e = eps(layout, big_k)
+        out.append(work(*got))
+        e = eps(*got, big_k)
         eps_.append(None if e is None else str(e))
     return {"work": out, "k": big_k, "delta": str(Cr.DELTA), "eps": eps_}, None
 
 
-__all__ = ["CHANGED", "DRAW_ROOT", "DRAW_TAG", "ENTRIES_FORM", "ENTRIES_TAG", "FILL_EPOCH", "FILL_FAMILIES", "FILL_KEYS",
-           "FILL_REQUESTS", "FILL_SALT", "FILL_STATEMENT_KEYS", "FILLS_FORM", "PAD_SALT_TAG", "PAD_SCALE", "PAD_TAG",
-           "RECEIPTS", "SALT_NOT_RECEIVED", "SUFFIX", "draw_root", "entries_root", "eps", "fill_epoch_reason",
-           "fill_period", "open_root", "pad_codes", "pad_entry", "pad_leaves", "pad_rows", "pad_salt", "period_name",
-           "work"]
+__all__ = ["CALL", "CALLS_FORM", "CALLS_NOT_RECEIVED", "CHANGED", "DESCRIPTOR_FORM", "DESCRIPTOR_HEX", "DESCRIPTOR_KEYS",
+           "DRAW_ROOT", "DRAW_TAG", "FILL_EPOCH", "FILL_KEYS", "FILL_SALT", "FILLS_FORM", "OPEN", "OPEN_TAG", "RECEIPTS",
+           "ROOTS_FORM", "ROOTS_TAG", "SALT_NOT_RECEIVED", "SHAPE", "STATEMENT_TAG", "SUFFIX", "TEMPLATE", "UNIT",
+           "block_of", "blocks", "descriptor", "descriptor_of", "draw_root", "eps", "families", "open_root",
+           "period_fill", "period_name", "receipts", "registered", "statement", "stratum", "work"]
