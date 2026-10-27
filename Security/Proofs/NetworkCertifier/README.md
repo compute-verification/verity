@@ -64,7 +64,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
                                as a window's (SameRegistration) and a window's good event (WindowGood)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
-                               monitoring period of sampled audits (PeriodLeakAccepted)
+                               monitoring period of sampled audits (PeriodLeakAccepted), and its audits' failures
+                               over the period's live coins, some window failing (WindowLeakFails, PeriodLeakUnion)
 ../../Definitions/NetworkCertifier/Guarantees/Horizon.lean  trusted: the wrong units over a horizon of sampled audits on
                                independent live coins (HorizonWrongUnitsLe)
 ../../Definitions/NetworkCertifier/HorizonLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
@@ -117,7 +118,9 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          registered observations are among AccSeqsSampled at its registration
                                          (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
                                          cells decode to, read back from those observations and counted over the
-                                         windows (encard_periodGood_le, periodLeak)
+                                         windows (encard_periodGood_le, periodLeak); each window's bound at the
+                                         statement and prover the other windows' coins fix, summed over the
+                                         period's live coins (periodLeakUnion_of, periodLeakUnion)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Horizon.lean    the wrong units over a horizon: a uniform draw misses `f` units with probability at most
@@ -318,8 +321,13 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
-  `Claims.Sampling.KS`, `Commitment.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
-  period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
+  `Claims.Sampling.KS`, `Commitment.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. `PeriodLeakUnion` is its
+  first part over the monitoring period's live coins, one coin per window: for every statement and prover of each
+  window that the other windows' coins fix, its coin giving its run's coins uniformly, some window's audit fails the
+  leak relation at the network certifier's rows (`WindowLeakFails`) with probability at most
+  `Σ_i (δ + ε_ks,i + ε_bind,i + ε_tap,i)` (`periodLeakUnion`, `Pouw.union_bound_update`). The period claim reads its
+  per-window bound off this union rather than taking it at a prover of its choosing. The registration's binding of the
+  prover's values at `reg` is not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
 - **The wrong units over a horizon** (`Horizon.lean`): `HorizonWrongUnitsLe` is the bound over many periods, cumulative

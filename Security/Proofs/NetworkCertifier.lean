@@ -176,6 +176,7 @@ theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTi
 theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
   @NetTiming.encard_wardenDecodable_le
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
+theorem PeriodLeakUnion : NetTiming.Guarantees.PeriodLeakUnion := NetTiming.periodLeakUnion
 theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
 theorem HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted := NetTiming.horizonLeak
 

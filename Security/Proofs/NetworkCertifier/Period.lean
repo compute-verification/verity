@@ -3,6 +3,7 @@ import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.TapRows
+import Proofs.Core.UnionBound
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -16,6 +17,10 @@ they decode to, number at most `#Ss` times the size of the product of those sets
 holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
 `∏_c (cap_c + 1)`, the fail choices in `EncardWardenViewsLe`, is room here. `periodLeak` adds the per-window bound at
 the network certifier's rows (`sampledLeak_tap`).
+
+`periodLeakUnion` takes that bound over the period's live coins (`periodLeakUnion_of`): the other windows' coins fix a
+window's statement and prover, and its own coin gives its run's coins uniformly, so its failure over its own coin is the
+sampled verifier's `PrBad` there; the union bound over the windows' coins (`Pouw.union_bound_update`) sums them.
 -/
 
 namespace NetTiming
@@ -119,6 +124,66 @@ theorem periodLeak : Guarantees.PeriodLeakAccepted := by
     (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P,
     encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
       schedOf srvOf hs dec hdz x wit tops⟩
+
+/-- **The union over a monitoring period's windows**, from a bound on one window at every statement in scope and every
+prover (`hwin`, `PeriodLeakAccepted`'s first part): window `i`'s failure over its own coin, at every value of the other
+coins, is the sampled verifier's `PrBad` at the statement and prover those coins fix (`hg`), at most
+`δ + ε_ks,i + ε_bind,i + ε_tap,i`; the union bound over the windows' coins sums them. -/
+theorem periodLeakUnion_of (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S)
+    (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : Stmt → Finset ℕ) (Dj : ℕ)
+    (tops : Stmt → List (Opening Bool))
+    (hwin : ∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+      PrBad H D.V
+          (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+          (E D decode) m P ≤
+        κ D δ m + Real.sqrt (γ D m * PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
+          (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H)
+    {n : ℕ} (Γ : Fin n → Type) [∀ i, Fintype (Γ i)] [∀ i, Inhabited (Γ i)]
+    (x : Fin n → ((j : Fin n) → Γ j) → Msg) (hx : ∀ i ζ, ScopeAcc D lay k (x i ζ))
+    (Ω : Fin n → ((j : Fin n) → Γ j) → Type) [∀ i ζ, Fintype (Ω i ζ)] [∀ i ζ, Nonempty (Ω i ζ)]
+    (P : (i : Fin n) → (ζ : (j : Fin n) → Γ j) → Prover (Ω i ζ))
+    (g : (i : Fin n) → (ζ : (j : Fin n) → Γ j) → Γ i →
+      Ω i ζ × (Fin (D.V.k (x i ζ)) → Coin) × (E D decode).C (x i ζ))
+    (hg : ∀ i ζ (q : Ω i ζ × (Fin (D.V.k (x i ζ)) → Coin) × (E D decode).C (x i ζ) → Prop),
+      Pr (fun y => q (g i ζ y)) = Pr q)
+    (εks εbind εtap : Fin n → ℝ)
+    (herr : ∀ i ζ, κ D δ (x i ζ) - δ + Real.sqrt (γ D (x i ζ) * PrB H D.V (P i ζ) (x i ζ)) ≤ εks i)
+    (hbind : ∀ i ζ, (Bext H D.V (E D decode) (Ω i ζ) (P i ζ) (x i ζ)).Pr H ≤ εbind i)
+    (htap : ∀ i ζ, (Btap H D.V (E D decode) D.commit D.parse tops (Ω i ζ) (P i ζ) (x i ζ)).Pr H ≤ εtap i) :
+    Pr (fun ξ : (j : Fin n) → Γ j =>
+        ∃ i, Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops x Ω P g i (Function.update ξ i default)
+          (ξ i)) ≤
+      ∑ i, (δ + εks i + εbind i + εtap i) := by
+  have hone : ∀ i ζ, Pouw.pr (fun y => Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops x Ω P g i ζ y) ≤
+      δ + εks i + εbind i + εtap i := fun i ζ => by
+    have hpr := hg i ζ fun s =>
+      (run H (P i ζ) D.V (x i ζ) s.1 s.2.1).out = .acc ∧
+        ¬ (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj
+          tops).ext (x i ζ) ((E D decode).eval H (P i ζ) (x i ζ) s.1 s.2.1 s.2.2).1
+    have h := hwin _ (hx i ζ) _ (P i ζ)
+    have he := herr i ζ
+    have hb := hbind i ζ
+    have ht := htap i ζ
+    calc Pouw.pr (fun y => Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops x Ω P g i ζ y)
+        = PrBad H D.V
+            (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj
+              tops) (E D decode) (x i ζ) (P i ζ) := hpr
+      _ ≤ _ := h
+      _ ≤ δ + εks i + εbind i + εtap i := by linarith
+  refine Pouw.union_bound_update id (fun i ξ => Guarantees.WindowLeakFails H D L K S lay k δ decode reg Dj tops x Ω P g
+    i (Function.update ξ i default) (ξ i)) _ fun i ξ => ?_
+  simp only [id, Function.update_idem, Function.update_self]
+  exact hone i _
+
+/-- **The leak through the network certifier over a monitoring period's live coins**: `Guarantees.PeriodLeakUnion`,
+`periodLeakUnion_of` at the per-window bound `periodLeak` has (`sampledLeak_tap`). -/
+theorem periodLeakUnion : Guarantees.PeriodLeakUnion := by
+  intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj tops hb n Γ _ _ x hx Ω _ _ P g hg εks εbind
+    εtap herr hbind htap
+  exact periodLeakUnion_of H D L K S lay k δ decode reg Dj tops
+    (fun m hm Ω _ _ P => TapProof.sampledLeak_tap H D hks hb L K S lay k δ decode hδ hdec _ Dj
+      (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P)
+    Γ x hx Ω P g hg εks εbind εtap herr hbind htap
 
 end Deploy
 
