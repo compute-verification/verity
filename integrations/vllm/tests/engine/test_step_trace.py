@@ -76,7 +76,7 @@ def test_a_trace_without_its_header_is_refused(tmp_path):
 
 
 def test_max_model_len_is_the_schedulers_where_its_scheduler_config_no_longer_holds_it():
-    """vLLM 0.11 moved ``max_model_len`` off the scheduler config; the served rows' statics read it (r20261024-153219-5c1b)."""
+    """vLLM 0.11 moved ``max_model_len`` off the scheduler config; the served workloads' statics read it."""
     sched = SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=4),
                             cache_config=SimpleNamespace(block_size=16, num_gpu_blocks=100), max_model_len=512)
     assert ST.scheduler_config(sched)["max_model_len"] == 512

@@ -30,7 +30,7 @@ def test_the_planner_reads_the_profile_tables():
 def test_unknown_model_notes_name_the_dense_default(tmp_path: Path):
     (tmp_path / "commit.log").write_text(f"x --workload workloads/{UNKNOWN}.json\n")
     assert A.row_config_from_attempt(str(tmp_path)).notes == [
-        "modelled without gc.freeze before the fork (pre-R19 record; --no-fork-gc-freeze equivalent)",
+        "modelled without gc.freeze before the fork (no frozen-fork line in commit.log; --no-fork-gc-freeze equivalent)",
         "model 'granite-3b' not in MODELS: dense defaults (phi3 coefficients) used",
         "host limit inferred from the sampler's cgroup peak 0 MiB -> 119209 MiB class"]
     assert A.row_config_from_workload(_workload(UNKNOWN)).notes == [
@@ -39,4 +39,4 @@ def test_unknown_model_notes_name_the_dense_default(tmp_path: Path):
 
 def test_plans_are_pinned():
     plans = {"unknown": A.predict(A.row_config_from_workload(_workload(UNKNOWN))), "known": A.predict(A.row_config_from_workload(_workload(KNOWN)))}
-    assert _digest(plans) == "8c07793f04cfc08d"
+    assert _digest(plans) == "89d100b75a825912"

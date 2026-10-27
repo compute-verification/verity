@@ -8,7 +8,7 @@
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 #   research run --on vy-dc-h200 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/served.sh \
+#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"

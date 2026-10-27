@@ -16,8 +16,8 @@ from typing import Any
 from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine, workload_file
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
-from verity_vllm.engine import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.engine.arrivals import run_requests_arrivals  # step-indexed arrivals (torch-free module, unit-tested)
+from verity_vllm.engine import chunks as _chunks  # prefill-chunk / token-step attribution (torch-free, unit-tested)
 from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
                                       effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
                                       parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
@@ -36,7 +36,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     The accepted tokens come from the file's `accepted_token_ids` per request (M6) or `ACCEPTED_TOKENS` of the case."""
     doc = json.loads(workload_file(path).read_text())
     eng = RowEngine.of(doc)
-    # [GEN sampling] an optional top-level `sampling` block selects the variant and the request seeds / fan-out:
+    # an optional top-level `sampling` block selects the variant and the request seeds / fan-out:
     # {"variant": "greedy", "seed": null, "n": 1} (defaults = the greedy runs); a request may override `seed` / `n`.
     samp = dict(doc.get("sampling") or {})
     variant = str(samp.get("variant", "greedy"))
@@ -56,7 +56,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
         req = {"request_id": r["request_id"], "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]],
                "max_tokens": int(max_tokens if max_tokens is not None else r["max_tokens"]),
                "seed": None if rs is None else int(rs), "n": int(r.get("n", n)),
-               # [coverage D87] serving profile B8-mixed: the engine step at which the request is admitted (0 = with the first
+               # serving profile B8-mixed: the engine step at which the request is admitted (0 = with the first
                # step, the historical behaviour).  Step-indexed, not wall-clock, so the observer and control runs see the same
                # batch membership at every step.
                "arrive_step": int(r.get("arrive_step") or 0),
@@ -64,7 +64,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
                # shape is (LP, T, C), and the Commit's replay reads those rows from what the producers committed
                "cached": plan[i]["cached"], "cached_from": [str(doc["requests"][q]["request_id"]) for q in plan[i]["producers"]]}
         if r.get("variant") is not None:
-            # [ov-sampling] a request may pin ANOTHER variant (mixed batch: one greedy row next to a sampled row); the
+            # a request may pin ANOTHER variant (mixed batch: one greedy row next to a sampled row); the
             # request record then carries its own temperature / top_p / top_k and the manifest lists them per request
             rp = (doc.get("variants") or {}).get(str(r["variant"]))
             if rp is None:
@@ -88,21 +88,21 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
         sampling["ignore_eos"] = True           # the static schedule (engine.static_schedule): every request runs its cap
     return {"requests": reqs, "sampling": sampling, "source": str(path), "model": doc.get("model"), "revision": eng.revision, "case": doc.get("case"),
             "accepted": accepted,
-            # [coverage D87] declared scheduler knobs the workload cannot run without (`engine.args`, e.g. max_num_batched_tokens for an
+            # declared scheduler knobs the workload cannot run without (`engine.args`, e.g. max_num_batched_tokens for an
             # unchunked 8-request prefill); run_config passes them as --engine-arg, an explicit CLI value wins
             "engine_args_required": dict(eng.args),
             "serving_profile": doc.get("serving_profile"), "context_class": doc.get("context_class"),
             "expected_engine_steps": doc.get("expected_engine_steps"),
-            # [R15 EXEC-02] the sweep row this workload belongs to and the execution it declares (row-id suffix / explicit field): the
-            # GPU stages hand `execution` to build_engine so enforce_eager is the row's, never the harness's literal (COORD M-0063 (2))
+            # the workload's row id and the execution it declares (row-id suffix / explicit field): the
+            # GPU stages hand `execution` to build_engine so enforce_eager is the workload's, never the harness's literal
             "row_id": (doc.get("sweep") or {}).get("row_id") if isinstance(doc.get("sweep"), dict) else doc.get("row_id"),
             "execution": execution_of_workload(doc),
-            # [R15 fp8] the row's declared TargetProfile overrides (`engine.target`, written by pipeline/workload.py --target): the channel
+            # the workload's declared TargetProfile overrides (`engine.target`, written by pipeline/workload.py --target): the channel
             # `target_of_workload` documents -- rc3 dropped it here, so every GPU stage built its engine with target=None (engine ARGS
             # still travelled through `engine.args`; environment knobs such as VLLM_USE_DEEP_GEMM have no other channel, and the header
-            # carried no `profile.target`).  None when the row declares none.
+            # carried no `profile.target`).  None when the workload declares none.
             "target": dict(eng.target) if eng.target else None,
-            # the row's whole engine block: what a served Commit holds its engine's switches to (`engine.served.declared`)
+            # the workload's whole engine block: what a served Commit holds its engine's switches to (`engine.served.declared`)
             "engine": eng.to_json(),
             # each enabled protocol's settings (`protocol_options.load_settings`), never hashed: the capture and the Commit install from it
             "protocols_config": dict(doc["protocols_config"]) if isinstance(doc.get("protocols_config"), dict) else None,
@@ -118,8 +118,8 @@ ACCEPTED_TOKENS: dict[str, list[int]] = {
 
 def execution_of_workload(workload: dict | None) -> str | None:
     """The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
-    schema carries one, else the last `__` token of `sweep.row_id` (`…__greedy__bi-eager` -> 'bi-eager'); None for a workload that is not
-    a sweep row (no row id: the caller's default applies and the header records `declared_execution: null`)."""
+    schema carries one, else the last `__` token of `sweep.row_id` (`…__greedy__bi-eager` -> 'bi-eager'); None for a workload outside
+    a sweep (no row id: the caller's default applies and the header records `declared_execution: null`)."""
     if not isinstance(workload, dict):
         return None
     sw = workload.get("sweep") if isinstance(workload.get("sweep"), dict) else {}
@@ -135,8 +135,8 @@ def execution_of_workload(workload: dict | None) -> str | None:
 def sampling_params(req: dict, sampling: dict) -> Any:
     from vllm import SamplingParams
 
-    seed = req.get("seed") if req.get("seed") is not None else sampling.get("seed")     # [GEN sampling] per-request seed / n
-    # [ov-sampling] a request with its own variant (mixed batch) carries temperature / top_p / top_k; else the workload's
+    seed = req.get("seed") if req.get("seed") is not None else sampling.get("seed")     # per-request seed / n
+    # a request with its own variant (mixed batch) carries temperature / top_p / top_k; else the workload's
     return SamplingParams(temperature=float(req.get("temperature", sampling.get("temperature", 0.0))),
                           top_p=float(req.get("top_p", sampling.get("top_p", 1.0))),
                           top_k=int(req.get("top_k", sampling.get("top_k", 0))), max_tokens=int(req["max_tokens"]),
@@ -164,10 +164,10 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
             self.n = int(d.get("n") or 1)
             self.arrive_step = int(d.get("arrive_step") or 0)
             self._order = order
-            # [ov-sampling] per-request variant (mixed batch): the request's own temperature / top_p / top_k, if pinned
+            # per-request variant (mixed batch): the request's own temperature / top_p / top_k, if pinned
             self.params = {k: d[k] for k in ("temperature", "top_p", "top_k") if k in d}
 
-    # [GEN sampling] n > 1: vLLM forks child requests f"{index}_{request_id}" (v1/engine/parallel_sampling.py) — the ids the model
+    # n > 1: vLLM forks child requests f"{index}_{request_id}" (v1/engine/parallel_sampling.py) — the ids the model
     # runner and the log see.  With the default CUMULATIVE output kind each step's RequestOutput carries only the children that produced
     # a token that step (the final one need not hold every child), so collect every CompletionOutput by (parent, index) across steps.
     static = static_schedule.declared_static(sampling)
@@ -180,7 +180,7 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
     finish: dict[str, dict] = {}
     cached: dict[str, int | None] = {}
     step_no = [0]
-    # [chunked 2026-09-17, additive] prefill-chunk attribution: the in-process scheduler's per-request `num_computed_tokens` is read
+    # prefill-chunk attribution: the in-process scheduler's per-request `num_computed_tokens` is read
     # after every step() (pure reads; nothing patched, nothing on the device), the returned tokens are counted per iteration; after
     # the run `chunks.attribute` adds prefill_steps / prefill_chunks / partial_prefill_steps / first_token_step /
     # token_steps to every `timing["requests"][rid]` and `timing["chunk_attribution"]` run-wide.  Every existing key is unchanged.
@@ -199,13 +199,13 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
         chunks.on_step(outs)
     rs = [_R(r, i) for i, r in enumerate(requests)]
     params_for = lambda r: sampling_params({"max_tokens": r.max_tokens, "seed": r.seed, "n": r.n, **r.params}, sampling)  # noqa: E731
-    # [D87] one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` adds every request before the first step, and
+    # one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` adds every request before the first step, and
     # its `engine_steps` counts forwards (the observer's / gates' unit) rather than step() iterations (vLLM V1 returns the previous
     # forward's sample, so iterations = forwards + 1); the raw iteration count is its `step_iterations`
     outs, timing = run_requests_arrivals(engine.llm, rs, params_for, on_step=_collect)
     timing["arrivals"] = any(r.arrive_step > 0 for r in rs)
     try:
-        # [rev F-r17-16 / R17-1] the attribution receives the RESOLVED async_scheduling as the lag of record (the same fact tokens.json's
+        # the attribution receives the RESOLVED async_scheduling as the lag of record (the same fact tokens.json's
         # `lag.value` and the RunHeader attest): a schedule-delta inference that contradicts it never rewrites the loop's step fields
         _asched = resolved_async_scheduling(engine.llm)
         _chunks.attribute(timing, chunks, {r.request_id: len(r.prompt_token_ids) for r in rs},

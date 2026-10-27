@@ -15,7 +15,7 @@ The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` diff
     tensor (`g<HB>x<M>x<NB>[x<BN>x<D>]`) or, on the compacted path (b >= 2 sequences, un-swapped), six per-sequence rectangles
     (`s<i>/g<h>x<sl>x<NB>[..]/{S,P,RP,ROW,O,FIN}`) -- so a step's plane class per layer is (kernel rule) x (staging rule) x (active set).
  5. Occurrence resolution: layer k = the step's k-th launch (`launches_in_step`); sequence i = the global index in `cu_seqlens_q`
-    order = the step's row order (`step_rows`, BIND-01): (request, seqlen_q) per active sequence.
+    order = the step's row order (`step_rows`): (request, seqlen_q) per active sequence.
  6. Binding: the name splits into (op_path `fa2.m1/L<k>`, member) -> the manifest identity of that layer at that engine step
     (`verity_vllm.query.manifest.bind`; at B>1 coverage holds the op's tensors at the step to the launch's whole stream, each tensor
     the words its name's geometry declares, `format.batch_launch_shortfall`); leaves are position-identified in the packed step stream.
@@ -104,7 +104,7 @@ def declarations_from_attention_impls(impls: Mapping[str, Mapping[str, Any]]) ->
 
 def attention_impls_of_record(program_dir: str | None = None, programs_root: str | None = None) -> tuple[dict | None, str | None]:
     """The Build record's `attention_impls_observed` for a Commit: `<program_dir>/result.json` (B=1) or the first `build_request*/result.json`
-    under `programs_root` that carries it (B>=2: every component Program of a row is the same model; the record is per layer, not per shape).
+    under `programs_root` that carries it (B>=2: every component Program of a workload is the same model; the record is per layer, not per shape).
     -> (impls, path) or (None, None).  json only (no torch)."""
     cands: list[str] = []
     if program_dir:
@@ -148,7 +148,7 @@ class StepSequences:
 
     @classmethod
     def from_rows(cls, rows: Iterable[tuple[Any, int, int]]) -> "StepSequences":
-        """From the collector's `step_rows[step]` = [(request_id, row_lo, row_hi), ..] (BIND-01, launch order)."""
+        """From the collector's `step_rows[step]` = [(request_id, row_lo, row_hi), ..] (launch order)."""
         return cls(tuple(int(hi) - int(lo) for _rid, lo, hi in rows), exact=True)
 
     @classmethod

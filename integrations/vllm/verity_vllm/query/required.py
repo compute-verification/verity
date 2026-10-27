@@ -4,7 +4,7 @@ What this module DECIDES (structure + correspondence, no by-name table):
 
 * WHICH Values are required: `verity_vllm.query.units.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
-  module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
+  module reads is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
 * WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path; a
   collective SITE's at its enclosing module, invocation k (`collective_sites`); at `<module>/<fx node>` when another fx node of the
@@ -29,7 +29,7 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
   runtime tensor (its fx node does not return it; `Correspondence.tensorless`) whose Values no Call reads and the Program does not
   return: the DSA indexer's MQA logits and top-k while every key is selected.  Switch (b)+(c) off (`return_slots=False`) to see the
   pure-dataflow population;
-* TP-04, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial, with every other port
+* the rank policy, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial, with every other port
   of the partial's producer (`Population`); the row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest,
   `tp_peer_binding` binds every output to each peer's partial).
 
@@ -234,7 +234,7 @@ class Population:
     the Commit's replay (`sampled_replay.ProgramIndex`) addresses a Call's committed output by the same members, so the rows a manifest
     counts and the rows the replay reads are one computation.
 
-    A RANK Program (`tp` = {"world": W >= 2, "rank": r}, result.json's) adds the TP-04 policy: every collective's output is
+    A RANK Program (`tp` = {"world": W >= 2, "rank": r}, result.json's) adds the rank policy: every collective's output is
     protocol-required, and so is its rank-local PARTIAL -- the one Value of this rank the collective reads (its other operands are
     `peers_<k>` Program inputs read by collectives only: the peer ranks' partials, received).  A partial produced in the collective's own
     module body is that producer's required Value, spelt `part_rank<r>` / `shard_rank<r>`, and so is every other port of the producer
@@ -320,13 +320,13 @@ class Population:
         for c in P.calls:
             if c.id in literals:            # never protocol-required, whatever node / hint it is named under (a pad guard's `<node>/eos` beside its I32Eq rows)
                 continue
-            if c.family in SAMPLING_EVENTS or c.id in self.collectives:         # TP-04: a collective's output is required on every rank
+            if c.family in SAMPLING_EVENTS or c.id in self.collectives:         # a collective's output is required on every rank
                 protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
             elif return_slots and c.id not in self.unreturned:
                 n = corr.name(c.id)
                 if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
                     protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-        # TP-04: the rank-local partials, each with every other port of its producer (a row-parallel linear that reduces in its own body
+        # the rank-local partials, each with every other port of its producer (a row-parallel linear that reduces in its own body
         # returns its quantised input and scales beside the partial: `DeepGemmFp8Linear_v1`)
         protocol.update(ValueRef(v.call, p.name) for v in self.partial_of for p in P.call(v.call).port_table)
         self.unreturned = frozenset(cid for cid in dead if not any(ValueRef(cid, p.name) in protocol for p in P.call(cid).port_table))
@@ -347,7 +347,7 @@ class Population:
         self._ports_of: dict[int, list[str]] | None = None
 
     def _rank_partials(self) -> None:
-        """TP-04 on a rank Program: the collectives, their rank-local operands (the partial is the operand's producer's Value when that
+        """The rank policy on a rank Program: the collectives, their rank-local operands (the partial is the operand's producer's Value when that
         producer is in the collective's body) and the received peer partials (non-record Program inputs every reader of which is a collective)."""
         P, corr = self.P, self.corr
         kinds: dict[str, str | None] = {}
@@ -515,7 +515,7 @@ class Population:
 
 def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None,
                query: str = QUERY_OF_RECORD) -> Population:
-    """`Population(P, corr)`: the required values of one request Program under `query` + the policy (+ TP-04 on a rank Program)."""
+    """`Population(P, corr)`: the required values of one request Program under `query` + the policy (+ the rank policy on a rank Program)."""
     return Population(P, corr, return_slots=return_slots, tp=tp, query=query)
 
 
