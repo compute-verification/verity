@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `verity bench all-protocols`: every window, one run of the toy (integrations/torch_loop, a W8A8 MLP on CPU) audited by
+# `verity example toy-onsite`: every window, one run of the toy (integrations/torch_loop, a W8A8 MLP on CPU) audited by
 # every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
 # $OUT/reports.jsonl, and the monitoring-period report over the windows so far in $OUT/monitoring-period.json
 # (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as benchmarks/prove_path/run.sh does: M0's

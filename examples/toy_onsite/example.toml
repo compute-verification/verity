@@ -1,0 +1,10 @@
+# The toy onsite example's rung on the ladder (examples/README.md): moved, its evidence not yet cited. Level 1 cites S1's run
+# of record (README); level 2 needs the verifier and the certifier on an auditor host, off the machine the loop runs on.
+protocol = "onsite"
+workload = "torch_loop"
+level = 0
+
+[placement]
+prover = "local"     # the loop and each leg's prover, on one CPU machine (vy-nebius-cpu-4 for the run of record)
+verifier = "local"   # each leg's verifier, C-Flock --zk behind the Lean firewall, on the same machine
+certifier = "local"  # the network certifier's session, beside the server

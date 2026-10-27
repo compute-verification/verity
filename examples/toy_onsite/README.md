@@ -1,9 +1,21 @@
-# all_protocols
+# The toy onsite example
 
-`verity bench all-protocols` (`run.sh`): every window, one run of the torch loop (`integrations/torch_loop`, a two-layer
-W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own and composed through onsite Verity
-(`verity/core/protocols/onsite`). The result is per monitoring period, over all compute: a week, a month and a year of
-every machine of a census deployment, the pooled total first and the per-window figure beside it.
+The composite `onsite` (`verity/core/protocols/onsite`) on the torch loop's toy: every window, one run of the loop audited
+by every protocol's own code, each decided on its own and composed through onsite Verity. The result is per monitoring
+period, over all compute: a week, a month and a year of every machine of a census deployment, the pooled total first and
+the per-window figure beside it. `verity example toy-onsite [ARGS]` runs it (`run.sh`, its arguments the runner's), and
+S1's run of record (below) is the one run that counts. It is compute-accounting's, and each leg is its protocol's lane's
+(the table below).
+
+## Workload and placement
+
+The workload is `integrations/torch_loop`: a two-layer W8A8 MLP on CPU, its weights seeded, one run serving `--windows N`
+windows. Every party runs on one CPU machine (`vy-nebius-cpu-4` for the run of record): the loop, each leg's prover and
+verifier (C-Flock `--zk` behind the Lean firewall), and the network certifier's session, which runs beside the server and
+not on an auditor's machine (the certifier leg's `stubbed` says so). `example.toml` puts the example at level 0 (moved) on
+the ladder (`examples/README.md`).
+
+## What runs
 
 - `verity_all_protocols/monitoring.py`: the monitoring-period report (`$OUT/monitoring-period.json`). A monitoring period
   of a deployment (`benchmarks/census/deployments.json`: its machines and window length, stated parameters) is
