@@ -51,6 +51,9 @@
 #include "../commit_gpu/commit_gpu.cuh"
 #include "../gpu_kit/bench.cuh"
 #include "../harness/native/cutlass_api.h"
+#ifdef V31_WG
+#include "wg_proto.cuh"
+#endif
 
 #define CL(x)                                                                                  \
   do {                                                                                         \
@@ -1320,10 +1323,14 @@ static std::string env_str(const char* name, const char* dflt) {
 // columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
-// the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl).
+// the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
+// V31_GEMM 1, the protocol's and the plain GEMM on warpgroup MMAs (wg_proto.cuh, the bench's wgl arm wgmma.linear itself),
+// V31_WGBN its tiles' columns (256 where N allows, or 128), V31_CM where it keeps the tail's low halves (0 registers, 1 an
+// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
-      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0);
+      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
+      gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1362,6 +1369,10 @@ struct Ctx {
   u32* gctr = nullptr;
   u32 gbase = 0;
   u32 *pctl = nullptr, *pclaim = nullptr, epoch = 0;
+#ifdef V31_WG
+  wgp::Args wa_proto{}, wa_plain{}, wa_wgl{};
+  int wbn = 256, wgrid = 0;
+#endif
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
@@ -1427,6 +1438,7 @@ struct Ctx {
       maps_dw = dalloc<Maps>(1);
       CK(cudaMemcpy(maps_dw, &mw, sizeof mw, cudaMemcpyHostToDevice));
     }
+    if (kn.gemm) wg_setup();
     CK(cudaFuncSetAttribute(gemm_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     CK(cudaFuncSetAttribute(gemm_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     CK(cudaFuncSetAttribute(wrap_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, TILE * 129 * 4));
@@ -1490,8 +1502,62 @@ struct Ctx {
     else if (wcw == 256) wrap2_kernel<256><<<dim3(n / 256, m / TILE), 512, lp * 128, st>>>(w);
     else wrap2_kernel<128><<<dim3(n / 128, m / TILE), 256, lp * 128, st>>>(w);
   }
+  // V31_GEMM 1: wg_proto.cuh's GEMMs, 128 x wbn tiles, one CTA an SM (s_a and s_w of wgl, gamma's baseline, at 1/127)
+  void wg_setup() {
+#ifdef V31_WG
+    wbn = kn.wgbn == 256 && n % 256 == 0 ? 256 : 128;
+    wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
+    float* sa = dalloc<float>(m);
+    float* sw = dalloc<float>(n);
+    const std::vector<float> ha(m, 1.f / 127), hw(n, 1.f / 127);
+    CK(cudaMemcpy(sa, ha.data(), 4 * (size_t)m, cudaMemcpyHostToDevice));
+    CK(cudaMemcpy(sw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
+    uint32_t* cbuf = kn.cm ? dalloc<uint32_t>((size_t)wgrid * wgp::TM * wbn / 2) : nullptr;
+    auto mk = [&](const int8_t* a, const int8_t* b, int mode) {
+      wgp::Args g{};
+      g.a = tmap(a, k, m, wgp::TM); g.b = tmap(b, k, n, wbn); g.pa = tmap(PA, TL, m, wgp::TM); g.pb = tmap(PB, TL, n, wbn);
+      g.dO = dO; g.cbuf = cbuf; g.sa = sa; g.sw = sw;
+      g.M = m; g.N = n; g.K = k; g.L = L; g.S = S; g.lp = lp; g.dz = dz; g.dy = dy; g.TT = TT; g.group = kn.wgg; g.mode = mode;
+      return g;
+    };
+    wa_proto = mk(X, W, 1); wa_plain = mk(X, W, 0); wa_wgl = mk(A, B, 2);
+    const void* ks[] = {(const void*)wgp::gemm<256, 0>, (const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 0>,
+                        (const void*)wgp::gemm<128, 1>};
+    const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM};
+    for (int i = 0; i < 4; i++) {
+      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, sm[i]));
+      if (kn.carve >= 0) CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributePreferredSharedMemoryCarveout, kn.carve));
+    }
+#else
+    fprintf(stderr, "V31_GEMM 1 needs a -DV31_WG build (sm_90a)\n");
+    exit(2);
+#endif
+  }
+#ifdef V31_WG
+  void wg_launch(cudaStream_t st, const wgp::Args& g) {
+    if (wbn == 256 && kn.cm) wgp::gemm<256, 1><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
+    else if (wbn == 256) wgp::gemm<256, 0><<<wgrid, wgp::Tile<256>::NT, wgp::Tile<256>::SMEM, st>>>(g);
+    else if (kn.cm) wgp::gemm<128, 1><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
+    else wgp::gemm<128, 0><<<wgrid, wgp::Tile<128>::NT, wgp::Tile<128>::SMEM, st>>>(g);
+  }
+  // wgmma.linear on A and B (bf16 words into O[b]): the plain GEMM a served call runs, gamma's denominator
+  void wgl(cudaStream_t st, int b) {
+    wgp::Args g = wa_wgl;
+    g.O = O[b];
+    wg_launch(st, g);
+  }
+#endif
   // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
   void gemm(cudaStream_t st, int b, bool proto, int diag = 0) {
+#ifdef V31_WG
+    if (kn.gemm) {
+      wgp::Args g = proto ? wa_proto : wa_plain;
+      g.words = words[b]; g.O = O[b]; g.diag = diag;
+      if (diag & 2) g.TT = 0;
+      wg_launch(st, g);
+      return;
+    }
+#endif
     if (proto) gemm_kernel<true><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, true, diag));
     else gemm_kernel<false><<<grid, Ring::NCT, Ring::SMEM, st>>>(gargs(b, false));
     gbase += (u32)tiles;
@@ -1608,6 +1674,16 @@ static void kernel_attrs(FILE* f) {
     fprintf(f, "%s\"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", i ? ", " : "", ks[i].name, a.numRegs,
             a.localSizeBytes, a.sharedSizeBytes);
   }
+#ifdef V31_WG
+  const KAttr wk[] = {{"wg_256_c0", (const void*)wgp::gemm<256, 0>}, {"wg_256_c1", (const void*)wgp::gemm<256, 1>},
+                      {"wg_128_c0", (const void*)wgp::gemm<128, 0>}, {"wg_128_c1", (const void*)wgp::gemm<128, 1>}};
+  for (const KAttr& w : wk) {
+    cudaFuncAttributes a;
+    CK(cudaFuncGetAttributes(&a, w.fn));
+    fprintf(f, ", \"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", w.name, a.numRegs, a.localSizeBytes,
+            a.sharedSizeBytes);
+  }
+#endif
   fprintf(f, "}");
 }
 
@@ -1783,6 +1859,9 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     if (c.kn.diag)
       for (const auto& [nm, d] : {std::pair<const char*, int>{"gemm_nost", 1}, {"gemm_notail", 2}, {"gemm_nodo", 4}, {"gemm_bare", 7}})
         arms.push_back({nm, [&c, d = d](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.gemm(s, 0, true, d); }});
+#ifdef V31_WG
+    if (c.kn.gemm) arms.push_back({"wgl", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.wgl(s, 0); }});
+#endif
     const gk::Timing tm = gk::timed_items(arms, reps, c.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
@@ -1823,6 +1902,16 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     if (cut.best)   // arm 12: over CUTLASS's fastest, and the two baselines' ratio
       printf("\"gamma_call_cutlass\": %.4f, \"gamma_ovl_cutlass\": %.4f, \"gamma_gemm_cutlass\": %.4f, \"cutlass_over_lt\": %.4f, ",
              med[7] / med[12], med[8] / med[12], med[5] / med[12], med[12] / med[0]);
+    for (size_t a = 0; a < arms.size(); a++)   // V31_GEMM 1: over wgmma.linear, the served GEMM
+      if (arms[a].name == "wgl")
+        printf("\"gemm_kind\": \"wgmma\", \"wgbn\": %d, \"cm\": %d, \"wgg\": %d, \"gamma_call_wgl\": %.4f, \"gamma_ovl_wgl\": %.4f, "
+               "\"gamma_gemm_wgl\": %.4f, \"plain_over_wgl\": %.4f, \"wgl_over_lt\": %.4f, ",
+#ifdef V31_WG
+               c.wbn,
+#else
+               0,
+#endif
+               c.kn.cm, c.kn.wgg, med[7] / med[a], med[8] / med[a], med[5] / med[a], med[1] / med[a], med[a] / med[0]);
     printf("\"kernels\": ");
     kernel_attrs(stdout);
     printf("}\n");
