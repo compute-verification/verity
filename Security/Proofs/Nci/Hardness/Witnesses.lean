@@ -7,8 +7,8 @@ import Proofs.Nci.Ldl.Witnesses
 
 The one-product instance as a counted operation (`Nci.Ldl.Honest.O`): the product's gate `{1}` is the one block, so a
 set of at most one operation gate computes the product whole exactly when it is `{1}`, which reads one unregistered
-input bit. So the product is `Priced` at `β = 1` per activation occurrence and not at `β = 2` (`not_priced_two`), and
-each nontrivial lemma's changed instance fails that premise, or `ActivationRate`, and meets the others.
+input bit. So the product is `Priced` at `β = 1` per activation occurrence and not at `β = 2`. Each nontrivial lemma's
+proof shows that at `β = 2` every other premise holds, `Priced` (or `ActivationRate`) fails, and the bound breaks.
 -/
 
 namespace Nci.Ldl.Honest
@@ -36,11 +36,6 @@ theorem priced_one : Assumptions.Priced d O (fun _ => 1) 0 1 (fun _ => ∅) := b
   · rw [ops_block, width_block]
     simp
 
-theorem not_priced_two : ¬ Assumptions.Priced d O (fun _ => 2) 0 1 (fun _ => ∅) := fun h => by
-  have h1 := h {1} (by rw [show d.D.computed = {1} from computed_eq]) (by decide)
-  rw [ops_block, width_block] at h1
-  norm_num at h1
-
 theorem fanOut_O : O.FanOut 1 := fun v => by
   cases v
   decide
@@ -57,24 +52,35 @@ theorem FanOutBlockCap_honest : Guarantees.FanOutBlockCap_honest :=
   ⟨fanOut_O, priced_one⟩
 
 theorem FanOutBlockCap_nontrivial : Guarantees.FanOutBlockCap_nontrivial := by
-  unfold Guarantees.FanOutBlockCap_nontrivial
-  rw [whole_block]
-  norm_num
+  refine ⟨fanOut_O, two_pos, fun h => ?_, fun h => ?_⟩
+  · have h1 := h {1} (by rw [show d.D.computed = {1} from computed_eq]) (by decide)
+    rw [ops_block, width_block] at h1
+    norm_num at h1
+  · have h1 := h {1} (by rw [show d.D.computed = {1} from computed_eq]) (by decide) (by decide)
+    rw [whole_block] at h1
+    norm_num at h1
 
 theorem FanOutBoundPriced_honest : Guarantees.FanOutBoundPriced_honest :=
   ⟨ckPartition, wholeIn, fanOut_O, priced_one⟩
 
 theorem FanOutBoundPriced_nontrivial : Guarantees.FanOutBoundPriced_nontrivial := by
-  unfold Guarantees.FanOutBoundPriced_nontrivial
-  rw [show d.D.size d.D.computed = 1 from size_computed, show M.J.card = 1 from rfl]
-  norm_num
+  refine ⟨ckPartition, wholeIn, fanOut_O, two_pos, one_pos, fun h => ?_, ?_⟩
+  · have h1 := h {1} (by rw [show d.D.computed = {1} from computed_eq]) (by decide)
+    rw [ops_block, width_block] at h1
+    norm_num at h1
+  · rw [show d.D.size d.D.computed = 1 from size_computed, show M.J.card = 1 from rfl]
+    norm_num
 
 theorem PricedOfActivationRate_honest : Guarantees.PricedOfActivationRate_honest :=
   ⟨fun p _ => by cases p; decide, consistent _, evaluatesBlocks, activationRate _⟩
 
 theorem PricedOfActivationRate_nontrivial : Guarantees.PricedOfActivationRate_nontrivial := by
-  unfold Guarantees.PricedOfActivationRate_nontrivial
-  rw [novelReads_block, show R.P.gates 0 = {1} from gates_eq 0, ops_block, Nat.clog_one_right]
-  norm_num
+  refine ⟨fun p _ => by cases p; decide, by norm_num, consistent _, evaluatesBlocks, fun h => ?_, fun h => ?_⟩
+  · have h0 := h 0
+    rw [acts_card, LDL_D] at h0
+    norm_num at h0
+  · have h0 := h 0
+    rw [novelReads_block, show R.P.gates 0 = {1} from gates_eq 0, ops_block, Nat.clog_one_right] at h0
+    norm_num at h0
 
 end Nci.Hardness.SecurityProofs
