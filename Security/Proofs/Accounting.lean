@@ -93,5 +93,6 @@ import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
 import Proofs.Accounting.Additive
+import Proofs.Accounting.GatesAdditive
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/
