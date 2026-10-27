@@ -86,7 +86,7 @@ def build(tmp: Path) -> None:
     def space(name: str, store: bytes = POUS_STORE, **kw) -> pous.Period:
         mc.SessionLog.create(tmp / name)
         return pous.run("n0", store, COINS, signer=signer, log=mc.SessionLog(tmp / name), clock=M.Clock(10 ** 9),
-                        point=pous.point_for(len(store), k=POUS_K), **kw)
+                        point=pous.point_for(len(store), pous.W, pous.C0, k=POUS_K), **kw)
 
     def reads(**kw) -> bandwidth.Period:
         c = Clock()

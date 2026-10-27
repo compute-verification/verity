@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import json
-import os
 import stat
 import sys
 import tomllib
@@ -26,7 +25,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import parties as SP_PARTIES
 from verity.core.wire import Message
-from verity_all_protocols import compose as C, parties as P
+from verity_all_protocols import compose as C, parties as P, settings as S
 
 EXAMPLE = P.ROOT / "examples" / "toy_network" / "config.toml"
 SP, CERT = "verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"
@@ -130,7 +129,7 @@ def test_a_verifier_whose_peers_listen_nowhere_decides_nothing(tmp_path, capsys)
     assert "challenger, firewall runs elsewhere and no --at says where it listens" in capsys.readouterr().err
 
 
-TOOLS = os.environ.get("VERITY_ALL_PROTOCOLS_TOOLS")
+TOOLS = S.tools()
 
 
 def verdicts(state: Path) -> list[dict]:
