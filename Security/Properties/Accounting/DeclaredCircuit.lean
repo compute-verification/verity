@@ -32,7 +32,7 @@ blocks accepts some schedule for a session whose appends are `appended c y` and 
 `sent c y`. The layout is the verifier's of those appends and runs (`Properties.RemoteAudit.sessionLayout`: tile `i` at
 the position the verifier checks the plan's `i`-th block at), `dflt c` where they give no layout of `N` tiles in
 `Fin T × Fin M` (a plan of other than `N` blocks; `G`'s pass has `N` tiles). `cap` is the one cap the session committed
-before its first coin, over which the check refuses a schedule (#4021), so on the coins the check accepts the layout
+before its first coin, over which the check refuses a schedule, so on the coins the check accepts the layout
 reads `y` only through the accepted schedule's `cap + 1` padded bits (`Properties.RemoteAudit.steered_of_checked`).
 
 On a session the check refuses at some pass the ledger credits nothing after the seed, so no shortfall against its
