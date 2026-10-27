@@ -112,7 +112,7 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
     from vllm.model_executor.layers.fused_moe.experts.triton_moe import TritonExperts
     from vllm.model_executor.layers.fused_moe.router.fused_topk_router import FusedTopKRouter
 
-    from verity_vllm.engine.profiles.generic import router_vpt_bf16
+    from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 
     def flag(test: Callable[[], Any]) -> bool | None:
         try:
