@@ -159,40 +159,13 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
 
 namespace Fast
 
-/-- `Link.parRange` specialized at each call (`parRangeS_eq`): each task's loop runs `f` inline, so no entry calls a
-closure or touches the reference count of anything the tasks share. -/
-@[specialize] def parRangeS {α : Type} (f : Nat → α) (a b : Nat) : Array α :=
-  ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
-    (fun acc t => acc ++ t.get) #[]
-
-theorem parRangeS_eq {α : Type} (f : Nat → α) (a b : Nat) : parRangeS f a b = (Array.range (a * b)).map f :=
-  Link.parRange_eq f a b
-
-/-- `(Array.range n).map f` in tasks of `2^12` entries. -/
-@[specialize] def parGen (f : Nat → F128) (n : Nat) : Array F128 :=
-  let a := n / 4096
-  parRangeS f a 4096 ++ (Array.range (n - a * 4096)).map fun j => f (a * 4096 + j)
-
-theorem parGen_eq (f : Nat → F128) (n : Nat) : parGen f n = (Array.range n).map f := by
-  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 4096)]
-  rw [Array.range_add, Array.map_append, Array.map_map, parGen, parRangeS_eq]
-  rfl
-
-theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
-    (Array.range t.size).map (fun i => f t[i]!) = t.map f := by
-  apply Array.ext
-  · simp
-  · intro i h1 _
-    simp only [Array.getElem_map, Array.getElem_range]
-    rw [getElem!_eq t (by simpa using h1)]
-
 /-- `t.map f` in tasks of `2^12` entries. -/
-@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 := parGen (fun i => f t[i]!) t.size
+@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 := parTab 4096 (fun i => f t[i]!) t.size
 
 theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
-  rw [parMap, parGen_eq, range_map_getElem!]
+  rw [parMap, parTab_eq, range_map_get!]
 
-/-- `parGen f` with each task building its own `ctx ()` first, which `f` reads. What a task builds is its own, so
+/-- `parTab 4096 f` with each task building its own `ctx ()` first, which `f` reads. What a task builds is its own, so
 reading it touches no reference count other tasks touch: entries of one table shared by every task are counted
 atomically by all of them at once. -/
 @[specialize] def parGenWith {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) : Array F128 :=
@@ -202,7 +175,7 @@ atomically by all of them at once. -/
     (let c := ctx (); (Array.range (n - a * 4096)).map fun j => f c (a * 4096 + j))
 
 theorem parGenWith_eq {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) :
-    parGenWith ctx f n = parGen (f (ctx ())) n := rfl
+    parGenWith ctx f n = parTab 4096 (f (ctx ())) n := rfl
 
 /-- `mulMap` in tasks, each with its own table of `r`, expanded from one `nibTable r` they share. -/
 def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
@@ -223,7 +196,7 @@ theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r
 (`F128.mul_add_one`), as `eqStepFast` computes it. Not a `@[csimp]` of `eqTable`, which the verifier's compiled path
 reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
 def eqTablePar (r : Array F128) : Array F128 :=
-  r.foldl (fun t rj => let hi := mulMapPar t rj; parGen (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
+  r.foldl (fun t rj => let hi := mulMapPar t rj; parTab 4096 (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
 
 theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
   unfold eqTablePar eqTable
@@ -231,7 +204,7 @@ theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
   funext t rj
   rw [mulMapPar_eq]
   dsimp only
-  rw [parGen_eq, eqStep, ← range_map_getElem! (· * (rj + 1))]
+  rw [parTab_eq, eqStep, ← range_map_get! (· * (rj + 1))]
   congr 1
   apply Array.map_congr_left
   intro i hi
@@ -289,14 +262,13 @@ def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
   let tabs := (sws.map fun sw => Task.spawn fun _ =>
     (eqTable sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·)))).map Task.get
   let k := min l 12
-  parRangeS (fun y => tabs.foldl (fun acc (ez, tb) =>
+  parTab (2 ^ k) (fun y => tabs.foldl (fun acc (ez, tb) =>
       let v := ez[y]!
-      acc + sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
+      acc + sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ l)
 
 theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
   unfold basisVals basisValsFast
-  rw [tasks_get fun sw : Switched => (eqTable sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·))), parRangeS_eq,
-    ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
+  rw [tasks_get fun sw : Switched => (eqTable sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·))), parTab_eq]
   apply Array.map_congr_left
   intro y _
   simp only [Array.foldl_map]
@@ -452,7 +424,7 @@ theorem baseOfPar_eq (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Opti
     baseOfPar alpha eLo a b lk sl = Stmt.baseOf alpha eLo a b lk sl := by
   cases lk with
   | some t =>
-    simp only [baseOfPar, Stmt.baseOf, foldTPar_eq, parGenWith_eq, parGen_eq, F128.mulBy_mulTableL]
+    simp only [baseOfPar, Stmt.baseOf, foldTPar_eq, parGenWith_eq, parTab_eq, F128.mulBy_mulTableL]
   | none =>
     simp only [baseOfPar]
     refine bands_eq _ _ _ (fun lo hi => ?_) (by simp only [Stmt.baseOf, Array.size_map, Array.size_range]; omega)
@@ -471,7 +443,7 @@ def tensorPar (lw rho : Array F128) : Array F128 :=
 
 theorem tensorPar_eq (lw rho : Array F128) : tensorPar lw rho = Stmt.tensor lw rho := by
   have hl : lw.map (· + 0) = lw := by simp [F128.add_zero]
-  rw [tensorPar, parGenWith_eq, hl, parGen_eq, Stmt.tensor]
+  rw [tensorPar, parGenWith_eq, hl, parTab_eq, Stmt.tensor]
   apply Array.ext
   · simp
   · intro i h1 h2

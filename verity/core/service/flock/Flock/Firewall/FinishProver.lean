@@ -15,6 +15,7 @@ differ, each by a parameter or a line:
 The proof file's bytes are the analysis's `encZk` (`FlockSoundness.Discharge.ZkView.encZk`), `flock-circuit --zk`'s
 `bincode` of `(Commitment, R1csProofLigerito, InnerProof)`.
 -/
+import Flock.Firewall.Link
 import Flock.With.Verify
 import Flock.With.Zk
 import Flock.Zk
@@ -330,18 +331,8 @@ namespace Fast
     (fun acc t => acc ++ t.get) #[] ++ (Array.range (n - n / b * b)).map fun j => f (n / b * b + j)
 
 theorem parTab_eq {α : Type} (b : Nat) (f : Nat → α) (n : Nat) : parTab b f n = (Array.range n).map f := by
-  have hp : ∀ a, ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
-      (fun acc t => acc ++ t.get) #[] = (Array.range (a * b)).map f := by
-    intro a
-    induction a with
-    | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
-    | succ a ih =>
-      rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
-      simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
-        List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
-        Array.map_map, Function.comp_def]
   conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n b)]
-  rw [Array.range_add, Array.map_append, Array.map_map, parTab, hp]
+  rw [Array.range_add, Array.map_append, Array.map_map, parTab, ← Link.parRange_eq f (n / b) b]
   rfl
 
 theorem range_map_get! {α β : Type} [Inhabited α] (f : α → β) (t : Array α) :
