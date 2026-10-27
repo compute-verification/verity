@@ -168,9 +168,9 @@ def release_line(tree: str, export_path: str | None = None, pod_path: str = POD_
 
 
 def _env_identity() -> tuple[dict, dict, str]:
-    import torch  # noqa: PLC0415  (pod only)
+    import torch  # pod only
     try:
-        import vllm  # noqa: PLC0415
+        import vllm
         vllm_v = vllm.__version__
     except Exception as e:  # noqa: BLE001
         vllm_v = f"unavailable: {e}"

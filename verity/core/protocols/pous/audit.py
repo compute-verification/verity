@@ -13,8 +13,8 @@ answers each index with a `Prog` (Lean `SeqResponder.step`, state kept inside th
 answer's rounds, and any answer over the round budget or `work` queries is late.  The budget is the deadline over `call_ns`,
 the fastest whole oracle call, unless `deadline_rounds` gives it directly.  `on_answer` is the timing hook for both.  The
 conversion of wall-clock time into calls holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a
-prover answers without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026,
-art:7617c8017e80; `primitives.pi2_keccak_f`).
+prover answers without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f (the red team's state
+attack, `primitives.pi2_keccak_f`).
 """
 
 from __future__ import annotations
