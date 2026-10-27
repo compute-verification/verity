@@ -246,6 +246,58 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
     assert _parser().parse_args(["run", "x"]).direct is None
 
 
+@pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
+def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
+    """BENCH-26: the Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
+    settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
+    one GPU through its slot and gpu-lease, the wait for kernels' leases inside the spec's max_minutes."""
+
+    from research.pods.nebius.slot_only import through_slot
+
+    root = Path(__file__).resolve().parents[3]
+    name = f"llama31-8b-fp8-1gpu-commit-served-width-{gpu}"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
+        rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
+    assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
+        gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
+    attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
+    assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
+    from verity_bench.vllm.runner import engine_args
+    assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
+            if key.startswith("attention")} == attention
+    assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
+    assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
+
+    assert node in jobs.DIRECT_NODES
+    plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    commands = []
+    assert jobs.dispatch(plan, name, root=root, direct=node,
+                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == 3
+    for command in commands:
+        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == "120m"
+        assert through_slot(workload)
+        lease = workload[workload.index("--", 4) + 1:]
+        assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
+
+
+def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
+    """The DC VMs' pinned-vLLM Python is $WORK/cp/venv312: the launcher takes it when none before it exists."""
+
+    root = Path(__file__).resolve().parents[3]
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    python = tmp_path / "cp" / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$0"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == str(python)
+
+
 def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
@@ -330,8 +382,8 @@ def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
 
     path = tmp_path / "spec.toml"
     path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
-        "[preset.engine_settings]\n", '[preset.engine_settings]\nattention_backend = "FLASH_ATTN"\n'))
-    refusal = f"unknown engine_settings ['attention_backend']; known: {list(ENGINE_SETTINGS)}"
+        "[preset.engine_settings]\n", '[preset.engine_settings]\nmoe_backend = "triton"\n'))
+    refusal = f"unknown engine_settings ['moe_backend']; known: {list(ENGINE_SETTINGS)}"
     with pytest.raises(ValueError, match=re.escape(refusal)):
         load_spec(path)
 

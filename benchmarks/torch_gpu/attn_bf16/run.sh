@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# attn_bf16's session on one card, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
+# attn_bf16's run on one card, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
 #   research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar \
-#     -- bash benchmarks/torch_gpu/attn_bf16/session.sh
+#     -- bash benchmarks/torch_gpu/attn_bf16/run.sh
 #
 # Outside any lease: the ship unpacked into a scratch directory and held to its MANIFEST.sha256, and the card recorded.  Under
 # one lease of at most 30 minutes: run.py, the identity check, every case of check/ and the diagnostic timing.  Every step's
