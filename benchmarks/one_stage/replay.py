@@ -1004,11 +1004,13 @@ def a2(run: Run) -> Iterator[Case]:
 
 
 def traced_argv(run: Run, script: str) -> list[str]:
-    """The arguments `pod.sh` (under `set -x`) passed `script`, from the run's `stderr.log`."""
+    """The arguments `pod.sh` (under `set -x`) passed the driver `script`, from the run's `stderr.log`. It is found by its
+    file name: the command line names the driver where it was at the run's commit."""
     for line in reversed(run.path("stderr.log").read_text().splitlines()):
         words = line.split()
-        if words[:1] == ["+"] and script in words:
-            return words[words.index(script) + 1:]
+        at = [i for i, w in enumerate(words) if os.path.basename(w) == script]
+        if words[:1] == ["+"] and at:
+            return words[at[0] + 1:]
     raise Missing(f"stderr.log: {script}'s command line")
 
 
@@ -1044,7 +1046,7 @@ def a2_unaudited(run: Run) -> Iterator[Case]:
     receipt = run.json(f"{base}/receipt.json")
     if receipt.get("registration") != R.digest(rec):
         raise Gap(f"{base}/receipt.json does not name inputs/served.tar's registration.json")
-    argv = traced_argv(run, "benchmarks/one_stage/a2.py")
+    argv = traced_argv(run, "a2.py")
     k, delta = int(option(argv, "--k", 256)), float(option(argv, "--delta", 2.0 ** -20))
     n = int(rec["population"])
     v2 = a2_copies(run, base, rec, n)
