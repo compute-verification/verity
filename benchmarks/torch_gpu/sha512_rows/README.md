@@ -106,6 +106,10 @@ compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/
 - `gpu.sh`: one leased GPU session.
 - `ruler.sh`, `as_commit_gpu.cuh`: the variants on commit_gpu's ruler (`commit_gpu sha`, gated by `reference.py check`)
   against its default build, with each build's SASS pipe mix, SM clock and ncu's pipe utilization.
+- `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels (`-m 1700`, `-m 1710`, optimized and
+  pure, built from source in scratch) against the default compression in one lease at one locked SM clock, in
+  compressions a second, with both sides' SASS pipe mix; `hashcat_forms` times our compression in hashcat's shapes
+  (constant IV, zero words, only two digest words read) to attribute the difference (HASH-24).
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 ```bash
