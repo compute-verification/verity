@@ -197,7 +197,9 @@ def test_the_rms_forward_model_is_the_bits() -> None:
 
 @pytest.mark.slow
 def test_the_rms_backward_model_is_the_bits() -> None:
-    """H = 160 at 32 lanes, r the forward's saved rsqrt in most tokens and a raw or special word in some."""
+    """The backward model's one check against the Definition's bits: H = 160 at 32 lanes reaches both of the row sum's lane
+    paths (lanes 0-7 read two float4s, the others one), with r the forward's saved rsqrt in most tokens and a raw or special
+    word in some. Tracing the Definition takes over a minute."""
     rng = np.random.default_rng(13)
     x, w = _norm_rows(rng, 96, 160)
     dy = _words(rng, (96, 160), 1e-3, raw=0.002, special=0.002)
@@ -212,8 +214,8 @@ def test_the_rms_backward_model_is_the_bits() -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("M", [100, 1100])
 def test_the_weight_grad_model_is_the_bits(M: int) -> None:
-    """96 columns at 100 tokens (one CTA, the tail loop) and 1,100 (18 CTAs with a tail, the cross-CTA sum, whose trace takes
-    about a minute)."""
+    """96 columns at 100 tokens (one CTA, the tail loop) and 1,100 (18 CTAs with a tail). Only more than one CTA reaches the
+    cross-CTA sum, and its trace takes about two minutes."""
     rng = np.random.default_rng(M)
     dy = _words(rng, (96, M), 1e-3, raw=0.02, special=0.02)
     hb = _words(rng, (96, M), raw=0.02, special=0.02)
