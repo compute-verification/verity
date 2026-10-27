@@ -24,6 +24,7 @@ own circuit, so a commit is a row there, and an AND operand the form its builder
 """
 from __future__ import annotations
 
+import gc
 from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -301,6 +302,18 @@ def _flat_out(res: Any, ret: Type) -> list[L]:
 
 
 def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True) -> Traced:
+    # The cyclic collector stays off while tracing: reference counting frees a trace's forms, and the collector's passes over
+    # the live ones cost more than the trace itself.
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        return _trace(build, params, ret, cse)
+    finally:
+        if on:
+            gc.enable()
+
+
+def _trace(build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> Traced:
     C = TracingCircuit(cse=cse)
     ins = _elements_in(C, params)
     outs = [C.canon(f) for f in _flat_out(build(C, *ins), ret)]
