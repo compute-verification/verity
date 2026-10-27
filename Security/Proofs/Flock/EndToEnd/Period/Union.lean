@@ -201,4 +201,15 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
         _ = x ^ (w + (M - w)) := (pow_add _ _ _).symm
         _ ≤ x ^ M := pow_le_pow_of_le_one zero_le hx (by omega)
 
+/-- **Records that ignore the history give the period's run**, from any history. -/
+theorem periodRunH_const {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ) :
+    ∀ (h : List ρ) (i T : ℕ) (s : Strategy (periodG G i T)),
+      periodRunH G (fun i _ => rec i) h i T s = periodRun G rec i T s
+  | _, _, 0, _ => rfl
+  | h, i, T + 1, s => by
+      simp only [periodRunH, periodRun]
+      congr 1
+      funext b s'
+      rw [periodRunH_const G rec _ (i + 1) T s']
+
 end FlockSoundness.Game

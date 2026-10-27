@@ -13,7 +13,9 @@ for each sampling block in order, a record `rec i τ b` of the strategy `τ` tha
 sampling block's output `b`. A record may read the strategy: C-Flock's wrong units are those of the transcript the
 prover is committed to at registration, which is a function of its strategy (`Flock.Guarantees.SamplingBlock.wrongSet`).
 An event of the period is a predicate on that list, and its probability is `value` of the run, which has no prover
-message left, so `value` is the exact probability over the verifier's coins.
+message left, so `value` is the exact probability over the verifier's coins. `periodRunH` is the same run whose
+records also read the records before them: a sampling block that reads carried state is recorded against what the
+sampling blocks before it committed.
 
 `PeriodGood G good i T s` says every sampling block's strategy, on every run of the period, satisfies `good`: it is how
 a per-session hypothesis about the prover (such as `cr/sha-512` for its knowledge finders) is taken at exactly the
@@ -56,6 +58,15 @@ def periodRun {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → S
   | _, 0, _ => .ret []
   | i, T + 1, s => runBind (fun _ => periodG G (i + 1) T)
       (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·)) (G i) s
+
+/-- **A period's run whose records read the history**: as `periodRun`, with sampling block `i`'s record
+`rec i h τ b` also reading `h`, the records of the sampling blocks before it, in order. -/
+def periodRunH {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → List ρ → Strategy (G i) → β i → ρ) :
+    List ρ → (i T : ℕ) → Strategy (periodG G i T) → Game (List ρ)
+  | _, _, 0, _ => .ret []
+  | h, i, T + 1, s => runBind (fun _ => periodG G (i + 1) T)
+      (fun b s' => (periodRunH G rec (h ++ [rec i h (Strategy.ofBind _ (G i) s) b]) (i + 1) T s').map
+        (rec i h (Strategy.ofBind _ (G i) s) b :: ·)) (G i) s
 
 /-- **Every sampling block's strategy satisfies `good`**: sampling block `i`'s strategy, and on every run, every later
 sampling block's. -/
