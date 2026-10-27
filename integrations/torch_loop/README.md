@@ -125,8 +125,10 @@ for every live prover,
 Pr[`flock-verify` accepts and at least K₀ of the 256 units are wrong] ≤ C(256 − K₀, 64) / C(256, 64) + ε_ks + δ_link.
 
 The first term is 0.42 at K₀ = 3 (the profile's 2 at δ = 0.5), 0.096 at K₀ = 8, 0.0085 at K₀ = 16 and 4.9 × 10⁻⁵ at
-K₀ = 32. The statement's named assumptions are hypotheses: A3 (the verifier's bytes are uniform), `live-verifier`
-(with `uniform/flock-coin-server` for the coin server's coins), `cr/sha-512` and `ecr/sha-512`.
+K₀ = 32. The statement's named assumptions are hypotheses: A3 (the verifier's bytes are uniform) and `live-verifier`
+(with `uniform/flock-coin-server` for the coin server's coins). ε_ks and δ_link are in the additive form: the
+probabilities that finders built from the prover output a SHA-512 collision, which `cr/sha-512` and `ecr/sha-512` bound
+outside the theorem.
 
 The draw on the gate's coins is `Select.select`'s. A6 (`Security/Proofs/Flock/Claims/Sampling/Select/OS.lean`,
 `Properties.SampledProofs.SecurityProofs`) proves it is the theorem's subset draw on the same bytes:
