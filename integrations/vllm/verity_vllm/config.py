@@ -419,7 +419,7 @@ def done_source(workload: Mapping[str, Any]) -> str:
 def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False) -> str | None:
     """Why a row of record (its ``sweep.row_id`` in ``RECORDS``, or any row with ``of_record``: one about to be indexed) is not done
     only at its public cap; None for a row that is, and for every research row (its EOS stops are its own).  Row files
-    (:meth:`RowConfig.of`), the row precheck and GP-01 refuse with it, and so does whatever indexes a row
+    (:meth:`RowConfig.of`), the row precheck and `pipeline.global_program` refuse with it, and so does whatever indexes a row
     (``pipeline.config_record.index_refusal``: ``records publish``, ``pull`` and ``switch``, and ``row chain`` when it publishes)."""
     sw = workload.get("sweep")
     row = sw.get("row_id") if isinstance(sw, Mapping) else None

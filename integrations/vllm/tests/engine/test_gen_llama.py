@@ -390,7 +390,7 @@ def test_base_and_qwen05_profiles_do_not_have_the_tuned_pattern_but_pin_the_targ
     `launch_config` (the sm_89 table row for a tabled (N,K) on the default `ada` target), so the profiles without the tuned pattern
     accept the tabled launch exactly as Bet A (`gemm_pins_for`) pins it — and still refuse any other tiling."""
     consts, warps, stages = GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 2048)
-    for prof in (BASE.PROFILE,):                                       # the derived Qwen-0.5B profile now carries the tuned pattern too
+    for prof in (BASE.PROFILE,):                                       # the derived Qwen-0.5B profile carries the tuned pattern too
         assert not any(isinstance(p, GP.GemmLaunchTuned) for p in prof.patterns)
         r, _ = _resolve(prof, 32, 2048, 2048, consts, warps, stages)
         g = [m for m in members(r) if isinstance(m, Compute)]
@@ -409,7 +409,7 @@ L40S_GPU = {"name": "NVIDIA L40S", "compute_capability": "8.9", "multi_processor
 @pytest.mark.parametrize("M", [1, 32, 129])
 def test_a100_header_o_proj_default_tiling_is_the_registered_ampere_gemm(M):
     """Positive: on an A100 header (cc 8.0, family None) vLLM launches the o_proj with the DEFAULT tiling (no Ampere table) — the
-    registered `ampere` target's geometry: `Gemm_v1{K,N}` through the base pattern, NUM_SMS 108 pinned from the header (X-01)."""
+    registered `ampere` target's geometry: `Gemm_v1{K,N}` through the base pattern, NUM_SMS 108 pinned from the header."""
     consts, warps, stages = DEFAULT_TILING
     for prof in (L.PROFILE, BASE.PROFILE):
         r, (a, w, c) = _resolve(prof, M, 2048, 2048, consts, warps, stages, gpu=A100_GPU, num_sms=108)

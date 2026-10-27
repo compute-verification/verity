@@ -1,5 +1,5 @@
-"""The TP2 RANK profiles the per-rank fold Match folds a rank log with -- Llama-3.2-1B (the B1/B8 rows of record)
-and Qwen2.5-1.5B (the qwen TP2 B8 row): the rank-local shard configuration is the full configuration with heads / kv heads / intermediate /
+"""The TP2 RANK profiles the per-rank fold Match folds a rank log with -- Llama-3.2-1B (the B1/B8 workloads of record)
+and Qwen2.5-1.5B (the qwen TP2 B8 workload): the rank-local shard configuration is the full configuration with heads / kv heads / intermediate /
 vocab divided by the world and the derived widths recomputed; the rank's own patterns (`EmbeddingShardCuda`, `TpCollective`) come first;
 the sampler sees the full vocabulary.  Torch-free (profile construction only).  The rank profiles are `profiles.generic.build_profile(role, world=2)`."""
 from __future__ import annotations
