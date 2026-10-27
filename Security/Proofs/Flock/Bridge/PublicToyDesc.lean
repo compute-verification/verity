@@ -1,8 +1,7 @@
 import Proofs.Flock.Bridge.PublicWitnesses
 
 /-!
-# A hand-built circuit file meeting `sampledKSLivePub_nontrivial`'s structural premises (LEAN-66)
-
+# A hand-built circuit file meeting `sampledKSLivePub_nontrivial`'s structural premises
 `sampledKSLivePub_nontrivial` reads three facts of the circuit `D.unroll` besides the parameters: it has no port, its
 key program returns a computed gate, and its units read or write at most `2^40` committed wires. `toyDesc` is a
 `Flock.Desc` built by hand, a flat file of one net, and `toyDesc_structural` proves all three of it at `n = 1`.
