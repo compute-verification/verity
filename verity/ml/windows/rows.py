@@ -663,12 +663,16 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
                 if kind == "rows" and (isinstance(src, ValueRows) or (isinstance(src, str) and src == WIRED)):
                     if isinstance(src, str) and p not in wired:
                         raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
-                    if isinstance(src, ValueRows) and (len(src.positions) != want[0] or src.value.words != words
-                                                       or src.value.word_bits != 16 or src.value.schema != m.schema(p)
-                                                       or not all(0 <= i < len(src.value.rows) for i in src.positions)):
-                        raise ValueError(f"{m.port(p)}: {len(src.positions)} rows of a value's {len(src.value.rows)} {src.value.schema} "
-                                         f"rows of {src.value.words} {src.value.word_bits}-bit leaves, not {want[0]} {m.schema(p)} "
-                                         f"rows of {words} u16 words")
+                    if isinstance(src, ValueRows):
+                        v, have = src.value, len(src.value.rows)
+                        why = [reason for reason, bad in (
+                            (f"{len(src.positions)} rows, not {want[0]}", len(src.positions) != want[0]),
+                            (f"rows of {v.words} words, not {words}", v.words != words),
+                            (f"{v.word_bits}-bit leaves, not 16", v.word_bits != 16),
+                            (f"{v.schema} rows, not {m.schema(p)}", v.schema != m.schema(p)),
+                            (f"positions outside its {have} rows", not all(0 <= i < have for i in src.positions))) if bad]
+                        if why:
+                            raise ValueError(f"{m.port(p)}: a registered value's rows given by reference: {'; '.join(why)}")
                     refd[m.port(p)] = src if isinstance(src, ValueRows) else (m, p)
                     continue
                 a = np.asarray(src, dtype=np.uint16)

@@ -28,7 +28,8 @@ function of the window's values:
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the slot rows' and the rows' own, committed hiding, and the labels show none of
-them. The index they make is the prover's, bound by its hiding leaf under `index_salt`.
+them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`). The index they make is the prover's, bound
+by its hiding leaf under `index_salt`.
 """
 from __future__ import annotations
 

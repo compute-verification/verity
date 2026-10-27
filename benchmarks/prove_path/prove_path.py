@@ -1413,7 +1413,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("weights")
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values)
+    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")

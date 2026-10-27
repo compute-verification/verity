@@ -139,7 +139,7 @@ def test_a_report_with_an_unfilled_number_is_refused() -> None:
     doc["sections"][0]["serve_noise"] = True
     out = D.render([], doc)
     assert out.splitlines()[0] == D.M3_STATUS and not re.search(r"⟨[A-Z][A-Z0-9_]*⟩", out.split("## Sources")[0])
-    assert f"a one-week sampling block of one H200\nhas at most H = 3,126,434 faulty AND gates and B = 177,688" in out
+    assert "a one-week sampling block of one H200\nhas at most H = 3,126,434 faulty AND gates and B = 177,688" in out
     for name in ("H_POOLED", "SERVE_NOISE_S"):
         partial = copy.deepcopy(doc)
         del partial["values"][name]
