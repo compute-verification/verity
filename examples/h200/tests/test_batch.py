@@ -279,7 +279,7 @@ class Toy:
         return [Family("sub:toy.argmax", "Toy_v1{}", "fixture", 1, replay)]
 
     def manifest(self):
-        return {"template": "Toy_v1{}", "issue": "CMP-126"}
+        return {"template": "Toy_v1{}"}
 
 
 def test_a_subcircuit_joins_the_registration_and_the_draw(params):

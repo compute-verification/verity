@@ -135,7 +135,7 @@ def test_part_3s_h_and_b_are_one_recorded_run_of_proofs_planner() -> None:
 
 def test_a_report_with_an_unfilled_number_is_refused() -> None:
     """A rendered report never carries a placeholder: only a draft shows ⟨NAME⟩, and `main` renders no draft."""
-    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "LEAN-56"}) | _noise()}
+    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "the lock"}) | _noise()}
     doc["sections"][0]["serve_noise"] = True
     out = D.render([], doc)
     assert out.splitlines()[0] == D.M3_STATUS and not re.search(r"⟨[A-Z][A-Z0-9_]*⟩", out.split("## Sources")[0])
@@ -153,7 +153,7 @@ def test_a_report_with_an_unfilled_number_is_refused() -> None:
 
 
 def test_part_1_states_the_guarantee_the_draw_certifies() -> None:
-    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "LEAN-56"})}
+    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "the lock"})}
     doc["proved"]["rows"] = [{"what": "the guarantee at δ = 1%: wrong proof blocks at most", "value": 1_367_366_590,
                               "unit": "of 3,124,276,224 proof blocks (43.77%)", "run": "r20261027-013000-abcd",
                               "verdict": "W at δ = 10⁻²: 1,367,366,590 of 3,124,276,224 proof blocks (43.77%)",
@@ -369,7 +369,7 @@ def test_proved_refuses_another_status_and_an_undrawn_block() -> None:
     with pytest.raises(ValueError, match="block 999, which the coin didn't draw"):
         _draft([], doc)
     with pytest.raises(ValueError, match="needs its run id"):
-        _draft([], {**_proved(), "proved": {"run": "DRAWPROVE", "drawn": [1], "lines": []}})
+        _draft([], {**_proved(), "proved": {"run": "the proving run", "drawn": [1], "lines": []}})
 
 
 NOISE = {"SERVE_NOISE_S": (8.5, "kraqwxsc r20261026-113133-5cb4 against r20261026-120015-3773"),
