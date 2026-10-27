@@ -64,7 +64,7 @@ table at the stage's operand commitment, before its draw (the play's form, `Stag
 accepts is accepted by the play's game or breaks binding or zero knowledge in some round (N1, X-RO commitments; F1 and
 F2, C-Flock's binding and zero knowledge), at most `δb` and `δz` a round.
 
-**Superseded by `ServiceSoundStagedPerProver`** (note:proofs/20261018T1604Z-report-redteam-2474, side finding; CMP-33).
+**Superseded by `ServiceSoundStagedPerProver`** (a red team's side finding).
 `M` ranges over all of `Mc` with no cost bound, and one `δb` bounds them all, so the premise is false for every
 `δb < 1` at SHA-512: a machine that hard-codes a collision opens a committed leaf two ways, and the third conjunct puts
 its accepted runs in `Bind`. It stays only because `StagedFloorK` and `StagedFloorKOneSided` are proved from it. -/
@@ -200,8 +200,8 @@ def KScopeOneSided (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B
 that commits first, every value of its coins and every play `x`, the run's charge (`max(|M|, cost)`) is at least `κ`
 times its products over every stage of every round, less its noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine
 B_θ this is P1 at the active price vector VF3j-16's prices (decision 17: τ 0.0610, margin 2.000, every price at most
-its measured cost, (π₃₂) closed for the whole census, every register load credited 16 a word;
-note:20261016T1640Z-draft-rs-vf3j-strict-closure) with P4 (B_θ complete), and it sums the stages' products, so it
+its measured cost, (π₃₂) closed for the whole census, every register load credited 16 a word)
+with P4 (B_θ complete), and it sums the stages' products, so it
 holds when a stage's interval, from its draw to its outputs' commitment, holds no other draw. Stages that overlap are
 `ChargeVF3j16Overlap`'s. -/
 def ChargeVF3j16 (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
@@ -233,8 +233,8 @@ uniform on `OCells`, all `Σ_t n_t n'_t B_t` of them at once. A challenger that 
 cell-block in it weights a small stage's cell-blocks above a large one's, and is outside this premise unless every
 stage has one size.
 
-**Superseded by `ServiceSoundOverlapPerProver`** (note:proofs/20261018T1604Z-report-redteam-2474, side finding;
-CMP-33), for `ServiceSoundStaged`'s reason: one `δb` for every adversary is false below 1 at SHA-512, since a machine
+**Superseded by `ServiceSoundOverlapPerProver`** (a red team's side
+finding), for `ServiceSoundStaged`'s reason: one `δb` for every adversary is false below 1 at SHA-512, since a machine
 that hard-codes a collision opens a committed leaf two ways. It stays only because `OverlapFloorK` and
 `OverlapFloorKOneSided` are proved from it. -/
 def ServiceSoundOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)

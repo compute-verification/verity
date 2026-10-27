@@ -9,7 +9,7 @@ C1, a draw that depends on the registration, is already expressed on main: `Floc
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `δ_link(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `δ_link(R, τ)` are in terms of its calls', for a window of `C` calls,
 registered at once, drawn at once by a law that depends on the registration, and proved call by call (`Pouw.Window`).
-Stated, not proved: Daniel's order is statement, red team, card, then proof (17 Oct), so `lean-audit.json` lists
+Stated, not proved: the order is statement, red team, card, then proof, so `lean-audit.json` lists
 `WindowEps` and `ServiceEscapes` under `shape.frozen` as `unstated`. The statements, their premises, the proof plan and
 what could make them false are in note:proofs/20261018T0400Z-draft-pouw-gap6-statement.
 

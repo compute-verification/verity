@@ -10,9 +10,8 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 
 * `SAKMatmul`: symmetric algorithmic knowledge for exact matrix products (R-ACCEL-6), on the round's words, for
   programs that exchange no bits with outside machines;
-* `ShaSpeed`: SHA-512's implementation speed (R-ACCEL-7), on the round's commitment, in sampling form, per prover
-  (RT-LEAN-2 L37);
-* `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work (RT-PROTO-2 P2, P18; RT-LEAN-2 L32),
+* `ShaSpeed`: SHA-512's implementation speed (R-ACCEL-7), on the round's commitment, in sampling form, per prover;
+* `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work (RT-PROTO-2 P2, P18),
   the one premise that prices outside machines;
 * `ServiceSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
   (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
@@ -33,7 +32,7 @@ namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither
 
-/-- `pouw-sak-matmul` (proposed; R-ACCEL-6, Daniel 25 Oct). **Symmetric algorithmic knowledge for exact matrix
+/-- `pouw-sak-matmul` (proposed; R-ACCEL-6). **Symmetric algorithmic knowledge for exact matrix
 products, SAK(matmul)**, on a round's words: in the model at its device premises, on every registrable instance
 `a ∈ Reg`, every words program that exchanges no bits with outside machines, on any advice `s` of at most `B` bits
 fixed before the round's coins, has moment at most 1 at the prices `μ` and rate `η a` against the public best's
@@ -43,7 +42,7 @@ priced cost `pub a`, outside a set `Deg` of the round's dithers of probability a
 `pub a` is the public best matmul method's priced cost of the instance's words (RT-LEAN L3) at the period's dual
 prices: no program computes the noised products' segment prefix sums (or all but a small fraction of the words the
 check could draw) more cheaply at `μ` than the best public method. Exchanged bits are priced by
-`OutsourceWithinEgress`, not here (RT-LEAN-2 L32).
+`OutsourceWithinEgress`, not here.
 
 **What the advice holds** (RT-PROTO-2 P14). Anything computed before the round within (G1)'s memory, so `pub` must hold
 against that precomputation (O-IO's lookup routes):
@@ -52,16 +51,16 @@ against that precomputation (O-IO's lookup routes):
   (RT-PROTO-2 P17), so a later round's program holds advice that depends on `W'`, and SAK must hold for programs that
   preprocess one operand (the matrix–vector-with-preprocessing class). The known speedups are log-factor tables, and
   they lose at int8 width (A4, A11);
-* **the cheapest registrable instance**: `Reg` is every instance the protocol lets a prover register (RT-LEAN-2 L27),
+* **the cheapest registrable instance**: `Reg` is every instance the protocol lets a prover register,
   so a prover that registers the instance whose words are cheapest at `μ` gets that instance's `pub`, no less;
-* **D5's menu with advice** (ASK-147 item 4): `pub` is the cheapest of D5's public programs priced with their advice,
+* **D5's menu with advice**: `pub` is the cheapest of D5's public programs priced with their advice,
   at the dual prices.
 
 **Degenerate dithers** (RT-PROTO-2 P17, finding W2). On a reuse round the reused coins are worst case over `Reg`, and
 the fresh dither is the round's `Draw`. A dither that makes the noised product's words computable from the advice
 (the zero noise, `W' = B` with `B = 0`) is in `Deg`; the operands stay worst case.
 
-**The rate** (RT-LEAN-2 L38). A program that skips a fraction `f` of the words and guesses them passes a checked cell
+**The rate**. A program that skips a fraction `f` of the words and guesses them passes a checked cell
 it skipped with probability `p` (a free guess: `2^{-32}` for a uniform word, more where the words are structured), so
 the premise holds only at `η · pub ≤ π s (1 − p)`, `π` the round's selection probability (RT-PROTO-2 P15, P20) and `s`
 its checked cells. -/
@@ -71,8 +70,8 @@ def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Ins
     ∀ (s : St) (Mw : G.Mc.Alg (St × P.Draw) P.Tr), (∀ i, G.ext Mw i = 0) →
       ∃ Deg : P.Draw → Prop, prob Deg ≤ κdeg B ∧ wordsMoment G P μ (pub a) (η a) a s Mw Deg ≤ 1
 
-/-- `pouw-sha512-speed` (proposed; R-ACCEL-7, Daniel 25 Oct: "sure"). **Nobody computes SHA-512 meaningfully faster
-than the best public implementation**, on a round's commitment, in sampling form and per prover (RT-LEAN-2 L37): in
+/-- `pouw-sha512-speed` (proposed; R-ACCEL-7). **Nobody computes SHA-512 meaningfully faster
+than the best public implementation**, on a round's commitment, in sampling form and per prover: in
 the model at its device premises (with (G3): an oracle call is a step priced at the public implementation's use), for
 every prover `A` on the registered instances `reg`, every advice of at most `B`
 bits on which each round's programs read nothing of that round's coins or later, and every words and commitment
@@ -92,7 +91,7 @@ hashes part of the tree is caught where the check selects a cell outside that pa
 Under the random oracle it is ABSORB-THM's realization: each oracle query costs at least the public implementation's,
 so the honest prover meets it with shortfall 0. MODEL-SPEC's θ floors (RT-MODEL M12, on `Open.sync`, `b1` and `madHi`)
 are what keep the model from hashing faster than the card. The premise is meant for models whose programs reach the
-oracle only through their calls (`Accel.OracleCalls` at the round's table, RT-LEAN-2 L28): where a program reads the
+oracle only through their calls (`Accel.OracleCalls` at the round's table): where a program reads the
 table as data it is false, and the headline says nothing. -/
 def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) (μ : G.Res → ℝ) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
@@ -107,7 +106,7 @@ def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) (μ
       commitMoment G P μ (pub (reg w)) (η (reg w)) ox.1 (reg w) (adv ox.1 ox.2 w) (Mw w) (Mh w) Deg ≤ 1) ≤ κsha A
 
 /-- `pouw-outsource-egress` (proposed; class L, conditional on the network certifier streaming the call's coin side
-`b` itself, RT-PROTO-2 P2 and P18; RT-LEAN-2 L32). **An exchanged bit replaces at most `β` of priced work**: in the
+`b` itself, RT-PROTO-2 P2 and P18). **An exchanged bit replaces at most `β` of priced work**: in the
 model at its device premises, every program has one that computes the same thing on every input, exchanges no bits
 with outside machines, and costs at most its cost plus `β` a bit it exchanged (`Accel.ext`, in either direction,
 other than the certifier's own coin stream).
@@ -127,7 +126,7 @@ service's verdict accepts only periods whose rounds' checks pass** on the regist
 probability `κ_S` over the oracle and the verifier's coins, for every prover: the rounds' checks run inside C-Flock's
 zero-knowledge proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each round's
 commitment (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
-code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
+code. It assumes nothing of the prover's algorithms. -/
 def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>

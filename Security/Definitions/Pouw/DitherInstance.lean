@@ -24,7 +24,7 @@ import Definitions.Core.Accel.Principles
 * **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the open parameters it gives;
 * **the network certifier's counts** (`Counted`, RT-PROTO P2): the verifier refuses a period whose signed counts into
   or out of the devices, read from the devices' readings (`Readings`), pass the caps `E_in`, `E_out`;
-* **the auditor's clocks** (`Timed`, RT-PROTO P5, RT-PROTO-2 P13, P25, CMP-154): the challenger issues each sampling
+* **the auditor's clocks** (`Timed`, RT-PROTO P5, RT-PROTO-2 P13, P25): the challenger issues each sampling
   block's coins at least `Δ` before the period's end, and the next block's only after every root of this one is in. The
   verifier refuses a period in which the network certifier saw a root arrive more than `Δ` after its block's coins,
   or a selected block's answer more than `τ_ans` after its check coin. Only selected blocks are answered, and an
@@ -190,9 +190,9 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | .issue => i
   | _ => 0
 
-/-- **D5 v2's named public matmul programs on the H200** (BET-ALGO-LAB, `note:20261026T0815Z-draft-accel-public-best-2`,
-`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`; `d5_v2.py` at `34866fd9f8`): protocol v3's
-round at A = B = 0, the frozen qkv shape (K 16384, n 16512) at CMP-118's caps (t 2, L' 512), the hull of every route
+/-- **D5 v2's named public matmul programs on the H200** (BET-ALGO-LAB;
+`d5_v2.py` at `34866fd9f8`): protocol v3's
+round at A = B = 0, the frozen qkv shape (K 16384, n 16512) at the caps (t 2, L' 512), the hull of every route
 in D5 v2's menu (the tile route, PD2-1's O-route, the zero-high-digit peel, Strassen's orbit, the integral catalogue,
 every route beside the MMA) priced at the honest period's duals μ° without the hashing. Served (μ° on `alu` and
 `joint0`): the dense product with O by PD2-1's O-route, pub_mm 0.4853 against H_mm 0.4984. Job-only (μ° on `alu`
@@ -204,7 +204,7 @@ the model's: its tensor MAC-times as they are, its lane-issues over 32 (a warp i
 def pubMmH200 : List ResUnits :=
   [mmUnits (35 / 32) (99 / 2097152) 0 0 (207 / 32768), mmUnits (9 / 8) (25 / 524288) 0 0 (53 / 8192)]
 
-/-- **D5 v2's named public matmul programs on the RTX PRO 6000** (as on the H200, at CMP-118's t 3, L' 256). Served
+/-- **D5 v2's named public matmul programs on the RTX PRO 6000** (as on the H200, at the caps t 3, L' 256). Served
 (μ° on `alu`, `rf` and `joint1`): Strassen's 2×2 orbit at depth 1, pub_mm 0.8255 against H_mm 0.8586. Job-only (μ° on
 `alu` and `rf`): the dense product with O by the zero-high-digit peel, pub_mm 0.2930 against H_mm 0.2974. And the honest
 kernel. Values off a dyadic are rounded down at the seventh decimal. D5's register-file words aren't a resource of the
@@ -217,7 +217,7 @@ def pubMmSm120 : List ResUnits :=
 RT-UNITS U13: `ShaSpeed` is in model units, so `c_sha = 1` in the model): the default build of `commit_gpu`
 (r20261018-062010-1c6b, measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760, IMAD 152), A-wide + R-hi (D5's
 `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850, IMAD.WIDE 850), with RT-UNITS'
-counts a compression (`note:20261026T0320Z-draft-accel-rt-units`). Priced as the model prices a lane (`opUse`): one
+counts a compression. Priced as the model prices a lane (`opUse`): one
 ALU or `imad` lane, `IMAD.WIDE` two `imad` lanes (U13), `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot.
 These are D5 v2's schedules too (`public_best.SHA_SCHEDULES` at `34866fd9f8`, the same ALU and issue counts). -/
 def pubShaH200 : List ResUnits :=
@@ -314,7 +314,7 @@ end Certifier
 
 section Clock
 
-/-- **The verdict with the auditor's clocks** (RT-PROTO P5, RT-PROTO-2 P13, P25, O-REDTEAM NF5, RT-LEAN L33, CMP-154):
+/-- **The verdict with the auditor's clocks** (RT-PROTO P5, RT-PROTO-2 P13, P25, O-REDTEAM NF5, RT-LEAN L33):
 the service's verdict, read with the challenger's signed issue times and the network certifier's signed arrival
 times, as the verdict reads them from the devices' readings `ob`.
 

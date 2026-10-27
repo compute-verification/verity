@@ -24,8 +24,7 @@ namespace Pouw.Guarantees.DitherInstance
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period on the card table `c` at the open
-parameters `x`** (CMP-136, CMP-154; RT-LEAN L3, L4, L9, L31, L32, L33; RT-LEAN-2 L27, L28, L39; RT-MODEL M12; RT-PROTO
-P2, P5, P9; RT-PROTO-2 P13, P18, P25). For every period's devices `D` (`n` cards pooled, at `f` ticks a second, and the
+parameters `x`**. For every period's devices `D` (`n` cards pooled, at `f` ticks a second, and the
 other devices), every sampling-block protocol `P` and layout `L`, every accelerator `G` of the machine model 𝓜 that is
 `D` at `x` under the resource match `e` (`OnCard`) whose oracle-call step is a public compression on the card
 (`CallsAtPub`), every number `nsb` of sampling blocks, every set `Reg` of registrable instances and registered
@@ -74,7 +73,7 @@ what the deadlines buy.
 
 The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
 them, and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the
-cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
+cards reach is `Assumptions.PeriodInventory`, held pending a ruling and not read here. `Q` calls use at least the
 capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
 price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
@@ -114,7 +113,7 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
 def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
   ∀ (x : Verity.Accel.Open), c.floors x → Verity.Assumptions.AccelProductForm x → WorkSoundAtX c pb hr x
 
-/-- **The headline on the card itself** (RT-LEAN L10, L31; RT-LEAN-2's fix): if the card can do no more than its
+/-- **The headline on the card itself** (RT-LEAN L10, L31, and the second red team's fix): if the card can do no more than its
 accelerator model (`Assumptions.CardWithinAccel c cap oracle can`, trust base item 1, for the card's computations
 `can`), then at some open parameters `x` both hold: `x` meets θ's floors with the product form and the card's runs are
 `c.machine x`'s programs (`CardRunsAt`), and the headline holds at `x` (`WorkSoundAtX`). So the `x` the headline is
@@ -123,7 +122,7 @@ theorem and in the lock.
 
 Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
 whose programs are exactly the card's; the witness that `SAKMatmul` and `ShaSpeed` hold at such a `G`, with free
-guesses (RT-LEAN-2 L38), is WORKSOUND-WIT's. A round's commitment reads the oracle, which the card has no instruction
+guesses, is WORKSOUND-WIT's. A round's commitment reads the oracle, which the card has no instruction
 for (ABSORB-THM's realization, R-ACCEL-7). -/
 def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
   ∀ {ι : Type} (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → (c.Mem → Prop) → Prop),

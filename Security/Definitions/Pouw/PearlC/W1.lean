@@ -12,8 +12,8 @@ its docstring. This module is W1 as a definition: a machine, its instructions, t
 `w1 dv P salt : CostModel Q R S`, the cost of a program as W1 charges it. It states no assumption and changes no
 statement; a restatement of TT_OUT over it is the proofs lane's.
 
-**What W1 is** (the problem statement §3.1, `note:20261004T2202Z-report-relay-docs-pouw-problem-statement`; decided
-28 Sep, amended by H5):
+**What W1 is** (the problem statement §3.1,
+amended by H5):
 - an instruction is priced by its class at the measured rate, per 32-bit lane result, and a tensor-core instruction by
   its whole fragment, however few of its outputs a program uses (`w1-complete/sm120`);
 - oblivious whole-word moves are free, at any memory level;
@@ -631,7 +631,7 @@ the run's device-memory read as the bandwidth account counts it, in 32-bit words
 def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : ℕ :=
   (final dv salt pr U act σ).fetched.dedup.length
 
-/-- **W1 priced, with no refund** (Daniel, item 9): a run's compute, the instructions' prices (`final`'s `cost`), plus
+/-- **W1 priced, with no refund**: a run's compute, the instructions' prices (`final`'s `cost`), plus
 `fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
 γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
 noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where

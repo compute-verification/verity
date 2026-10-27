@@ -5,13 +5,13 @@ import Definitions.Pouw.MerkleExtract
 # Commit-and-open from SHA-512 as a random oracle: the extraction premise and its realization (trusted)
 
 `ExtractAdv` (commit-and-open costs what computing costs) is a theorem from SHA-512 as a random oracle for the
-commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of its own
+commitments (R-ACCEL-3, pending a ruling) and its realization, not a premise of its own
 (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`). This file holds `ExtractAdv` and what that theorem reads:
 
 * `QueryLog` (ABSORB-THM's B2): a period's commitment-path queries, per value of the verifier's coins, in the
   lazy-sampling form of `Definitions.Pouw.MerkleExtract.Prover`, with round `w`'s root after the first `τ w` answers.
 * `ExtractAdvAt` and `ExtractAdv`: each round's work splits into a words program and a commitment program on advice
-  fixed before the round's coins (RT-LEAN-2 L37's four conditions on the commitment side).
+  fixed before the round's coins (four conditions on the commitment side).
   - The advice carries the oracle and the query log before the round, instead of only the prover's state, and holds at
     most `Badv A` bits.
   - The commitment program reads the advice, the dither and the words, and its output is the prover's root as an
@@ -20,8 +20,7 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
     root (`RoundProto.opens`, condition 2).
   - The cost clause is the period's, on runs within the cap, with a term `ξ A` for the walk and the log's upkeep
     (B4). `ξ A`, `κx A` and `Badv A` are the prover's own.
-  - The event is on runs whose sampling blocks' work makes at most `Q` oracle calls (`Prover.calls`, RT-LEAN-2 L39,
-    CMP-154). A run whose timed use fits the period's devices makes at most `cap_r / callUse_r` for each
+  - The event is on runs whose sampling blocks' work makes at most `Q` oracle calls (`Prover.calls`). A run whose timed use fits the period's devices makes at most `cap_r / callUse_r` for each
     resource `r` a call uses (G3), so `WorkSound` reads it at such a `Q`.
 * `Realization` and `ShaRealize`: the realization premise on the no-fold round, prover by prover. On every run whose
   rounds make at most `Q` oracle calls, a prover's commitment-path hashing is its own calls and the verifier's
@@ -29,7 +28,7 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
   extractor over that log, its commitment program is its own commitment path, and the two cost at most the prover's
   own timed use plus `k · ξw + q A · ξl`. Programs reach the oracle only through calls (`Accel.OracleCalls`, a device
   premise of `ShaRealize`), so the log can be the prover's calls. The challenger times each sampling block's work,
-  from its coins to its root, so the cap bounds the work's calls (CMP-154). An answer reaches no root, since no later
+  from its coins to its root, so the cap bounds the work's calls. An answer reaches no root, since no later
   program reads it, and its calls aren't capped (the answers' calls, under Open). One budget and schedule serve every
   prover's work calls and the verifier's evaluations (L39): `k + 1` segments of `⌈Q⌉ + V` queries, `V` the verifier's
   evaluations, one ending at each root and one after the last, so `q = (k + 1)(⌈Q⌉ + V)` and
@@ -39,7 +38,7 @@ The modelling choices, each a hypothesis or a clause RT-LEAN can check:
 * **(N1) distinct queries**: `QueryLog.fresh`. A repeat needs no query, so `q` counts distinct SHA-512 inputs.
 * **(N2) `q` includes the verifier's evaluations**: `Realization`'s clause that every point an accepted opening's check
   hashes is a logged query. Sampling block `b`'s evaluations enter the log as queries after its answer, which may
-  arrive after later blocks' coins and roots (CMP-154): they sit in the segment the answer arrives in, before the next
+  arrive after later blocks' coins and roots: they sit in the segment the answer arrives in, before the next
   root or in the last segment, and no root reads them, since no later program reads an answer. A later query may read
   them (an evaluation at a point nobody queried is a fresh uniform answer either way).
 * **(N3) each prover's own query budget `q A` and schedule `τ A`**: `q A` bounds `A`'s distinct commitment-path
@@ -47,12 +46,12 @@ The modelling choices, each a hypothesis or a clause RT-LEAN can check:
   after the log's first `τ A w` queries and before the rest: the queries before the root, padded with dummy queries
   (free in the analysis). The walk of round `w` reads only those, so `τ A w` must not reach past the root: the queries
   after it depend on the round's check coins and later ones, which `Mw w`'s advice doesn't carry (WORKSOUND-WIT's
-  WIT1, CMP-136 6dbe5998). A prover with more queries has a larger `q A`, and so a larger `ξ A` and `κx A`; at the
+  WIT1). A prover with more queries has a larger `q A`, and so a larger `ξ A` and `κx A`; at the
   cap, `k + 1` segments of `⌈Q⌉ + V` queries are one budget and schedule for every prover
   (`Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`).
 
 Open:
-* **The cost split** (RT-LEAN-2 L28's remainder) is `Realization`'s cost clause, a premise, on runs within the cap.
+* **The cost split** is `Realization`'s cost clause, a premise, on runs within the cap.
   The oracle calls are priced steps (G3) and the only way to the oracle (`Accel.OracleCalls`), but nothing in `Accel`
   says which of a program's steps are its commitment path. Three facts would discharge it:
   - `use` composes: a program built by `Mc.seq`, `Mc.pair` and routing uses at most what its parts use (`Machine`'s
@@ -63,7 +62,7 @@ Open:
     the path's calls cut out is `Mw w` before the walk, and the path is `Mh w`.
 
   The first two are laws of the machine. The third is a property of the prover, which is the next item.
-* **The walk's oracle reach.** `Mw w` reads only the advice and the dither (RT-LEAN-2 L37, condition 1), and on every
+* **The walk's oracle reach.** `Mw w` reads only the advice and the dither, and on every
   run within the cap it must be the walk over the prover's log, which reads the answers the prover got inside the
   round. A prover whose words or tree read such an answer has no `Mw w` at an advice size that doesn't hold those
   answers for every dither, so `ShaRealize` at one `Badv` for every prover is false on a machine that has such a
@@ -75,7 +74,7 @@ Open:
   is `k + 1` times the calls'. Charging only the logged calls and evaluations (a count of entries beside `q`), or
   letting each root come at a stopping time of the log instead of a fixed position (`QueryLog.root_dep`, with
   `extract_of_ro_roots` over it), would remove the factor.
-* **The answers' calls** (CMP-154, RT-POOL RP20). Answers are off the state path and untimed, so the cap `Q` bounds
+* **The answers' calls** (RT-POOL RP20). Answers are off the state path and untimed, so the cap `Q` bounds
   only the work's calls. An answer whose opening reads oracle answers it got by its own calls (a search for a point
   that hashes to a committed node) needs those calls in the log, or the verifier's evaluations don't read only earlier
   logged answers (`QueryLog.qry_dep`). At each prover's own `q A` such a prover has a larger budget, so `WorkSound`, at
@@ -117,10 +116,10 @@ make at most `Q` oracle calls while some round's check fails on `Mw w`'s words, 
 `A`'s root at those words, with probability at most `κx`.
 * `Mw w` and `Mh w` read advice `adv o x w` of at most `Badv` bits that reads no coin of round `w` or later. The
   extractor's words read the queries before the round, which the prover's state need not hold.
-* **`Mh w`'s output is `A`'s root** on the advice, the dither and `Mw w`'s words (RT-LEAN-2 L37, condition 1).
+* **`Mh w`'s output is `A`'s root** on the advice, the dither and `Mw w`'s words.
 * **The cost clause is the period's** (ξ, ABSORB-THM's B4), on runs within the cap `Q`. Over the period, the words
   and commitment programs use at most what the prover's sampling blocks use in their timed work
-  (`Prover.timedUse`, CMP-154), plus `ξ r` of resource `r`: the extractor's walk and the upkeep of the query log,
+  (`Prover.timedUse`), plus `ξ r` of resource `r`: the extractor's walk and the upkeep of the query log,
   which aren't the prover's. A query is logged once in the period, so a per-round clause would count its upkeep `k`
   times. Past the cap the log isn't the prover's calls, and `WorkSound` reads the clause only on runs that fit the
   devices.
@@ -144,7 +143,7 @@ def ExtractAdvAt (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst)
       ∃ w, ¬ (P.ok (reg w) (ox.2 w).1 (ox.2 w).2 (G.Mc.eval (Mw w) (adv ox.1 ox.2 w, (ox.2 w).1)) ∧
         P.opens ox.1 (A.root ox.1 ox.2 w) (ox.2 w).2 (G.Mc.eval (Mw w) (adv ox.1 ox.2 w, (ox.2 w).1)))) ≤ κx
 
-/-- `pouw-commit-extract` (proposed; the Accel-model instance of ASK-16's random-oracle card, with
+/-- `pouw-commit-extract` (proposed; the ACCEL model's instance of the random-oracle card, with
 `StraightLineExtraction`; `ExtractOfRealize` proves it from SHA-512 as a random oracle and `ShaRealize`).
 **Committing and opening costs what computing costs**: in the model at its device premises, every prover `A` meets
 `ExtractAdvAt` at the cap `Q` on its rounds' oracle calls, its own advice size `Badv A`, walk-and-log cost `ξ A` and
@@ -167,7 +166,7 @@ prover `A` has
 * round words programs `Mw w` on advice of at most `Badv` bits fixed before the round's coins, each, on every answer
   stream with distinct answers, the walk of the extractor down from the round's root over the queries before it
   (`MerkleExtract.ext`; a cell it can't reach reads `0`). Where answers repeat, `ext`'s choice among the matching
-  points can walk into another round's tree, and a repeat is already `κ_x`'s `q²` term (RT-LEAN-2 L40). The
+  points can walk into another round's tree, and a repeat is already `κ_x`'s `q²` term. The
   commitment programs `Mh w` read the advice, the dither and the words, and their output is `A`'s root;
 * the cost half, over the period, on every run within the cap. The `Mw w` and `Mh w` use at most the prover's timed
   use (`Prover.timedUse`, its sampling blocks' work) plus `k · ξw + q · ξl` of each resource: `ξw` the walk's use
@@ -205,7 +204,7 @@ def Realization (G : Accel) (nf : NoFold) (k : ℕ) (reg : Fin k → (noFoldRoun
         (ext ((L.prover x w).oracle u) E ((L.prover x w).pre u) (L.root x w u) (dirs c)).getD 0)
 
 /-- `pouw-commit-realize` (proposed; the realization half of SHA-512 as a random oracle for the commitments, R-ACCEL-3
-with R-ACCEL-7, pending Daniel; the Accel instance of ASK-16's card 9cd57182, beside `StraightLineExtraction`). In the
+with R-ACCEL-7, pending a ruling; the ACCEL model's instance of the random-oracle card, beside `StraightLineExtraction`). In the
 model at its device premises, with the oracle reached only through priced calls (G3, `Accel.OracleCalls`), every
 prover `A` of `k` rounds on the no-fold round `nf` at the registered instances `reg` has a `Realization` on its runs
 within `Q` oracle calls, at its own query budget `q A`, schedule `τ A` and advice size `Badv A`, with the walk's use
