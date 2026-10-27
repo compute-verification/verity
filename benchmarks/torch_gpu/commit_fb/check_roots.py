@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from verity_config.settings import SHARED
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -113,7 +114,7 @@ def run_case(name: str, batch: int, layers: int, head: bool, shuffled: bool, sma
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", default=os.environ.get("OUT"))
+    ap.add_argument("--out", default=SHARED.OUT)
     ap.add_argument("--cases", default=",".join(CASES))
     ns = ap.parse_args(argv)
     started = time.perf_counter()
@@ -133,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         d.mkdir(parents=True, exist_ok=True)
         (d / "roots.json").write_text(json.dumps(summary, indent=1) + "\n")
         result = {
-            "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
+            "schema": RESULT_SCHEMA, "run_id": SHARED.RESEARCH_RUN_ID or "local", "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "commit_fb/check_roots", "cases": CASES, "gpu": summary["gpu"],
                                      "implementation": "commit_fb.commit_step -> verity_vllm.commit.row_tables_device.step_roots"},
             "validation": {"status": "passed" if ok else "failed",
@@ -148,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def write_result(result: dict, out: Path) -> None:
     """``result.json`` in the run dir (``$RESEARCH_RUN_DIR``), else beside the outputs."""
-    d = Path(os.environ.get("RESEARCH_RUN_DIR") or out)
+    d = Path(SHARED.RESEARCH_RUN_DIR or out)
     tmp = d / "result.json.tmp"
     tmp.write_text(json.dumps(result, indent=1) + "\n")
     os.replace(tmp, d / "result.json")

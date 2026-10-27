@@ -16,7 +16,7 @@ export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=/usr/local/cuda/bin:$PATH
-export PYTHONPATH=$ROOT:$ROOT/integrations/vllm:$ROOT/tools/research/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT:$ROOT/integrations/vllm:$ROOT/tools/research/src:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}
 ARCH=${ARCH:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-kcommitfb}
 

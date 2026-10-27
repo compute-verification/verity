@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 #: the frozen shape's linears (MQA decoder: width 16384, 256 query heads of 64, 1 KV head, MLP 65536, 256 tokens): (n, k)
@@ -227,7 +228,7 @@ def _cublaslt_version() -> int | None:
 
 def _env(torch, dev) -> dict:
     e = {"torch": torch.__version__, "cuda": torch.version.cuda, "device": dev.type,
-         "lease_uuid": os.environ.get("GPU_LEASE_UUID"), "lease_who": os.environ.get("GPU_LEASE_WHO")}
+         "lease_uuid": SHARED.GPU_LEASE_UUID, "lease_who": SHARED.GPU_LEASE_WHO}
     if dev.type == "cuda":
         p = torch.cuda.get_device_properties(dev)
         e |= {"name": p.name, "capability": f"{p.major}.{p.minor}", "sms": p.multi_processor_count,

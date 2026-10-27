@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import statistics
 import subprocess
 import sys
@@ -36,6 +35,7 @@ from collections import deque
 from pathlib import Path
 
 import torch
+from verity_config.settings import SHARED
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -176,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--sweep", default="660,4096", help="other batches for the layer arm (comma list; '' for none)")
     ap.add_argument("--no-beside", action="store_true")
-    ap.add_argument("--out", default=os.environ.get("OUT") or ".")
+    ap.add_argument("--out", default=SHARED.OUT or ".")
     ns = ap.parse_args(argv)
     started = time.perf_counter()
     spec = F.shape_h()
@@ -225,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     roots = out / "roots.json"
     check = json.loads(roots.read_text()) if roots.exists() else None
     result = {
-        "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1",
+        "schema": RESULT_SCHEMA, "run_id": SHARED.RESEARCH_RUN_ID or "local", "kind": "bench-result/v1",
         "workload_fingerprint": {"workload": "commit_fb/bench", "shape": res["shape"], "batch": ns.batch, "reps": ns.reps,
                                  "implementation": "commit_fb.commit_step_async -> verity_vllm.commit.row_tables_device.step_roots "
                                                    "(protocol_options/pouw_cuda/row_table.cu)",
