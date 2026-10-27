@@ -2,21 +2,27 @@
 (`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
 `of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
-framing broken, and a period in each form the period's guarantee doesn't cover), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`
-names, so agreeing on it holds which rule refused the period."""
+framing broken, a period in each form the period's guarantee doesn't cover, a period with its filler windows, honest
+or with one mutation aimed at every refusal of `fill.period_fill`, which the period reports and no verdict reads, and a
+period read against a capacity), compared outcome for outcome, its reason and its public output (a refused fill's
+refusal, ``gaps`` and ``utilization``) included: the reason is the refusal `credit.period_credit` names, so agreeing on
+it holds which rule refused the period."""
 from __future__ import annotations
 
 import json
 import random
 import shutil
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+import pouw_fill_cases as fill_cases
 import pouw_period_cases as cases
+from verity.core.protocols.pouw import fill as F
 from verity.core.protocols.pouw import period_check as PC
 from verity.core.protocols.pouw import verifier as V
 
@@ -88,6 +94,89 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
         assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
         assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
         assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
+
+
+def test_a_filler_shape_spans_at_most_t_max_noise_tiles():
+    """A filler descriptor whose block spans t = min(L, K)/L′ = `fill.T_MAX` noise tiles is a shape, one more is not."""
+    sh = fill_cases.D.Shape(128, 128, 32 * F.T_MAX, 32, 32 * F.T_MAX, 16384, o=False)
+    assert F.descriptor_of(F.descriptor(sh, 1, bytes(64)))[0] == (sh, 1)
+    j = json.loads(F.descriptor(sh, 1, bytes(64)))
+    j.update(L=32 * (F.T_MAX + 1), k=32 * (F.T_MAX + 1))
+    assert F.descriptor_of(fill_cases.Cr._canonical(j).encode()) == (None, ("descriptor", F.SHAPE))
+
+
+def test_a_fill_is_credited_beside_work():
+    """A period with honest filler windows is accepted with its fill (``{work, k, delta, eps}``) beside the served credit,
+    which is the same period's credit without them, and with ``gaps`` saying no guarantee covers the fill: the fill
+    changes nothing `work`'s rule reads."""
+    for seed in range(3):
+        a = PC.case(cases.instance(random.Random(f"fill/{seed}"), "fill"))
+        assert a["verdict"] == "accept", a["reason"]
+        assert a["public"].pop("gaps") == PC.GAPS
+        fill = a["public"].pop("fill")
+        assert sorted(fill) == ["delta", "eps", "k", "work"] and a["profile"]["fills"] == len(fill["work"]) > 0
+        assert all(w > 0 for w in fill["work"]) and fill["delta"] == a["public"]["delta"]
+        served = PC.case(cases.instance(random.Random(f"fill/{seed}"), "honest"))
+        assert served["verdict"] == "accept" and served["public"] == a["public"], (served, a)
+
+
+@pytest.mark.parametrize("name", fill_cases.NAMES)
+def test_a_fill_mutation_is_reported_not_decided_on(name):
+    """Each of `pouw_fill_cases`' mutations leaves the period accepted with its served credit and reports the fill
+    refused, ``{refused: "code: why"}``, with the refusal it aims at (``fill`` naming the refused filler window's own
+    code), and no filler windows in the profile."""
+    for seed in range(2):
+        got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
+        assert got["verdict"] == "accept" and "fills" not in got["profile"], (name, got)
+        assert got["public"]["gaps"] == PC.GAPS, (name, got["public"])
+        code, _, why = got["public"]["fill"]["refused"].partition(": ")
+        assert code == fill_cases.AIMS[name], (name, got["public"]["fill"])
+        if name in fill_cases.INNER:
+            assert f" the fill earns nothing: {fill_cases.INNER[name]}: " in why, (name, got["public"]["fill"])
+
+
+def _without_fills(case: dict) -> dict:
+    e = json.loads(bytes.fromhex(case["evidence"]))
+    return {**case, "evidence": cases._hex({k: v for k, v in e.items() if k != "fills"})}
+
+
+def test_fill_never_changes_the_verdict():
+    """A period's verdict and reason, and its served credit, are the same with its filler windows (honest or with any of
+    `pouw_fill_cases`' mutations) as without them, under no capacity or a capacity, and so is its utilization: no
+    guarantee covers the fill yet, so no decision and nothing certified reads it."""
+    rng = random.Random("fill-verdict")
+    for name in ["fill", *fill_cases.NAMES]:
+        d = fill_cases.with_fills(rng, cases.credit_cases.period_instance(rng, "honest", **cases.COVERED), name)
+        case = cases.serve(d)
+        served = sum(PC.case(_without_fills(case))["public"]["work"])
+        for params in ({}, {"capacity": rng.randint(1, 2 * served)}):
+            with_, without = (PC.case({**c, "params": {**c["params"], **params}}) for c in (case, _without_fills(case)))
+            assert (with_["verdict"], with_["reason"]) == (without["verdict"], without["reason"]), (name, params, with_)
+            if with_["verdict"] == "accept":
+                assert {k: v for k, v in with_["public"].items() if k not in ("fill", "gaps")} == without["public"], \
+                    (name, params)
+
+
+def test_utilization_certifies_served_work_alone():
+    """With a capacity the credit gains ``utilization``: C, the certified work, the served work alone however much fill
+    the period presents (under a capacity of its served work and its fill together, it certifies the served work and
+    its share is below 1), and its share of C; no parameter decides idle, so a floor beside the capacity, or a
+    malformed capacity, is refused as a parameter."""
+    for seed in range(4):
+        a = PC.case(cases.instance(random.Random(f"utilization/{seed}"), "utilization"))
+        assert a["verdict"] == "accept", a["reason"]
+        pub, u = a["public"], a["public"]["utilization"]
+        assert u["certified"] == sum(pub["work"]) and Fraction(u["share"]) == Fraction(u["certified"], u["capacity"])
+        rng = random.Random(f"fill-utilization/{seed}")
+        d = fill_cases.with_fills(rng, cases.credit_cases.period_instance(rng, "honest", **cases.COVERED), "fill")
+        b = PC.case(cases.serve(d))
+        served, fill = sum(b["public"]["work"]), sum(b["public"]["fill"]["work"])
+        got = PC.case({**cases.serve(d), "params": {**cases.serve(d)["params"], "capacity": served + fill}})
+        assert got["verdict"] == "accept" and fill > 0, got["reason"]
+        assert got["public"]["utilization"] == {"capacity": served + fill, "certified": served,
+                                                "share": str(Fraction(served, served + fill))}
+        got = PC.case(cases.instance(random.Random(f"params-capacity/{seed}"), "params-capacity"))
+        assert got["verdict"] == "reject" and got["reason"].startswith("params: "), got["reason"]
 
 
 @pytest.mark.parametrize("raw", [b"\xff", b"\xed\xa0\x80", b'{"program_fn":"\xc0\xaf"}'])
