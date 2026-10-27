@@ -44,7 +44,7 @@ HERE = Path(__file__).resolve().parent
 CT = HERE.parent / "codec_tensor"
 sys.path.insert(0, str(CT))
 
-import bench as BW  # noqa: E402  (codec_tensor's; before paged, which puts word_codec, whose bench.py is another, first)
+import bench as BW  # noqa: E402  (codec_tensor's)
 import reader as RD  # noqa: E402
 import sketching as SKT  # noqa: E402
 
