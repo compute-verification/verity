@@ -1398,6 +1398,10 @@
    "owner": "@training",
    "digest": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
   },
+  "Nci.Ldl.Assumptions.HeldRate": {
+   "owner": "@training",
+   "digest": "ffd64517cc4d94d5f880e9eb9ef96f35f081ddd9814060645b8847529fa9a43c"
+  },
   "Nci.Ldl.CKPartition": {
    "owner": "@training",
    "digest": "3d7b0910224d34fe886ee78be5ec5b263947f09a07ecadbffd2b639965dd2862"
@@ -8356,6 +8360,12 @@
    "assumptions": [],
    "type_hash": "cbe091114f7d58bb20b6bfda7500d46b00512a6e5ac0977029fb70e0b4a46905"
   },
+  "Nci.Ldl.SecurityProofs.PairBound": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.PairBound : Nci.Ldl.Guarantees.PairBound"],
+   "assumptions": [],
+   "type_hash": "b8f442ece31d2385acf662bc9647dbbf3173805a08c6a77f6557a3b1c1f0578b"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
@@ -12618,7 +12628,8 @@
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness (LEAN-66): every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at RT-LEAN L7's toy instance, the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous (CMP-145).",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verdicts that accept everything; a counterexample about no protocol function (CMP-145).",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod (RT-POOL RP21), one premise's form from another's, about no protocol function's acceptance (CMP-145).",
-   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text."
+   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
+   "Nci.Ldl.SecurityProofs.PairBound": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it, counted product occurrences each naming a distinct (weight, entry) pair and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks and HeldRate (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance. Its honest instance is Nci.Ldl.SecurityProofs.Witness.pairBound_honest, and Nci.Ldl.SecurityProofs.Witness.pairBound_nontrivial is its conclusion failing with HeldRate dropped."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -19185,6 +19196,7 @@
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -19283,6 +19295,7 @@
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -19799,6 +19812,7 @@
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -22537,6 +22551,7 @@
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -22792,12 +22807,17 @@
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
   },
   "Definitions.Nci.Assumptions.Ldl": {
-   "digest": "b8f07c106255f52731a8f34ff1eb09359980259b8dc298a85845e35e882db025",
+   "digest": "a570ac48de4f48a631a8b2053a7a84beeb18c09ec0ae4eb466e2a7f105984b93",
    "definitions": {
     "Nci.Ldl.Assumptions.ActivationRate": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d",
-    "Nci.Ldl.Assumptions.EvaluatesBlocks": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
+    "Nci.Ldl.Assumptions.EvaluatesBlocks": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495",
+    "Nci.Ldl.Assumptions.HeldRate": "ffd64517cc4d94d5f880e9eb9ef96f35f081ddd9814060645b8847529fa9a43c"
    },
-   "guarantees": ["Nci.Ldl.SecurityProofs.BlockDescription", "Nci.Ldl.SecurityProofs.FanOutBound"]
+   "guarantees": [
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound"
+   ]
   },
   "Definitions.Nci.Assumptions.Packed": {
    "digest": "0e92201f09ca7dc081175cbcac6116af2c84cc5a0c82c296d9f52a67809c076d",
@@ -23366,16 +23386,18 @@
    ]
   },
   "Definitions.Nci.Guarantees.Ldl": {
-   "digest": "1bf0a41e00d30c513184e404334391a23fdf592b84f556b702343ce7112cdbb4",
+   "digest": "4b13098efd1f4d17945e4f5f8c19f51a5a8449b8aaa3e69512755c48d7ed869d",
    "definitions": {
     "Nci.Ldl.Guarantees.BlockDescription": "dccf2ea2af37dcf7b6aef97c8b100ecff7a6f7095d0ec7cc2e153b61777e3968",
     "Nci.Ldl.Guarantees.Counting": "ad03ea31ea21f0e489c0860b567bf59d0ab8ca3435c5321486a585a6775e9a84",
-    "Nci.Ldl.Guarantees.FanOutBound": "ee0978a22e21f240c2e6db730be048647031ff243ee2e9fb43da937806579318"
+    "Nci.Ldl.Guarantees.FanOutBound": "ee0978a22e21f240c2e6db730be048647031ff243ee2e9fb43da937806579318",
+    "Nci.Ldl.Guarantees.PairBound": "6d1d2d811d12aeb3b0f11b680fca44f8383b7b1b76b14a01a5a33d7310ad7472"
    },
    "guarantees": [
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
-    "Nci.Ldl.SecurityProofs.FanOutBound"
+    "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound"
    ]
   },
   "Definitions.Nci.Guarantees.Packed": {
@@ -23528,7 +23550,8 @@
    "guarantees": [
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
-    "Nci.Ldl.SecurityProofs.FanOutBound"
+    "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.PairBound"
    ]
   },
   "Definitions.Nci.Links": {

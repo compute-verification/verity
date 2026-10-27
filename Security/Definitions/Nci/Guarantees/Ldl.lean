@@ -11,6 +11,8 @@ The working draft's Lemma 1, Theorem 3 and Corollary 4b, on core's circuit and `
   `|C| ≥ (c / q) Σ_v ω_v`.
 * `FanOutBound` (Corollary 4b): with activation fan-out at most `e` and `ActivationRate`,
   `ρ ≥ c β_x M / (T₀ e h_x)`, `h_x = k' + λ_x`.
+* `PairBound`: with each (weight, entry) pair counted once and `HeldRate`, `ρ ≥ 4 c β_w β_e M / (T₀ h²)`,
+  `h = k' + ℓ`.
 
 `ρ = |C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` the size of the
 reference circuit. The statements are about an arbitrary circuit, not the NCI check's code.
@@ -61,5 +63,26 @@ def FanOutBound : Prop :=
     CKPartition d R.P c k → R.Consistent (d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
     Assumptions.EvaluatesBlocks D t R a aBlk → Assumptions.ActivationRate β Λ t D R M a (d.D.eval inp) →
       c * β * M.J.card / (T₀ * e * (k + Nat.clog 2 n + aBlk + Λ)) ≤ d.D.size d.D.computed / T₀
+
+/-- **The pair bound**: let `R` be a `(c,k)`-partition of `d`, with `B = n` blocks, and `M` counted product occurrences
+`J`, each assigned to the block of its representative gate, each naming the weight `wt p` it reads and the entry
+`src p` it descends from, no two naming the same pair (each (weight, entry) pair counted once). Let the run
+`X = eval inp` take the registered values. If the decoder evaluates blocks for the tuples `a` within `t` at overhead
+`aBlk` (`EvaluatesBlocks`) and they meet `HeldRate βw βe ℓ t`, `LDL_{t,R}(a_I) ≥ βw |W_I| + βe |S_I| − ℓ` with
+`βw, βe > 0`, then for `h = k + ⌈log₂ B⌉ + aBlk + ℓ` and a reference size `T₀ > 0`,
+`ρ = |C| / T₀ ≥ 4 c βw βe M / (T₀ h²)`.
+
+Lemma 1 gives `βw |W_I| + βe |S_I| ≤ h`; distinct pairs give `|𝓙_I| ≤ |W_I| |S_I|`, at most `h² / (4 βw βe)` (AM–GM);
+Theorem 3 with unit weights on the representatives gives the bound. It survives a block that recomputes activations from
+the layers it holds (`ActivationRate`'s docstring), since those are free under `HeldRate`, and replay, since a replayed
+product names a pair already counted. When `h = 0` the bound is `0`. -/
+def PairBound : Prop :=
+  ∀ (d : Declaration) (n c k : ℕ) (R : Registration d n) {ι A W S : Type} [DecidableEq W] [DecidableEq S]
+    (M : Products d.D ι A) (wt : ι → W) (src : ι → S) (D : Decoder) (t aBlk : ℕ)
+    (a : Fin n → d.D.Transcript → List Bool) (βw βe ℓ T₀ : ℝ) (inp : d.D.Transcript),
+    CKPartition d R.P c k → R.Consistent (d.D.eval inp) → Set.InjOn (fun p => (wt p, src p)) M.J →
+    0 < βw → 0 < βe → 0 < T₀ → Assumptions.EvaluatesBlocks D t R a aBlk →
+    Assumptions.HeldRate βw βe ℓ t D R M wt src a (d.D.eval inp) →
+      4 * c * βw * βe * M.J.card / (T₀ * (k + Nat.clog 2 n + aBlk + ℓ) ^ 2) ≤ d.D.size d.D.computed / T₀
 
 end Nci.Ldl.Guarantees
