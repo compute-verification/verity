@@ -1,4 +1,4 @@
-"""scan-zk: NET-68's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
+"""scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
 t, the scan's state S_{t−1} and the Programs' row t, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
