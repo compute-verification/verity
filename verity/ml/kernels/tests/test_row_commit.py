@@ -4,18 +4,18 @@ position apart is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves,
 every table and loop of the mask, gives ``hm96/vectors_sha512.json``'s commit strings and leaves under both keys, the gates'
 reference on fresh rows and salts and the vectors' hiding leaves; and the gates' Definitions compute what it does.
 ``row_commit_cases.cu`` runs the cases, built by the host's C++ compiler and, where nvcc and a GPU are present, on the
-device."""
+device; the device build is cached (`cuda_build`), so a GPU job builds it (``cuda_lib``) before it leases a GPU."""
 from __future__ import annotations
 
 import ctypes
 import hashlib
 import json
 import random
-import shutil
-import subprocess
+from functools import cache
 from pathlib import Path
 from typing import Callable
 
+import cuda_build
 import numpy as np
 import pytest
 
@@ -27,7 +27,7 @@ from verity.ml.commitments.gates import frame_v3 as F
 from verity.ml.commitments.gates import hm96 as H
 from verity.ml.commitments.gates.sha512 import midstate, words_be
 from verity.ml.commitments.merkle import merkle_depth
-from verity.ml.kernels import ROW_COMMIT
+from verity.ml.kernels import ROW_COMMIT, SHA512
 
 SOURCE = Path(__file__).resolve().with_name("row_commit_cases.cu")
 COMMITMENTS = Path(F.__file__).resolve().parents[1]
@@ -41,8 +41,6 @@ SCHEMAS = (ROW, SEG, "sha512/row/v2", "sha512/row-seg/v1")
 #: both sides of every step of uint's length below 2^32
 EDGES = (0, 1, 255, 256, 65535, 65536, (1 << 24) - 1, 1 << 24, (1 << 32) - 1)
 LEAF, PAD, NODE, HM96, EMPTY, LEAF_AT = range(6)
-HOST_FLAGS = ("-x", "c++", "-O1", "-std=c++17", "-fPIC", "-shared", "-Wall", "-Werror")
-CUDA_FLAGS = ("-x", "cu", "-O3", "-std=c++17", "-arch=native", "-Xcompiler", "-fPIC", "-shared")
 
 u8 = ctypes.c_uint8
 
@@ -69,12 +67,15 @@ def case(kind: int, form: int = 0, *, did: bytes = b"", schema: str = ROW, pos: 
 Run = Callable[..., list]
 
 
-def _build(tool: str, flags: tuple[str, ...], out: Path) -> ctypes.CDLL:
-    r = subprocess.run([tool, *flags, "-o", str(out), str(SOURCE)], capture_output=True, text=True, check=False)
-    assert r.returncode == 0, f"{tool} failed:\n{r.stderr[-4000:]}"
-    lib = ctypes.CDLL(str(out))
+def _load(path: Path) -> ctypes.CDLL:
+    lib = ctypes.CDLL(str(path))
     assert lib.rc_case_bytes() == ctypes.sizeof(Case) and lib.rc_out_bytes() == ctypes.sizeof(Out)
     return lib
+
+
+@cache
+def cuda_lib() -> ctypes.CDLL:
+    return _load(cuda_build.device_lib(SOURCE, (ROW_COMMIT, SHA512)))
 
 
 def _runner(lib: ctypes.CDLL, cuda: bool = False) -> Run:
@@ -100,18 +101,9 @@ def _runner(lib: ctypes.CDLL, cuda: bool = False) -> Run:
     return run
 
 
-def _gpu() -> bool:
-    if shutil.which("nvcc") is None or shutil.which("nvidia-smi") is None:
-        return False
-    r = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True, check=False)
-    return r.returncode == 0 and "GPU" in r.stdout
-
-
 @pytest.fixture(scope="module")
 def host(tmp_path_factory: pytest.TempPathFactory) -> ctypes.CDLL:
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
-    assert cxx is not None, "no C++ compiler on the path"
-    return _build(cxx, HOST_FLAGS, tmp_path_factory.mktemp("host") / "row_commit.so")
+    return _load(cuda_build.host_lib(SOURCE, (), tmp_path_factory.mktemp("host") / "row_commit.so"))
 
 
 def _hex(s: str) -> bytes:
@@ -217,7 +209,7 @@ def _check_hm96(run: Run, forms: int) -> None:
 # --- the tests ----------------------------------------------------------------------------------------------------------------
 
 def test_the_package_names_the_header_and_it_includes_the_one_sha512() -> None:
-    assert ROW_COMMIT == SOURCE.parents[1] / "row_commit.cuh"
+    assert ROW_COMMIT.resolve() == SOURCE.parents[1] / "row_commit.cuh"
     assert '#include "sha512.cuh"' in ROW_COMMIT.read_text()
     assert '#include "../row_commit.cuh"' in SOURCE.read_text()
 
@@ -284,10 +276,11 @@ def test_the_definitions_compute_what_the_header_does(host: ctypes.CDLL) -> None
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not _gpu(), reason="no nvcc or no CUDA device")
-def test_the_device_computes_every_case_as_the_host(host: ctypes.CDLL, tmp_path: Path) -> None:
-    """Slow for its nvcc build: the device's loads, funnel shifts and vector stores, which the host build doesn't have."""
-    run = _runner(_build("nvcc", CUDA_FLAGS, tmp_path / "row_commit_cuda.so"), cuda=True)
+@pytest.mark.skipif(cuda_build.gpu_arch() is None, reason="no nvcc or no CUDA device")
+def test_the_device_computes_every_case_as_the_host(host: ctypes.CDLL) -> None:
+    """Slow for its nvcc build, where the cache has none: the device's loads, funnel shifts and vector stores, which the host
+    build doesn't have."""
+    run = _runner(cuda_lib(), cuda=True)
     _check_leaves(run)
     _check_pads_and_nodes(run)
     _check_trees(run)
