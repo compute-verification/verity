@@ -25,9 +25,9 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   until the continuous audit (`Pous.Guarantees.ContinuousAudit`) is tied in.
 
 There is one wipe per block, the one that opens it (so block 0 has one too, which bounds what survives from before the
-horizon), as in DEVICE-WIPE's `Verity.Blocks` and `Verity.Wipe`. Blocks and wipes are fields here until that core
-vocabulary lands; the wipe's verdict and `kept` are fields as the audits' verdicts are (`PeriodRun.accepts`), and a
-bridge from `Verity.Wipe.SurvivorBound` to the wipe's event is to give `kept` its meaning.
+horizon), as in `Verity.Blocks` and `Verity.Wipe`. Blocks and wipes are fields here, not read off that core
+vocabulary; the wipe's verdict and `kept` are fields as the audits' verdicts are (`PeriodRun.accepts`), and a bridge
+from `Verity.Wipe.SurvivorBound` to the wipe's event is to give `kept` its meaning.
 -/
 
 namespace Accounting
