@@ -17,7 +17,7 @@ import pytest
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
