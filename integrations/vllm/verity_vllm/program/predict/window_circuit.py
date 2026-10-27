@@ -2,29 +2,27 @@
 unit's output a committed row and every input row wired or registered.
 
 A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each
-boundary, one every ``every`` scan buckets from the window's start, ``slots`` in all, each of at most ``prompt`` prompt ids
-and ``outputs`` outputs. Slots are lane-major: slot 2j + b at the class of record is boundary b's lane j, anchored at
-bucket 16b. Its circuit is one class Program a slot, whatever the traffic (`class_circuit`): the Build's greedy request
-Program at one prompt row and P - 1 decode steps, P = prompt + outputs - 1 positions, every position computing the whole
-stack, the LM head and the token select, position p attending to keys 0..p. So the circuit is a function of the class
-alone: which slots carry a request, arrival steps, prompt lengths, output lengths and key counts are values, never
-structure.
+boundary, one every ``every`` scan buckets from the window's start, ``slots`` in all, each of at most ``prompt`` prompt ids and
+``outputs`` outputs. Slots are lane-major: slot 2j + b at the class of record is boundary b's lane j, anchored at bucket 16b.
+Its circuit is one class Program a slot, whatever the traffic (`class_circuit`): the Build's greedy request Program at one
+prompt row and P - 1 decode steps, P = prompt + outputs - 1 positions, every position computing the whole stack, the LM head and
+the token select, position p attending to keys 0..p. So the circuit is a function of the class alone: which slots carry a
+request, arrival steps, prompt lengths, output lengths and key counts are values, never structure.
 
-A slot's request comes from the network certifier's scan: the Programs at boundary b read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `io_shell.ScanSlots_v1` (`scan_state.bridge`, wires and no gate), which
-gives the slot's lane its `io_shell.SlotRow_v1` row (its occupancy word, its prompt's length and its ids) and its head (its
-prompt's length and ``max_tokens``). Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s while p is below the
-class's prompt cap (the prompt's id below its length, else the previous position's select; the slot it carries starts as
-the row's), and past it the previous position's select. Each position's select is masked by the slot's occupancy word
-(`io_shell.SlotMask_v1`, so an empty slot's are `io_shell.EMPTY`) and collected (`io_shell.OutCollect_v1`: the
-``outputs`` from the prompt's last position on). The slot's last position makes its entry of the scan's Programs' row
-(`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the registered model's first stop id, that one kept,
-`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold
-(a prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the
-scan refuses at the anchor (a Program's n over KO) and the egress never renders. The scan's state rows and the entries
-are the circuit's external ports. A slot's Program hands all its outputs to the scan at its anchor, which carries them
-across windows (`SC_GROUP`), so no Program runs into the next window. `window_circuit(registered, compiled, cls, grain,
-placed=...)` refuses a window the class's slots don't take and emits the class's circuit.
+A slot's request comes from the network certifier's scan: boundary b's Programs read the scan's state row before it
+(`scan_state.SCAN_STATE`, registered) through `io_shell.ScanSlots_v1` (`scan_state.bridge`, wires and no gate), which gives each
+lane its `io_shell.SlotRow_v1` row (its occupancy word, its prompt's length and its ids) and its head (its prompt's length and
+``max_tokens``). Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s below the class's prompt cap (the prompt's id
+below its length, else the previous position's select; its slot starts as the row's), and past it the previous position's
+select. Each select is masked by the slot's occupancy word (`io_shell.SlotMask_v1`, `io_shell.EMPTY` for an empty slot) and
+collected (`io_shell.OutCollect_v1`, from the prompt's last position on). The last position makes the slot's entry of the scan's
+Programs' row (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the model's first stop id, that one kept,
+`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold (a
+prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses
+at the anchor and the egress never renders. The state rows and the entries are the circuit's external ports. A slot's Program
+hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
+next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and
+emits its circuit.
 
 `class_circuit` walks the class Program's nodes in order and lowers each to units at ``grain``, once a slot: node j's units
 of slot 0, then of slot 1 and so on, each allocation's slots side by side in its template (`window_builder`, which holds
@@ -78,26 +76,26 @@ heads, KV groups and slices as digits of one) and `interface.coalesce`d, and eac
 template, so the slots' copies of a pattern are one and the circuit's description grows with the class Program's nodes, not
 its slots or units; so does the lowering's own state (a node's output rows are runs, a gather is keyed by its rows' runs).
 
-The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the
-blocks' slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the
-stack, LM head, token select, mask and collector after it are that position's, a slot's scan read and `SlotRow_v1` are its
-first position's and its entry its last's, and a gather is its reader's. An allocation's units are one entry, its slots' runs at one step side by side (the slot digit, then
-the run), and like entries that follow on merge, at one step and then at consecutive steps (`_inference`).
+The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
+slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head,
+token select, mask and collector after it are that position's, a slot's scan read and `SlotRow_v1` its first position's, its entry
+its last's and a gather its reader's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
+digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps (`_inference`).
 
-Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary
-than its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program
-would read more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's
-peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a head past `KEYS`
-keys of an attention version with no per-key-block cut, a weight whose leaves aren't whole u16 words, a row form the cut
-rule can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
-is held by the units' proofs on their committed rows, never by this lowering.
+Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary than
+its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program would read
+more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request
+a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a head past `KEYS` keys of an attention
+version with no per-key-block cut, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a
+unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran is held by the
+units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
 verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
 registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
-model and key, never roots the verifier computes (`window_weights`).
-The scan state reads count registered likewise only where the verifier pinned `scan_state.SCAN_STATE` at the root of the
-scan's rows the window reads (`ingress_scan.window_state`), which no weights registration gives.
+model and key, never roots the verifier computes (`window_weights`). Its scan state reads count registered likewise only
+where the verifier pinned `scan_state.SCAN_STATE` at the root of the scan's rows the window reads
+(`ingress_scan.window_state`), which no weights registration gives.
 """
 from __future__ import annotations
 
@@ -621,8 +619,7 @@ class _Program:
         self._collect(self.position - 1, Row(mtid, mu, "o0", 2))
 
     def _collect(self, p: int, tok: Row) -> None:
-        """Position p's masked select ``tok`` collected into the slot's outputs (`io_shell.OutCollect_v1`, the first
-        position's from its scan head), and at its last position the slot's entry of the scan's Programs' row."""
+        """Position p's masked select ``tok`` into the slot's `io_shell.OutCollect_v1` chain, and at its last its entry."""
         KO = self.cls.outputs
         ctid, cu = self.b.unit(bind(IO.OutCollect, KO=KO, FIRST=p == 0))
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))
@@ -658,8 +655,7 @@ def class_program(registered: Any, cls: WindowClass) -> Any:
 
 
 def stop_ids(registered: Any) -> tuple[int, ...]:
-    """The registered model's stop ids, its config's ``eos_token_id`` (an id, a list of them or none): a request's outputs
-    end at the first one it samples, which is kept."""
+    """The registered model's stop ids, its config's ``eos_token_id`` (an id, a list or none): outputs end at the first, kept."""
     e = registered.phi.hf_config.get("eos_token_id")
     return tuple(sorted({int(x) for x in ([] if e is None else [e] if isinstance(e, int) else e)}))
 
@@ -717,12 +713,11 @@ class Lowered:
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
                   name: str = NAME) -> IF.Circuit:
-    """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of
-    the scan state row before its anchor (`WindowClass.anchor`), and each allocation's slots side by side in its template; its
-    blocks' slots are the slots. The registered parameters are the weights, one a weight and row width
-    (`window_builder.weight_param`), and ``SCAN_STATE``'s ``cls.buckets`` rows, row a the scan's state row before the
-    window's bucket a (`ingress_scan.window_state`'s rows, `scan_state`). A window's circuit is every slot's; ``programs``
-    is the first slots only, a probe's census (`class_size`)."""
+    """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
+    scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
+    slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
+    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is
+    every slot's; ``programs`` is the first slots only, a probe's census (`class_size`)."""
     return lower(registered, cls, programs, grain, name).circuit
 
 
@@ -765,8 +760,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
     ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
     certifier's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
-    end unchecked. A last output past the window's end is the scan's to carry (a slot's Program hands every output to the
-    scan at its anchor, and `SC_GROUP` carries them across windows), so no Program runs into the next window."""
+    end unchecked. A last output past the window's end is the scan's to carry (module docstring)."""
     takes(compiled, cls, placed)
     return class_circuit(registered, cls, None, grain, name)
 
