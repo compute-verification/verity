@@ -194,6 +194,23 @@ def test_a_tampered_output_is_refused_by_replay(bundle) -> None:
     assert B.replay(u, payload) and not B.replay(u, bytes(bad))
 
 
+def test_a_boolean_template_replays_its_bits_in_word_order() -> None:
+    """A Boolean-profile template's rows are its ports' bits packed little-endian into u16 words: an argmax over bf16 words
+    replays to the index numpy finds, and a flipped low or high index bit is refused."""
+    import numpy as np
+
+    logits = np.array([0.5, -3.0, 2.25, 7.5, 1.0, -0.25, 6.0, 0.0, 3.5, -7.0, 4.0, 5.5, 1.5, 2.0, -1.0, 0.75], np.float32)
+    words = (logits.view(np.uint32) >> 16).astype("<u2").tobytes()
+    unit = {"template": {"id": "Argmax_v2{V=16}"},
+            "rows": [{"port": "logits", "row": [0, 32]}, {"port": "o0", "row": [32, 2]}]}
+    payload = words + int(np.argmax(logits)).to_bytes(2, "little")
+    assert B.replay(unit, payload)
+    for bit in (0, 15):
+        bad = bytearray(payload)
+        bad[32 + bit // 8] ^= 1 << (bit % 8)
+        assert not B.replay(unit, bytes(bad))
+
+
 def _build(fresh, drawn, binding: str = "GEMM_SM120_S8", **kw) -> tuple[dict, bytes]:
     d, weights, com = fresh
     return B.build(d, drawn, commitment=com, locate=B.torch_loop_locate(128), binding=binding, reads=B.torch_loop_reads,
