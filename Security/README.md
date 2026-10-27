@@ -2,7 +2,7 @@
 
 The Lean statement and proof of what an accepted run of Verity guarantees: for each subprotocol, and then for the composed
 protocol, a bound on the probability that the verifier accepts while a claim about the run fails. The terms are the
-[Glossary](../ARCHITECTURE.md#glossary)'s.
+[Glossary](../GLOSSARY.md)'s.
 
 ## Three trees
 
@@ -53,11 +53,11 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | Subprotocol | Guarantee | Status |
 |---|---|---|
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Proofs/Flock/Bridge/Refused.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZ` and `LinkCRZC` |
-| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` |
+| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. No served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) yet |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
-| Network certifier | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
-| Memory wipe | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
+| Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
+| Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
 | PoUB (the remote bandwidth audit) | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
@@ -66,15 +66,17 @@ PoUW has other guarantees, outside protocol soundness.
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
-accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and the network certifier.
+accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement for the remote
   deployment is not on `main` yet.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZ`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
-  drawn by the auditor's challenger after the commitment it challenges, with no Fiat–Shamir and no retries.
-  Auditor-trusted devices (network certifiers, memory challengers) are onsite's; remote has none at the site.
+  with no Fiat–Shamir and no retries. The one auditor-trusted device remote relies on is the auditor's challenger, off
+  the site, which draws each coin after the commitment it challenges: `trusted-host`, with the premises
+  `CoinsConfidential` and `OneClock` (stated in `verity/core/protocols/sampled_proofs/README.md`, not in Lean). Network
+  certifiers and memory challengers are onsite's.
 - **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth: the remote
   bandwidth audit (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered
   store. It is a different protocol from the remote composite, and a component of onsite only.
