@@ -1,17 +1,19 @@
-"""The scan (`ingress_scan.IngressScanBucket`) and the egress buckets on the views it writes (`egress.EgressBucket`), on
-the warden's own records: the warden, driven tick by tick (`test_network_certifier_warden`'s harness), carries three
-warden-form id requests on two lanes, the third queued until a lane frees, and their responses of id events. The
-reference's scan of its ingress rows from the empty state, the Programs' rows its responses, holds each request's prompt
-ids at their positions, its head's fields, its admission bucket and its anchor until the anchor and its outputs from
-then until its last egress bucket, and reuses a slot only past it; the view ingress bucket t writes is the state egress
-bucket t accepts the warden's egress row t on, every bucket; a view from another bucket, or a forged egress row, is
-refused. The ingress circuit is the reference on every bucket and on each named negative (two blocks swapped, a data
-cell after a pad, an `END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its
-last egress bucket, a digit, an ordinal or a pad byte changed, a state bit off in the head, a slot's header, its ids or
-its outputs, the state rows of two buckets swapped, a Programs' entry off its anchor or off its outputs, a view bit off)
-and on random flips, and the egress circuit is its reference on the views and rows; `scan_traffic.serve`, the zk run's
-driver, ticks the same rows as the warden; and the w63 class's state is the layout NEG sized
-(note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs N2's view reads."""
+"""The scan (`ingress_scan.IngressScanBucket`, `IngressScanFirst`) and the egress buckets on the views it writes
+(`egress.EgressBucket`), on the warden's own records: the warden, driven tick by tick (`test_network_certifier_warden`'s
+harness), carries three warden-form id requests on two lanes, the third queued until a lane frees, and their responses
+of id events. The reference's scan of its ingress rows from the empty state, the Programs' rows its responses, holds
+each request's prompt ids at their positions, its head's fields, its admission bucket and its anchor until the anchor
+and its outputs from then until its last egress bucket, and reuses a slot only past it; egress bucket t computes the
+warden's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged one) from a
+view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random flips (S_t
+and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
+`END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress
+bucket, an ordinal or a pad byte changed, a phase of EVERY, a Programs' entry off its anchor), and computes another
+S_t than the scan's, which the state row its o1 opens refuses, from a digit changed or a Programs' entry off its
+outputs; the first bucket's circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its
+reference on the views; `scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63
+class's state is the layout NEG sized (note:network-accounting/20261025T0830Z-report-net68-scan-router) with the outputs
+N2's view reads."""
 from __future__ import annotations
 
 import asyncio
@@ -39,6 +41,7 @@ PARAMS = WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, qu
                       ingress_buckets=3, egress_cells=9)
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=3, WITHIN=3, D=5, KO=8)
 UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=3, WITHIN=3, D=5, KO=8)
+FIRST = bind(IS.IngressScanFirst, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=3, WITHIN=3, D=5, KO=8)
 SHAPE = CLS.egress
 EGRESS = bind(EG.EgressBucket, B=B, R=SHAPE.R, r=SHAPE.r, NR=SHAPE.NR, K=SHAPE.K, IB=SHAPE.IB, D=SHAPE.D)
 PROMPTS = ([1000, 1007, 1014], [2000 + 3 * k for k in range(60)], [131071 - k for k in range(100)])
@@ -109,19 +112,19 @@ def test_the_scan_holds_each_request_through_its_egress_and_reuses_a_slot_only_p
     assert run.states[8].slots[0].n == 0 and [s.q for s in run.states[PARAMS.delay + 3].slots] == [3, 2]
 
 
-def test_each_egress_bucket_accepts_the_view_its_ingress_bucket_wrote_and_refuses_another(run):
+def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_bucket_wrote(run):
     ch = run.chain
     assert len(ch.egress) == len(ch.ingress) == PARAMS.window
     assert sum(row[s * B] == DATA for row in ch.egress for s in range(SHAPE.R)) == sum(map(len, RESPONSES))
     for t in range(PARAMS.window):
-        assert EG.verdict(SHAPE, ch.view(t), ch.egress[t]) == EG.ACCEPT, t
+        assert EG.outputs(SHAPE, ch.view(t)) == (EG.ACCEPT, ch.egress[t]), t
         assert EG.state_bits(SHAPE, ch.view(t)) == ch.views[t]
     moved = [t for t in range(PARAMS.window - 1) if ch.egress[t] != ch.egress[t + 1]]
-    assert moved and all(EG.verdict(SHAPE, ch.view(t + 1), ch.egress[t]) == 0 for t in moved)
+    assert moved and all(EG.outputs(SHAPE, ch.view(t + 1))[1] != ch.egress[t] for t in moved)
     t, s = next((t, s) for t, row in enumerate(ch.egress) for s in range(SHAPE.R) if row[s * B] == DATA)
     forged = bytearray(ch.egress[t])
     forged[s * B + IT.ID_AT + IT.ID_DIGITS - 1] ^= 1
-    assert EG.verdict(SHAPE, ch.view(t), bytes(forged)) == 0
+    assert EG.outputs(SHAPE, ch.view(t))[1] != bytes(forged)
 
 
 def test_scan_traffic_ticks_the_warden_s_rows(run):
@@ -155,13 +158,19 @@ def test_the_state_is_the_layout_neg_sized():
             w63.serves(replace(served, **bad))
 
 
-Case = tuple[bytes, list[int], list[int], list[int], list[int]]
+#: (row, sin, prog), the first bucket's sin the empty state's
+Case = tuple[bytes, list[int], list[int]]
 
 
-def _negatives(run) -> dict[str, Case]:
-    ch, rows, bits, states = run.chain, run.rows, run.bits, run.states
-    honest = lambda t, **kw: tuple(kw.get(k, v) for k, v in zip(("row", "sin", "prog", "sout", "view"), ch.unit(t)))  # noqa: E731
-    out = {}
+def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]]]:
+    """The cases a check refuses, and those of bucket t whose S_t is another than the scan's (the state row t, which
+    the unit's o1 must open, refuses them)."""
+    ch, rows, states = run.chain, run.rows, run.states
+
+    def honest(t, **kw) -> Case:
+        return tuple(kw.get(k, v) for k, v in zip(("row", "sin", "prog"), (ch.ingress[t], ch.states[t], ch.progs[t])))
+
+    out, other = {}, {}
     blk = _blocks(rows[1])
     assert [[c[0] for c in b] for b in blk] == [[END, PAD], [PAD, PAD]]
     out["swapped"] = honest(1, row=_join([blk[1], blk[0]]))
@@ -183,7 +192,7 @@ def _negatives(run) -> dict[str, Case]:
     cell[at] = ord("0") + (cell[at] - ord("0") + 1) % 10
     blk = _blocks(rows[t])
     blk[p][i] = bytes(cell)
-    out["digit"] = honest(t, row=_join(blk))
+    other["digit"] = t, honest(t, row=_join(blk))
     blk = _blocks(rows[t])
     blk[p][i] = blk[p][i][:4] + bytes([blk[p][i][4] ^ 1]) + blk[p][i][5:]
     out["ordinal"] = honest(t, row=_join(blk))
@@ -192,62 +201,81 @@ def _negatives(run) -> dict[str, Case]:
     blk = _blocks(rows[t])
     blk[p][i] = blk[p][i][:-1] + b"\x01"
     out["pad-byte"] = honest(t, row=_join(blk))
-    lay = IS.layout(CLS)
-    for name, field, bit, t in (("now", "now", 0, 2), ("phase", "phase", 1, 2), ("last", "last", 0, 2),
-                                ("slot-q", "1.q", 0, 2), ("slot-fields", "1.fields", 2, 2),
-                                ("slot-anchor", "1.anchor", 0, 2), ("slot-ids", "1.ids", 5, 2), ("slot-n", "1.n", 0, 7),
-                                ("slot-out", "1.out", 3, 7)):
-        sout = list(bits[t + 1])
-        sout[lay[field][0] + bit] ^= 1
-        out[f"state-{name}"] = honest(t, sout=sout)
-    # bucket 4 given bucket 5's state rows, the chain's states swapped between buckets, its own row, prog and view
-    out["chain"] = honest(4, sin=bits[5], sout=bits[6])
+    out["phase-every"] = honest(2, sin=IS.encode(CLS, replace(states[2], phase=CLS.EVERY)))
     entries = IS.prog_decode(CLS, ch.progs[3])
     assert entries == [(3, RESPONSES[0] + (0,) * 5), (0, (0,) * CLS.KO)]
     out["prog-off-anchor"] = honest(3, prog=IS.prog_encode(CLS, [entries[0], (1, (7,))]))
-    out["prog-outputs"] = honest(3, prog=IS.prog_encode(CLS, [(2, RESPONSES[0][:2]), IS.NONE]))
-    for name, t, at in (("view-b", 4, 0), ("view-live-high", 4, SHAPE.slot_at(0) + 1),
-                        ("view-out", 7, SHAPE.slot_at(1) + EG.IDS + 2)):
-        view = list(ch.views[t])
-        view[at] ^= 1
-        out[name] = honest(t, view=view)
-    return out
+    other["prog-outputs"] = 3, honest(3, prog=IS.prog_encode(CLS, [(2, RESPONSES[0][:2]), IS.NONE]))
+    return out, other
 
 
-def _circuit(fn, args) -> list[int]:
-    return [int(x) for x in np.asarray(evaluate_bits(fn, *[np.asarray(a, dtype=np.uint8) for a in args])).reshape(-1)]
+def _circuit(fn, args) -> list[list[int]]:
+    """Each case's output bits."""
+    out = np.asarray(evaluate_bits(fn, *[np.asarray(a, dtype=np.uint8) for a in args]))
+    return [[int(x) for x in o] for o in out.reshape(len(args[0]), -1)]
 
 
-def test_each_negative_is_refused_by_the_reference(run):
-    for name, case in _negatives(run).items():
-        assert IS.reference(CLS, *case) == 0, name
+def _scan_outputs(fn, cases) -> list[tuple[int, list[int], list[int]]]:
+    """Each case's (o0, o1, o2): o0's value, S_t's bits and the view's."""
+    NS = IS.state_bits(CLS)
+    return [(sum(b << i for i, b in enumerate(o[:16])), o[16:16 + NS], o[16 + NS:])
+            for o in _circuit(fn, IS.arguments(CLS, cases))]
+
+
+def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run):
+    refused, other = _negatives(run)
+    for name, case in refused.items():
+        assert IS.reference(CLS, *case) == (0, None, None), name
+    for name, (t, case) in other.items():
+        ok, st, _ = IS.reference(CLS, *case)
+        assert ok == 1 and st != run.chain.outputs(t)[0], name
 
 
 @pytest.mark.slow
 def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_random_flips(run):
-    """Slow (about 13 s: 224,436 ANDs traced, then evaluated on about 110 cases, and the egress unit on 47)."""
+    """Slow (about 15 s: 216,772 and 137,889 ANDs traced, the ingress unit evaluated on about 90 cases, the first
+    bucket's on about 30, and the egress unit on 31)."""
     ch = run.chain
-    honest = [ch.unit(t) for t in range(len(run.rows))]
-    negs = _negatives(run)
+    T = len(run.rows)
+    honest = [(ch.ingress[t], ch.states[t], ch.progs[t]) for t in range(T)]
+    refused, other = _negatives(run)
+    negs = list(refused.values()) + [c for _, c in other.values()]
     rng = random.Random(7)
-    flips = []
+    flips, at = [], []
     for _ in range(60):
-        case = [bytearray(x) if k == 0 else list(x) for k, x in enumerate(honest[rng.randrange(len(honest))])]
-        k = rng.randrange(5)
+        at.append(rng.randrange(T))
+        case = [bytearray(x) if k == 0 else list(x) for k, x in enumerate(honest[at[-1]])]
+        k = rng.randrange(3)
         if k == 0:
             case[0][rng.randrange(len(case[0]))] ^= 1 << rng.randrange(8)
         else:
             case[k][rng.randrange(len(case[k]))] ^= 1
         flips.append((bytes(case[0]), *case[1:]))
-    cases = honest + list(negs.values()) + flips
-    got = _circuit(UNIT, IS.arguments(CLS, cases))
-    want = [IS.reference(CLS, *c) for c in cases]
-    assert got == want
-    assert got[:len(honest)] == [1] * len(honest) and got[len(honest):len(honest) + len(negs)] == [0] * len(negs)
-    T = len(run.rows)
-    pairs = [(ch.view(t), ch.egress[t]) for t in range(T)] + [(ch.view(t + 1), ch.egress[t]) for t in range(T - 1)]
-    pairs += [(ch.view(t), ch.egress[(t + 3) % T]) for t in range(T)]
-    got = _circuit(EGRESS, [list(col) for col in zip(*(EG.bucket_arguments(SHAPE, s, r) for s, r in pairs))])
-    words = np.asarray(got).reshape(len(pairs), 16)
-    assert [int(w[0]) for w in words] == [EG.verdict(SHAPE, s, r) for s, r in pairs] and not words[:, 1:].any()
-    assert [int(w[0]) for w in words[:T]] == [1] * T
+    cases = honest + negs + flips
+    got = _scan_outputs(UNIT, cases)
+    for c, (o0, o1, o2) in zip(cases, got):
+        ok, st, view = IS.reference(CLS, *c)
+        assert o0 == ok and (not ok or (o1, o2) == (st, view))
+    assert got[:T] == [(1, *ch.outputs(t)) for t in range(T)]
+    assert [o0 for o0, _, _ in got[T:T + len(refused)]] == [0] * len(refused)
+    assert [(o0, o1 != ch.outputs(t)[0]) for (t, _), (o0, o1, _) in zip(other.values(), got[T + len(refused):])] \
+        == [(1, True)] * len(other)
+    moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
+    assert sum(moved) >= 5, moved
+    # the first bucket's unit is the ingress unit at the empty state, its outputs bit for bit where a check fails too
+    starts = [(c[0], c[2]) for c in cases if c[1] == ch.states[0]]
+    for _ in range(20):
+        row, prog = bytearray(ch.ingress[0]), list(ch.progs[0])
+        if rng.randrange(2):
+            row[rng.randrange(len(row))] ^= 1 << rng.randrange(8)
+        else:
+            prog[rng.randrange(len(prog))] ^= 1
+        starts.append((bytes(row), prog))
+    first = _scan_outputs(FIRST, starts)
+    assert first == _scan_outputs(UNIT, [(row, ch.states[0], prog) for row, prog in starts])
+    assert first[0] == (1, *ch.outputs(0)) and 0 in [o0 for o0, _, _ in first]
+    assert [o0 for o0, _, _ in first] == [IS.reference(CLS, row, None, prog)[0] for row, prog in starts]
+    views = [ch.view(t) for t in range(T)] + [ch.view(t + 1) for t in range(T - 1)]
+    got = _circuit(EGRESS, [list(col) for col in zip(*(EG.bucket_arguments(SHAPE, s) for s in views))])
+    assert got == [EG.output_bits(SHAPE, s) for s in views]
+    assert [EG.outputs(SHAPE, ch.view(t)) for t in range(T)] == [(EG.ACCEPT, row) for row in ch.egress]

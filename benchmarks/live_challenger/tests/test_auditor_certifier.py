@@ -37,9 +37,11 @@ def host(tmp_path) -> A.Host:
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
 
-def gate(host, argv, *, by="network-accounting", active=lambda r: False, started=None, token="ab12"):
-    return A.gate(argv, host, by=by, now=T0, token=token, own=lambda p: None, certifier_active=active,
-                  start_certifier=(started.append if started is not None else lambda r: None))
+def gate(host, argv, *, by="network-accounting", active=lambda r: False, started=None, token="ab12", stdin=None,
+         own=None):
+    return A.gate(argv, host, by=by, now=T0, token=token, own=own or (lambda p: None), certifier_active=active,
+                  start_certifier=(started.append if started is not None else lambda r: None),
+                  read=lambda n: pytest.fail("read stdin") if stdin is None else stdin[:n])
 
 
 def test_a_lane_key_starts_a_rehearsal_and_a_second_waits_for_it_to_end(host):
@@ -98,7 +100,7 @@ A_HEIGHT_REFUSED = [(v, "10 to 20") for v in ("9", "1", "0", "21", "30", "010", 
     (["--tokens", "32\n"], "--tokens '32\\n': 16 to 64"),
     (["--in", "2"], "unrecognized arguments: --in"),
     (["--delta-buckets", "74"], "unrecognized arguments: --delta-buckets"),
-    (["--tamper", "burst"], "--tamper 'burst': one of ['late', 'extra', 'drop', 'token'], or none for an honest shim"),
+    (["--tamper", "burst"], "--tamper 'burst': one of ['late', 'extra', 'drop', 'token', 'byte'], or none for an honest shim"),
     (["--tamper", "honest"], "--tamper 'honest'"),
     (["--tamper", "Drop"], "--tamper 'Drop'"),
     (["--tamper", "drop,token"], "--tamper 'drop,token'"),
@@ -337,6 +339,10 @@ VARIED = REQUEST + ["--traffic", "varied"]
     (["--compact", "4096"], {"compact": 4096}, ["--compact", "4096"]),
     (["--compact", "16", "--eos-ids", "128009", "--tokens", "32"], {"tokens": 32, "eos_ids": [128009], "compact": 16},
      ["--tokens", "32", "--eos-ids", "128009", "--compact", "16"]),
+    (["--margin", "1"], {"margin": 1.0}, ["--margin", "1.0"]),
+    (["--margin", "8"], {"margin": 8.0}, ["--margin", "8.0"]),
+    (["--margin", "4", "--compact", "8", "--rate", "0.5"], {"rate": 0.5, "compact": 8, "margin": 4.0},
+     ["--rate", "0.5", "--compact", "8", "--margin", "4.0"]),
 ])
 def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_plan_named_for_its_run(host, tmp_path,
                                                                                                    given, recorded,
@@ -382,11 +388,13 @@ def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_pla
      "--minutes 1: 100 requests at 1.5 a second arrive over 66.6667 seconds"),
     *[(["--traffic", "varied", "--compact", v], f"--compact {v!r}: 8 to 4096")
       for v in ("7", "0", "4097", "65536", "-8", "08", "8.0", "B", "")],
+    *[(["--traffic", "varied", "--margin", v], f"--margin {v!r}: 1 to 8, a plain decimal")
+      for v in ("0", "0.5", "0.9999", "8.0001", "9", "10", "-1", ".5", "4.", "1e0", "nan", "inf", "")],
     *[([flag, v], f"{flag}: varied traffic's (--traffic varied)")
       for flag, v in (("--rate", "2"), ("--prompt-range", "16:1024"), ("--seed", "0"), ("--eos-ids", "2"),
-                      ("--compact", "8"))],
+                      ("--compact", "8"), ("--margin", "4"))],
     *[(["--traffic", "fixed", flag, v], f"{flag}: varied traffic's (--traffic varied)")
-      for flag, v in (("--rate", "2"), ("--seed", "0"), ("--compact", "8"))],
+      for flag, v in (("--rate", "2"), ("--seed", "0"), ("--compact", "8"), ("--margin", "2"))],
     (["--traffic", "varied", "--name", "x"], "unrecognized arguments: --name"),
 ])
 def test_the_gate_refuses_a_varied_rehearsal_it_cant_check_and_varied_flags_on_fixed_traffic(host, bad, why):
@@ -395,6 +403,70 @@ def test_the_gate_refuses_a_varied_rehearsal_it_cant_check_and_varied_flags_on_f
     argv = ["--ssh", shlex.join(["certifier-rehearse", *[w for kv in good.items() for w in kv]]), "--key",
             "network-accounting"]
     rc, out = gate(host, argv, started=[])
+    assert rc == 3 and why in json.loads(out)["refused"], out
+    assert not host.certifier.exists()
+
+
+PROMPTS = [[70001, 3], [5], [7]]
+
+
+def test_a_varied_rehearsal_takes_its_prompts_off_stdin_into_its_witness_and_rehearses_on_that_file(host):
+    """`--prompts` on varied traffic reads the prompts off the gate's stdin as a scan rehearsal's are read and writes
+    them, canonical, to `witness/prompts.json` (0700, the file 0600, both `auditor`'s); the request records their count
+    and ids, never the ids, and keeps its own `--requests`. The run's command passes that file, beside the run's `out/`,
+    as `rehearse --prompts-file`, with no `--prompt-range`; `fetch` gives the witness to the run's own lane alone."""
+    owned, data = [], json.dumps(PROMPTS, indent=2).encode()
+    rc, out = gate(host, VARIED + ["--prompts", "--margin", "4", "--requests", "100", "--rate", "0.2", "--tokens",
+                                   "24", "--eos-ids", "0", "--minutes", "45"], stdin=data, own=owned.append,
+                   started=[])
+    assert rc == 0, out
+    run = json.loads(out)["run"]
+    d, w = host.certifier / run, host.certifier / run / A.WITNESS
+    req = json.loads((d / "request.json").read_text())
+    assert {k: req[k] for k in ("traffic", "prompts", "margin", "requests", "rate", "tokens", "eos_ids")} == {
+        "traffic": "varied", "prompts": {"count": 3, "ids": 4}, "margin": 4.0, "requests": 100, "rate": 0.2,
+        "tokens": 24, "eos_ids": [0]}
+    assert "device" not in req and "prompt_range" not in req
+    assert b"70001" not in out and b"70001" not in (d / "request.json").read_bytes()
+    assert (w / A.PROMPTS).read_bytes() == b"[[70001,3],[5],[7]]"
+    assert (w.stat().st_mode & 0o777, (w / A.PROMPTS).stat().st_mode & 0o777) == (0o700, 0o600)
+    assert owned == [host.certifier, w / A.PROMPTS, w, d]
+
+    seen = []
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+                          command=lambda req, out, url: seen.append((req, out, url)) or rehearsal(SUMMARY)(req, out,
+                                                                                                         url),
+                          wait=lambda proc, s: proc.wait())
+    (got, work, url), = seen
+    assert got == req and work == d / "out" and end["rc"] == 0
+    argv = A.certifier_command(got, work, url, tree=Path("/opt/vy-challenger") / PIN)
+    assert argv[argv.index("--requests"):argv.index("--temperature")] == [
+        "--requests", "100", "--tokens", "24", "--rate", "0.2", "--eos-ids", "0", "--margin", "4.0",
+        "--prompts-file", str(w / A.PROMPTS)]
+    assert "--prompt-range" not in argv and argv[argv.index("--traffic"):] == [
+        "--traffic", "varied", "--name", run, "--strategies", "honest"]
+    for key, witness in (("memory-accounting", False), ("network-accounting", True)):
+        rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", key], host)
+        with tarfile.open(fileobj=io.BytesIO(blob)) as tar:
+            names = tar.getnames()
+        assert rc == 0 and (f"{run}/witness/prompts.json" in names) == witness
+        assert witness or not any(n.startswith(f"{run}/witness") for n in names)
+
+
+@pytest.mark.parametrize("argv, stdin, why", [
+    (["--prompts"], b"[[1]]", "--prompts: varied traffic's (--traffic varied)"),
+    (["--traffic", "fixed", "--prompts"], b"[[1]]", "--prompts: varied traffic's (--traffic varied)"),
+    (["--traffic", "varied", "--prompts", "--prompt-range", "8:8"], b"[[1]]",
+     "--prompt-range: the chat turns' lengths, which --prompts replaces"),
+    *[(["--traffic", "varied", "--prompts"], bad, ("--prompts: stdin is a JSON array of 1 to 400 prompts, each an array "
+                                                   "of 1 to 2048 token ids below 2^17"))
+      for bad in (b"", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b'{"p": [[1]]}',
+                  json.dumps([[1]] * 401).encode(), json.dumps([[0] * 2049]).encode())],
+    (["--traffic", "varied", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]",
+     "--prompts: over 1048576 bytes on stdin"),
+])
+def test_the_gate_refuses_a_varied_rehearsals_prompts_it_cant_check_and_writes_nothing(host, argv, stdin, why):
+    rc, out = gate(host, REQUEST + argv, stdin=stdin, started=[])
     assert rc == 3 and why in json.loads(out)["refused"], out
     assert not host.certifier.exists()
 

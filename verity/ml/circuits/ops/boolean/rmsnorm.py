@@ -1,4 +1,4 @@
-"""A bf16 row's RMSNorm as Boolean Definitions: one proof unit a row where the row fits a unit, and CMP-92's two-level form
+"""A bf16 row's RMSNorm as Boolean Definitions: one proof block a row where the row fits a unit, and CMP-92's two-level form
 where it doesn't. Every output fits its size class: 16 bits a bf16 word, 32 an f32.
 
     RmsNormRow_v1{N, EPS}       (x: Array<N, BF16>, w: Array<N, BF16>) -> Array<N, BF16>

@@ -2,7 +2,7 @@
 ``verity_bench.vllm.commit_arm:COMMIT`` (``commit``, eager) or ``verity_bench.vllm.commit_arm:COMMIT_COMPILED``
 (``commit@compiled``, at vLLM's compiled serving defaults) in ``arm_modules`` and the arm's id in ``arms``.
 
-``sampled-proofs:vllm-v1`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
+``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
 proofs refuses (`protocol_options.sampled_proofs.refusals`: it runs in a row's Commit stage). So these arms install the Commit's
 committer on the served engine themselves, configured as a row's Commit stage runs it (`config.CommitConfig`,
 `pipeline.commit.make_committer`): ``native_collect_v2b`` (gather windows, size-adaptive blocks, native worker, GPU tree, fast
@@ -80,12 +80,12 @@ def committer_engine(llm: Any) -> SimpleNamespace:
     harness's ``target.engine`` (``verity_vllm.LLM``, or for a local checkpoint the runner's stand-in, which has no pin):
     the ``vllm.LLM``, its in-process model runner, the served model, and the checkpoint's repo and revision (into its
     geometry digest), which are the pin's, or for a local checkpoint vLLM's model path with no revision."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
 
     pin = getattr(llm, "pin", None)
     mc = llm.vllm.llm_engine.vllm_config.model_config
     cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
-    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model, cp=cp)
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class CommitArm:

@@ -1,6 +1,6 @@
 """N2's served profile: on a served link, whose egress end has no public occupancy profile, the egress counts derived
 from the ingress counts under the declared clock sync, zero-knowledge. A Boolean Definition, a gated part of N2's
-served proof unit (`service`'s `NetworkServedLinkWindow` v4), which runs on every link-window; its one output is the ok
+served proof block (`service`'s `NetworkServedLinkWindow` v4), which runs on every link-window; its one output is the ok
 bit. That unit's Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar
 and held to the Definition by circuit-check; N2's verifier of record reads its output from the unit's proof, and the
 in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the circuit.
@@ -461,7 +461,7 @@ def unit(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int):
 
 @lru_cache(maxsize=None)
 def gate(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> PrimitiveDefinition:
-    """`unit(…)` as one gate of N2's served proof unit (`service.LinkWindows.unit`) that names the Definition and its
+    """`unit(…)` as one gate of N2's served proof block (`service.LinkWindows.unit`) that names the Definition and its
     pinned circuit digest, `Gate[NetworkServedCounts_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check."""
     d = unit(T, F, FIN, R, RIN, OWN)
     return gate_of(d, pinned_digest(d, PINS), "N2's served counts")

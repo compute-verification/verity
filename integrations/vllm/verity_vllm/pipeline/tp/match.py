@@ -60,7 +60,7 @@ def _engine_main(args) -> None:
 
     from verity_vllm.engine import served, vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
-    from verity_vllm.engine.rank_worker import EXTENSION
+    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
