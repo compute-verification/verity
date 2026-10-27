@@ -37,7 +37,7 @@ KIMI = Profile(
     beta_x=0.87, legs=512, fanout=37248, per_param=2, vocab=163840, bcol=1, thread_d=10, thread_e=37248, thread_c=2,
     kappa_forward=0.294, kappa_wgrad=0.294, layers=61, layer_weights=4e8, layer_bits=1.04e12 * 2.5 / 61,
     thread_k=2e7, entry_width=512, price=2.8, price_max=8, gamma=1, beta_v=0.63, map_width=7168, map_width_min=7168,
-    h_eff=17, b_ps=1, step_tokens=6.7e7)
+    h_eff=17, b_ps=1, step_tokens=6.7e7, residual_width=7168)
 DECLARED = FlopBudget(6.4e16, K)
 WINDOW = FlopBudget(5.5e20, 7.3e11)
 
@@ -135,6 +135,17 @@ def test_premise_shares():
     assert classes.expensive_share(K, bits, 61) == 60 / 61
     assert classes.expensive_share(17.5 * bits, bits, 61) == 43 / 61
     assert classes.expensive_share(61 * bits, bits, 61) == 0
+    assert classes.unheld_share(K, bits, 61) == classes.expensive_share(K, bits, 61)
+    assert classes.unheld_share(bits, bits, 61) == 0
+    assert classes.unheld_share(WINDOW.inputs, bits, 61) == 0
+
+
+def test_the_pair_bound_is_am_gm_over_held_weights_and_entries():
+    """`|W| |S| ≤ (k / 2)² / (βw βe)` at `βw |W| + βe |S| ≤ k`, with `βe = β_x d` an entry."""
+    k = WINDOW.inputs
+    assert classes.pair(k, 2.5, 0.87, 7168) == pytest.approx((k / 2 / 2.5) * (k / 2 / (0.87 * 7168)))
+    a = CLASSES["pair"].allowance(KIMI)(WINDOW)
+    assert a == pytest.approx(classes.pair(k, 2.5, 0.87, 7168) * 0.602 / 0.294 * 61 / 43)
 
 
 def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_and_divided_by_its_share():
@@ -154,14 +165,16 @@ def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_an
         assert arg.counts in ("kappa", "keyed") or arg.counts in Profile.__dataclass_fields__
 
 
-def test_at_the_serving_block_only_the_linear_counts_cap():
+def test_at_the_serving_block_only_the_pair_bound_caps():
+    """The linear counts priced per activation give no cap once a block holds a layer's update (`unheld_share`): it
+    computes that layer's activations from its entries. The pair bound charges only the held weights and the entries."""
     finite = {n for n, arg in CLASSES.items() if arg.allowance(KIMI)(WINDOW) < KIMI.kappa * WINDOW.compute / 2}
-    assert finite == {"fanout-priced", "fanout-split"}
+    assert finite == {"pair"}
 
 
 def test_a_class_whose_field_is_unknown_is_outside():
     for name, fieldname in (("cover", "layers"), ("covering", "kappa_forward"), ("threaded", "thread_k"),
-                            ("fanout-priced", "layer_bits"), ("accumulator", "kappa_wgrad")):
+                            ("fanout-priced", "layer_bits"), ("accumulator", "kappa_wgrad"), ("pair", "residual_width")):
         with pytest.raises(Outside, match=fieldname):
             CLASSES[name].allowance(replace(KIMI, **{fieldname: None}))
 
@@ -204,7 +217,7 @@ def test_a_class_caps_a_block_of_gates_through_the_one_conversion():
     """`q_T(c, k)` on gates is the FLOP-model statement at `c / G` FLOPs, and a gate holds `w = κ / (2G)`: the capacity
     `w c` is `κ/2` a FLOP."""
     u = hardware.units(Registry.load())
-    a = CLASSES["fanout-priced"].allowance(KIMI)
+    a = CLASSES["pair"].allowance(KIMI)
     c = u.gates(WINDOW.compute)
     assert classes.per_block(a, u)(Budget(c, WINDOW.inputs)) == a(WINDOW)
     assert classes.weight_per_gate(KIMI, u) * c == pytest.approx(KIMI.kappa * WINDOW.compute / 2)

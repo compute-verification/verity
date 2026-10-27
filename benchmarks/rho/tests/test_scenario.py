@@ -38,16 +38,16 @@ def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alon
 
 
 def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound():
-    """Refuting E1's activation rate at every block size takes fanout-priced and fanout-split (which cite it) out of
-    the lower bound: onsite H200's is then exactly the lower bound without them, and both are still reported alone,
-    tagged refuted, at the overhead they had."""
-    name, premise = "reference-onsite-h200", "premise.e1-activation-rate"
+    """Refuting `HeldRate` at every block size takes the pair bound (which cites it) out of the lower bound: onsite
+    H200's is then exactly the lower bound without it, and the pair bound is still reported alone, tagged refuted, at
+    the overhead it had."""
+    name, premise = "reference-onsite-h200", "premise.held-rate"
     base = evaluate_named(REG, name).families[0]
     refuted = REG.override({f"{premise}.standing": "refuted", f"{premise}.beyond": "refuted"})
     f = evaluate_named(refuted, name).families[0]
     cite = REG[f"{premise}.lean"]
     citing = {a.name for a in CLASSES.values() if cite in a.cites}
-    assert citing == {"fanout-priced", "fanout-split"}
+    assert citing == {"pair"}
     s = build(REG, name)
     without = evaluate(replace(s, bounds=tuple(a for a in s.bounds if a.name not in citing))).families[0]
     assert set(f.combined.excluded) == citing and replace(f.combined, excluded=()) == without.combined
@@ -61,7 +61,8 @@ def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound(
 def test_s_times_and_gates_per_flop_come_from_one_source():
     """The bound holds a gate at `u/w = ω_max 2G / (κ s_×)` of the reference's weight, so the FLOP model's `G` beside
     a Boolean design's measured `s_×` (681 gates a bf16 product) scales every weight counted at `u` (the dark
-    leaves, most of onsite H200's lower bound) by `681 w`, about 0.82, with nothing to say so. Building refuses the mix;
+    leaves and the uncertified routes, about a tenth of onsite H200's lower bound) by `681 w`, about 0.82, with nothing
+    to say so. Building refuses the mix;
     with both from that design it builds, and the lower bound moves by that much on the share counted at `u`."""
     design = "boolean:AmpereBF16TcDot16_v3"
     name = "reference-onsite-h200"
@@ -74,7 +75,7 @@ def test_s_times_and_gates_per_flop_come_from_one_source():
     w = classes.weight_per_gate(base.families[0].profile, base.scenario.context.units)
     assert base.scenario.structure.basis == base.scenario.context.units.basis == "flop-model"
     at_u = sum(t.share for t in analysis.attribution(base) if t.name == "dark" or t.name.split(".")[0] in ROUTES)
-    assert 0.5 < at_u <= 1
+    assert 0.05 < at_u <= 1
     assert one.lo / base.lo == pytest.approx(1 / (at_u / (681 * w) + 1 - at_u), rel=5e-3)
     assert build(REG.override({"units.basis": design}), "reference-onsite-h200-elementary").structure.s_times == 1
 
