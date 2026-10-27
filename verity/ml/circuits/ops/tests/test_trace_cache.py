@@ -54,7 +54,7 @@ def build(directory: str) -> dict:
     traced = [amax.defn.traced(amax.S()), EW.Bf16Add.traced(), m3.defn.traced(m3.S()), own.traced(), rest.traced()]
     return {"digest": program_digest(prog), "gates": prog.gates,
             "traced": [hashlib.sha256(repr((T.n_inputs, T.gates, T.outputs, T.counts)).encode()).hexdigest() for T in traced],
-            "counts": [cache.hits, cache.misses, cache.bad] if cache else None}
+            "counts": [cache.hits, cache.misses, len(cache.bad), len(cache.unkeyed)] if cache else None}
 
 
 def _run(directory: str) -> dict:
@@ -67,7 +67,7 @@ def test_a_warm_build_gives_the_cold_builds_gates_and_digest(tmp_path: Path) -> 
     cold = _run(str(tmp_path / "traces"))
     warm = _run(str(tmp_path / "traces"))
     assert plain["counts"] is None
-    assert cold["counts"] == [0, 4, 0] and warm["counts"] == [4, 0, 0]
+    assert cold["counts"] == [0, 4, 0, 0] and warm["counts"] == [4, 0, 0, 0]
     for k in ("digest", "gates", "traced"):
         assert cold[k] == plain[k] and warm[k] == plain[k], k
     assert len(list((tmp_path / "traces").glob("*/*.trace"))) == 4
@@ -80,12 +80,15 @@ def test_an_entry_is_read_only_whole_and_under_its_own_key(tmp_path: Path) -> No
     trace_cache.store(path, key, T)
     back = trace_cache.load(path, key)
     assert (back.n_inputs, back.gates, back.outputs, back.counts) == (T.n_inputs, T.gates, T.outputs, T.counts)
-    assert trace_cache.load(path, {**key, "version": 2}) is None
+    assert trace_cache.load(path, {**key, "version": 2}) == "another key's entry"
     data = path.read_bytes()
     path.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
-    assert trace_cache.load(path, key) is None
+    assert trace_cache.load(path, key) == "its payload's SHA-512 isn't its header's"
     path.write_bytes(data[:-3])
-    assert trace_cache.load(path, key) is None
+    assert trace_cache.load(path, key) == "its payload's SHA-512 isn't its header's"
+    path.write_bytes(trace_cache.MAGIC + b"{\n")
+    assert trace_cache.load(path, key).startswith("unreadable: JSONDecodeError: ")
+    assert trace_cache.load(tmp_path / "none.trace", key).startswith("unreadable: FileNotFoundError: ")
 
 
 def test_a_bad_entry_is_traced_again_and_rewritten(tmp_path: Path, monkeypatch) -> None:
@@ -96,8 +99,18 @@ def test_a_bad_entry_is_traced_again_and_rewritten(tmp_path: Path, monkeypatch) 
     (path,) = tmp_path.glob("*/*.trace")
     path.write_bytes(path.read_bytes()[:-1])
     again = TR.trace(_pair, [W8, W8], W8, key=key)
-    assert (cache.hits, cache.misses, cache.bad) == (0, 2, 1)
-    assert again.gates == T.gates and trace_cache.load(path, cache.key(key, _pair, [W8, W8], W8, True)) is not None
+    assert (cache.hits, cache.misses, cache.bad) == (0, 2, [f"{path.name}: its payload's SHA-512 isn't its header's"])
+    assert again.gates == T.gates and isinstance(trace_cache.load(path, cache.key(key, _pair, [W8, W8], W8, True)), TR.Traced)
+
+
+def test_a_trace_it_cannot_key_is_traced_and_recorded(tmp_path: Path, monkeypatch) -> None:
+    cache = trace_cache.TraceCache(tmp_path)
+    monkeypatch.setattr(TR, "CACHE", cache)
+    T = TR.trace(_pair, [W8, W8], W8, key=("TraceCachePair", 1, {"F": object()}))
+    assert T.gates == TR.trace(_pair, [W8, W8], W8).gates
+    assert (cache.hits, cache.misses, cache.bad) == (0, 0, [])
+    assert len(cache.unkeyed) == 1 and cache.unkeyed[0].startswith("TraceCachePair: a binding has no static form (")
+    assert not list(tmp_path.iterdir())
 
 
 def test_a_builder_the_code_digest_skips_is_keyed_by_its_file() -> None:

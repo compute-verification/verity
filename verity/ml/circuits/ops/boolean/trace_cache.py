@@ -81,22 +81,25 @@ def _source(build: Callable) -> str | None:
 
 
 class TraceCache:
-    """The entries under ``directory``; ``hits``, ``misses`` and ``bad`` (entries traced again) count this process's lookups."""
+    """The entries under ``directory``. ``hits`` and ``misses`` count this process's lookups; ``bad`` holds each entry it traced
+    again and ``unkeyed`` each trace it couldn't key, with why."""
 
     def __init__(self, directory: str | os.PathLike) -> None:
         self.dir = Path(directory)
-        self.hits = self.misses = self.bad = 0
+        self.hits = self.misses = 0
+        self.bad: list[str] = []
+        self.unkeyed: list[str] = []
 
-    def key(self, key: tuple, build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> dict | None:
-        """The entry's key, None for a builder or binding it can't name (traced, not cached)."""
+    def key(self, key: tuple, build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> dict | str:
+        """The entry's key, or why a builder or binding can't name one (it is traced, not cached)."""
         name, version, bindings = key
         src = _source(build)
         if src is None:
-            return None
+            return f"{name}: its builder has no source file"
         try:
             statics = {k: _static_json(v) for k, v in bindings.items()}
-        except TypeError:
-            return None
+        except TypeError as e:
+            return f"{name}: a binding has no static form ({e})"
         return {"name": name, "version": version, "bindings": statics, "params": [t.to_json() for t in params],
                 "ret": ret.to_json(), "cse": cse, "code": code_digest(), "builder": _file_digest(src) if src else "",
                 "python": "%d.%d" % sys.version_info[:2], "numpy": np.__version__}
@@ -107,15 +110,16 @@ class TraceCache:
 
     def trace(self, key: tuple, build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> TR.Traced:
         k = self.key(key, build, params, ret, cse)
-        if k is None:
+        if isinstance(k, str):
+            self.unkeyed.append(k)
             return TR.trace(build, params, ret, cse=cse)
         p = self.path(k)
         if p.exists():
             T = load(p, k)
-            if T is not None:
+            if isinstance(T, TR.Traced):
                 self.hits += 1
                 return T
-            self.bad += 1
+            self.bad.append(f"{p.name}: {T}")
         self.misses += 1
         T = TR.trace(build, params, ret, cse=cse)
         store(p, k, T)
@@ -137,27 +141,31 @@ def store(path: Path, key: dict, T: TR.Traced) -> None:
     os.replace(tmp, path)
 
 
-def load(path: Path, key: dict) -> TR.Traced | None:
-    """The circuit at ``path`` if it is a whole entry for ``key`` in this machine's byte order, else None."""
+def load(path: Path, key: dict) -> TR.Traced | str:
+    """The circuit at ``path`` if it is a whole entry for ``key`` in this machine's byte order, else why it isn't."""
     try:
         with open(path, "rb") as f:
             if f.readline() != MAGIC:
-                return None
+                return "no trace-cache magic line"
             head = json.loads(f.readline())
             payload = f.read()
-        if head["key"] != key or head["byteorder"] != sys.byteorder or hashlib.sha512(payload).hexdigest() != head["sha512"]:
-            return None
+        if head["key"] != key:
+            return "another key's entry"
+        if head["byteorder"] != sys.byteorder:
+            return f"written in {head['byteorder']} byte order"
+        if hashlib.sha512(payload).hexdigest() != head["sha512"]:
+            return "its payload's SHA-512 isn't its header's"
         n, tc = head["gates"], head["type"]
         w = array(tc).itemsize
         if len(payload) != n + (2 * n + head["outputs"]) * w:
-            return None
+            return "its payload's size isn't its header's"
         mv, cols = memoryview(payload), []
         for lo, hi in ((n, n + n * w), (n + n * w, n + 2 * n * w), (n + 2 * n * w, len(payload))):
             a = array(tc)
             a.frombytes(mv[lo:hi])
             cols.append(a.tolist())
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return f"unreadable: {type(e).__name__}: {e}"
     kinds, NOT = TR._KINDS, _KIND["not"]
     gates = [(kinds[g], (x,) if g == NOT else (x, y)) for g, x, y in zip(payload[:n], cols[0], cols[1])]
     return TR.Traced(head["n_inputs"], gates, cols[2], dict(head["counts"]))
