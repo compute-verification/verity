@@ -1,4 +1,4 @@
-"""The seeded weights the skeleton serves: the torch loop's generator and stream (`verity_torch_loop.weights`),
+"""The seeded weights the skeleton serves: ALLP-IFACE's generator and stream (`verity_torch_loop.weights`, CMP-95 item 1),
 with the reads the driver, the store and replay make.
 
 The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what memory-accounting's

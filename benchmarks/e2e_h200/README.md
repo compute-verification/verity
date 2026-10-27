@@ -31,7 +31,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 
 | Piece | Here now | Replaced by |
 |---|---|---|
-| Weights | The torch loop's generator and weights stream (`verity_torch_loop.weights`), every linear generated once into the device's memory (`driver.Params`, over `--workers` processes); the record carries the registration digest under the test salt key for small shapes | the prover's salt key's digest |
+| Weights | ALLP-IFACE's generator and weights stream (`verity_torch_loop.weights`, CMP-95 item 1), every linear generated once into the device's memory (`driver.Params`, over `--workers` processes); the record carries the registration digest under the test salt key for small shapes | the prover's salt key's digest |
 | Weights registration | `weights_commit.py`: every tensor committed as the registered value the served Program reads (`registered.domain` under its digest, its widths from the Program's parameter types, never its gate lists), streamed a chunk a worker under the operating system's salts into a 0600 witness; `open` opens a ScaledMm proof block's `wrow`/`sw` reads against it (`verify_read`) | — |
 | Store and decode call | `--weights staged`: `store.py`'s P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`, a layer a step | memory-accounting's layout and decode call, and its P2-encoded store on the card |
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (an exact f64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
@@ -45,9 +45,9 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (`benchmarks/e2e_demo`) |
-| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS on the card's store, the bandwidth audit, the network certifier's own records, C-Flock `--zk` and Lean |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
 
-`replay.py` and `cpu_step.py` are the CPU replay of drawn units in the 16-bit forms, and an
+`replay.py` and `cpu_step.py` are the replay lane's (#4460): the CPU replay of drawn units in the 16-bit forms, and an
 independent CPU decode step; the suite holds the driver's rows equal to `cpu_step`'s.
 
 ## Commands
