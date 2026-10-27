@@ -109,11 +109,29 @@ def _challenger_party() -> Any:
     return module
 
 
-def _json(path: Path) -> dict[str, Any] | None:
-    try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
-        return None
+def _json_if(path: Path) -> dict[str, Any] | None:
+    """``path``'s JSON, or None when there is no such file."""
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+#: what the toy's steps raise when they can't do them: a subprocess that failed, a file that isn't there
+FAILED = (OSError, RuntimeError, subprocess.CalledProcessError)
+
+
+class _Host:
+    """The challenger's host, a socket it can't open `SP.Unavailable`."""
+
+    def __init__(self, host: Any) -> None:
+        self.host = host
+
+    def start(self) -> dict[str, str]:
+        try:
+            return self.host.start()
+        except OSError as e:
+            raise SP.Unavailable(f"the challenger's host: {e}") from e
+
+    def stop(self) -> None:
+        self.host.stop()
 
 
 def product(exe: str, ids: Sequence[str], cases: Mapping[str, Any], digests: Mapping[str, str]) -> dict[str, Any]:
@@ -136,14 +154,17 @@ class Machine:
                             requests=",".join(map(str, w["requests"])), steps=w["steps"], pouw=None, weights=None,
                             tamper=set(w["tamper"]), windows=w["blocks"], node=os.uname().nodename, delta=None, tools=t)
         (self.state / "blocks").mkdir(parents=True, exist_ok=True)
-        RN.loop_window(i, os.environ.get("RESEARCH_RUN_ID") or "local", a, self.state / "blocks",
-                       self.state / "public" / f"w{i}")
-        return (self.state / "blocks" / f"w{i}" / "registration.json").read_bytes()
+        try:
+            RN.loop_window(i, os.environ.get("RESEARCH_RUN_ID") or "local", a, self.state / "blocks",
+                           self.state / "public" / f"w{i}")
+            return (self.state / "blocks" / f"w{i}" / "registration.json").read_bytes()
+        except FAILED as e:
+            raise SP.Unavailable(f"serving block {i}: {type(e).__name__}: {e}") from e
 
     def pin(self) -> dict[str, Any]:
         exe = Path(tools(self.state)["flock-firewall"])
         if not os.access(exe, os.X_OK):
-            raise RuntimeError(f"{exe} is not an executable")
+            raise SP.Unavailable(f"{exe} is not an executable")
         got = {"firewall": str(exe), "sha512": hashlib.sha512(exe.read_bytes()).hexdigest(), "sessions": 1,
                "why": RN.ONE_AT_A_TIME}
         d = self.state / "firewall"
@@ -152,16 +173,16 @@ class Machine:
         return got
 
     def host(self) -> Any:
-        return _challenger_party().Host(self.state / "challenger" / "host",
-                                        R.main_lines(str(main_history(self.state))))
+        return _Host(_challenger_party().Host(self.state / "challenger" / "host",
+                                              R.main_lines(str(main_history(self.state)))))
 
     def audit(self, i: int, registration: bytes, challenger: Mapping[str, Any], firewall: Mapping[str, Any]
               ) -> tuple[dict[str, Any], dict[str, Any] | None]:
         t, block = tools(self.state), self.state / "blocks" / f"w{i}"
         if hashlib.sha512(Path(t["flock-firewall"]).read_bytes()).hexdigest() != firewall["sha512"]:
-            raise RuntimeError("the firewall the prover's sessions run is not the one the firewall party pinned")
+            raise SP.Unavailable("the firewall the prover's sessions run is not the one the firewall party pinned")
         if (block / "registration.json").read_bytes() != registration:
-            raise RuntimeError(f"{block}/registration.json is not the registration the workers sent")
+            raise SP.Unavailable(f"{block}/registration.json is not the registration the workers sent")
         out = self.state / "record" / f"w{i}" / "sampled-proofs"
         out.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("RAYON_NUM_THREADS", str(os.cpu_count() or 1))
@@ -172,18 +193,21 @@ class Machine:
         except Exception as e:  # noqa: BLE001: a leg that can't decide is the block's error, never a verdict
             ans = {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}
         (out / "answer.json").write_text(json.dumps(ans, sort_keys=True))
-        case = _json(out / "sampled-proofs.case.json")
+        case = _json_if(out / "sampled-proofs.case.json")
         if case is not None:
             (out / "case.json").write_text(json.dumps(case, sort_keys=True))
         return ans, case
 
     def component(self, i: int, name: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         rec = self.state / "record" / f"w{i}" / name
-        ans, case = _json(rec / "answer.json"), _json(rec / "case.json")
+        ans, case = _json_if(rec / "answer.json"), _json_if(rec / "case.json")
         return None if ans is None or case is None else (ans, case)
 
     def product(self, ids: Sequence[str], cases: Mapping[str, Any], digests: Mapping[str, str]) -> dict[str, Any]:
-        return product(tools(self.state)["product"], ids, cases, digests)
+        try:
+            return product(tools(self.state)["product"], ids, cases, digests)
+        except (*FAILED, ValueError) as e:
+            raise SP.Unavailable(f"the product: {type(e).__name__}: {e}") from e
 
     def capabilities(self, party: str) -> dict[str, Any]:
         if party == SP.CHALLENGER:

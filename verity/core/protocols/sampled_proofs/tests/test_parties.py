@@ -1,8 +1,9 @@
 """Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest run's
 verifier audits each block once its registration, the firewall's pin and the challenger's address are in, in order, and
 its product accepts; a listed component with no answer is absent and the product never accepts over it; an accepting
-audit of another registration rejects; an audit that raises is its block's error; workers that can't serve leave the
-verifier refused ``closed`` with nothing audited; parameters out of their range are refused by every party; the
+audit of another registration rejects; an audit that is `Unavailable` is its block's error, and one that raises anything
+else fails the run (``party-died``, its error recorded); workers that can't serve leave the verifier refused ``closed``
+with nothing audited; parameters out of their range are refused by every party; the
 challenger's host stops once the verifier is done, however it finishes; the verifier replays from its own transcript;
 and the placement holds each party's principal to its machine's owner."""
 
@@ -44,7 +45,7 @@ class Machine:
     """Stand-in capabilities: what each was called with, in order."""
 
     def __init__(self, *, accept: bool = True, other: dict | None = None, commitment: str | None = None,
-                 audit_raises: bool = False, serve_raises: bool = False) -> None:
+                 audit_raises: Exception | None = None, serve_raises: bool = False) -> None:
         self.host, self.calls = Host(), []
         self.accept, self.other, self.commitment = accept, other, commitment
         self.audit_raises, self.serve_raises = audit_raises, serve_raises
@@ -52,7 +53,7 @@ class Machine:
     def serve(self, i: int) -> bytes:
         self.calls.append(("serve", i))
         if self.serve_raises:
-            raise RuntimeError("no GPU")
+            raise P.Unavailable("no GPU")
         return registration(i)
 
     def pin(self) -> dict:
@@ -62,7 +63,7 @@ class Machine:
     def audit(self, i, raw, challenger, firewall):
         self.calls.append(("audit", i, raw, challenger["address"], firewall["sha512"]))
         if self.audit_raises:
-            raise OSError("the records audit left no summary")
+            raise self.audit_raises
         digest = self.commitment or R.digest(json.loads(raw))
         return {"verdict": "accept" if self.accept else "reject", "commitment": digest}, CASE
 
@@ -132,13 +133,24 @@ def test_an_accepting_audit_of_another_registration_rejects():
     assert next(c for c in m.calls if c[0] == "product")[2][SP] == P.NO_CASE
 
 
-def test_an_audit_that_raises_is_its_blocks_error():
-    m = Machine(audit_raises=True)
+def test_an_unavailable_audit_is_its_blocks_error():
+    m = Machine(audit_raises=P.Unavailable("the records audit left no summary"))
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert line["components"] == {"sampled-proofs": "error"} and line["verdict"] == "reject"
     assert next(c for c in m.calls if c[0] == "product")[2][SP] == P.NO_CASE
     assert r.status == "completed"
+    (why,) = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "private"]
+    assert why == {"block": 0, "audit": "unavailable", "error": "the records audit left no summary"}
+
+
+def test_an_audit_that_raises_anything_else_fails_the_run_by_name():
+    m = Machine(audit_raises=KeyError("verdict"))
+    r = go(m)
+    assert r.status == "failed"
+    assert r.outcomes[P.VERIFIER]["refused"] == "party-died"
+    assert "KeyError" in json.dumps(r.outcomes[P.VERIFIER]["outcome"])
+    assert not [c for c in m.calls if c[0] == "product"]
 
 
 def test_workers_that_cant_serve_leave_the_verifier_refused_closed_with_nothing_audited():

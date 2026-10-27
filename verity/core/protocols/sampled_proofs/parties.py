@@ -20,6 +20,10 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   None; ``component(block, name) -> (answer, case) | None``, another listed component's; and ``product(ids, cases,
   digests) -> {"product", "verdict", "reason"}``, `Core.Composition.product` over exactly those components.
 
+A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
+name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
+is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
+
 The run's parameters (`params_of`) are its sampling blocks (``blocks``), the configuration's listed components
 (``components``, `IDS`' names, sampled proofs among them) and what its coins are (``coins``: ``simulated`` when the
 challenger's host is a machine the prover's parties share, else ``development``, a key made for the session).
@@ -34,7 +38,8 @@ accepts over it. Each block's line is an output entry of the record and the veri
     {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
      "registration": DIGEST, "verdict": V, "reason": R}
 
-An audit or a product that raises is that block's ``error``, never a verdict. The verifier refuses by name a block out of
+An audit or a product that is `Unavailable` is that block's ``error``, never a verdict (an audit's reason a private entry
+of the record). The verifier refuses by name a block out of
 range or registered twice (``schema``, ``out-of-phase``), a second address or pin (``out-of-phase``), and a peer that
 leaves before it said what the verifier waits on (``closed``); it tells the challenger ``Done`` before it finishes,
 however it finishes, and the challenger stops its host on ``Done`` or when the verifier leaves.
@@ -105,8 +110,12 @@ def _params(params: Mapping[str, Any]) -> dict[str, Any]:
     return params_of(params["blocks"], params["components"], params["coins"])
 
 
-def _why(e: Exception) -> str:
-    return f"{type(e).__name__}: {e}"[:2000]
+class Unavailable(Exception):
+    """A capability's machine can't do its step; its message is the reason (module docstring)."""
+
+
+def _why(e: Unavailable) -> str:
+    return str(e)[:2000]
 
 
 class Challenger:
@@ -116,7 +125,7 @@ class Challenger:
         self.host = identity.capabilities["host"]
         try:
             at = self.host.start()
-        except Exception as e:  # noqa: BLE001: a host that doesn't start is the challenger's refusal, by name
+        except Unavailable as e:
             return [Finish({"error": _why(e)}, "host", kind="private")]
         self.at = {"address": at["address"], "pin": at["pin"]}
         return [Send(VERIFIER, Message("Challenger", self.at))]
@@ -135,9 +144,9 @@ class Firewall:
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:
             pin = identity.capabilities["pin"]()
-            msg = Message("Firewall", {"sha512": pin["sha512"], "sessions": pin["sessions"]})
-        except Exception as e:  # noqa: BLE001
+        except Unavailable as e:
             return [Finish({"error": _why(e)}, "firewall", kind="private")]
+        msg = Message("Firewall", {"sha512": pin["sha512"], "sessions": pin["sessions"]})
         return [Send(VERIFIER, msg), Finish(dict(msg.fields))]
 
     def on(self, r: Received) -> list[Any]:
@@ -156,7 +165,7 @@ class Workers:
         for i in range(blocks):
             try:
                 registration = bytes(serve(i))
-            except Exception as e:  # noqa: BLE001
+            except Unavailable as e:
                 return [*out, Finish({"served": i, "error": _why(e)}, "serve", kind="private")]
             out.append(Send(VERIFIER, Message("Registration", {"block": i}, registration)))
         return [*out, Finish({"served": blocks})]
@@ -223,18 +232,21 @@ class Verifier:
         out: list[Any] = []
         while (len(self.lines) < self.params["blocks"] and len(self.lines) in self.registrations
                and self.challenger is not None and self.firewall is not None):
-            out.append(Record(self._decide(len(self.lines)), "output"))
+            out += self._decide(len(self.lines))
         if len(self.lines) == self.params["blocks"]:
             out += self._finish(None)
         return out
 
-    def _decide(self, i: int) -> dict[str, Any]:
+    def _decide(self, i: int) -> list[Record]:
+        """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
         digest = R.digest(record)
+        out = []
         try:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
-        except Exception as e:  # noqa: BLE001: an audit that can't decide is the block's error, never a verdict
-            answer, case = {"verdict": "error", "reason": _why(e)}, None
+        except Unavailable as e:
+            answer, case = {"verdict": "error"}, None
+            out.append(Record({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
         if answer.get("verdict") == "accept" and answer.get("commitment") != digest:
             answer, case = {"verdict": "reject", "commitment": answer.get("commitment"),
                             "reason": "the audit's commitment is not the registration the workers sent"}, None
@@ -249,11 +261,11 @@ class Verifier:
             got = self.product([IDS[c] for c in self.params["components"]], cases, digests)
             verdict = {"product": str(got["product"]), "verdict": str(got["verdict"]),
                        "reason": None if got.get("reason") is None else str(got["reason"])}
-        except Exception as e:  # noqa: BLE001
+        except Unavailable as e:
             verdict = {"product": None, "verdict": "error", "reason": _why(e)}
         line = {"block": i, "coins": self.params["coins"], "components": status, "registration": digest, **verdict}
         self.lines.append(line)
-        return line
+        return [*out, Record(line, "output")]
 
     def _finish(self, refused: str | None) -> list[Any]:
         out: list[Any] = [] if self.done else [Send(CHALLENGER, Message("Done"))]
@@ -266,4 +278,5 @@ PROTOCOLS = {ID: PROTOCOL}
 
 
 __all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE", "PROTOCOL",
-           "PROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "Verifier", "Workers", "params_of"]
+           "PROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "Unavailable", "Verifier", "Workers",
+           "params_of"]
