@@ -80,9 +80,10 @@ opens each drawn unit's pub, o0 and o1 rows against that file's roots and recomp
 without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
-(`acquire.h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
-``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
-records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``). Its
+(`acquire.h1_commit.attach`: the rows-sha512 committer, the int8 source at each linear's Int8RowQuant_v1 site, the
+step-input port and its tap) into ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its
+input ids (``roots1``), its ``committer`` record its 64-byte run root (`pouw_h1_commit.committed`, which refuses any other),
+and records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``). Its
 B is registered once, before its first window (under a fresh local key, `local_weights`, unless ``--model`` names the
 auditor's registration), and reused by the later windows. Each
 Commit window is also held to core's ROOTS1 steps over its own evidence (`core_verdict`: `pouw_h1_challenger.manifest_reason`,
@@ -760,10 +761,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
                   f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
+                from verity_vllm.protocols.pouw.h1 import commit as CT
                 rc = com.finalize()
-                out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
-                                    **{k: rc.extra.get(k) for k in ("values_retained_bytes", "expected_tensors",
-                                                                     "committed_tensors", "errors_n", "errors")}}
+                out["committer"] = {**CT.committed(com, rc, ("values_retained_bytes", "expected_tensors", "committed_tensors",
+                                                             "errors_n", "errors")),
+                                    "finalize_s": round(rc.t_finalize_s, 3)}
             if a.commit:
                 print(f"[fill] {name} served {json.dumps({k: out.get(k) for k in ('gpu', 'step_s', 'decode_step_s_median', 'serve', 'same_tokens', 'committer')}, default=str)[:3000]}",
                       flush=True)

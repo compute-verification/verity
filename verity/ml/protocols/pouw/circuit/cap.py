@@ -84,7 +84,7 @@ also holds each passing row's own atoms, zeros and elems to the same inequality 
 `PearlC.row_cap_at(k)`, 4ρ at the device's census ks and ρ elsewhere (`row_rho`); without one (-h0) the served cap is
 v1's, the tile's alone, and the scheme refuses the census ks.
 
-**The split** (`pc8.Shape.cap`, `Pc8CallCap`): a word is the cap's proof unit, since a cap word is about 7.8M ANDs at
+**The split** (`pc8.Shape.cap`, `Pc8CallCap`): a word is the cap's proof block, since a cap word is about 7.8M ANDs at
 K = 8,192 and a 64 × 64 tile of them does not stage.  The root holds the A rows (`Pc8RowACap`) and a strip unit per TM
 of them (`Pc8CapStrip`), then per strip its word units row by row, per tile row its digests (`Pc8CapRowDigest`) and its
 sums (`Pc8CapRowTally`), its tile units and their tallies.  Each value is computed once: a word unit computes its own

@@ -442,7 +442,7 @@ def run(a: argparse.Namespace) -> dict:
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
     from verity_vllm.engine.build import build_engine, target_mismatches
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1 as PH
 

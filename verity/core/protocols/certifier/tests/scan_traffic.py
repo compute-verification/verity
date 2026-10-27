@@ -18,7 +18,8 @@ from verity.core.protocols.certifier.grid import Certifier, Record
 @dataclass(frozen=True)
 class Served:
     """Both links served through the warden: the ingress and egress records its grids closed (one a link-window),
-    each connection's admission bucket and response ids (ordinal q = k + 1), and the warden's `fails` frames."""
+    each connection's admission bucket and response ids (ordinal q = k + 1), and the warden's `fails` frames and the
+    `fails` records its grid closed."""
 
     params: W.WardenParams
     ingress: tuple[Record, ...]
@@ -26,6 +27,7 @@ class Served:
     admitted: tuple[int, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]
+    failed: tuple[Record, ...] = ()
 
     @property
     def outputs(self) -> dict[int, tuple[int, ...]]:
@@ -38,24 +40,32 @@ class Served:
 
 
 def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
-          responses: Sequence[Sequence[int]], windows: int) -> Served:
+          responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
-    there by its egress), and the warden ticks both links for `windows` link-windows as `Warden._tick` does: admitted
-    in arrival order at the first bucket with a free lane, `_ingress` until its `END`, `_egress` until its own `END`,
-    its lane free the bucket after."""
+    there by its egress; a connection of `late` gets no byte from its server, so the warden fails it late at its first
+    egress cell), and the warden ticks both links and `fails` for `windows` link-windows as `Warden._tick` does:
+    admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`, `_egress` until its own
+    `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
     fails: list[bytes] = []
-    warden = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fails.append))
+    failed = Certifier("fails", params.fails_grid)
+
+    def fail(frame: bytes) -> None:
+        fails.append(frame)
+        failed.enqueue(frame)
+
+    warden = SimpleNamespace(params=params, requests_released=0, run_id=None, fails=SimpleNamespace(enqueue=fail))
     conns = []
     for k, (a, xs) in enumerate(zip(arrivals, responses, strict=True)):
         c = W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
-        c.egress = bytearray(b"".join(IT.id_event(x, P) for x in xs) + IT.TRAILER)
-        c.egress_ended = True
+        if k not in late:
+            c.egress = bytearray(b"".join(IT.id_event(x, P) for x in xs) + IT.TRAILER)
+            c.egress_ended = True
         conns.append(c)
     queue, active = deque(conns), []
-    grids = (Certifier("requests", params.grid), Certifier("responses", params.grid))
-    records: tuple[list[Record], list[Record]] = ([], [])
+    grids = (Certifier("requests", params.grid), Certifier("responses", params.grid), failed)
+    records: tuple[list[Record], list[Record], list[Record]] = ([], [], [])
     for t in range(windows * params.window):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
@@ -80,14 +90,14 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
     if queue or active:
         raise ValueError("every connection ends within the link's windows")
     return Served(params, tuple(records[0]), tuple(records[1]), tuple(c.admitted for c in conns),
-                  tuple(tuple(xs) for xs in responses), tuple(fails))
+                  tuple(tuple(xs) for xs in responses), tuple(fails), tuple(records[2]))
 
 
 @dataclass(frozen=True)
 class Chain:
     """The scan of a run's ingress rows (`ingress_scan.scan`, the Programs' rows its outputs): the states S_{−1} (the
-    empty state) … S_{T−1} as bit rows, the Programs' rows and the egress views, unit t's (row, sin, prog, sout, view)
-    being (ingress[t], states[t], progs[t], states[t + 1], views[t])."""
+    empty state) … S_{T−1} as bit rows, the Programs' rows and the egress views; unit t reads (ingress[t], states[t],
+    progs[t]), the first unit no state, and computes (states[t + 1], views[t])."""
 
     cls: IS.Class
     ingress: list[bytes]
@@ -97,8 +107,14 @@ class Chain:
     progs: list[list[int]]
     views: list[list[int]]
 
-    def unit(self, t: int) -> tuple[bytes, list[int], list[int], list[int], list[int]]:
-        return self.ingress[t], self.states[t], self.progs[t], self.states[t + 1], self.views[t]
+    def unit(self, t: int) -> tuple[bytes, list[int], list[int]] | tuple[bytes, list[int]]:
+        """Unit t's arguments: (row, prog) for t = 0 (`IngressScanFirst`), (row, sin, prog) after it
+        (`IngressScanBucket`)."""
+        return (self.ingress[0], self.progs[0]) if t == 0 else (self.ingress[t], self.states[t], self.progs[t])
+
+    def outputs(self, t: int) -> tuple[list[int], list[int]]:
+        """Unit t's o1 and o2: S_t and its egress view."""
+        return self.states[t + 1], self.views[t]
 
     def view(self, t: int) -> EG.State:
         return IS.view(self.cls, self.scan[t + 1], t)

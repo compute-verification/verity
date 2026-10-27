@@ -12,7 +12,7 @@ scales.
               `junk`) and a slot that is selected whose row is the canonical empty row (`hollow`, RT-ALGO-4); it reads no
               row byte, so a selected row of zero bytes under a nonzero scale (`scale_only`) is admitted
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
-              proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
+              proof block's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     tile      a unit (32 slot rows by 32 weight rows) is `PouwH1Tile_v4`, whose `admit` input is its 32 rows' admit bits,
               bound by commitment equality to the two admit-tree leaves the tally reads: its live bit is their OR, so
               the tiles the circuit treats as live are exactly the tiles the tally credits, and an admitted tile of
@@ -25,7 +25,7 @@ scales.
               sum_site count_site N_site K_site, a public weighting of four 16-bit limbs; the level is
               window.level(window.floor_point(Cr)) and the published credit Pub = window.point(level) <= Cr
 
-Every admit unit is proved in every window (`proof_plan`); the tally is no proof unit until a tally Definition exists.  The
+Every admit unit is proved in every window (`proof_plan`); the tally is no proof block until a tally Definition exists.  The
 draw is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
 `pouw.circuit.admit`'s word.
 """
@@ -203,7 +203,7 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                          "by commitment equality to the two leaves of the call's admit tree that the tally reads, so its "
                          "live bit (their OR) is the tally's liveness: credit counts exactly the tiles live in-circuit, "
                          "an admitted tile of zero-byte rows included (RT4-LOGIC-4, RT4-LOGIC-20)",
-            "tally": f"no proof unit until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
+            "tally": f"no proof block until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
                      f"per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over the steps (< 2^16), and "
                      "the level (window.level(floor_point(sum_site count N K)), <= 9 bits)",
             "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "

@@ -1,5 +1,6 @@
-"""`protocol_options.pouw_h1_commit` (ROOTS1, VLLM-73): with the Commit in H1's serving engine (the int8 source at each
-linear's Int8RowQuant_v1 site, `pouw_h1_commit.source`, on a committer whose acquires a `CommitTap` sees), its record
+"""`protocol_options.pouw_h1_commit` (ROOTS1, VLLM-73): with the Commit in H1's serving engine (`acquire.h1_commit.attach`:
+the int8 source at each linear's Int8RowQuant_v1 site and the step-input port, on a rows-sha512 committer whose acquires a
+`CommitTap` sees, refused under any other scheme or run root), its record
 registers each step's A table of K ``a/<K>@<s>`` (VLLM-77: both linears' rows, call after call) as its AROW of the
 step and K and each round's input-ids table ``ids@<s>`` as its step's input ids, the window's own trees, and calls_root
 binds the record. A window whose served A is all zero codes, or one A row off the rows the Commit acquired, or whose
@@ -34,6 +35,7 @@ from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
 from verity_vllm.acquire import h1_commit as HC  # noqa: E402
+from verity_vllm.commit.served_record import StepInputPort  # noqa: E402
 from verity_vllm.engine import int8_experts as X  # noqa: E402
 from verity_vllm.engine.hooks import Hooks  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import commit as CT  # noqa: E402
@@ -45,7 +47,6 @@ from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"
-EMBED = "model.embed_tokens"
 #: the committer's engine step at the window's step 0 (its steps count from the engine's start, H1's from the window's)
 FIRST = 7
 #: step 0 admits a and b (prompt tokens, cap); step 1 decodes one row of each
@@ -132,13 +133,63 @@ class MoEModel(nn.Module):
 
 
 class Committer:
-    """The committer's face the int8 source and the tap use: the step being committed (``_cur``) and its acquire."""
+    """The rows-sha512 committer's face (`h1_commit.committer`) that `h1_commit.attach`, the int8 source, the step-input
+    port and the tap use: the step being committed (``_cur``) and its scheduled tokens (``_plan_shape``), its acquire, its
+    sources, its staging (``sized``) and window ring (``ring``), and its finalized 64-byte run root."""
 
-    def __init__(self):
-        self._cur, self.errors, self.got = None, [], []
+    name, commit_scheme, chunk = "stand-in", CT.SCHEME, 4096
+
+    def __init__(self, engine=None):
+        self.engine, self.model, self.run_id = engine, getattr(engine, "model", None), None
+        self._cur, self._plan_shape, self.errors, self.got, self.sources = None, None, [], [], []
+        self.plan_inputs = self.sized = self.ring = None
+        self.installed = self.closed = False
 
     def _acquire(self, name, t, job):
         self.got.append((int(job.step), name))
+
+    def attach_source(self, src):
+        self.sources.append(src)
+
+    def size_arena(self, envelope):
+        self.sized = dict(envelope)
+        return {"envelope": self.sized}
+
+    def enable_windows(self, rec):
+        self.ring = rec
+
+    def install(self):
+        self.installed = True
+        for s in self.sources:
+            s.install()
+
+    def finalize(self):
+        return SimpleNamespace(run_root=bytes(CT.ROOT_BYTES), extra={"expected_tensors": 0, "committed_tensors": 0, "errors_n": 0})
+
+    def close(self):
+        for s in self.sources:
+            s.uninstall()
+        self.closed = True
+
+
+def vllm_config(tokens=ROWS, seqs=8, model_len=64):
+    """A rank's vLLM config as `h1_commit.RankCommit` reads it: the token budget, the batch and the model length."""
+    return SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=tokens, max_num_seqs=seqs),
+                           model_config=SimpleNamespace(max_model_len=model_len))
+
+
+def _engine(model):
+    """What `h1_commit.attach` reads of an engine (`engine.build.build_engine`'s): its model and what it executes
+    (``effective``)."""
+    return SimpleNamespace(model=model, effective={"max_num_batched_tokens": ROWS, "max_num_seqs": 8, "max_model_len": 64})
+
+
+def bound(com):
+    """`h1_commit.committer` as the stand-in ``com`` on the engine and run it is given."""
+    def committer(engine, run_id):
+        com.engine, com.model, com.run_id = engine, engine.model, run_id
+        return com
+    return committer
 
 
 @pytest.fixture(autouse=True)
@@ -204,9 +255,10 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`); ``order`` the model's layers in the
     order the forward calls them (module order unless given). ``coins(eng, kw)`` is the window's settings as the GPU
     harness makes them (`pouw_h1_gpu.h1_settings` with `kw`), else one session of `_host`'s; ``key`` the window's key
-    (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger. With
-    ``served_commit`` the Commit is the server's (`_served_commit`, H1's tap on it `h1_commit.tap`): the ids are its
-    port's, each step's model input padded by `GRAPH_PAD` positions past its scheduled tokens."""
+    (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger. The Commit is
+    H1's own (`h1_commit.attach` on the stand-in `Committer`), or with ``served_commit`` the server's (`_served_commit`,
+    H1's tap on it `h1_commit.tap`); either way the ids are its step-input port's, each step's model input padded by
+    `GRAPH_PAD` positions past its scheduled tokens."""
     if coins is None:
         _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com = model or Model(edit), com or Committer()
@@ -214,10 +266,11 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     if served_commit:
         port, src = _served_commit(com, model)
         tap = HC.tap(com, model, layers, range(FIRST, FIRST + STEPS))
+        src.install()
     else:
-        port, src, tap = None, HC.source(com, model, layers), CT.CommitTap(EMBED)
-        tap.tap(com)
-    src.install()
+        monkeypatch.setattr(HC, "committer", bound(com))
+        _com, src, tap = HC.attach(_engine(model), layers)
+        port = next(s for s in com.sources if isinstance(s, StepInputPort))
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
         served._a = _Laid(lay)
@@ -237,11 +290,8 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
             com._cur = SimpleNamespace(step=FIRST + s)
             src.on_step_begin()
             got = ids(s, _ids(run, s))
-            if port is None:
-                com._acquire(f"{EMBED}/in", torch.tensor(got), com._cur)
-            else:
-                com._plan_shape, n = (len(got), len(set(run.owners[s]))), len(got) + GRAPH_PAD
-                port._pre(None, (torch.tensor([*got, *[0] * GRAPH_PAD]), torch.arange(n)), {})
+            com._plan_shape, n = (len(got), len(set(run.owners[s]))), len(got) + GRAPH_PAD
+            port._pre(None, (torch.tensor([*got, *[0] * GRAPH_PAD]), torch.arange(n)), {})
             for layer in (model.model.layers if order is None else [model.model.layers[w] for w in order]):
                 k = layer.weight.shape[1] if isinstance(layer, Linear) else K
                 layer((torch.randn(len(run.owners[s]), k, generator=g) * 3).bfloat16())
@@ -249,7 +299,10 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     finally:
         lied.uninstall()
         comp.close()
-        src.uninstall()
+        if served_commit:
+            src.uninstall()
+        else:
+            com.close()
         tap.untap()
     return json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text()), run, tap
 
@@ -506,18 +559,16 @@ def test_on_the_servers_commit_each_a_table_is_its_int8_sources_rows_and_each_ro
 
 def test_the_ports_ids_are_the_steps_scheduled_tokens_and_keep_no_graph_pad():
     """The port's T ids, zero past the step's N scheduled tokens: the tap keeps the first N, which hold no CUDA graph's
-    padding, so round r's ids are those N whatever the call's ``pad``; port ids with no count of the step's tokens are
-    refused. The embedding's input (H1's own Commit) still drops its last ``pad``."""
+    padding, so round r's ids are those N; port ids with no count of the step's tokens are refused, and so is a round at
+    an engine step whose ids the Commit never acquired."""
     tap = CT.CommitTap(port="step.input/ids")
     tap.take("step.input/ids", np.array([5, 6, 7] + [0] * (PORT_T - 3)), FIRST, 3)
     tap._steps[0] = FIRST
-    assert tap.ids_at(0, pad=GRAPH_PAD) == [5, 6, 7] and tap.refused == []
+    assert tap.ids_at(0) == [5, 6, 7] and tap.refused == []
     tap.take("step.input/ids", np.zeros(PORT_T, np.int64), FIRST + 1)
     assert tap.refused == [f"engine step {FIRST + 1}: the port's input ids with no count of the step's scheduled tokens"]
-    own = CT.CommitTap(EMBED)
-    own.take(f"{EMBED}/in", np.array([5, 6, 7, 0, 0]), FIRST)
-    own._steps[0] = FIRST
-    assert own.ids_at(0, pad=2) == [5, 6, 7]
+    tap._steps[1] = FIRST + 1
+    assert tap.ids_at(1) == [] and tap.refused[-1] == f"step 1: the Commit acquired no input ids at engine step {FIRST + 1}"
 
 
 def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every_step():
@@ -544,48 +595,79 @@ def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every
         HC.tap(com, moe, PHK.layers(moe, (Linear,)), steps)
     _served_commit(com, model)
     tap = HC.tap(com, model, layers, steps)
-    assert (tap.port, tap.embed) == ("step.input/ids", None)
+    assert tap.port == "step.input/ids"
     assert tap.ops == {f"model.layers.{w}/row_quant_{2 * i + w}": CT.site(f"model.layers.{w}")
                        for i in range(STEPS) for w in range(2)}
     tap.untap()
     assert "_acquire" not in vars(com)
 
 
-class FusedEmbed(nn.Module):
-    """vLLM's DeepseekV32Model at TP1 (GLM-5.3's): its table whole on the rank, it gathers the embedding from its weight
-    (`fused_embed_norm`) and calls the embedding only for ``inputs_embeds``' runner path, never on its own."""
+class Top(nn.Module):
+    """vLLM's top model as the step-input port's pre-hook sees it, called as ``(input_ids, positions)``: two linears and
+    an embedding it never calls, as GLM-5.3 at TP1 gathers its table fused (r20261024-015257-abac)."""
 
-    def __init__(self, replicated=True):
+    def __init__(self):
         super().__init__()
-        self.embed_tokens, self.replicated_embed = nn.Module(), replicated
+        self.model = Model().model
 
     def forward(self, input_ids, positions, intermediate_tensors=None, inputs_embeds=None):
         return positions
 
 
-def test_a_model_that_gathers_its_embedding_fused_gives_the_commit_its_ids_at_its_forward():
-    """r20261024-015257-abac: GLM-5.3 at TP1 never calls its embedding, so the committer's pre-hook on it acquired no
-    step's ids and ROOTS1 refused every round (``the Commit acquired no input ids at engine step 0``). `fused_embed`
-    acquires them at the model's forward under the embedding's name, outside a step and for ``inputs_embeds`` (whose
-    embedding call the committer's own pre-hook takes) nothing, and hooks nothing on a model that calls its embedding."""
-    model, com, tap = nn.Module(), Committer(), CT.CommitTap(EMBED)
-    model.model = FusedEmbed()
-    tap.tap(com)
-    h = HC.fused_embed(com, model, EMBED)
+def test_attach_builds_a_rows_sha512_commit_whose_port_is_the_steps_one_copy_of_its_ids(monkeypatch):
+    """`h1_commit.attach`: H1's committer (`h1_commit.committer`, the stand-in here), the int8 source at each linear, and
+    the step-input port over the engine's token budget rounded up to whole chunks of i64 ids (32 tokens, a port of 512),
+    with no module's input acquired beside it (``plan_inputs`` empty); the staging sized for the engine's workload and its
+    window ring enabled on that sizing; then installed. The port takes each step's ids at the top model's forward, so a
+    model that never calls its embedding gives them, and the tap keeps the step's scheduled tokens only."""
+    top, com = Top(), Committer()
+    monkeypatch.setattr(HC, "committer", bound(com))
+    got, src, tap = HC.attach(_engine(top), PHK.layers(top, (Linear,)), run_id="h1/w")
+    port = com.sources[-1]
     try:
-        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
-        com._cur = SimpleNamespace(step=FIRST)
-        model.model(torch.tensor([5, 6, 7]), torch.arange(3))
-        model.model(input_ids=torch.tensor([8]), positions=torch.arange(1), inputs_embeds=torch.zeros(1, 4))
-        model.model(torch.tensor([9]), torch.arange(1), None, torch.zeros(1, 4))
+        assert got is com and com.run_id == "h1/w" and com.sources == [src, port] and isinstance(port, StepInputPort)
+        assert port.T == HC.port_tokens(com, ROWS) == 512 and com.plan_inputs == set()
+        assert com.sized == {"batch": 8, "max_prompt": ROWS, "max_new": 1, "max_num_batched_tokens": ROWS,
+                             "max_model_len": 64}
+        assert com.ring == {"envelope": com.sized} and com.installed and tap.port == "step.input/ids"
+        com._cur, com._plan_shape = SimpleNamespace(step=FIRST), (3, 2)
+        top(torch.tensor([5, 6, 7, 0]), torch.arange(4))
+        assert com.got == [(FIRST, "step.input/ids"), (FIRST, "step.input/positions")] and com.errors == []
+        assert tap._ids[FIRST].tolist() == [5, 6, 7] and tap.refused == []
     finally:
-        h.remove()
+        com.close()
         tap.untap()
-    assert com.got == [(FIRST, f"{EMBED}/in")] and com.errors == []
-    assert tap._ids[FIRST].tolist() == [5, 6, 7]
-    plain = nn.Module()
-    plain.model = FusedEmbed(replicated=False)
-    assert HC.fused_embed(com, plain, EMBED) is None
+    assert com.closed and port._h is None and "_acquire" not in vars(com)
+    assert [HC.port_tokens(com, t) for t in (1, 512, 513, 8192)] == [512, 512, 1024, 8192]
+    with pytest.raises(ValueError, match=r"gives no \['max_num_batched_tokens', 'max_num_seqs'\]"):
+        HC.envelope(SimpleNamespace(effective={"max_model_len": 64}))
+
+
+def test_h1s_commit_refuses_a_sha256_run_root(monkeypatch):
+    """vllm-v1's committer (SHA-256 rows, 32-byte roots) is no Commit of H1's. `h1_commit.attach` refuses one built under
+    it, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run records of the Commit
+    (the GPU harness's ``committer`` and each rank's release), refuses vllm-v1's real 32-byte run root, and a
+    rows-sha512 committer's root of any length but 64. The offline core's rows-sha512 run root passes."""
+    from tests.check import opened as O
+    steps = {0: [("step.input/ids", bytes(range(64)))]}
+    sha512 = O.commit_steps(steps, commit_scheme=CT.SCHEME, run_id="h1-rows")
+    sha256 = O.commit_steps(steps, run_id="h1-v1")
+    assert (sha512[0].commit_scheme, len(sha512[1].run_root)) == (CT.SCHEME, CT.ROOT_BYTES)
+    assert (sha256[0].commit_scheme, len(sha256[1].run_root)) == ("vllm-v1", 32)
+    assert CT.committed(*sha512) == {"run_root": sha512[1].run_root.hex(), "commit_scheme": CT.SCHEME,
+                                     "name": sha512[0].name}
+    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
+        CT.committed(*sha256)
+    short = SimpleNamespace(run_root=bytes(32), extra={})
+    with pytest.raises(ValueError, match=f"committed under {CT.SCHEME} to a 32-byte run root"):
+        CT.committed(Committer(), short)
+    old, model = sha256[0], Model()
+    closed = []
+    monkeypatch.setattr(old, "close", lambda: closed.append(True))
+    monkeypatch.setattr(HC, "committer", lambda engine, run_id: old)
+    with pytest.raises(ValueError, match=f"commits under vllm-v1, not {CT.SCHEME}"):
+        HC.attach(_engine(model), PHK.layers(model, (Linear,)))
+    assert closed == [True] and old.sources == [] and "_acquire" not in vars(old)
 
 
 def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monkeypatch):
