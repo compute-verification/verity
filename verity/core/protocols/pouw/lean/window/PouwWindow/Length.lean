@@ -3,7 +3,7 @@ import PouwWindow.Json
 /-!
 # The fixed length (`window.py`, "the fixed length")
 
-Correct tokens served past the honest run's end of sequence are not useful work (Daniel, 19 Oct, ASK-39). A row of
+Correct tokens served past the honest run's end of sequence are not useful work. A row of
 record serves its slot's public max_tokens whatever it samples (vLLM's `ignore_eos`), so W_use is public. `lengthItem` is
 the `length` item of a window whose slots serve `maxTokens`, and `lengthProblem` is why a registered one is not, the first
 rule it breaks, with `length_problem`'s reason.
