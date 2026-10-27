@@ -1692,12 +1692,12 @@ def floors(record: Record) -> tuple[float, ...]:
 
 
 def pooled(record: Record) -> tuple[float, float]:
-    """The horizon reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
+    """The pooled reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
     and at most a share `floor` of any window's, both except with probability δ together.
 
     Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
+    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateSessionDraw`), every draw lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:

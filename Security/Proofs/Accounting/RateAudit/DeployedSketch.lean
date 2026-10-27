@@ -310,7 +310,7 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
             pr (fun _ : SketchStore N m × Passes => False) :=
           pr_mono fun _ hx => (hx.1 hr).elim
         _ ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))) := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 end SketchDeployedWindow
@@ -413,7 +413,7 @@ theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
   pr_draws_map_of_causal id A Ev B hB
 
 /-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
-theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
@@ -424,7 +424,7 @@ theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchS
       ∑ w, ((A.win w y).correctAll E (y w).1 (y w).2.1).card ≤ K) _
     (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
-    ((Rate.Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Rate.Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, hK⟩ := hω
     refine ⟨fun w t => hmem ω w t (hall w t), ?_⟩
     show ∑ i, d * (Gs i ω).card ≤ d * K
@@ -442,12 +442,12 @@ theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchS
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
 /-- The pooled draw over the whole monitoring period. -/
-theorem pr_draws_horizon_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
+theorem pr_draws_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
         ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_draws_horizon_le_map id A K
+  pr_draws_pooled_le_map id A K
 
 /-- The pooled draw in every window, on any store drawn before the session's coins. -/
 theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
@@ -461,7 +461,7 @@ theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
       ∃ w, ((A.win w y).correctAll E (y w).1 (y w).2.1).card ≤ Kw) _
     (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
-    ((Rate.Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
+    ((Rate.Pooled.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, w, hw⟩ := hω
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
@@ -484,7 +484,7 @@ theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono fun _ h => h.2.imp (fun hK => ⟨h.1, hK⟩) (fun hw => ⟨h.1, hw⟩)).trans
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K)
+    ((pr_or_le _ _).trans (add_le_add (pr_draws_pooled_le_map store A K)
       (pr_draws_window_le_map store A Kw)))
 
 /-- Both pooled-draw readings. -/
@@ -641,7 +641,7 @@ theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionCon
           (n : ℝ≥0∞) * (ε + (P : ℝ≥0∞) * (G * term)) := by
         refine add_le_add (add_le_add ?_ ?_) le_rfl
         · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-          exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+          exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
         · rw [show ((n : ℝ≥0∞) * P * N) =
               (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
           exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
@@ -704,7 +704,7 @@ theorem RemoteSessionConservationSketchDeployedProduct :
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
   gcongr
-  · exact Deployed.horizon_deployed n hn
+  · exact Deployed.pooled_deployed n hn
   · exact Deployed.window_deployed n (by omega)
 
 end Accounting.SecurityProofs
