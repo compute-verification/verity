@@ -143,21 +143,20 @@ def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server()
     12:16 PM PDT)."""
     ctx = context("reference-h200")
     r = envelopes.regime(REG, "onsite")
-    loc, w = ctx.location, r.wipe.wipe_s
-    rate = loc.hosts * (r.certifier.r_in + r.certifier.timing + r.certifier.side)
+    loc, pol, w = ctx.location, ctx.policy, r.wipe.wipe_s
+    rate = r.certifier.intake * pol.k / ctx.c * loc.phi + loc.hosts * (r.certifier.timing + r.certifier.side)
     assert r.budget(ctx) == Budget(float(math.floor(loc.phi * w)), loc.hosts * r.wipe.k_wipe + rate * w)
-    # an H200 server: 5 GB, and its declared ingress, 65.6 kbit/s (NET-92), for a day
-    assert r.budget(ctx).inputs == pytest.approx(4.58e10, rel=0.01)
+    # an H200 server: 5 GB, and α Φ = 4.9e6 bit/s for a day
+    assert r.budget(ctx).inputs == pytest.approx(4.67e11, rel=0.01)
     # per device: 8 x 10 GB, 36.5 GB of host
     per_device = envelopes.regime(REG, "onsite-per-device")
     state = loc.devices * per_device.wipe.residual_bits + loc.hosts * per_device.wipe.host_residual_bits
-    assert per_device.budget(ctx).inputs == pytest.approx(state + rate * w) == pytest.approx(9.38e11, rel=0.01)
+    assert per_device.budget(ctx).inputs == pytest.approx(state + rate * w) == pytest.approx(1.36e12, rel=0.01)
 
 
 def test_todays_wipe_leaves_about_12_gb_a_server_and_its_boot_disk():
     """`regime.onsite-today`: `k_wipe` of about 12 GB a server plus each server's (or compute tray's) boot disk, which
-    the wipe doesn't reach; without the boot disk an H200 serving block's input is within 2.5x of the 5 GB reference's
-    (12 GB against 5, and a day's declared ingress on both)."""
+    the wipe doesn't reach; without the boot disk an H200 serving block's input is within 2x of the 5 GB reference's."""
     onsite, today = envelopes.regime(REG, "onsite"), envelopes.regime(REG, "onsite-today")
     for fleet in ("reference-h200", "reference-gb200"):
         loc = context(fleet).location
@@ -165,7 +164,7 @@ def test_todays_wipe_leaves_about_12_gb_a_server_and_its_boot_disk():
         assert onsite.wipe.state(loc) == loc.hosts * 4e10 and onsite.wipe.boot_disk_bits == 0
     ctx = context("reference-h200")
     bare = envelopes.regime(REG.override({"regime.onsite-today.boot_disk_bits": 0}), "onsite-today")
-    assert onsite.budget(ctx).inputs < bare.budget(ctx).inputs < 2.5 * onsite.budget(ctx).inputs
+    assert onsite.budget(ctx).inputs < bare.budget(ctx).inputs < 2 * onsite.budget(ctx).inputs
     assert today.budget(ctx).inputs > 30 * onsite.budget(ctx).inputs
 
 
@@ -180,27 +179,30 @@ def test_the_links_form_is_what_windows_proves():
 
 
 def test_the_declared_io_bound_at_w63_is_the_plan_notes():
-    """NET-92's per-server bound at W63 (B 512, r 4, 4 lanes, C 47, IDB 17, D 21, KO 64, τ_b 100 ms;
-    note:network-accounting/20261027T0220Z-finding-net92-plan): K = 45 ids a cell, 36,067 bits in and 1,095 out a
-    request (1,088 id bits and the count), so a server takes at most 65.6 kbit/s in and 2.0 kbit/s out, against the
-    warden's line rate of 655 kbit/s each way."""
-    c = envelopes.regime(REG, "onsite").certifier
+    """NET-92's per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 21, KO 64, τ_b
+    100 ms; note:network-accounting/20261027T0220Z-finding-net92-plan): K = 45 ids a cell, 36,067 bits in and 1,095 out
+    a request (1,088 id bits and the count), so a server takes at most 65.6 kbit/s in and 2.0 kbit/s out, against the
+    warden's line rate of 655 kbit/s each way. `regime.onsite` doesn't take it."""
+    c = envelopes.regime(REG, "onsite-w63").certifier
     assert (c.ids_per_cell, c.request_in, c.request_out) == (45, 36_067, 1_095)
     assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (65.6, 2.0, 655_360)
     # a lane anchors a request at most every D + 1 = 22 buckets
     assert c.period_bits(22) == (4 * 36_067, 4 * 1_095) and c.period_bits(23) == (8 * 36_067, 8 * 1_095)
-    with pytest.raises(ValueError, match=r"declared I/O bound needs \['cell_bytes'"):
-        Certifier(declared=True)
+    assert not envelopes.regime(REG, "onsite").certifier.declared
+    for refused in (lambda: Certifier(declared=True),
+                    lambda: envelopes.regime(REG.override({"regime.onsite.declared": True}), "onsite")):
+        with pytest.raises(ValueError, match=r"declared I/O bound needs \['cell_bytes'"):
+            refused()
 
 
 def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_upper_end():
-    """With `declared` a location's certified ingress is `hosts · r_in`, cited to draft:NET-92 in place of NET-35's count
-    check: as an intake `r_in / (α Φ_s)`, 0.0133 at Kimi K2's policy on an H200 server. `declared_x` scales it up to at
-    most the location's links (its high end is line rate, the upper end until NET-92's PR 5, where the 5 GB point is
-    vacuous), and without `declared` it is `intake · α Φ` again."""
-    at = {"declared": {}, "intake": {"regime.onsite.declared": False},
-          "line": {"regime.onsite.declared_x": REG.param("regime.onsite.declared_x").high}}
-    on, off, line = (envelopes.regime(REG.override(v), "onsite") for v in at.values())
+    """`regime.onsite`'s certified ingress is `intake · α Φ`, cited to draft:NET-92 (a server's ingress only its
+    declared inputs, at most α Φ at full use). With `declared` (`regime.onsite-w63`) it is `hosts · r_in`, cited to the
+    plan note too: as an intake `r_in / (α Φ_s)`, 0.0133 at Kimi K2's policy on an H200 server. `declared_x` scales it up
+    to at most the location's links (its high end is line rate, the upper end until NET-92's PR 5)."""
+    line = REG.override({"regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
+    on, off, at_line = (envelopes.regime(REG, "onsite-w63"), envelopes.regime(REG, "onsite"),
+                        envelopes.regime(line, "onsite-w63"))
     c = on.certifier
     for fleet in ("reference-h200", "reference-gb200"):
         ctx = context(fleet)
@@ -208,13 +210,28 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
         assert c.prompts(ctx) == pytest.approx(loc.hosts * c.r_in)
         assert c.intake_of(ctx) == pytest.approx(loc.hosts * c.r_in / alpha_phi) and c.intake_of(ctx) < 0.02
         assert on.rate_in(ctx) == pytest.approx(loc.hosts * (c.r_in + c.timing + c.side))
-        assert line.rate_in(ctx) == pytest.approx(loc.links + loc.hosts * (c.timing + c.side))
-        assert off.rate_in(ctx) == pytest.approx(off.certifier.intake * alpha_phi + loc.hosts * (c.timing + c.side))
+        assert at_line.rate_in(ctx) == pytest.approx(loc.links + loc.hosts * (c.timing + c.side))
+        assert off.rate_in(ctx) == pytest.approx(alpha_phi + loc.hosts * (c.timing + c.side))
+        assert off.certifier.intake_of(ctx) == 1
     assert c.intake_of(context("reference-h200")) == pytest.approx(0.01326, rel=1e-3)
     assert {"draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan"} <= set(on.cites())
-    assert "draft:NET-35" not in on.cites() and "draft:NET-35" in off.cites() and "draft:NET-92" not in off.cites()
-    r = {k: evaluate_named(REG.override(v), "reference-onsite-h200") for k, v in at.items()}
-    assert r["declared"].lo > r["intake"].lo and r["line"].vacuous(r["line"].lo)
+    assert "draft:NET-92" in off.cites() and not any("NET-35" in c for c in on.cites() + off.cites())
+
+
+def test_onsite_w63_beside_the_reference():
+    """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 65.6 kbit/s,
+    0.0203 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.58e10 bits and ρ's lower end, which the dark
+    share's 1% caps near 100, rises from 98.7 to 99.8; at line rate both are vacuous (2.35). The cadence feeds the
+    serving rho credits only if outputs outnumber prompts more than 28:1, so it isn't the default."""
+    ref, w63 = evaluate_named(REG, "reference-onsite-h200"), evaluate_named(REG, "onsite-w63")
+    inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
+    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.583e10, rel=1e-3)]
+    assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.0203, rel=1e-3)
+    assert [(round(r.lo, 1), round(r.hi)) for r in (ref, w63)] == [(98.7, 249), (99.8, 250)]
+    line = REG.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
+                         "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
+    at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
+    assert all(r.vacuous(r.lo) and round(r.lo, 2) == 2.35 for r in at_line)
 
 
 def test_four_servers_as_one_location_have_four_times_a_servers_budget():
@@ -232,24 +249,18 @@ def test_without_pouw_only_the_serving_cut_bounds():
 
 
 def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_device_an_nvl72_rack_does():
-    """With the ingress at `intake · α Φ`; at each server's declared inputs (NET-92) not even a rack per device does."""
     def inputs(registry: Registry, name: str):
         r = evaluate_named(registry, name)
         return r, r.scenario.regime.budget(r.scenario.context).inputs
 
-    def per_device(registry: Registry) -> Registry:
-        return registry.override({f"scenario.{n}.regime": "onsite-per-device" for n in ("onsite-gb200-kimi",
-                                                                                        "onsite-h200-kimi")})
-
-    intake = REG.override({"regime.onsite.declared": False})
-    (rack, rack_in), (_, server_in) = inputs(intake, "onsite-gb200-kimi"), inputs(intake, "onsite-h200-kimi")
-    (rack_pd, rack_pd_in), (server_pd, server_pd_in) = (inputs(per_device(intake), "onsite-gb200-kimi"),
-                                                        inputs(per_device(intake), "onsite-h200-kimi"))
+    per_device = REG.override({f"scenario.{n}.regime": "onsite-per-device" for n in ("onsite-gb200-kimi",
+                                                                                     "onsite-h200-kimi")})
+    (rack, rack_in), (_, server_in) = inputs(REG, "onsite-gb200-kimi"), inputs(REG, "onsite-h200-kimi")
+    (rack_pd, rack_pd_in), (server_pd, server_pd_in) = (inputs(per_device, "onsite-gb200-kimi"),
+                                                        inputs(per_device, "onsite-h200-kimi"))
     state = rack.families[0].profile.state_bits
     assert rack_pd_in > state > rack_in > server_pd_in > server_in
     assert rack_pd.hi < server_pd.hi
-    declared = [inputs(r, n)[1] for r in (per_device(REG), REG) for n in ("onsite-gb200-kimi", "onsite-h200-kimi")]
-    assert state > max(declared) == declared[0]
 
 
 @pytest.mark.parametrize("name", REG.names("regime"))

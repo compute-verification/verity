@@ -80,7 +80,7 @@ def certified_md(d: dict | None) -> list[str]:
                  f"{fmt(d['r_out'])} bit/s out), at the warden form's public parameters (draft:NET-92); line rate, "
                  f"{fmt(d['links'])} bit/s, is its upper end until NET-92's PR 5")
     else:
-        basis = "`intake · α Φ` (draft:NET-35)"
+        basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:NET-92)"
     return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
              f"{basis}; plus {fmt(d['channels'])} bit/s of timing and side channels."), ""]
 

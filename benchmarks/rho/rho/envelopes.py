@@ -19,10 +19,10 @@ inference block constrains) and its `delta`, split into the coins' draws and the
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the horizon.
 * `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
-  `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. With `declared`,
-  `r_in` is each server's inference blocks' declared inputs (NET-92), a function of the warden form's public
-  parameters; without it, `intake · α Φ`. Its δ is 0: the certifier is the auditor's device (`trusted-nebius-host`),
-  and the side channels an assumed cap.
+  `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
+  `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs (NET-92);
+  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
+  set. Its δ is 0: the certifier is the auditor's device (`trusted-nebius-host`), and the side channels an assumed cap.
 * The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
@@ -269,10 +269,12 @@ class Certifier:
 
     (`note:network-accounting/20261027T0220Z-finding-net92-plan`). This is a draft until NET-92's PR 5 states the
     per-server bits in Lean. Until then `declared_x` keeps the line rate as the ingress's upper end: the ingress is
-    `declared_x · hosts · r_in`, at most the location's `links`."""
+    `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of the
+    serving credited at the location can't feed that serving, so `declared` is off by default until a deployment picks
+    one that does."""
 
-    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 once
-    #: NET-35's count check holds it there (without `declared`)
+    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 under
+    #: NET-92, which admits only declared inputs (without `declared`)
     intake: float = 1.0
     #: the certified prompt ingress in bit/s per location, given directly (None: `hosts · r_in` with `declared`, else
     #: `intake · α Φ`)
@@ -298,7 +300,7 @@ class Certifier:
     declared_x: float = 1.0
 
     CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
-    INTAKE = ("draft:NET-35",)
+    INTAKE = ("draft:NET-92",)
     DECLARED = ("draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan")
 
     def __post_init__(self) -> None:
