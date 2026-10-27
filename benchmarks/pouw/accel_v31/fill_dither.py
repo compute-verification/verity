@@ -1,13 +1,14 @@
 """The GPU's no-fold call (v31lib's Prover over libv31.so) checked against the reference itself,
 `verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's mirror of it, on filler calls (the pad,
 `dither.Shape` with `o` False: T_1 .. T_S a tile) and served calls (an operand A, `o` True: T_1 .. T_{S-1} and then O a
-tile). On each case: the seeds the prover hands the device (v31's `fill_seeds` for a filler, `served_seeds` for a served
-call) against `dither.fill_seeds` and `dither.seeds` byte for byte, the device's pad (`dither.pad_rows`), every committed
+tile). On each case: the call's seeds (`dither.fill_seeds` for a filler, `dither.seeds` for a served call) as the device's
+seed buffer holds them (v31's `fill_seeds_bytes`), read back stream by stream against dither's byte for byte, the
+device's pad (`dither.pad_rows`), every committed
 value of sampled cells (`dither.cell_values`: the T_s the layout commits, and O), sampled leaves rebuilt from only the
 cells they hold (`dither.leaf_row`) and opened against the GPU's root on the GPU's own paths (`dither.opens`, salted
 `dither.salts(Ks, off)` at the call's offset), and, on the small cases, the whole call (`dither.values`,
-`dither.values_buffer`, `dither.commit`) against the GPU's values and root. The device runs on v31's seeds and the
-reference on dither's. A cheating call must fail them.
+`dither.values_buffer`, `dither.commit`) against the GPU's values and root. The device runs on the seeds read back from
+its buffer and the reference on dither's. A cheating call must fail them.
 
     PYTHONPATH=. python3 benchmarks/pouw/accel_v31/fill_dither.py --lib LIB [--cells 64] [--leaves 8] [--out DIR]
 
@@ -50,12 +51,12 @@ c-forgeO 256 256 4096 256 1024 1024 served forgeO:0.5 0
 
 
 def case_seeds(served: bool, rng: np.random.Generator) -> tuple[dict[str, bytes], dict[str, bytes]]:
-    """(the prover's seeds, the reference's) for one call."""
-    if not served:
-        salt, coin = os.urandom(64), os.urandom(64)
-        return v31.fill_seeds(salt, coin), dither.fill_seeds(salt, coin)
-    coin, receipt, call = os.urandom(64), os.urandom(64), int(rng.integers(1 << 62))
-    return v31.served_seeds(coin, receipt, call), dither.seeds(coin, receipt, call)
+    """(the seeds read back from the device's seed buffer, dither's) for one call."""
+    if served:
+        ref = dither.seeds(os.urandom(64), os.urandom(64), int(rng.integers(1 << 62)))
+    else:
+        ref = dither.fill_seeds(os.urandom(64), os.urandom(64))
+    return v31.fill_seeds_from(v31.fill_seeds_bytes(ref), served), ref
 
 
 def committed(sh: dither.Shape, buf: bytes, i: int, j: int) -> list[int]:
