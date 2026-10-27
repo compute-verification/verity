@@ -17,6 +17,7 @@ import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.PublicWitnesses
+import Proofs.Flock.Bridge.PublicNontrivial
 import Proofs.Flock.Bridge.PublicToyDesc
 import Proofs.Flock.Bridge.HiddenReturns
 import Proofs.Flock.Bridge.HiddenLayer
@@ -40,11 +41,15 @@ public parameters, plus `Flock.Bridge.lossPubR` at `J²·K` times the collision 
 of C-Flock's `K` finders and the registered reads' (`PubFinderRows`, over `PubFinder`'s), `J` the plan's tables (the
 averaged premise, `PubAvg`). `PublicDeployed`:
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `δ + f(p) < 1` at the deployment's
-parameters for `p ≤ 2^-200`. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
-(false at the verifier that accepts everything, `Flock.Bridge.deltaPubR_lt_one`). `PublicToyDesc`: a hand-built circuit file meeting the nontrivial
-lemma's structural premises (no port, a computed returned gate, `ioSum ≤ 2^40`). `HiddenReturns`: under the
-parse those premises are never met, since a returned gate is an output row's bit (`Flock.Bridge.outputs_noPort`), so
-no file parses to the toy (`Flock.Bridge.toyDesc_unparsed`). `HiddenLayer`: the hidden-output count curve
+parameters for `p ≤ 2^-200`. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and the
+statement at the verifier that accepts everything (`Flock.Guarantees.SampledKSLivePubAll`). `PublicNontrivial`: that
+statement is false at the toy session of `Flock.Test.ToyPubFiles` (`Flock.Guarantees.sampledKSLivePub_nontrivial`),
+where a registrant opens the returned row's input to `0` and the gate to `1` (`ToyPubReads`, `ToyPubGates`,
+`FaultyRow`), under two interim premises: the toy's files parse (`Assumptions.ToyFilesParse`) and its setup
+(`Assumptions.ToySetupPub`). `PublicToyDesc`: a hand-built circuit file meeting V2's nontrivial lemma's structural
+premises (no port, a computed returned gate, `ioSum ≤ 2^40`). `HiddenReturns`: under the parse those premises are never
+met, since a returned gate is an output row's bit (`Flock.Bridge.outputs_noPort`), so no file parses to the toy
+(`Flock.Bridge.toyDesc_unparsed`). `HiddenLayer`: the hidden-output count curve
 (`zk_flock_countPr_reg` at `planZHJ`) is nontrivial at a perfectly binding toy binding (`Flock.Bridge.countPrReg_nontrivial`). `HiddenModel`: `EndToEndHiddenModel` at
 the verifier that accepts everything, and its toy, whose every table is refused. `HiddenModelWitness`: under
 `toy-setup` (`Assumptions.ToySetup`), that statement is false (`Flock.Bridge.endToEndHiddenModel_nontrivial`).

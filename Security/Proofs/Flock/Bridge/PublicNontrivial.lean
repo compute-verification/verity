@@ -1,3 +1,4 @@
+import Proofs.Flock.Bridge.FaultyRow
 import Proofs.Flock.Bridge.ToyPubGates
 import Proofs.Flock.Bridge.ToyPubReads
 import Proofs.Flock.Bridge.Assumptions.ToyFilesParse

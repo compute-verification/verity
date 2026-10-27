@@ -14,21 +14,15 @@ import Proofs.Flock.Soundness.Game.Prob
   (`FlockSoundness.Audit.Circuit`, `Bridge.commitDep`), with no premise.
 * **The transfer** (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`): at any circuit whose commitment opens nothing,
   a computed output fails the claim for every witness when every unit is drawn; and an event that never holds has
-  probability 1 under every strategy. `SampledKSLivePub`'s and V2's `_nontrivial` read the instance through these.
+  probability 1 under every strategy. V2's `_nontrivial` reads the instance through these.
 * **V2 and V3** (`sampledKSLiveV2_honest`, `sampledKSLiveV2_nontrivial`): their parameter hypotheses hold as
   deployed, and at the verifier that accepts everything their additive bound is below the event's probability, 1, at
   every prover whose finder `B^τ` has `J²·K·Pr[B^τ] ≤ 2^-200` (`Bridge.boundPr_le_pub`).
-* **Nontrivial** (`sampledKSLivePub_nontrivial`): `SampledKSLivePubAll`, `SampledKSLivePub` at the verifier that
-  accepts everything, is false at any setting of its file-level fields whose circuit has no port and computes a
-  returned output, with every unit drawn, at any registrant's opening and a prover with `J²·K·Pr[B^τ] ≤ 2^-200`
-  (`Bridge.deltaPubR_lt_one`). `¬ RelS` is proved there, for every run and every witness. What stays a binder is what
-  only the files or a named assumption give: the parses `hD` and `hpub` (`Flock.Desc.parse` and `HmOut.loadPublic` read the files through `Lean.Json.parse`, a `partial def` the kernel can't
-  unfold, so no proof exhibits a file that parses), the draw setup `y₀` and the records' custody `hCust` (set up from
-  those files; custody is the named assumption `live-verifier`), A3, and `B^τ`'s collision probability (what
-  `cr/sha-512` bounds).
+* **Nontrivial**: `SampledKSLivePubAll`, `SampledKSLivePub` at the verifier that accepts everything, states what
+  `PublicNontrivial`'s `sampledKSLivePub_nontrivial` refutes at the toy session's files.
 * **Vacuous as stated** (`Bridge.outputs_noPort`, `HiddenReturns`): with the parse `hD` of an untyped statement in
-  scope, a circuit with no port returns no gate, so the structural premises of `sampledKSLivePub_nontrivial` and
-  `sampledKSLiveV2_nontrivial` are never met together, and both hold for want of an instance.
+  scope, a circuit with no port returns no gate, so the structural premises of `sampledKSLiveV2_nontrivial` are never
+  met together, and it holds for want of an instance.
 -/
 
 namespace Flock.Bridge
@@ -326,88 +320,6 @@ def SampledKSLivePubAll : Prop :=
       ENNReal.ofReal (Bridge.deltaPubR n kd K₀ k M Rw (Bridge.ioSum P) ρ +
         Bridge.lossPubR k (Bridge.ioSum P) ρ
           ((nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIxR dj y₀ P vb L) * B.Pr Claims.Sampling.sha512Msg))
-
-open Classical in
-/-- **`SampledKSLivePub`'s nontrivial lemma**: `SampledKSLivePub` at the verifier that accepts everything is
-false at any setting of its file-level fields whose circuit has no port (so its commitment opens nothing) and returns a
-computed gate, with every unit drawn (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires, the deployed parameters
-(`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`), any registrant's opening and a prover whose finder `B^τ` has
-`J²·K·Pr[B^τ] ≤ 2^-200`. There the claims' values fail the claim at every run, whatever the registrant opens
-(`Bridge.not_relS_unopened`, for every witness), so `Pr[accept ∧ ¬ RelS] = 1`, while `δ + f(J²·K·Pr[B^τ]) < 1`
-(`Bridge.deltaPubR_lt_one`). The toy (`Bridge.toy_exceeds`) is such a circuit, built by hand; the binders left are the
-files' parses, the draw setup, the records' custody, A3 and `B^τ`'s collision probability. -/
-theorem sampledKSLivePub_nontrivial :
-  ∀ (n : ℕ) (Reg : Type)
-    (own : Array Flock.Registered.Port)
-    (I : Inputs) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
-    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
-    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
-    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
-    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
-    (rd : FlockSoundness.Registered.ReadsX
-      (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
-      (Discharge.ZkReg.rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub))
-    (wr : (S : Finset (Fin n)) → (R : Reg) →
-      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
-    (_hA3 : Assumptions.UniformRandomBytes Lb src)
-    (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (t' v qR : ℝ)
-    (q : Claims.Sampling.Query),
-    let L := Law.execOS (n := n) src (.subset kd) n
-    let G := auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)
-    let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
-    let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
-      (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
-    let wo : vb.Pos → vb.Opening := fun p => ((p, rd.wv p, rd.ws p) : vb.Opening)
-    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
-      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
-          hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
-    let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
-    kd = n → 1 ≤ K₀ → D.unroll.ports.size = 0 → (∃ g ∈ Cc.outputs, (Cc.op g).isInput = false) →
-    Bridge.ioSum P ≤ 2 ^ 40 →
-    (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIxR dj y₀ P vb L) *
-        (Bridge.pubFinderR dj y₀ P vb wo Bridge.kDep (2 ^ 192) (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)
-          (Bridge.strictComp (FlockSoundness.StrictCR.oneRun G τ fun o =>
-            rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR)).Pr
-          Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200 →
-    ¬ SampledKSLivePubAll := by
-  intro n Reg own I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω
-    _ _ Lb src hA3 hTags hCust K₀ hK₀ τ t' v qR q L G P vb wo σ Cc hkdn hK1 hports hout hW hB hAll
-  obtain ⟨g, hg, hgi⟩ := hout
-  obtain ⟨hk, hRw, hM, hρ, hρk⟩ := sampledKSLivePub_honest
-  have h := hAll n Reg own I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ rd
-    wr dg N Ω Lb src hA3 hTags hCust Bridge.kDep (2 ^ 192) (2 ^ 192) hk hRw hM (1 / 2) hρ hρk t' K₀ hK₀ τ v qR q
-  have hr : ∀ g : Fin Cc.N,
-      (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map
-        (fun r => (⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩ : Bridge.RowAt)) =
-        none := by
-    intro g
-    cases hrow : FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g with
-    | none => rfl
-    | some r =>
-      have := r.2.1.isLt
-      omega
-  obtain ⟨u, -⟩ := Bridge.unit_some P hgi
-  have hn : n ≤ K₀ * kd := by
-    rw [hkdn]
-    exact Nat.le_mul_of_pos_left n hK1
-  have hlt := Bridge.deltaPubR_lt_one (W := Bridge.ioSum P) u.pos hK₀ hn hW
-    (mul_nonneg (mul_nonneg (sq_nonneg _) (Nat.cast_nonneg _)) (Claims.Pr_nonneg _)) hB
-  exact not_le.2 (Bridge.exceeds_of_forall_not τ (fun _ => Bridge.not_relS_unopened P _ kd hkdn desc q _ _ _
-    (Bridge.commitDep_opens_none Cc _ hr D.unroll n _ _) _ (by positivity) hg hgi) hlt) h
 
 /-- **`SampledKSLiveV2`'s parameter hypotheses hold as deployed**: `1 ≤ k`, `1 ≤ R_w`, `1 ≤ M`, `ρ < 1`, and every
 table of the hidden-output plan at rate at most `ρ` (`planZHJ_M1W`, `rateZ_le_m1w`), at `k = ⌈2^24/e⌉`,

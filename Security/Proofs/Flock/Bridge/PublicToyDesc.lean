@@ -1,9 +1,9 @@
 import Proofs.Flock.Bridge.PublicWitnesses
 
 /-!
-# A hand-built circuit file meeting `sampledKSLivePub_nontrivial`'s structural premises
+# A hand-built circuit file meeting `sampledKSLiveV2_nontrivial`'s structural premises
 
-`sampledKSLivePub_nontrivial` reads three facts of the circuit `D.unroll` besides the parameters: it has no port, its
+`sampledKSLiveV2_nontrivial` reads three facts of the circuit `D.unroll` besides the parameters: it has no port, its
 key program returns a computed gate, and its units read or write at most `2^40` committed wires. `toyDesc` is a
 `Flock.Desc` built by hand, a flat file of one net, and `toyDesc_structural` proves all three of it at `n = 1`.
 
@@ -78,7 +78,7 @@ theorem toy_nComp (hU : Built toyC.unit) : (Rows.ofNet hU).nComp = 1 := by
   rw [h, toy_facts.2.1, toy_facts.1]
   simp
 
-/-- **The toy meets the structural premises of `sampledKSLivePub_nontrivial`** at `n = 1`: no port, a returned gate
+/-- **The toy meets the structural premises of `sampledKSLiveV2_nontrivial`** at `n = 1`: no port, a returned gate
 that is computed, and at most `2^40` committed wires read or written. -/
 theorem toy_structural (hU : Built toyC.unit) :
     toyC.ports.size = 0 ∧
@@ -124,7 +124,7 @@ theorem toy_structural (hU : Built toyC.unit) :
           Finset.sum_le_sum fun u _ => (Finset.card_le_univ _).trans_eq (Fintype.card_fin _)
       _ ≤ 2 ^ 40 := by simp [hN]
 
-/-- **`toyDesc` meets the structural premises of `sampledKSLivePub_nontrivial`** (`D.unroll.ports.size = 0`, a computed
+/-- **`toyDesc` meets the structural premises of `sampledKSLiveV2_nontrivial`** (`D.unroll.ports.size = 0`, a computed
 returned gate of `Cc`, `ioSum P ≤ 2^40`) at `n = 1`, for any proof that its unit net is built. -/
 theorem toyDesc_structural (hU : Built toyDesc.unroll.unit) :
     toyDesc.unroll.ports.size = 0 ∧
