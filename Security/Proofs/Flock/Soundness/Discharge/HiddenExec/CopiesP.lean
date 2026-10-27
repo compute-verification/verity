@@ -72,8 +72,7 @@ theorem unitRowsFlatP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coi
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
     rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
   obtain ⟨eA, eB⟩ := Hidden.deltaEntry_kept (pin := st.pin) hk j.val
-  have hpc := Hidden.parse_untyped ht s.parse
-  have hpin := Hidden.unpinned_of_rep hpc.1 hpc.2 hrows.1
+  have hpin := (Hidden.committed_of_commit s.parse).unpinned_of_rep ht hrows.1
   have hd1 : (HmOut.delta st.c st.pin).1 = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [Hidden.hidden_delta_unpinned hpin]
   have hd2 : (HmOut.delta st.c st.pin).2 = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by

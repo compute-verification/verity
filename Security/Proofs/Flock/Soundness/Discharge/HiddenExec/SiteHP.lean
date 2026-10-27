@@ -35,10 +35,10 @@ namespace AcceptedHP
 variable (a : AcceptedHP T)
 
 theorem parse : HmRow.parse a.tags a.cf a.tables = .ok a.st.c :=
-  (Hidden.parse_untyped a.ht a.s.parse).1
+  (Hidden.parse_untyped a.ht (a.s.parseF a.hi)).1
 
 theorem checkRows : HmOut.checkRows a.st.c = .ok () :=
-  (Hidden.parse_untyped a.ht a.s.parse).2
+  (Hidden.parse_untyped a.ht (a.s.parseF a.hi)).2
 
 theorem rowRanges : RowRanges a.st.c :=
   RowRanges.ofL (st := Hidden.flatTwin a.st) a.flatLayout a.unitFacts.parse a.unitFacts.check
@@ -96,7 +96,7 @@ theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g 
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrHP a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       (pop.digest u p a.st.c.ports.size).data.toList := by
   obtain ⟨d, D, hd, hD, hlt, hpop, hg2, hu⟩ := hs
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   dsimp only at hd hpop hu hg hg2 hp ⊢
   subst hd
@@ -112,7 +112,7 @@ theorem copy_siteHP (a : AcceptedHP T) {z : Witness T.m} (hz : T.Satisfies z) (o
     {q byte bit : ℕ} (hk : Aliased.srcKey a.st.c x.val = .msg q byte bit)
     (hin : Typed.msgCol a.st.c g q byte bit < 2 ^ a.st.c.kLog) :
     T.block z o (a.col hg x) = z (siteAddrHP a o (Typed.msgCol a.st.c g q byte bit)) := by
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   dsimp only at hg x hx hneg hk hin ⊢
   have F := flat_unitFactsP ht s
@@ -158,10 +158,10 @@ theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
     T.block z o (a.col hg x) =
       z (siteAddrHP a o (Typed.msgCol a.st.c g (HmOut.nIn a.st.c + jo) ((16 * k + t) / 8) ((16 * k + t) % 8))) := by
   have hcol := col_val_compHP a hg x hu' h1 h2 hx
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   dsimp only at ho hrf hg x hu' hj h1 h2 hx hjo hk hw hcol ⊢
-  obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' s.parse
+  obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' (s.parseF hi)
   have P := parse_facts hpa
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
@@ -192,7 +192,7 @@ theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
   have hin := Layout.msgCol_lt_of_parse hpa hg hp (2 * k + t / 8) (t % 8) (Nat.mod_lt _ (by norm_num))
   refine bit_inj _ _ ?_
-  rw [hb, hb8, bit_siteAddrHP ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', h, pi, s, L, hR,
+  rw [hb, hb8, bit_siteAddrHP ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', hi, h, pi, s, L, hR,
     regs, hregs, rfl⟩ z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc,
     ← hcol, blockBit_of_lt _ z o (Fin.isLt _)]
 
@@ -208,7 +208,7 @@ theorem AcceptedHP.row_bc (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
       (Hidden.Any.rowMsg a.st.c.ports[p]!
         (bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p)))
       (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   dsimp only at hupv hrf hg hp ⊢
   have L0 := flat_layoutP ht s
