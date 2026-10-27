@@ -34,7 +34,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
   its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K columns, halved while an earlier node reads that slice
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
-- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit, and its product `ScaledMmS8_v1{K, N}`,
+- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit (its body's two, scale and codes,
+  where an earlier node reads its template's ``x`` at another row count: o_proj's), and its product `ScaledMmS8_v1{K, N}`,
   ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
   is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
@@ -56,9 +57,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   `TokenSelectChunk_v2{C}`, each reading its C logits as the LM head's rows that hold them, and
   `TokenSelectCombine_v2{V, C}` over them: ``best`` and ``idx`` a row a chunk, and ``x0`` (``logits[0]``) from one
   `Gemm_v2{K, 1}` unit over the LM head's input and its first weight row.
-- `SiluMul_v2{I}` is P units `SiluMul_v2{I / P}`, each reading its gate and up elements as the gate-up GEMM's rows that
-  hold them, P the fewest that leaves a unit within ``grain.rows`` rows; `RMSNormTriton_v5` and `RMSNormFusedCuda_v2` are
-  one unit each.
+- `SiluMul_v2{I}` is P units `SiluMul_v2{I / P}`, each reading its gate and up elements as the gate-up GEMM's rows, P the
+  fewest that leaves a unit within ``grain.rows`` rows; `RMSNormTriton_v5` and `RMSNormFusedCuda_v2` are one unit each.
 
 The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
 (`window_builder.weight_param`: ``weights/<label>@<words>``), its reads' bases and steps whole rows of it, so each is pinned
@@ -112,6 +112,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
 from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
+from verity.ml.definitions.registry import int8_exact as IX
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19
 from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
@@ -398,7 +399,20 @@ class _Program:
         ends = list(accumulate((w for _, w in lay.outs), initial=0))
         self.outs[j] = [(a, e, Row(tid, u, o, w)) for (o, w), a, e in zip(lay.outs, ends, ends[1:])]
 
-    _RMSNormTriton = _RMSNormFusedCuda = _Int8RowQuant = _one
+    _RMSNormTriton = _RMSNormFusedCuda = _one
+
+    def _Int8RowQuant(self, j: int, node: Any) -> None:
+        """`Int8RowQuant_v1{K}`, one unit, or where an earlier node reads its template's ``x`` at another row count, its body's
+        two: `Int8RowScale_v1{K}` (its scale) and `Int8StaticQuant_v1{K}` (its codes under it), each reading ``x``."""
+        xs, K, (codes, scale) = self.rows(node.args[0].refs), node.fn.bindings["K"], IF.layout(node.fn).outs
+        if self.b.read_rows.get((descriptor_id(node.fn), "x"), len(xs)) == len(xs):
+            return self._one(j, node)
+        (st, su), (qt, qu) = self.b.unit(bind(IX.Int8RowScale, K=K)), self.b.unit(bind(IX.Int8StaticQuant, K=K))
+        s = Row(st, su, "o0", scale[1])
+        self.b.feed(st, "x", su, 1, xs)
+        self.b.feed(qt, "x", qu, 1, xs)
+        self.b.feed(qt, "s", qu, 1, (s,))
+        self.outs[j] = [(0, codes[1], Row(qt, qu, "o0", codes[1])), (codes[1], codes[1] + scale[1], s)]
 
     def _SiluMul(self, j: int, node: Any) -> None:
         """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
@@ -634,17 +648,6 @@ FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQu
             "TokenSelect")
 
 
-def _runs(xs: Sequence[Any], key: Any, at: Any, n: Any, make: Any) -> list[Any]:
-    """``xs`` with each run of like entries (equal ``key``, consecutive units) merged by ``make(first, units)``."""
-    out: list[Any] = []
-    for x in sorted(xs, key=lambda x: (key(x), at(x))):
-        if out and key(out[-1]) == key(x) and at(out[-1]) + n(out[-1]) == at(x):
-            out[-1] = make(out[-1], n(out[-1]) + n(x))
-        else:
-            out.append(x)
-    return out
-
-
 def class_program(registered: Any, cls: WindowClass) -> Any:
     """The class's request Program (a `build.BuildResult`): the Build's greedy request at one prompt row and
     ``cls.positions`` - 1 decode steps, in the registered compiler's form."""
@@ -740,10 +743,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
     if wired:
         b.settle()
-    roots = _runs(b.roots, lambda x: (x.reader, x.port, x.table, x.of), lambda x: x.at, lambda x: x.units,
-                  lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n))
-    openings = _runs(b.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict), lambda x: x.at, lambda x: x.units,
-                     lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n))
+    roots, openings = b.merged()
     params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))

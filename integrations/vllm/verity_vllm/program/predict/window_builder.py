@@ -85,6 +85,18 @@ def _runs_of(rows: Sequence[Row]) -> list[tuple[int, int, int]]:
     return out
 
 
+def _merge(xs: Sequence[Any], key: Any, make: Any) -> list[Any]:
+    """``xs`` (each from unit ``at``, ``units`` of them) with each run of like ones (equal ``key``, consecutive units) merged
+    by ``make(first, units)``."""
+    out: list[Any] = []
+    for x in sorted(xs, key=lambda x: (key(x), x.at)):
+        if out and key(out[-1]) == key(x) and out[-1].at + out[-1].units == x.at:
+            out[-1] = make(out[-1], out[-1].units + x.units)
+        else:
+            out.append(x)
+    return out
+
+
 def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
     """The unit step σ with ``rowss[i]`` each of ``rowss[0]``'s rows σ·i units on, None where there is none."""
     r0 = rowss[0]
@@ -235,6 +247,13 @@ class _Builder:
             raise Unexpressible(f"{len(why)} templates the window can't hold, each port cut once a writer row: " + "; ".join(why))
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
+
+    def merged(self) -> tuple[list[IF.TableRead], list[IF.Opening]]:
+        """The table reads and the openings, each run of like ones at consecutive units one."""
+        return (_merge(self.roots, lambda x: (x.reader, x.port, x.table, x.of),
+                       lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
+                _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict),
+                       lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
