@@ -533,7 +533,7 @@ rest of the event where it meets `FinderCR`, `ComponentBound`'s event at `σ` is
 theorem bound {δ : ℝ} (hs : k.atCode.Sound (V.certOf θ) k.price a δ)
     (hδ : ENNReal.ofReal δ ≤ V.delta θ a (V.cost θ F c σ)) (hb : V.FinderCR a θ F c σ → k.BreakBound) :
     Game.prob (fun o => ComponentAccepts a o.sent ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ := by
-  unfold Vocab.error
+  unfold Vocab.error condError
   split_ifs with hcr
   · classical
     show _ ≤ V.delta θ a (V.cost θ F c σ) + V.loss a θ ((V.live θ F c).collides sha512Msg a σ)
