@@ -26,7 +26,7 @@ from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, R
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
-from test_merge_gate import CHECK_FILES, CHECKED
+from test_merge_gate import CHECK_FILES
 
 RULES = 'hold_label = "hold"\n'
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
@@ -904,31 +904,6 @@ def test_a_rewritten_pr_head_is_fetched_by_force_and_merged(world):
     world.gh.put(1, new)
     members, _ = q.sync()
     assert members[0].head == new and _git(world.origin, "show", "refs/heads/next:a.txt") == "rewritten"
-
-
-def test_land_fast_forwards_main_to_the_newest_commit_with_a_passing_check_and_shadow_lands_nothing(world, monkeypatch):
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    main_before = _git(world.origin, "rev-parse", "main")
-    shadow = world.queue(shadow=True)
-    shadow.sync()
-    assert _git(world.origin, "rev-parse", f"refs/heads/{SHADOW_BRANCH}") and world.on_next(shadow) == [1, 2, 3]
-    members, _ = world.queue().sync()
-    monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    for m, command in ((members[1], CHECKED), (members[2], ("false",))):
-        tree = world.tmp / f"check-{m.pr}"
-        _git(world.dev, "fetch", "-q", "origin")
-        _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), m.commit)
-        monkeypatch.chdir(tree)
-        research_main(["run", "--runs-dir", str(world.tmp / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
-                       "--cwd", "source", "--", *command])
-    shadow.land()                                               # whatever it finds, a shadow queue never moves `main`
-    assert _git(world.origin, "rev-parse", "main") == main_before
-    q = world.queue()
-    assert q.land(dry_run=True) == members[1] and _git(world.origin, "rev-parse", "main") == main_before
-    assert q.land() == members[1]
-    assert _git(world.origin, "rev-parse", "main") == members[1].commit      # a fast-forward: exactly the checked commit
-    assert world.on_next(q) == [3]
 
 
 def test_pr_label_targets(tmp_path, monkeypatch):
@@ -2775,9 +2750,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
-                      (["queue", "drive"], "drive needs --on MACHINE"), (["queue", "report"], "report needs --on MACHINE")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and drive only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only"),
+                      (["queue", "drive"], "drive needs --on MACHINE")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
