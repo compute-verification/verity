@@ -174,7 +174,7 @@ PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
 say "WINDOW $PICK"
 cd "$TREE/integrations/vllm" || exit 9
-CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
+CA=$(cd "$TREE" && "$PY" examples/prove-path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
 [ -n "$CA" ] || stop compiler 13
 echo "registered compiler: $CA" > "$OUT/compiler.txt"
@@ -194,12 +194,12 @@ say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))[
 cd "$TREE" || exit 9
 wc_ok=0
 for c in $CLASSES; do
-  if ! grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py; then
+  if ! grep -q '"window-circuit"' examples/prove-path/prove_path.py; then
     say "MISSING V3b's window circuit (#4317 with #4757, VLLM-103): this tree's prove_path.py has no window-circuit"; break
   fi
   cls=(); tag=record; [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
   f=$D/window-circuit-w$K-$tag.json
-  timeout "${WC_TIMEOUT:-30m}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
+  timeout "${WC_TIMEOUT:-30m}" "$PY" examples/prove-path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
     --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" --pin "${PIN:-weights}" "${cls[@]}" \
     > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
   rc=$?
@@ -215,7 +215,7 @@ say "MISSING V3c (VLLM-103, vllm-stack-neutral): the committer writing the windo
 wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
-  PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$OUT/sampled-proofs.log" 2>&1
+  PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash examples/prove-path/run.sh > "$OUT/sampled-proofs.log" 2>&1
 rc=$?
 say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log" | cut -c1-3000)"
 [ -n "$(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log")" ] || say "SAMPLED-PROOFS: no RECORDS line; $(grep -v '^+' "$OUT/sampled-proofs.log" | tail -3 | tr '\n' ' ' | cut -c1-600)"

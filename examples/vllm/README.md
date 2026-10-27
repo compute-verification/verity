@@ -3,7 +3,7 @@
 Llama-3.2-1B (`unsloth/Llama-3.2-1B` at `9535bd9b1d1dea6acafbdc4813b728796aeb28da`), bf16, batch-invariant eager, served
 by vLLM on one RTX PRO 6000 through `verity_vllm`'s committing OpenAI endpoint, and each closed Commit window audited on
 the prove path. This directory holds what is the example's: its workload, its placement and its commands. What attaches
-Verity to vLLM is `integrations/vllm/`, and the audit is `benchmarks/prove_path/`'s.
+Verity to vLLM is `integrations/vllm/`, and the audit is `examples/prove-path/`'s.
 
 ## Workload
 
@@ -45,12 +45,12 @@ From the tree root, each a `research run` on its party's node (the scripts' head
      gpu-lease 1 --wait --mem-gb 256 -- bash examples/vllm/serve.sh
    ~~~
 
-3. The audit of window K, honest and forged: `benchmarks/prove_path/run.sh` with `PP_SERVE_RUN` (the serve dir, or its
+3. The audit of window K, honest and forged: `examples/prove-path/run.sh` with `PP_SERVE_RUN` (the serve dir, or its
    `art:` id), `PP_WINDOW=K` and `PP_SERVE_ROWS` (the window's sealed row dir).
 
    ~~~sh
    research run --on vy-nebius-cpu-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
-     --env PP_SERVE_RUN=art:… --env PP_WINDOW=0 --env PP_SERVE_ROWS=art:… -- bash benchmarks/prove_path/run.sh
+     --env PP_SERVE_RUN=art:… --env PP_WINDOW=0 --env PP_SERVE_ROWS=art:… -- bash examples/prove-path/run.sh
    ~~~
 
 The scripts reach the integration as they always have: `PYTHONPATH` holds the tree and `integrations/vllm`, and they run

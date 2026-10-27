@@ -8,7 +8,7 @@ circuit depends on: one unit per output coordinate of each linear at each reques
 one per quantize between two, `loop.TorchLoop`'s ``wired``). The command writes the circuit
 record of a window of that circuit under ``--law`` in members of at most ``--cap`` units, its run fields empty, prints
 ``{"bits": N}`` (the advice's length, which is charged) and exits 0; on advice that is not a schedule it exits `REFUSED`,
-the reason on stderr (the contract is `benchmarks/prove_path/records_audit.py`'s). ``--identity`` prints the name, digest
+the reason on stderr (the contract is `examples/prove-path/records_audit.py`'s). ``--identity`` prints the name, digest
 and commit it is registered under (`compiler`), and ``--table ARGV...`` the verifier's table entry for it running as ARGV
 (`table`)."""
 from __future__ import annotations

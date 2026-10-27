@@ -1,5 +1,5 @@
 """arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to ENC-CODE's coders (`code.py`, `code_v1`)
-on what v1 actually codes (the fixture's streams, as `benchmarks/network_e2e/encodings/arith_vectors.py --steps` cut
+on what v1 actually codes (the fixture's streams, as `examples/network-vllm/encodings/arith_vectors.py --steps` cut
 them: advice v1's windows, the replay's decisions, the arrival order's deviations and the hits sent past the pool
 bound, on ENC-REPLAY's step traces with v1's charges, and ENC-DERIVED's still-sent fields on the TRACE-CORPUS
 fixture, each symbol tagged a bit or an integer's, with code.py's state after every symbol and its segment), to the

@@ -1,7 +1,7 @@
 """The integrity leg: sampled proofs' one-stage audit of the window, from its records alone
 (`verity_all_protocols.table`'s interface: ``leg(period_dir, node, out) -> answer``).
 
-The audit is `benchmarks/prove_path/records_audit.py`'s, as `run.sh` with ``PP_TORCH_LOOP=1`` runs it: the registration
+The audit is `examples/prove-path/records_audit.py`'s, as `run.sh` with ``PP_TORCH_LOOP=1`` runs it: the registration
 held to the circuit the verifier registered before the loop ran (``--circuit``) and to the run root the loop published,
 the draw on live coins read after the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, and the
 audit record of the verifier of record (`one_stage.verifier.audit_record`, the Lean ``sampled-proofs-verifier``). A
@@ -42,7 +42,7 @@ from verity.core.protocols.sampled_proofs.one_stage import audit as A, registrat
 
 PROTOCOL = R.PROTOCOL
 ROOT = Path(__file__).resolve().parents[3]
-RECORDS_AUDIT = ROOT / "benchmarks" / "prove_path" / "records_audit.py"
+RECORDS_AUDIT = ROOT / "examples" / "prove-path" / "records_audit.py"
 #: the δ a window's audit record is decided at when its ``period.json`` names none
 DELTA = "1/100"
 #: the ports one audit's sessions may listen on, from its base (a session per member with a proved unit, its drawn ones
@@ -133,7 +133,7 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def keep(src: Path, dst: Path) -> None:
     """The audit's records from ``src`` into ``dst``: never a prover's file (its rows and salts) nor a circuit, whose pin
-    the records hold (`benchmarks/prove_path/run.sh`'s ``keep``)."""
+    the records hold (`examples/prove-path/run.sh`'s ``keep``)."""
     for f in src.rglob("*"):
         rel = f.relative_to(src)
         if not f.is_file() or "archive" in rel.parts[1:] or f.name == "circuit.txt" or f.name.endswith("-private.bin") \

@@ -93,7 +93,7 @@ from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
-TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
+TRACE_8EB1 = REPO / "examples/network-vllm/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
 WINDOW = 212
 #: counts fitted to w212, from which its decisions charge 25 bits in place of the session's 27
 FITTED = AE.Carry(((1, 0), (16, 0), (64, 16)), 0)
@@ -158,7 +158,7 @@ def _encodings():
     `sys.modules` after, so their bare names clash with nothing."""
     import importlib
 
-    enc = REPO / "benchmarks/network_e2e/encodings"
+    enc = REPO / "examples/network-vllm/encodings"
     names = ("replay", "replay_vectors", "cache_vectors", "enc_derived")
     saved, path = {k: sys.modules.pop(k) for k in names if k in sys.modules}, list(sys.path)
     sys.path[:0] = [str(enc)]
@@ -210,12 +210,12 @@ def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespac
 
 
 def _corpus(tmp: Path) -> Path:
-    """corpus-smallkv unpacked as ENC-DERIVED's tests read it (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s
+    """corpus-smallkv unpacked as ENC-DERIVED's tests read it (`examples/network-vllm/encodings/tests/test_v1.py`'s
     `_corpus`, which imports pytest): each batch in Model Runner V2's order, each stop-id finish marked `eos`."""
     import gzip
     import shutil
 
-    src = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/corpus-smallkv"
+    src = REPO / "examples/network-vllm/encodings/tests/fixtures/corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp / f)
     out = []
@@ -238,7 +238,7 @@ def corpus_check(x: SimpleNamespace) -> None:
     each arrival's tokens (`cache_vectors`' trace, `derived.tokens_of`)."""
     import tempfile
 
-    enc = REPO / "benchmarks/network_e2e/encodings"
+    enc = REPO / "examples/network-vllm/encodings"
     RP, RV, CV = _encodings()
     t = RP.read_corpus_trace(_corpus(Path(tempfile.mkdtemp())))
     _st, cases = RV.vectors(t, R=x.S.R, W=x.S.W, A=x.S.A)

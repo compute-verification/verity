@@ -14,7 +14,7 @@ A spec-level reference for network accounting's timing channel:
   check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
-  behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
+  behaviour (`examples/network-sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
   stays counts only until N3 is a proof-service unit with Selection `All`. The network verdict of record is
   `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
@@ -37,7 +37,7 @@ A spec-level reference for network accounting's timing channel:
   start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
   what its size class or the prefix layer's counts can't express. It is the compile unit's core, between the committed
   decisions and `compile_steps`' Programs, and is held step for step to the replay
-  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet. It takes the circuits
+  (`examples/network-vllm/encodings/replay_vectors.py`); it is in no proof-service Spec yet. It takes the circuits
   and their evaluator from `verity`;
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
   served through the warden's egress, every cell of an egress link-window is opened, each a pad, the canonical event of
@@ -97,7 +97,7 @@ A spec-level reference for network accounting's timing channel:
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+  (`examples/network-vllm/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
 - the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
@@ -138,7 +138,7 @@ A spec-level reference for network accounting's timing channel:
   registered book's counts, never witness. The bit-checking variant, the alternative: `ArithEncodeStep_v1{K, BIN}` and
   `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
-  v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
+  v1's windows and on ENC-DERIVED's still-sent fields (`examples/network-vllm/encodings/arith_vectors.py`), and it is
   in no proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
 - the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hm96 rows,
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)

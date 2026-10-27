@@ -1482,6 +1482,13 @@
         "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
         "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_e2e/": "examples/network-vllm/",
+        "benchmarks/network_sim/": "examples/network-sim/",
+        "benchmarks/prove_path/": "examples/prove-path/"
+      }
     }
   ]
 }

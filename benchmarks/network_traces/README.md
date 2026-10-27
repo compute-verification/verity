@@ -55,7 +55,7 @@ than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes e
 endpoint takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
 certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
 (`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the
-endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
+endpoint's records (`examples/network-vllm/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
 `serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps,
 network-e2e's binding and the two provers, and writes `out/report/report.json` and `report.md`:
 

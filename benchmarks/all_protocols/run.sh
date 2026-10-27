@@ -2,7 +2,7 @@
 # `verity bench all-protocols`: every window, one run of the toy (integrations/torch_loop, a W8A8 MLP on CPU) audited by
 # every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
 # $OUT/reports.jsonl, and the monitoring-period report over the windows so far in $OUT/monitoring-period.json
-# (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as benchmarks/prove_path/run.sh does: M0's
+# (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as examples/prove-path/run.sh does: M0's
 # flock-circuit, Lean's flock-verify and flock-firewall, the sampled-proofs verifier of record, onsite, PoUS's run and
 # setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol) and the streamed
 # wipe's (wipe-protocol), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the

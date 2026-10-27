@@ -4,7 +4,7 @@
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its capacities are the
 ones memory accounting reads, at the values `verity.core.protocols.remote_bandwidth.timing` states
-(`benchmarks/network_sim/tests/test_graph.py` pins them, so that a declaration needs nothing imported): each GPU's memory,
+(`examples/network-sim/tests/test_graph.py` pins them, so that a declaration needs nothing imported): each GPU's memory,
 read bandwidth and on-chip state (S_chip), its rate for each kind of work a Program's gates are (`logical.work`:
 tensor-core multiply-adds by precision, `mac:fp8` and the like, at the dense datasheet peaks that
 `benchmarks/census/hardware.json` gives under the same names; on the CUDA cores, word operations, `cuda:op`, and Boolean

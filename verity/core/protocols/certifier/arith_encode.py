@@ -14,7 +14,7 @@ counting the bits it would write, which is what the composition charges, or chec
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
 Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of ENC-CODE's
-32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
+32-bit Witten–Neal–Cleary arithmetic coder (`examples/network-vllm/encodings/code.py`, `ArithEncoder`), as `code_v1`
 codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
 for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile unit
 runs the encoder forward, since which value is read next, and so its window, is the replay's position.

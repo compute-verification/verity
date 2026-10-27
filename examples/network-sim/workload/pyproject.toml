@@ -1,0 +1,24 @@
+[project]
+name = "verity-netsim-workload"
+version = "0.0.0"
+description = "The simulated datacenter's workload: a Boolean Program or verity_vllm's serving Program placed on blocks, framed across certified links."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-vllm"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+verity = { workspace = true }
+verity-vllm = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `workload` is imported as a package from the directory above it, and `datacenter` (not an installed package) by path.
+pythonpath = ["..", "../../../benchmarks/datacenter"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# accounting.py reads the workload with the accounting layer's `datacenter`.
+inputs = ["benchmarks/datacenter"]

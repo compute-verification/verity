@@ -6,7 +6,7 @@ How a real served window becomes `CompileSlice_v1`'s input, and what the replay'
 windows need: `ReplayStep_v1` (`replay_step`), with `replay_chain`'s `ReplayAdvance` beside each step and `ReplayLoad`
 once a window.
 
-**A served window as the slice's input** (`benchmarks/network_e2e/encodings/replay_vectors.py`):
+**A served window as the slice's input** (`examples/network-vllm/encodings/replay_vectors.py`):
 - `served_window(records, w)` cuts window w out of a served scheduler trace (the recorder's `advice_trace.jsonl`): the
   header, the arrivals the engine core added before the window's first step, and its steps, renumbered from that step.
   It also returns the session index of the window's first arrival. It refuses a window the trace doesn't open and
@@ -26,7 +26,7 @@ once a window.
 
 **vLLM run r20261024-141912-8eb1** (Llama-3.2-1B under vLLM's AsyncScheduler: max_num_seqs 8, max_num_batched_tokens
 2048, max_model_len 512, chunked prefill, no prefix caching, 101,626 KV pages) served 480 requests in 6,169 steps and
-339 windows. Its records are `benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/`: the scheduler trace, and
+339 windows. Its records are `examples/network-vllm/encodings/tests/fixtures/vllm-8eb1/`: the scheduler trace, and
 windows 212's and 1's seals.
 - The async replay reproduces all 6,169 steps (6,624 decisions, 466 requests arrived on an ask).
 - Every window opens on a drained engine, so each is a slice from the empty engine.
@@ -47,7 +47,7 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   reference on it and on its negatives ([compile-slice.md](compile-slice.md))
   (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w212.py`).
 - `ReplayStep_v1` at AS = 1 is w212's served scheduler on all 22 of its async units, circuit and reference
-  (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
+  (`examples/network-vllm/encodings/tests/test_served_window.py`).
 - At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4`), w212 is
   `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
@@ -146,7 +146,7 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
   caching), 38 units, the last schedule on the drained engine dropped. Its charge is from the session's carry after
   window 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
 - `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
-  (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
+  (`examples/network-vllm/encodings/tests/test_served_window.py`).
 - `CompileSlice_v1` takes it at AS = 1, with two parts that sync didn't need:
   - **The reference at AS = 1.** It reads its entries by `replay_chain`'s names at its shape (`running_names`,
     `waiting_names`, `arrival_names`) in `_state`, `_row`, `_inputs` and `check`'s decoding of `cert` and `arr`,

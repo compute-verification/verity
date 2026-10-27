@@ -56,7 +56,7 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
 cd "$TREE/integrations/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
+  (cd "$TREE" && "$PY" examples/prove-path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 

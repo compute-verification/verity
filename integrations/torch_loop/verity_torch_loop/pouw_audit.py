@@ -3,7 +3,7 @@
     python -m verity_torch_loop.pouw_audit --window DIR --circuit SHA512 --run HEX --m0-pythonpath PATH --bin flock-circuit \\
         --lean flock-verify --firewall flock-firewall --out DIR [--forged | --late] [--pouw-check BIN] [--skip-negatives]
 
-The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
+The audit is one-stage's from the records alone (`examples/prove-path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
 firewall on the drawn tiles, Lean's verdicts and the audit record. What differs is because the registration's
 window is PoUW's ``{context, kind, public}``, not one-stage's provenance:
@@ -53,7 +53,7 @@ from verity.ml.windows import interface as IF
 from . import pouw as PW
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
+sys.path.insert(0, str(ROOT / "examples" / "prove-path"))
 
 import records_audit as RA  # noqa: E402
 
@@ -152,7 +152,7 @@ def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction, salt: Mappi
 
 
 def keep(src: Path, dst: Path) -> None:
-    """The audit's records from ``src`` into ``dst``, as `benchmarks/prove_path/run.sh`'s ``keep``: never a member's
+    """The audit's records from ``src`` into ``dst``, as `examples/prove-path/run.sh`'s ``keep``: never a member's
     circuit (its SHA-512 is in the records), a session's archive, an instance file, a private file or the prover's copy of
     a member's files."""
     for f in sorted(src.rglob("*")):

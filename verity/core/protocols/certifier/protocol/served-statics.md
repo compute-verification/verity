@@ -43,7 +43,7 @@ the prover's word.
 
 **Cost** (`size`, pinned in `served_statics.circuit-check.json`). A step is R·(1 + LW + TW) − 2 ANDs, and the steps'
 flags cost 2·(G − 1) more. Every committed row a unit reads is hashed in-circuit, so its two rows, G·R·(3 + IW +
-2·(LW + TW)) bits, set its C-Flock block (`benchmarks/prove_path/served_statics_zk.py cost`):
+2·(LW + TW)) bits, set its C-Flock block (`examples/prove-path/served_statics_zk.py cost`):
 
 | class | G | unit ANDs | block (k_log) |
 |---|---|---|---|
@@ -56,6 +56,6 @@ So a served-class unit fits 2^27 up to G = 64, four units a window.
 
 **Open.**
 - vllm's serve call (`commit_served`) registers at G = P. It is to pass the tie's G.
-- `benchmarks/prove_path/served_statics_zk.py` takes the Programs' statics from the honest rows, as compile(advice) lays
+- `examples/prove-path/served_statics_zk.py` takes the Programs' statics from the honest rows, as compile(advice) lays
   out a step whose advice's rows they are, and checks them natively against each step's committed positions
   (`served_tie_window.statics_held`). The verifier is to compile them from the advice.
