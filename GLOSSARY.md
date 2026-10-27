@@ -4,7 +4,7 @@ The rest of the [Glossary](ARCHITECTURE.md#glossary), and it changes with it: a 
 
 ## Notation
 
-The datacenter model's symbols, one meaning each (Daniel, 26 Oct). The canonical text is the Notion working draft
+The datacenter model's symbols, one meaning each. The canonical text is the Notion working draft
 "Distinguishing inference from frontier training", §3, §8 and its notation table, with
 `note:training/20261026T1840Z-draft-formal-properties`. A gate count that credits or reports is in AND gates, and the
 (c, k)-partitions count every gate ("Size, credit and exclusion", below).
@@ -42,7 +42,7 @@ The datacenter model's symbols, one meaning each (Daniel, 26 Oct). The canonical
 
 ## Size, credit and exclusion
 
-Daniel (26 Oct, 6:40 PM PDT, tentative): credit and all reporting are in circuit size, counted in AND gates.
+Credit and all reporting are in circuit size, counted in AND gates (tentative).
 
 - **Size** is a circuit's or a region's AND-gate count. AND gates are what C-Flock pays for, so size is the lingua franca
   every protocol credits in and every result reports computation in, in place of work, FLOPs, MAC-times and pricing. U uncertified
@@ -63,12 +63,11 @@ Daniel (26 Oct, 6:40 PM PDT, tentative): credit and all reporting are in circuit
   `Price`, and the covert residual F·T − W_cert, which is exclusion on one device), and ACCEL's `PROTOCOL.md` credits at
   pub(μ°) against W_reg until CMP-158 restates it in AND gates.
 
-Daniel's standing instruction goes with it: anyone who finds a reason this is wrong floats it the moment they find it,
-on its #agent-coordination thread or to @compute-research.
+Anyone who finds a reason this is wrong says so the moment they find it.
 
 ## Workload
 
-Daniel (26 Oct, 5:49 and 5:56 PM PDT): a **workload** is what a datacenter runs over a monitoring period: its Programs,
+A **workload** is what a datacenter runs over a monitoring period: its Programs,
 their inputs (weights, and requests or data) and their placement. It is one thing at every scale, from one server to a
 whole datacenter, inference and training alike, and workloads compose: workloads run side by side are one workload.
 "Row" no longer names one; it stays only for a commitment's matrix rows. vLLM's workload files
@@ -100,7 +99,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block |
 | "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
 | "M1", "M2" (elsewhere in the code these also name unrelated things) | C-Flock ZK |
-| `hm96-sha256/v1`, until one-hash deletes it | the hiding leaf `hm96-sha512/v1` |
+| `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
@@ -126,10 +125,10 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for a model's transformer layer; the model's `blocks.N` module paths, the tap family `moe_block_stream` | layer |
 | "block" for a bucket of the network certifier's timing advice; the Lean's `OccupancyReadsOwnBlock`, `EncardAccSeqsLeBlocks`, until network accounting renames them | bucket |
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
-| "physical block" (#4732) | server-time block |
+| "physical block" | server-time block |
 | "isolation unit" (IU) | isolation block |
 | "replay unit" (RU) | replay block |
-| "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/` (`subprotocols/` after Demo B), the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
+| "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/`, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in ACCEL's docs until CMP-158; W_cert, the Lean's `WorkSound`, `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
@@ -139,7 +138,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 
-The `veritor.*` gate families are grandfathered and the prefix is frozen (circuits, 14 Oct 2026, CIR-12): each existing id
+The `veritor.*` gate families are grandfathered and the prefix is frozen: each existing id
 declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, the `veritor.tc-bf16.*@1` and
 `veritor.tensor-core.*@2` families) keeps its exact spelling, because the `*_FAMILY_DIGEST` pins, fixtures and recorded runs
 bake it in, and renaming would invalidate every one of them for no semantic gain. No new family is created under
@@ -184,7 +183,7 @@ Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so t
   hardware.
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
   clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
-  block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`) (Daniel, 26 Oct). The code's link-window is a sampling block of
+  block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`). The code's link-window is a sampling block of
   2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the T ingress then the
   T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
   one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link, its

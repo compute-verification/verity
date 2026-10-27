@@ -40,7 +40,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier of record is Lean, a Python verifier keeps only the edges into `verity.ml`
-it had on 18 Oct (`CORE_ML_EDGES`). `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
+that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
 Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
 Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
 `tests/test_integration_boundaries.py`).
@@ -60,16 +60,16 @@ research status RUN  # check back on a run (`research run` returns once it start
 
 ## Design rules
 
-Daniel's, current; their history is his decisions log in Notion, and the friction skill has the standing rulings stated
-nowhere else.
+The rules in force, each stated as itself. Who set each one, when and why is Daniel's decisions log in Notion, and the
+friction skill has the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and draws, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
-  from 16 to 262,144 bits, and its output bits count in leakage (19 Oct, provisional; `UNIT_CLASS_MAX` = 16 restores the
-  16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden (24 Oct): it
+  from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
+  16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
 - **One proof service** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
@@ -80,17 +80,17 @@ nowhere else.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees, signatures
   are hash-based (LMS, n = 64), and BLAKE3 is `archive/`'s. Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  named premise H-μ⁺ (the premise ledger's row R1, `note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
+  named premise H-μ⁺, not yet in a lock.
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: the remote bandwidth
-  audit's pass seeds inside a window, from the window's live challenge and the previous pass's root (12 Oct); and PoUW's
+  audit's pass seeds inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
-  live salt (`pouw.salt`, #2637) and the operands' committed roots, which a drawn unit's proof derives. Grinding is a term
-  of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try (18 Oct). No
+  live salt (`pouw.salt`) and the operands' committed roots, which a drawn unit's proof derives. Grinding is a term
+  of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
   retries: a failed proof is a visible failure, and nothing redraws. Outer proofs go through the firewall as independent
   sessions: each staged statement is fixed before any session draws coins and gets exactly one session, with its own live
   coins in its own firewall pass; no statement reads another session's transcript or coins; every session is recorded and
-  every verdict counts (24 Oct, provisional; https://app.notion.com/p/403399515d9e81298f49e4b6b78634e7).
-- **Verifier cost: O(circuit description), never O(unrolled circuit)** (18 Oct). A verifier of record works in
+  every verdict counts (provisional).
+- **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier of record works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
@@ -98,28 +98,28 @@ nowhere else.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the prover doesn't
   control, never a process on the prover's node, and trust in it and its host is the named assumption `trusted-host`.
-  Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap" (25 Oct).
-- **The audited hardware is untrusted, and so is its vendor** (17 Oct). No guarantee rests on a GPU attesting its own
+  Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
+- **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration.
-- **Lean is the definition and the verifier of record** (18 Oct). Python in `verity.ml` mirrors it for the prover's
-  speed, held to it by difftest. Each protocol switches by the 8 Oct procedure (the friction skill); until then its
+- **Lean is the definition and the verifier of record.** Python in `verity.ml` mirrors it for the prover's
+  speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
-- **Soundness and zero knowledge in Lean; completeness may be Python** (18 Oct). What a guarantee says about a cheating
+- **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
-- **That a circuit computes what the model computes is completeness, never proved** (24 Oct). It decides only whether
-  honest serving passes: every guarantee is about the registered circuit, one that passes circuit-check (25 Oct), and the
+- **That a circuit computes what the model computes is completeness, never proved.** It decides only whether
+  honest serving passes: every guarantee is about the registered circuit, one that passes circuit-check, and the
   developer validates the match empirically (circuit-check, hardware captures, served outputs). Nobody proves it, lists it
   as an assumption or counts it as a gap. Lean holds one description of the circuit, the parsed circuit file the verifier
   checks, and defines every other layer's circuit from it.
-- **Integrations are frontends, and Verity is agnostic to them** (24 Oct). Verity's vocabulary is circuits, values,
+- **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
   those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
   before any coin; and on a draw, the drawn units' openings, to the prover behind the firewall.
-- **Results are per monitoring period, over all compute** (25 Oct). The time length of interest is the monitoring
+- **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
   period (Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
   all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
@@ -134,7 +134,7 @@ Each package's tests are one suite in its own `tests/`, run in its own process a
 holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
 and dummy credentials: the testing skill.
 
-An agent VM only edits (18 Oct): its 16 GB are shared by every agent on it, and one out-of-memory kill takes them all
+An agent VM only edits: its 16 GB are shared by every agent on it, and one out-of-memory kill takes them all
 down. Locally, run only git, reading and editing, messaging and the notes, one test file or `-k` selection under about a
 minute and 1 GB, `lake env lean` on one file of a built tree, a Lean package with no Mathlib or ArkLib, and the lock fast
 path. Everything else (every suite, `verity check`, circuit-check, any build of `Security`, cargo, nvcc, every e2e and GPU
@@ -143,7 +143,7 @@ the cluster queue (4 CPUs, 16 GiB, 60 min unless `--cpus`, `--mem-gb` or `--time
 pool when one starts sooner. The shell hook refuses those locally and names the remote command; `AGENT_GUARD_LOCAL_OK=1`
 in the command opts in.
 
-No tool call blocks more than 20 minutes (19 Oct): every `--wait` stops there, cancels nothing and exits 79 naming the
+No tool call blocks more than 20 minutes: every `--wait` stops there, cancels nothing and exits 79 naming the
 command to check back with, and you end your turn. No test reads wall-clock time (no sleeps, clock readings or timeouts:
 wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its exceptions in `ALLOWED`). A test that flakes is
 deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
@@ -165,9 +165,9 @@ A pass of a test suite, a circuit-check target or a Lean package's Lean check is
 unchanged. `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit
 in M's NAME pool.
 
-A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged (9 Oct), so a
+A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. PRs land
-on an eyeball review, and the full check runs after landing (24 Oct). ci's `research queue drive` lands them
+on an eyeball review, and the full check runs after landing. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
@@ -175,15 +175,15 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
   makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for. A `hold` label, a conflict on `next` or a
   Markdown file over its cap keeps a PR out.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
-  the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists (8 Oct). Drive
+  the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile. A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
-  passed at or above it; Lean proofs alone land on the verdict (25 Oct).
+  passed at or above it; Lean proofs alone land on the verdict.
 - One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
   marked. Citations and tables read only commits whose after-landing run passed.
 - A pure move that `verity check move BASE HEAD` certifies lands alone, ahead of the queue, through the lander. Only
   drive's App pushes `main` and `next`.
-- Anyone may do whatever it takes to cut check time (11 Oct): a change to how `check` runs lands without its file owner's
+- Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's
   review, and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready
   mark and `main` moving unless the automation refuses.
 
@@ -194,11 +194,11 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
   this is a requirement, not a claim that `main` proves it. The verifier refuses any form the proof doesn't cover and
   gains none ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a new
   workload needs no verifier or proof change.
-- **The math is modular** (24 Oct). Each layer is proved once over the guarantee of the layer below: a session verifier's
+- **The math is modular.** Each layer is proved once over the guarantee of the layer below: a session verifier's
   knowledge soundness for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
   (zero-knowledge, plain, recursive) and each protocol instantiates those theorems, and a proof that redoes a layer is
   refactored onto the shared one.
-- **One vocabulary** (25 Oct). A concept more than one guarantee reads (the circuit, commitments and hashes, coins and
+- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and
   draws, probability, partitions and units, devices and signatures) has one definition, in `Core` or `Hash`, which every
   area and protocol reads; an area defines only its own, and no new Lean adds a second definition. lean owns
   consolidating today's duplicates.
@@ -207,7 +207,7 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the NCI check and the remote bandwidth
   audit's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
-  hypotheses not yet proved about the live path. The analysis is `Security/`, three trees (24 Oct): definitions
+  hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
   statements Daniel reads), properties (`Properties/`, `security_properties`: statements about the code's Lean
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
@@ -227,34 +227,34 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
 
 ## Working principles
 
-- **Research velocity comes first** (6 Oct). Be generous with what lands and cut ceremony: propose cutting any gate,
+- **Research velocity comes first.** Be generous with what lands and cut ceremony: propose cutting any gate,
   review or step that slows landing without catching real errors, and fix what breaks later. Our machines are research
   infrastructure; don't mimic deployment settings.
-- **Waiting is a bug** (25 Oct). A step you repeat that makes you wait more than about 10 minutes is friction even when it
+- **Waiting is a bug.** A step you repeat that makes you wait more than about 10 minutes is friction even when it
   never fails: fix it at the source, or take it to its owner that day with its numbers (minutes a wait, waits a day).
   Push back the same way, through your coordinator, on a rule that costs velocity, Daniel's included. A slow loop's owner
   fixes it ahead of other work.
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
-- **The tree gets smaller over time** (Daniel, 26 Oct). Each lead owns its areas' size: make two interfaces or
+- **The tree gets smaller over time.** Each lead owns its areas' size: make two interfaces or
   definitions of one thing one, make things extensible, delete dead and superseded code, and move data and logs to the
   evidence store. A PR that adds code says in its body what it deletes or unifies, or why nothing can go. top's hourly
   consolidation reading tracks `main`'s size.
-- **Parked work gets done** (Daniel, 26 Oct). We have parallelism: a lead starts each Backlog or Todo issue worth doing on
+- **Parked work gets done.** We have parallelism: a lead starts each Backlog or Todo issue worth doing on
   its own worker and closes the rest with a reason. Being busy is no reason to park one. Set more goals, not fewer.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, the skills, READMEs,
   docstrings and CLI help. When code must change first, the ruling's relay names the owner and the PR that changes the
   docs with it. Fix a stale statement on sight. `tests/test_doc_paths.py` fails on a doc naming a dead path.
-- **Make every decision yourself except keys and claims** (8 Oct). Access, keys, and what a guarantee says or rests on go
-  to Daniel through your coordinator, with your recommendation; spend is its lead's call (13 Oct). A change that crosses
+- **Make every decision yourself except keys and claims.** Access, keys, and what a guarantee says or rests on go
+  to Daniel through your coordinator, with your recommendation; spend is its lead's call. A change that crosses
   owners goes to the other owner, and the coordinator settles a disagreement. Fix what's in your way at the source when
   the fix is yours, and record each ruling you get (the friction skill).
 - A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
   results depends on one: pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
   `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
-  when its work there ends (19 Oct).
+  when its work there ends.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`. The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that
   would print the environment or every process's command line; on a VM booted without it, run origin/main's
@@ -262,20 +262,40 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
 
 ## Where writing goes
 
+**The repository says what is true now and how to reproduce it. It is not a record.** A reader learns from it what each
+part is and does, its contract in the Glossary's terms, the rules, and how to run each measurement (a benchmark's runner
+and its parameters). What a run measured, what happened and who decided live outside it, and the tree doesn't cite them:
+
+- **In the tree:** code, tests, Lean, circuits and their pins, the parameters and configuration code reads (with their
+  public sources: a data sheet, the census), small fixtures beside their generators, and maintained current-truth docs
+  (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, the root's `GLOSSARY.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`,
+  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). A protocol keeps its `PROTOCOL.md` only
+  while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
+- **Not in the tree, and not cited from it** (code, comments, docstrings, Lean, READMEs, docs): measured results
+  (numbers, tables, plots, overheads), reports and drafts, and the process's ids and names: run, `art:` and `note:` ids,
+  Notion pages, Linear issues, Slack threads, PR numbers, agent ids, lane and worker names, dates, and attributions such
+  as "(Daniel, 24 Oct)". A rule or a constraint is stated as itself. Only this file and the skills, which describe the
+  process, name its roles (a handle as an owner). Results are published from the store, never copied into the tree: a
+  reader who finds no overhead figure in the repository has found it working as intended, and runs the benchmark or reads
+  the published result.
+- **Where those live:** results in the evidence store, why a line changed in git, open work in Linear, who decided a rule
+  and when in Daniel's decisions log in Notion, and reports and findings in the notes.
+- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
+  `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
+  docstring or a doc.
+
+Outside the tree:
+
 - **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
-  by Goal, are the campaign map (Daniel, 14 and 26 Oct). Slack carries rings and conversation, never the brief or status.
+  by Goal, are the campaign map. Slack carries rings and conversation, never the brief or status.
   How: the coordinating skill.
-- **This repo** holds code, tests, small fixtures and maintained current-truth docs only (`README.md`, `AGENTS.md`,
-  `ARCHITECTURE.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`;
-  `tests/test_repository.py`). A protocol keeps its `PROTOCOL.md` only while experimental: the PR whose Lean covers it
-  deletes it, leaving a README of outline, signposts and core API.
 - **Notes** (lane reports, checkpoints, findings, drafts, friction notes) are Markdown under
   `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`,
   `kind`, `status`, `repo`, `origin`), cited as `note:<id>` and published with `research notes sync --path lanes/<lane>`.
   Notes are records, never messages: a handoff, an order or an ask goes on Slack, or to your own workers as a follow-up.
   A Cursor agent store is its agent's scratch: nothing another agent needs lives only there, and nothing cites it.
 - **Writing for a person** is a Notion page, or cites only what they can open: PRs, repository files, run ids and Notion
-  pages. The notes repo is private, so a `note:` id is for agents (19 Oct).
+  pages. The notes repo is private, so a `note:` id is for agents.
 - **Evidence and generated output** go in the evidence store, never Git: `research run` publishes every run as an
   Attempt, and anything else goes in with `research data put --kind K --file|--tree P --preserve`, cited as `art:<id>`
   (`tools/research/src/research/store/README.md`). Tables and reports render on demand from code plus the store.
@@ -286,16 +306,16 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
 
 A lane's rulebook is `~/.research/notes/kb/LANE-CONTRACT.md`. Each coordinator, a handle's holder (`research msg
 handles`), is a plain Cursor cloud agent on the environment "Verity compute-verification" that owns one vertical slice and
-runs its own workers; there are no Cursor Projects (13 Oct). `@top` is the admin: handovers, the roster, the quiet-lane
-sweep, Daniel's decisions log, relays to Daniel, announcing and settling, and consolidation (26 Oct: work, records and
+runs its own workers; there are no Cursor Projects. `@top` is the admin: handovers, the roster, the quiet-lane
+sweep, Daniel's decisions log, relays to Daniel, announcing and settling, and consolidation (work, records and
 notation converge, not multiply); it does no lane work. Launching, handing over and archiving coordinators:
 `infra/cursor/README.md`.
 
 - **Reread the rules each night**: this file and the rulings in the friction and lean-proofs skills.
-- **Keep chatter low** (contract §3a). Every message and background shell reaches the coordinator and the human: run long
+- **Keep chatter low.** Every message and background shell reaches the coordinator and the human: run long
   jobs detached, and message someone only to unblock them or change their plan.
-- **Workers run where they can't take you down**: as cloud subagents (`Task` with `environment: "cloud"`, which Daniel
-  asked for once for every agent here, 18 Oct, so nobody asks first) or as detached `research run`s; a local subagent only
+- **Workers run where they can't take you down**: as cloud subagents (`Task` with `environment: "cloud"`, a standing
+  request for every agent here, so nobody asks first) or as detached `research run`s; a local subagent only
   for a short read-only lookup. A cloud worker boots from the environment's snapshot, so its brief is complete (the task,
   the done-condition, the deadline, "reread `git show origin/main:AGENTS.md`"), tells it to create
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
@@ -303,7 +323,7 @@ notation converge, not multiply); it does no lane work. Launching, handing over 
   branch and SHA for its launcher to.
 - **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
-- **Stay reachable** (19 Oct). Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a
+- **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a
   run, end your turn naming its id and ETA, and your launcher resumes you. Agents keep no heartbeat: the control pod's
   agent watch flags a stalled or stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is
   gone, or silent past the watch's flag is relaunched fresh from its last note. Briefs ask for a checkpoint before long
