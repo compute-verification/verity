@@ -1,5 +1,5 @@
 """Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
-(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
+(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit phase reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
 by run index (control run i <-> treatment run i).  Refuses when the two processes' compilation settings differ (CompilationMode,
@@ -87,7 +87,7 @@ def main(a: Options) -> None:
     # [coord M-0178 (2a)] the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
     # {(name, source sha256)}) and the per-piece launch programs.  The treatment's pieces carry the record op as an extern call, so its
     # launch programs (call_set) legitimately differ; its KERNEL SET should equal the control's -- a difference means the record op changed
-    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the row's implementation is then the treatment's).
+    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the workload's implementation is then the treatment's).
     gkc, gkt = cc.get("generated_kernels") or {}, ct.get("generated_kernels") or {}
     kernels_identified = bool(gkc.get("kernel_set_sha256")) and bool(gkt.get("kernel_set_sha256"))
     kernel_set_equal = kernels_identified and gkc.get("kernel_set_sha256") == gkt.get("kernel_set_sha256")

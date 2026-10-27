@@ -1,17 +1,17 @@
 """serve-openai's admissions: what a request brings to the engine (`Admission`, and `Delta`, what goes back), and the order
 they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed it, in the
-API server's body-read order; ``release-order`` adds them in the warden's release order, so the advice needn't carry the
+API server's body-read order; ``release-order`` adds them in the network certifier's release order, so the advice needn't carry the
 permutation between the two (3,669 bits on TRACE-CORPUS's heavy trace).
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
 is no hold to a bucket boundary (settled 11:23Z: the boundary saves no step bits).
 
-**What the warden sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
+**What the network certifier sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
 order of its run (the certifier's ``Proxy.requests_released`` before the release counts it): dense, each N once, every
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
 certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
-forwarded at once. The warden's shim (`benchmarks/network_traces/active_replay.LiveServer`) copies both onto the POST it
+forwarded at once. The network certifier's shim (`benchmarks/network_traces/active_replay.LiveServer`) copies both onto the POST it
 sends the endpoint; it doesn't today, so ``release-order`` holds nothing until it does.
 
 What a request without the header gets: it is forwarded at once (``unordered``), as the served plan's probes are. A
@@ -73,7 +73,7 @@ class Admission:
     deliver: Callable[[Delta], None]
     ingress: dict[str, Any]
     user: str | None = None
-    release: tuple[str, int] | None = None   # (the warden's run, the request's place in its release order)
+    release: tuple[str, int] | None = None   # (the network certifier's run, the request's place in its release order)
     times: dict[str, float] = field(default_factory=dict)   # wall-clock stamps (telemetry): head, received, submitted, admitted
 
 

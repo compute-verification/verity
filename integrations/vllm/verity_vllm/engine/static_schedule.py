@@ -11,7 +11,7 @@ must reach its cap); `vllm_adapter.sampling_params` hands it to vLLM.
 
     early stop         a request finished other than by length at its cap (an EOS, a stop id, max_model_len)
     preemption         a request's computed-token count went down (KV pressure: the host recomputed it)
-    host prefix cache  a request read KV blocks vLLM's hash match chose (`num_cached_tokens` > 0)
+    host prefix cache  a request read KV pages vLLM's hash match chose (`num_cached_tokens` > 0)
 
 and records the realized schedule (`schedule_of`: per request in declared order, arrival, prefill forwards, token forwards, finish),
 whose digest leaves out request ids and tokens.  Two runs of one declaration with different prompt contents must have the same

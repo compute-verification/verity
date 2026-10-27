@@ -1,5 +1,5 @@
 """H1's served tables, committed as registered values of compute accounting's window Program
-(`h1window.program`, one tile template per K) as the window serves them, so the Lean verifier opens every row a unit reads
+(`h1window.program`, one tile template per K) as the window serves them, so the Lean verifier opens every row a proof block reads
 (`flock-verify --zk --registered`, `h1window.table_reads_file`).
 
 * **The Program** is declared before the window serves (`declared`): every step calls every linear ``(module, K, n)`` in
@@ -12,21 +12,21 @@
   A window's own values are its through their domains, which bind its open root (`Served.key`: `salt.window_open_root`
   of the period's weights' root, round 0's request root and the session, or the key the run is given, 64 bytes); round
   0's input-ids table, whose root that request root contains, binds the session instead (`Served.ids_tree`).
-* **The tables** are the ones a unit's rows open at (`h1window.table`, `h1window.table_reads`): step s's A table of K
+* **The tables** are the ones a proof block's rows open at (`h1window.table`, `h1window.table_reads`): step s's A table of K
   ``a/<K>@<s>``, the M slot rows of each of step s's calls of K, call after call in call order (`step_calls`;
   the j-th starts at row M·j), each its K int8 codes then its f32 s_a (`h1zy.ROW`; the served rows, then zero codes of
-  scale 0), and call c's z table ``zy@<c>``, one record a unit of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
+  scale 0), and call c's z table ``zy@<c>``, one record a proof block of the call in its tile order (`h1zy.RECORD`: its cells' s32 z,
   row-major, then their bf16 y; a slot past the served rows is z = 0 and y = +0, dq(0, +0, s_w) for a finite positive
   s_w); and the weights' ``b/<K>``, K's linears' rows linear after linear, each its K weight codes then its f32 s_w (Σn
-  rows every step's units read). With ``receipts`` (BRIDGE2), call c's receipt table ``receipt@<c>`` too: one row a unit
-  of the call in its tile order, the unit's receipt, the statement's output row o0 (`receipt_words`: its nw = 2 (KS + m)
+  rows every step's proof blocks read). With ``receipts`` (BRIDGE2), call c's receipt table ``receipt@<c>`` too: one row a proof block
+  of the call in its tile order, the proof block's receipt, the statement's output row o0 (`receipt_words`: its nw = 2 (KS + m)
   u32 words, each little-endian, so 2 nw u16 words), its domain bound to the open root alike, and listed whole under
-  round s's root (`segments`). A unit's seeds take its call's roots, root(A) its step's ``a/<K>@<s>`` and root(B)
+  round s's root (`segments`). A proof block's seeds take its call's roots, root(A) its step's ``a/<K>@<s>`` and root(B)
   ``b/<K>``, so a step's receipt tables of K are registered at its last call of K, once both are. Call c's public
-  table ``pub@<c>`` holds its statement's public row ``pub`` (`h1window.PUBS`): row t unit u0 + t's,
+  table ``pub@<c>`` holds its statement's public row ``pub`` (`h1window.PUBS`): row t proof block u0 + t's,
   `core_check.public_words` of the window's Program salt, u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted
   `core_check.public_row_salt` of the open root and u0 + t, so anyone rebuilds it, as credit's `registered_file` and
-  Lean's ``registeredFile`` do; its rows are kept. Those are the salt, position and roots the unit's receipt is seeded
+  Lean's ``registeredFile`` do; its rows are kept. Those are the salt, position and roots the proof block's receipt is seeded
   from. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the statement's output row o1): row u
   `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry, since credit registers them itself
   and refuses a window that does.
@@ -66,14 +66,14 @@
   round 0's request root and its domain bound to the session (`ids_tree`); each later round's
   is the Commit's ids of its step (`close_round`). The Commit registers the window's own tree as its
   value of the same rows when its rows are the same (`a_tree`, `ids_tree`, `pouw_h1_commit.CommitTap`). With the tap, the
-  window's round tables are the live unit's registered values too (`pouw_h1_live`, `live`, in `entries`): round 0's
+  window's round tables are the live proof block's registered values too (`pouw_h1_live`, `live`, in `entries`): round 0's
   request headers ``requests@0`` and each round's slot table ``slots@<s>``, listed whole under round s's root.
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
   linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, served weights that
   aren't the auditor's registration, and at `close` a window that isn't static or a table the Program reads that was
   never registered.
-* **Statements.** A Lean ``--registered`` port holds one root, so a statement holds one call's units, and its file is
+* **Statements.** A Lean ``--registered`` port holds one root, so a statement holds one call's proof blocks, and its file is
   `reads_file` of that call: `h1window.table_reads_file`, the verifier's own reads from its Program, each call table's
   domain bound to the window's open root and the weights' to none, as their trees were. `register` holds the window's
   trees to an earlier record of the log under the same domain (R7-held) and writes each call's file (`file_name`).
@@ -318,9 +318,9 @@ class Served:
     refused: list[str] = field(default_factory=list)
     #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`)
     tap: Any = None
-    #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
+    #: each call's receipts, one a proof block in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
     #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered (BRIDGE2) at its step's last call of its K, once
-    #: the roots its units' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered; one with a ``prepare`` is
+    #: the roots its proof blocks' seeds take, its step's ``a/<K>@<s>`` and ``b/<K>``, are registered; one with a ``prepare`` is
     #: first handed those calls together (`_prepare`); one with a ``stage`` is handed each served call and its rows ``a``
     #: where they are on a CUDA device, before they're read to the host (it copies them and keeps no reference to ``a``,
     #: which the engine reuses; a ValueError refuses the window)
@@ -334,7 +334,7 @@ class Served:
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
-    #: with the tap, the live unit's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
+    #: with the tap, the live proof block's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
     live: dict[str, G.Registered] = field(default_factory=dict)
     #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
     _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
@@ -440,7 +440,7 @@ class Served:
         return HW.table(self.program, HW.PUBS, int(c))
 
     def receipt_shape(self, c: int) -> tuple[int, int]:
-        """Call ``c``'s receipt table's rows and u16 words a row: one row a unit of the call, its tile unit's ``receipt``
+        """Call ``c``'s receipt table's rows and u16 words a row: one row a proof block of the call, its tile unit's ``receipt``
         (the statement's output row o0, `h1window.RECEIPT_PORT`), as a ``row/v2`` row of its bits; 0 words when they
         are no whole u16 words, which `h1window.table_reads_file` refuses to read."""
         S = self.program.fn.S()
@@ -602,8 +602,8 @@ class Served:
 
     def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str) -> dict[str, str]:
         """Each of ``calls``' (a step's calls of one K) public table ``pub@<c>`` (`pub_table`), registered once its step's
-        A table ``a`` and the weights' ``b`` are: row t unit u0 + t's public row, `core_check.public_words` of the
-        window's Program salt, u0 + t and (root(a), root(b)), and in a J10-R window (`h1window.is_j10r`) u0 and the unit's
+        A table ``a`` and the weights' ``b`` are: row t proof block u0 + t's public row, `core_check.public_words` of the
+        window's Program salt, u0 + t and (root(a), root(b)), and in a J10-R window (`h1window.is_j10r`) u0 and the proof block's
         blocks (`h1window.call_blocks`), salted `core_check.public_row_salt` of the open root and u0 + t, as credit's
         `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
         units, out, j10r = HW.call_units(self.program), {}, HW.is_j10r(self.program)
@@ -643,7 +643,7 @@ class Served:
         return True
 
     def _receipts(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray | None:
-        """Call ``call``'s receipts' words (`receipts`, `receipt_words`), refused unless one row a unit of its tile
+        """Call ``call``'s receipts' words (`receipts`, `receipt_words`), refused unless one row a proof block of its tile
         unit's receipt width (`receipt_shape`)."""
         try:
             got = receipt_words(self.receipts(call, codes, scales, *self._weight_args(call)))
@@ -677,7 +677,7 @@ class Served:
 
     def close(self, run: Any) -> None:
         """After the run's last round: refuse a window that isn't static, or that left a table its Program reads
-        unregistered; else commit its ok rows (`ok`): row u unit u's, `core_check.OK_ROW` under `core_check.ok_salt` of
+        unregistered; else commit its ok rows (`ok`): row u proof block u's, `core_check.OK_ROW` under `core_check.ok_salt` of
         the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`)."""
         if self.refused:
             return
@@ -695,8 +695,8 @@ class Served:
                                  row_salts=b"".join(CC.ok_salt(self.root, u) for u in range(n)))
 
     def tables(self) -> list[str]:
-        """Every value the Program's units open at: each K's ``b/<K>``, then each step's A tables, then each call's z
-        table, then each call's public table; then, with ``receipts``, each call's receipt table, which its units'
+        """Every value the Program's proof blocks open at: each K's ``b/<K>``, then each step's A tables, then each call's z
+        table, then each call's public table; then, with ``receipts``, each call's receipt table, which its proof blocks'
         receipts are."""
         pre, ks, cs = self.program.fn.bindings["PREFIX"], sorted({k for _name, k, _n in self.linears}), range(len(self.calls))
         return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in cs))
@@ -725,7 +725,7 @@ class Served:
         return digest_of(self.entries(), self.refused)
 
     def query(self) -> dict[str, Any]:
-        """The window Program's partition query: every tile of each K's template one unit (`h1window.query`)."""
+        """The window Program's partition query: every tile of each K's template one proof block (`h1window.query`)."""
         return HW.query(self.program)
 
 

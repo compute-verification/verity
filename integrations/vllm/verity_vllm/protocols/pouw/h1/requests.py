@@ -30,7 +30,7 @@
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
   before that round's coin (RT4-INT-22).
 * **Round values** (the live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales) and, when
-  its arm hands them over, its z table (one leaf a unit, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
+  its arm hands them over, its z table (one leaf a proof block, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
@@ -40,14 +40,14 @@
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
   rows of its calls of K call after call, whole, as the aligned subtrees of its registered tree (`round_row`,
   `pouw_h1_served.Served.segments`), registered as the run records the step's last call of K. So each call's A rows, the
-  ones its units read, are fixed under its own round's root before that round's coin, and no other round lists them.
+  ones its proof blocks read, are fixed under its own round's root before that round's coin, and no other round lists them.
   Round s's input-ids table ``ids@<s>`` (ROOTS1, `pouw_h1_commit`) is listed there whole too. Round 0's is built at
   admission, before the window opens: its prompts' tokens in step 0's batch order (`first_ids`), each request's first
   rows at the first slot its entry names. Its root is inside round 0's request root (`credit.requests_root` of the
   request table's root and it; round 0's row keeps the table's as ``request_table``), so the window's open root fixes
   the prompt tokens before the salt; its domain binds the window's session in place of that root.
-* **Not yet.** The round root has no admit root (H1 has no admit unit yet), no producer hands the run a receipt root
-  yet, and no unit reads the round coins yet.
+* **Not yet.** The round root has no admit root (H1 has no admit proof block yet), no producer hands the run a receipt root
+  yet, and no proof block reads the round coins yet.
 """
 from __future__ import annotations
 
