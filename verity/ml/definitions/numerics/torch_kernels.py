@@ -1,12 +1,15 @@
-"""numpy models of the torch 2.13/2.14 CUDA kernels behind the training Definitions (`registry.torch_attention`), in each
-kernel's own order, on rows of f32 (u32) and bf16 (u16) words. Every f32 result's NaN is the GPU's 0x7FFFFFFF and every
-rounding to bf16 is F2FP's (`derived_rows.f2fp_bf16`, NaN 0x7FFF); nothing is flushed. ``expf`` is `NvExpf_v1`, libdevice's
-sequence with the sm_89 MUFU.EX2 table, as the Definitions read it until the sm_120 table is pinned.
+"""numpy models of the torch 2.13/2.14 CUDA kernels behind the training Definitions (`registry.torch_attention`,
+`registry.torch_loss`), in each kernel's own order, on rows of f32 (u32) and bf16 (u16) words. Every f32 result's NaN is the
+GPU's 0x7FFFFFFF and every rounding to bf16 is F2FP's (`derived_rows.f2fp_bf16`, NaN 0x7FFF); nothing is flushed.
 
-These are written from the kernels' source independently of the gates, so a test that compares them checks the gates. A GPU
-difftest compares them with the CUDA kernels themselves.
+These are written from the kernels' source independently of the gates, so a test that compares them checks the gates. The two
+libdevice functions are the exception: ``expf`` evaluates `NvExpf_v2` and ``logf`` `NvLogf_v3`, the Boolean Definitions the
+kernels' gates call, which their own modules' tests hold to their word Definitions. A GPU difftest compares the models with the
+CUDA kernels themselves.
 """
 from __future__ import annotations
+
+import math
 
 import numpy as np
 
@@ -73,12 +76,43 @@ def bf16_add(a, b):
     return bf16(add(f32(a), f32(b)))
 
 
-def expf(x) -> np.ndarray:
-    from verity.ml.circuits import evaluation as E
-    from verity.ml.definitions.registry import moe as M
+def _libdevice(defn, x) -> np.ndarray:
+    from verity.ml.circuits.evaluation.bits import evaluate_words
 
     x = np.asarray(x, U32)
-    return canon(np.asarray(E.evaluate_batch(M.NvExpf, x.reshape(-1)), U32).reshape(x.shape))
+    return canon(np.asarray(evaluate_words(defn, x.reshape(-1)), U32).reshape(x.shape))
+
+
+def expf(x) -> np.ndarray:
+    from verity.ml.definitions.registry import boolean_moe
+
+    return _libdevice(boolean_moe.NvExpf, x)
+
+
+def logf(x) -> np.ndarray:
+    from verity.ml.definitions.registry import gumbel_boolean
+
+    return _libdevice(gumbel_boolean.NvLogf, x)
+
+
+def _isnan(u) -> np.ndarray:
+    u = np.asarray(u, U32)
+    return ((u & 0x7F800000) == 0x7F800000) & ((u & 0x007FFFFF) != 0)
+
+
+def fmaxf(a, b) -> np.ndarray:
+    """``fmaxf`` (`F32Fmaxf_v1`): the larger, +0 over -0; a NaN operand yields the other, two NaNs 0x7FFFFFFF."""
+    a, b = np.broadcast_arrays(np.asarray(a, U32), np.asarray(b, U32))
+    na, nb = _isnan(a), _isnan(b)
+    m = np.where(gt(a, b), a, b)
+    m = np.where(((a | b) & U32(0x7FFFFFFF)) == 0, a & b, m)
+    m = np.where(na, b, np.where(nb, a, m))
+    return np.where(na & nb, U32(GPU_NAN), m)
+
+
+def max_combine(a, b) -> np.ndarray:
+    """`Max`'s ``a < b ? b : a``."""
+    return np.where(gt(b, a), np.asarray(b, U32), np.asarray(a, U32))
 
 
 def _lanes(N: int) -> tuple[int, int]:
@@ -204,3 +238,103 @@ def repeat_kv_backward(g) -> np.ndarray:
     for i in range(1, VT0):
         out = add(out, acc[i])
     return bf16(out)
+
+
+LOWEST = 0xFF7FFFFF
+SPAN, LANES = 4096, 32
+
+
+def warp_reduce(v, op) -> np.ndarray:
+    """``cuda_utils::WarpReduce``'s value at lane 0 over the last axis (32): ``s_l = op(s_l, s_{l+h})`` for h = 16 .. 1."""
+    v = np.asarray(v, U32)
+    while v.shape[-1] > 1:
+        h = v.shape[-1] // 2
+        v = op(v[..., :h], v[..., h:])
+    return v[..., 0]
+
+
+def _threads(x) -> np.ndarray:
+    """Rows (R, V) of bf16 logits as f32 (R, V / 4096, 1024, 4): thread t's load k holds columns 4(t + 1024k) + j."""
+    x = np.atleast_2d(np.asarray(x, np.uint16))
+    return f32(x).reshape(x.shape[0], x.shape[1] // SPAN, 1024, 4)
+
+
+def log_softmax_maxes(x) -> np.ndarray:
+    """The warps' maxes (R, 32) of `cunn_SoftMaxForward<4>` with 1024 threads on rows (R, V) of bf16 logits: each thread's
+    fmaxf from -FLT_MAX over its loads in order, then lane 0's WarpReduce with Max."""
+    xf = _threads(x)
+    m = np.full(xf.shape[::2], LOWEST, U32)
+    for k in range(xf.shape[1]):
+        for j in range(4):
+            m = fmaxf(m, xf[:, k, :, j])
+    return warp_reduce(m.reshape(-1, LANES, LANES), max_combine)
+
+
+def log_softmax_forward(x):
+    """`cunn_SoftMaxForward<4>` with 1024 threads on rows (R, V) of bf16 logits, V % 4096 == 0: (out (R, V) f32, max (R,),
+    logsum (R,), the warps' maxes (R, 32), the warps' sums (R, 32))."""
+    x = np.atleast_2d(np.asarray(x, np.uint16))
+    R = x.shape[0]
+    xf = _threads(x)
+    wm = log_softmax_maxes(x)
+    mx = warp_reduce(wm, max_combine)
+    e = expf(add(xf, neg(mx)[:, None, None, None]))
+    s = np.zeros((R, 1024), U32)
+    for k in range(xf.shape[1]):
+        for j in range(4):
+            s = add(s, e[:, k, :, j])
+    ws = warp_reduce(s.reshape(R, LANES, LANES), add)
+    ls = logf(warp_reduce(ws, add))
+    out = add(add(f32(x), neg(mx)[:, None]), neg(ls)[:, None])
+    return out, mx, ls, wm, ws
+
+
+def nll_threads(M: int) -> int:
+    return min(max(1 << math.floor(math.log2(M // 16) + 0.5), 32), 1024)
+
+
+def nll_loss(lp, t, V: int, mean: bool) -> tuple[int, int]:
+    """`nll_loss_forward_reduce_cuda_kernel_2d` over M rows' target log-probabilities lp (f32) and labels t (u32, valid below
+    V): (output, total_weight), each thread's ``sh -= lp`` and ``acc += 1`` over rows t, t + T, ..., then the stride tree."""
+    lp, t = np.asarray(lp, U32), np.asarray(t, U32)
+    M = len(lp)
+    T = nll_threads(M)
+    sh, acc = np.zeros(T, U32), np.zeros(T, U32)
+    for i0 in range(0, M, T):
+        n = min(T, M - i0)
+        v = t[i0:i0 + n] < V
+        sh[:n] = np.where(v, add(sh[:n], neg(lp[i0:i0 + n])), sh[:n])
+        acc[:n] = np.where(v, add(acc[:n], U32(0x3F800000)), acc[:n])
+    stride = T // 2
+    while stride:
+        sh[:stride] = add(sh[:stride], sh[stride:2 * stride])
+        acc[:stride] = add(acc[:stride], acc[stride:2 * stride])
+        stride //= 2
+    out = div(sh[:1], acc[:1]) if mean else sh[:1]
+    return int(np.asarray(out).reshape(-1)[0]), int(acc[0])
+
+
+def nll_loss_backward(go: int, tw: int, mean: bool) -> int:
+    go_, tw_ = np.array([go], U32), np.array([tw], U32)
+    return int(np.asarray(neg(div(go_, tw_) if mean else go_)).reshape(-1)[0])
+
+
+def log_softmax_nll_backward(x, t, mx, ls, g, V: int) -> np.ndarray:
+    """``nll_loss``'s backward then `cunn_SoftMaxBackward`'s and ``.float()``'s on rows (R, V) of bf16 logits with labels t,
+    the forward's max and logsum, and the gradient g: the row's gradient gO (g at a valid label, +0 elsewhere), its sum s from
+    +0 (one nonzero term, so in any order), bf16(fma(-expf(out), s, gO)) with out the forward's epilogue recomputed."""
+    x = np.atleast_2d(np.asarray(x, np.uint16))
+    t = np.asarray(t, U32).reshape(-1)
+    g = np.broadcast_to(np.asarray(g, U32), t.shape)
+    valid = t < V
+    go = np.where((np.arange(x.shape[1])[None, :] == t[:, None]) & valid[:, None], g[:, None], U32(0))
+    s = np.where(valid, add(U32(0), g), U32(0))
+    out = add(add(f32(x), neg(np.asarray(mx, U32))[:, None]), neg(np.asarray(ls, U32))[:, None])
+    return bf16(fma(neg(expf(out)), s[:, None], go))
+
+
+def chunk(x, w: int) -> np.ndarray:
+    """Warp w's chunk of rows (R, V): columns 4096k + 128w + c, in that order."""
+    x = np.atleast_2d(np.asarray(x))
+    R, V = x.shape
+    return x.reshape(R, V // SPAN, LANES, 128)[:, :, w, :].reshape(R, -1)
