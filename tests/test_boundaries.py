@@ -79,8 +79,11 @@ ALLOWED = {
     # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
     # 2026-10-26 (memory accounting, the owner's ruling of 25 Oct, 6:47 PM PDT: the real bandwidth audit is over the
     # P2-encoded weights store): a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # 2026-10-27 (memory accounting, MEM-99): the session's verifier and prover are parties of the deployment layer
+    # (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs", "core.protocols.pous"},
+                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
+                                        "core.deploy"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
