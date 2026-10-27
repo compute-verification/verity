@@ -11,11 +11,12 @@ own Commit.
   remaining steps empty (`pouw_h1.H1Run.close`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
   (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with a
-  key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds a node for each tile
-  unit (`units`), S × slot(T)/32 × Σn/32, and declaring it and its digest take time linear in them before the server
-  listens: about 7 minutes for Llama-3.2-1B at T 512 and S 16, about 3 minutes a step at T 2048. The server logs both.
-  The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`write_program`), so the
-  period-open of it (``served_verdicts.py period open``) can go out once the server listens, before any window reserves.
+  key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
+  template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
+  descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
+  times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`write_program`),
+  so the period-open of it (``served_verdicts.py period open``) can go out once the server listens, before any window
+  reserves.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): the window's open
   reserves it (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)), round 0 opens it on the window's
@@ -135,7 +136,8 @@ def refusal(opts: Any) -> str | None:
 
 def units(shapes: Any, rows: int, steps: int) -> int:
     """The tile units of the window Program `served.declared` builds over ``shapes`` (each ``(n, K)``) at T ``rows`` and S
-    ``steps``: one node of its body each, so declaring it and its digest cost time linear in them."""
+    ``steps``: the members of its batches, one a call (S × the linears), so the descriptor, the declare and the digest
+    grow with the calls, not the units."""
     from verity.core.protocols.pouw.circuit import h1window as HW
 
     from verity_vllm.protocols.pouw import h1 as PH
@@ -288,7 +290,7 @@ class H1Windows:
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
         modules = {w: f"linear {w}" for w in range(len(self.layers))} | pouw._named(model, self.layers)
         print(f"[serve-h1] declaring the window Program: {self.steps} steps of {len(shapes)} linears at T {self.rows}, "
-              f"{units(shapes, self.rows, self.steps)} tile units", flush=True)
+              f"{self.steps * len(shapes)} calls, {units(shapes, self.rows, self.steps)} tile units", flush=True)
         t0 = time.perf_counter()
         self.program = SV.declared(shapes, modules, self.rows, self.steps, unit=unit)
         t1 = time.perf_counter()

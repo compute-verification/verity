@@ -13,11 +13,11 @@
 # ship's modules and cubin ($OUT/bench-old.jsonl), so both builds are timed by one ruler on one card.  Every step's exit
 # code is in $OUT/rc.txt; exits non-zero if any failed.
 # VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default the first of /workspace/cp/venv312,
-# /workspace/venv312 and /workspace/jobs/venv312); GPU_LEASE_WHO the lease's holder (default kernels-kattnref); LEASE_MIN
-# the lease's bound (default 30); check.py's environment (SWEEP_ONLY, BATCHES, ...) passes through.
+# /workspace/venv312 and /workspace/jobs/venv312); GPU_LEASE_WHO the lease's holder (default units/ and the run's id);
+# LEASE_MIN the lease's bound (default 30); check.py's environment (SWEEP_ONLY, BATCHES, ...) passes through.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
-export O GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-kattnref}
+export O GPU_LEASE_WHO=${GPU_LEASE_WHO:-units/${RESEARCH_RUN_ID:-local}}
 V=${VERITY_BENCH_VENV:-}
 if [ -z "$V" ]; then
   for c in /workspace/cp/venv312 /workspace/venv312 /workspace/jobs/venv312; do [ -x "$c/bin/python" ] && V=$c && break; done
