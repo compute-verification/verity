@@ -439,7 +439,8 @@ def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypa
 
     monkeypatch.setattr(G.tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(G.shutil, "rmtree", stubborn)
-    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn)
+    # 3.12's TemporaryDirectory cleans up through shutil.rmtree; a module-level tempfile._rmtree exists only on later Pythons
+    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn, raising=False)
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
 
@@ -753,7 +754,8 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
 
 
 def test_only_the_top_change_is_linted_as_each_member_below_was_at_its_own_merge(both_ruffed, verdict_cache):
-    """The lint isn't cached: #1's verdict kept from below the top doesn't spare it the lint at the top."""
+    """What the lint finds is kept apart from the verdict: #1's verdict kept from below the top neither fails by it there nor
+    spares it the lint at the top."""
     base = both_ruffed.git("rev-parse", "main")
     one = both_ruffed.commit("one: an unused import", {"tools/b.py": "import sys\n"})
     both_ruffed.git("checkout", "-q", "-b", "two", base)
@@ -777,6 +779,138 @@ def test_with_no_ruff_to_run_the_gate_cannot_judge_and_names_the_hosts_fix(both_
     assert G.main(["main", "pr", "--json"]) == 2
     err = capsys.readouterr().err
     assert "there is no `uv` to provide it" in err and f"--break-system-packages {both_ruffed.pin}`" in err, err
+
+
+REPO_ENV_LINT = "tests/lint/test_repo_env_reads.py"
+REPO_ENV_JSON = "tests/lint/allowlists/repo_env_reads.json"
+TOOLS_A = {"file": "tools/a.py", "count": 1}
+A_READS = "import os\nA = os.environ.get('A')\n"
+
+
+@pytest.fixture
+def env_linted(repo) -> Repo:
+    """``repo`` with the repository's real environment-read lint: tools/a.py's read of A is its one, which the list allows."""
+    repo.commit("env reads", {REPO_ENV_LINT: (SCRIPT.parents[3] / REPO_ENV_LINT).read_text(),
+                              REPO_ENV_JSON: _allowlist(TOOLS_A), "tools/a.py": A_READS})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def _env_lint(repo: Repo) -> str | None:
+    """the repository's environment-read lint, as the root suite runs it after landing, on ``repo``'s checkout"""
+    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_env_reads as T; "
+                        "T.test_no_new_reads()"], cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def test_a_new_direct_environment_read_is_refused_naming_it_and_the_settings_registry_and_one_there_passes(env_linted):
+    """Reads outside the lint's scope (the integration's, the archive's) are left to others."""
+    env_linted.commit("a second read in a.py, a new file with one, and reads the lint doesn't hold", {
+        "tools/a.py": A_READS + "B = os.environ['B']\n", "tools/c.py": "import os\nif 'C' in os.environ:\n    pass\n",
+        "integrations/vllm/verity_vllm/c.py": "import os\nX = os.getenv('X')\n", "archive/x.py": "import os\nos.getenv('X')\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["env_read"]) == ("failed", [], ["tools/a.py", "tools/c.py"]), c["why"]
+    assert c["why"].startswith(f"adds 2 direct environment read(s) to the Python it changes, as the base's {REPO_ENV_LINT} "
+                               "counts them (tools/a.py 1 -> 2; tools/c.py 0 -> 1): Read the variable through your area's "
+                               "settings registry, which declares each one once (the template: "
+                               "integrations/vllm/verity_vllm/settings.py"), c["why"]
+    assert c["fix"] == ["tools/a.py:3 B (os.environ[...])", "tools/c.py:2 C (in os.environ)"]
+    assert "tools/c.py: 1 found, 0 allowed" in (_env_lint(env_linted) or "")
+    env_linted.commit("reads them through the area's registry", {
+        "tools/a.py": A_READS, "tools/c.py": "from tools import settings\nif settings.C:\n    pass\n",
+        "tools/settings.py": "import os\nB = os.environ['B']\nC = 'C' in os.environ\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["env_read"], c["why"]) == ("passed", ["tools/c.py", "tools/settings.py"],
+                                                       "no direct environment read is new in the 2 Python file(s) it "
+                                                       "changes"), c["why"]
+    assert _env_lint(env_linted) is None
+
+
+def test_a_read_moved_within_its_file_passes_the_gate_and_the_repository_lint(env_linted):
+    env_linted.commit("A's read moves into a function", {"tools/a.py": "import os\n\n\ndef a():\n    return os.environ.get('A')\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["env_read"]) == ("passed", ["tools/a.py"]), c["why"]
+    assert _env_lint(env_linted) is None
+
+
+def test_a_rename_must_move_its_entry_which_passes_both_and_is_refused_naming_the_entry_when_it_doesnt(env_linted):
+    env_linted.commit("moves a.py as it is", {"tools/a.py": None, "tools/sub/a.py": A_READS})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"renames Python whose direct environment reads {REPO_ENV_JSON} allows at the old path, and leaves 1 entry behind: "
+        f"{REPO_ENV_LINT} counts a file's direct environment reads under its path, so it would fail after landing"), c["why"]
+    assert c["fix"] == [f'{REPO_ENV_JSON}: move {{"file": "tools/a.py", "count": 1}} to "tools/sub/a.py", as the change '
+                        f"moves the file (`python3 {REPO_ENV_LINT} --move tools/a.py tools/sub/a.py`)"]
+    assert "tools/sub/a.py: 1 found, 0 allowed" in (_env_lint(env_linted) or "")
+    subprocess.run([sys.executable, REPO_ENV_LINT, "--move", "tools/a.py", "tools/sub/a.py"], cwd=env_linted.root, check=True,
+                   capture_output=True)
+    env_linted.commit("its entry", {REPO_ENV_JSON: (env_linted.root / REPO_ENV_JSON).read_text()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("passed", ["repo_env_reads"], []), c["why"]
+    assert _env_lint(env_linted) is None
+
+
+def test_a_registry_mark_counts_from_the_changes_base_so_it_lands_before_the_reads_it_exempts(env_linted):
+    mark = {"file": "tools/config.py", "registry": True}
+    reads = {"tools/config.py": "import os\nB = os.environ.get('B')\n"}
+    env_linted.commit("marks config.py a registry, and reads B there", {REPO_ENV_JSON: _allowlist(TOOLS_A, mark), **reads})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["fix"]) == ("failed", [REPO_ENV_JSON], ["tools/config.py:2 B (os.environ.get)"])
+    assert "(a mark counts from the change's base, so a new one lands before the reads it exempts)" in c["why"], c["why"]
+    assert _env_lint(env_linted) is None
+    env_linted.git("checkout", "-q", "-b", "mark", "main")
+    env_linted.commit("the mark alone", {REPO_ENV_JSON: _allowlist(TOOLS_A, mark)})
+    [c] = G.gate("main", "mark")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_env_reads"]), c["why"]
+    env_linted.git("checkout", "-q", "main")
+    env_linted.git("merge", "-q", "--ff-only", "mark")
+    env_linted.git("checkout", "-q", "-b", "reads")
+    env_linted.commit("reads B in the registry", reads)
+    [c] = G.gate("main", "reads")["changes"]
+    assert (c["verdict"], c["env_read"]) == ("passed", ["tools/config.py"]), c["why"]
+
+
+def test_the_environment_read_list_may_not_grow(env_linted):
+    b = {"file": "tools/b.py", "count": 1}
+    env_linted.commit("a new read, allowed", {"tools/b.py": "import os\nos.getenv('B')\n", REPO_ENV_JSON: _allowlist(TOOLS_A, b)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"]) == ("failed", [REPO_ENV_JSON]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_ENV_JSON} 1 -> 2 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_ENV_JSON}: {G.key(b)} 0 -> 1"]
+
+
+def test_loosening_the_environment_read_lint_fails_naming_what_the_base_lint_finds(env_linted):
+    lint = (SCRIPT.parents[3] / REPO_ENV_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')
+    env_linted.commit("leaves tools/ out and drops its entry", {REPO_ENV_LINT: lint, REPO_ENV_JSON: _allowlist()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_env_reads"], [
+        "repo_env_reads: tools/a.py: 1 found, 0 allowed", "repo_env_reads: tools/a.py:2 A (os.environ.get)"]), c["why"]
+
+
+def test_the_source_checks_are_kept_beside_the_verdict_and_never_fail_a_member_below_the_top(env_linted, verdict_cache,
+                                                                                            monkeypatch):
+    base = env_linted.git("rev-parse", "main")
+    one = env_linted.commit("one: a new read", {"tools/b.py": "import os\nB = os.environ['B']\n"})
+    env_linted.git("checkout", "-q", "-b", "two", base)
+    two = env_linted.commit("two: clean", {"tools/c.py": "C = 1\n"})
+    env_linted.git("checkout", "-q", "-b", "next", base)
+    m1 = env_linted.queue(1, "one", one)
+    assert _verdicts(G.gate("main", "next")) == [("#1", "failed")]
+    env_linted.queue(2, "two", two)
+    doc = G.gate("main", "next")
+    assert [(c["name"], c["verdict"], c["env_read"]) for c in doc["changes"]] == [("#1", "untouched", None),
+                                                                                  ("#2", "passed", ["tools/c.py"])]
+    monkeypatch.setattr(G, "find", lambda c, base: pytest.fail("judged again"))
+    assert _verdicts(G.gate("main", m1)) == [("#1", "failed")] and len(list(verdict_cache.glob("*.json"))) == 4
+
+
+def test_a_base_whose_environment_read_lint_does_not_load_cannot_judge(env_linted, capsys):
+    env_linted.git("checkout", "-q", "main")
+    env_linted.commit("breaks the lint", {REPO_ENV_LINT: "raise SystemError('no')\n"})
+    env_linted.git("checkout", "-q", "-B", "pr")
+    env_linted.commit("a clean file", {"tools/c.py": "C = 1\n"})
+    assert G.main(["main", "pr", "--json"]) == 2
+    assert f"{REPO_ENV_LINT} at " in capsys.readouterr().err
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"

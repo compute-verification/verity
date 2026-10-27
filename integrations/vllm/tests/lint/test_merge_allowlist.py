@@ -63,6 +63,25 @@ def test_the_repositorys_ruff_list_merges_per_file_and_rule_and_a_count_changed_
         MA.merge(_ruff_doc(e), _ruff_doc({**e, "symbol": "s"}), _ruff_doc(e))
 
 
+def _env_doc(*entries: dict) -> dict:
+    return {"rule": "direct environment reads (tests/lint/test_repo_env_reads.py)", "entries": list(entries)}
+
+
+def test_the_repositorys_environment_read_list_merges_per_file_and_a_registry_mark_like_any_entry():
+    """Per-file counts merge as the ruff list's do (a count changed two ways takes the larger); a settings registry mark
+    added on one side is kept, and one removed on one side and kept on the other is removed."""
+    a, b = {"file": "tools/a.py", "count": 3}, {"file": "tools/b.py", "count": 1}
+    mark = {"file": "tools/x/config.py", "registry": True}
+    merged, why = MA.merge(_env_doc(a, b), _env_doc({**a, "count": 2}, b, mark), _env_doc({**a, "count": 1}))
+    assert why == [] and merged == _env_doc({**a, "count": 2}, mark)
+    merged, why = MA.merge(_env_doc(a, mark), _env_doc(a), _env_doc(a, mark))
+    assert why == [] and merged == _env_doc(a)
+    assert MA.dump(_env_doc(a, mark)).splitlines()[4] == '    {"file": "tools/x/config.py", "registry": true}'
+    for bad in ({"file": "tools/a.py", "registry": False}, {"file": "tools/a.py", "count": True}):
+        with pytest.raises(ValueError, match="ours: malformed entry"):
+            MA.merge(_env_doc(a), _env_doc(bad), _env_doc(a))
+
+
 def test_the_keep_map_merges_by_module():
     base = {"schema": "vllm-dead-code-keep/v1", "modules": {"m.a": "why a", "m.b": "why b"}}
     merged, why = MA.merge(base, {**base, "modules": {"m.a": "why a"}}, {**base, "modules": {**base["modules"], "m.c": "why c"}})
