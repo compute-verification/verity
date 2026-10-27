@@ -8,10 +8,11 @@ import Proofs.Accounting.PouwWork
 `Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted`: `comm_of_periodLeak` at network accounting's proof of
 `PeriodLeakAccepted` (`NetTiming.periodLeak`). On a run that realizes the network certifier's period of `n` sampled
 audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
-`n · (δ + ε_ks + ε_bind + ε_tap)`. The network certifier accepting with the claim failing means some window fails
-`WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
-verifier's `PrBad` at `RLeakTap` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
-`κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
+`n · (δ + ε_ks + 2 · Pr[B])`, `B` the network component's finder. The network certifier accepting with the claim failing
+means some window fails `WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is
+at most the sampled verifier's `PrBad` at `RLeakTap` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct
+bounds by `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + 2 · Pr[B]` at each window's prover, since `B`
+finds a collision at least as often as that window's `B_ext` and its `B_tap`.
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at
@@ -67,13 +68,13 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : AuditStatement → Finset ℕ}
     {Dj n : ℕ} (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
     (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
-    (εks εbind εtap : ℝ)
+    (εks : ℝ) (B : Claims.Finder)
     (herr : ∀ ξ i, Claims.Sampling.κ D δ (R.stmt ξ i) - δ +
       Real.sqrt (Claims.Sampling.γ D (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)
-    (hbind : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ εbind)
+    (hext : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H)
     (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
-      εtap) :
-    r.Sound c p .network (n * (δ + εks + εbind + εtap)) := by
+      B.Pr H) :
+    r.Sound c p .network (n * (δ + εks + 2 * B.Pr H)) := by
   intro ξ
   have hlin := ksLin_of_periodLeak hsrc H D hks L Kₒ S lay k δ decode hδ hdec reg Dj R.tops hb
   calc Pouw.pr (fun x : Ω (r.own .network) =>
@@ -94,14 +95,14 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
             ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
               (R.stmt (Function.update ξ (r.own .network) x) i) (R.wit (Function.update ξ (r.own .network) x) i)
               (R.obs (Function.update ξ (r.own .network) x) i)) := pr_exists_le _
-    _ ≤ ∑ _i : Fin n, (δ + εks + εbind + εtap) := by
+    _ ≤ ∑ _i : Fin n, (δ + εks + 2 * B.Pr H) := by
         refine Finset.sum_le_sum fun i _ => (R.window_le ξ i).trans ?_
         have h := hlin (R.stmt ξ i) (R.scope ξ i) (R.Tape ξ i) (R.prover ξ i)
         have he := herr ξ i
-        have hx := hbind ξ i
+        have hx := hext ξ i
         have ht := htap ξ i
         linarith
-    _ = n * (δ + εks + εbind + εtap) := by
+    _ = n * (δ + εks + 2 * B.Pr H) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 /-- **The network certifier's per-period guarantee**, at network accounting's proof of `PeriodLeakAccepted`. -/
