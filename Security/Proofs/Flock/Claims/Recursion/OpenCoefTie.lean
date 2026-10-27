@@ -671,7 +671,7 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
     rw [getElem!_neg _ s hge] at hqry
     exact Nat.not_lt_zero _ hqry
   have hinst : instR (Claims.Recursion.xI (DR b elem IV) x) q < n := by
-    unfold instR OpenLower.qAt
+    unfold RecDeploy.OpenDirs.instR OpenLower.qAt
     rw [hxI, hql, hnq]
     generalize ((OpenLower.schAt (xIOf x) 0).levels[s]!).q = Q at hqry ⊢
     have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
@@ -726,7 +726,7 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   have hcp : OpenLower.copyR (Claims.Recursion.xI (DR b elem IV) x) w p ht q =
       Flock.Readable.copyOf p 0 ht w (instR (Claims.Recursion.xI (DR b elem IV) x) q / cc.g)
         (instR (Claims.Recursion.xI (DR b elem IV) x) q % cc.g) 0 := by
-    simp only [OpenLower.copyR, OpenLower.copyAtR, instR, getElem!_pos p.sts 0 ht, hc0]
+    simp only [OpenLower.copyR, OpenLower.copyAtR, RecDeploy.OpenDirs.instR, getElem!_pos p.sts 0 ht, hc0]
   rw [hcp]
   refine openCoefs_of_words (by omega) fun h hh => ?_
   rw [htie hcr h hh, hct']
