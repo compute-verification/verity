@@ -470,8 +470,8 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids to the export bucket (§7.3)
+research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
