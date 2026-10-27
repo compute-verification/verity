@@ -92,7 +92,7 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
         return False, f"identity coverage: {cov.error}"
     if not cov.ok:
         if cov.missing_n == 0 and (cov.ambiguous_n or 0) > 0:
-            # [R16 rev F-r16-08 / M-0077] every required identity is bound, but not UNAMBIGUOUSLY: two leaf entries under one identity
+            # every required identity is bound, but not UNAMBIGUOUSLY: two leaf entries under one identity
             amb = cov.ambiguous[0] if cov.ambiguous else {}
             return False, (f"identity coverage: {cov.ambiguous_n} of {cov.expected_n} required identities have more than one binding "
                            f"(C1 requires one unambiguous binding; first: step {amb.get('step')} {amb.get('op_path')}/{amb.get('output_member')} inv {amb.get('invocation')} "
@@ -109,7 +109,7 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
         if int(po.get("verified") or 0) != int(po.get("opened") or 0):
             return False, f"population openings verified {po.get('verified')} != opened {po.get('opened')}"
     elif int(po.get("verified") or 0) != int(po.get("opened") or 0):
-        # [R17 fp8] retain=host + exclude: the host share opened here must verify; the deferred share is opened by replay (openings_after_release)
+        # retain=host + exclude: the host share opened here must verify; the deferred share is opened by replay (openings_after_release)
         return False, f"population openings (host share) verified {po.get('verified')} != opened {po.get('opened')}"
     return True, "PASS"
 

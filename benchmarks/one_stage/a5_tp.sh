@@ -211,6 +211,7 @@ advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under t
 
 if [ -n "${A5_TP:-}" ]; then
   N=${A5_NAME:-glm}; WIN=$A5_TP/serving-rows; WL=integrations/vllm/workloads/$ROW.json; ADV=()
+  $REPO/.venv/bin/verity-vllm workload-file $WL > /dev/null || exit 8
   if [ -n "${A5_ADVICE:-}" ]; then
     WIN=$W/serving-rows
     advice_pair $A5_TP/commit ${A5_BUILD:-$A5_TP/build} $PART $WL $WIN $O/$N; WL=

@@ -1513,11 +1513,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", metavar="ROLE", help="fill with --served and --gate: the served model's int8 checkpoint role "
                                                     "(LLAMA31_8B_INT8), whose registration under --circuit the gate's "
                                                     "model-key answers; each K's b/<K> is registered under its key before "
-                                                    "the window's salt (pouw_h1_served.Weights, VLLM-72)")
+                                                    "the window's salt (pouw_h1_served.Weights)")
     ap.add_argument("--circuit", metavar="SHA512", help="with --model: the period's circuit (its declared Program's digest)")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
-                         "flight every served step (VLLM-52; its own T, S and cap)")
+                         "flight every served step (its own T, S and cap)")
     ap.add_argument("--handoff", metavar="SOCK", help="fill with --challenger: once served, hand the window (to "
                                                      "--handoff-state) and its session's stream (to the holder at SOCK) "
                                                      "off and exit, the close left to --close-from (pouw_h1_handoff)")

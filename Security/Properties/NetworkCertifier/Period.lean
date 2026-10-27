@@ -38,7 +38,7 @@ certifier signs about the clock is witness, so the clock is synced as the audito
 Comparisons the code makes with a `BEq` instance not known to be lawful (`Json`, `ByteArray`, `String`, the profile's
 levels) are stated as the code's `==` returning `true`.
 
-Beside the property, its two lemmas' objects (LEAN-66): `PeriodAcceptMeansOf`, the property of any period check, and
+Beside the property, its two lemmas' objects: `PeriodAcceptMeansOf`, the property of any period check, and
 `acceptAllPeriod`, a check that accepts every period; and an honest period of one clock-form link-window
 (`honestParams`, `honestCommitment`, `honestEvidence`), its certificates signed with the certifier's key at the deployed
 LMS parameters, with the two named assumptions about code the kernel can't evaluate that its acceptance takes
