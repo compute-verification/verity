@@ -54,7 +54,7 @@ from verity.ml.circuits.refs import Coll, Explicit, concat
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 
-from .torch_attention import SM120, SM120_SHAPES, SM120_STEP, transpose
+from .torch_attention import GPU_SHAPES, GPU_STEP, ON_GPU, transpose
 
 __all__ = ["EmbeddingBackwardEntry", "EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardSortEnd",
            "EmbeddingBackwardSortRun", "EmbeddingBackwardSortStep", "EmbeddingBackwardTied", "EmbeddingBackwardTorch", "kernel",
@@ -74,9 +74,9 @@ FEATURE_MAX, CHUNK = 3072, 32
 #: the tokens of one `EmbeddingBackwardSortRun` in `EmbeddingBackwardTorch`, a proof block
 RUN = 8192
 M_MAX = 1 << 24
-_SORT = f"at M = 4,096 in {SM120_SHAPES}, all 576 features of 65 entries (the model: of all 3,859 the tokens hold)"
-_IN_SORT = f"exact-model-tested; inside EmbeddingBackwardTorch_v1, {_SORT}: {SM120}"
-_FEATURE = f"at M = 256 in {SM120_STEP}, all 576 features of the 253 entries its tokens hold and of 32 they don't"
+_SORT = f"at M = 4,096 in {GPU_SHAPES}, all 576 features of 65 entries (the model: of all 3,859 the tokens hold)"
+_IN_SORT = f"exact-model-tested; inside EmbeddingBackwardTorch_v1, {_SORT}: {ON_GPU}"
+_FEATURE = f"at M = 256 in {GPU_STEP}, all 576 features of the 253 entries its tokens hold and of 32 they don't"
 
 
 def _add(C, a, b):
@@ -190,13 +190,13 @@ EmbeddingBackwardTorch = CompositeDefinition(
     doc="embedding_dense_backward_cuda's sort path (M > 3072, deterministic) for entry v and one feature over M tokens: "
         "partials of 10 of v's tokens summed from +0 in position order, the partials summed from +0, rounded to bf16; "
         "EmbeddingBackwardSortRun on runs of 8192 tokens from +0, then EmbeddingBackwardSortEnd",
-    conformance=f"exact-model-tested; {_SORT}: {SM120}", refuse=_refuse("M", FEATURE_MAX + 1, M_MAX))
+    conformance=f"exact-model-tested; {_SORT}: {ON_GPU}", refuse=_refuse("M", FEATURE_MAX + 1, M_MAX))
 EmbeddingBackwardFeatureChunk = specialized(
     "EmbeddingBackwardFeatureChunk", 1, ("N",), lambda S: lambda C, *w: _feature_chunk(C, S, *w),
     lambda S: ((("acc", BF16), ("v", U32)) + _tokens(_statics(S, "N", 1, CHUNK).N), BF16),
     doc="one chunk of N <= 32 tokens of embedding_backward_feature_kernel for entry v: v's tokens summed in f32 from the "
         "first's gradient in position order, then acc = bf16(acc + bf16(sum)); acc when no token is v",
-    refuse=_refuse("N", 1, CHUNK), conformance=f"exact-model-tested; inside EmbeddingBackwardFeature_v1, {_FEATURE}: {SM120}")
+    refuse=_refuse("N", 1, CHUNK), conformance=f"exact-model-tested; inside EmbeddingBackwardFeature_v1, {_FEATURE}: {ON_GPU}")
 
 
 def _feature(B, S, v, t, g):
@@ -212,7 +212,7 @@ EmbeddingBackwardFeature = CompositeDefinition(
     _feature,
     doc="embedding_dense_backward_cuda's feature kernel (M <= 3072) for entry v and one feature over M tokens: "
         "EmbeddingBackwardFeatureChunk on each 32 consecutive tokens, from +0",
-    conformance=f"exact-model-tested; {_FEATURE}: {SM120}", refuse=_refuse("M", 1, FEATURE_MAX))
+    conformance=f"exact-model-tested; {_FEATURE}: {ON_GPU}", refuse=_refuse("M", 1, FEATURE_MAX))
 
 # --- the step's blocks ------------------------------------------------------------------------------------------------------
 
@@ -237,8 +237,8 @@ EmbeddingBackwardEntry = CompositeDefinition(
     lambda S: ((("v", U32), ("t", Array(_statics(S, "M", 1, M_MAX).M, U32)),
                 ("g", Array(_statics(S, "H", 1, M_MAX).H, Array(S.M, BF16)))), Array(S.H, BF16)), _entry,
     doc="entry v's row of embedding_dense_backward_cuda over M tokens: kernel(M) on each of the H features' gradient columns",
-    conformance=f"exact-model-tested; at M = 256, 13 features of the 253 entries the tokens of {SM120_STEP} hold, and at "
-                f"M = 4,096, 8 features of 4 entries in {SM120_SHAPES}: {SM120}", refuse=_refuse_all("M", "H"))
+    conformance=f"exact-model-tested; at M = 256, 13 features of the 253 entries the tokens of {GPU_STEP} hold, and at "
+                f"M = 4,096, 8 features of 4 entries in {GPU_SHAPES}: {ON_GPU}", refuse=_refuse_all("M", "H"))
 
 
 def _ids(B, n: int) -> Coll:
@@ -262,5 +262,5 @@ EmbeddingBackwardTied = CompositeDefinition(
     doc="the tied embedding's gradient over M tokens: g (M x H, token-major) through transpose, EmbeddingBackwardEntry_v1 on "
         "each of the V entries, then Bf16AddF2fp_v2 of the LM head's dW w and each entry's row",
     conformance="exact-model-tested; against numerics.torch_blocks' model (tests/test_torch_embedding.py), whose tied add is "
-                f"the GPU's on every word of {SM120_STEP}: {SM120}",
+                f"the GPU's on every word of {GPU_STEP}: {ON_GPU}",
     refuse=_refuse_all("M", "V", "H"))

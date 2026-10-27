@@ -1,13 +1,13 @@
 """The training kernels' numpy models (`numerics.torch_kernels`), and the Definitions that trace in a second or two at the step's
 sizes, on words an sm_120 GPU computed in a 2-layer smollm2-135m training step: a few rows of each kernel, every word equal.
 The other tests hold each Definition to its model on random and special words; these hold the model to the GPU. The fixture
-(`fixtures/smollm2-step-sm120-2026-10-27/step.npz`) is cut from run r20261027-031630-ce8e's dump (B 1, S 256, torch
-2.14.0+cu130 on an RTX PRO 6000, cc 12.0), whose every row run r20261027-035245-3d66 checks the same way. A loss row's 49,152
-log-probabilities and gradient are kept as the sha256 of the GPU's words.
+(`fixtures/torch-training-step/step.npz`) is cut from a dump of the step (B 1, S 256, torch 2.14.0+cu130 on an RTX PRO 6000,
+cc 12.0), every row of which was checked the same way. A loss row's 49,152 log-probabilities and gradient are kept as the
+sha256 of the GPU's words.
 
 The training run's own shapes (B 8, S 512) take kernels the 2-layer step doesn't: the embedding's sort path (M = 4096 ids),
-the mean loss's 256-thread tree, and rows of 512 and 1,024 keys. `fixtures/smollm2-train-shapes-sm120-2026-10-27/shapes.npz`
-is cut from run r20261027-040221-0e4d (the same GPU and torch), whose every word run r20261027-040917-a3ba checks."""
+the mean loss's 256-thread tree, and rows of 512 and 1,024 keys. `fixtures/torch-training-shapes/shapes.npz` is cut from a
+dump at those shapes (the same GPU and torch), every word of which was checked."""
 from __future__ import annotations
 
 import hashlib
@@ -32,12 +32,12 @@ def _load(path: Path) -> dict:
 
 @pytest.fixture(scope="module")
 def step():
-    return _load(FIXTURES / "smollm2-step-sm120-2026-10-27" / "step.npz")
+    return _load(FIXTURES / "torch-training-step" / "step.npz")
 
 
 @pytest.fixture(scope="module")
 def shapes():
-    return _load(FIXTURES / "smollm2-train-shapes-sm120-2026-10-27" / "shapes.npz")
+    return _load(FIXTURES / "torch-training-shapes" / "shapes.npz")
 
 
 def _same(got, want) -> None:
