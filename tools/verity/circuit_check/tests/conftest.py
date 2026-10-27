@@ -1,5 +1,5 @@
 """The suite's report: with ``CIRCUIT_CHECK_REPORT=path`` set, every target the suite checked is written there as one
-`verity-circuit-check/v1` report when the session ends (CI uploads it).  In an xdist worker, the circuit-checks the tests start
+`verity-circuit-check/v1` report when the session ends.  In an xdist worker, the circuit-checks the tests start
 keep to that worker's share of the suite's memory (`worker_slot_gb`).
 
 circuit-check's catalog (`Catalog`: `targets.suite()` and what its roots reach) is built once per session, and only for a test
