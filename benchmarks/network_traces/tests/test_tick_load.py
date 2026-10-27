@@ -85,3 +85,20 @@ def test_jitter_reads_the_pacers_write_starts_and_pairs_each_offset_with_the_nex
     assert j["paced_ms"] == 50.0 and [r[6] for r in j["buckets"]] == [t / 100 for t in range(n)]
     assert j["next"]["client"]["n"] == sum(1 for t in range(n - 1) if (t + 1) % 3)
     assert j["next"]["client"]["decoder"]["accuracy"] == 1.0 and "release" in j["written"]
+
+
+def test_summary_lists_each_late_paced_bucket_with_its_end_and_the_previous_ones(tmp_path):
+    """A paced run's summary lists the buckets that reached the pacer after their time, started past the slack or
+    weren't written, each with its write's end and the previous bucket's, and the ends' tail."""
+    releases = [[t, -40.0, 0.0, 0.1, True] for t in range(8)]
+    releases[3], releases[5], releases[6] = [3, 2.0, 2.0, 2.1, True], [5, -40.0, 30.0, 30.1, True], \
+        [6, -40.0, 0.0, 0.1, False]
+    releases[2][3] = 61.0
+    log = {"slack_ms": 25.0, "lateness_ms": {"egress": [0.1] * 8}, "paced": {"ms": 50.0, "releases": releases}}
+    with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
+        json.dump(log, fh)
+    (tmp_path / "calibration.json").write_text(json.dumps({"grid": {"window_buckets": 4}}))
+    p = tl.summary(tmp_path)["paced"]
+    assert p["late"] == [[3, 0, 3, 2.0, 2.0, 2.1, 61.0], [5, 1, 1, -40.0, 30.0, 30.1, 0.1],
+                         [6, 1, 2, -40.0, 0.0, 0.1, 30.1]]
+    assert p["end_max_ms"] == 61.0 and p["buckets"] == 8

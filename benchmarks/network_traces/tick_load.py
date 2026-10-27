@@ -12,8 +12,9 @@ completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes
 `--profile`), and stops the hogs. It writes
 `ticks.json` in `--out`: the CPUs and hogs, the rehearsal's exit and verdict, and per grid the ticks and their lateness
 (median, p99, p99.9, max in ms, the ticks past the slack with their window and bucket, and the windows the honest run
-was refused on), and from a paced proxy its pacer's write starts and the buckets it got late or started past the slack
-(`paced`). The rehearsal's own outputs are under `--out`/rehearsal.
+was refused on), and from a paced proxy its pacer's write starts and ends and the buckets it got late or started past
+the slack, each with its write's end and the previous bucket's (`paced`). The rehearsal's own outputs are under
+`--out`/rehearsal.
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
 (`NetTiming.JitterBounded`): does an offset within a bucket that the prover chooses reach a receiver outside?
@@ -234,11 +235,12 @@ def summary(run: Path) -> dict:
     check = json.loads((run / "check.json").read_text()) if (run / "check.json").exists() else {}
     if (paced := log.get("paced")) is not None:
         rows = paced["releases"]
-        start = [r[2] for r in rows]
+        start, end = [r[2] for r in rows], {r[0]: r[3] for r in rows}
         out["paced"] = {"ms": paced["ms"], "buckets": len(rows), "start_median_ms": _quantile(start, 0.5),
                         "start_p99_ms": _quantile(start, 0.99), "start_p999_ms": _quantile(start, 0.999),
                         "start_max_ms": max(start), "arrived_max_ms": max(r[1] for r in rows),
-                        "late": [[t, t // buckets, t % buckets, a, s] for t, a, s, _, w in rows
+                        "end_p999_ms": _quantile(list(end.values()), 0.999), "end_max_ms": max(end.values()),
+                        "late": [[t, t // buckets, t % buckets, a, s, e, end.get(t - 1)] for t, a, s, e, w in rows
                                  if a > 0 or s > slack or not w]}
     out["verdict"] = check.get("verdict")
     out["refused_windows"] = {row["window"]: {d: a["raw"] for d, a in row["audit"].items() if a["raw"]}
