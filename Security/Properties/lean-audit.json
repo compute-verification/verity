@@ -210,6 +210,18 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+  },
+  "Pous.Component.AcceptsAll": {
+   "owner": "@memory-accounting",
+   "digest": "cb7eae488cf26c205bd5d1f15d61503cc8f20355de28e53ec03069969f7a850f"
+  },
+  "Pous.Component.WipeChecked": {
+   "owner": "@memory-accounting",
+   "digest": "dd34a8430a8c20b641fbe6f728e23f533fafe266de3080129d062a81774075fd"
+  },
+  "Pous.EndToEnd.AcceptedAt": {
+   "owner": "@memory-accounting",
+   "digest": "7e7b3aceb1db09ac7ae6963ba59a46d38aafb0982c7680821ab61ad44391ecf2"
   }
  },
  "meaning": [
@@ -653,11 +665,83 @@
    "assumptions": [],
    "type_hash": "1f62adc1d401e89ae7fd1e127eddd0626124b177506be24f96f20e82cb2d9f2b"
   },
+  "Pous.Component.SecurityProofs.runAccepts_by": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.runAccepts_by :",
+    "  Iff Pous.Component.RunAccepts (Pous.Component.RunAcceptsBy PousCheck.RunProtocol.protocol.check)"
+   ],
+   "assumptions": [],
+   "type_hash": "4a75b839bf771d49dde5409e73b4d3df4c807a730fd4bc285d3fa8f71c25b1c6"
+  },
+  "Pous.Component.SecurityProofs.runAccepts_complete": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.runAccepts_complete (p : PousCheck.RunProtocol.Params)",
+    "  (pub : PousCheck.SetupProtocol.Public) (e : PousCheck.RunProtocol.Evidence) :",
+    "  Pous.EndToEnd.AcceptedAt p.point p.trusted.toList e.setup.commitment e.setup.store pub e.digests e.session",
+    "      p.sessionId →",
+    "    Eq (PousCheck.RunProtocol.protocol.check p pub e)",
+    "      (Core.Outcome.accept (PousCheck.RunProtocol.certify p.point) p.point)"
+   ],
+   "assumptions": [],
+   "type_hash": "4bdbbc1dafa32086e3fe354f8e3b7d3441554445b2e54eceda3b9059ad17c1db"
+  },
+  "Pous.Component.SecurityProofs.runAccepts_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.runAccepts_fails",
+    "  (check :",
+    "    PousCheck.RunProtocol.Params →",
+    "      PousCheck.SetupProtocol.Public →",
+    "        PousCheck.RunProtocol.Evidence → Core.Outcome PousCheck.RunProtocol.Public PousCheck.Run.Point) :",
+    "  Pous.Component.AcceptsAll check → Not (Pous.Component.RunAcceptsBy check)"
+   ],
+   "assumptions": [],
+   "type_hash": "01950969f54875465e0aee46dc84f3ac02d53c4f0ec7ecad8307ae34d599426f"
+  },
   "Pous.Component.SecurityProofs.runBinds": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Component.SecurityProofs.runBinds : Pous.Component.RunBinds"],
    "assumptions": [],
    "type_hash": "f1c66a8d1f3f6164547133133fdcdd331c75d520758f4137a313b1ee437b83d8"
+  },
+  "Pous.Component.SecurityProofs.runBinds_break_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.runBinds_break_fails :",
+    "  Not",
+    "    (∀ (q : PousCheck.P2.Params) (pub : PousCheck.SetupProtocol.Public) (e e' : PousCheck.RunProtocol.Evidence),",
+    "      have xs := Pous.Component.forkStrings q pub e e';",
+    "      Exists fun x =>",
+    "        And (List.instMembership.mem xs x)",
+    "          (Exists fun y =>",
+    "            And (List.instMembership.mem xs y) (And (Ne x y) (Eq (Flock.Sha512.hash x) (Flock.Sha512.hash y)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "3bf0347e1c8a9ad85ebf88f5d35122e868bcf8540eeb81622fd7eaa698be3370"
+  },
+  "Pous.Component.SecurityProofs.runBinds_by": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.runBinds_by :",
+    "  Iff Pous.Component.RunBinds (Pous.Component.RunBindsBy PousCheck.RunProtocol.protocol.check)"
+   ],
+   "assumptions": [],
+   "type_hash": "cae0d8833e038b335902ce17da54fae64182d90fa7eb297d659fe5aa0656d2e6"
+  },
+  "Pous.Component.SecurityProofs.runBinds_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.runBinds_fails",
+    "  (check :",
+    "    PousCheck.RunProtocol.Params →",
+    "      PousCheck.SetupProtocol.Public →",
+    "        PousCheck.RunProtocol.Evidence → Core.Outcome PousCheck.RunProtocol.Public PousCheck.Run.Point) :",
+    "  Pous.Component.AcceptsAll check → Not (Pous.Component.RunBindsBy check)"
+   ],
+   "assumptions": [],
+   "type_hash": "a859641de48e9964059f341fffb59ef357e85595aea2c1e18ce8e70527328030"
   },
   "Pous.Component.SecurityProofs.runDigest": {
    "owner": "@memory-accounting",
@@ -670,6 +754,64 @@
    "signature": ["Pous.Component.SecurityProofs.wipeAccepts : Pous.Component.WipeAccepts"],
    "assumptions": [],
    "type_hash": "4d618aa961b5a75a729863911c1a74a6814ce6e7b6f25377db57255a3822f06a"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_by": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.wipeAccepts_by :",
+    "  Iff Pous.Component.WipeAccepts (Pous.Component.WipeAcceptsBy MemoryChallenger.WipeProtocol.protocol.check)"
+   ],
+   "assumptions": [],
+   "type_hash": "ac58b689636e0d20bd6762b4bc1d74cdaab80e83e47008fc243e140e639364ce"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_complete": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.wipeAccepts_complete (p : MemoryChallenger.WipeProtocol.Params)",
+    "  (c : MemoryChallenger.StreamedWipe.Commitment) (e : MemoryChallenger.WipeProtocol.Evidence)",
+    "  (s : MemoryChallenger.StreamedWipe.Signed) :",
+    "  Eq c.server p.server →",
+    "    Eq c.session p.session →",
+    "      Eq e.signed (Option.some s) →",
+    "        Pous.Component.WipeChecked MemoryChallenger.SCHEMES p.trusted.toList s c →",
+    "          Eq (MemoryChallenger.WipeProtocol.protocol.check p c e)",
+    "            (Core.Outcome.accept",
+    "              (MemoryChallenger.WipeProtocol.certify c.params (MemoryChallenger.StreamedWipe.egressUnits s.egressBits))",
+    "              { fst := c.params, snd := MemoryChallenger.StreamedWipe.egressUnits s.egressBits })"
+   ],
+   "assumptions": [],
+   "type_hash": "512194c71d7ab9ea466852fe314d7cbc69530028b4f45f8471329223b5f9b90f"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_fails": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "  (check :",
+    "    MemoryChallenger.WipeProtocol.Params →",
+    "      MemoryChallenger.StreamedWipe.Commitment →",
+    "        MemoryChallenger.WipeProtocol.Evidence →",
+    "          Core.Outcome MemoryChallenger.WipeProtocol.Public (Prod MemoryChallenger.StreamedWipe.Params Int)) :",
+    "  Pous.Component.AcceptsAll check → Not (Pous.Component.WipeAcceptsBy check)"
+   ],
+   "assumptions": [],
+   "type_hash": "bd724c9b075b560f379cd86659ac6fe4fc3312c2280f631d26995143f62ff7c5"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_meets": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Component.SecurityProofs.wipeAccepts_meets (I seed : ByteArray) (k : Lms.PrivateKey) :",
+    "  Eq (Lms.key Lms.deployed I seed) (Except.ok k) →",
+    "    Exists fun c =>",
+    "      Exists fun e =>",
+    "        Exists fun out =>",
+    "          Exists fun prof =>",
+    "            Eq",
+    "              (MemoryChallenger.WipeProtocol.protocol.check",
+    "                { server := c.server, session := c.session, trusted := (List.cons k.publicKey List.nil).toArray } c e)",
+    "              (Core.Outcome.accept out prof)"
+   ],
+   "assumptions": [],
+   "type_hash": "2d86adbf1b0e618863617c0c79ba56b0969ae3131084736a7c151e36e1ad428f"
   },
   "Pous.Component.SecurityProofs.wipeDigest": {
    "owner": "@memory-accounting",
@@ -2259,36 +2401,6 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
-  },
-  "Pous.Component.SecurityProofs.runAccepts_by": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.runBinds_by": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.wipeAccepts_by": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.runAccepts_fails": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.runBinds_fails": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.runBinds_break_fails": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.wipeAccepts_fails": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.runAccepts_complete": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.wipeAccepts_complete": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Component.SecurityProofs.wipeAccepts_meets": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -4075,9 +4187,18 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.Component.SecurityProofs.wipeDigest",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -4134,8 +4255,17 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -6614,9 +6744,17 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.Component.SecurityProofs.wipeDigest",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
@@ -6753,9 +6891,16 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.Component.SecurityProofs.wipeDigest",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -6941,9 +7086,19 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.Component.SecurityProofs.wipeDigest",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
@@ -7073,7 +7228,13 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -7163,7 +7324,13 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -7472,8 +7639,16 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -7712,7 +7887,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -7757,7 +7936,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -7807,6 +7990,7 @@
     "Lms.signAt": "013e60d1e8eb98aa9cfcd9569309b9601fd53dee8fad48b90c5afb7632463676"
    },
    "guarantees": [
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -7860,8 +8044,16 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -7927,8 +8119,16 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -7987,9 +8187,15 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.Component.SecurityProofs.wipeDigest"
    ]
   },
@@ -8067,8 +8273,18 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.Component.SecurityProofs.wipeDigest",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
@@ -8101,8 +8317,16 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -8179,7 +8403,14 @@
     "MemoryChallenger.StreamedWipe.verdict": "3b29d81a36d99642e4476a2d3ac3aa087b5433bb50877ad5d8301095993d39bf",
     "_private.MemoryChallenger.StreamedWipe.0.MemoryChallenger.StreamedWipe.tiersJson": "c49a13e43342b426ef848318c4864e6d6195f068dc7010a8784907dae2daf9a9"
    },
-   "guarantees": ["Pous.Component.SecurityProofs.wipeAccepts", "Pous.Component.SecurityProofs.wipeDigest"]
+   "guarantees": [
+    "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
+    "Pous.Component.SecurityProofs.wipeDigest"
+   ]
   },
   "MemoryChallenger.Verdict": {
    "digest": "31e763500bf324942f8d5579e4ba37a5aa2b1b703a0c2a229c0deb82428ce411",
@@ -8211,8 +8442,18 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -8236,7 +8477,13 @@
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.intJ": "83089091dfa1e2ec4c839299fa798acf5057ae5648cfda7f318bf7bc40d0f888",
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.natJ": "aae9e67ce6fad22524532dee9f859a6fb9b2f4935cf892a569e7769c81bbf1d6"
    },
-   "guarantees": ["Pous.Component.SecurityProofs.wipeAccepts", "Pous.Component.SecurityProofs.wipeDigest"]
+   "guarantees": [
+    "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
+    "Pous.Component.SecurityProofs.wipeDigest"
+   ]
   },
   "MemoryChallenger.WipeProtocol": {
    "digest": "44fbfd248ae96bc49402194df67d3bf7f119b4e2a78d4d4222af8bbc9cc76ddc",
@@ -8278,7 +8525,14 @@
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.hexJ": "d1ca30893491681448632d04d8023bdb929531cf409e6162a2124e8a2d1deb9f",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.natJ": "e8727017f342ed9865812bb9541059197bd40dd29953092439507393e12349aa"
    },
-   "guarantees": ["Pous.Component.SecurityProofs.wipeAccepts", "Pous.Component.SecurityProofs.wipeDigest"]
+   "guarantees": [
+    "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "Pous.Component.SecurityProofs.wipeAccepts_meets",
+    "Pous.Component.SecurityProofs.wipeDigest"
+   ]
   },
   "NciCheck.Baseline": {
    "digest": "7cb5f4cf6c88d226bde6f81ca145861723e9b060d2ce38c17bf1ed1ac09fd340",
@@ -9019,7 +9273,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
@@ -9041,7 +9299,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -9074,7 +9336,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -9098,7 +9364,13 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -9146,7 +9418,13 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -9203,7 +9481,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -9264,7 +9546,13 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
@@ -9324,7 +9612,13 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.runDigest"
    ]
   },
@@ -9351,7 +9645,11 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_by",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -9390,7 +9688,13 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
@@ -10806,6 +11110,9 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -10820,21 +11127,33 @@
    ]
   },
   "Properties.Pous.Component": {
-   "digest": "d22dc36e5c9e7f42e7059b52b50af3cd21c6cf8d20bce69e23bf0f04ea418996",
+   "digest": "5dcd4fee3e7c8b748964978342f0a6400b388fca409c0c5f8ed043d66fbb13cd",
    "definitions": {
+    "Pous.Component.AcceptsAll": "cb7eae488cf26c205bd5d1f15d61503cc8f20355de28e53ec03069969f7a850f",
     "Pous.Component.RunAccepts": "7ffc3aa74c34224df5c5362aaf678702679ade66285cfdf4932cce5bf2e2e389",
+    "Pous.Component.RunAcceptsBy": "8996c231e68e573f5544d2e61e0005a83c46a3ca0ea56c39e0bb7b8521e27ed6",
     "Pous.Component.RunBinds": "a655057b5830dee6d2459b8f6fc196c7eb1a18f206547d0181fd0cf6efac08aa",
+    "Pous.Component.RunBindsBy": "5d06b613ac245b8f6a809954d38ca0a8afd1a22cf512dea4f4b6f40e89b25d79",
     "Pous.Component.RunDigest": "5ac43825fad3567c29b06e1a5ed107c37e1b38165c767ea272583ed36dfaa25c",
     "Pous.Component.WipeAccepts": "1f109c2b6f8d2ec018639fa175d40dc48984537b8e05aca6d37d0bf5ca89aeca",
+    "Pous.Component.WipeAcceptsBy": "4498c6d21b80ecf403918c94beeb78042b940138a6050782b8aa8b3afd1d9a5b",
     "Pous.Component.WipeChecked": "dd34a8430a8c20b641fbe6f728e23f533fafe266de3080129d062a81774075fd",
     "Pous.Component.WipeDigest": "a66796f765fd33799f08e77e59b960ded1fc6ff79c440f1bf7e4a671aec1d874",
     "Pous.Component.forkStrings": "8429ff83ae4ca164f7adb03ddebe57a5b501a99885b5d52725297fbcf9c88e3b"
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.Component.SecurityProofs.runDigest",
     "Pous.Component.SecurityProofs.wipeAccepts",
+    "Pous.Component.SecurityProofs.wipeAccepts_by",
+    "Pous.Component.SecurityProofs.wipeAccepts_complete",
+    "Pous.Component.SecurityProofs.wipeAccepts_fails",
     "Pous.Component.SecurityProofs.wipeDigest"
    ]
   },
@@ -10878,6 +11197,9 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -10923,7 +11245,13 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
+    "Pous.Component.SecurityProofs.runAccepts_by",
+    "Pous.Component.SecurityProofs.runAccepts_complete",
+    "Pous.Component.SecurityProofs.runAccepts_fails",
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -11055,6 +11383,9 @@
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runBinds",
+    "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "Pous.Component.SecurityProofs.runBinds_by",
+    "Pous.Component.SecurityProofs.runBinds_fails",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
