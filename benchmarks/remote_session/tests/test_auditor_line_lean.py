@@ -13,6 +13,7 @@ shares and line (r20261024-090248-249f, which reran each run's `auditor_line.ana
 from __future__ import annotations
 
 import copy
+import dataclasses
 import gzip
 import json
 import math
@@ -27,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import auditor_line as al  # noqa: E402
 import lean_verifier as lv  # noqa: E402
-from verity.core.protocols.remote_bandwidth import line  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, codec, line, receipts  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OLD = {"4.4e+09": line.TIME_HELD, "5.4e+10": line.LINK_CHARGED}
@@ -40,17 +41,20 @@ INPUTS = {"groups": GROUPS, "per": 2, "blocks": 1000, "block_bytes": 4096, "chip
                     "link_bytes_per_s": "40960", "rebuild_burst_bytes": "4096", "disk_burst_bytes": "0",
                     "link_burst_bytes": "8192"}}
 """A paced session of seven groups whose line credits weights and filler in both forms, with wrong receipts."""
+REGISTRATION = audit.Registration(b"node-under-test", 1000, bytes(64), bytes(32), codec.DEFAULT, receipts.DEFAULT,
+                                  False, receipts.LAYOUT, receipts.sketch_rows(receipts.DEFAULT))
 RECORD = {**{k: INPUTS[k] for k in ("per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates")},
-          "samples": 1500, "seen": [{k: g[k] for k in line.SEEN} for g in GROUPS],
+          "registration": lv.registration_json(REGISTRATION), "samples": 1500,
+          "seen": [{k: g[k] for k in line.SEEN} for g in GROUPS],
           "record": {"windows": [{"lengths": [1000, 1000], "steps": [2 * t, 2 * t + 1], "post_seed": [0, 0],
                                   "heads": [None, "ab" * 64], "stale": [1000, 1000],
                                   "arrived_ns": [g["last_ns"] - 1, g["last_ns"]], "released_ns": g["released_ns"],
                                   "deadline_ns": g["last_ns"] + 5, "opened_ns": g["last_ns"] + 1, "drawn": 1500}
                                  for t, g in enumerate(GROUPS)],
                      "blocks": 1000, "appended": 0, "released": 0, "lifetime": 2, "pace": {"k": 2, "window_ns": 10 ** 9},
-                     "appends": None, "registration": "00" * 64}}
-"""`INPUTS`' session read off its record: window t group t, two passes over the 1000 blocks, 1500 of its 2000 receipts
-drawn (`line.record_inputs_json`'s form)."""
+                     "appends": None, "registration": REGISTRATION.digest.hex()}}
+"""`INPUTS`' session read off its record of `REGISTRATION`: window t group t, two passes over the 1000 blocks, 1500 of
+its 2000 receipts drawn (`line.record_inputs_json`'s form)."""
 
 
 @pytest.fixture(scope="module")
@@ -93,13 +97,18 @@ def test_the_lean_computes_the_line_line_py_computes(lean):
 
 def test_the_lean_reads_the_line_off_the_record_as_line_py_does(lean):
     """Read off the record (`line_record`), the Lean's line is line.py's, and both are the line of the record's groups
-    and windows given; the record's own refusals are both's, word for word, and a moved answer is a disagreement."""
+    and windows given; the record's own refusals, a record not of the registration given among them, are both's, word
+    for word, and a moved answer is a disagreement."""
     got = al.line_of_record(RECORD, lean)
     assert got == line.record_run_json(RECORD) == al.line_of_record(RECORD, None)
     assert got == line.run_json({**INPUTS, "windows": [[2000, 1500]] * len(GROUPS)})
     assert all(0 < al.shares_of(got)[f]["time"] < 1 for f in line.FORMS)
+    other = lv.registration_json(dataclasses.replace(REGISTRATION, payload_root=bytes([1]) * 64))
     for bad, why in (({**RECORD, "seen": RECORD["seen"][:-1]}, "the auditor saw 6 windows, not the record's 7"),
-                     ({**RECORD, "samples": 1499}, "window 0 drew 1500 of its 2000 receipts, not min(1499, 2000)")):
+                     ({**RECORD, "samples": 1499}, "window 0 drew 1500 of its 2000 receipts, not min(1499, 2000)"),
+                     ({**RECORD, "registration": other}, "the record is not of the registration given"),
+                     ({**RECORD, "record": {**RECORD["record"], "blocks": 999}},
+                      "the record's 999 registered blocks are not the registration's 1000")):
         with pytest.raises(line.Refused, match=f"^{re.escape(why)}$"):
             al.line_of_record(bad, lean)
     with pytest.raises(al.Disagree, match=f"disagree at .{line.TIME_HELD}.time.weights_share"):
