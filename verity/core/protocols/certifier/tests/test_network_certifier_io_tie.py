@@ -535,10 +535,9 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
 
 
 def test_the_heavy_traces_honest_egress_is_accepted_through_its_order():
-    """TRACE-CORPUS's heavy trace (`fixtures/warden-heavy-order.json`, from
-    art:d538087522581c66e103caa5e5929dcc10ed8602aa485d8538cff4d5d3943b16): 1,000 requests, 126,502 outputs over buckets
-    301 … 589, whose engine admits in the API server's body-read order, out of the warden's arrival order. Served
-    through the warden's own egress, every egress window of T = 16 buckets of 1,024 lanes is accepted through advice
+    """The trace corpus's heavy trace (`fixtures/warden-heavy-order.json`, whose ``source`` names the trace): 1,000
+    requests, 126,502 outputs over buckets 301 … 589, whose engine admits in the API server's body-read order, out of
+    the warden's arrival order. Served through the warden's own egress, every egress window of T = 16 buckets of 1,024 lanes is accepted through advice
     v1's order permutation, each request on its stream from admission. Without it (v0's identity) the map can't be
     built: the advice's admissions aren't in its numbering's order, which the warden's FIFO would need."""
     trace = json.loads((Path(__file__).parent / "fixtures" / "warden-heavy-order.json").read_text())

@@ -64,10 +64,10 @@ N2 through the proof service:
 - `service`: one link-window's certificates through the proof service: the network `Spec`, the salted root over the
   certified records, and the verifier of record, `LinkWindows` (`verify`, and `network_verdict`, the AND over a link's
   link-windows with no ε or share credit).
-- `head_check`: each head's check, `NetworkHeadCheck_v2`: its hiding opening, its fields, its counts against the profile,
-  and its record digest under the certifier's salt against the digest its certificate signs.
-- `served`: a served link's counts, `NetworkServedCounts_v1`, the egress counts derived from the ingress counts under the
-  window's declared sync.
+- `head_check`: each head's check, `NetworkHeadCheck_v2`: its hiding opening, its fields, its counts against the
+  profile, and its record digest under the certifier's salt against the digest its certificate signs.
+- `served`: a served link's counts, `NetworkServedCounts_v1`, the egress counts derived from the ingress counts under
+  the window's declared sync.
 - `advised`: an advised link's counts, `NetworkAdvisedCounts_v1`, held to the releases of the prover's advice, with
   each window's sync read from the certifier's clock certificates.
 - `tie_service`: the ingress tie through the proof service (`IngressTie`), which builds `advised.IoTieVerdict`.
@@ -155,8 +155,7 @@ Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound, while N3, the content check, is the design (Daniel's provisional
-call on ASK-70, 19 Oct).
+the declared sync), beside the proved timing bound, while N3, the content check, is a design.
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
 (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of C-Flock's Lean
@@ -167,23 +166,23 @@ certifier-serve run's link-windows this way through the link's own stream, and s
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof service, whose public kinds have none for a trusted device's signature over a hiding
-  commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
+  commitment. That is a provisional exception to the four public kinds, not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
 `LinkWindows.verify`'s verdict of record on a plain, served or warden link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`; an advised link's stays the Python's. `verify` runs both on every proof, and a link-window where
-they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
-to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
+they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The Lean is of
+record on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the drawn units with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
   take as inputs what the proof service and the lowering give: the findings of the verifier's own C-Flock Lean run, the
   sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
-  advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
-  which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.
+  advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the
+  Lean, which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.
 - on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
   plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
   warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64
@@ -204,9 +203,10 @@ A proof of the unit is held to its circuit. Each gate names its Definition's cir
 spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any other
 Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
 
-The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
-salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
-(`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
-a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
-Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing
-of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
+**The certificate's link to its head.** The certificate signs no hash of witness. The certifier signs
+`D = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws
+fresh for each record (`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only
+(`CertifiedRecord.salt`). D is a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the
+certificate's public fields and D. Each end's head check holds R to the head it opens and D to R under `salt_c`, so the
+certificates' check reads nothing of the heads; the in-the-clear check also checks that link over the opening
+(`CertifiedRecord.verify`).

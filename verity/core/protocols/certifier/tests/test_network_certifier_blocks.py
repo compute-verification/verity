@@ -6,7 +6,7 @@ the server's uplink commits and signs the load, the request and the response (`t
 come from its certificates alone (`blocks.pins`): with them, held to the window's roots its registrations record, the
 circuit's free inputs are 0. The demo's own request and
 response rows (`transfer_rows.request_rows`, `response_rows`) bind at the frozen shape on stand-in units (`demo`). Cut in
-two servers, each inference block (the record's (slot, step) of each unit) runs on one of them (NET-92)."""
+two servers, each inference block (the record's (slot, step) of each unit) runs on one of them."""
 
 from __future__ import annotations
 
@@ -438,14 +438,14 @@ def test_a_wires_in_may_come_before_its_out_but_not_on_its_own_server():
         BK.check(record(c), b, layouts(c))
 
 
-#: the refusal of an inference block on two servers (NET-92), where both are named
+#: the refusal of an inference block on two servers, where both are named
 ON_TWO = ("inference block (slot {slot}, step {step}): units of {a} on server {sa} and of {b} on server {sb}; an inference "
           "block runs on one server, the one that may read its inputs (NET-92)")
 
 
 def test_refuses_an_inference_block_on_two_servers():
-    """NET-92 (Daniel, 26 Oct): a server's ingress and egress carry only its inference blocks' declared inputs and outputs,
-    and an inference block runs on one server. Cut dot | cast with the cast in the dot's own inference blocks, every
+    """A server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an inference block
+    runs on one server. Cut dot | cast with the cast in the dot's own inference blocks, every
     (slot, step) is on both servers, refused by name; with the cast in blocks of its own (`two_servers`) the same cut is
     accepted. Two servers over a record that states no inference block are refused, nothing then saying which server runs
     each (one server needs none: `tiny`'s record states none)."""

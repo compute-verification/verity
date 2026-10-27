@@ -1,7 +1,6 @@
-"""The scan's ingress side (NET-68's step-indexed scan router, note:network-accounting/20261025T0830Z-report-net68-scan-router):
-one unit a certifier bucket t, `IngressScanBucket`, which reads bucket t's ingress row, the carried state S_{t−1} and
-the Programs' row at t, and computes S_t from them and S_t's egress view, its outputs beside an ok bit (the generator
-form); the first bucket's, `IngressScanFirst`, reads no state and starts from the empty one. Every switch is computed
+"""The ingress side of the step-indexed scan: one unit a certifier bucket t, `IngressScanBucket`, which reads bucket
+t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's egress
+view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state and starts from the empty one. Every switch is computed
 from the state and the rows; none is witness. Nothing here is in a Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
@@ -11,7 +10,7 @@ none, each on the connection's ordinal q. A connection's ingress is one warden-f
 (`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
-**Fixed slots a timestep** (ASK-122, Daniel, 26 Oct: "fixed slots per network timestep"). A timestep is EVERY buckets,
+**Fixed slots a timestep.** Programs start at fixed slots a network timestep. A timestep is EVERY buckets,
 its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
 `Class.serves`), so every link-window has its boundaries at the same buckets and one window circuit serves them all.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN

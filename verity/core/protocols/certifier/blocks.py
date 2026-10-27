@@ -1,5 +1,5 @@
-"""Daniel's blocks (CMP-92) as network accounting reads them: which proof units each server runs, the server-time block a
-circuit is, and its transfer gates, every row that crosses a server block's boundary, each a row of a value the network
+"""The blocks as network accounting reads them: which proof blocks each server runs, the server-time block a circuit
+is, and its transfer gates, every row that crosses a server block's boundary, each a row of a value the network
 certifier on that server's uplink committed and signed (`transfer_rows`). The verifier pins a transfer value's root from
 that certificate alone (`pins`), so with every other input row wired, the circuit's free inputs (the window interface's
 `input_count` under those pins) are 0.
@@ -31,13 +31,13 @@ a row, the size of the commitment the certifier makes of it row by row), never o
 
 - the servers each a new name on a new uplink (one network certifier an uplink), their units together a partition of
   every template's units ("all": the one server's);
-- each inference block on one server (NET-92; Daniel, 26 Oct: a server's ingress and egress carry only its inference
-  blocks' declared inputs and outputs, and an inference block runs on a single server, so which server may read its
-  input bits is unambiguous): the record's inference entries (``blocks.inference``, the window interface's
-  `InferenceEntry`, each unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
+- each inference block on one server (a server's ingress and egress carry only its inference blocks' declared inputs
+  and outputs, and an inference block runs on a single server, so which server may read its input bits is
+  unambiguous): the record's inference entries (``blocks.inference``, the window interface's `InferenceEntry`, each
+  unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
   with two servers or more the record states them. Which server runs which units is protocol structure, deployment
   configuration as NCI's declaration is, public and not a private partition, so this is checked in the clear with no
-  proof unit (`server_blocks`). The work is per entry, server run and digit: an entry's units on one run are at most
+  proof block (`server_blocks`). The work is per entry, server run and digit: an entry's units on one run are at most
   two boxes a digit of its mixed radix, each a rectangle of (slot, step);
 - a transfer a new value, but a wire's other one, its kind in its direction (`transfer_rows.KINDS`), on a server, in its
   window, its ``t`` within the server-time block's T steps and over its rows;
@@ -149,7 +149,7 @@ def _pattern(d: Any, keys: Sequence[str], what: str, cut: bool = False) -> Patte
 
 @dataclass(frozen=True)
 class Server:
-    """A server block: proof units ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
+    """A server block: proof blocks ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
     watches."""
 
     name: str
