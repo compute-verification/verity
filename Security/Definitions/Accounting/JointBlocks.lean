@@ -97,6 +97,6 @@ end BlocksRun
 
 /-- **The demo's memory share**, `0.1163`: at the demo's store, `Pous.Guarantees.ObligationDemo` bounds the bits of `U`
 above the state bound `S₀` by `0.1163 · U`, so the demo's memory term is `BlocksRun.MemoryTerm demoMemoryShare`. -/
-def demoMemoryShare : ℝ := 1163 / 10000
+noncomputable def demoMemoryShare : ℝ := 1163 / 10000
 
 end Accounting
