@@ -19,7 +19,8 @@ id (`release`), which `deployment.json` names (`run_id`).
   which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
-  host clock (`origin_unix`).
+  host clock (`origin_unix`); with `--remote-client` it is on another host (`client-agent`), and its arrival times are
+  read on its own clock moved by the offset it measured to the warden's.
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
@@ -46,10 +47,12 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
+    python warden_serve.py client-agent --listen HOST:PORT --out DIR [--sessions 1] [--wait 3600]
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
-        --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
+        --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]]
+        [--remote-client HOST:PORT [--remote-wait 1800]] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, each bucket released by its pacer `--paced-ms`
@@ -82,6 +85,11 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   egress record's; `check.json`.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
+- `rehearse --remote-client HOST:PORT` runs the client on another host instead: `client-agent` there, which takes each
+  rehearsal in turn over a control connection. The warden listens on this host's address toward the agent. The agent
+  reads the warden host's wall clock over the connection (`clock_offset`: the shortest of `PINGS` round trips, its
+  midpoint), runs `client` on that clock, and returns `client.json`. `remote.json` holds where it ran and its offset
+  and round trip before and after the session.
 
 **The load** (`--load-store`, the gate's `load-relay`): the serving session's weights' load, relayed and committed by
 this device and signed by its one signer. `rehearse` first relays the store to the H200's sink
@@ -113,6 +121,7 @@ import re
 import resource
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -832,6 +841,103 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
     return doc
 
 
+# The client on another host (`client-agent`, `rehearse --remote-client`): a control connection whose messages are each
+# a length (u32be) and that many bytes of JSON.
+
+#: the round trips a client agent reads the warden host's clock over, at each end of a session
+PINGS = 32
+
+
+def send_doc(sock: socket.socket, doc: dict) -> None:
+    data = json.dumps(doc).encode()
+    sock.sendall(len(data).to_bytes(4, "big") + data)
+
+
+def recv_doc(sock: socket.socket) -> dict:
+    return json.loads(_recv_exact(sock, int.from_bytes(_recv_exact(sock, 4), "big")))
+
+
+def _recv_exact(sock: socket.socket, n: int) -> bytes:
+    data = bytearray()
+    while len(data) < n:
+        if not (chunk := sock.recv(n - len(data))):
+            raise ConnectionError(f"the control connection ended {len(data)} of {n} bytes into a message")
+        data += chunk
+    return bytes(data)
+
+
+def clock_offset(sock: socket.socket, clock=time.time) -> dict:
+    """The warden host's wall clock less this host's (`offset_s`), read over the control connection `sock`: of
+    `PINGS` round trips, the shortest's (`rtt_s`), its midpoint against the reading `remote_client` answered it with."""
+    best = None
+    for i in range(PINGS):
+        sent = clock()
+        send_doc(sock, {"ping": i})
+        theirs = recv_doc(sock)["pong"]
+        back = clock()
+        if best is None or back - sent < best[0]:
+            best = (back - sent, theirs - (sent + back) / 2)
+    return {"offset_s": best[1], "rtt_s": best[0]}
+
+
+def remote_client(sock: socket.socket, deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
+    """A session of the client agent at the other end of `sock`: sends it the deployment and the traffic, answers its
+    pings with this host's wall clock, and writes what it returns, `client.json` (its arrivals on this host's clock)
+    and `remote.json` (where it ran, and its clock's offset and round trip before and after the session)."""
+    send_doc(sock, {"deployment": deployment, "traffic": traffic})
+    while "ping" in (msg := recv_doc(sock)):
+        send_doc(sock, {"pong": clock()})
+    (out / "client.json").write_text(json.dumps(msg["client"]))
+    (out / "remote.json").write_text(json.dumps({k: msg[k] for k in ("peer", "clock")}, indent=1))
+    return msg
+
+
+def connect_agent(address: tuple[str, int], wait: float) -> socket.socket:
+    """A control connection to the client agent at `address`, tried every 2 s until it answers or `wait` s pass."""
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            sock = socket.create_connection(address, timeout=10)
+        except OSError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(2)
+        else:
+            sock.settimeout(None)
+            return sock
+
+
+def client_agent(listen: tuple[str, int], out: Path, sessions: int, wait: float) -> int:
+    """`client-agent`: `client` on this host for `sessions` rehearsals in turn, each `rehearse --remote-client`'s
+    control connection to `listen`, waiting at most `wait` s for each. A session reads the warden host's clock
+    (`clock_offset`) and runs `client` on it, so its arrivals are on the warden's clock, and reads it again at its end;
+    session k's `client.json` is also kept under `out`/session-k. A session whose control connection fails is printed
+    and counted, and the agent goes on to the next; it returns 1 if any failed."""
+    out.mkdir(parents=True, exist_ok=True)
+    failed = 0
+    with socket.create_server(listen) as server:
+        server.settimeout(wait)
+        cs._announce({"listening": [listen[0], server.getsockname()[1]]})
+        for k in range(sessions):
+            sock, peer = server.accept()
+            with sock:
+                sock.settimeout(None)
+                try:
+                    session = recv_doc(sock)
+                    reserve_fds(len(session["traffic"]) + FD_MARGIN)
+                    before = clock_offset(sock)
+                    doc = asyncio.run(client(session["deployment"], session["traffic"], out / f"session-{k}",
+                                             clock=lambda shift=before["offset_s"]: time.time() + shift))
+                    send_doc(sock, {"client": doc, "clock": {"before": before, "after": clock_offset(sock)},
+                                    "peer": {"agent_host": socket.gethostname(), "warden_address": peer[0]}})
+                except (OSError, ValueError) as e:
+                    failed += 1
+                    print(json.dumps({"session": k, "failed": f"{type(e).__name__}: {e}"}), flush=True)
+                    continue
+            print(json.dumps({"session": k, "connections": len(doc["connections"]), "clock": before}), flush=True)
+    return 1 if failed else 0
+
+
 # The offline check.
 
 def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
@@ -1088,6 +1194,8 @@ def rehearse(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     params = _params(args)
     me = [sys.executable, str(HERE / "warden_serve.py")]
+    control = None if args.remote_client is None else connect_agent(args.remote_client, args.remote_wait)
+    host = "127.0.0.1" if control is None else control.getsockname()[0]
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
     try:
@@ -1121,7 +1229,7 @@ def rehearse(args) -> int:
             (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
             windows = grouped[-1]["windows"][1]
         with open(out / "serve.log", "w") as log:
-            serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
+            serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", f"{host}:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
@@ -1132,14 +1240,24 @@ def rehearse(args) -> int:
             if "listening" not in json.loads(serving.stdout.readline() or "{}"):
                 raise SystemExit("serve exited before listening (serve.log)")
             with open(out / "client.log", "w") as clog:
-                client_exit = subprocess.run(me + ["client", "--deployment", str(out / "deployment.json"),
-                                                   "--traffic", str(out / "traffic.json"), "--out", str(out)],
-                                             stdout=clog, stderr=subprocess.STDOUT).returncode
+                if control is None:
+                    client_exit = subprocess.run(me + ["client", "--deployment", str(out / "deployment.json"),
+                                                       "--traffic", str(out / "traffic.json"), "--out", str(out)],
+                                                 stdout=clog, stderr=subprocess.STDOUT).returncode
+                else:
+                    try:
+                        remote_client(control, json.loads((out / "deployment.json").read_text()), traffic, out)
+                        client_exit = 0
+                    except (OSError, ValueError) as e:
+                        print(f"the client agent at {args.remote_client}: {type(e).__name__}: {e}", file=clog)
+                        client_exit = 1
             serve_exit = serving.wait()
     finally:
         for proc in procs:
             if proc.poll() is None:
                 proc.terminate()
+        if control is not None:
+            control.close()
         shutil.rmtree(scratch)
     result = check(out) | {"upstream": list(upstream), "model": model, "exit": {"serve": serve_exit,
                                                                               "client": client_exit}}
@@ -1156,6 +1274,7 @@ def parser() -> argparse.ArgumentParser:
     f = sub.add_parser("fake", help="a stand-in for vLLM's streamed /v1/completions")
     s = sub.add_parser("serve", help="the warden in front of the server, for one run")
     c = sub.add_parser("client", help="the traffic, through the shim")
+    ca = sub.add_parser("client-agent", help="client on this host for rehearsals on another (rehearse --remote-client)")
     x = sub.add_parser("check", help="the offline check of a run")
     r = sub.add_parser("rehearse", help="traffic, then serve, client and check")
     pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no warden")
@@ -1163,7 +1282,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--dir", required=True, type=Path)
     for q in (k, r):
         q.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
-    for q in (t, s, c, r, pr):
+    for q in (t, s, c, ca, r, pr):
         q.add_argument("--out", required=True, type=Path)
     for q in (t, r, pr):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
@@ -1175,8 +1294,10 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--temperature", type=float, help="every request's temperature (default: drawn, 0, 0.7 or 1)")
         q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
     t.set_defaults(model="model")
-    for q in (f, s):
+    for q in (f, s, ca):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
+    ca.add_argument("--sessions", type=int, default=1, help="the rehearsals it serves, one after another")
+    ca.add_argument("--wait", type=float, default=3600.0, help="seconds it waits for each rehearsal to connect")
     for q in (f, r):
         q.add_argument("--token-ms", type=float, default=20.0, help="the fake endpoint's milliseconds a token")
         q.add_argument("--first-ms", type=float, default=100.0,
@@ -1213,6 +1334,11 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
+    r.add_argument("--remote-client", type=cs._address,
+                   help="the client agent's HOST:PORT (client-agent, on another host): the client runs there, and the "
+                        "warden listens on this host's address toward it")
+    r.add_argument("--remote-wait", type=float, default=1800.0,
+                   help="with --remote-client: seconds to keep trying the agent before the rehearsal starts")
     r.add_argument("--ids", action="store_true",
                    help="warden-form id requests (id_traffic), answered id-form (the fake's --id-payload): the scan's "
                         "traffic (scan_zk.py --warden-run)")
@@ -1281,6 +1407,9 @@ def main(argv=None) -> int:
         reserve_fds(len(traffic) + FD_MARGIN)
         asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))
         return 0
+    if args.command == "client-agent":
+        ar._quiet_runtime()
+        return client_agent(args.listen, args.out, args.sessions, args.wait)
     if args.command == "check":
         result = check(args.run)
         (args.run / "check.json").write_text(json.dumps(result, indent=1))

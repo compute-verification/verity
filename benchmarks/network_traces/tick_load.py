@@ -3,7 +3,7 @@ this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
-        [--secret-bit] [--paced-ms MS]
+        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--remote-client HOST:PORT]]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
@@ -27,14 +27,19 @@ when t's bit is 1, and half a bucket more when 0, so both bits write the same to
 their phase against the egress tick that makes bucket t. `jitter.json` in `--out` holds, per bucket, its bit, its lead,
 the tokens written in its slot, the client's offset of the bucket's arrival after its boundary (`peer.json`'s
 `bucket_lag_ms`: the proxy writes a bucket's cells in one write, so each cell's offset is its bucket's), the egress
-tick's lateness and, from a paced proxy (`certifier_serve.py --paced-ms`), when its pacer started the bucket's write
-after the bucket's time; and, for the buckets written in and the idle ones (the control), whether those offsets tell
-the bit apart (`distinguish`). `next` holds the same of each bucket's client offset against the next bucket's bit, over
+tick's lateness and, from a paced proxy (`certifier_serve.py --paced-ms`) or warden, when its pacer started the bucket's
+write and when the write ended, after the bucket's time; and, for the buckets written in and the idle ones (the
+control), whether those offsets tell the bit apart (`distinguish`). `next` holds the same of each bucket's client offset against the next bucket's bit, over
 the buckets whose next was written in: that bit's 0 writes half a bucket before the next boundary, so at a pacer
 offset of half a bucket (`certifier_serve.PACED_MS`) just before this bucket's write. It holds timing and the bits,
 none of the run's records, salts or keys.
 
 Run it inside one `research run --on auto --cpus N`, so the hog loads only the run's own cores.
+
+**With `--warden --remote-client HOST:PORT`** the receiver is on another host: `warden_serve.py client-agent` there,
+one session a rehearsal. The stub, the warden, its pacer and the hogs stay here, and the client's offsets are read on
+its clock moved by the offset it measured to this host's. `jitter.json`'s `remote` is the rehearsal's `remote.json`:
+the agent's host, and its clock's offset and round trip before and after.
 """
 
 from __future__ import annotations
@@ -401,33 +406,37 @@ def warden_jitter(run: Path, bits: SecretBits) -> dict:
     cells to reach a client (`warden_lags`), the buckets no connection had cells in left out, and each tick's lateness
     and the pacer's release starts from `warden.json`."""
     log = json.loads((run / "warden.json").read_text())
-    return _jitter(warden_lags(run), log["ticks_ms"], log.get("paced"), bits)
+    remote = json.loads((run / "remote.json").read_text()) if (run / "remote.json").exists() else None
+    return _jitter(warden_lags(run), log["ticks_ms"], log.get("paced"), bits) | {"remote": remote}
 
 
 def _jitter(lag: list[float | None], ticks: list[float], paced: dict | None, bits: SecretBits) -> dict:
-    starts = {t: s for t, _, s, _, _ in (paced or {}).get("releases", [])}
+    releases = (paced or {}).get("releases", [])
+    starts, ends = {t: s for t, _, s, _, _ in releases}, {t: e for t, _, _, e, _ in releases}
     written = Counter(t for t, _ in bits.writes)
     rows = []
     for t, x in enumerate(lag):
         bit, lead = bits.draw(t)
         rows.append([t, bit, round(lead * 1000, 3), written.get(t, 0), x, ticks[t] if t < len(ticks) else None,
-                     starts.get(t)])
+                     starts.get(t), ends.get(t)])
     late = [x for _, x in bits.writes]
     out = {"lead_ms": LEAD_MS, "bucket_ms": None if bits.grid is None else bits.grid[1] * 1000,
            "paced_ms": (paced or {}).get("ms"),
            "writes": {"n": len(late), "late_median_ms": _quantile(late, 0.5) if late else None,
                       "late_p99_ms": _quantile(late, 0.99) if late else None, "late_max_ms": max(late, default=None)},
            "columns": ["bucket", "bit", "lead_ms", "tokens_written", "client_offset_ms", "tick_lateness_ms",
-                       "release_start_ms"],
+                       "release_start_ms", "release_end_ms"],
            "buckets": rows}
     for name, keep in (("written", lambda r: r[3] > 0), ("idle", lambda r: r[3] == 0)):
         sel = [r for r in rows if keep(r) and r[4] is not None]
         out[name] = {"client": distinguish([(r[4], r[1]) for r in sel]),
                      "tick": distinguish([(r[5], r[1]) for r in sel if r[5] is not None]),
-                     "release": distinguish([(r[6], r[1]) for r in sel if r[6] is not None])}
+                     "release": distinguish([(r[6], r[1]) for r in sel if r[6] is not None]),
+                     "release_end": distinguish([(r[7], r[1]) for r in sel if r[7] is not None])}
     following = [(r, n) for r, n in zip(rows, rows[1:]) if n[3] > 0 and r[4] is not None]
     out["next"] = {"client": distinguish([(r[4], n[1]) for r, n in following]),
-                   "release": distinguish([(r[6], n[1]) for r, n in following if r[6] is not None])}
+                   "release": distinguish([(r[6], n[1]) for r, n in following if r[6] is not None]),
+                   "release_end": distinguish([(r[7], n[1]) for r, n in following if r[7] is not None])}
     quarter = LEAD_MS / 4
     out["written_by_lead"] = {
         f"{q * quarter:g}-{(q + 1) * quarter:g}": distinguish([(r[4], r[1]) for r in rows if r[3] > 0 and r[4] is not None
@@ -457,7 +466,14 @@ def main(argv=None) -> int:
                          "second, each of at most --tokens, windows of --window buckets")
     ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")
     ap.add_argument("--window", type=int, default=60, help="with --warden: the warden's window, in buckets")
+    ap.add_argument("--remote-client", metavar="HOST:PORT",
+                    help="with --warden: the client agent on another host (warden_serve.py client-agent), the "
+                         "receiver; the stub, the warden and the hogs stay on this one")
+    ap.add_argument("--remote-wait", type=float, default=1800.0,
+                    help="with --remote-client: seconds to keep trying the agent")
     a = ap.parse_args(argv)
+    if a.remote_client and not a.warden:
+        ap.error("--remote-client: with --warden")
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
     bits = SecretBits(a.out / "rehearsal", os.urandom(64), warden=a.warden) if a.secret_bit else None
@@ -468,7 +484,9 @@ def main(argv=None) -> int:
         command = [sys.executable, str(HERE / "warden_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
                    "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
                    str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
-                   "--out", str(a.out / "rehearsal"), *paced]
+                   "--out", str(a.out / "rehearsal"), *paced,
+                   *(["--remote-client", a.remote_client, "--remote-wait", str(a.remote_wait)] if a.remote_client
+                     else [])]
     else:
         command = [sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
                    "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),

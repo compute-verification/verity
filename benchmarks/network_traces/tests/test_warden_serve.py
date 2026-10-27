@@ -3,8 +3,9 @@ the offline check of a run whose warden is driven tick by tick on a `VirtualCloc
 key: the check accepts the run, whose server got each request with its release order under the run id `deployment.json`
 names, and refuses a record that isn't what was certified, a cell that reached its client in
 another bucket, and a response that isn't the record's; a window in which the warden refused a connection is certified
-and signed nowhere; and a window's slow commit, which faults the next window when it runs in the warden's process,
-moves no tick in `serve`'s publisher process."""
+and signed nowhere; a window's slow commit, which faults the next window when it runs in the warden's process,
+moves no tick in `serve`'s publisher process; and a client agent on another host reads the warden host's clock over
+its control connection and hands back its session."""
 
 from __future__ import annotations
 
@@ -743,3 +744,35 @@ def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_i
     held = sorted(os.listdir("/proc/self/fd"))
     n = ws.reserve_fds(table() + 1)
     assert table() >= n and sorted(os.listdir("/proc/self/fd")) == held
+
+
+def test_a_client_agent_reads_the_warden_hosts_clock_and_hands_back_its_session(tmp_path):
+    """`clock_offset` takes the shortest of its round trips, and its midpoint against the warden host's reading: here
+    round trip 7, 0.5 against every other's 2, and the warden's clock 1000 ahead at its midpoint (1000.25 at the rest's).
+    `remote_client` sends the session, answers each ping with its clock, and writes what the agent returns."""
+    import socket
+    import threading
+
+    rtt = [0.5 if i == 7 else 2.0 for i in range(ws.PINGS)]
+    agent_clock = iter(x for i in range(ws.PINGS) for x in (10.0 * i, 10.0 * i + rtt[i]))
+    warden_clock = iter(10.0 * i + rtt[i] / 2 + 1000 + (0 if i == 7 else 0.25) for i in range(ws.PINGS))
+    warden_side, agent_side = socket.socketpair()
+    got: dict = {}
+
+    def agent() -> None:
+        with agent_side:
+            got["session"] = ws.recv_doc(agent_side)
+            got["before"] = ws.clock_offset(agent_side, clock=lambda: next(agent_clock))
+            ws.send_doc(agent_side, {"client": {"connections": [{"index": 0}]}, "clock": {"before": got["before"]},
+                                     "peer": {"agent_host": "b"}})
+
+    thread = threading.Thread(target=agent)
+    thread.start()
+    with warden_side:
+        ws.remote_client(warden_side, {"origin_unix": 1.5}, [{"at": 0.25}], tmp_path, clock=lambda: next(warden_clock))
+    thread.join()
+    assert got["session"] == {"deployment": {"origin_unix": 1.5}, "traffic": [{"at": 0.25}]}
+    assert got["before"] == {"offset_s": 1000.0, "rtt_s": 0.5}
+    assert json.loads((tmp_path / "client.json").read_text()) == {"connections": [{"index": 0}]}
+    assert json.loads((tmp_path / "remote.json").read_text()) == {"peer": {"agent_host": "b"},
+                                                                   "clock": {"before": got["before"]}}
