@@ -1,9 +1,9 @@
-"""[R16 rev F-r16-20 / M-0400; fix pin] A stochastic row's selector (GumbelTopPTokenSelect_v1) has no registered evaluator, so the sampled
+"""A stochastic row's selector (GumbelTopPTokenSelect_v1) has no registered evaluator, so the sampled
 replay excludes its output VUs from the population under the text `no registered evaluator for GumbelTopPTokenSelect_v1` -- the SAME
 why-class ('no-evaluator') as the ruled applicability domain (RoPE_v1, sampled_replay.NOT_YET), which `_complete_replay_population_gap`
-did not gate (F-r16-02 gated plane-fed + interior-composed-v2 only).  The selector's output is THE value a stochastic row adds and is
-reproducible from the committed logits only with the seed AND the top-p split count S (reqval M-0305 / REQ-03), so until REQ-03 lands and a
-derived_rows evaluator exists, form (A) cannot replay it.  On the first stochastic row of record (stoch M-0366 / M-0387, int-2) form (B)
+did not gate (it gated plane-fed + interior-composed-v2 only).  The selector's output is THE value a stochastic row adds and is
+reproducible from the committed logits only with the seed AND the top-p split count S (REQ-03), so until REQ-03 lands and a
+derived_rows evaluator exists, form (A) cannot replay it.  On the first stochastic row of record form (B)
 value-checked the 32 sampled ids (compared_by_family.sampled_token_ids 32 == 32 (step, request) pairs, 0 mismatch, attribution complete),
 so C2 held through (B) + Match.  On a stochastic COMMIT-ONLY rerun WITHOUT --match-dir the same Commit PASSed with the 32 ids value-checked by
 NEITHER form: C1 / C3 bind them, nothing computes them -- a vacuous pass path (not exercised live).
@@ -13,7 +13,7 @@ form-(B)-REQUIRED gap with a FAMILY-TARGETED test -- the oracle present, its req
 == the (step, request) pairs (>= the excluded selector VUs), none not-compared, 0 mismatch -> PASS carrying the note; else FAIL by name.
 NOT `_form_b_complete_over_values`: the stochastic row's oracle is value-partial on instance_outputs (the selector's own instance output
 has no fold instance) and `result` is None there -- that partiality is not about the sampled ids.  The NOT_YET domain stays ungated; the
-plane-fed FAIL (F-r16-07) still leads when both are present; greedy rows (TokenSelect_v1 HAS an evaluator) are byte-identical."""
+plane-fed FAIL still leads when both are present; greedy rows (TokenSelect_v1 HAS an evaluator) are byte-identical."""
 from __future__ import annotations
 
 import pytest
@@ -62,8 +62,8 @@ def test_the_class_label_is_the_domains_and_the_family_is_not_in_the_domain():
     """The finding's mechanism: the selector exclusion reads 'no-evaluator' like RoPE_v1 does, but GumbelTopPTokenSelect_v1 is neither in
     NOT_YET nor in EVALUATORS -- the population text is the only handle, and the gate reads it."""
     assert why_class(K_SEL) == "no-evaluator" == why_class(K_ROPE)
-    assert "GumbelTopPTokenSelect_v1" not in NOT_YET                        # never the domain: replayed once stoch's evaluator is on the tree
-    # (int-4, stoch bd92c6291 / M-0440 -- then the population carries no K_SEL and this gate is the safety net), gated by name before
+    assert "GumbelTopPTokenSelect_v1" not in NOT_YET                        # never the domain: replayed once the selector's evaluator is on the tree
+    # (then the population carries no K_SEL and this gate is the safety net), gated by name before
     assert "TokenSelect_v1" in EVALUATORS                                   # greedy selectors are replayed; no gap on greedy rows
 
 
@@ -75,11 +75,11 @@ def test_stochastic_commit_only_rerun_without_form_b_fails_by_name():
 
 
 def test_the_first_stochastic_row_of_record_passes_carrying_the_note():
-    """stoch M-0366 / M-0387 as graded by rev M-0400: C2 holds through (B) + Match; the PASS text says so instead of a bare PASS."""
+    """C2 holds through (B) + Match; the PASS text says so instead of a bare PASS."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_STOCH, "oracle_compare": OC_STOCH}, True, min_openings=64)
     assert ok, why
     assert why.startswith("PASS (selector outputs x32 (GumbelTopPTokenSelect_v1 x32) not replayed (no evaluator; S not committed until REQ-03), value-checked by form (B) [sampled_token_ids compared 32/32 (step, request) pairs, not compared 0, 0 mismatch]"), why
-    # value-partial on instance_outputs is NOT the test here (rev M-0400: not _form_b_complete_over_values) -- result None passes the family test
+    # value-partial on instance_outputs is NOT the test here (not _form_b_complete_over_values) -- result None passes the family test
     note, fail = _complete_replay_population_gap(SR_STOCH, OC_STOCH)
     assert fail is None and note and "sampled_token_ids compared 32/32" in note
 
@@ -122,19 +122,19 @@ def test_greedy_rows_and_the_not_yet_domain_are_unchanged():
     assert ok and why.startswith("PASS"), why                                      # no oracle, no note about selectors
     assert "selector" not in why and "F-r16-20" not in why
     assert _complete_replay_population_gap(SR_GREEDY, None) == (None, None)
-    # an OLDER record's RoPE / attention labels by name (K_ROPE, K_ATTN: RoPE_v1 left NOT_YET in R17 -- dense, ruling R17-9 -- and
-    # Attention_v3 / Attention_v2 in R17-11; every replay on this tree evaluates those rows) are neither the domain nor a gated gap: the
+    # an OLDER record's RoPE / attention labels by name (K_ROPE, K_ATTN: RoPE_v1, Attention_v3 and Attention_v2 have
+    # left NOT_YET; every replay on this tree evaluates those rows) are neither the domain nor a gated gap: the
     # verdict is the one its tree gave, a Commit-only rerun evaluates the rows
     assert not ({"RoPE_v1", "Attention_v3", "Attention_v2"} & set(NOT_YET))
     sr = {**SR_GREEDY, "population": {**SR_GREEDY["population"], "not_evaluable": {K_ROPE: 10, K_ATTN: 5}}}
     assert _complete_replay_population_gap(sr, None) == (None, None)
-    # a would-be 'no registered evaluator for RoPE_v1' on a tree that had it in neither table WOULD be gated like Gemm_v2 was (F-r16-20b)
+    # a would-be 'no registered evaluator for RoPE_v1' on a tree that had it in neither table WOULD be gated like Gemm_v2 was
     sr = {**SR_GREEDY, "population": {**SR_GREEDY["population"], "not_evaluable": {"no registered evaluator for RoPE_v1": 10}}}
     assert _complete_replay_population_gap(sr, None)[1] is not None
 
 
 def test_earlier_fails_lead_the_plane_fed_fail_first():
-    """F-r16-07's plane-fed FAIL (neither form covers the planes) still names first when a stochastic MoE row carries both gaps."""
+    """The plane-fed FAIL (neither form covers the planes) still names first when a stochastic MoE row carries both gaps."""
     k_06f = "fed by moe_block_stream planes (SiluMul_v1@experts): row -> plane mapping not in this replay (MAN-06f, v2)"
     sr = {**SR_STOCH, "population": {**SR_STOCH["population"], "not_evaluable": {K_ROPE: 9184, k_06f: 64, K_SEL: 32}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": sr, "oracle_compare": OC_STOCH}, True, min_openings=64)
@@ -153,4 +153,4 @@ def test_a_selector_family_alias_is_read_by_the_token_select_rule_not_by_a_list(
     assert not ok and "32 selector output VUs (GumbelTokenSelect_v1 x32)" in why, why
     sr2 = {**SR_STOCH, "population": {**SR_STOCH["population"], "not_evaluable": {K_ROPE: 9184, "no registered evaluator for Gemm_v2": 7}}}
     note, fail = _complete_replay_population_gap(sr2, None)
-    assert fail is not None and "selector" not in fail and "F-r16-20" not in fail   # F-r16-20b's gate (test_commit_verdict_hopper_no_evaluator_gap.py)
+    assert fail is not None and "selector" not in fail and "F-r16-20" not in fail   # the Hopper gate (test_commit_verdict_hopper_no_evaluator_gap.py)

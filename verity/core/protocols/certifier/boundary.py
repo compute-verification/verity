@@ -34,8 +34,8 @@ the field with `Boundary.record`, and the verifier reads it with `parse`.
   `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
 
 Every bucket's gates are the same whatever the load, so no arrival step, prompt length or occupancy is public: a
-request's token ids are values the window's units parse from the cells, like every other value (top's gate-0 ruling, 25
-Oct: arrival steps and prompt lengths stay private, the certifiers' observations are witness). The I/O tie reads row t of
+request's token ids are values the window's units parse from the cells, like every other value (arrival steps and
+prompt lengths stay private: the certifiers' observations are witness). The I/O tie reads row t of
 link ℓ at unit `Boundary.unit` (``reads_from`` of a member's `warden_rows.bucket_port` is its unit of bucket t, less t).
 
 **The check** (`refusal`, the verifier's), by `Layout.Fits`' conjuncts over the horizon: every egress gate is one `C`
@@ -51,13 +51,12 @@ that fits only at the gate grain is refused. In the scan, ingress unit t's state
 input and its view output egress unit t's state input: each chain is one registered leaf, written by one unit and read
 by the other under one `b ‖ c`, so the record declares it a wire.
 
-`Fits` stays structural (top's ruling, 25 Oct: semantic Fits is dropped): a served window fits in the step-indexed scan's
-form (`ingress_scan`, note:network-accounting/20261025T0830Z-report-net68-scan-router),
-whose bucket t unit reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s,
-the empty state, constants of its circuit), and whose Programs start at fixed
-boundaries and read their slots there, so an egress bucket reaches ingress only through earlier buckets' state, whatever
-the arrival steps and prompt lengths. A window in any other form, such as an egress bucket that reads every request's
-ids, is refused: the verifier gains no form ahead of its proof. The record must also name the boundary's rows, and no
+`Fits` is structural, never semantic: a served window fits in the step-indexed scan's form (`ingress_scan`), whose
+bucket t unit reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s, the
+empty state, constants of its circuit), and whose Programs start at fixed boundaries and read their slots there, so
+an egress bucket reaches ingress only through earlier buckets' state, whatever the arrival steps and prompt lengths. A
+window in any other form, such as an egress bucket that reads every request's ids, is refused: the verifier gains no
+form ahead of its proof. The record must also name the boundary's rows, and no
 others, as its ``external`` ports.
 """
 from __future__ import annotations

@@ -4,11 +4,10 @@ import Definitions.Accounting.Bandwidth.Game
 # The bandwidth audit v0 with a second secret the chip's view determines
 
 `Game.lean`'s game for a device that also holds `z`, `n` bits uniform and independent of the store and the oracle, in
-the sense of bandwidth additivity (Mbw, section 5 of `note:console/20261012T0645Z-draft-actual-circuit-model`): the
-chip's view in the window (its state at the seed and every answer it read) determines `z`. The device lays out its
-on-chip state, device memory and side sources from the store and `z`, and its chip outputs `z` along with its tags.
-That is the same as the view determining `z`, since a chip program's output is any function of its state and of the
-answers it read.
+the sense of bandwidth additivity (the actual-circuit model's Mbw): the chip's view in the window (its state at the seed
+and every answer it read) determines `z`. The device lays out its on-chip state, device memory and side sources from the
+store and `z`, and its chip outputs `z` along with its tags. That is the same as the view determining `z`, since a chip
+program's output is any function of its state and of the answers it read.
 -/
 
 namespace Bandwidth

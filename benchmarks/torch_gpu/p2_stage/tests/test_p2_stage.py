@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -85,7 +86,7 @@ def test_blocks_of():
         L.blocks_of(-1, 2)
 
 
-def test_store_layout_is_cmp95s_at_the_frozen_shape():
+def test_store_layout_at_the_frozen_shape():
     """The frozen layout's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
     262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
     68,011,580 over 2,043 blocks."""
@@ -655,3 +656,13 @@ def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypa
     L.segment_path(root, 1, "json").unlink()
     with pytest.raises(SystemExit, match="not done"):
         full.main(run + ["--out", str(tmp_path / "o4")])
+
+
+def test_every_kept_path_has_a_reason_in_keep_json():
+    """session.sh keeps each node path under keep.json's owner and expiry with that path's reason; a `keep PATH WHAT`
+    whose WHAT has no reason would keep nothing."""
+    keep = json.loads((HERE / "keep.json").read_text())
+    whats = re.findall(r'^\s*keep "\$\w+" (\w+)$', (HERE / "session.sh").read_text(), re.M)
+    assert sorted(whats) == sorted(keep["why"])
+    assert keep["owner"].startswith("@") and keep["expires"]
+    assert all("{layer}" in why for why in keep["why"].values())

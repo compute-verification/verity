@@ -101,11 +101,12 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 _VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.silicon (and verity) from the shipped tree
-for _src in (_VERITY_SRC, _VERITY_SRC / "catalog"):
+for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 import k32  # noqa: E402
 import model5  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 MAX_TILES_PER_CALL = 1 << 14
 
@@ -348,7 +349,7 @@ class Probe:
         return {"device": name.value.decode(), "compute_capability": f"{major.value}.{minor.value}",
                 "nvidia_smi": smi.stdout.strip() if smi.returncode == 0 else None,
                 "driver": fields[1] if len(fields) > 1 else None, "gpu_uuid": cuda_uuid or (fields[3] if len(fields) > 3 else None),
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES,
                 "hostname": platform.node(), "has_mxf4": bool(self.lib.has_mxf4()), "backend": "tcgen05" if self.tcgen05 else "mma.sync"}
 
     def clocks(self, uuid: str | None) -> dict | None:
@@ -597,7 +598,8 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def acc_random(n, lo=-30, hi=40):
         return f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
     yield "random_random_scales", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk)), scales((n, 8, nblk)), acc_random(n)
@@ -745,7 +747,8 @@ def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def pm_zero(shape):
         return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
     # (c) +-0 against +-0 operands, (d) every product -0 x -0, (e) pairs cancelling exactly inside every group, (f) group 0
@@ -1145,7 +1148,8 @@ def twin_summary(D, models: dict) -> dict:
 
 def families_bf16(rng, n_random: int):
     k = 16
-    cast = lambda x: to_bf16_bits(x.astype(np.float32))
+    def cast(x):
+        return to_bf16_bits(x.astype(np.float32))
     n = n_random
     yield "randn_random_acc", cast(rng.standard_normal((n, 16, k))), cast(rng.standard_normal((n, 8, k))), None, None, \
         f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-20, 21, (n, 16, 8)))).astype(np.float32))
@@ -1230,7 +1234,7 @@ class FakeProbe:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "nvidia_smi": None, "driver": None,
-                "gpu_uuid": "GPU-fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "hostname": platform.node(),
+                "gpu_uuid": "GPU-fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES, "hostname": platform.node(),
                 "has_mxf4": True, "backend": "fake"}
 
     def clocks(self, uuid):
@@ -1506,7 +1510,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--chain2 is a tcgen05 option")
     if args.chain < 1 or (args.chain > 1 and instr not in ROW_KIND):
         ap.error("--chain L (L >= 2) is for the mma.sync rows " + ", ".join(sorted(ROW_KIND)))
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
     if args.sass_only:
         args.sass_check = True
@@ -1763,7 +1767,7 @@ def main(argv: list[str] | None = None) -> int:
     results["failures"] = failures
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         agree = {}
         first_mism: list = []

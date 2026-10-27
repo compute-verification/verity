@@ -8,7 +8,7 @@ One call a linear and M, every row live, its operands `shape.whole`'s (the demo'
 scales `shape.weight_scales` and `activation_scales`. The arms, timed by CUDA events one call at a time, in an order that
 rotates each rep:
 
-* `plain`: s8_linear's `int_mm.linear(x, sx, w, sw)` (#4472, the exact W8A8 linear's int_mm backend: `torch._int_mm` and
+* `plain`: s8_linear's `int_mm.linear(x, sx, w, sw)` (the exact W8A8 linear's int_mm backend: `torch._int_mm` and
   the fused epilogue, the eager one where there is no Triton);
 * `int_mm`: `torch._int_mm` alone, the s32 GEMM;
 * `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py): s8_linear's exact linear, wgmma.scaled_mm at its tuned
@@ -40,8 +40,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shape as S
 import units as UN
 

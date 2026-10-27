@@ -15,8 +15,8 @@ aren't 4-byte aligned).  ``lens`` (B,) int32 in 0..T, default T each: words of p
 sequence of no keys gets O = +0.  ``check_lens`` (default True) refuses lens outside [0, T], at the price of a device sync;
 pass False under a CUDA graph, where the caller vouches for them.  ``out`` takes a contiguous bf16 tensor of the result's shape and writes
 every word of it.  ``warps`` (1, 2, 4 or 8 a CTA; default attn.LAUNCH's) decides only which warp runs a tile, never a word.
-``path`` "fast" (the default) launches attn.LAUNCH's tiling, and "ref" the reference kernels (the _ref kernels, which
-were attn_ref's until HASH-32: slow and tuned for nothing), for the same words.
+``path`` "fast" (the default) launches attn.LAUNCH's tiling, and "ref" the reference kernels (the _ref kernels, slow and
+tuned for nothing), for the same words.
 Without lens each call is one launch; with lens, S is filled before the launch (one more pass over S) and, without
 check_lens, O is zeroed first (one over O).  Launches are on torch's current stream, from the cubin build.sh ships:
 ATTN_BF16_CUBIN, else attn_bf16.<arch>.cubin beside this file (sm_90a on an H100/H200, sm_120a on an RTX PRO 6000).
@@ -37,8 +37,8 @@ GROUP = {"s16": 16, "h16": 16, "h8": 8}
 #: the s16 kernels' most keys a query sees, and PV's largest K
 S16_KEYS = 32
 #: each op's launch: (tiling, warps a CTA, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
-#: serve; run.py's timing sweeps the alternatives (r20261026-015211-8087 on the H200 at the frozen shape: QK^T and PV each
-#: fastest with every group of a sequence in one warp, at M = 4,096, 16,384 and 20,480 within 3%)
+#: serve; run.py's timing sweeps the alternatives (on the H200 at the frozen shape, QK^T and PV are each fastest with every
+#: group of a sequence in one warp, at M = 4,096, 16,384 and 20,480 within 3%)
 LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 1, 16)}
 #: qk's and pv's ``path``: attn.LAUNCH's tiling, or the reference kernels
 PATHS = ("fast", "ref")
@@ -257,7 +257,6 @@ def qk(q, k, lens=None, *, out=None, fill: int = NEG_INF, warps: int | None = No
 def pv(p, v, lens=None, *, out=None, kpv: int = PAD_K, warps: int | None = None, check_lens: bool = True,
        path: str = "fast"):
     """O (B, H, D) = p (B, H, T) times v (B, T, D) or (B, Hkv, T, D), PV's K = max(kpv, pad16(lens)); see the module."""
-    import torch
 
     p, v = _words(p, "p", False), _kv4(_words(v, "v", False))
     if p.dim() != 3 or v.dim() != 4 or v.shape[0] != p.shape[0] or v.shape[2] != p.shape[2]:

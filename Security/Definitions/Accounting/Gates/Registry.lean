@@ -55,11 +55,11 @@ mask (`PouwOrBit`, `PouwMask32`, `PouwH1Tile_v4`) and J10-R's call-scope noise (
 * **refused:** any id neither list names (`classOf id = none`: another version of a family, or a numeral it lacks,
   among them), and any gate whose operation isn't in its primitive's class (`Classed`).
 
-`classOf` is what property/v1's closed table is to agree with, id for id. It agrees with the red team's closed table
-on every id but `PouwDot16U8S8_v1`, free here
-under `Proven` as the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts it (`×65536` on the
-s16 reading, no wrap, as ruled), and the table's nine other `other` ids, roundings
-here: the ruling caps three classes and no fourth, and both are budgeted the same.
+`classOf` is what property/v1's closed table is to agree with, id for id. It agrees with
+`benchmarks/property_redteam/cases.py`'s closed table on every id but `PouwDot16U8S8_v1`, free here under `Proven` as
+the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts it (`×65536` on the s16 reading, no wrap,
+as ruled), and the table's nine other `other` ids, roundings here: the ruling caps three classes and no fourth, and both
+are budgeted the same.
 -/
 
 namespace Accounting.Gates

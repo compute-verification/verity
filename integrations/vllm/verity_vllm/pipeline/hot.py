@@ -1,4 +1,4 @@
-"""Hot Commit worker (BRIEF §5 / §8 #4): one commit_delta process serves consecutive Commit jobs of the SAME engine key
+"""Hot Commit worker: one commit_delta process serves consecutive Commit jobs of the SAME engine key
 instead of building a fresh vLLM engine per invocation.  Not a distributed service: one worker per pod, files under one directory,
 the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
 
@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_file
 
 SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
@@ -75,7 +75,7 @@ RELEASE_JSON = Path(settings.HOT_RELEASE_JSON)
 
 
 def release_json_sig() -> str | None:
-    """(tag, commit) of the tree on the pod, or None when there is no RELEASE.json (a lane tree run by hand)."""
+    """(tag, commit) of the tree on the pod, or None when there is no RELEASE.json (a tree run by hand)."""
     try:
         d = json.loads(RELEASE_JSON.read_text())
         return f"{d.get('tag')}@{str(d.get('commit'))[:9]}"
@@ -136,13 +136,13 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
         paths.append(hs)
     ncb = settings.NATIVE_COLLECT_BUILD
     if ncb:
-        # [R17 rel M-0803] NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
+        # NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
         # name that one when the digest is computable here, else every .so one level down (plus the flat legacy location)
         keyed: list[str] = []
         try:
-            from verity_vllm.commit.committer import native_collect as _nc, native_jit as _nj
+            from verity_vllm.commit.committer import native_ext as _ne, native_jit as _nj
 
-            keyed = sorted(glob.glob(os.path.join(_nj.keyed_build_dir(ncb, _nc.build_source_digest()), "*.so")))
+            keyed = sorted(glob.glob(os.path.join(_nj.keyed_build_dir(ncb, _ne.build_source_digest()), "*.so")))
         except Exception:  # noqa: BLE001 -- no torch / no sources here: fall back to the directory listing
             keyed = []
         paths += keyed or sorted(glob.glob(os.path.join(ncb, "*.so")) + glob.glob(os.path.join(ncb, "*", "*.so")))
@@ -166,7 +166,7 @@ def engine_identity(argv: list[str]) -> dict[str, Any]:
     wl_path = _argval(argv, "--workload", "workloads/workload_cov_b0_b1_c256.json")
     wl: dict[str, Any] = {}
     with contextlib.suppress(Exception):
-        wl = json.loads(Path(wl_path).read_text())
+        wl = json.loads(workload_file(wl_path).read_text())
     ck = _argval(argv, "--checkpoints", "manifests/checkpoints.json")
     return {"workload": {k: wl.get(k) for k in WORKLOAD_ENGINE_KEYS if k in wl}, "workload_path": wl_path,
             "checkpoints_sha256": sha256_file(ck) if os.path.exists(ck) else f"missing:{ck}",
@@ -403,7 +403,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
 # ---------------------------------------------------------------------------------------------------------------------------- server
 # committer attributes that own device / pinned memory (native_collect window ring + scratch, the FA2/FA3 tap buffers of the hidden
 # sources, the staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
-# explicitly after `close()` so the caching allocator can hand the memory to the next job (R16 sys: +2.3 GiB allocated per hot job otherwise).
+# explicitly after `close()` so the caching allocator can hand the memory to the next job (else +2.3 GiB stays allocated per hot job).
 DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_levels", "_done", "_layouts", "_streams",
                 "_metas_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
 

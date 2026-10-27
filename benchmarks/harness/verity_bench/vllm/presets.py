@@ -52,7 +52,7 @@ PRECISIONS = ("bfloat16", "fp8", "int8_exact")
 ENGINE_SETTINGS = (
     "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
     "block_gpu_memory_utilization", "resident_kv_cache_memory_bytes", "block_kv_cache_memory_bytes", "capture_sizes",
-    "serving_defaults", "cuda_graphs", "enforce_eager",
+    "serving_defaults", "attention_backend", "attention_config", "cuda_graphs", "enforce_eager",
 )
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"

@@ -44,6 +44,7 @@ import numpy as np
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+from verity_config.settings import of
 
 __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "device_lib", "digests", "host_lib", "words"]
 
@@ -53,8 +54,9 @@ DEVICE_SOURCES = (POUW_SHA, HERE / "sha512x.cuh", HERE / "rows.cuh", HERE / "row
 HOST_SOURCES = (HERE / "sha512x.cuh", HERE / "rows.cuh", HERE / "rows_host.cpp")
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-lineinfo", "-Xptxas", "-v")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
-BUILD_DIR = Path(os.environ.get("SHA512_ROWS_BUILD") or Path.home() / ".cache" / "verity" / "sha512_rows")
-DEFAULT_VARIANT = os.environ.get("SHA512_ROWS_V", "0000")
+settings = of(__file__)
+BUILD_DIR = Path(settings.SHA512_ROWS_BUILD or Path.home() / ".cache" / "verity" / "sha512_rows")
+DEFAULT_VARIANT = settings.SHA512_ROWS_V
 
 INST = hm96.SHA512
 KEY = INST.default_key

@@ -12,16 +12,16 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import add as AD  # noqa: E402
-import argmax as AM  # noqa: E402
-import build_check  # noqa: E402
-import fixture as F  # noqa: E402
-import quant as Q  # noqa: E402
-import rmsnorm as RN  # noqa: E402
-import softmax as SM  # noqa: E402
-import sweep as SW  # noqa: E402
-import words as W  # noqa: E402
-from verity.ml.circuits.ops import fp32, mufu, prims  # noqa: E402
+import add as AD
+import argmax as AM
+import build_check
+import fixture as F
+import quant as Q
+import rmsnorm as RN
+import softmax as SM
+import sweep as SW
+import words as W
+from verity.ml.circuits.ops import fp32, mufu, prims
 
 F32_SPECIALS = [0x00000000, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001, 0x7F800001, 0x00000001, 0x80000001,
                 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x3F800000, 0xBF800000, 0x3F800001, 0x4B000000, 0x42FE0000]

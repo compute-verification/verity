@@ -108,7 +108,7 @@ class Shape:
         return rec
 
 
-def stage(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, kern) -> dict:
+def sweep(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, kern) -> dict:
     fns, recs = {}, {}
     for cfg in dict.fromkeys(cfgs):
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "cfg": str(cfg)}
@@ -165,10 +165,10 @@ def main() -> int:
         for m in ms:
             t0 = time.time()
             shape = Shape(n, k, m)
-            med = stage(out, shape, coarse(m, n, kern), 3, clock, "coarse", kern)
-            med = stage(out, shape, refine(best(med, a.top, kern), kern), 3, clock, "refine", kern)
+            med = sweep(out, shape, coarse(m, n, kern), 3, clock, "coarse", kern)
+            med = sweep(out, shape, refine(best(med, a.top, kern), kern), 3, clock, "refine", kern)
             base = kern.baseline(m, n, k)
-            med = stage(out, shape, best(med, a.top, kern) + [base], a.reps, clock, "final", kern)
+            med = sweep(out, shape, best(med, a.top, kern) + [base], a.reps, clock, "final", kern)
             win = best(med, 1, kern)
             row = [m, str(win[0]) if win else None, med.get(str(win[0])) if win else None, med.get(str(base))]
             table.setdefault(f"{n},{k}", []).append(row)

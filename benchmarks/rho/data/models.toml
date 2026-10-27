@@ -120,6 +120,23 @@ attention = [["q", 1536, 1536, 28, 28], ["k", 1536, 256, 28, 28], ["v", 1536, 25
 dense = [["gate", 1536, 8960, 28, 28], ["up", 1536, 8960, 28, 28], ["down", 8960, 1536, 28, 28]]
 head = [["head", 1536, 151936, 1, 1]]
 
+[model.smollm2-135m]
+n_total = { value = 134515008, unit = "param", source = "HuggingFaceTB/SmolLM2-135M config.json: the 49152 x 576 embedding tied to the LM head, 30 layers of 3,538,944 matrix weights and two 576-wide norms, and the final norm", status = "derived" }
+n_active = { value = 134515008, unit = "param", source = "dense: every parameter per token, the LM head tied to the embedding", status = "derived" }
+d_model = { value = 576, source = "HuggingFaceTB/SmolLM2-135M config.json hidden_size", status = "datasheet" }
+layers = { value = 30, source = "HuggingFaceTB/SmolLM2-135M config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 49152, source = "HuggingFaceTB/SmolLM2-135M config.json vocab_size", status = "datasheet" }
+legs = { value = 576, source = "the least d_in of a layer's matrices: d_model", status = "derived" }
+fanout = { value = 3072, source = "the MLP input: 2 x 1536 (SwiGLU gate and up)", status = "derived" }
+tied_embeddings = true
+
+# HuggingFaceTB/SmolLM2-135M config.json (HF LlamaForCausalLM): 9 heads of 64, 3 kv heads, SwiGLU intermediate 1536, the
+# LM head tied to the embedding.
+[model.smollm2-135m.matrices]
+attention = [["q", 576, 576, 30, 30], ["k", 576, 192, 30, 30], ["v", 576, 192, 30, 30], ["o", 576, 576, 30, 30]]
+dense = [["gate", 576, 1536, 30, 30], ["up", 576, 1536, 30, 30], ["down", 1536, 576, 30, 30]]
+head = [["head", 576, 49152, 1, 1]]
+
 # Runs: the targets. kind is one of instances.RUN_KINDS; compute, when given, is the reference algorithm's FLOPs.
 
 [run.kimi-k2-pretrain]
@@ -171,3 +188,12 @@ step_tokens = { value = 2.6e5, unit = "token", source = "a hundredth of the run'
 model = "kimi-k2"
 kind = "sft"
 tokens = { value = 1e10, unit = "token", source = "a frontier SFT stage of millions of examples at a few thousand tokens each", status = "assumed" }
+
+# One optimizer step, measured as a Boolean circuit (data/circuits.toml circuit.smollm2-135m-step): 8 packed sequences of
+# 512 tokens under SFT cross-entropy.
+[run.smollm2-135m-step]
+model = "smollm2-135m"
+kind = "sft"
+tokens = { value = 4096, unit = "token", source = "one optimizer step of B = 8 sequences of S = 512 tokens (circuit.smollm2-135m-step batch x seq_len)", status = "declared" }
+compute = { value = 3305840836608, unit = "FLOP", source = "6 x n_active x tokens: 6 x 134,515,008 x 4,096 (instances.Run.target's convention, attention's products left out)", status = "derived" }
+step_tokens = { value = 4096, unit = "token", source = "one optimizer step, one micro-batch", status = "declared" }
