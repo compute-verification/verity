@@ -42,8 +42,8 @@ So the restated facts constrain every round:
   commit string, the readers take the first holder's; a holder that opens it otherwise shows a collision among the
   calls they record, so that is the escape.
 
-`FinalOpens` gives way to `Claims.Recursion.Bound.LastBinds`: the view's last message isn't the run's, and two accepted
-views that differ only there collide among `IVStar`'s calls.
+`FinalOpens` gives way to `Claims.Recursion.Bound.LastBindsEC`: the view's last message isn't the run's, and two
+accepted views that differ there in what `E*` reads collide among `IVStar`'s calls.
 
 `LayoutB` is its own record here, the deployed layout's fields with the pieces added (segments of constant bytes and
 hidden values, the statement's fixed rounds), so the statement builds on `VStar.Layout` as it stands. It reads each
