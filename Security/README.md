@@ -58,9 +58,26 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
 | Network certifier | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipe | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| Remote bandwidth audit | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB (the remote bandwidth audit) | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
+
+## The remote protocol in Lean
+
+Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
+site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
+accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and the network certifier.
+
+- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement for the remote
+  deployment is not on `main` yet.
+- **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZ`, `LinkCRZC`,
+  `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
+  `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
+  drawn by the auditor's challenger after the commitment it challenges, with no Fiat–Shamir and no retries.
+  Auditor-trusted devices (network certifiers, memory challengers) are onsite's; remote has none at the site.
+- **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth: the remote
+  bandwidth audit (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered
+  store. It is a different protocol from the remote composite, and a component of onsite only.
 
 ## Building and checking
 
