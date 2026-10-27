@@ -82,6 +82,15 @@ every machine of a census deployment, the pooled total first and the per-window 
   `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
   turns a period's accepted answer of either path into the block record's certifier leg (`verity/block-record/v1`,
   CMP-95 item 6), the one shape a loop's leg and the H200 fallback write.
+- `legs/nci.py`: the registration check (`table.REGISTRATION`), real, no protocol of the table and no component of
+  onsite. NCI's check of record (`verity/nci/v1`) on the window's declaration: the verifier's population program of the
+  circuit it registered, its record the window's registration, one IU of the program's units, θ empty (the weights are
+  registered reads, not registered parameters). The answer is `nci_reference`'s, and Lean's `nci serve` must agree; it
+  writes `nci.case.json`, onsite's registration case, which onsite checks before composing, so a refusal rejects the
+  composed verdict. Its `policy.json`, which the report's `registration` row carries, states what it measured (the toy
+  reads 2,112 bits over 9 gates a unit, about 235 a gate, and its IU's share of Γ), the verdict at α = 256 bits a gate
+  and Γ = 2^44, the one onsite composes, labelled `placeholder (toy)` (the composed verdict's `policy`), and the verdict
+  at the GLM-5.3 demo's α = 2^-25: it doesn't comply.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
   one `ALLP` line per window, led by the monitoring period. Outer proofs go through the firewall one at a time, one
   firewalled session on the run whichever window it belongs to, so the windows are audited one after another and each

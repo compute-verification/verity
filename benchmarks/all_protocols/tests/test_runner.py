@@ -4,7 +4,9 @@
 * nothing composes to accept while onsite's components are stubs or a leg is missing, even when every leg accepts;
 * a leg that raises, or answers outside the core answer's shapes, is that row's error and never a verdict, and the other
   legs still run;
-* once every component is a port, onsite's own executable decides on the legs' cases;
+* once every component is a port, onsite's own executable decides on the legs' cases and the registration's;
+* the registration check (NCI's) is reported beside the protocols with its policy, and a registration it refuses rejects
+  the composed verdict whatever the legs answer, as does one it accepts that isn't the one sampled proofs committed to;
 * given its executable, onsite checks every period: each stub on a case with no statement, each port with no case on one
   it refuses, and the report says where each case came from and whether onsite rejected on each rejecting leg's own case;
 * each leg reads the answers of the legs before it, and its port's case reaches onsite;
@@ -52,7 +54,7 @@ def fake(verdict: str, case: dict | None = None):
     return leg
 
 
-COMPONENT = {e.name: e.component for e in T.TABLE}
+COMPONENT = {e.name: e.component for e in (T.REGISTRATION, *T.TABLE)}
 
 
 def period(tmp_path: Path, tampered: bool = False) -> Path:
@@ -119,7 +121,9 @@ def test_missing_legs_are_never_verdicts(tmp_path):
     assert {n: x["owner"] for n, x in missing.items()} == {
         "work": "compute-accounting", "space": "memory-accounting", "bandwidth": "memory-accounting",
         "communication": "network-accounting", "wipe": "memory-accounting"}
+    assert r["registration"] == {"verdict": "missing", "owner": "network-accounting"}
     assert r["composed"]["verdict"] == "pending-ports"
+    assert "the registration check missing" in r["composed"]["reason"]
     assert r["protocols"]["integrity"]["quantity"] == {"bound": 1}
     assert r["protocols"]["integrity"]["delta"] == "1/2"
     assert r["protocols"]["integrity"]["epsilon"] == "1/4"
@@ -151,16 +155,19 @@ EVERY_PORT = [x for x in PORTS if x != "NetworkCheck.Check.protocol"]
 def test_onsite_decides_once_every_component_is_a_port(tmp_path):
     exe = onsite_exe(tmp_path)
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
-    every = {e.name: fake("accept", case) for e in T.TABLE}
+    every = {e.name: fake("accept", case) for e in (T.REGISTRATION, *T.TABLE)}
     r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["argv1"] == "check"
     ids = [x["id"] for x in got["evidence"]["components"]]
     assert ids == sorted(C.PORTS[x][1] for x in EVERY_PORT)
-    assert got["commitment"] == C.bind(C.PROTOCOL, [(i, "ab" * 64) for i in ids]).hex()
-    assert got["params"] == {"components": [{"id": i, "params": {"k": 1}} for i in ids]}
-    assert set(r["composed"]["inputs"].values()) == {"leg"}
+    assert got["commitment"] == (C.bind(C.PROTOCOL, [(i, "ab" * 64) for i in ids]) + bytes.fromhex("ab" * 64)).hex()
+    assert got["params"] == {"components": [{"id": i, "params": {"k": 1}} for i in ids],
+                             "registration": {"id": C.REGISTRATION, "params": {"k": 1}}}
+    assert got["evidence"]["registration"] == {"commitment": "01", "evidence": "02", "id": C.REGISTRATION,
+                                               "params": {"k": 1}}
+    assert set(r["composed"]["inputs"].values()) == {"leg"} and C.REGISTRATION in r["composed"]["inputs"]
     assert got["blobs"] == []
 
 
@@ -171,13 +178,61 @@ def test_onsite_reads_the_blobs_a_case_names(tmp_path):
     (tmp_path / "circuit.txt").write_bytes(b"circuit")
     (tmp_path / "pub.bin").write_bytes(b"public")
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
-    every = {e.name: fake("accept", case) for e in T.TABLE}
+    every = {e.name: fake("accept", case) for e in (T.REGISTRATION, *T.TABLE)}
     every["integrity"] = fake("accept", case | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
     r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["blobs"] == [b"circuit".hex(), b"public".hex()]
     assert all(set(x) == {"commitment", "evidence", "id", "params"} for x in got["evidence"]["components"])
+    assert set(got["evidence"]["registration"]) == {"commitment", "evidence", "id", "params"}
+
+
+def test_a_refused_registration_rejects_the_composition_though_every_leg_accepts(tmp_path):
+    """The registration check is no protocol of the table: its row is reported beside them, with the policy its verdict
+    is at, and its rejection rejects the composed verdict; onsite agrees when it rejected on the registration."""
+    def nci(period_dir: Path, node: str, out: Path) -> dict:
+        (out / "nci.case.json").write_text(json.dumps({"commitment": "01", "evidence": "02", "params": {}}))
+        (out / "policy.json").write_text(json.dumps({"label": "placeholder (toy)"}))
+        return answer("reject", C.REGISTRATION)
+
+    case = {"commitment": "01", "evidence": "02", "params": {}}
+    every = {e.name: fake("accept", case) for e in T.TABLE}
+    exe = onsite_exe(tmp_path, "reject", f"registration: {C.REGISTRATION} reject: the division does not comply")
+    r = decide(tmp_path, **every, registration=nci, onsite=EVERY_PORT, exe=str(exe))
+    assert "registration" not in r["protocols"] and all(x["verdict"] == "accept" for x in r["protocols"].values())
+    assert r["registration"]["verdict"] == "reject" and r["registration"]["policy"] == {"label": "placeholder (toy)"}
+    c = r["composed"]
+    assert c["verdict"] == "reject" and "the registration check" in c["reason"] and c["agree"]
+    assert c["policy"] == "placeholder (toy)" and c["inputs"][C.REGISTRATION] == "leg"
+    assert RN.summary_line(r)["registration"]["verdict"] == "reject"
+    again = tmp_path / "again"
+    again.mkdir()
+    exe = onsite_exe(again, "reject", "verity/pouw/v1 reject: params: no template")
+    assert not decide(again, **every, registration=nci, onsite=EVERY_PORT, exe=str(exe))["composed"]["agree"]
+
+
+def test_a_registration_other_than_the_one_sampled_proofs_committed_to_rejects(tmp_path):
+    """The registration check accepted a registration whose digest isn't the one sampled proofs' leg committed to: the
+    composed verdict rejects though every leg accepts, and onsite agrees when it refused on that mismatch."""
+    def nci(period_dir: Path, node: str, out: Path) -> dict:
+        (out / "nci.case.json").write_text(json.dumps({"commitment": "01", "evidence": "02", "params": {}}))
+        return {**answer("accept", C.REGISTRATION), "commitment": "cd" * 64}
+
+    case = {"commitment": "01", "evidence": "02", "params": {}}
+    every = {e.name: fake("accept", case) for e in T.TABLE}
+    want = C.mismatch("cd" * 64, "ab" * 64)
+    assert want == (f"registration: verity/nci/v1 checked {'cd' * 64}, verity/sampled-proofs/one-stage/v2 committed "
+                    f"{'ab' * 64}")
+    r = decide(tmp_path, **every, registration=nci, onsite=EVERY_PORT, exe=str(onsite_exe(tmp_path, "reject", want)))
+    c = r["composed"]
+    assert c["verdict"] == "reject" and "the registration, which integrity's leg did not commit to" in c["reason"]
+    assert c["agree"] and json.loads((tmp_path / "seen.json").read_text())["commitment"].endswith("cd" * 64)
+    again = tmp_path / "again"
+    again.mkdir()
+    exe = onsite_exe(again, "accept")
+    r = decide(again, **every, registration=nci, onsite=EVERY_PORT, exe=str(exe))
+    assert r["composed"]["verdict"] == "reject" and not r["composed"]["agree"]
 
 
 def test_onsite_checks_every_period_beside_stubs_and_missing_cases(tmp_path):
@@ -190,7 +245,7 @@ def test_onsite_checks_every_period_beside_stubs_and_missing_cases(tmp_path):
     c = r["composed"]
     assert c["verdict"] == "reject" and c["answer"]["verdict"] == "reject" and c["agree"]
     assert c["inputs"] == {"verity/pouw/v1": "leg", "verity/sampled-proofs/one-stage/v2": "no case (integrity accept)",
-                           "verity/stub/pous/v0": "stub"}
+                           "verity/stub/pous/v0": "stub", C.REGISTRATION: "no case (registration missing)"}
     got = {x["id"]: x for x in json.loads((tmp_path / "seen.json").read_text())["evidence"]["components"]}
     assert got["verity/stub/pous/v0"]["evidence"] == C.STUB_CASE["evidence"]
     assert got["verity/sampled-proofs/one-stage/v2"]["commitment"] == ""
@@ -211,7 +266,7 @@ def test_a_component_compose_does_not_know_is_refused():
 def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_path):
     exe = onsite_exe(tmp_path)
     case = {"commitment": "01", "evidence": "02", "params": {}}
-    every = {e.name: fake("accept", case) for e in T.TABLE}
+    every = {e.name: fake("accept", case) for e in (T.REGISTRATION, *T.TABLE)}
     every["bandwidth"] = fake("undecided")
     r = decide(tmp_path, **every, onsite=["SampledProofs.OneStageZk.protocol"], exe=str(exe), table=OUTSIDE)
     assert r["composed"]["verdict"] == "undecided"
@@ -227,6 +282,11 @@ def test_the_table_names_every_onsite_component_once():
     assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 6
     assert len(named) == 6
     assert T.TABLE[0].name == "integrity", "integrity runs first: PoUW's evidence is its answer"
+    assert C.onsite_registration() == (C.REGISTRATION_LEAN, C.COMMITTER_LEAN), "onsite's registration check changed"
+    assert C.COMMITTER_LEAN in onsite
+    assert T.REGISTRATION not in T.TABLE and T.REGISTRATION.component not in {e.component for e in T.TABLE}
+    with pytest.raises(ValueError, match="registered"):
+        C.onsite_registration("def protocol : Protocol := product \"verity/onsite/v0\" components")
 
 
 def test_a_leg_is_its_file(tmp_path):

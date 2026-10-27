@@ -10,14 +10,14 @@ A window is one stretch of one machine's serving and its audits, and a monitorin
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
 registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
 (`integrations/torch_loop`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
-with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
-(`decide`). Outer proofs go through the firewall one at a time, one firewalled session on the run whichever window it
-belongs to, so the windows are audited one after another and each audit's drawn members' proof sessions too (``--jobs``
-and ``--session-jobs`` take only 1); only what never goes through the firewall, the next window's loop, overlaps an
-audit. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/reports.jsonl``:
+with ``period.json`` beside it (the legs' records, `table.PERIOD`); the registration check (`table.REGISTRATION`, NCI's)
+checks its declaration and each protocol of `table.TABLE` audits it, each through its leg (`decide`). Outer proofs go
+through the firewall one at a time, one firewalled session on the run whichever window it belongs to, so the windows are
+audited one after another and each audit's drawn members' proof sessions too (``--jobs`` and ``--session-jobs`` take only
+1); only what never goes through the firewall, the next window's loop, overlaps an audit. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/reports.jsonl``:
 
     {"format": "verity/all-protocols-window/v1", "window": W, "node": NAME, "run": RUN, "loop": {...},
-     "protocols": {NAME: ROW, ...}, "composed": {...}, "seconds": {...}}
+     "registration": ROW, "protocols": {NAME: ROW, ...}, "composed": {...}, "seconds": {...}}
 
 After each window ``DIR/monitoring-period.json`` is `monitoring.monitoring` over the windows so far: integrity's pooled
 total over a week, a month and a year of the census deployment (``--deployment``) at δ = 1% and 10⁻⁶, the per-window
@@ -27,11 +27,13 @@ figure beside it, and what is proved and what scaled. Its line (``ALLP``) leads 
 A row is ``{"verdict": "missing", "owner": LANE}`` for a protocol with no leg, ``{"verdict": "error", "owner", "reason"}``
 for a leg that couldn't decide, and otherwise its answer's verdict with ``protocol``, ``owner``, ``commitment``,
 ``reason``, ``quantity`` (its answer's public outputs, what acceptance certifies; null unless it accepts), ``delta`` (its
-profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of its units), ``runs`` and the whole
-``answer``. ``composed`` is `compose.composed`'s.
+profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of its units), ``runs``, the ``policy``
+its verdict is at when its leg states one (the registration check's), and the whole ``answer``. ``composed`` is
+`compose.composed`'s.
 
 ``--tools FILE``: JSON naming the built executables (``flock-circuit``, ``flock-verify``, ``flock-firewall``,
-``m0-pythonpath``, ``pous-run-protocol``, ``pous-setup``, ``remote-audit-protocol``). ``--tamper W,...``: those windows'
+``m0-pythonpath``, ``pous-run-protocol``, ``pous-setup``, ``remote-audit-protocol``, ``wipe-protocol``, ``nci``).
+``--tamper W,...``: those windows'
 loop records outputs that are not its model's (`serve --tamper`) and its prover skips its self-check, so a drawn unit's
 proof is of a false witness. ``--pouw h1`` (until ALLP-H1LOOP's ``serve --pouw h1`` lands): the loop also writes PoUW's
 window (its linears as the pinned H1 tile) to ``<window>/pouw``, and ``verity_torch_loop.pouw_audit`` audits it into
@@ -87,7 +89,7 @@ from pathlib import Path
 from typing import Any
 
 from . import compose as C, monitoring as M, tie as T
-from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
+from .table import ANSWERS, PERIOD, REGISTRATION, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-window/v1"
 ROOT = Path(__file__).resolve().parents[3]
@@ -128,22 +130,25 @@ def row_of(entry: Entry, a: Any, out: Path) -> dict[str, Any]:
     runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
     run = os.environ.get("RESEARCH_RUN_ID")
     accepted = a["verdict"] == "accept"
+    policy = json.loads((out / "policy.json").read_text()) if (out / "policy.json").exists() else None
     return {"protocol": a["protocol"], "owner": entry.owner, "verdict": a["verdict"], "reason": a["reason"],
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
             "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
-            "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
+            "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs],
+            **({"policy": policy} if policy is not None else {}), "answer": a}
 
 
 def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABLE,
            legs: Callable[[str], LegFn | None] = leg_of, onsite: Sequence[str] | None = None, exe: str | None = None,
-           clock: Callable[[], float] = time.monotonic) -> dict[str, Any]:
-    """Every protocol's row on the window in ``period_dir``, in ``table``'s order, each leg's answer written to
+           clock: Callable[[], float] = time.monotonic, registration: Entry = REGISTRATION) -> dict[str, Any]:
+    """The registration check's row on the window in ``period_dir`` (`table.REGISTRATION`, first: onsite's commit
+    phase), then every protocol's, in ``table``'s order, each leg's answer written to
     ``period_dir/answers/<component>.json`` for the legs after it, and the composed verdict."""
     rows: dict[str, dict] = {}
     cases: dict[str, dict | None] = {}
     seconds: dict[str, float] = {}
     (period_dir / ANSWERS).mkdir(exist_ok=True)
-    for e in table:
+    for e in (registration, *table):
         fn = legs(e.component)
         if fn is None:
             rows[e.name] = {"verdict": "missing", "owner": e.owner}
@@ -161,14 +166,16 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
             case = lout / f"{e.component}.case.json"
             cases[e.name] = json.loads(case.read_text()) if case.exists() else None
         seconds[e.name] = round(clock() - t, 1)
+    reg, reg_case = rows.pop(registration.name), cases.pop(registration.name, None)
     p = json.loads((period_dir / PERIOD).read_text())
     report = {"format": FORMAT, "window": p["window"], "node": node, "run": os.environ.get("RESEARCH_RUN_ID"),
               "loop": {"circuit": p["circuit"], "run_root": p["run_root"], "law": p["law"], "cap": p["cap"],
                        "delta": p.get("delta"), "tampered": bool(p.get("prover_env")), "pouw": p.get("pouw"),
                        **({"tie": {k: p["tie"][k] for k in ("strategy", "window", "stratum", "root")}}
                           if p.get("tie") else {})},
-              "mode": p.get("mode"), "protocols": rows, "seconds": seconds,
-              "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe)}
+              "mode": p.get("mode"), "registration": reg, "protocols": rows, "seconds": seconds,
+              "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe,
+                                     registration=reg, registration_case=reg_case)}
     out.mkdir(parents=True, exist_ok=True)
     shutil.copytree(period_dir / ANSWERS, out / ANSWERS, dirs_exist_ok=True)
     return report
@@ -441,25 +448,29 @@ def main(argv: list[str] | None = None) -> int:
             jobs.append(pool.submit(lambda w=w, loop=loop: finish(window(w, run, a, Path(scratch), out, loop))))
         for j in jobs:
             j.result()
-    bad = [r for r in reports if "error" in r or any(x["verdict"] == "error" for x in r["protocols"].values())]
+    bad = [r for r in reports if "error" in r or any(x.get("verdict") == "error" for x in
+                                                     [r.get("registration") or {}, *r["protocols"].values()])]
     return int(bool(bad))
 
 
 def summary_line(report: dict[str, Any]) -> dict[str, Any]:
-    """The window's line: each protocol's verdict and quantity, and the composed verdict."""
+    """The window's line: the registration check's verdict, each protocol's verdict and quantity, and the composed
+    verdict."""
     if "error" in report:
         return {"window": report["window"], "error": report["error"]}
-    mode = report.get("mode") or {}
+    mode, reg = report.get("mode") or {}, report.get("registration") or {}
     return {"window": report["window"], "of_record": bool(mode.get("of_record")),
             **({"gap": mode["gap"]} if mode.get("gap") else {}), "tampered": report["loop"]["tampered"],
             **({"tie": report["loop"]["tie"]["strategy"]} if report["loop"].get("tie") else {}),
+            "registration": {"verdict": reg.get("verdict"), **({"reason": reg["reason"][:300]} if reg.get("reason") else {})},
             "protocols": {n: {"verdict": r["verdict"],
                               **({"bound": r["quantity"].get("bound")} if isinstance(r.get("quantity"), dict)
                                  and "bound" in r["quantity"] else {}),
                               **({"epsilon": r["epsilon"], "delta": r["delta"]} if r.get("epsilon") else {}),
                               **({"reason": r["reason"][:300]} if r.get("reason") else {})}
                           for n, r in report["protocols"].items()},
-            "composed": {k: report["composed"].get(k) for k in ("verdict", "reason")}}
+            "composed": {**{k: report["composed"].get(k) for k in ("verdict", "reason")},
+                         **({"policy": report["composed"]["policy"]} if "policy" in report["composed"] else {})}}
 
 
 if __name__ == "__main__":

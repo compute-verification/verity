@@ -17,9 +17,10 @@ It returns its protocol's answer in the core interface's canonical form (`Answer
 verity/core/protocols/interface/README.md): ``{"commitment", "profile", "protocol", "public", "reason", "verdict"}``.
 What its acceptance certifies is its ``public`` (W, S, Q, K, the bound on wrong units), and its δ its profile's. It may
 write ``out/<component>.case.json``, ``{"commitment": hex, "evidence": hex, "params": JSON}``, the case its port's
-``serve`` reads, which onsite's evidence carries for it once the port replaces onsite's stub, and ``out/runs.json``, the
-ids of runs it launched. A leg that can't decide raises: the runner reports ``error``, never a verdict. A protocol whose
-leg file doesn't exist yet reports ``{"verdict": "missing", "owner": LANE}``.
+``serve`` reads, which onsite's evidence carries for it once the port replaces onsite's stub, ``out/runs.json``, the
+ids of runs it launched, and ``out/policy.json``, the policy its verdict is at, which its row carries. A leg that can't
+decide raises: the runner reports ``error``, never a verdict. A protocol whose leg file doesn't exist yet reports
+``{"verdict": "missing", "owner": LANE}``.
 
 A lane plugs its protocol in by adding its file, and touches nothing else.
 """
@@ -60,6 +61,11 @@ TABLE: tuple[Entry, ...] = (
     Entry("wipe", "wipe", "memory-accounting"),
 )
 
+#: The registration check onsite runs in its commit phase, before composing (`Core.Composition.registered`): NCI's check
+#: of record on the window's declaration. It is no protocol of `TABLE` and no component of onsite; the runner runs its leg
+#: first and reports it beside the protocols, and a registration it refuses refuses the composed verdict.
+REGISTRATION = Entry("registration", "nci", "network-accounting")
+
 
 def load(component: str, legs_dir: Path = LEGS_DIR) -> ModuleType | None:
     """The module ``legs/<component>.py``, or None while that file doesn't exist."""
@@ -96,4 +102,5 @@ def check_answer(a: Any) -> dict[str, Any]:
     return dict(a)
 
 
-__all__ = ["ANSWERS", "Entry", "LEGS_DIR", "LegFn", "PERIOD", "TABLE", "check_answer", "leg_of", "load", "period_of"]
+__all__ = ["ANSWERS", "Entry", "LEGS_DIR", "LegFn", "PERIOD", "REGISTRATION", "TABLE", "check_answer", "leg_of", "load",
+           "period_of"]
