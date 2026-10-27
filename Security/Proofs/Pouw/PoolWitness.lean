@@ -140,9 +140,9 @@ theorem WorkMoment_honest :
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
       (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
         (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
-      ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
+      SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
-      OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
+      OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
       ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
       ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x := by
@@ -179,9 +179,9 @@ theorem WorkSound_honest :
       tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
       (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
         (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
-      ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
+      SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
         (fun _ => 0) (fun _ => 0) ∧
-      OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
+      OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
       ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
       ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
       ∀ o x, honest.Passes twVerdict twDev o x ∧ honest.timedUse o x = twPd.hon ∧

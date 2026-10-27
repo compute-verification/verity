@@ -181,8 +181,8 @@ which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
 - δ_coin is the draw's failure probability;
 - δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
-  extraction and in `ShaSpeed`;
-- κ_dmm and κ_dsha are `SAKMatmul`'s and `ShaSpeed`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
+  extraction and in `SAKSha`;
+- κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
   per sampling block.
 
 **Its budget.** For a fleet of G replicas to keep these terms within δ_coin in total, each replica's are at most
@@ -412,7 +412,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
 - **κ's values** (see "Its budget") and the headline's single κ go to Daniel: κ_dmm and κ_dsha are `SAKMatmul`'s and
-  `ShaSpeed`'s error terms.
+  `SAKSha`'s error terms.
 - **The Lean** (WORKSOUND-5, stacked on #4787):
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
     `Timed`, and the phase's oracle calls logged before root b;
@@ -448,8 +448,8 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
 - **The premises**, named and unproved:
   - `SAKMatmul` (`pouw-sak-matmul`): no program computes the committed values more cheaply at μ than the public best.
     It is false wherever a known cheaper route is missing from the menu.
-  - `ShaSpeed` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.
-  - Beside them are `OutsourceWithinEgress`, `CertifierSeesImports`, `RootAfterCoin` and `ServiceSound`, and
+  - `SAKSha` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.
+  - Beside them are `OutsourceWithinEgress`, `CertifierSeesImports`, `RootAfterCoin` and `ProofSystemSound`, and
     POOL-THM's `CoinsConfidential` (which `WitnessPathPrivate` discharges) and `IndependentCoins`.
   - `PeriodInventory` is held pending Daniel: whether host CPUs and DPUs are devices of the period.
 - **The RTX PRO 6000's cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they

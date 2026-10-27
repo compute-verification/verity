@@ -293,7 +293,7 @@ theorem twSAK (w : Fin 2) : SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm 
   · exact (Real.exp_pos _).le
   · exact le_rfl
 
-theorem twShaSpeed : ShaSpeed tw twRound 2 twReg twμ twHsha
+theorem twSAKSha : SAKSha tw twRound 2 twReg twμ twHsha
     (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w) (fun _ => 0) (fun _ => 0) := by
   intro _ _ _ _ _ A B Adv _ adv _ Mw Mh _ _ _
   refine prob_le_zero fun ox ⟨w, _, hw⟩ => hw ⟨fun _ => False, prob_le_zero fun _ h => h, ?_⟩
@@ -325,7 +325,7 @@ theorem twOutsource : OutsourceWithinEgress tw twμ 0 := by
   intro _ _ _ _ I O f
   exact ⟨f, fun i => ⟨rfl, rfl, by simp⟩⟩
 
-theorem twService : ServiceSound tw twRound 2 twReg twVerdict twDev 0 := fun _ =>
+theorem twService : ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 := fun _ =>
   prob_le_zero fun _ h => h.2 fun w => ⟨Set.mem_univ _, h.1.1 w⟩
 
 theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _ _ _ _ => by
@@ -509,9 +509,9 @@ def WitnessHolds : Prop :=
     tw.G1 ∧ tw.G2 ∧ tw.G3 ∧ tw.P1 ∧ tw.P2 ∧
     (∀ w, SAKMatmul tw twRound twμ (twReg w) (fun _ => twHmm w)
       (fun _ => twη * (twHmm w + twHsha w + twHo w) / twHmm w) (fun _ => 0)) ∧
-    ShaSpeed tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
+    SAKSha tw twRound 2 twReg twμ twHsha (fun w => twη * (twHmm w + twHsha w + twHo w) / twHsha w)
       (fun _ => 0) (fun _ => 0) ∧
-    OutsourceWithinEgress tw twμ 0 ∧ ServiceSound tw twRound 2 twReg twVerdict twDev 0 ∧
+    OutsourceWithinEgress tw twμ 0 ∧ ProofSystemSound tw twRound 2 twReg twVerdict twDev 0 ∧
     ImportWithinCertifier tw twRound 2 twVerdict twDev 0 ∧ AnswersFit tw twRound 2 twVerdict twDev twSel twPd ∧
     ExtractAdv tw twRound 2 twReg twSel twQ twBadv twξ (fun _ => 0) ∧
     (∀ A, twε A < 1 ∧ twκ A < 1) ∧
@@ -520,7 +520,7 @@ def WitnessHolds : Prop :=
 theorem witness : WitnessHolds :=
   ⟨twDual, fun _ => ⟨by norm_num [twHmm], by norm_num [twHsha], by norm_num [twHo], le_rfl, le_rfl⟩, twCost,
     by norm_num [twη], by norm_num [twδ], by norm_num [twδ], le_rfl, le_rfl, fun _ _ => le_rfl,
-    fun _ => ⟨le_rfl, le_rfl⟩, twCap, tw_G1, tw_G2, tw_G3, trivial, trivial, twSAK, twShaSpeed, twOutsource,
+    fun _ => ⟨le_rfl, le_rfl⟩, twCap, tw_G1, tw_G2, tw_G3, trivial, trivial, twSAK, twSAKSha, twOutsource,
     twService, twImport, twAnswersFit, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
     fun o x => ⟨honest_passes o x, honest_timedUse o x, honest_withinCap o x⟩⟩
 

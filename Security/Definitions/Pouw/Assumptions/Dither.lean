@@ -10,11 +10,11 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 
 * `SAKMatmul`: symmetric algorithmic knowledge for exact matrix products (R-ACCEL-6), on the round's words, for
   programs that exchange no bits with outside machines;
-* `ShaSpeed`: SHA-512's implementation speed (R-ACCEL-7), on the round's commitment, in sampling form, per prover
+* `SAKSha`: SHA-512's implementation speed (R-ACCEL-7), on the round's commitment, in sampling form, per prover
   (RT-LEAN-2 L37);
 * `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work (RT-PROTO-2 P2, P18; RT-LEAN-2 L32),
   the one premise that prices outside machines;
-* `ServiceSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
+* `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
   (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
 * `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
 
@@ -25,7 +25,7 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 * `CoinsConfidential`: a replica's coins reach no machine outside it before it has them, so the strategy run on it
   reads none of them (for the MVP, by one device that produces a server's coins and runs its certifier; RP4).
 
-Only `SAKMatmul`, `ShaSpeed`, `OutsourceWithinEgress` and `ExtractAdv` say anything about which algorithms a prover
+Only `SAKMatmul`, `SAKSha`, `OutsourceWithinEgress` and `ExtractAdv` say anything about which algorithms a prover
 runs.
 
 **Advice.** A round's programs read advice fixed before the round's coins, of at most `B` bits (an injection into
@@ -110,7 +110,7 @@ so the honest prover meets it with shortfall 0. MODEL-SPEC's θ floors (RT-MODEL
 are what keep the model from hashing faster than the card. The premise is meant for models whose programs reach the
 oracle only through their calls (`Accel.OracleCalls` at the round's table, RT-LEAN-2 L28): where a program reads the
 table as data it is false, and the headline says nothing. -/
-def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
+def SAKSha (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
   G.G1 → G.G2 → G.G3 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),
     (∃ e : Adv → Fin (2 ^ B), Function.Injective e) →
@@ -132,7 +132,7 @@ other than the challenger's signed coin stream, RT-POOL RP27).
 A node that forwards a call's `b` (`m K` bits) and gets back only the root has the outside machine do the call's
 `m K N` MACs, so `β = n_max · H/macs` with `n_max = N` for a static call and `d_v` for PV, `H = H_mm + H_sha + H_o`
 (the outside machine returns the root, so it saves the round's hashing too: RT-PROTO-2 P18's addition). `SAKMatmul` and
-`ShaSpeed` are stated over programs that exchange nothing, and this premise carries their bound to every program at
+`SAKSha` are stated over programs that exchange nothing, and this premise carries their bound to every program at
 `β` a bit (WORKSOUND-INST-2's form, on every program type). It is per program: an answer that sends a later block's
 coins out is a different program from that block's work, which is in `WorkSound`'s Open (RT-POOL RP21). -/
 def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
@@ -146,7 +146,7 @@ one of its registrable ones and its check passes (`Prover.Accepted`). The checks
 proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
 (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
-def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
+def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ≤ κS

@@ -69,7 +69,7 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
   have hinst' : ∀ b, 0 < Wmm b ∧ 0 < Wsha b ∧ 0 ≤ Wans b ∧ pubCost e μ pb.mm (macs b) ≤ Wmm b ∧
       pubCost e μ pb.sha (comps b) ≤ Wsha b := fun b =>
     ⟨(hinst b).1, (hinst b).2.1, (hinst b).2.2.1, (hinst b).2.2.2.1, (hinst b).2.2.2.2.1⟩
-  have svc' : ServiceSound G P nsb Reg
+  have svc' : ProofSystemSound G P nsb Reg
       (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev κS := fun A =>
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
   have imp : ImportWithinCertifier G P nsb

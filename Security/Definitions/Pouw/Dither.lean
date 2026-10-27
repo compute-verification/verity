@@ -18,7 +18,7 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
   v2 are instances, and the served sampling block, checked where its selection coin picks it (`ditherSelected`);
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
-  `SAKMatmul`, `ShaSpeed`), in units of priced cost, outside a degenerate set of dithers;
+  `SAKMatmul`, `SAKSha`), in units of priced cost, outside a degenerate set of dithers;
 * **a monitoring period's prover** sampling block by sampling block, in the commit, challenge and response phases
   (`Prover`): each block's operands committed before its coins (its instance, adapted: chosen after the earlier
   blocks' coins), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`,
@@ -297,7 +297,7 @@ the boundary. Sampling block `b`, in the order of its coins:
   computes between them and the block's commitment, and returns the commitment and the state after it. The
   challenger then issues the block's check coin `c` (whether the block is selected, and which of its proof blocks a
   selected block proves), and `absorb b` writes it into the state. `absorb` is a function, not a program: it reads no
-  oracle and uses nothing. Whatever it computes is advice to later blocks' programs, and `SAKMatmul` and `ShaSpeed`
+  oracle and uses nothing. Whatever it computes is advice to later blocks' programs, and `SAKMatmul` and `SAKSha`
   hold at every advice of the size `ExtractAdv` gives, so it buys the prover nothing they don't already allow;
 * **the response phase**: `answer b` answers the check from the state after the block's work and every coin of the
   period (CMP-154). It is off the state path, since no later program reads it, so it may run beside later sampling
@@ -416,8 +416,8 @@ end Prover
 
 /-- **The service's verdict on a period** (RT-LEAN-2 L29): what the verifier accepts, from the oracle, the verifier's
 coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
-signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs (`ServiceSound` ties
-it to `Prover.Accepted`). -/
+signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs
+(`ProofSystemSound` ties it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
 

@@ -124,8 +124,8 @@ def WorkSound : Prop :=
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
-    ShaSpeed G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
-    OutsourceWithinEgress G μ β → ServiceSound G P k Reg verdict dev κS →
+    SAKSha G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
+    OutsourceWithinEgress G μ β → ProofSystemSound G P k Reg verdict dev κS →
     ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
     ExtractAdv G P k Reg sel Q Badv ξ κx →
     FreedSound G P k verdict dev Pd 1
@@ -154,8 +154,8 @@ def WorkMoment : Prop :=
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ w, SAKMatmul G P μ (Reg w) (fun _ => pubmm w) (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
-    ShaSpeed G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
-    OutsourceWithinEgress G μ β → ServiceSound G P k Reg verdict dev κS →
+    SAKSha G P k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha κsha →
+    OutsourceWithinEgress G μ β → ProofSystemSound G P k Reg verdict dev κS →
     ImportWithinCertifier G P k verdict dev K → AnswersFit G P k verdict dev sel Pd →
     ExtractAdv G P k Reg sel Q Badv ξ κx →
     MomentSound G P k verdict dev Pd 1
@@ -208,9 +208,9 @@ def WorkSoundNoFold : Prop :=
     G.G1 → G.G2 → G.G3 → G.OracleCalls eo → G.P1 → G.P2 →
     (∀ w, SAKMatmul G (noFoldRound nf) μ (Reg w) (fun _ => pubmm w)
       (fun _ => η * (Hmm w + Hsha w + Ho w) / Hmm w) κdmm) →
-    ShaSpeed G (noFoldRound nf) k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha
+    SAKSha G (noFoldRound nf) k Reg μ pubsha (fun w => η * (Hmm w + Hsha w + Ho w) / Hsha w) κdsha
       (fun _ => κsha) →
-    OutsourceWithinEgress G μ β → ServiceSound G (noFoldRound nf) k Reg verdict dev κS →
+    OutsourceWithinEgress G μ β → ProofSystemSound G (noFoldRound nf) k Reg verdict dev κS →
     ImportWithinCertifier G (noFoldRound nf) k verdict dev K → AnswersFit G (noFoldRound nf) k verdict dev sel Pd →
     ShaRealize G nf k Reg sel Q E eo rD pl dirs ξw ξl (fun _ => (k + 1) * (⌈Q⌉₊ + V) + k * ⌈Q⌉₊)
       (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) →

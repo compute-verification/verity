@@ -1642,7 +1642,7 @@
    "owner": "@compute-research",
    "digest": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919"
   },
-  "Pouw.Assumptions.ServiceSound": {
+  "Pouw.Assumptions.ProofSystemSound": {
    "owner": "@compute-research",
    "digest": "b1173d6ee843470ffa0ab5ac7e9893218a98f5b65331af984bc59b49767e6a0b"
   },
@@ -1682,7 +1682,7 @@
    "owner": "@compute-research",
    "digest": "8d8932ec8500c381c8a5b555dafd4af3e9fbf210f25577319d7cca7b5afe8d5f"
   },
-  "Pouw.Assumptions.ShaSpeed": {
+  "Pouw.Assumptions.SAKSha": {
    "owner": "@compute-research",
    "digest": "0a00c902779109296ffa552dc3dfa5cb4bbc79f0d60ce3e40e87c89a52e18a07"
   },
@@ -11757,7 +11757,7 @@
    }
   },
   "frozen": {
-   "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
+   "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",
    "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools (CMP-152, CMP-136).",
    "Pouw.SecurityProofs.Dither.FleetSound": "frozen (verdict): the accepted replicas' moments pooled by convexity, each at its own quantified verdict, as WorkSound (CMP-152, RT-PROTO-2 P16).",
@@ -11765,7 +11765,7 @@
    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": "frozen (premise): ExtractAdv from ShaRealize and SHA-512 as a random oracle, one premise's form from another's, about no protocol function's acceptance (CMP-132).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "frozen (verdict): as WorkSoundH200, at the open parameters card-within-accel(H200) gives (CMP-136, RT-LEAN L10, L31).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "frozen (verdict): as WorkSoundOnCardH200, on the RTX PRO 6000 (CMP-136).",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136).",
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",

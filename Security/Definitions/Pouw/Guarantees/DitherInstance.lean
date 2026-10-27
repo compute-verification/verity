@@ -80,7 +80,7 @@ capacity (`TimedWorkFits`) and ran its selected answers within the period (`Answ
 buy.
 
 The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
-them, and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the
+them, and `SAKMatmul` and `SAKSha` hold at the dual price over them too. That they are all of the processors the
 cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
 capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
 price. -/
@@ -102,9 +102,9 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ b, SAKMatmul G P μ (Reg b) (fun _ => pubCost e μ pb.mm (macs b))
       (fun _ => ηw * (Wmm b + Wsha b + Wans b) / Wmm b) κdmm) →
-    ShaSpeed G P nsb Reg μ (fun b => pubCost e μ pb.sha (comps b))
+    SAKSha G P nsb Reg μ (fun b => pubCost e μ pb.sha (comps b))
       (fun b => ηw * (Wmm b + Wsha b + Wans b) / Wsha b) κdsha κsha →
-    OutsourceWithinEgress G μ (nmax * Wmac) → ServiceSound G P nsb Reg verdict dev κS →
+    OutsourceWithinEgress G μ (nmax * Wmac) → ProofSystemSound G P nsb Reg verdict dev κS →
     CertifierSeesImports G P nsb dev cin cout → CommitAfterWork G P nsb dev t opArrive →
     RootAfterCoin G P nsb dev t arrive → AnswerAfterWork G P nsb dev sel t ansAt →
     ExtractAdv G P nsb Reg sel Q Badv ξ κx →
@@ -132,7 +132,7 @@ read at is the card's own, the one its runs refine to, and the trust base's mode
 theorem and in the lock.
 
 Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
-whose programs are exactly the card's; the witness that `SAKMatmul` and `ShaSpeed` hold at such a `G`, with free
+whose programs are exactly the card's; the witness that `SAKMatmul` and `SAKSha` hold at such a `G`, with free
 guesses (RT-LEAN-2 L38), is WORKSOUND-WIT's. A sampling block's commitment reads the oracle, which the card has no instruction
 for (ABSORB-THM's realization, R-ACCEL-7). -/
 def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
