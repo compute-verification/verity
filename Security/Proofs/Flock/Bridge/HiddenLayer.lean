@@ -67,10 +67,10 @@ theorem toy_mem_io1 : (⟨1, by decide⟩ : Fin toyCircuit.N) ∈ toyPartition.i
   simp only [Partition.io, Finset.mem_filter]
   exact ⟨toyPartition.mem_committed_of_output (by decide), Or.inl (by decide)⟩
 
+omit [Fintype K] [DecidableEq K] in
 /-- **The one unit is wrong at every registration and transcript**: an opening of the input's commit string carries
 `1`, the input's value in `Xv`; then the circuit computes `0` at the negation, and its commit string opens only to
 `1`. -/
-omit [Fintype K] [DecidableEq K] in
 theorem toy_mem_wrongRegZ {Dh : Type} (Hc : List UInt8 → Dh) (R : Reg) (Xv : Fin toyCircuit.N → Bool) :
     (0 : Fin 1) ∈ wrongRegZ A toyPartition planZ tab (toyBinding A planZ tab Hc) R Xv := by
   refine (mem_wrongRegZ A toyPartition planZ tab (toyBinding A planZ tab Hc)).2 ?_
@@ -88,8 +88,8 @@ theorem toy_mem_wrongRegZ {Dh : Type} (Hc : List UInt8 → Dh) (R : Reg) (Xv : F
   rw [e1, h0] at h1
   exact absurd h1 (by decide)
 
-/-- **The layer's lowering holds where no message satisfies the tables**: there is nothing to decode. -/
 omit [Fintype K] [DecidableEq K] in
+/-- **The layer's lowering holds where no message satisfies the tables**: there is nothing to decode. -/
 theorem toy_lowering
     (hunsat : ∀ S R u M, ¬ (tabOfZ planZ tab S R u).S.Satisfies (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M)) :
     LoweringSoundZK A toyPartition planZ tab (toyDecode planZ tab) :=
