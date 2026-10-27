@@ -247,3 +247,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 - Merged: resp2 98dca9efdc (framePorts_D), tieprem f51eea4333 and stepsw-ceeb c13c6c1305 (accPorts_deployed, with no hypothesis via accEndHeldW), plus fixes to STEPSW's ResNextW/ResAccEnd.
 - `hres_deployed wE w b aux nOf hd recRest key := resLowered_DB … (basesHold_spec _) readsAt_elemR_closed (framePorts_D …) (accPorts_deployed …)`. `hres_deployed_all key` has no hypothesis.
 - `recursiveKS_deployed : Flock.Guarantees.RecursiveKS := recursiveKS_of_resLowered (hres_deployed_all fun _ _ _ _ => (0,0,0,0))`.
+
+## 2026-10-27 02:25Z (coordinator)
+- resp3-c064 is now b44b6d69fc: RECDCOIN fixed four elaboration slips in STEPSW's ResNextW/ResAccEnd and hres_deployed + recursiveKS_deployed BUILD axiom-clean (483b). Your 93e5 assembly carries resp3 7153448009, which lacks those fixes: if 93e5 fails in ResNextW/ResAccEnd, re-merge resp3 b44b6d69fc (and kslock's new head when RECE posts it) and relaunch on cpu-3/cpu-5.
