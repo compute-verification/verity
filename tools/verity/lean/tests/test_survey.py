@@ -136,7 +136,7 @@ end FlockX
 """,
 }
 LOCK = {"guarantees": {"Pous.SecurityProofs.Sound": {}, "Pous.SecurityProofs.other": {}},
-        "assumptions": {"Pous.Assumptions.Honest": {"owner": "@pous"}},
+        "assumptions": {"Pous.Assumptions.Honest": {}},
         "shape": {"frozen": {"Pous.SecurityProofs.other": "lemma: a step, not a property"}}}
 
 
@@ -205,7 +205,7 @@ FACTS = {"pins": {"A.g": {"kind": "theorem", "reads": [{"name": "A.read", "modul
     {"module": "Definitions.A.Old", "name": "A.old", "kind": "def"},
     {"module": "Definitions.B", "name": "B.b", "kind": "def"},
 ]}
-SIZE_LOCK = {"roots": ["Definitions"], "guarantees": {"A.g": {"owner": "@lane"}}, "reads": {
+SIZE_LOCK = {"roots": ["Definitions"], "guarantees": {"A.g": {}}, "reads": {
     "Definitions.A.Basic": {"definitions": {"A.read": "h1", "A.S.x": "h2", "A.S": "h3"}},
     "Definitions.B": {"definitions": {"B.b": "h4"}},
 }}
@@ -278,7 +278,7 @@ def source(module: str) -> str:
 def stand_in(tmp_path):
     """(the root holding the stand-in package at `Security/Proofs` and a test naming `Proofs.B.Named`, its lock, the usage
     document)."""
-    policy = {"roots": ["Proofs.Root"], "guarantees": {"Proofs.A.main": {"owner": "@owner"}}}
+    policy = {"roots": ["Proofs.Root"], "guarantees": {"Proofs.A.main": {}}}
     write(tmp_path, {**{source(m): text for m, text in UNUSED_SOURCES.items()},
                      f"{PKG}/lakefile.toml": 'name = "security_proofs"\nsrcDir = ".."\n',
                      f"{PKG}/{S.C.POLICY}": json.dumps(policy),
@@ -328,7 +328,7 @@ def test_what_a_queued_pr_touches_or_imports_is_kept(stand_in):
         "Proofs.B.Old": (["#4", "#5"], "reads")}
     got = decide(root, policy, usage, [TEST], queued={"6": {"files": [source("Proofs.B.Group")], "imports": []}})
     assert got["kept"]["Proofs.B.Group"].startswith("queued: ") and got["unused"] == ["Proofs.A.Side", "Proofs.B.Old"]
-    doc = S.listing(root, pruned(root)[1], got, {PKG: policy}, usage, {"Proofs.B.Group": got["kept"]["Proofs.B.Group"]})
+    doc = S.listing(root, pruned(root)[1], got, {"Proofs.B.Group": got["kept"]["Proofs.B.Group"]})
     assert [r["module"] for r in doc["held"]] == ["Proofs.B.Group"] and doc["total"]["held"] == 1
     assert "\nheld (1 modules" in S.report(doc)
 
@@ -475,12 +475,18 @@ def test_an_unbuilt_module_is_kept(stand_in):
 
 
 def test_listing_carries_bytes_area_owner_and_totals(stand_in):
+    """A module's owner is the lane the branches merged into its directory's history name."""
     root, policy, usage = stand_in
-    doc = S.listing(root, pruned(root)[1], decide(root, policy, usage, [TEST], ["Proofs.B.Old"]), {PKG: policy}, usage)
+    git = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *a], cwd=root, check=True,
+                                    capture_output=True)
+    git("init", "-q")
+    git("add", f"{PKG}/A")
+    git("commit", "-q", "-m", "Merge branch 'cursor/proofs-sweep-1a2b'")
+    doc = S.listing(root, pruned(root)[1], decide(root, policy, usage, [TEST], ["Proofs.B.Old"]))
     rows = {r["module"]: r for r in doc["unused"]}
-    assert rows["Proofs.A.Side"]["owner"] == "@owner" and rows["Proofs.A.Side"]["owner_from"] == "lock"
+    assert rows["Proofs.A.Side"]["owner"] == "@proofs" and rows["Proofs.B.Group"]["owner"] is None
     assert rows["Proofs.A.Side"]["bytes"] == len(UNUSED_SOURCES["Proofs.A.Side"].encode())
-    assert doc["areas"]["A"]["modules"] == 1 and doc["areas"]["B"] == {
+    assert doc["areas"]["A"]["modules"] == 1 and doc["areas"]["A"]["owners"] == {"@proofs": 1} and doc["areas"]["B"] == {
         "modules": 1, "bytes": len(UNUSED_SOURCES["Proofs.B.Group"].encode()), "frozen": 1,
         "frozen_bytes": len(UNUSED_SOURCES["Proofs.B.Old"].encode()), "owners": {"-": 2}}
     assert doc["total"]["unused"] == 3 and doc["total"]["frozen"] == 1 and doc["total"]["kept_by"]["named"] == 2
@@ -498,7 +504,7 @@ def test_a_guarantee_is_undeclared_only_where_no_package_listing_it_declares_it(
 
 def test_delete_rewrites_the_imports_through_what_it_deleted(stand_in):
     root, policy, usage = stand_in
-    doc = S.listing(root, pruned(root)[1], decide(root, policy, usage, [TEST], ["Proofs.B.Old"]), {PKG: policy}, usage)
+    doc = S.listing(root, pruned(root)[1], decide(root, policy, usage, [TEST], ["Proofs.B.Old"]))
     files = {m: x.file for m, x in pruned(root)[1].items()}
     write(root, {"README.md": f"`{PKG}/B/Group.lean` groups them\n",
                  f"x/{S.C.POLICY}": '{"reads": {"Proofs.B.Group.Sub": {}, "Proofs.B.Group": {}}}\n',

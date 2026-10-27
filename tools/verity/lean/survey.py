@@ -1844,38 +1844,18 @@ def decide(root: Path, pkg: Package, mods: dict[str, Module], policy: dict, usag
             "frozen": [m for m in unused if any(m == f or m.startswith(f + ".") for f in frozen)]}
 
 
-def owners(policies: dict[str, dict], pins: dict[str, str | None]) -> dict[str, str]:
-    """{module prefix: the owner most of the guarantees declared under it have}, for every prefix of a declaring module."""
-    votes: dict[str, Counter] = defaultdict(Counter)
-    for policy in policies.values():
-        for g, e in policy.get("guarantees", {}).items():
-            if (m := pins.get(g)) and (who := (e or {}).get("owner")):
-                parts = m.split(".")
-                for i in range(1, len(parts) + 1):
-                    votes[".".join(parts[:i])][who] += 1
-    return {p: c.most_common(1)[0][0] for p, c in votes.items()}
-
-
-def listing(root: Path, mods: dict[str, Module], decided: dict, policies: dict[str, dict], usage: dict,
-            held: dict[str, str] | None = None) -> dict:
-    """The list: ``decided``'s unused modules, each with its bytes, area (`Module.area`), owner (the owner most of the
-    guarantees declared under its nearest enclosing namespace of modules have, in the locks; else the lane most of the
-    branches merged into its directory's history name) and the documents naming it (`docs`), totals per area and in all;
-    and ``held`` ({module: why}), the modules only a queued PR or the `checks`, `cited` or `suffix` rule keeps, with the
-    same columns."""
-    lead = owners(policies, usage.get("usage", {}).get("pins", {}))
+def listing(root: Path, mods: dict[str, Module], decided: dict, held: dict[str, str] | None = None) -> dict:
+    """The list: ``decided``'s unused modules, each with its bytes, area (`Module.area`), owner (the lane most of the
+    branches merged into its directory's history name, `lane_from_history`) and the documents naming it (`docs`), totals
+    per area and in all; and ``held`` ({module: why}), the modules only a queued PR or the `checks`, `cited` or `suffix`
+    rule keeps, with the same columns."""
     history: dict[str, str | None] = {}
 
     def row(m: str) -> dict:
-        parts = m.split(".")
-        who = next((lead[".".join(parts[:i])] for i in range(len(parts) - 1, 1, -1) if ".".join(parts[:i]) in lead), None)
-        how = "lock"
-        if who is None:
-            if (d := os.path.dirname(mods[m].file)) not in history:
-                history[d] = lane_from_history(root, d)
-            who, how = history[d], "git log"
+        if (d := os.path.dirname(mods[m].file)) not in history:
+            history[d] = lane_from_history(root, d)
         return {"module": m, "path": mods[m].file, "bytes": mods[m].path.stat().st_size, "area": mods[m].area,
-                "owner": who, "owner_from": how, "docs": decided["docs"].get(m, []),
+                "owner": history[d], "docs": decided["docs"].get(m, []),
                 "frozen": any(m == f or m.startswith(f + ".") for f in decided.get("frozen_under", []))}
 
     rows = [row(m) for m in decided["unused"]]
@@ -1922,7 +1902,7 @@ def report(doc: dict) -> str:
     for title, rows, last in (("unused", doc["unused"], "docs"), ("held", doc["held"], "why")):
         if rows:
             out += ["", f"{title} ({len(rows)} modules, {fmt(sum(r['bytes'] for r in rows))} bytes)",
-                    table([[r["module"], fmt(r["bytes"]), r["area"], f"{r['owner'] or '-'} ({r['owner_from']})",
+                    table([[r["module"], fmt(r["bytes"]), r["area"], r["owner"] or "-",
                             "frozen" if r["frozen"] else "", ", ".join(r[last]) if last == "docs" else r[last]]
                            for r in sorted(rows, key=lambda r: (r["area"], r["module"]))],
                           ["module", "bytes", "area", "owner", "frozen", last])]
@@ -2032,7 +2012,7 @@ def run_unused(a) -> int:
     files = tracked(ROOT)
     decided = decide(ROOT, pkgs[p], mods, policies[p], usage, files, a.frozen, queued)
     bare = decide(ROOT, pkgs[p], mods, policies[p], usage, files, a.frozen, doubts=False)["unused"]
-    doc = listing(ROOT, mods, decided, policies, usage, {m: decided["kept"][m] for m in bare if m in decided["kept"]})
+    doc = listing(ROOT, mods, decided, {m: decided["kept"][m] for m in bare if m in decided["kept"]})
     doc |= {"package": p, "locks": sorted(policies), "queued_prs": len(queued),
             "undeclared": undeclared(ms, policies, usage.get("usage", {}).get("pins", {}))}
     if a.out:

@@ -80,7 +80,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (C-Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
-  and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
+  and listed by name in the lock's `assumptions`. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
   takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
   premise is a record change. AGENTS.md "Lean" has the rest.

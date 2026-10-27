@@ -46,7 +46,7 @@ def built(**guarantees: dict) -> dict:
 def record(deps: dict | None = None, **guarantees: dict) -> dict:
     """The record `check.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
     fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, built(**guarantees),
-                         FILES, update=True, owner="@lean")
+                         FILES, update=True)
     assert fails == []
     return pol | {"dependencies": deps or {"mathlib": "a" * 64, "toolchain": "c" * 64}}
 
@@ -116,33 +116,41 @@ def test_a_derived_record_both_sides_changed_merges_as_ours_and_the_merged_build
 
 
 def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
-    """A dependency bumped two ways, an owner set two ways and a `frozen` entry written two ways refuse, whatever derived
-    record merges as a candidate beside them."""
+    """A dependency bumped two ways and a `frozen` entry written two ways refuse, whatever derived record merges as a
+    candidate beside them."""
     base = record(t=thm([F]))
     restated = lambda s, h: record(t=thm([F], s, h))
     ours, theirs = restated("P.f n ≤ n", "00000000000000dd"), restated("P.f n < n + 1", "00000000000000ee")
     deps = lambda d: {"dependencies": {"mathlib": d * 64, "toolchain": "c" * 64}}
     assert M.merge(base, ours | deps("b"), theirs | deps("d"))[1] == [
         "dependencies[mathlib]: changed on both sides, differently"]
-    owner = lambda rec, who: rec | {"guarantees": {"P.t": rec["guarantees"]["P.t"] | {"owner": who}}}
-    assert M.merge(base, owner(ours, "@proofs"), owner(theirs, "@circuits"))[1] == [
-        "guarantees[P.t].owner: changed on both sides, differently"]
     frozen = lambda rec, why: rec | {"shape": {"frozen": {"P.t": why}}}
     assert M.merge(base, frozen(ours, "lemma"), frozen(theirs, "restatable"))[1] == [
         "shape[frozen][P.t]: added on both sides, differently"]
-    hyp = lambda rec, who: rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
-    assert M.merge(hyp(base, "@lean"), hyp(ours, "@proofs"), hyp(theirs, "@circuits"))[1] == [
-        "assumptions[P.Hyp].owner: changed on both sides, differently"]
 
 
-def test_an_owner_merges_apart_from_the_statement():
-    base = record(t=thm([F]))
-    unowned = {**base, "guarantees": {"P.t": A.unowned(base["guarantees"]["P.t"])}}
-    restated = record(t=thm([F], "P.f n ≤ n", "00000000000000dd"))
-    merged, why = M.merge(unowned, base, {**restated, "guarantees": {"P.t": A.unowned(restated["guarantees"]["P.t"])}})
-    assert why == [] and merged["guarantees"] == restated["guarantees"], "one side's owner, the other's restatement"
-    other = {**base, "guarantees": {"P.t": base["guarantees"]["P.t"] | {"owner": "@proofs"}}}
-    assert M.merge(unowned, base, other)[1] == ["guarantees[P.t].owner: added on both sides, differently"]
+def owned(rec: dict, who: str) -> dict:
+    """``rec`` as an older lock writes it, each guarantee and assumption naming ``who`` as its `owner`."""
+    return rec | {s: {k: {"owner": who} | r for k, r in rec[s].items()} for s in ("guarantees", "assumptions") if s in rec}
+
+
+def test_a_side_whose_entries_name_an_owner_merges_to_today_s_record_and_normalizes(tmp_path):
+    """A branch from before the locks dropped their owners, merged with one from after or with another such branch that
+    names other owners, is read without them: the merge is the merged tree's record, and `--normalize` drops them from a
+    lock alone."""
+    t, u = thm([F]), thm([F, G], "P.g n = n", "00000000000000bb")
+    hyp = lambda rec: rec | {"assumptions": {"P.Hyp": {"digest": "a" * 64}}}
+    base, ours, theirs = hyp(record(t=t)), hyp(record(t=thm([F], "P.f n ≤ n", "00000000000000dd"))), hyp(record(t=t, u=u))
+    tree = hyp(record(t=thm([F], "P.f n ≤ n", "00000000000000dd"), u=u))
+    for sides in ((owned(base, "@lean"), ours, owned(theirs, "@proofs")), (base, owned(ours, "@lean"), theirs),
+                  (owned(base, "@lean"), owned(ours, "@proofs"), owned(theirs, "@circuits"))):
+        for n, d in zip(("base", "ours", "theirs"), sides):
+            (tmp_path / n).write_text(A.text(d))
+        assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 0
+        assert (tmp_path / "ours").read_text() == A.text(tree)
+    path = tmp_path / "lean-audit.json"
+    path.write_text(A.text(owned(tree, "@lean")))
+    assert M.main(["--normalize", str(path)]) == 0 and path.read_text() == A.text(tree)
 
 
 def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_side_changed_its_module():
@@ -195,10 +203,10 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     base = record(t=thm([F, G]))
     drop_g = record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000bb"))
     keep_g = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
-    hyp = lambda rec, d: rec | {"assumptions": {"P.Hyp": {"owner": "@lean", "digest": d * 64}}}
+    hyp = lambda rec, d: rec | {"assumptions": {"P.Hyp": {"digest": d * 64}}}
     merged, why = M.merge(hyp(base, "a"), hyp(drop_g, "b"), hyp(keep_g, "c"), candidate := [])
     assert why == [] and "assumptions[P.Hyp].digest (ours)" in candidate
-    assert merged["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": "b" * 64}}
+    assert merged["assumptions"] == {"P.Hyp": {"digest": "b" * 64}}
     merged, why = M.merge(hyp(base, "a"), drop_g, hyp(keep_g, "c"), candidate := [])
     assert why == [] and "assumptions[P.Hyp]" in candidate and merged["assumptions"]["P.Hyp"]["digest"] == "c" * 64
     tree = built(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000bb"), v=thm([H], "P.h n = n", "00000000000000cc"))
@@ -208,14 +216,14 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
 
 
-def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner():
+def test_a_guarantee_one_side_removed_stays_removed_over_the_other_side_s_change():
     base = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"))
     ours = record(t=thm([F]))
     theirs = record(t=thm([F]), u=thm([F, G], "P.g n = n + 0", "00000000000000dd"))
     merged, why = M.merge(base, ours, theirs, candidate := [])
     assert why == [] and candidate == ["guarantees[P.u] (removed)"] and merged["guarantees"] == ours["guarantees"]
-    owner = theirs | {"guarantees": theirs["guarantees"] | {"P.u": theirs["guarantees"]["P.u"] | {"owner": "@proofs"}}}
-    assert M.merge(base, ours, owner)[1] == ["guarantees[P.u]: removed on one side and changed on the other"]
+    merged, why = M.merge(base, ours, base, candidate := [])
+    assert why == [] and candidate == [] and merged["guarantees"] == ours["guarantees"], "unchanged there: no candidate"
 
 
 FIXTURES = HERE / "fixtures" / "merge"

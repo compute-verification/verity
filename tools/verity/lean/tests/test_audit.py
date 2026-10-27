@@ -89,7 +89,7 @@ def facts(**over):
 
 
 FILES = {"P": "P.lean", "P.Assumptions": "P/Assumptions.lean", "P.Defs": "P/Defs.lean", "P.Thms": "P/Thms.lean"}
-POLICY = {"roots": ["P"], "assumptions": {"P.Hyp": {"owner": "@lean"}}, "guarantees": {"P.t": {"owner": "@lean"}}}
+POLICY = {"roots": ["P"], "assumptions": {"P.Hyp": {}}, "guarantees": {"P.t": {}}}
 
 
 def recorded(f=None):
@@ -108,7 +108,7 @@ def test_four_names_holds_the_guarantees_under_the_roots_it_lists_to_the_four_na
             "P.SecurityProofs.V": lifted("P.SecurityProofs.V", "P.Guarantees.V", binders=" (n : Nat)", args=" n"),
             "P.SecurityProofs.X": lifted("P.SecurityProofs.X", "P.Guarantees.Y"),
             "Q.u": fact(signature="Q.u : True", hyps=[], reads=[])}
-    policy = POLICY | {"four_names": ["P"], "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    policy = POLICY | {"four_names": ["P"], "guarantees": {n: {} for n in pins}}
     fails, _ = A.judge(policy, facts(pins=pins), FILES, update=True)
     assert [f.split(" is a guarantee")[0] for f in fails] == [
         f"four names: P.{n}" for n in ("SecurityProofs.V", "SecurityProofs.W", "SecurityProofs.X", "t")]
@@ -117,7 +117,7 @@ def test_four_names_holds_the_guarantees_under_the_roots_it_lists_to_the_four_na
 
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
-    assert pol["guarantees"]["P.t"] == {"owner": "@lean", "signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"],
+    assert pol["guarantees"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"],
                                         "assumptions": ["P.Hyp"], "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and set(pol["reads"]["P.Defs"]) == {"digest", "definitions"}
@@ -152,21 +152,14 @@ def test_a_lock_listing_its_readers_is_a_record_difference_an_update_drops():
     assert A.review(listed, pol, facts(), {}) == []
 
 
-def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
+def test_an_owner_an_older_lock_names_is_read_past_and_an_update_drops_it():
+    """An entry's `owner` is no part of its record: a lock from before the locks dropped them passes as it is, and its
+    update is today's record, with nothing in the review."""
     pol = recorded()
-    bare = {**POLICY, "guarantees": {"P.t": {}}}
-    no_owner = ('guarantees: P.t has no owner: write "owner": "@lane" in its entry, the handle of the lane that answers for '
-                'it, or run `check.py --update --owner @lane`')
-    fails, written = A.judge(bare, facts(), FILES, update=True)
-    assert fails == [no_owner] and written["guarantees"] == {"P.t": {}}, "no record is written for a guarantee without an owner"
-    assert A.judge(bare, facts(), FILES, update=True, owner="@proofs")[1]["guarantees"]["P.t"]["owner"] == "@proofs"
-    assert A.judge(pol, facts(), FILES, update=True, owner="@proofs")[1] == pol, "an entry's owner is kept"
-    assert A.judge({**pol, "guarantees": {"P.t": A.unowned(pol["guarantees"]["P.t"])}}, facts(), FILES)[0] == [no_owner]
-    odd = {**pol, "guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "proofs"}}}
-    assert A.judge(odd, facts(), FILES)[0] == ["guarantees: P.t's owner 'proofs' is not a handle such as @proofs"]
-    handed = {**pol, "guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "@compute-accounting"}}}
-    text = A.review(pol, handed, facts(), {})
-    assert text == [f"guarantee P.t: owner @lean -> @compute-accounting: {A.OWNED}"] and A.statement_changes(text) == []
+    older = pol | {s: {k: {"owner": "@lean"} | r for k, r in pol[s].items()} for s in ("guarantees", "assumptions")}
+    assert A.judge(older, facts(), FILES)[0] == []
+    assert A.judge(older, facts(), FILES, update=True) == ([], pol)
+    assert A.review(older, pol, facts(), {}) == []
 
 
 def spec_facts(reads=None, outside=(), spec=()):
@@ -466,7 +459,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
     premised = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
     premised["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"}]
     for policy, now in [
-            (POLICY, facts()),                                                      # owned, no record yet
+            (POLICY, facts()),                                                      # listed, no record yet
             ({**A.judge(POLICY, facts(pins={"P.t": premised}), FILES, update=True)[1], "assumptions": {}},
              facts(pins={"P.t": premised})),                                        # a premise the lock doesn't list
             (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})),
@@ -482,9 +475,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
         "assumptions: P.Hyp's definition in P.Assumptions changed;")
     signed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
     for policy, now, files in [(pol, facts(), FILES),                                      # passes
-                               ({**POLICY, "guarantees": {"P.t": {}}}, facts(), FILES),    # no record and no owner
                                (pol, facts(pins={}), FILES),                               # renamed or gone: `--moved`
-                               (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
                                (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
         assert A.regenerated(policy, now, files, A.judge(policy, now, files)[0]) is None
 
@@ -503,7 +494,7 @@ def test_every_record_difference_code_is_one_update_settles():
            {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
     cases = {
         "guarantees.unrecorded": (POLICY, facts()),
-        "assumptions.unrecorded": (pol | {"assumptions": {"P.Hyp": {"owner": "@lean"}}}, facts()),
+        "assumptions.unrecorded": (pol | {"assumptions": {"P.Hyp": {}}}, facts()),
         "assumptions.unlisted-premise": ({**A.judge(POLICY, facts(pins={"P.t": premised}), FILES, update=True)[1],
                                           "assumptions": {}}, facts(pins={"P.t": premised})),
         "guarantees.signature": (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n")})),
@@ -516,7 +507,7 @@ def test_every_record_difference_code_is_one_update_settles():
         "guarantees.readers": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}, facts()),
         "guarantees.reads-digest": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}, facts()),
         "assumptions.digest": (pol, facts(pins={"P.t": fact(reads=hyp)})),
-        "assumptions.unread": (pol | {"assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}},
+        "assumptions.unread": (pol | {"assumptions": pol["assumptions"] | {"P.Other": {"digest": "0" * 64}}},
                                facts()),
     }
     assert set(cases) == A.RECORD_DIFFERENCE
@@ -536,7 +527,7 @@ def test_what_settles_is_keyed_on_codes_not_text():
     reworded = A.Failure(unrecorded.code, unrecorded.entry, "guarantees: P.t is not recorded yet")
     assert A.regenerated(POLICY, now, FILES, [reworded]) == A.judge(POLICY, now, FILES, update=True)[1]
     assert A.regenerated(POLICY, now, FILES, [str(unrecorded)]) is None, "the same text without its code settles nothing"
-    lookalike = A.Failure("guarantees.no-owner", "P.t", str(unrecorded))
+    lookalike = A.Failure("guarantees.missing", "P.t", str(unrecorded))
     assert A.regenerated(POLICY, now, FILES, [lookalike]) is None
     assert A.regenerated(POLICY, now, FILES, [reworded, lookalike]) is None
     assert A.code_of(unrecorded) == "guarantees.unrecorded" and A.code_of(str(unrecorded)) is None
@@ -610,7 +601,7 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
         "theorem c {x : Nat} : x + 0 = x := rfl\ntheorem d (x : Nat) : 0 + x = x := Nat.zero_add x\nend Control\n")
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Alpha\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {"owner": "@lean"} for n in "abcd"}}, tmp_path)
+    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in "abcd"}}, tmp_path)
     got = {n: f["pins"][f"Control.{n}"]["type_sha256"] for n in "abcd"}
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
@@ -718,7 +709,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
                      f"theorem c (n : Nat) : {fin} := rfl\nend Control\n")
     pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Moves": {"imports": []}},
-                       "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.a", "Control.b", "Control.c")}})
+                       "guarantees": {n: {} for n in ("Control.main_thm", "Control.a", "Control.b", "Control.c")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
@@ -790,7 +781,7 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "theorem v (h : Hyp) (n : Nat) : double n = n + n := by unfold double; omega\n"
         "theorem w (n : Nat) : double n = n + n := by unfold double; omega\n"
         "end Control\n")
-    A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
+    A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {f"Control.{n}": {} for n in ("main_thm", *"pqrstvw")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
     build()
@@ -978,8 +969,8 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 
 def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
     """A whole-Security replay holds about 120 GiB whatever its threads (one with 16 was killed at 128 GiB),
-    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
-    it; the package alone needs the build's floor."""
+    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and the refusal says to run the
+    whole audit on a machine that has it; the package alone needs the build's floor."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
     for p in (proofs, spec):
         p.mkdir()
@@ -988,7 +979,7 @@ def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(t
     assert A.memory_refusal([proofs], 32) is None
     why = A.memory_refusal([spec, proofs], 32)
     assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
-    assert "--kind lean-audit" in (A.memory_refusal([spec, proofs], 128) or "")
+    assert f"check.py --build {spec}` on a machine with {A.SPEC_FLOOR_GIB} GiB" in (A.memory_refusal([spec, proofs], 128) or "")
     assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
 
 
@@ -1057,7 +1048,7 @@ def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
     (tmp_path / "READY.json").write_text("{}\n")
     with pytest.raises(SystemExit):
         A.main([str(pkg), "--update"])
-    assert "--cwd clone" in capsys.readouterr().err
+    assert "rerun in a clone of its own" in capsys.readouterr().err
 
 
 def test_a_theorem_s_statement_is_read_from_its_source():
@@ -1091,7 +1082,7 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
         "open Classical in\ntheorem pick (p : Prop) : (if p then j else j) = j + 0 := by split <;> rfl\nend\n"
         "end Control.Sub\n")
     pol = unclaimed(A.load(pkg))
-    A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
+    A.dump(pkg, pol | {"guarantees": {n: {} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
                                                                         "Control.Sub.pick")},
                        "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -1186,16 +1177,16 @@ def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
     assert sorted(A.read_groups(A.guarantee_reads(rec))["P.Defs"]["definitions"]) == ["P.g", "P.walk"]   # through its `_f`
 
 
-def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_out():
+def test_regrouped_records_of_unchanged_declarations_are_one_line_the_notification_leaves_out():
     """A record whose declarations are unchanged but whose generated constants are grouped differently (`group_keys`) is
-    counted on one line that `statement_changes` leaves out, so the landing DM lists only real changes; a changed declaration
+    counted on one line that `statement_changes` leaves out, so the notification of the changed records lists only real changes; a changed declaration
     among them is still listed."""
     enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
     mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
     cases = {"name": "P.Enc.casesOn", "module": "P.Defs", "kind": "def", "hash": "3" * 32, "own": []}
     g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32, "own": []}
     hyp = {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "6" * 32, "own": []}
-    pol = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}}}
+    pol = {**POLICY, "guarantees": {"P.t": {}}}
     now = facts(pins={"P.t": fact(reads=[enc, mk, cases, g, hyp])})
     sha_ = lambda *rs: A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
     by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
@@ -1335,7 +1326,7 @@ def test_a_lift_the_audit_cannot_certify_is_a_change_of_meaning():
         assert f"definition P.T ({module}), read by P.t: new" in text
     assert "  named assumptions: P.Hyp -> none" in text
     two = facts(pins={"P.t": fact(), "P.u": fact(signature="P.u : True", h="00000000000000dd")})
-    old = A.judge(POLICY | {"guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}, two, FILES, update=True)[1]
+    old = A.judge(POLICY | {"guarantees": {"P.t": {}, "P.u": {}}}, two, FILES, update=True)[1]
     now = facts(pins={"P.t": lifted_fact(), "P.u": lifted_fact(name="P.u", unfolded="00000000000000ee")})
     text = A.review(old, A.judge(old, now, FILES, update=True)[1], now, {})
     assert text[0] == f"guarantee P.t: lifted into P.T: {A.LIFTED}" and text[1] == "guarantee P.u: changed"
@@ -1375,7 +1366,7 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
 def test_a_premise_the_lock_does_not_list_fails():
     """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
     hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
-    `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; otherwise a merge
+    `P.Hyp`) fails while the lock doesn't list it, and an update adds it; otherwise a merge
     that drops such an entry (as one did `Flock.Assumptions.RegistrantCovers`') passes. Without an import graph to say
     which modules the repository builds, a premise outside an assumptions module is not counted (the next test has one)."""
     applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
@@ -1385,13 +1376,13 @@ def test_a_premise_the_lock_does_not_list_fails():
     f = facts(pins={"P.t": pin})
     fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
     assert fails == [] and pol["assumptions"] == {
-        "P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
+        "P.Hyp": {"digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     assert A.judge(pol, f, FILES)[0] == []
     digest = pol["assumptions"]["P.Hyp"]["digest"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (the landing DM shows it), or write \"P.Hyp\": "
-        f"{{\"owner\": \"@lean\", \"digest\": \"{digest}\"}} under `assumptions`."]
+        "and commit the record (a notification of the changed records, on landing, shows it), or write \"P.Hyp\": "
+        f"{{\"digest\": \"{digest}\"}} under `assumptions`."]
 
 
 def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
@@ -1410,12 +1401,12 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_depend
     f = facts(pins={"P.t": pin}, graph=graph)
     assert A.own_modules(f) == {"P.Defs"}
     fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
-    assert fails == [] and list(pol["assumptions"]) == ["P.Sound"] and pol["assumptions"]["P.Sound"]["owner"] == "@lean"
+    assert fails == [] and pol["assumptions"] == {"P.Sound": {}}
     assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (the landing DM shows it), or write \"P.Sound\": "
-        "{\"owner\": \"@lean\"} under `assumptions`."]
+        "and commit the record (a notification of the changed records, on landing, shows it), or write \"P.Sound\": "
+        "{} under `assumptions`."]
 
 
 def asserted(head, module="P.Assumptions", props=False):
@@ -1437,7 +1428,7 @@ def test_an_alias_of_listed_assumptions_is_no_new_named_assumption():
     another such definition) failed as a new named assumption, and listing or renaming it took another records run. It is
     not one: the check holds its parts to the lock in its place (so a listed part reached only through it is read), an
     update doesn't add it, and taken closed, its parts are the guarantee's named assumptions."""
-    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}}}
+    listed = {**POLICY, "assumptions": {"P.Hyp": {}, "P.Hyp2": {}}}
     for unfolds in ({"P.Both": [asserted("P.Hyp"), asserted("P.Hyp2")]},
                     {"P.Both": [asserted("P.Inner", "P.Defs"), asserted("P.Hyp")], "P.Inner": [asserted("P.Hyp2")]}):
         fails, pol = A.judge(listed, aliased(unfolds), FILES, update=True)
@@ -1453,7 +1444,7 @@ def test_an_alias_hiding_anything_but_listed_assumptions_is_a_new_one_and_its_fa
     """Fail-closed: a premise that unfolds to anything but listed assumptions (one the lock doesn't list, `False`, a bound
     predicate, a constant applied to a proposition or a predicate, a part that doesn't unfold) stays a new named assumption,
     taken open or closed; its failure says what it unfolds to and the entry an update would write, so one edit settles it."""
-    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}}}
+    listed = {**POLICY, "assumptions": {"P.Hyp": {}}}
     pol = A.judge(listed, aliased({"P.Both": [asserted("P.Hyp")]}), FILES, update=True)[1]
     cases = {"P.Hidden": [asserted("P.Hyp"), asserted("P.Hidden")],
              "False": [asserted("P.Hyp"), asserted("False", "Init.Prelude")],
@@ -1466,16 +1457,16 @@ def test_an_alias_hiding_anything_but_listed_assumptions_is_a_new_one_and_its_fa
         beside = " beside the listed P.Hyp" if why != "P.Hyp applied to a proposition or predicate" else ""
         assert fails == [
             "assumptions: P.Both is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-            "with its guarantees' owner and commit the record (the landing DM shows it), or write \"P.Both\": "
-            f"{{\"owner\": \"@lean\"}} under `assumptions`. It unfolds to {why}{beside}, so it is no alias of listed "
+            "and commit the record (a notification of the changed records, on landing, shows it), or write \"P.Both\": "
+            f"{{}} under `assumptions`. It unfolds to {why}{beside}, so it is no alias of listed "
             "assumptions, which the lock would not count."], (why, fails)
         assert "P.Both" in A.judge(listed, got, FILES, update=True)[1]["assumptions"]
-        assert A.judge({**pol, "assumptions": pol["assumptions"] | {"P.Both": {"owner": "@lean"}}}, got, FILES)[0] == []
+        assert A.judge({**pol, "assumptions": pol["assumptions"] | {"P.Both": {}}}, got, FILES)[0] == []
         closed = aliased({"P.Both": parts}, closed=True)
         assert "guarantees: P.t assumes (h : P.Both), a closed Prop" in "".join(A.judge(listed, closed, FILES, update=True)[0])
     hidden = aliased({"P.Both": cases["P.Hidden"]})
     hidden["pins"]["P.u"] = fact() | {"premises": [{"binder": "h", "head": "P.Hidden", "module": "P.Assumptions"}]}
-    fails, pol = A.judge({**listed, "guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}, hidden, FILES,
+    fails, pol = A.judge({**listed, "guarantees": {"P.t": {}, "P.u": {}}}, hidden, FILES,
                          update=True)
     assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Hidden"} and A.judge(pol, hidden, FILES)[0] == []
 
@@ -1528,8 +1519,8 @@ def test_aliases_of_listed_assumptions_pass_and_aliases_hiding_others_fail_on_a_
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     names = ["t_both", "t_bothR", "t_nested", "t_closed", "t_sneaky", "t_sneakyR", "t_absurd", "t_rec"]
     policy = unclaimed(A.load(pkg))
-    policy["guarantees"] = policy["guarantees"] | {f"Control.{n}": {"owner": "@lean"} for n in names}
-    policy["assumptions"] = policy["assumptions"] | {"Control.A": {"owner": "@lean"}, "Control.B": {"owner": "@lean"}}
+    policy["guarantees"] = policy["guarantees"] | {f"Control.{n}": {} for n in names}
+    policy["assumptions"] = policy["assumptions"] | {"Control.A": {}, "Control.B": {}}
     f = A.facts_of(pkg, policy, tmp_path)
     files = A.lean_modules(pkg)
     new = lambda fails: sorted(x.split(" ")[1] for x in fails if x.code in ("assumptions.unlisted-premise",
@@ -1543,8 +1534,7 @@ def test_aliases_of_listed_assumptions_pass_and_aliases_hiding_others_fail_on_a_
 
 
 def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
-    """A premise whose module is outside `meaning` (a Proofs module) has no `reads` record, and its entry was an owner
-    alone, so strengthening `RecDeploy.PlainLeavesAdmitted` changed no record. Its digest is now its walk's
+    """A premise whose module is outside `meaning` (a Proofs module) has no `reads` record, and its entry was empty, so strengthening `RecDeploy.PlainLeavesAdmitted` changed no record. Its digest is now its walk's
     (`Facts.lean`'s `assumption_reads`: it and what it reads): a change to either fails under its name, and an update
     writes it, which the review prints."""
     pin = fact(signature="P.t (n : Nat) (h : P.Leaves n) : P.f n = n", hyps=[])
@@ -1554,15 +1544,15 @@ def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
                                        {"name": "P.bound", "module": "P.Thms", "kind": "def", "sha256": sha(bound)}]}
     f = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 1"))
     fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
-    assert fails == [] and pol["assumptions"] == {"P.Leaves": {"owner": "@lean", "digest": A.digest(walk("n + 1")["P.Leaves"])}}
+    assert fails == [] and pol["assumptions"] == {"P.Leaves": {"digest": A.digest(walk("n + 1")["P.Leaves"])}}
     assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
     moved = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 2"))
     assert A.judge(pol, moved, FILES)[0] == [
         "assumptions: P.Leaves's definition in P.Thms, or a definition it reads, changed; run `check.py --update` and commit "
-        "the record (the landing DM shows the change)"]
+        "the record (a notification of the changed records, on landing, shows the change)"]
     new = A.judge(pol, moved, FILES, update=True)[1]
     assert A.assumption_changes(pol, new) == ["assumption P.Leaves: changed (its statement or a definition it reads)"]
-    bare = {**pol, "assumptions": {"P.Leaves": {"owner": "@lean"}}}
+    bare = {**pol, "assumptions": {"P.Leaves": {}}}
     assert A.judge(bare, f, FILES)[0][0].startswith("assumptions: P.Leaves has no record")
     assert A.assumption_changes(bare, pol) == ["assumption P.Leaves: recorded: its statement and the definitions it reads, "
                                                "digested"]
@@ -1591,14 +1581,14 @@ def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_c
     pol = A.load(pkg)
     A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
                        "reads_exempt": {"Control.Leaves": "the premise outside `meaning` this test digests"},
-                       "guarantees": pol["guarantees"] | {"Control.leaf": {"owner": "@lean"}}})
+                       "guarantees": pol["guarantees"] | {"Control.leaf": {}}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda update: A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
     build()
     assert unshaped(audit(True)) == []
     first = (pkg / A.POLICY).read_text()
     rec = json.loads(first)["assumptions"]
-    assert set(rec) == {"Control.Hyp", "Control.Leaves"} and rec["Control.Leaves"]["owner"] == "@lean"
+    assert set(rec) == {"Control.Hyp", "Control.Leaves"} and set(rec["Control.Leaves"]) == {"digest"}
     assert len(rec["Control.Leaves"]["digest"]) == 64 and "Control.Leaves" not in json.dumps(json.loads(first)["reads"])
     build()
     assert unshaped(audit(False)) == [] and unshaped(audit(True)) == [] and (pkg / A.POLICY).read_text() == first
@@ -1644,8 +1634,8 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert fails == [
         "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
         "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, by P.verify -> P.fast: compiled code "
-        "no proof sees; if it belongs there, run `check.py --update`, which lists it under `verifier.allow` (the landing DM "
-        "shows it), else take it off the path",
+        "no proof sees; if it belongs there, run `check.py --update`, which lists it under `verifier.allow` (a notification of the changed "
+        "records, on landing, shows it), else take it off the path",
         "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
         "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
     assert A.verifier_failures(None, path) == []
@@ -1656,7 +1646,7 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
 
 def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
     """`verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
-    `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
+    `--update` writes it, so the notification of the changed records shows one added: an Init extern the list doesn't name fails (no `module:Init`
     admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
     path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
             "implemented_by": [{"name": "Array.foldlM", "module": "Init.Data.Array.Basic", "by": "Array.foldlMUnsafe"}],
@@ -1664,8 +1654,8 @@ def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
     rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Array.foldlM", "Nat.add"]}
     assert A.verifier_failures(rule, path) == [
         "verifier: ByteArray.push (@[extern], in Init.Data.ByteArray.Basic) is on the path from P.verify: compiled code no "
-        "proof sees; if it belongs there, run `check.py --update`, which lists it under `verifier.allow` (the landing DM "
-        "shows it), else take it off the path"]
+        "proof sees; if it belongs there, run `check.py --update`, which lists it under `verifier.allow` (a notification of the changed "
+        "records, on landing, shows it), else take it off the path"]
     assert A.verifier_failures({**rule, "allow": [*rule["allow"], "ByteArray.push", "UInt64.add"]}, path) == [
         "verifier: `verifier.allow` lists UInt64.add, which admits nothing on the path from P.verify; run `check.py --update`"]
     assert A.verifier_failures({**rule, "allow": ["module:Init"]}, path) == []
@@ -1707,7 +1697,7 @@ def test_the_verifiers_path_also_starts_from_each_executables_main():
         rows,
         "verifier: Task.spawn (@[extern], in Init.Core) is on the path from PVerify's main (the p-verify executable), by "
         "main -> P.fold -> P.par -> Task.spawn: compiled code no proof sees; if it belongs there, run `check.py --update`, "
-        "which lists it under the p-verify executable's list in `verifier.allow_in` (the landing DM shows it), else take "
+        "which lists it under the p-verify executable's list in `verifier.allow_in` (a notification of the changed records, on landing, shows it), else take "
         "it off the path"]
     f = facts(); f["verifier"] = path
     fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
@@ -1761,7 +1751,7 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
     rule = {"modules": ["P.Claims"], "not": {"P.Helper": "a collision, which the claims read"},
             "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]},
                           "P.Complete": {"fails": "P.Complete_fails", "meets": ["P.Complete_meets", "P.Complete_zk"]}}}
-    policy = {**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    policy = {**POLICY, "claims": rule, "guarantees": {n: {} for n in pins}}
     f = facts(pins=pins, spec_definitions=defs)
     assert A.claim_failures(policy, f) == [
         "claims: P.Complete_fails does not state that P.Complete fails: past its ∀ and ∃ binders its statement must be "
@@ -1769,7 +1759,7 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         "claims: P.Complete_meets states P.Complete itself: a `meets` witness states the claim's checkable antecedents at a "
         "deployed record (a decoder meeting its bound, a non-empty scope), not the claim",
         "claims: P.Complete_zk, P.Complete's `meets` witness, is not under `guarantees`: list it there, so its record shows "
-        "in the landing DM"]
+        "in the notification of the changed records, on landing"]
     assert A.claim_failures({**policy, "claims": {**rule, "not": {}}}, f)[0].startswith(
         "claims: P.Helper (P.Claims) is a claim definition with no witnesses: name its `P.Helper_fails`")
     good = {**rule, "witnesses": {"P.KS": rule["witnesses"]["P.KS"]}, "not": {**rule["not"], "P.Complete": "not yet stated"}}
@@ -1791,8 +1781,8 @@ def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
             "P.KS_meets": fact() | {"body": {"head": "P.Within", "negated": False, "conclusion": [within], "absurd": False}}}
     rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}},
             "not": {"P.Within": "a decoder's bound, which the claims read", "P.Other": "a helper"}}
-    policy = {**POLICY, "assumptions": {**POLICY["assumptions"], "P.KS": {"owner": "@proofs"}, "P.Within": {"owner": "@proofs"}},
-              "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    policy = {**POLICY, "assumptions": {**POLICY["assumptions"], "P.KS": {}, "P.Within": {}},
+              "claims": rule, "guarantees": {n: {} for n in pins}}
     f = facts(pins=pins, spec_definitions=defs)
     assert A.claim_failures(policy, f) == []
     assert A.claim_failures({**policy, "claims": {**rule, "not": {**rule["not"], "P.Gone": "moved"}}}, f) == [
@@ -1821,7 +1811,7 @@ def test_a_meets_witness_says_something_about_the_deployment():
                                                  "negated": False, "conclusion": list(conclusion), "absurd": absurd}}}
         rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}}}
         f = facts(pins=pins, spec_definitions=[{"name": "P.KS", "module": "P.Claims", "kind": "def", "predicate": True}])
-        fails = A.claim_failures({**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}, f)
+        fails = A.claim_failures({**POLICY, "claims": rule, "guarantees": {n: {} for n in pins}}, f)
         assert all(x.endswith("applies a definition of the spec (the deployed record, a predicate or a field of it)")
                    for x in fails)
         return [x.removeprefix("claims: P.KS_meets, P.KS's `meets` witness, ").partition(":")[0] for x in fails]
@@ -1866,7 +1856,7 @@ def witnessed(guarantee=None, honest=None, nontrivial=None, **policy):
             | (guarantee or {}),
             "P.sound_honest": fact(hyps=[]) | {"body": wbody("P.Compiled")} | (honest or {}),
             "P.sound_nontrivial": fact(hyps=[]) | {"body": wbody("P.Holds", negated=True)} | (nontrivial or {})}
-    pol = {**POLICY, "guarantees": {n: {"owner": "@lean"} for n in pins},
+    pol = {**POLICY, "guarantees": {n: {} for n in pins},
            "witnesses": {"P.sound": {"honest": ["P.sound_honest"], "nontrivial": "P.sound_nontrivial"}}} | policy
     return pol, facts(pins=pins, own_modules=sorted(WOWN))
 
@@ -1984,7 +1974,7 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     guarantee moved), drops every other, and adds none, so a new guarantee in scope fails until it has witnesses."""
     pol, f = witnessed()
     h = f["pins"]["P.sound"]["type_sha256"]
-    bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}, "unwitnessed": {"P.sound": h}}
+    bare = {**POLICY, "guarantees": {"P.sound": {"type_hash": h}}, "unwitnessed": {"P.sound": h}}
     assert A.witness_failures(bare, f, WOWN) == []
     assert A.unwitnessed_kept(bare, f, {}) == {"P.sound": h}
     changed = {**bare, "unwitnessed": {"P.sound": sha("other")}}
@@ -2023,16 +2013,16 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert witness_codes({**bare, "unwitnessed": []}, f) == ["witnesses.form"]
 
     two = facts(pins={**f["pins"], "P.sound2": f["pins"]["P.sound"]}, own_modules=sorted(WOWN))
-    grown = {**bare, "guarantees": {**bare["guarantees"], "P.sound2": {"owner": "@lean"}}}
+    grown = {**bare, "guarantees": {**bare["guarantees"], "P.sound2": {}}}
     assert witness_codes(grown, two) == ["witnesses.missing"]
     assert A.unwitnessed_kept(grown, two, {}) == {"P.sound": h}
 
     old = sha("before the move")
     moved = facts(pins={"P.sound": f["pins"]["P.sound"] | {"moved": {"sha256": old}}}, own_modules=sorted(WOWN))
-    was = {**bare, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": old}}, "unwitnessed": {"P.sound": old}}
+    was = {**bare, "guarantees": {"P.sound": {"type_hash": old}}, "unwitnessed": {"P.sound": old}}
     assert witness_codes(was, moved) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(was, moved, {}) == {"P.sound": h}
-    assert A.unwitnessed_kept({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved, {}) == {}
+    assert A.unwitnessed_kept({**was, "guarantees": {"P.sound": {"type_hash": sha("x")}}}, moved, {}) == {}
 
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
@@ -2078,7 +2068,7 @@ def test_a_witness_constructs_its_instance_and_takes_only_listed_assumptions():
     assert witness_codes(*witnessed(nontrivial=in_scope)) == ["witnesses.nontrivial-assumes"]
     assert witness_codes(*witnessed(honest={"hypotheses": unlisted})) == ["witnesses.honest-form"]
     pol, f = witnessed(nontrivial=in_scope)
-    assert witness_codes({**pol, "assumptions": {**pol["assumptions"], "P.FalseInScope": {"owner": "@proofs"}}}, f) == []
+    assert witness_codes({**pol, "assumptions": {**pol["assumptions"], "P.FalseInScope": {}}}, f) == []
 
 
 def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
@@ -2112,7 +2102,7 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
         return {"body": wbody("And", conclusion=list(conjuncts))} | more
     beats = nt(wk("P.Compiled"), neg("P.Covers"), neg("LE.le"))
     pol, f = witnessed(g, nontrivial=beats)
-    pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
+    pol["assumptions"] = {**pol["assumptions"], "P.Covers": {}}
     assert A.witness_scope("P.sound", pol, f["pins"]["P.sound"]) == (
         "exclusion", "it concludes a bound and reads P.Covering.load of P.Covering, a partition or covering, and no acceptance")
     assert A.witness_failures(pol, f, WOWN) == []
@@ -2170,21 +2160,17 @@ def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():
-    """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
-    record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
-    there, owned by the owner of the guarantees that read them."""
+    """Each assumption has the digest of its definition as `reads` holds it, so a changed assumption is its own record; an
+    entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read there."""
     pol = recorded()
-    assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
+    assert pol["assumptions"] == {"P.Hyp": {"digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
     assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `check.py --update` and commit the record " \
-           "(the landing DM shows the change)" in A.judge(pol, changed, FILES)[0]
-    unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
+           "(a notification of the changed records, on landing, shows the change)" in A.judge(pol, changed, FILES)[0]
+    unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"digest": "0" * 64}}}
     assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
     assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
-    unowned = {**pol, "assumptions": {"P.Hyp": {"digest": pol["assumptions"]["P.Hyp"]["digest"]}}}
-    assert A.judge(unowned, facts(), FILES)[0] == ['assumptions: P.Hyp has no owner: write "owner": "@lane" in its entry, or '
-                                                   'run `check.py --update --owner @lane`']
     unlisted = {**pol, "assumptions": {}}
     assert A.judge(unlisted, facts(), FILES)[0][0] == ("guarantees: P.t assumes (h : P.Hyp), a closed Prop that is not a "
                                                        "named assumption: a Prop constant listed under `assumptions`")
@@ -2305,7 +2291,7 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
     assert A.packages(tmp_path) == [pkg]
     rep = A.audit(pkg, tmp_path / "out")
     assert rep["failures"][0].startswith(f"policy: {pkg} has no lean-audit.json")
-    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "guarantees": {}}') and '{"owner": "@lane"}' in rep["failures"][0]
+    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "guarantees": {}}') and '("name": {} under "guarantees")' in rep["failures"][0]
 
 
 def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_path):
@@ -2518,7 +2504,7 @@ def test_a_guarantee_is_proved_by_exactly_one_package():
                      "proved in a module under the roots of the spec package or of a package its `proved_in` names"]
     assert pins["P.t"]["module"] == "Q.Thms" and pins["P.u"]["module"] == "P.Defs" and pins["P.w"] == {"kind": "missing"}
     assert by == {"this package": ["P.u"], "../q": ["P.t"]}
-    assert A.judge(POLICY | {"guarantees": {"P.w": {"owner": "@lean"}}}, facts(pins={"P.w": pins["P.w"]}), FILES, update=True)[0] == [
+    assert A.judge(POLICY | {"guarantees": {"P.w": {}}}, facts(pins={"P.w": pins["P.w"]}), FILES, update=True)[0] == [
         "guarantees: P.w is missing"]
     fails = A.assign(["P.t"], sources)[1]
     assert fails == ["guarantees: P.t is proved in Q.Thms (../q) and in R.Thms (../r): one package proves a guarantee; "
@@ -2620,7 +2606,7 @@ SPEC = {"assumptions": ["Core.Assumptions"], "meaning": ["Core.Protocol", "Core.
                    "Core.Assumptions": {"imports": ["Core.Assumptions"], "why": "a named assumption imports no proof"},
                    "Core.Guarantees": {"imports": ["Core.Protocol", "Core.Assumptions", "Core.Guarantees"],
                                        "why": "a guarantee is stated over the spec"}},
-        "guarantees": {"Core.SecurityProofs.main": {"owner": "@lean"}, "Core.SecurityProofs.inline": {"owner": "@lean"}},
+        "guarantees": {"Core.SecurityProofs.main": {}, "Core.SecurityProofs.inline": {}},
         "shape": {"frozen": {"Core.SecurityProofs.main": "frozen: a test of moving proofs, not of the shape",
                              "Core.SecurityProofs.inline": "frozen: a test of moving proofs, not of the shape"}}}
 

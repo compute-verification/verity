@@ -20,8 +20,8 @@ spec = importlib.util.spec_from_file_location("lean_changed", HERE.parent / "lea
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
-OLD = json.dumps({"guarantees": {"G": {"owner": "@lean"}}}) + "\n"
-NEW = json.dumps({"guarantees": {"G": {"owner": "@lean", "type_hash": "new"}}}) + "\n"
+OLD = json.dumps({"guarantees": {"G": {}}}) + "\n"
+NEW = json.dumps({"guarantees": {"G": {"type_hash": "new"}}}) + "\n"
 
 
 @pytest.fixture()

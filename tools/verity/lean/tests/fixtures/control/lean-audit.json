@@ -3,7 +3,7 @@
  "exempt": {"Scratch": "a scratch file, built by nobody", "RunOk": "the controls' test, which `runs` runs"},
  "runs": {"RunOk": {"args": ["{run.txt}"],
                     "data": {"run.txt": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22"}}},
- "assumptions": {"Control.Hyp": {"owner": "@lean"}},
+ "assumptions": {"Control.Hyp": {}},
  "escapes": {"Control.loop": "partial def: the controls' listed escape",
              "Control.loop'": "partial def, calling `loop` as `loop` calls it"},
  "layers": {"Control.Assumptions": {"imports": [], "why": "the named assumption imports nothing of the package"},
@@ -11,8 +11,7 @@
  "trees": {"definitions": ["Control.Assumptions", "Control.Defs"], "proofs": ["Control.Thms"]},
  "claims": {"modules": ["Control.Defs"],
             "witnesses": {"Control.Small": {"fails": "Control.Small_fails", "meets": ["Control.Small_meets"]}}},
- "guarantees": {"Control.main_thm": {"owner": "@lean"}, "Control.Small_fails": {"owner": "@lean"},
-                "Control.Small_meets": {"owner": "@lean"}},
+ "guarantees": {"Control.main_thm": {}, "Control.Small_fails": {}, "Control.Small_meets": {}},
  "shape": {"premises": ["Control.Assumptions"], "statements": ["Control.Defs"],
            "properties": {"Control.main_thm": {"function": "Control.double", "outcome": "none"}}}
 }

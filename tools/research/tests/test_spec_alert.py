@@ -81,9 +81,9 @@ def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or
     unchanged one shows nothing."""
     def doc(assumed: dict, defs: dict | None = None) -> dict:
         return _doc({"P.t": _g("P.t : A", H1)}, defs) | {"assumptions": assumed}
-    old = doc({"P.Leaves": {"owner": "@proofs", "digest": H1}, "P.Bare": {"owner": "@proofs"}, "P.Hyp": {"digest": H1}},
+    old = doc({"P.Leaves": {"digest": H1}, "P.Bare": {}, "P.Hyp": {"digest": H1}},
               {"P.Hyp": H1})
-    new = doc({"P.Leaves": {"owner": "@proofs", "digest": H2}, "P.Bare": {"owner": "@proofs", "digest": H3},
+    new = doc({"P.Leaves": {"digest": H2}, "P.Bare": {"digest": H3},
                "P.Hyp": {"digest": H2}, "P.New": {"digest": H3}}, {"P.Hyp": H2})
     assert spec.changes(old, new) == [
         "• definition `P.Hyp` (`P.Defs`) changed",

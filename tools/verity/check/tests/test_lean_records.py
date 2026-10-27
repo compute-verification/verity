@@ -506,10 +506,10 @@ def test_a_merge_of_main_that_takes_main_s_lean_inputs_whole_runs_nothing(lane, 
     the lane's). The merge of main, which changes nothing of the package but main's changes and merge.py's lock, runs
     nothing: its lock is a candidate the train's Lean check rebuilds."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
-    _commit(lane, {"c/C.lean": "def c := 2\n", "c/lean-audit.json": '{"guarantees": {"L.l": {"owner": "@lean"}}}'}, "lane")
+    _commit(lane, {"c/C.lean": "def c := 2\n", "c/lean-audit.json": '{"guarantees": {"L.l": {}}}'}, "lane")
     assert LC.audit_records("c", deps, tree) == 0 and len(_calls(tmp_path)) == 1
     _git(lane, "checkout", "-q", "main")
-    _commit(lane, {"c/lakefile.toml": "# main\n", "c/lean-audit.json": '{"guarantees": {"M.m": {"owner": "@x"}}}'}, "main")
+    _commit(lane, {"c/lakefile.toml": "# main\n", "c/lean-audit.json": '{"guarantees": {"M.m": {}}}'}, "main")
     _git(lane, "checkout", "-q", "lane")
     _git(lane, "merge", "-q", "--no-edit", "main")
     assert json.loads((lane / "c" / "lean-audit.json").read_text())["guarantees"].keys() == {"L.l", "M.m"}
@@ -527,13 +527,13 @@ def test_a_merge_of_main_that_takes_main_s_lean_inputs_whole_runs_nothing(lane, 
 
 def test_a_lock_the_merge_did_not_take_from_merge_py_runs(lane, tmp_path):
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
-    _commit(lane, {"c/lean-audit.json": '{"guarantees": {"L.l": {"owner": "@lean"}}}'}, "lane")
+    _commit(lane, {"c/lean-audit.json": '{"guarantees": {"L.l": {}}}'}, "lane")
     assert LC.audit_records("c", deps, tree) == 0 and len(_calls(tmp_path)) == 1
     _git(lane, "checkout", "-q", "main")
-    _commit(lane, {"c/lean-audit.json": '{"guarantees": {"M.m": {"owner": "@x"}}}'}, "main")
+    _commit(lane, {"c/lean-audit.json": '{"guarantees": {"M.m": {}}}'}, "main")
     _git(lane, "checkout", "-q", "lane")
     _git(lane, "merge", "-q", "--no-edit", "main")
-    (lane / "c" / "lean-audit.json").write_text('{"guarantees": {"L.l": {"owner": "@lean"}, "M.m": {"owner": "@y"}}}')
+    (lane / "c" / "lean-audit.json").write_text('{"guarantees": {"L.l": {}, "M.m": {"type_hash": "by hand"}}}')
     _git(lane, "commit", "-q", "-a", "--amend", "--no-edit")
     assert LC.audit_records("c", deps, tree) == 0 and len(_calls(tmp_path)) == 1
 
