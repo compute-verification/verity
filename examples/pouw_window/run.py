@@ -1,11 +1,11 @@
 """E2E-120's driver: one served int8 window's committed values taken through today's spot check, printing accept/reject for
 the honest run and every attack, and the served design's ε and γ.
 
-    python3 benchmarks/pouw/e2e_120/run.py [--m M --n N --k K --window S] [--seed SEED] [--json]
+    python3 examples/pouw_window/run.py [--m M --n N --k K --window S] [--seed SEED] [--json]
 
 With no C-Flock, this is the check alone (`window.Round`, the statement's public file by `window.ideal_proof`): it shows the
 honest window accepted and the library rejected, and that MITM and skip-filler are not caught by today's duo check. On the
-pod, benchmarks/pouw/e2e_120/job.sh stages the same `PouwSegCheckDither_v2{S, duo}` statement through C-Flock --zk and the
+pod, examples/pouw_window/job.sh stages the same `PouwSegCheckDither_v2{S, duo}` statement through C-Flock --zk and the
 Lean verifier of record, so accept/reject there is the verifier's; `run.py --stage OUT` writes one honest statement's
 circuit.txt, inst.bin and pub.bin for it.
 

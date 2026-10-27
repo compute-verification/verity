@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-MM = Path(__file__).resolve().parents[1] / "machine_model"
+MM = Path(__file__).resolve().parents[2] / "benchmarks" / "pouw" / "machine_model"
 if str(MM) not in sys.path:
     sys.path.insert(0, str(MM))
 

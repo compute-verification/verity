@@ -14,7 +14,7 @@ Each pool's rows come from KINDS of generators (normal values, wide exponents, s
 NaN and infinities, uniform random words, ...), each row from its own seed.
 
 Two cross-checks, each of whose disagreements exits 1 before anything is written:
-- with --replay PATH (the CMP-96 CPU replay, benchmarks/e2e_h200/replay.py of #4460), every pool word is also computed by
+- with --replay PATH (the CMP-96 CPU replay, examples/h200/replay.py of #4460), every pool word is also computed by
   that file's references of circuits' templates (RmsSumSqPart_v1 ... ArgmaxCombine_v1, unit by unit as the replay reads
   them);
 - with `verity.ml.circuits.ops.rows` (CIR-104) installed, or its file given as --rows PATH, every argmax pool's tokens by

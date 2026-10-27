@@ -6,7 +6,7 @@
 #
 #   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
 #     --send RUN/out/lib/sm_90a/h1u_kraqwxsc.so --send RUN/inputs/j10r_ref.so [--send PIN/sass_pins.json] -- \
-#     bash benchmarks/e2e_h200/percall_job.sh
+#     bash examples/h200/percall_job.sh
 #
 # Before the lease: uv sync, attn_ref's cubin, the SHA-512 engine's build, and the SASS gate on the h1u build under this
 # tree's pins and (sass_pins.json sent) the sent pins. Under one GPU lease (gpu-lease, shared with the node's other runs):
@@ -15,7 +15,7 @@
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 IN=${RESEARCH_RUN_DIR:-.}/inputs
-E=benchmarks/e2e_h200
+E=examples/h200
 H1U=${H1U:-kraqwxsc}
 mkdir -p "$OUT"
 uv sync -q --all-packages --extra torch

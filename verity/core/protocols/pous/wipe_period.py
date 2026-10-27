@@ -22,7 +22,7 @@ that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`
 certifier counted over the session. Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement, and the profile
 names each gap. `EXPERIMENTAL` says what the bound rests on.
 
-`leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
+`leg(period_dir, node, out)` is the wipe's leg of `examples/toy_onsite`: one wipe as `period.json`'s `wipe` says
 (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
 device declared so that its memory outside the fill counts in `R`), the memory challenger on `period.json`'s
 `challenger_host` (`wipe_party.Party.of`; this node by default, a process whose key and session log are beside the
@@ -393,7 +393,7 @@ def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
+    """The wipe's leg of `examples/toy_onsite` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
     `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
     party of its own on `period.json`'s `challenger_host` (`wipe_party.Party.of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover

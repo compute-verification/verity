@@ -185,7 +185,7 @@ AUTHENTICATION = ("included", "included-hash", "included-hash-shared", "excluded
 RETENTION = ("retained", "streamed", "recomputed")
 ZK_NONE = "none"
 
-#: Two results whose values differ on any of these are never compared; the judge refuses (``benchmarks/judge.py``).
+#: Two results whose values differ on any of these are never compared; the judge refuses (``archive/shared/judge.py``).
 #: Two results must agree on every one of these before any of their numbers may be compared: same proof class and
 #: authentication, same target and domain, same K **and batch size**, the **same hardware** (the whole probed object:
 #: a 4090 run is never compared with a CPU run, nor with another pod's driver), and the same soundness target

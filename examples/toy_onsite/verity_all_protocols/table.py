@@ -1,6 +1,6 @@
 """The protocols every window is audited by, and the one interface their legs share.
 
-A leg is ``benchmarks/all_protocols/legs/<component>.py`` (``-`` as ``_``) defining
+A leg is ``examples/toy_onsite/legs/<component>.py`` (``-`` as ``_``) defining
 
     leg(period_dir: Path, node: str, out: Path) -> dict
 

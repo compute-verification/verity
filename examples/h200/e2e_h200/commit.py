@@ -34,7 +34,7 @@ import torch
 from .plan import Entry, Map, Table
 from .shape import Shape
 
-COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
+COMMIT_SLOTS = Path(__file__).resolve().parents[3] / "benchmarks" / "torch_gpu" / "commit_slots"
 BACKENDS = ("slots", "reference", "host", "device")
 #: groups the forward may run ahead of the side stream's row reads: an added group's tables stay allocated until the side
 #: stream has read them, so without a bound a commit slower than the forward holds the whole step's values

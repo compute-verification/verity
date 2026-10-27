@@ -106,7 +106,7 @@ def pv(p: np.ndarray, values: np.ndarray) -> np.ndarray:
 
 # --- per-slot lengths, on the tensors' device ----------------------------------------------------------------------------
 
-ATTN_REF = Path(__file__).resolve().parents[2] / "torch_gpu" / "attn_ref" / "attn_ref.py"
+ATTN_REF = Path(__file__).resolve().parents[3] / "benchmarks" / "torch_gpu" / "attn_ref" / "attn_ref.py"
 _ONE, _INF, _NAN = 0x3F800000, 0x7F800000, 0x7FFFFFFF
 
 

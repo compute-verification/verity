@@ -164,7 +164,7 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   leaves include each one-row unit's slot-tree leaf; trees are the multi-row units' trees, the slot trees' fold and
   close, and the step tree. The leaf matrix's trees (run r20261026-014030-c476) took 34 ms at 16,384 slots and 4 ms at
   1,024: a fold at a few slots a group is launch-bound.
-- **Beside ALLP-H200's served step** (`overlap.py`: `../../e2e_h200/`'s driver at the frozen shape, 4,096 slots in
+- **Beside ALLP-H200's served step** (`overlap.py`: `../../../examples/h200/`'s driver at the frozen shape, 4,096 slots in
   micro-batches of 1,024, the demo weights resident; circuits' shared-row layout, 101,718 units in 102,448 rows, 27.4 MB
   a slot). Serving alone takes 3.25 s a step. Today's loop hides 2% of the commit: each group is streamed to the side
   stream, but the step's end waits for its roots and the driver's ticks synchronize the whole device. Overlapped, with
@@ -248,7 +248,7 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
   units, and (with a GPU) the device against the host twin.
-- `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
+- `overlap.py`: the commit beside `../../../examples/h200/`'s served step on one GPU: serving alone, the commit alone, today's
   loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
   commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
   SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the forward's host waiting on

@@ -1,4 +1,4 @@
-"""``benchmarks/judge.py``: refuses across identity fields, judges otherwise, and reads the recorded runs that exist."""
+"""``archive/shared/judge.py``: refuses across identity fields, judges otherwise, and reads the recorded runs that exist."""
 
 from __future__ import annotations
 

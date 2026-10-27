@@ -17,11 +17,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and templates: a8's scan tests import a8, which imports a0.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a warden run its tests drive tick by tick (`test_warden_serve._run`).
-# `benchmarks/all_protocols` and `benchmarks/e2e_demo/verity_e2e_demo`: served_verdicts' rows (`runner.row_of`, the
+# `examples/toy_onsite` and `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' rows (`runner.row_of`, the
 # integrity leg's answer) and its block record (`block_record`, its schema).
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
-          "benchmarks/all_protocols/verity_all_protocols", "benchmarks/all_protocols/legs",
-          "benchmarks/e2e_demo/verity_e2e_demo",
+          "examples/toy_onsite/verity_all_protocols", "examples/toy_onsite/legs",
+          "examples/h200/interfaces/verity_e2e_demo",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
