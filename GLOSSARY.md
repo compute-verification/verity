@@ -35,7 +35,7 @@ appear).
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, not yet in Lean; `FixedMachine` and `InitialBudget` not yet in Lean |
 | server-time block, serving block | A server's gates between two wipes (a server-time block); a serving block is one, its padded size c_S = ⌊Φ_s·Δ_wipe⌋ and its input allowance k_S = k_wipe + (r_in + r_side)·Δ_wipe: what the wipe leaves of M_s (at most 4×10^10 bits plus egress), and the certified ingress and the side channels over the wipe interval Δ_wipe. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the serving-block bound not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its input accounting has not already charged. | not yet in Lean |
-| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a wipe clears. INV is the inventory's: coverage, the dark fleet's bound, and the honesty of certifiers, challengers and their hosts (`trusted-nebius-host`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
+| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a wipe clears. INV is the inventory's: coverage, the dark fleet's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
 
 **Classes, protocols and the guarantee**
 
@@ -46,7 +46,7 @@ appear).
 | 𝒜′ | 𝒜_phys ∩ ⋂_a 𝒜_a, which every accepted run lies in except with probability Σ_a δ_a and the cryptographic terms. | not yet in Lean |
 | τ, b | A prover strategy; a server-window, one serving block between two wipes. | `Verity.Game.Strategy`; b as `Verity.Block` |
 | δ_coin, δ_crypto | Probability bounds from the live-coin draws, under uniform coins; advantage bounds for SHA-512's binding, knowledge soundness and pseudorandomness, against a stated adversary. | `Verity.Sound`'s δ; `Security/Definitions/Hash/` |
-| Break, B^τ, 𝒟_b^τ | A forgery of the devices' logged coins; the collision finder built from τ, whose SHA-512 collision is the binding term f(Pr[B^τ collides]); the distinguisher built from τ at server-window b, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
+| Break, B^τ, 𝒟_b^τ | The event that the fixed finder exhibits a SHA-512 collision, or that the fixed forger produces a valid LMS signature under a device's registered key on a message the device's log never signed, charged as f(Pr[B^τ collides]) + Pr[the forger succeeds] and never assumed away; B^τ is the fixed finder built from τ; 𝒟_b^τ is the distinguisher built from τ at server-window b, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
 | ε_Wipe,b | The streamed wipe's failure bound at server-window b, 2^-128 + Adv_PRF. | `StreamedWipeMeetsServer5GB`, not yet in Lean |
 
 **Tasks and overhead**
@@ -138,7 +138,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
 | "verifier gateway" | the challenger |
-| "batch verifier" (outside `archive/`, where B-Ligero's is another thing) | the verifier |
+| "batch verifier" (B-Ligero's was another thing) | the verifier |
 | "GPU workers" | workers |
 | "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` and the module docs of the `Protocol.lean` files | spec |
@@ -155,8 +155,9 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
 | "block" for a section of a record ("the workload record's sampling block") | section |
 | "block" for a model's transformer layer; the model's `blocks.N` module paths, the tap family `moe_block_stream` | layer |
-| "block" for a bucket of the network certifier's timing advice; the Lean's `OccupancyReadsOwnBlock`, `EncardAccSeqsLeBlocks`, until they are renamed | bucket |
+| "block" for a bucket of the network certifier's timing advice, and "the one-block cap"; the Lean's `OccupancyReadsOwnBlock`, `EncardAccSeqsLeBlocks`, until they are renamed | bucket (the τ_b time slot), and "a bucket's cap" |
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
+| "compile unit" | the compile slice's proof block |
 | "physical block" | server-time block |
 | "isolation unit" (IU) | isolation block |
 | "replay unit" (RU) | replay block |
@@ -167,6 +168,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
+| "Commit window", for the steps one Commit covers | Commit period |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until it is renamed | Dither |
@@ -178,6 +180,13 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until they are renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | ε_undecl + ε_skip at that GPU; the exchanged bits are an input term (k_S's r_in and r_side), reported beside it in bits |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
+| θ for a card's numbers | the card table (θ is the registered inputs) |
+| "envelope ISA", "envelope op" for the ACCEL model's instruction kinds; `machine_model`'s `cover` command and its `envelope` key, until they are renamed | the ACCEL ops (envelope is 𝒜_a only) |
+| "coverage premise", "coverage table" for the ACCEL model's; `machine_model/data/cover/`, until it is renamed | the card premise, the opcode table (coverage is the inventory's) |
+| "words" for Dither's committed 16-bit sums | prefix sums |
+| "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until it is renamed | the store's load |
+| "post-landing run", "postland" | after-landing run |
+| "train" for a batch of PRs landed on one check | none: check-mode landing is deleted, and drive lands the reviewed prefix of `next` |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the declared circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
@@ -193,8 +202,16 @@ bake it in, and renaming would invalidate every one of them for no semantic gain
 
 - **The ACCEL model** 𝓜 is the physical model: a period's devices as the Lean's `Accel` reads them
   (`Security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
-  device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000. Its
-  parameters, θ, are `benchmarks/pouw/machine_model/`'s data.
+  device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000.
+- **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
+  ceiling (`benchmarks/pouw/machine_model/`'s data). θ is never a card's numbers; it is the registered inputs.
+- **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
+- **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
+  the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
+- **Segment**: L consecutive inner indices of one output cell, between two committed prefix sums. A Dither proof block is
+  one segment of one cell.
+- **Noise period** L′: the period of Dither's noise along K; a segment is t = L/L′ noise periods.
+- **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is
   experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt is no-fold: each
   segment's 16-bit noised prefix sums are committed as SHA-512 hiding leaves, hm96 rows of 16 KiB, before the check coin,
@@ -210,16 +227,23 @@ Some words keep a different, narrower sense:
 - `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout and a `GateSelection` is a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay. `verity.ml.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
-  runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value; in private circuits it
-  is the circuit of one proof block, so the developer's circuit is hidden like any value.
+  runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value. Circuit hiding is
+  recursion (C-Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `archive/vole`, not C-Flock.
+- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not C-Flock.
+- A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
+  (CUTLASS's `Stages`, Triton's `num_stages`); it is not a phase or a run.
+- In a kernel, a **warp** is CUDA's 32 threads that issue together, and a **lane** is one thread's index among them.
+- A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
+  `sliding_window`). It is not a period.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
 
 ## Terms of one area
 
 Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so that it holds the shared terms:
 
+- **Slot**: one sequence of a served batch, one row of a step's activations; a step at batch 4,096 commits 4,096 slots
+  (`commit_slots`).
 - **Wire**: an edge from a gate to a gate that reads it; it carries its source gate's value and has none of its own.
 - **Port** and **element**: a port is a named array of fixed-width elements on a circuit definition's boundary, one of its
   parameters or results, bound by each call to gates of the caller; under `Q_call`, a Call whose result ports fit in X bits
@@ -254,3 +278,15 @@ Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so t
 - **Lock**: a package's guarantee records in its `lean-audit.json` (`AGENTS.md`, "Lean"): each guarantee's statement and
   every definition it reads. A changed record means a guarantee now says something else. It protects only the guarantees
   and what their statements read, though today it lists many lemmas too.
+- **Checking and landing** (the team skill, "Landing"):
+  - **Ready mark**: an owner's statement that a PR's head may land; drive admits only marked heads.
+  - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
+  - **`next`**: the branch where drive stacks admitted PRs, one merge each, above `main`; `main` fast-forwards to its
+    reviewed prefix.
+  - **Preflight**: the checks `research queue ready` runs on a head merged onto `next` before it records the mark.
+  - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
+  - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
+    Lean that runs as code, lands only on a passed Lean check at or above it.
+  - **After-landing run**: the full check of `main`'s tip after each landing; when it passes, `main` is verified.
+  - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
+  - **Pure move**: a change that only renames paths, certified by `move_check`; it lands alone, without review.
