@@ -1,5 +1,5 @@
 import Mathlib.Tactic.Ring
-import Properties.Flock.Circuit.Prog
+import Definitions.Flock.Lowering
 import Flock.Net
 
 /-!
@@ -55,7 +55,7 @@ theorem forIn_range_yield_ok {ε : Type} {lo hi : ℕ} {f : ℕ → PUnit → Ex
 def InputPadding (inCols : ℕ) (ra rb : Array (Array ℕ)) (c : ℕ) : Prop :=
   c < inCols ∧ (ra.getD c #[]).isEmpty = true ∧ (rb.getD c #[]).isEmpty = true
 
-/-- **Row order** (#144's `Rows.topo`, as the parser checks it): every computed row
+/-- **Row order** (`Rows.topo`, as the parser checks it): every computed row
 `inCols ≤ r < constPos` reads, in `A` and in `B`, only the constant or an earlier column that is not
 input padding. -/
 def RowOrder (inCols constPos : ℕ) (ra rb : Array (Array ℕ)) : Prop :=

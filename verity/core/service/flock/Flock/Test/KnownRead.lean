@@ -10,6 +10,7 @@ known rows are not its words, is refused. A port marked `read_in_full` is checke
 words (`fullRows`): refused at another width, or at a bit no computed row reads.
 -/
 import Flock.KnownRead
+import Flock.JsonParse
 
 namespace Flock.Test.KnownRead
 
@@ -117,7 +118,7 @@ def reg (name : String) (words : Option Nat) (bits : Nat := 16) : Registered.Por
 
 /-- The ports a file's JSON marks read in full, or its refusal. -/
 def marked (t : String) : String :=
-  match Lean.Json.parse t >>= Flock.KnownRead.readOf with
+  match JsonParse.parse t >>= Flock.KnownRead.readOf with
   | .ok ns => toString ns
   | .error e => e
 

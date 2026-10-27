@@ -28,7 +28,7 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
 sys.path.insert(0, str(Path(__file__).parent))
-import test_tp_collective_site as tp  # noqa: E402  (the synthetic tensor-parallel Program: one rank of a world of 2)
+import test_tp_collective_site as tp  # the synthetic tensor-parallel Program: one rank of a world of 2
 
 PROF = dict(mode="profile", profile="b1-eager")
 

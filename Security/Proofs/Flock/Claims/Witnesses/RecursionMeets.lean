@@ -20,7 +20,7 @@ read:
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
 * `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdCover`, `RecDeploy.bdDeployed` at
-  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight (ASK-72); its element-level
+  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight; its element-level
   Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
   replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
@@ -37,7 +37,7 @@ read:
   round at an inner-ready statement in scope where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.halted_live`);
 * `ZKStop_meets_ready`: where that leaves the stop live. The inner statement `RecDeploy.PlainLeavesAdmitted` names
-  (#2468's) is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
+  is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
   round before the staging round where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.ready_of_admitted`); so it does wherever the inner statement's size, its regions and its honest record
   fit, which in scope are the inner readiness the stop reads (`RecDeploy.ready_inScope_iff`);
@@ -233,8 +233,8 @@ theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonemp
   (`FlockComplete.RecordFitsAt`), the same: in scope, those three facts are exactly the inner readiness the stop reads
   (`RecDeploy.ready_inScope_iff`).
 
-No statement in scope is exhibited: the scope check and Flock's setup read the statement's JSON with `Lean.Json.parse`,
-a `partial` function the kernel can't unfold (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
+No statement in scope is exhibited: the scope check and Flock's setup read the statement's circuit file, whose rows
+`HmRow.parse` reads by regenerating the `hm96` nets, beyond what the kernel evaluates (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
 size (`RecordFitsAt`) is a bound with no proof here. -/
 theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)

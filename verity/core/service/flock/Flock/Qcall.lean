@@ -14,6 +14,7 @@ import Flock.Program
 import Flock.Partition
 import Flock.Canon
 import Flock.Hash
+import Flock.JsonParse
 
 namespace Flock.Qcall
 
@@ -32,7 +33,7 @@ def inapplicable {α} (detail : Json) : V α := throw s!"query-inapplicable: {de
 
 /-- The detail of a `query-inapplicable` error, when the error is one. -/
 def inapplicableDetail? (e : String) : Option Json :=
-  if e.startsWith "query-inapplicable: " then (Json.parse (e.drop 20).toString).toOption else none
+  if e.startsWith "query-inapplicable: " then (JsonParse.parse (e.drop 20).toString).toOption else none
 
 /-- One activation's gates (`cut.CallGates`): `n` local gates, `inputs` parameter leaves; per gate whether it computes, its
 declared width, primitive id and last reader (`n` when returned, -1 unread); `keep` (compact → local) and `idx` (local → compact,

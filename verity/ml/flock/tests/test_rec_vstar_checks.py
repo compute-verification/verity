@@ -27,6 +27,7 @@ from test_rec_opening_unit import opening
 from test_rec_outer import BIN, staged  # noqa: F401
 from verity_flock import rec_algebra as A
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_budget as RBG
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 
@@ -209,6 +210,36 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
                         str(tmp_path / "program.json")], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.startswith(
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape"), p.stdout
+
+
+def test_a_v_star_sessions_registration_past_the_call_bound_is_refused_by_both(staged, tmp_path):  # noqa: F811
+    """`rec_outer`'s staged level's registered reads, one port's tree made 65 levels deep and the file made to name 4097
+    ports: `verify` under the verifier's inner shape refuses each at setup with `RecBudget.regs`'s message, which
+    `rec_budget.regs` returns for the same file, and the honest file passes both."""
+    d = staged[0]
+    honest = json.loads((d / "registered.json").read_text())
+    assert RBG.regs(honest) is None
+    inner = _inner(tmp_path / "inner.json", 25, 22, 8)
+    sess = tmp_path / "session"
+    sess.mkdir()
+    (sess / "session.json").write_text("{}")
+    first, port = sorted(honest["ports"].items())[0]
+    deep = {**honest, "ports": {**honest["ports"], first: {**port, "leaves": 2**64 + 1}}}
+    wide = {**honest, "ports": {f"w{i:04}": port for i in range(RBG.MAX_PORTS + 1)}}
+    for k, obj in enumerate((deep, wide)):
+        why = RBG.regs(obj)
+        assert why is not None
+        with pytest.raises(ValueError, match="the recursion's call bound covers no more"):
+            RBG.check(obj, "rec-open/l8-h1", 8)
+        (tmp_path / f"r{k}.json").write_text(json.dumps(obj))
+        p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                            "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"),
+                            "--program", str(d / "program.json"), "--registered", str(tmp_path / f"r{k}.json"),
+                            "--rec-inner", str(inner), "--rec-part", "0",
+                            "--rec-bindings", str(_bindings(d, tmp_path / "bindings.json")), "--session", str(sess)],
+                           capture_output=True, text=True)
+        [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+        assert p.returncode == 1 and v["why"] == "setup: " + why, v
 
 
 def _reads(path: Path, ports: list[list]) -> Path:

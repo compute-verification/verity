@@ -35,11 +35,11 @@ open Claims (Msg)
 
 /-- A file read as JSON, where its text parses. -/
 theorem jsonOf_of {b : ByteArray} {t : String} {d : Lean.Json} {g : String → String}
-    (ht : String.fromUTF8? b = some t) (hd : (Lean.Json.parse t).mapError g = .ok d) (what : String) :
+    (ht : String.fromUTF8? b = some t) (hd : (Flock.JsonParse.parse t).mapError g = .ok d) (what : String) :
     FlockDeploy.jsonOf what b = .ok d := by
   unfold FlockDeploy.jsonOf
   simp only [ht]
-  cases hp : Lean.Json.parse t with
+  cases hp : Flock.JsonParse.parse t with
   | error e => rw [hp] at hd; cases hd
   | ok j => rw [hp] at hd; cases hd; rfl
 

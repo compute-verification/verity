@@ -14,7 +14,7 @@ import pytest
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat

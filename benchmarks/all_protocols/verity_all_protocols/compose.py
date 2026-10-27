@@ -46,6 +46,9 @@ OUT_BITS = 16
 #: what `horizon_leak`'s K rests on until its two per-window inputs are discharged
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
+#: K's jitter term, the periods' own at their jitter bound (1, so 0 bits): J (`NetTiming.JitterBounded`) assumes it,
+#: and the certifier doesn't meet J at that bound: an offset the prover chooses within a bucket reaches the client
+JITTER = "assumed (J)"
 
 
 def onsite_components(source: str | None = None) -> list[str]:
@@ -72,31 +75,35 @@ def bind(protocol: str, components: Sequence[tuple[str, str]]) -> bytes:
     return hashlib.sha512(protocol.encode() + b"\0" + body).digest()
 
 
-def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str]) -> tuple[bytes, bytes, bytes]:
-    """Onsite's params, commitment and evidence from each component's case and its commitment's digest (its answer's
-    ``commitment``), both keyed by the component's protocol id: what ``onsite check`` reads (the composition README's
-    table)."""
+def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
+                  protocol: str = PROTOCOL) -> tuple[bytes, bytes, bytes]:
+    """The product ``protocol``'s (onsite's by default) params, commitment and evidence from each component's case and its
+    commitment's digest (its answer's ``commitment``), both keyed by the component's protocol id: what ``onsite check``
+    and ``product IDS check`` read (the composition README's table)."""
     ids = sorted(cases)
     params = canonical_json({"components": [{"id": i, "params": cases[i]["params"]} for i in ids]})
-    commitment = bind(PROTOCOL, [(i, digests[i]) for i in ids])
+    commitment = bind(protocol, [(i, digests[i]) for i in ids])
     evidence = canonical_json({"components": [{"commitment": cases[i]["commitment"], "evidence": cases[i]["evidence"],
                                                "id": i, "params": cases[i]["params"]} for i in ids]})
     return params, commitment, evidence
 
 
-def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str]) -> dict[str, Any]:
-    """``onsite check`` on the components' cases (`onsite_inputs`), with every blob file a case names (``blobs``, the
-    files integrity's audit on the proofs reads) after them: its answer line, parsed."""
-    params, commitment, evidence = onsite_inputs(cases, digests)
+def onsite_check(exe: str | Sequence[str], cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
+                 protocol: str = PROTOCOL) -> dict[str, Any]:
+    """``onsite check`` (or ``product IDS check``: ``exe`` as an argv, with ``protocol`` its product's id) on the
+    components' cases (`onsite_inputs`), with every blob file a case names (``blobs``, the files sampled proofs' audit
+    on the proofs reads) after them: its answer line, parsed."""
+    params, commitment, evidence = onsite_inputs(cases, digests, protocol)
     blobs = [str(b) for i in sorted(cases) for b in cases[i].get("blobs") or ()]
+    argv = [exe] if isinstance(exe, str) else list(exe)
     with tempfile.TemporaryDirectory() as d:
         files = []
         for name, data in (("params.json", params), ("commitment.bin", commitment), ("evidence.json", evidence)):
             (Path(d) / name).write_bytes(data)
             files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files, *blobs], capture_output=True, text=True, check=False)
+        p = subprocess.run([*argv, "check", *files, *blobs], capture_output=True, text=True, check=False)
     if p.returncode not in (0, 1, 2):
-        raise RuntimeError(f"onsite check exited {p.returncode}: {p.stderr[-2000:]}")
+        raise RuntimeError(f"{' '.join(argv)} check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
@@ -195,7 +202,7 @@ def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: i
     number yet (``e_for_eps_2delta`` is the per-window error at which that sum stays within 2δ). The schedule, cell,
     free-input and jitter terms are the periods' own, scaled to ``count``. ``share`` is K over the period's registered
     output bits, 16 a unit. #4367 is conditional on its two per-window inputs (`HORIZON_CONDITION`), so this K is cited
-    as conditional."""
+    as conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     count = len(periods) if count is None else count
     audits = [a for p in periods for a in p["audits"]]
     q = min(Fraction(a["drawn"], a["units"]) for a in audits)
@@ -211,7 +218,7 @@ def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: i
     windows = math.ceil(scale * len(audits))
     return {"periods": count, "windows": windows, "units": N, "q": str(q), "Fmax": fmax, "K": K, "terms": terms,
             "share": K / (OUT_BITS * N), "eps": f"{delta} + Σ_i (e_i + e'_i) over {windows} windows",
-            "e_for_eps_2delta": str(delta / windows), "conditional": HORIZON_CONDITION}
+            "e_for_eps_2delta": str(delta / windows), "conditional": HORIZON_CONDITION, "jitter_term": JITTER}
 
 
 def fleet(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: int, machines: int) -> dict[str, Any]:
@@ -248,6 +255,6 @@ def communication(reports: Sequence[Mapping[str, Any]], period_s: float, spans: 
     return out
 
 
-__all__ = ["CERTIFIER", "HORIZON_CONDITION", "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL", "STUB_CASE", "bind",
+__all__ = ["CERTIFIER", "HORIZON_CONDITION", "JITTER", "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL", "STUB_CASE", "bind",
            "communication", "component_of", "composed", "fleet", "horizon_leak", "onsite_cases", "onsite_check",
            "onsite_components", "onsite_inputs", "stub_component"]
