@@ -7,7 +7,199 @@ import Proofs.Properties.Verity.SampledSim
 only on the requests (`PlayDevice.served` reads a release's answers, never its coins), so the releases it serves are
 exactly those the reduction reads as served, each with the requests before it (`servesNext`, `tagOfServed`):
 `served_play`. Each entry it serves names its request's family and root (`served_req`).
+
+What v2's acceptance runs of the challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's
+(`OneStageZk.Session0`), the order and groups it asks of them, and every coin a record holds the challenger's.
 -/
+
+open Lean (Json)
+
+namespace SampledProofs.OneStageZk
+
+/-- A loop over a list in `Except` that returns: its first step returns, and the rest runs from it. -/
+theorem loop_cons_ok {α σ ε : Type} {f : α → σ → Except ε (ForInStep σ)} {x : α} {l : List α} {s s' : σ}
+    (h : forIn (x :: l) s f = .ok s') :
+    ∃ r, f x s = .ok r ∧ match r with
+      | .done b => b = s'
+      | .yield b => forIn l b f = .ok s' := by
+  rw [List.forIn_cons] at h
+  cases hx : f x s with
+  | error e => rw [hx] at h; cases h
+  | ok r =>
+    rw [hx] at h
+    refine ⟨r, rfl, ?_⟩
+    cases r with
+    | done b => cases h; rfl
+    | yield b => exact h
+
+
+/-- A loop that only yields returns only where each of its steps returns. -/
+theorem loop_each {α ε : Type} {f : α → Unit → Except ε (ForInStep Unit)}
+    (hy : ∀ x r, f x () = .ok r → r = .yield ()) :
+    ∀ (l : List α) (u : Unit), forIn l () f = .ok u → ∀ x ∈ l, ∃ r, f x () = .ok r
+  | [], _, _, x, hx => by cases hx
+  | y :: l, u, h, x, hx => by
+    obtain ⟨r, hr, hn⟩ := loop_cons_ok h
+    rcases List.mem_cons.1 hx with rfl | hx
+    · exact ⟨r, hr⟩
+    · obtain rfl := hy y r hr
+      exact loop_each hy l u (by simpa using hn) x hx
+
+/-- A loop that returns relates its start to its end by any reflexive, transitive relation each step keeps. -/
+theorem loop_mono {α σ ε : Type} (R : σ → σ → Prop) (hrefl : ∀ s, R s s)
+    (htrans : ∀ a b c, R a b → R b c → R a c) (f : α → σ → Except ε (ForInStep σ))
+    (hf : ∀ x s r, f x s = .ok r → R s r.value) :
+    ∀ (l : List α) (s s' : σ), forIn l s f = .ok s' → R s s'
+  | [], s, s', h => by
+    rw [List.forIn_nil] at h
+    cases h
+    exact hrefl s
+  | x :: l, s, s', h => by
+    obtain ⟨r, hr, hn⟩ := loop_cons_ok h
+    have h1 := hf x s r hr
+    cases r with
+    | done b => cases hn; exact h1
+    | yield b => exact htrans _ _ _ h1 (loop_mono R hrefl htrans f hf l b s' hn)
+
+/-- The loop's state only grows: its uses and wants by appending, its order and groups by adding. -/
+def Grows (s s' : Array Challenger.Use × Array (Option (String × Array String)) × Array Json ×
+    Array (String × String) × Array (List String)) : Prop :=
+  (∃ t, s'.1 = s.1 ++ t) ∧ (∃ t, s'.2.1 = s.2.1 ++ t) ∧ (∀ x ∈ s.2.2.2.1, x ∈ s'.2.2.2.1) ∧
+    ∀ g ∈ s.2.2.2.2, g ∈ s'.2.2.2.2
+
+theorem grows_refl (s) : Grows s s := ⟨⟨#[], by simp⟩, ⟨#[], by simp⟩, fun _ h => h, fun _ h => h⟩
+
+theorem grows_trans (a b c) (h1 : Grows a b) (h2 : Grows b c) : Grows a c := by
+  obtain ⟨⟨t1, e1⟩, ⟨t2, e2⟩, o1, g1⟩ := h1
+  obtain ⟨⟨t3, e3⟩, ⟨t4, e4⟩, o2, g2⟩ := h2
+  exact ⟨⟨t1 ++ t3, by rw [e3, e1, Array.append_assoc]⟩, ⟨t2 ++ t4, by rw [e4, e2, Array.append_assoc]⟩,
+    fun x hx => o2 x (o1 x hx), fun g hg => g2 g (g1 g hg)⟩
+
+/-- **Session 0's uses, as `roundsWhy` runs them**: its record in the blobs, its uses (`sessionUses 0`), one segment
+each; the uses `roundCoins` reads begin with the draw's, then session 0's in order, each with the coins its record
+holds; the draw is before each of session 0's families and its link points before its other families (`order`), and
+its families are one group (`groups`). -/
+def Session0 (label : String) (draw : Challenger.Use) (bs : Core.Blobs) (s0 : Session)
+    (uses : List Challenger.Use) (wants : List (Option (String × Array String))) (order : List (String × String))
+    (groups : List (List String)) : Prop :=
+  ∃ b record us0, bs.get s0.record s!"session {s0.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
+    sessionUses 0 record = .ok us0 ∧ s0.coins.size = us0.length ∧
+    uses[0]? = some draw ∧ wants[0]? = some none ∧
+    (∀ j u, us0[j]? = some u → uses[j + 1]? = some u.1 ∧ ∃ what, wants[j + 1]? = some (some (what, u.2))) ∧
+    (∀ ℓ ∈ (us0.map (·.1.label)).eraseDups, (label, ℓ) ∈ order) ∧
+    (∀ ℓ ∈ (us0.map (·.1.label)).eraseDups, ℓ ≠ Hello.slotStream 0 POINTS → (Hello.slotStream 0 POINTS, ℓ) ∈ order) ∧
+    (us0.map (·.1.label)).eraseDups ∈ groups
+
+/-- **What `roundsWhy` runs, where it names no reason**: v2's parameters name a challenger key and label and a window
+root, the draw's segment opens `opened`, and `roundCoins` returns `ξs` for its uses, order, groups and coins; every coin
+a session's record holds is the challenger's (`coinsMismatch`, use by use); and session 0's uses are read as
+`Session0` says. -/
+theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
+    (h : roundsWhy p c e bs = none) :
+    ∃ key label w opened uses wants order groups coins ξs, p.base.challenger = some (key, label) ∧
+      p.base.verifier.windowRoot = some w ∧ getD (getD e.base.coins "segment") "openings" = .arr opened ∧
+      Challenger.roundCoins key w uses order groups coins = .ok ξs ∧
+      (∀ x ∈ ξs.zip wants, ∀ what hs, x.2 = some (what, hs) → coinsMismatch hs x.1 = none) ∧
+      ∀ s0 rest, e.sessions.toList = s0 :: rest →
+        Session0 label ⟨label, c.digest, opened.size⟩ bs s0 uses wants order groups := by
+  unfold roundsWhy at h
+  split at h
+  · rename_i key label w hc hw
+    dsimp only at h
+    split at h
+    · rename_i hr
+      simp only [bind, Except.bind, pure, Except.pure] at hr
+      split at hr
+      · rename_i opened hop
+        split at hr
+        · cases hr
+        · rename_i v hfor
+          split at hr
+          · cases hr
+          · rename_i ξs hrc
+            split at hr
+            · cases hr
+            · rename_i u hchk
+              refine ⟨key, label, w, opened, v.1.toList, v.2.1.toList, v.2.2.2.1.toList, v.2.2.2.2.toList, _, ξs, hc, hw, hop, hrc, ?_, ?_⟩
+              · intro x hx what hs hxs
+                obtain ⟨r, hr⟩ := loop_each (fun x r hr => by
+                    repeat' split at hr
+                    all_goals first | (cases hr; rfl) | cases hr | skip
+                    ) _ u hchk x hx
+                cases hm : coinsMismatch hs x.fst with
+                | none => rfl
+                | some why =>
+                  exfalso
+                  simp only [hxs, hm] at hr
+                  cases hr
+              · intro s0 rest hs0
+                rw [hs0, List.zipIdx_cons] at hfor
+                obtain ⟨r, hr0, hn⟩ := loop_cons_ok hfor
+                dsimp only at hr0
+                split at hr0
+                · cases hr0
+                · rename_i b hb
+                  split at hr0
+                  · rename_i record hrec
+                    split at hr0
+                    · cases hr0
+                    · rename_i us0 hus
+                      split at hr0
+                      · rename_i hsz
+                        have hus' : sessionUses 0 record = .ok us0 := by
+                          cases hq : sessionUses 0 record with
+                          | error e => rw [hq] at hus; cases hus
+                          | ok y => rw [hq] at hus; cases hus; rfl
+                        obtain rfl := Except.ok.inj hr0
+                        have hg := loop_mono Grows grows_refl grows_trans _ (fun x s r hx => by
+                          repeat' split at hx
+                          all_goals first
+                            | (cases hx; done)
+                            | (rename_i heq; cases heq; done)
+                            | (cases hx; exact grows_refl _)
+                            | (cases hx; exact ⟨⟨_, rfl⟩, ⟨_, rfl⟩,
+                                fun _ h => Array.mem_append_left _ (Array.mem_append_left _ h),
+                                fun _ h => Array.mem_push_of_mem _ h⟩)) _ _ _ hn
+                        obtain ⟨⟨t1, e1⟩, ⟨t2, e2⟩, ho, hgr⟩ := hg
+                        refine ⟨b, record, us0, hb, hrec, hus', beq_iff_eq.1 hsz, ?_, ?_, ?_, ?_, ?_, ?_⟩
+                        · rw [e1]; simp
+                        · rw [e2]; simp
+                        · intro j u hu
+                          have hj : j < us0.length := (List.getElem?_eq_some_iff.1 hu).1
+                          refine ⟨?_, toString s0.name ++ toString "'s " ++ toString u.1.label, ?_⟩
+                          · rw [e1]
+                            simp [List.getElem?_append_left (by simpa using hj : j < (us0.map (·.1)).length), hu]
+                          · rw [e2]
+                            simp only [Array.toList_append, Array.toList_map, List.cons_append,
+                              List.getElem?_cons_succ]
+                            rw [List.getElem?_append_left (by simpa using hj)]
+                            simp only [List.nil_append, List.getElem?_map, hu, Option.map_some]
+                        · intro ℓ hℓ
+                          apply Array.mem_toList_iff.2
+                          apply ho
+                          simp only [Array.mem_append, List.mem_toArray, List.mem_map]
+                          exact Or.inl (Or.inr ⟨ℓ, hℓ, rfl⟩)
+                        · intro ℓ hℓ hne
+                          apply Array.mem_toList_iff.2
+                          apply ho
+                          simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_filter]
+                          exact Or.inr ⟨ℓ, ⟨hℓ, by simpa using hne⟩, rfl⟩
+                        · apply Array.mem_toList_iff.2
+                          apply hgr
+                          simp
+                      · split at hr0
+                        · cases hr0
+                        · rename_i heq
+                          cases heq
+                  · split at hr0
+                    · cases hr0
+                    · rename_i heq
+                      cases heq
+      · cases hr
+    · cases h
+  · cases h
+
+end SampledProofs.OneStageZk
 
 namespace Verity.Served
 
