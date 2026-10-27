@@ -35,8 +35,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.append(str(HERE.parent))
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(__file__)
 
 EXIT_FAIL = 8
 NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")

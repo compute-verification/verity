@@ -39,7 +39,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import settings
+from verity_config.settings import of
+
+settings = of(__file__)
 
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 

@@ -77,10 +77,11 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "harness"))
-sys.path.append(str(HERE.parent))
 import arms as A  # noqa: E402
 import scoring as S  # noqa: E402
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(HERE.parent / "settings.py")
 
 NVCC = settings.NVCC or "/usr/local/cuda-13.0/bin/nvcc"
 settings.put("PATH", f"{Path(NVCC).parent}:{settings.PATH}")  # cuobjdump and ncu beside nvcc, as dfill.sh

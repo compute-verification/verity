@@ -14,8 +14,9 @@ import statistics
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-import settings
+from verity_config.settings import of
+
+settings = of(__file__)
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}

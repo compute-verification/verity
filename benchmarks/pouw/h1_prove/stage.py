@@ -35,11 +35,12 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
-sys.path.append(str(HERE.parent))
 
 import h1unit as U  # noqa: E402
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+
+settings = of(__file__)
 
 NAME = "unit/pouw-h1-tile"
 

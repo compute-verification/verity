@@ -26,11 +26,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.append(str(HERE.parent))
 import fused_score as FS  # noqa: E402
 import psched_score as PS  # noqa: E402
 import score as SC  # noqa: E402
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(HERE.parent / "settings.py")
 
 A, S = SC.A, SC.S
 FUSED_GATES = ("fused_receipts", "fused_dram", "fused_exact")

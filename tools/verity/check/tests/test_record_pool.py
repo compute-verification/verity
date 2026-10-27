@@ -1,6 +1,5 @@
 """`check.py --record --on M --pool NAME`: a lane's own recorded check in a slot of M's NAME pool, `research run --pool`'s pools,
-since the CPU nodes' merge-check slots are only=trains (CI-192: training's and vllm's recorded checks couldn't place, and proofs
-ran lean-agreement by hand). And `--record` inside a `research run`, which can't launch one of its own, names the command that
+since the CPU nodes' merge-check slots are only=trains. And `--record` inside a `research run`, which can't launch one of its own, names the command that
 records it instead."""
 from __future__ import annotations
 

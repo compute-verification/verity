@@ -45,7 +45,9 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC
 import of_record as OR
-import settings
+from verity_config.settings import of
+
+settings = of(__file__)
 
 #: the challenger's checks are of record in Lean (`of_record`), which `lake` builds
 LEAN = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

@@ -44,8 +44,9 @@ from verity.core.protocols.pouw.schemes import pearl_c4 as F
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.append(str(HERE.parent))
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(__file__)
 
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip

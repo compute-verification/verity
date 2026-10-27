@@ -23,7 +23,6 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
-sys.path.append(str(HERE.parent))
 
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
 from verity.core.protocols.pouw.circuit import leaves as L  # noqa: E402
@@ -34,7 +33,9 @@ from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 
 import served_commit as SC  # noqa: E402
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(__file__)
 
 TILE = (1, 1)
 DEV = "sm120"

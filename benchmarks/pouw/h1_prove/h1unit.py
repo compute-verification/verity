@@ -61,7 +61,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -80,9 +79,9 @@ from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity_config.settings import of
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-import settings
+settings = of(__file__)
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192

@@ -16,7 +16,9 @@ from verity.core.protocols.pouw import core_check as CC
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "h1_prove"))
 import h1unit as U
-import settings
+from verity_config.settings import of
+
+settings = of(__file__)
 
 
 @pytest.mark.slow

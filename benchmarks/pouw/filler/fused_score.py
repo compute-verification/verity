@@ -40,9 +40,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.append(str(HERE.parent))
 import score as SC  # noqa: E402
-import settings  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
+settings = of(HERE.parent / "settings.py")
 
 A, S = SC.A, SC.S
 FUSED_SLOT_BYTES = 44  # a filler warp's global traffic a step: its receipt (8) and count (4), and the round's FState (32)

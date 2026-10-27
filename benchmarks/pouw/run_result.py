@@ -1,6 +1,6 @@
 """The ``research/result/v0.1`` document (``tools/research/src/research/result.py``) each PoUW benchmark writes when it runs
 under ``research run`` (``$RESEARCH_RUN_DIR`` set): the gates as its validation, its headline numbers as measurements, its
-value settings in force (`settings.record`) in its fingerprint, and its full JSON as the measurement file.  Stdlib only, so
+value settings in force (`Registry.of_record`) in its fingerprint, and its full JSON as the measurement file.  Stdlib only, so
 the benchmarks need not import ``research``."""
 
 from __future__ import annotations
@@ -9,7 +9,9 @@ import json
 import os
 from pathlib import Path
 
-import settings
+from verity_config.settings import of
+
+settings = of(__file__)
 
 
 def write(out: Path, ok: bool, checker: str, detail: str, measurements: list[tuple[str, float, str]]) -> None:
@@ -22,7 +24,7 @@ def write(out: Path, ok: bool, checker: str, detail: str, measurements: list[tup
     except ValueError:
         rel = None
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"source_sha": settings.RESEARCH_SOURCE_SHA, "settings": settings.record()},
+           "workload_fingerprint": {"source_sha": settings.RESEARCH_SOURCE_SHA, "settings": settings.of_record()},
            "validation": {"status": "passed" if ok else "failed", "checker": checker, "detail": detail, "evidence": [rel] if rel else []},
            "measurements": [{"name": n, "value": float(v), "unit": u} for n, v, u in measurements],
            "measurement_files": [rel] if rel else [], "artifacts": []}

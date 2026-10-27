@@ -18,16 +18,17 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # require); the Python held to the Lean: `window.py` (with the switch, `verifier.py`, and its pinned vectors), `h1zy.py`
 # (`test_lanes.py`), and h1_lanes' known rows (`test_known_rows.py`: `benchmarks/pouw/h1_lanes/run.py` with
 # `benchmarks/pouw/h1_prove/h1unit.py`, which import most of PoUW's protocol and the proof service's one-stage modules,
-# so both trees are named whole, and `benchmarks/pouw/settings.py`, which h1unit reads its tile through), with the core
-# they import (the integrity profile, `verity.ml`'s circuits, commitments, crypto, randomness and kernels' tensor-core
-# reference, and `verity.errors`), and C-Flock's Python (`verity_flock`), which lowers the statements whose input wires
-# it holds `PouwWindow.Lanes` to; what `lake` reads through the path requires: PoUW's commitments (`pouw_commit`, in
-# PoUW's tree), the proof service's Lean (`core_sampled_proofs`) with the core protocol interface and the LMS verifier,
-# core's identity and randomness, and C-Flock's verifier with its configuration.
+# so both trees are named whole, and `benchmarks/pouw/settings.py` with `verity_config`, which h1unit reads its tile
+# through), with the core they import (the integrity profile, `verity.ml`'s circuits, commitments, crypto, randomness
+# and kernels' tensor-core reference, and `verity.errors`), and C-Flock's Python (`verity_flock`), which lowers the
+# statements whose input wires it holds `PouwWindow.Lanes` to; what `lake` reads through the path requires: PoUW's
+# commitments (`pouw_commit`, in PoUW's tree), the proof service's Lean (`core_sampled_proofs`) with the core protocol
+# interface and the LMS verifier, core's identity and randomness, and C-Flock's verifier with its configuration.
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw", "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/settings.py",
+          "tools/config/verity_config",
           "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/ml/flock/python",
           "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "verity/core/primitives/identity", "verity/core/primitives/randomness",

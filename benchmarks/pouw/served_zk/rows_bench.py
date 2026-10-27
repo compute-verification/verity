@@ -59,10 +59,10 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments import merkle as MK
 from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
-sys.path.append(str(HERE.parent))
-import settings  # noqa: E402
+settings = of(__file__)
 
 M_REAL, LAYERS = 32, 32
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}   # (n, k)
@@ -205,7 +205,7 @@ def main() -> int:
     vp, u64, P = C.c_void_p, C.c_uint64, C.POINTER
     image, rimage = Path(args.cubin).read_bytes(), Path(args.rows_cubin).read_bytes()
     dev = R.Dev(image)
-    refused = dev.identity(os.environ.get("PEARLC_EXPECT_UUID"))  # the Pearl-C runner's variable, declared with kernels' settings
+    refused = dev.identity(settings.PEARLC_EXPECT_UUID)
     calls, reps, prefill = settings.CALLS, settings.REPS or 30, settings.PREFILL
     res: dict = {"schema": "verity-pouw/served-zk-rows-bench/v0",
                  "run": os.path.basename((settings.RESEARCH_RUN_DIR or "").rstrip("/")) or "local",

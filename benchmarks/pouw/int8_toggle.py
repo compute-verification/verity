@@ -20,7 +20,9 @@ from pathlib import Path
 
 import torch
 
-import settings
+from verity_config.settings import of
+
+settings = of(__file__)
 
 #: pattern: (left operand, right operand)
 PATTERNS = {"full": ("full", "full"), "wide": ("wide", "wide"), "u-bit": ("wide", "bit"), "bit": ("bit", "bit"),
