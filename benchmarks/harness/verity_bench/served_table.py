@@ -152,6 +152,7 @@ class Found:
     reps: int
     point: Mapping[str, Any]
     caveats: list[dict[str, Any]]
+    device: str | None = None
 
 
 def _labels(store: Any, targets: Sequence[str], pull: bool) -> list[dict[str, Any]]:
@@ -190,7 +191,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], pul
         if absent := [arm for arm in arms if arm not in row["arms"]]:
             return [], f"no timed {', '.join(absent)} at {row['point']['id']}"
     caveats = [label for label in labels if label["key"] in CAVEAT_KEYS]
-    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats) for row in rows], None
+    device = doc["identity"].get("gpu")
+    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device) for row in rows], None
 
 
 def _newest(store: Any, spec: str, point: str, arms: Sequence[str], pull: bool,
@@ -276,10 +278,10 @@ def _points(protocol: Protocol, pull: bool, store: Any,
 
 def _source(spec: str, point: str, found: Found | None, record: str | None) -> dict[str, Any]:
     if found is None:
-        return {"spec": spec, "point": point, "run": None, "art": None, "commit": None, "reps": None, "caveats": [],
-                "record": record}
-    return {"spec": spec, "point": point, "run": found.run, "art": found.art, "commit": found.commit,
-            "reps": found.reps, "caveats": found.caveats, "record": record}
+        return {"spec": spec, "point": point, "device": None, "run": None, "art": None, "commit": None, "reps": None,
+                "caveats": [], "record": record}
+    return {"spec": spec, "point": point, "device": found.device, "run": found.run, "art": found.art,
+            "commit": found.commit, "reps": found.reps, "caveats": found.caveats, "record": record}
 
 
 def _over(point: Mapping[str, Any], arm: str, over: str | None, metric: str) -> dict[str, Any] | None:
@@ -546,23 +548,26 @@ def render(table: Mapping[str, Any]) -> str:
     lines += [f"- {row['device']} (`{row['run']}`): `{row['arm']}`; {_cell(row['form'])}" for row in table["live"]]
     lines += [
         "",
-        "## Served rows on one RTX PRO 6000 (`vllm_bench_point`)",
+        "## Served rows, one GPU each (`vllm_bench_point`)",
         "",
+        "The device is the GPU the run's engines saw (the result's `identity.gpu`); a ratio's arm and stock ran on it in "
+        "the same run. "
         f"Ratios are a protocol's arm over `{table['served_stock']}` (stock FP8 as vLLM serves it), paired by rep: mean "
         "± 95% half-width (Student t), or the mean alone at one rep; lower is better. A row is its protocol's run of "
         "record (the art or runs `PROTOCOLS` names) or, without one, the newest passing run of its spec and point in "
         "the evidence store; a result labelled `superseded_by` is skipped. The caveat is the newest `label` and `note` "
         "on the result and its run.",
         "",
-        "| protocol | spec | point | / served stock, per output token | / served stock, per decode token "
+        "| protocol | device | spec | point | / served stock, per output token | / served stock, per decode token "
         "| / eager stock, per output token | reps | run | art | caveat |",
-        "|---|---|---|---:|---:|---:|---:|---|---|---|",
+        "|---|---|---|---|---:|---:|---:|---:|---|---|---|",
     ]
     for row in rows:
         eager = _ratio(row["over_eager"][PER_OUTPUT]) if row["over_eager"] else "—"
         served = row["over_served"] or {}
-        lines.append("| " + " | ".join([row["protocol"], f"`{row['spec']}`", row["point"], _ratio(served.get(PER_OUTPUT)),
-                                        _ratio(served.get(PER_DECODE)), eager, *_sources(row)]) + " |")
+        lines.append("| " + " | ".join([row["protocol"], row["device"] or "—", f"`{row['spec']}`", row["point"],
+                                        _ratio(served.get(PER_OUTPUT)), _ratio(served.get(PER_DECODE)), eager,
+                                        *_sources(row)]) + " |")
     lines += ["", "Arms:", ""]
     seen = set()
     for row in rows:

@@ -29,9 +29,10 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
 
 
 class ScaledEngine:
-    def __init__(self, arm, scale):
+    def __init__(self, arm, scale, gpu):
         self.arm, self.scale, self.reps = arm, scale, 0
-        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": None, "engine_overrides": {}, "kv_cache_tokens": 1}
+        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": None, "engine_overrides": {}, "kv_cache_tokens": 1,
+                         "gpu": gpu}
 
     def gate(self, point):
         return {f"{point.id}-0": (7, 9)}
@@ -56,19 +57,22 @@ class ScaledEngine:
 
 
 class ScaledFactory:
-    def __init__(self, commit_scale):
-        self.commit_scale = commit_scale
+    def __init__(self, commit_scale, gpu):
+        self.commit_scale, self.gpu = commit_scale, gpu
 
     def create(self, arm, preset, *, resident):
-        return ScaledEngine(arm, self.commit_scale if arm.id.startswith("commit") else 1.0)
+        return ScaledEngine(arm, self.commit_scale if arm.id.startswith("commit") else 1.0, self.gpu)
 
 
-def _result(point_id: str, commit_scale: float, reps: int = 2) -> dict:
+RTX, H200 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA H200"
+
+
+def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"), Arm("stock-fp8@compiled"),
             Arm("commit@compiled", control="stock-fp8@compiled"))
     return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
-                         factory=ScaledFactory(commit_scale), git_commit="c" * 40)
+                         factory=ScaledFactory(commit_scale, gpu), git_commit="c" * 40)
 
 
 class Producer:
@@ -193,9 +197,11 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
 
     markdown = served_table.render(table)
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
+    assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
     assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
     assert "served Commit at b8 \\| mechanism evidence only / no pinned sm_120 build" in line
-    assert "| PoUS bandwidth audit | `llama31-8b-fp8-1gpu-bandwidth-served` | b8-p512-mixed | — | — | — | — | no passing run |" in markdown
+    assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served` | b8-p512-mixed | — | — | — | — "
+            "| no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
 
 
@@ -219,7 +225,7 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
 
     producer = Producer(tmp_path)
     b32 = producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.1))
-    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
+    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25, gpu=H200))
     newer = producer.ran("r20261024-030000-0003", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 9.0))
     producer.ran("r20261024-040000-0004", COMMIT_SPEC, "b8-p512-mixed", None, validation="failed", rc=3)
     listed = producer.table(["r20261024-020000-0001"], "listed")
@@ -250,7 +256,7 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
     assert [point for protocol, point in rows if protocol == "by map"] == ["b8-p512-mixed", "b32-p512-mixed"]
     assert rows["by map", "b8-p512-mixed"]["over_eager"] is None
     by_id = rows["by id", "b8-p512-mixed"]
-    assert (by_id["run"], by_id["record"]) == ("r20261024-020000-0002", None)
+    assert (by_id["run"], by_id["record"], by_id["device"], art_row["device"]) == ("r20261024-020000-0002", None, H200, RTX)
     assert by_id["run"] != newer and by_id["over_served"]["time_per_output_token_s"]["mean"] == pytest.approx(1.5)
     assert rows["by id", "—"]["run"] is None
     [failed] = table["skipped"]
@@ -261,6 +267,7 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
 
     markdown = served_table.render(table)
     assert f"| r20261024-020000-0001 | `{b32[:16]}` (record `{listed[:16]}`) | prices it, doesn't credit it |" in markdown
+    assert f"| by id | {H200} | `{COMMIT_SPEC}` | b8-p512-mixed | 1.500× ± 0.000 |" in markdown
     assert "r20261024-040000-0004" in markdown.split("Passed over")[1]
 
 
