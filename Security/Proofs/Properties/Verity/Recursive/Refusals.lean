@@ -527,7 +527,7 @@ theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs
       have a2 : w.registration = none := (Option.some.inj hr).symm
       rw [a1, a2]
     | some d =>
-      rw [hor, Option.mapM_some] at hr hreg
+      simp only [hor, Option.mapM_some] at hr hreg
       cases hg : bs.get d "rec inner registration" with
       | error err =>
         rw [hg] at hreg
