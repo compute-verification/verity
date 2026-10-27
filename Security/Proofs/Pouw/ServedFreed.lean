@@ -43,10 +43,7 @@ theorem ServedFreed : Pouw.Guarantees.ServedFreed := by
   refine le_trans (prob_mono fun ox h => ?_) (hfloor hG1 hG2 hP1 hP2 A' hfree)
   obtain ⟨⟨hw, hn⟩, z, hfit, hnot⟩ := h
   obtain ⟨htr, hcost⟩ := hA' ox.1 ox.2
-  refine ⟨show vw ox.1 ox.2 (A'.transcript ox.1 ox.2) () by rw [htr]; exact hw, ?_⟩
-  by_contra hge
-  push_neg at hge
-  apply hnot
+  refine ⟨show vw ox.1 ox.2 (A'.transcript ox.1 ox.2) () by rw [htr]; exact hw, not_le.mp fun hge => hnot ?_⟩
   have hext : β * A.ext ox.1 ox.2 ≤ β * K := mul_le_mul_of_nonneg_left (himp A ox.1 ox.2 hn) hβ
   exact Pouw.SecurityProofs.Dither.FreedOfFloor G Pd 1 _ (A.timedUse ox.1 ox.2) μ z z' hμ hneeds hval zero_le_one
     (div_nonneg (le_max_left _ _) hC.le) hfit' hslack hfit (floor_of_max hC (by linarith))
@@ -231,7 +228,8 @@ theorem fill_not_freed (X : Fin 3 → ℝ) (hX : ∀ r, 0 ≤ X r) (hlt : 2 * X 
   · rintro ⟨W', z', -, hfit, hval⟩
     have hv := honest_le hfit
     have e1 : twPd.value 1 (fun j => 8 - X j) = 46 - (2 * X 0 + X 1 + X 2) := by
-      rw [value3]
+      show 1 * 14 + ∑ j : Fin 3, twμ j * (8 - X j) = _
+      rw [priced3]
       ring
     rw [twC, hε, twε_eq] at hval
     rw [twF, twε_eq] at hlt
@@ -332,7 +330,9 @@ theorem ServedFreed_nontrivial :
   · norm_num at h1
   intro ox
   refine ⟨⟨trivial, trivial⟩, fill_not_freed (quiet.timedUse ox.1 ox.2) (timedUse_nonneg quiet ox.1 ox.2) ?_ twEps⟩
-  simp only [quiet_timedUse]
+  have h0 := quiet_timedUse ox.1 ox.2 0
+  have h1 := quiet_timedUse ox.1 ox.2 1
+  have h2 := quiet_timedUse ox.1 ox.2 2
   linarith [twF_pos]
 
 end Witnesses

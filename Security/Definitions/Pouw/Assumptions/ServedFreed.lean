@@ -58,8 +58,9 @@ costs at most the prover's plus `β` a bit the prover's programs exchanged, its 
 coins out, and an outside machine that keeps state across programs can return that block's root to its work. That
 work then imports only the root, so the per-program `OutsourceWithinEgress` is false at such a node: the work's
 exchange-free replacement does the block's words and hashing, worth `H_b`, against `β` times the root's 512 bits.
-Here the answer's exported coins count too. The per-program form implies this one
-(`Pouw.SecurityProofs.outsourcePeriod_of_perProgram`), so it asks no more of 𝓜.
+Here the answer's exported coins count too. In 𝓜, where a program's outputs are a function of its own inputs, the
+per-program form implies this one (`Pouw.SecurityProofs.outsourcePeriod_of_perProgram`): this is the weaker claim,
+and the one that stays true at a node whose outside machines keep state across programs.
 
 **β** (RT-PROTO-2 P2, P18). The premise holds only at `β` at least a sampling block's honest priced cost over the
 fewest bits that carry its coins out and its root back, `β ≥ H_b / (|coin_b| + 512)`: a block whose coins are a
