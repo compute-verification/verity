@@ -9,9 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import lifecycle  # noqa: E402
-import onsite  # noqa: E402
-import remote  # noqa: E402
+import lifecycle
+import onsite
+import remote
 
 
 def main(argv: list[str] | None = None) -> int:
