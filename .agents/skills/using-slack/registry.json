@@ -628,6 +628,7 @@
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
+      "linear": "HASH",
       "owns": [
         "benchmarks/hash/",
         "benchmarks/torch_gpu/"
