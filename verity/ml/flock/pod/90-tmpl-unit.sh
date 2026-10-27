@@ -2,7 +2,8 @@
 # A templated statement end to end (PRF-133): RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
 # line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
-# refuses the statement once every check has passed, so each verdict's reason must be exactly that refusal. Run from the
+# covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session must be accepted, and the m0 one
+# refused as a templated statement without --zk, by Lean and by the live server (its LIVE line) alike. Run from the
 # verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt, template.json, tmpl.txt, stage.json,
 # statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, lean-<mode>.log (its VERDICT line), verdicts.json.
 # env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget where /workspace isn't
@@ -74,7 +75,6 @@ python3 verity/ml/flock/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.js
   || { tail -20 $O/stage.err; exit 1; }
 mkdir -p $D/tables
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
-WANT="refused: verity/flock-circuit/tmpl, a templated statement: a statement form the soundness proof does not cover"
 echo '{}' > $O/verdicts.json
 for mode in ${MODES:-m0 zk}; do
   Z=; [ $mode = zk ] && Z=--zk
@@ -94,13 +94,17 @@ for mode in ${MODES:-m0 zk}; do
     --session $SESS > $O/lean-$mode.log 2>&1
   echo "$mode rc $?"
   grep -h '^VERDICT' $O/lean-$mode.log | head -1 | cut -c1-600
-  python3 - $O/verdicts.json $mode "$WANT" $O/lean-$mode.log $O/prove-$mode.txt <<'EOF'
+  python3 - $O/verdicts.json $mode $O/lean-$mode.log $O/prove-$mode.txt <<'EOF'
 import json, sys
-out, mode, want, log, prove = sys.argv[1:]
+out, mode, log, prove = sys.argv[1:]
+want = None if mode == "zk" else \
+    "refused: a templated statement without --zk: a statement form the soundness proof does not cover"
 v = [json.loads(l[8:]) for l in open(log) if l.startswith("VERDICT ")]
 live = [json.loads(l.split("\t", 1)[1]) for l in open(prove) if l.startswith("LIVE")]
+lean_ok = bool(v) and (v[0]["accepted"] is True if want is None else not v[0]["accepted"] and v[0]["why"] == want)
+live_ok = bool(live) and (live[0].get("accepted") is True if want is None else live[0].get("why") == want)
 doc = json.load(open(out))
-doc[mode] = {"verdict": v[0] if v else None, "pass": bool(v) and not v[0]["accepted"] and v[0]["why"] == want,
+doc[mode] = {"verdict": v[0] if v else None, "pass": lean_ok and live_ok, "lean_pass": lean_ok, "live_pass": live_ok,
              "live_why": live[0].get("why") if live else None}
 json.dump(doc, open(out, "w"), indent=1, sort_keys=True)
 EOF
