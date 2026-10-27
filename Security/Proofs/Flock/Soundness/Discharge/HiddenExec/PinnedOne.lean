@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Inst.Place
 import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+import Proofs.Flock.Soundness.Discharge.Inst.Order
 
 /-!
 # A pinned statement's witness satisfies its statement without Δ's pinned copies
@@ -114,12 +115,12 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
     intro j
     have hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0 := fun j' => by
       unfold sparseEntry
-      rw [ite_eq_right (by have := F.rowsA; omega)]
+      rw [ite_eq_right (by have h : st.c.unit.a.rows ≤ st.c.unit.useful := F.rowsA; omega)]
     have hB : ∀ j', sparseEntry st.c.unit.b st.c.unit.useful j' +
         lookupEntry st.c.unit.lookup st.c.unit.useful j' = 0 := fun j' => by
       rw [L.unit_lookup]
       unfold sparseEntry
-      rw [ite_eq_right (by have := F.rowsB; omega)]
+      rw [ite_eq_right (by have h : st.c.unit.b.rows ≤ st.c.unit.useful := F.rowsB; omega)]
       rfl
     show matA (Hidden.unpin st) (Hm.zeroCol st.c) j.val = 0
     exact (Integrate.placedA_eq (st := Hidden.unpin st) P L hleaf ⟨Hm.zeroCol st.c, hZ⟩ j).symm.trans
