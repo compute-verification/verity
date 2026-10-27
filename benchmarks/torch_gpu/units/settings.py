@@ -17,7 +17,7 @@ REGISTRY = Registry(
     S("UNITS_EXPECT", str, None, WHERE, "the card name the identity check wants (default its arch's, check.EXPECT): which "
                                         "card runs, not what it computes"),
     S("UNITS_ANY_GPU", present, False, DEBUG, "set: no card or lease identity check (a run on another card)"),
-    S("UNITS_REPLAY", str, None, VALUE, "fixture.py's --replay: the CMP-96 replay its pools are cross-checked against"),
+    S("UNITS_REPLAY", str, None, VALUE, "fixture.py's --replay: the CPU replay its pools are cross-checked against"),
     S("UNITS_ROWS", str, None, VALUE, "fixture.py's --rows: an ops/rows.py loaded in place of the installed one"),
     S("SWEEP", not_zero, True, VALUE, "0: check.py runs no sweep"),
     S("SWEEP_ONLY", one, False, VALUE, "1: check.py runs the sweeps alone"),

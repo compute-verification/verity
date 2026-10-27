@@ -544,7 +544,7 @@ __global__ void __launch_bounds__(256) h1j_noise(const u64* __restrict__ seeds, 
   }
 }
 
-// The one-stream form (kh_one; CA's PouwH1Tile_v3): the same walk and receipts, plus each cell's served z =
+// The one-stream form (kh_one; PouwH1Tile_v3): the same walk and receipts, plus each cell's served z =
 // O' - sum_d 128^d D_d + 256 X WB^T mod 2^32, WB = wb+ - wb- (wrapw) from B and the noise, carried by a third MMA set a
 // segment into its own accumulator; then y = RN_bf16(RN32(RN32(z) s_a[row]) s_w[col]) (int8_exact.dequantize), s_a = 0
 // for rows >= m. The step (m, flags) is read from the device, as dither_one's H1OStep {parity, m, pad, flags}.
@@ -569,7 +569,7 @@ struct OneOut {
   u32* lr = nullptr;    // DG (kh_lanes): unit u's record of its 32 lanes' words at lr + 32 u W (W = kh_words(K))
 };
 
-// PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
+// PL (kh_one_peel; the peel): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
 // z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T): two more MMAs a fragment (X by the coins c, the
 // dither bits b by B) into a fourth accumulator, and xa by B into the wrap term's, in a segment where a lane has an xa.
@@ -2751,7 +2751,7 @@ extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
-// J10 banded (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): kh_one and
+// J10 banded (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): kh_one and
 // kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
 extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
@@ -2767,7 +2767,7 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
-// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, whose credit derives a unit's call and
+// J10-R (J10R's Definition, `h1tile.j10r_reference`, in the verifier's form, whose credit derives a unit's call and
 // blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
 // scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
 // columns 32 cj .. of it.
@@ -2833,7 +2833,7 @@ extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, co
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// J10-R's receipts-only units (h1tile.PouwH1Tile_v5 / v6's receipt, J10R's Definition on cursor/h1-j10r-1de3; measured
+// J10-R's receipts-only units (h1tile.PouwH1Tile_v5 / v6's receipt, J10R's Definition; measured
 // only until the verifier takes the form): a call of M rows (its A slot) has one noise stream, seed_c's at call scale,
 // row i's blocks at i RB and column j's at M RB + j CB; unit (ri, cj) at position base + u reads call rows 32 ri .. and
 // columns 32 cj .., and folds under its own sigma_R. A call's row tiles are hashed once (h1jr_rows) and its units' column

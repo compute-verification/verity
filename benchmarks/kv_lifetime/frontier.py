@@ -170,7 +170,7 @@ def main() -> int:
     models = json.loads(a.models.read_text())["models"][a.model_name]
     if not a.r_cap_node and "products" not in models[a.lever]["coefficients"]:
         raise SystemExit(f"{a.models}: step model {a.model_name} {a.lever!r} has no data products (class `products`), and "
-                         "E_WORD is in nonlinear units (#4622): give its attention coefficients the row's data products (2 D a "
+                         "E_WORD is in nonlinear units: give its attention coefficients the row's data products (2 D a "
                          "head-key, b_q), or a node peak in nonlinear units (--r-cap-node)")
     rc = r_cap(models[a.lever], ph)
     rc["window_run"] = {T: max(r_cap(models[a.lever], p)["window"][T] for p in an["phases"]) for T in rc["window"]}

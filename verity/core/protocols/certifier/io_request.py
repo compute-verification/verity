@@ -22,10 +22,10 @@ holds), and its request's carry-in and carry-out, (bytes left, prompt fields so 
 cells: (0, 0) before its first cell and (0, n) after its `END`, n its prompt_len. The verifier computes them (`lanes`)
 from the advice's prompt lengths, advice request i on ordinal order[i] + 1 (advice v1's order permutation; v0's is
 the identity), and the warden's ingress release (`Release`: each connection's first bucket and its request cells a
-bucket), which it takes in the clear tonight as it takes the ingress record's wiring (the named gap). So connection
+bucket), which it takes in the clear for now as it takes the ingress record's wiring (the named gap). So connection
 q's lanes chain by construction: (0, 0) into its first bucket, each bucket's carry-out the next one's carry-in, and
 (0, n_q) out of its last, and the link's bucket verdicts hold every request's prompt_len to its cells, whatever
-buckets it spans (REDTEAM phase 9 (b): a carry checked alone accepts any added count).
+buckets it spans (a carry checked alone would accept any added count).
 
 **What 1 means** (`reference`): in each lane, the R cells read from the carry-in are pads and request cells on its
 ordinal, no request cell after a pad or after the request's `END`, each request cell that cell of a canonical id

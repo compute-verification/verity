@@ -15,13 +15,13 @@
                                  doorbell with only its own machines
 
 Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all, and the card's daily limit and the tenant's
-quotas stopped launches with no warning (Daniel, 18 Oct 03:53Z). A VM's rate and address come from the machines registry (`research
+quotas stopped launches with no warning. A VM's rate and address come from the machines registry (`research
 pods register`, <notes>/machines.d); one not registered is recorded from the API with rate None. A VM that can't be read is
 recorded as RUNNING and unread, never idle. Runs on infra's VM, which holds the Slack credential (the control pod holds none).
 Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them.
 
-The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop (Daniel, 19 Oct
-18:11Z, lane contract v2.19 §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
+The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop
+(the lane contract, §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
 unset or unregistered) with its own idle hours. A sample also copies each VM's /etc/research/deadline into its registry entry's
 `deadline` when it changed (one notes sync per pass), which the control pod's wake (wake.py) reads while the VM is stopped.
 """
