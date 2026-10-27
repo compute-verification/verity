@@ -51,7 +51,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", c
     ranks = []
     for r in range(world):
         c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=I,
-                               commit_scheme=ROWS if commit_scheme == ROWS else None)
+                               commit_scheme=commit_scheme)
         b = root / "build" / f"rank{r}"
         b.mkdir(parents=True)
         shutil.copyfile(c["row_dir"] / "build_request" / "instances.json.gz", b / "instances.json.gz")

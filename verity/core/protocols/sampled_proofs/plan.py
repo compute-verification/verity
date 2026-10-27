@@ -5,7 +5,7 @@ Program for checking; it is verification policy, not computation (README "Protoc
 probability a gate of the class is checked, each gate drawn independently.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the
-fault model.  It belongs to a proof unit under the selected plan and is sampled like any other gate.  WB's
+fault model.  It belongs to a proof block under the selected plan and is sampled like any other gate.  WB's
 "model binding" (every committed weight leaf rebuilt from the registered checkpoint) is *a plan whose weight `Input`
 gates have p = 1*; a plan may instead sample them.  There are no trusted sources.
 
@@ -151,7 +151,7 @@ class AuthenticationLocation:
 
 @dataclass
 class Obligation:
-    """One sampled proof unit: a gate selection of the canonical circuit (here always a `FunctionCall` or
+    """One sampled proof block: a gate selection of the canonical circuit (here always a `FunctionCall` or
     `Region`), its boundary values with their authentication locations, and the plan that selected it."""
 
     selection: GateSelection

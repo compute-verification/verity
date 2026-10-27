@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, spec_label

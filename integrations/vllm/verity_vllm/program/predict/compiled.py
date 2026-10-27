@@ -43,7 +43,7 @@ from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles.dense_generic import find_hf_config
-from verity_vllm.engine.profiles.generic import router_vpt_bf16
+from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 from verity_vllm.program.model import config_of
 from verity.ml.definitions.registry.bf16_gemm_check import device_pin
 from verity_vllm.query.manifest.format import SERVED_IDS as IDS, SERVED_POSITIONS as POSITIONS

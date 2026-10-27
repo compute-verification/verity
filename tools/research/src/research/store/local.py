@@ -822,13 +822,14 @@ class LocalStore:
 
     def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None,
                 progress: Callable[[str, int, int], None] | None = None, payload_kinds: Sequence[str] = (),
-                payload_max_bytes: int = REFRESH_PAYLOAD_MAX, attempts_only: bool = False) -> dict:
+                payload_max_bytes: int = REFRESH_PAYLOAD_MAX, attempts_only: bool = False, since: str | None = None) -> dict:
         """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
         only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
         and index just those.  The way a fresh machine builds its catalog from the remote alone.  `payload_kinds`: also make
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
-        `research merge` reads), one listing instead of three."""
+        `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
+        attempts whose ids sort after it, listed from there (`research queue ready`'s records gate)."""
         from . import labels_sync as LS  # noqa: PLC0415
 
         t0 = time.monotonic()
@@ -836,7 +837,8 @@ class LocalStore:
         want_m = [] if attempts_only else \
             [k for k in r.list("manifests/") if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")])]
         want_m = [k for k in want_m if not (self.root / k).exists()]
-        want_a = [k for k in r.list("attempts/") if k.endswith(".json") and ids.is_run_id(k[len("attempts/"):-len(".json")])]
+        listed = r.list("attempts/") if since is None else [k for k, _ in r.list_times("attempts/", start_after=f"attempts/{since}")]
+        want_a = [k for k in listed if k.endswith(".json") and ids.is_run_id(k[len("attempts/"):-len(".json")])]
         want_a = [k for k in want_a if not (self.root / k).exists()]
         rep: dict[str, Any] = {"remote": r.describe(), "manifests": 0, "attempts": 0, "labels": 0, "errors": []}
         tmpdir = self.root / "scratch"

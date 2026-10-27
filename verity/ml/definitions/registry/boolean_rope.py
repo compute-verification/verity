@@ -14,7 +14,7 @@ runs for the word primitives: ``t = RN32(y * s)`` (FMUL, subnormals kept), ``RN3
 bf16_rn with aten's NaN 0x7FC0. Every NaN of the f32 steps ends in that cast, so their payloads never reach the output. The
 composites are `b1`'s bodies on bits: `RoPEHead_v2` batches `RopeOut_v2` and `RopeOutAdd_v2` over the D/2 coordinate pairs and
 `RoPE_v2` batches `RoPEHead_v2` over the heads with one shared cos/sin row, so both are separable and each output element is
-one proof unit under `Q_word` v1, as in the word Program. The GPT-J versions are the same gates on the pairs (2i, 2i+1),
+one proof block under `Q_word` v1, as in the word Program. The GPT-J versions are the same gates on the pairs (2i, 2i+1),
 the kernel's `IS_NEOX=false` branch (DeepSeek-V2 MLA's q_pe and k_pe: GLM-4.7-Flash, GLM-5.3), with the odd half's operands
 swapped as nvcc contracts that instantiation: ``RopeOutAdd_v2(y, x, s, c) = bf16_rn(RN32(x * s + RN32(y * c)))``.
 """

@@ -877,6 +877,22 @@ def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_exec
     assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
 
 
+def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
+    """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`, advice_compile's too), so an int8
+    serve compiles on both sides with its quantization config beside the target's int8 scope, never the bf16 fixture's."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    rev = "15b0976d400d796ee589e7737d03a919526bf800"
+    serve = {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": rev, "execution": "bi-eager",
+             "target": {**TARGET, "int8_exact": "linears"}}
+    phi = PP.phi_of_serve(serve)
+    assert phi.model["hf_config"] == json.loads(pinned_hf_config(serve["model"], rev).read_text())
+    assert phi.model["hf_config"]["quantization_config"]["quant_method"] == "verity_int8" and phi.target["int8_exact"] == "linears"
+    assert phi.digest() != PP.phi_of_serve(serve, hf_config=str(PP.LLAMA32_1B_CONFIG)).digest()
+    bf16 = {**serve, "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "target": TARGET}
+    assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
+
+
 def test_a_served_windows_compiler_is_the_servers_whatever_phi_it_compiles_under(monkeypatch):
     """The registration names the server's compiler (`verity-vllm advice`'s, over its tree's code identity), so the verifier's I2
     carries that name and digest, and φ (the target, the seed) moves what I2 compiles, not the name it is registered under."""
