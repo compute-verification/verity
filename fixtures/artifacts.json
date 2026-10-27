@@ -117,6 +117,7 @@
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "integrations/vllm/tests/protocols/fixtures/challenger_periods",
   "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": "verity/ml/flock/tests/fixtures/f1-gate",
+  "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "verity/ml/commitments/tests/fixtures/layouts",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
