@@ -2,7 +2,8 @@
 gate accepts, and a request the gate or the class refuses is refused with its reason; a session through a stub gate keeps
 the lane's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
-nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard."""
+nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
+its draw on the gate's coins names the auditor's node as the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
 import io
@@ -64,6 +65,8 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
                               "--scan --prompts --tokens 64")
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.KI} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
     assert "--port 18782 --protocol ids --id-payload 503 --admit release-order" in doc["endpoint"]
+    assert doc["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
+    assert f"PORT=18782 ADMIT=release-order PROTOCOL=ids MAX_MODEL_LEN={SS.KI + SS.KO}" in doc["hand_start"]
 
 
 @pytest.mark.parametrize("flags, why", [
@@ -161,3 +164,48 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
                     "CR_EOS_IDS": "256"}
     assert SS.main(["chain", "--run", RUN, "--keep", str(keep)]) == 2
     assert SS.main([*argv, "N2_DRAW=4"]) == 2
+    assert SS.main([*argv, "--draw", "8"]) == 0
+    assert "CR_SCAN_ARGS=--draw 8" in (tmp_path / "seen").read_text().splitlines()
+
+
+def _gate_chain(tmp_path, monkeypatch, peer):
+    here = tmp_path / "here"
+    here.mkdir(exist_ok=True)
+    (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\n')
+    (here / "leak_guard.py").write_text("")
+    monkeypatch.setattr(SS, "HERE", here)
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    (tmp_path / "run" / "inputs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "run" / "inputs" / "challenger-key.json").write_text("{}")
+    (tmp_path / "gate-key").write_text("")
+    (tmp_path / "main.txt").write_text("abc\n")
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = json.dumps({"device": "warden", "peer": peer}).encode()
+        info = tarfile.TarInfo(f"{RUN}/request.json")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
+    (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
+    return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",
+            "--challenger-key", "challenger-key.json", "--key", str(tmp_path / "gate-key"),
+            "--main", str(tmp_path / "main.txt")]
+
+
+def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
+    argv = _gate_chain(tmp_path, monkeypatch, "vy-dc-h200-2")
+    assert SS.main(argv) == 0
+    scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
+    assert scan == ["--draw", "8", "--challenger", f"gate:{SS.GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
+                    SS.AUDITOR, "--challenger-key", str(tmp_path / "run" / "inputs" / "challenger-key.json"),
+                    "--gate-key", str(tmp_path / "gate-key")]
+    for peer in ("vy-dc-h200-2", "vy-nebius-1"):
+        argv = _gate_chain(tmp_path, monkeypatch, "vy-nebius-1")
+        assert SS.main([*argv, "--coin-peer", peer]) == 2
+        assert "is the served node, the prover's" in capsys.readouterr().err
+    assert SS.main([*argv, "CR_SCAN_ARGS=--peer vy-dc-h200-2"]) == 2
+    assert SS.main([*argv[:-2], "--key", str(tmp_path / "no-key")]) == 2
+    assert "no gate key" in capsys.readouterr().err
+    assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
+    assert "give K" in capsys.readouterr().err

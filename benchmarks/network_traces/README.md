@@ -45,8 +45,11 @@ vy-dc-h200-2's `serve-openai` on :18782, at the scan's class: prompts of KI = 1,
 ids out a request. It runs at a given UTC time when asked. The lane's fetch, with `witness/`, stays in a 0700
 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs
 the chain's warden path on the kept fetch, and only from a tree with the record's leak guard. `session --gate local`
-is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. The scan's draw on
-the auditor's coins runs on the peer, through its line of `/etc/vy/coin-ports`.
+is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins
+gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain runs on (vy-nebius-cpu-2),
+which the challenger's coin link reaches through that node's own line of `/etc/vy/coin-ports`. It refuses the served
+node as the draw's peer, since the gate key and the warden run's witness never go on the prover's machine. Until the
+auditor's node has its line, the chain draws on the verifier's coins (`--coins verifier`, the default).
 
 ## The chain's run of record
 

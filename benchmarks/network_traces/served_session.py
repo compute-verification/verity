@@ -8,7 +8,8 @@ proves the session.
     python served_session.py plan [FLAGS]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
         [--at UTC]
-    python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [CR_K=V ...]
+    python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
+        [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
 FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 400] [--height 12] [--minutes M]
        [--prompt-ids 1024] [--tokens 64] [--vocab 128000]
@@ -39,23 +40,35 @@ FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 400] [--h
 * **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's records (``--endpoint``; a dry rehearsal's KEEP/RUN/endpoint by default) and the model's EOS ids
   (``--eos-ids``), N2's period drawn on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
-  at CR_MEM_GB 96, unless a CR_K=V says otherwise. It is refused unless the tree has the record's leak guard
-  (``leak_guard.py``, #5218), which chain_record.sh runs on its way out, whatever the exit.
+  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
+  verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
+  refused unless the tree has the record's leak guard (``leak_guard.py``, #5218), which chain_record.sh runs on its
+  way out, whatever the exit.
 
-**The coin link.** The scan's draw on the auditor's live coins (``scan_zk.py prove --draw K --challenger gate:GATE
---peer P --challenger-key RECORD --gate-key KEY``) runs on P, the peer whose loopback the gate's challenger reaches
-through P's line of /etc/vy/coin-ports (vy-dc-h200-2's: 7871-7880, which infra installs with #4946; a reserve for a
-peer without one is refused). It needs the lane's gate key and the warden run's witness on P, outside the run dir.
-Until those are placed, the chain draws on the verifier's coins.
+**The coin link.** A draw on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
+--main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
+(``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the lane's gate key and the kept
+fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link (#4946) carries the
+session's coins over ssh to that port of P's loopback, where the draw's client connects. The gate key and the warden
+run's witness are the auditor's, so the draw never runs on the served node, which is the prover's: a ``--coin-peer``
+that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
+node with no line is refused, so until P has one the chain draws on the verifier's coins. ``--main`` is the verifier's
+copy of main's first-parent history, fetched from the tree's origin by default as n2_advised_zk.sh does;
+``--challenger-key`` is infra's challenger-key/v1 record (labelled ``challenger-key current``), a path or a name under
+the run's inputs/. CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``,
+``--peer``) themselves.
 
 The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 180m \\
-      -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \\
-      --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 python3 \\
-      benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART --eos-ids 128001,128008,128009
+      --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
+      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 python3 \\
+      benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART --eos-ids 128001,128008,128009 \\
+      --draw 8 --coins gate --challenger-key challenger-key.json
+
+(``--coins verifier``, without ``--send`` and ``--challenger-key``, until vy-nebius-cpu-2 has its coin-ports line);
 
 and the dry rehearsal, on any CPU node:
 
@@ -89,6 +102,8 @@ import auditor as A  # noqa: E402
 #: the scan's class (`scan_zk.W63`): at most KI prompt ids in, exactly KO ids out a request
 KI, KO = 1024, 64
 PEER, PORT, GATE, LANE = "vy-dc-h200-2", 18782, "research@204.12.178.84", "network-accounting"
+#: the auditor's side, where the chain runs and the gate's coins for its draw arrive
+AUDITOR = "vy-nebius-cpu-2"
 KEY = Path.home() / ".ssh" / "vy-gate-network-accounting"
 KEEP = Path("/workspace/research/lanes/network-accounting/gate")
 #: Llama 3's regular token ids; 128,000 and up are its special tokens
@@ -99,7 +114,10 @@ LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
 #: the flags the endpoint (vllm's) serves the scan's class with: the warden's id form, in its release order
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
-           "--scheme rows-sha512 --seal"
+           "--scheme rows-sha512 --seal --max-model-len {ctx}"
+#: vllm's hand start of it, which commits (``--required-manifest ROW/manifest.json``); serve.sh's MAX_MODEL_LEN defaults
+#: to 512, under the class's KI + KO
+HAND_START = "examples/vllm/serve.sh with PORT={port} ADMIT=release-order PROTOCOL=ids MAX_MODEL_LEN={ctx}"
 
 
 class Refused(Exception):
@@ -155,7 +173,8 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
             "least_minutes": A.warden_minutes(a.requests, a.height),
             "prompts": req["prompts"], "prompts_bytes": len(data),
-            "endpoint": ENDPOINT.format(port=a.port),
+            "endpoint": ENDPOINT.format(port=a.port, ctx=a.prompt_ids + a.tokens),
+            "hand_start": HAND_START.format(port=a.port, ctx=a.prompt_ids + a.tokens),
             "runs": {
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
@@ -303,6 +322,63 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
     return 0 if doc["rc"] == 0 and (doc["verdict"] or {}).get("accepted") is True else (doc["rc"] or 1)
 
 
+def served_peer(fetch: Path) -> str | None:
+    """The node the kept gate run served on: its ``request.json``'s peer."""
+    with tarfile.open(fetch, "r:gz") as tar:
+        for m in tar:
+            if m.isfile() and m.name.count("/") == 1 and m.name.endswith("/request.json"):
+                return json.loads(tar.extractfile(m).read()).get("peer")
+    return None
+
+
+def first_parent(tree: Path, dest: Path) -> Path:
+    """main's first-parent history from `tree`'s origin, written to `dest` (n2_advised_zk.sh's)."""
+    git = ["git", "-C", str(tree)]
+    shallow = subprocess.run([*git, "rev-parse", "--is-shallow-repository"], capture_output=True, text=True)
+    unshallow = ["--unshallow"] if shallow.stdout.strip() == "true" else []
+    for refspec in ("+refs/heads/main:refs/remotes/origin/main", "+refs/remotes/origin/main:refs/remotes/origin/main"):
+        if subprocess.run([*git, "fetch", "-q", *unshallow, "origin", refspec], capture_output=True).returncode == 0:
+            break
+    got = subprocess.run([*git, "rev-list", "--first-parent", "refs/remotes/origin/main"], capture_output=True, text=True)
+    if got.returncode or not got.stdout.strip():
+        raise Refused(f"no main first-parent history from {tree}'s origin ({got.stderr.strip()[-200:]}): give --main FILE")
+    dest.write_text(got.stdout)
+    return dest
+
+
+def input_file(name: Path) -> Path:
+    """`name`, else the run's inputs/ file of that name."""
+    if name.is_file():
+        return name
+    sent = Path(os.environ.get("RESEARCH_RUN_DIR", "")) / "inputs" / name
+    if os.environ.get("RESEARCH_RUN_DIR") and sent.is_file():
+        return sent
+    raise Refused(f"no file {name}, nor one of that name under the run's inputs/: send it with --send")
+
+
+def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
+    """The scan's draw arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+    the auditor's side (`--coin-peer`)."""
+    if a.coins == "verifier":
+        return [] if a.draw is None else ["--draw", str(a.draw)]
+    if a.draw is None:
+        raise Refused("--coins gate draws --draw K of the scan's units: give K")
+    served = served_peer(fetch)
+    if served is None:
+        raise Refused(f"{fetch} holds no request.json naming the node it served on, so the coin peer can't be checked")
+    if a.coin_peer in (served, PEER):
+        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
+                      f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
+    if a.challenger_key is None:
+        raise Refused("--coins gate needs --challenger-key, infra's challenger-key/v1 record (challenger-key current)")
+    if not a.key.is_file():
+        raise Refused(f"no gate key {a.key}: the draw runs on the node that holds the lane's gate key, {AUDITOR}")
+    main = input_file(a.main) if a.main else first_parent(TREE, Path(os.environ.get("OUT") or a.keep / a.run) /
+                                                          "scan-main.txt")
+    return ["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
+            "--challenger-key", str(input_file(a.challenger_key)), "--gate-key", str(a.key)]
+
+
 def chain(a: argparse.Namespace) -> int:
     if not (HERE / "leak_guard.py").is_file():
         raise Refused("this tree has no record leak guard (leak_guard.py, #5218), which chain_record.sh runs on its "
@@ -322,7 +398,15 @@ def chain(a: argparse.Namespace) -> int:
         k, eq, v = kv.partition("=")
         if not (eq and k.startswith("CR_")):
             raise Refused(f"{kv!r}: CR_K=V, a chain_record.sh variable")
+        if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer")):
+            raise Refused(f"{k}: the scan's draw and its coins are --draw and --coins's, which keep the draw off the "
+                          "prover's node")
         env[k] = v
+    coins = coin_args(a, fetch)
+    if any(c.isspace() for w in coins for c in w):
+        raise Refused(f"{coins}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give paths without it")
+    if scan := " ".join(coins):
+        env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
     return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
 
 
@@ -351,6 +435,13 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--keep", type=Path, default=KEEP)
     q.add_argument("--endpoint")
     q.add_argument("--eos-ids")
+    q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
+    q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
+    q.add_argument("--coin-peer", default=AUDITOR, help="with --coins gate: this node, as the gate's peers file names it")
+    q.add_argument("--challenger-key", type=Path)
+    q.add_argument("--main", type=Path, help="the verifier's git rev-list --first-parent origin/main")
+    q.add_argument("--gate", default=GATE)
+    q.add_argument("--key", type=Path, default=KEY)
     q.add_argument("set", nargs="*", help="CR_K=V")
     return p
 
