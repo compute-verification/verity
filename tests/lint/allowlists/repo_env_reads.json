@@ -315,8 +315,6 @@
     {"file": "verity/core/protocols/pous/tests/test_pous_protocol.py", "count": 2},
     {"file": "verity/core/protocols/pous/tests/test_pous_scheme.py", "count": 1},
     {"file": "verity/core/protocols/pouw/lean/window/tests/test_lanes.py", "count": 1},
-    {"file": "verity/ml/circuits/ops/tests/test_boolean_cast.py", "count": 1},
-    {"file": "verity/ml/circuits/ops/tests/test_boolean_elementwise.py", "count": 1},
     {"file": "verity/ml/definitions/numerics/_jit.py", "count": 3},
     {"file": "verity/ml/definitions/numerics/dense_rows.py", "count": 1},
     {"file": "verity/ml/flock/cuda_chunk_patch.py", "count": 2},
