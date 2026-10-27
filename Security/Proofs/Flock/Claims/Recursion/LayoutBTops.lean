@@ -28,7 +28,7 @@ it; `CapPorts` holds at every shape too (`capPorts`, `CapPorts.lean`, from `capP
 drops it.
 
 `HeldB` is structural: it asks that every round is fixed, held or assembled from pieces of the parts. That the pieces
-read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksB`,
+read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksBV`,
 `PartOpensB` and `DecompB` take, unchanged here.
 -/
 
@@ -420,7 +420,7 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
 `ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap and each tops round at its level's caps, where at
 the dense form `HeldB` comes from `heldB_layoutBTops`. What stays at the dense form is the schedule (`SchedMatches`),
 RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the last round's pieces (`FinPieces`, which holds at
-`finOpen`: `finPieces_finOpen`), and `VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the
+`finOpen`: `finPieces_finOpen`), and `VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the
 readers' three facts. `ksLin2_deployed_cap`'s `TopsHeld` is not among them. -/
 theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -438,7 +438,7 @@ theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧

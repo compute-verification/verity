@@ -1,4 +1,4 @@
-"""Small-statics Program fixtures and explicit-oracle helpers for the query track (window 2026-09-17).
+"""Small-statics Program fixtures and explicit-oracle helpers for the query track.
 
 Shared by the boundary / query-API / partition test suites (import as `tests.program.fixtures_query`).  Every
 constructor returns a `Program` small enough for the explicit oracle (`layout.GateSelection.in_` / `.out` on the expanded

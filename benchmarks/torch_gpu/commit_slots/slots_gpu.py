@@ -7,14 +7,23 @@ A step is committed as its groups' outputs arrive::
 
     sc = StepCommitter(plan, step, slots, salt_key)     # salt_key: slots.fresh_salt_key(), the prover's
     for tensors in each group's outputs:                 # e.g. a layer's ops, (slots, ...) CUDA tensors
-        done = sc.add(tensors)                           # on the plan's side stream behind the current stream; reuse the
-                                                         # tensors' memory only after the event `done`
+        done = sc.add(tensors)                           # on the plan's side stream behind the current stream; overwrite
+                                                         # the tensors in place only after the event `done`
     pending = sc.finish()                                # no host sync
     pending.result()                                     # slots.StepCommit(root, slot_roots), the reference's
 
 or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``slots.commit`` signature with the plan in place
 of the context and layout. ``Plan(..., device="host")`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference.
+
+The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
+until the producer's stream waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it
+has added them: their memory goes back to its stream at the read, not at the side stream's tail, and at the HBM cap its
+next allocations find it there without the allocator's retry (which frees the cache and waits on every stream).
+
+With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
+first add and replayed with the tensors' addresses and the salt key as data, so the same kernels give the same roots while
+the host enqueues a handful of calls an add, not the thousands a step that otherwise wait on a full launch queue.
 
 A group is one launch of the engine's row kernel a pass, so groups of several layers (``regroup``) fill the GPU better at
 small slot counts. Grouping is the prover's plumbing: the layout's digest, the salts and every root stay the same.
@@ -32,9 +41,11 @@ and about one slot-tree node (two).
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import importlib.util
 import sys
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,10 +56,12 @@ import slots as S
 
 from verity.ml.commitments.merkle import merkle_depth
 
-__all__ = ["TEMP_BYTES", "E", "Pending", "Plan", "StepCommitter", "build", "commit", "regroup"]
+__all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "regroup"]
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
+LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
+                      # tables alive at the producer's next allocation than it holds itself (at the HBM cap, 2 ran out)
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
@@ -120,23 +133,179 @@ class _Group:
     first_unit: int
 
 
+@dataclass(frozen=True)
+class _Graph:
+    """A group's add captured as one CUDA graph: it reads its tensors' addresses and slot strides from ``addr`` ((2,
+    tensors) int64 on the device, filled before each replay), and salts under the key ``rekey`` sets in its ``n`` leaf
+    launches ``nodes``."""
+    graph: Any
+    addr: Any
+    nodes: Any
+    n: int
+
+
+class SmPartition:
+    """``sms`` of a CUDA device's SMs as a green context (the driver's ``cuGreenCtxCreate``, through the bindings torch's
+    ``GreenContext`` uses), and the rest as another, made on first use: a stream of either runs its kernels on its SMs
+    alone, while the primary context's streams still run on every SM. The split rounds ``sms`` up to the device's
+    granularity; ``sms`` and ``rest`` are the counts it gave."""
+
+    def __init__(self, sms: int, device: Any) -> None:
+        import torch
+        from torch.cuda._utils import _check_cuda_bindings, _cuda_bindings_driver
+
+        self.torch, self.ok, self.drv = torch, _check_cuda_bindings, _cuda_bindings_driver
+        self.index = torch.device(device).index
+        self.index = torch.cuda.current_device() if self.index is None else self.index
+        torch.cuda.init()
+        drv, ok = self.drv, self.ok
+        self.dev = ok(drv.cuDeviceGet(self.index))
+        whole = ok(drv.cuDeviceGetDevResource(self.dev, drv.CUdevResourceType.CU_DEV_RESOURCE_TYPE_SM))
+        if not 0 < sms < whole.sm.smCount:
+            raise ValueError(f"a partition takes 1 .. {whole.sm.smCount - 1} of the device's {whole.sm.smCount} SMs, not {sms}")
+        groups, n, self._rest = ok(drv.cuDevSmResourceSplitByCount(1, whole, 0, sms))
+        if n != 1:
+            raise RuntimeError(f"the device's SMs split into {n} groups of {sms}, not one")
+        self.sms, self.rest, self.device_sms = int(groups[0].sm.smCount), int(self._rest.sm.smCount), int(whole.sm.smCount)
+        self._ctx, self._rest_ctx = self._green(groups[0]), None
+        self._streams: dict[tuple[bool, int], Any] = {}
+
+    def _green(self, resource: Any) -> Any:
+        drv, ok = self.drv, self.ok
+        desc = ok(drv.cuDevResourceGenerateDesc([resource], 1))
+        return ok(drv.cuGreenCtxCreate(desc, self.dev, drv.CUgreenCtxCreate_flags.CU_GREEN_CTX_DEFAULT_STREAM))
+
+    def _stream(self, rest: bool, priority: int) -> Any:
+        least, greatest = self.ok(self.drv.cuCtxGetStreamPriorityRange())
+        priority = min(max(priority, greatest), least)
+        if (rest, priority) not in self._streams:
+            if rest and self._rest_ctx is None:
+                self._rest_ctx = self._green(self._rest)
+            ctx = self._rest_ctx if rest else self._ctx
+            s = self.ok(self.drv.cuGreenCtxStreamCreate(ctx, self.drv.CUstream_flags.CU_STREAM_NON_BLOCKING, priority))
+            self._streams[(rest, priority)] = (s, self.torch.cuda.ExternalStream(int(s), self.index))
+        return self._streams[(rest, priority)][1]
+
+    def stream(self, priority: int = 0) -> Any:
+        """The stream on the partition's ``sms`` SMs at ``priority`` (torch's, lower first, clamped to the device's)."""
+        return self._stream(False, priority)
+
+    def rest_stream(self, priority: int = 0) -> Any:
+        """The stream on the other ``rest`` SMs at ``priority``."""
+        return self._stream(True, priority)
+
+    def close(self) -> None:
+        """Destroys the partition's streams and green contexts, each of which holds device memory, once their work is done:
+        after this no tensor may still wait on one of its streams, and the caller has freed (``torch.cuda.empty_cache``)
+        what was allocated on them."""
+        for s, ext in self._streams.values():
+            ext.synchronize()
+            self.ok(self.drv.cuStreamDestroy(s))
+        self._streams = {}
+        for ctx in (self._ctx, self._rest_ctx):
+            if ctx is not None:
+                self.ok(self.drv.cuGreenCtxDestroy(ctx))
+        self._ctx = self._rest_ctx = None
+
+    @contextlib.contextmanager
+    def current(self) -> Any:
+        """The partition's green context as this thread's current context, the one the runtime resolves a kernel in: a
+        graph captured on ``stream`` takes kernel node parameters only from it (the primary context's are refused)."""
+        ctx = self.ok(self.drv.cuCtxFromGreenCtx(self._ctx))
+        self.ok(self.drv.cuCtxPushCurrent(ctx))
+        try:
+            yield
+        finally:
+            self.ok(self.drv.cuCtxPopCurrent())
+
+
+class _Held:
+    """A plan's added tensors not yet dropped, oldest first, each with its read (an event on the side stream) and the stream
+    that made them. On a CUDA plan (``torch``), a thread of its own, started at its first add and then waiting for the
+    next when none are held, waits on the oldest read and drops each add's tensors as soon as its read has passed, so a
+    producer that has freed them finds their memory back at its next allocation, the next add or not."""
+
+    def __init__(self, torch: Any = None, device: Any = None) -> None:
+        self.entries: collections.deque[tuple[Any, Any, tuple[Any, ...]]] = collections.deque()
+        self.lock = threading.Lock()
+        self.added, self.drained = threading.Condition(self.lock), threading.Condition(self.lock)
+        self.torch, self.device = torch, device
+        self.thread: threading.Thread | None = None
+
+    def hold(self, read: Any, producer: Any, tensors: Sequence[Any]) -> None:
+        with self.lock:
+            self.entries.append((read, producer, tuple(tensors)))
+            if self.torch is None:
+                return
+            if self.thread is None:
+                self.thread = threading.Thread(target=self._reap, name="slots_gpu-release", daemon=True)
+                self.thread.start()
+            self.added.notify()
+
+    def release(self, keep: int | None = None) -> None:
+        with self.lock:
+            while self.entries:
+                read, producer = self.entries[0][:2]
+                if not read.query():
+                    if keep is None or len(self.entries) <= keep:
+                        break
+                    producer.wait_event(read)
+                self.entries.popleft()
+            if not self.entries:
+                self.drained.notify_all()
+
+    def _reap(self) -> None:
+        # Waiting on and querying events while another thread captures a CUDA graph is refused unless that capture is
+        # thread-local, as the plan's own are (Plan.graph).
+        try:
+            self.torch.cuda.set_device(self.device)
+            while True:
+                with self.lock:
+                    self.added.wait_for(lambda: self.entries)
+                    read = self.entries[0][0]
+                read.synchronize()
+                self.release()
+        except BaseException:
+            with self.lock:
+                self.thread = None
+            raise
+
+
 class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
-    temporaries within ``temp_bytes``."""
+    temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``: 0, the
+    build's default, 1; on an H200, 1 is 4% faster at FAMILIES' passes of 35 slots of 117k rows and 2 is 8% faster at
+    CIR-113's shared rows, 2,134 slots of 1,965 rows, with the same bytes).
+
+    With ``sms``, the side stream is on an ``SmPartition`` of that many SMs (``partition``; ``sms`` becomes the count it
+    gave), and the leaf kernel's persistent grid fills those alone: the commit then shares the device with work on the
+    other SMs instead of taking turns with it for all of them. The bytes are the same at every ``sms``."""
 
     def __init__(self, context: bytes, layout: S.Layout, device: Any = "cuda", arch: str | None = None,
-                 temp_bytes: int = TEMP_BYTES) -> None:
-        self.context, self.layout, self.temp_bytes = context, layout, temp_bytes
+                 temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0, sms: int = 0) -> None:
+        self.context, self.layout, self.temp_bytes, self.leaf_minb = context, layout, temp_bytes, leaf_minb
         self.engine = _Engine(device, arch)
         self.host, self.torch, self.device = self.engine.host, self.engine.torch, self.engine.device
         self.unit_dids = E.words(S.unit_domain_ids(context, layout))
         self.slot_did = S.slot_domain(context, layout).domain_id
         self.depth = merkle_depth(layout.unit_count)
-        self.stream = None if self.host else self.torch.cuda.Stream(self.device)
+        self.partition = SmPartition(sms, self.device) if sms and not self.host else None
+        self.sms = self.partition.sms if self.partition else 0
+        if self.host:
+            self.stream = None
+        else:
+            self.stream = self.partition.stream() if self.partition else self.torch.cuda.Stream(self.device)
+        self._graphs: dict[tuple[int, ...], _Graph] = {}
+        self._pool: Any = None
+        self._frontiers: dict[int, Any] = {}
+        self._open: StepCommitter | None = None
+        self._held = _Held() if self.host else _Held(self.torch, self.device)
         shapes: dict[int, _Shape] = {}
         with self.side():
+            self.slot_dw = self.engine._wordsof([self.slot_did])
+            self.engine._schema(E.ROOT_SCHEMA)
             self.groups = []
             u0 = 0
             for i, g in enumerate(layout.groups):
@@ -147,11 +316,24 @@ class Plan:
             self.mids = [self.engine.node_mids([self.slot_did], k) for k in range(self.depth)]
             self.pad0, self.pads_right = self._closing()
         if not self.host:
+            self.stream.synchronize()
             self.torch.cuda.synchronize(self.device)
 
     def side(self) -> Any:
         """The plan's side stream as the current stream (nothing on the host)."""
         return contextlib.nullcontext() if self.host else self.torch.cuda.stream(self.stream)
+
+    def hold(self, read: Any, producer: Any, tensors: Sequence[Any]) -> None:
+        """Holds an add's ``tensors`` until the side stream has read them (``read``, an event there); ``producer`` is the
+        stream that made them. A CUDA plan drops them as soon as the read has passed."""
+        self._held.hold(read, producer, tensors)
+
+    def release(self, keep: int | None = None) -> None:
+        """Drops the held tensors whose read has passed, oldest first, and with ``keep`` all but the last ``keep`` adds' too,
+        each once its producer's stream waits for its read. A tensor its producer has freed then goes back to that stream's
+        pool after its read, in the stream's order, with no event for the allocator to wait on (``record_stream``'s would
+        be the side stream's tail when the producer frees it)."""
+        self._held.release(keep)
 
     def put(self, a: np.ndarray) -> Any:
         """An index or word array on the plan's device (int64 there)."""
@@ -196,9 +378,9 @@ class Plan:
         lt = self.engine.leaf_table(dids, shape.unit_of_row, shape.rank, None, salt_row)
         return _Group(shape, lt, self.put(dids), u0)
 
-    def rows(self, shape: _Shape, tensors: Sequence[Any]) -> Any:
-        """The engine's row table for a group of ``shape`` over ``tensors``: its spec with each part's tensor address added
-        (the engine's ``rows``, without a Python step a row)."""
+    def addresses(self, shape: _Shape, tensors: Sequence[Any]) -> tuple[list[int], list[int]]:
+        """Each of ``tensors``' address and slot stride, each part of a group of ``shape`` checked to lie in its tensor's
+        slot rows."""
         slots = int(tensors[0].shape[0])
         base, stride, width = [], [], []
         for t in tensors:
@@ -215,6 +397,14 @@ class Plan:
                 width.append(t[0].numel() * t.element_size())
         if np.any(shape.extent > np.asarray(width, dtype=np.int64)):
             raise ValueError(f"a part is outside its tensor's rows {width}")
+        return base, stride
+
+    def rows(self, shape: _Shape, tensors: Sequence[Any], addr: Any = None) -> Any:
+        """The engine's row table for a group of ``shape`` over ``tensors``: its spec with each part's tensor address added
+        (the engine's ``rows``, without a Python step a row). With ``addr`` ((2, tensors) int64 on the device), the spec
+        takes the addresses and strides from there when it is computed, not from ``tensors``: a captured graph's."""
+        slots = int(tensors[0].shape[0])
+        base, stride = self.addresses(shape, tensors)
         if self.host:
             spec = shape.spec.copy()
             b, s = np.asarray(base, dtype=np.uint64), np.asarray(stride, dtype=np.uint64)
@@ -228,8 +418,10 @@ class Plan:
             torch = self.torch
             spec = shape.spec.clone()
             w = spec.view(torch.int64).reshape(shape.rows, -1)
-            b = torch.tensor(base, dtype=torch.int64, device=self.device)
-            s = torch.tensor(stride, dtype=torch.int64, device=self.device)
+            if addr is None:
+                b, s = (self.engine._up(np.asarray(v, dtype=np.int64)).view(torch.int64) for v in (base, stride))
+            else:
+                b, s = addr[0], addr[1]
             src = shape.src
             two = (w[:, 4] >> 32) > 0
             w[:, 0] = b[src[0]] + w[:, 0]
@@ -252,6 +444,30 @@ class Plan:
             dids = np.repeat(dids, S_, axis=0) if self.host else dids.repeat_interleave(S_, dim=0)
             roots = self.engine.root(x.reshape(-1, m, 8), dids)
             self.engine.frame_units(frames, units, roots.reshape(n, S_, 8), run)
+
+    def graph(self, sc: StepCommitter, grp: _Group, tensors: Sequence[Any]) -> _Graph:
+        """Group ``sc.k``'s add at ``sc``'s slots and this plan's pass size, leaf kernel and SMs, as a CUDA graph: captured
+        (not run) on its first call, on the side stream, into the one memory pool the plan's graphs share (they run one
+        after another on that stream), reading its tensors' addresses from its ``addr``. A graph keeps the leaf grid it
+        was captured with, so ``sms`` is in its key."""
+        key = (sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms)
+        if key not in self._graphs:
+            torch = self.torch
+            if self._pool is None:
+                self._pool = torch.cuda.graph_pool_handle()
+            addr = torch.zeros((2, len(tensors)), dtype=torch.int64, device=self.device)
+            g = torch.cuda.CUDAGraph(keep_graph=True)
+            g.capture_begin(pool=self._pool, capture_error_mode="thread_local")
+            sc.capturing = True
+            try:
+                sc._passes(grp, self.rows(grp.shape, tensors, addr), False)
+            finally:
+                sc.capturing = False
+                g.capture_end()
+            g.instantiate()
+            n = -(-sc.slots // self.per_pass(grp.shape, sc.slots))
+            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n)
+        return self._graphs[key]
 
     def empty(self, *shape: int) -> Any:
         """Digest words, (*shape, 8)."""
@@ -354,10 +570,11 @@ class Plan:
 
 
 class Pending:
-    """A finished step's commitment in flight: ``result()`` waits for it (``ready()`` doesn't)."""
+    """A finished step's commitment in flight: ``result()`` waits for it (``ready()`` doesn't), and then drops the tensors
+    its plan holds that are read."""
 
-    def __init__(self, event: Any, root: Any, slot_roots: Any) -> None:
-        self.event, self._root, self._slot_roots = event, root, slot_roots
+    def __init__(self, event: Any, root: Any, slot_roots: Any, plan: Plan | None = None) -> None:
+        self.event, self._root, self._slot_roots, self._plan = event, root, slot_roots, plan
 
     def ready(self) -> bool:
         return self.event is None or self.event.query()
@@ -365,27 +582,56 @@ class Pending:
     def result(self) -> S.StepCommit:
         if self.event is not None:
             self.event.synchronize()
+            if self._plan is not None:
+                self._plan.release()
         return S.StepCommit(E.digests(self._root)[0], tuple(E.digests(self._slot_roots)))
 
 
 class StepCommitter:
     """Step ``step`` of ``slots`` slots under ``plan``, its salts under ``salt_key`` (32 bytes, the prover's): ``add`` each
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
-    what the current stream has enqueued, and each added tensor is held for that stream (``record_stream``). With ``marks``
-    (a list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
-    (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves."""
+    what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
+    those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
+    own) waits for their read instead, as `e2e_h200.commit`'s loop waits ``LAG`` (2) groups back. A producer that drops
+    each group's tables once it has made the next group's (e2e_h200's driver) has their memory back as soon as the side
+    stream has read them, and at the default lag of 1 by its next add at the latest. With ``marks`` (a
+    list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
+    (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
 
-    def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes, marks: list[tuple[str, Any]] | None = None) -> None:
+    With ``graphs`` (a CUDA plan), each add is one CUDA graph launch: the group's passes, captured on the first add of that
+    group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses and the salt
+    key as data. The kernels and their arguments are the same, so the roots are; the host enqueues a handful of calls an add
+    instead of a pass's dozens, so it no longer waits on the launch queue. The frontier is then the plan's, so a plan has
+    one such step open at a time, its adds and finish in order. Its ``marks`` are one ``("add", event)`` an add, and
+    ``finish``'s."""
+
+    def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes, marks: list[tuple[str, Any]] | None = None,
+                 graphs: bool = False, lag: int = LAG) -> None:
         if len(salt_key) != 32:
             raise ValueError("a salt key is 32 bytes")
+        if graphs and plan.host:
+            raise ValueError("a step on graphs is on a CUDA plan")
+        if lag < 0:
+            raise ValueError("a lag is 0 or more adds")
         self.step_did = S.step_domain(plan.context, plan.layout, step, slots).domain_id
-        self.plan, self.slots, self.k, self.marks = plan, slots, 0, marks
+        self.plan, self.slots, self.k, self.marks, self.graphs, self.lag = plan, slots, 0, marks, graphs, lag
+        self.producer = None if plan.host else plan.torch.cuda.current_stream(plan.device)
+        self.capturing = False
         self.salts = E.SaltKey(salt_key)
+        if graphs:
+            if plan._open is not None and plan._open.k:
+                raise ValueError("the plan's step on graphs is open: finish it first")
+            plan._open = self
         with plan.side():
-            self.frontier = plan.empty(slots, plan.depth + 1)
+            if not graphs:
+                self.frontier = plan.empty(slots, plan.depth + 1)
+            else:
+                if slots not in plan._frontiers:
+                    plan._frontiers[slots] = plan.empty(slots, plan.depth + 1)
+                self.frontier = plan._frontiers[slots]
 
     def _mark(self, name: str) -> None:
-        if self.marks is not None and not self.plan.host:
+        if self.marks is not None and not self.plan.host and not self.capturing:
             ev = self.plan.torch.cuda.Event(enable_timing=True)
             ev.record(self.plan.stream)
             self.marks.append((name, ev))
@@ -393,7 +639,7 @@ class StepCommitter:
     def add(self, tensors: Sequence[Any]) -> Any:
         """The next group's outputs: tensor i of shape (slots, ...), each slot's bytes contiguous, ``group.sources[i]`` of them.
         Returns an event on the side stream after which the tensors may be overwritten (a producer that reuses its buffers
-        waits on it), or None on the host."""
+        waits on it; one that frees them needn't), or None on the host."""
         plan, layout = self.plan, self.plan.layout
         if self.k >= len(layout.groups):
             raise ValueError("every group is in")
@@ -402,20 +648,47 @@ class StepCommitter:
             raise ValueError(f"group {self.k} takes {len(g.sources)} tensors, not {len(tensors)}")
         for t, n in zip(tensors, g.sources, strict=True):
             self._check(t, n)
-        done = None
         if not plan.host:
             plan.stream.wait_stream(plan.torch.cuda.current_stream(plan.device))
-        with plan.side():
-            table = plan.rows(grp.shape, tensors)
-            frames = plan.engine.frame_table([plan.slot_did], grp.first_unit, grp.shape.units)
-            per = plan.per_pass(grp.shape, self.slots)
-            for s0 in range(0, self.slots, per):
-                s1 = min(self.slots, s0 + per)
-                run, done = self._leaves(grp, frames, plan.slots_of(table, s0, s1), s0, s1 == self.slots)
-                plan.fold(self.frontier[s0:s1], grp.first_unit, run)
-                del run
-                self._mark("fold")
+        if self.graphs:
+            done = self._replay(grp, tensors)
+        else:
+            with plan.side():
+                done = self._passes(grp, plan.rows(grp.shape, tensors), True)
         self.k += 1
+        if done is not None:
+            plan.hold(done, self.producer, tensors)
+            plan.release(self.lag)
+        return done
+
+    def _passes(self, grp: _Group, table: Any, signal: bool) -> Any:
+        """The group's passes over ``table``, each folded into the frontier; with ``signal``, the event after which its
+        tensors are read (``_leaves``)."""
+        plan, done = self.plan, None
+        frames = plan.engine.frame_table(plan.slot_dw, grp.first_unit, grp.shape.units)
+        per = plan.per_pass(grp.shape, self.slots)
+        for s0 in range(0, self.slots, per):
+            s1 = min(self.slots, s0 + per)
+            run, done = self._leaves(grp, frames, plan.slots_of(table, s0, s1), s0, signal and s1 == self.slots)
+            plan.fold(self.frontier[s0:s1], grp.first_unit, run)
+            del run
+            self._mark("fold")
+        return done
+
+    def _replay(self, grp: _Group, tensors: Sequence[Any]) -> Any:
+        """The group's add as its graph's launch (captured first if this is its first): the tensors' addresses into the
+        graph's ``addr``, the step's salt key into its leaf launches, then the launch; the event after it."""
+        plan, torch = self.plan, self.plan.torch
+        base, stride = plan.addresses(grp.shape, tensors)
+        with plan.side():
+            gr = plan.graph(self, grp, tensors)
+            gr.addr.copy_(torch.tensor([base, stride], dtype=torch.int64).pin_memory(), non_blocking=True)
+            with plan.partition.current() if plan.partition else contextlib.nullcontext():
+                plan.engine.rekey(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, self.salts.key)
+            gr.graph.replay()
+            done = torch.cuda.Event(blocking=True)
+            done.record(plan.stream)
+        self._mark("add")
         return done
 
     def _leaves(self, grp: _Group, frames: Any, table: Any, s0: int, last: bool) -> tuple[Any, Any]:
@@ -426,12 +699,12 @@ class StepCommitter:
         x = eng.row_digests(table)
         self._mark("rows")
         if last and not plan.host:
-            done = plan.torch.cuda.Event()
+            done = plan.torch.cuda.Event(blocking=True)
             done.record(plan.stream)
         S_ = table.slots
         run, rest = plan.empty(S_, shape.units), plan.empty(shape.rest, S_)
-        eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, frames=frames, dest=shape.dest,
-                   run=run)
+        eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, plan.leaf_minb, frames=frames,
+                   dest=shape.dest, run=run, sms=plan.sms)
         del x
         self._mark("leaves")
         if shape.multi:
@@ -449,12 +722,13 @@ class StepCommitter:
         if t.device != self.plan.device or t.shape[0] != self.slots or not t[0].is_contiguous() \
                 or t[0].numel() * t.element_size() != n:
             raise ValueError(f"a tensor is (slots={self.slots}, ...) on {self.plan.device} with {n} contiguous bytes a slot")
-        t.record_stream(self.plan.stream)
 
     def finish(self) -> Pending:
         plan = self.plan
         if self.k != len(plan.layout.groups):
             raise ValueError(f"{self.k} of {len(plan.layout.groups)} groups are in")
+        if plan._open is self:
+            plan._open = None
         eng = plan.engine
         with plan.side():
             slot_roots = plan.close(self.frontier)
@@ -470,12 +744,13 @@ class StepCommitter:
             sr.copy_(slot_roots, non_blocking=True)
             ev = torch.cuda.Event()
             ev.record(plan.stream)
-        return Pending(ev, r, sr)
+        return Pending(ev, r, sr, plan)
 
 
-def commit(plan: Plan, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int) -> S.StepCommit:
+def commit(plan: Plan, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int,
+           graphs: bool = False) -> S.StepCommit:
     """``slots.commit`` on ``plan``'s device: every group's outputs at once, waiting for the result."""
-    sc = StepCommitter(plan, step, slots, salt_key)
+    sc = StepCommitter(plan, step, slots, salt_key, graphs=graphs)
     for tensors in outputs:
         sc.add(tensors)
     return sc.finish().result()

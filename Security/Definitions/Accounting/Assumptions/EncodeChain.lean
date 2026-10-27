@@ -1,11 +1,15 @@
 import Definitions.Accounting.Gates.Codec
 
 /-!
-# The encode bound's named conjecture: a word's encoding costs budgeted units per squaring (trusted)
+# The encode bound's former conjecture, falsified: a word's encoding costs budgeted units per squaring (trusted)
 
-What the encode bound (`Definitions/Accounting/Guarantees/Gates.lean`, `EncodeBudget`) assumes, a named `Prop` taken as a
-hypothesis, never an `axiom`. It is genuine math, a conjecture (Daniel, 8 Oct): it sits under `shape.conjectures` with
-a falsification test that runs, and every claim resting on it is conditional.
+**Falsified.** `Accounting.SecurityProofs.Gates.EncodeChainRefuted` (`Security/Proofs/Accounting/Gates/Bitwise.lean`)
+proves it false inside its floor at every `E ≥ 1` and every `B`, p1024 at `k = 3` among the fields: an AND of two bits
+is a free s8-family step, so a circuit of bits computes any number of words for the key's gather units
+(`benchmarks/property_redteam/bitwise_codec.py` builds it, its test runs it). It stays listed, marked `falsified` under
+`shape.conjectures`, so that anything that takes it as a hypothesis is refused by the Lean check; no guarantee does. The
+encode bound now rests on its two parts in the model's nonlinear units (`Gates.nonlinear`, a data product a unit):
+`SquaringFloor` and `ChainSum` (`Definitions/Accounting/Assumptions/SquaringChain.lean`).
 
 * `EncodeChainHardness F k B E ε`: in the circuit model, computing `q` distinct words of the codec's encoding (less
   parity) on more than `ε` of the draws costs `E` budgeted units a word, less `E/(n−1)` for each bit of run input, at
@@ -16,7 +20,8 @@ namespace Accounting.Assumptions
 
 open Accounting.Gates
 
-/-- **`encode-chain-hardness`: computing a word of the codec's encoding costs `E` budgeted units.** For every circuit
+/-- **`encode-chain-hardness`: computing a word of the codec's encoding costs `E` budgeted units (falsified:
+`Accounting.SecurityProofs.Gates.EncodeChainRefuted`; superseded by `SquaringFloor` and `ChainSum`).** For every circuit
 `C` of the model whose window is proven and whose budgeted gates each read at most `B` operand bits (`Restricted B C`),
 whose registered inputs are fixed before the draw and whose coin inputs are bytes of the draw or fixed
 (`CodecInputs`), and that computes the `q` distinct words `words` (each below `p`) of the masked `k`-round codec over
@@ -30,9 +35,8 @@ bits of run input (the word itself, sent after the draw).
 
 **The floor.** It is claimed at `ε ≥ 2^−64` (`εden ≤ 2^64 · εnum`), `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`, and says
 nothing outside them; every reader carries them. Below each, a circuit with no budgeted gate computes a word, so the
-bound fails at every `E ≥ 1` (the red team's report,
-art:6bf31146fd1239ee0a07b05eae88f827c9b31948128a6d4a4c58c4b96d0a124e, with its `EncodeRefute.lean`; the examples
-after `EncodeCost` in `Proofs/Accounting/Gates.lean` put its counterexamples outside the floor):
+bound fails at every `E ≥ 1` (the red team's counterexamples; the examples
+after `EncodeCost` in `Proofs/Accounting/Gates.lean` put them outside the floor):
 
 * at `ε = 0`, the constant bytes of one draw's target are right on that draw;
 * at `k = 0` the encoding is the payload word itself, registered before the draw;
@@ -49,7 +53,7 @@ The floor doesn't say `p` is prime, since p1024's primality has no Lean proof he
 squarings mod `p` (1,021 at p1024). In the model products are free only as s8-family steps, whose operands must be
 proven, by interval analysis, to be bytes; so each squaring's `L = n/8` input limbs are byte-format values, which a
 free gate can't make from a wide one, and come from the previous squaring's budgeted gates. For one squaring the red
-team's Lemma R (`Renormalization`, note:20261017T1859Z-report-property-redteam R3.3 and R4.1) puts at least
+team's Lemma R (`Renormalization`) puts at least
 `L − d(ε)` units there, `d(ε) = d₀ + log₂(1/ε)/8`, at every `ε ≥ 2^−64`, whatever byte-format representation the
 squaring outputs; the conjecture is that it composes along the chain and over words, with no shortcut for the
 exponentiation (as Sloth's sequentiality) and no amortization across words. At `E = k · S · (L − d(ε))`:

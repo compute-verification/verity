@@ -665,7 +665,7 @@ def torch_loop_reads(c: Mapping[str, Any], template: str, port: str) -> tuple[st
 def torch_loop_layout(h: int, layers: int) -> S.Layout:
     """The torch loop's step layout: a group a layer, its tensors the linear's input codes (``h`` bytes), their f32 scale and
     the linear's bf16 output (``2h`` bytes). Its units: the input quantizer (the codes row, then the scale row), then one unit
-    per output coordinate (its 2-byte row), the proof unit `ScaledMmS8Coordinate_v1` proves."""
+    per output coordinate (its 2-byte row), the proof block `ScaledMmS8Coordinate_v1` proves."""
     quant = (S.Row((S.Part(0, 0, h),)), S.Row((S.Part(1, 0, 4),)))
     group = S.Group((h, 4, 2 * h), (quant, *((S.Row((S.Part(2, 2 * c, 2),)),) for c in range(h))))
     return S.Layout(f"torch-loop/mlp-w8a8-h{h}/every-linear/v1", (group,) * layers)

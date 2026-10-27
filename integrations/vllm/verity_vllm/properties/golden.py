@@ -10,13 +10,15 @@ sequence `(step, event, pattern, specialization)` of every instance plus the fol
 canonical digest.  Additive specializations leave both unchanged; anything else is a regression that needs an explicit,
 versioned migration (a new corpus entry recorded by the integrator with the decision id), never a silent edit.
 
-Corpus manifest: `verity_vllm/properties/golden/corpus.json`.  Logs live under `data/logs/` (tracked).
+Corpus manifest: `verity_vllm/properties/golden/corpus.json`.  Logs live under `data/logs/`, registered fixtures
+(`fixtures/artifacts.json`) that `check` fetches where they are not.
 """
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
 import json
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -52,6 +54,16 @@ def measure(log: str | Path, profile_name: str) -> dict[str, Any]:
             "unresolved": result.unresolved, "seconds": round(time.time() - t0, 2), **info}
 
 
+def _fetch(log: Path) -> str | None:
+    """None once `log` is here, fetched first when absent (a registered fixture: `research data fetch-fixtures` checks every byte
+    against its id); else why it is not."""
+    if log.exists():
+        return None
+    p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(REPO.parent.parent), str(log)],
+                       capture_output=True, text=True)
+    return None if log.exists() else f"log not present in this checkout; fetch-fixtures rc {p.returncode}: {p.stderr.strip()[-300:]}"
+
+
 def load_corpus(path: Path = CORPUS) -> dict[str, Any]:
     if not path.exists():
         return {"schema": "verity-gen/golden/v1", "entries": []}
@@ -66,8 +78,9 @@ def check(corpus_path: Path = CORPUS, only: list[str] | None = None) -> dict[str
             continue
         log = REPO / e["log"]
         ent = {"name": e["name"], "log": e["log"], "profile": e["profile"], "expected_digest": e["digest"], "expected_attribution_sha": e["attribution_sha"]}
-        if not log.exists():
-            ent.update(status="skipped", reason="log not present in this checkout")
+        missing = _fetch(log)
+        if missing:
+            ent.update(status="skipped", reason=missing)
         else:
             try:
                 m = measure(log, e["profile"])

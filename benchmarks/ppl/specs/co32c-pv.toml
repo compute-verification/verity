@@ -1,4 +1,4 @@
-description = "co32c with P·V as CO-Dither specifies it (note:20261017T0030Z-draft-checked-strip, round 3): P the peeled side, round(P / s) + c on [0, 127] with c a fresh bit where key <= query and c's mean (half the causal sum of V) taken off in the epilogue, under the adopted w64 peel (U and its offset 64); V the served side, dithered on 8 bits (committing its residue sums' digits changes no served value); the linears and Q K^T as in co32c"
+description = "co32c with P·V as CO-Dither specifies it: P the peeled side, round(P / s) + c on [0, 127] with c a fresh bit where key <= query and c's mean (half the causal sum of V) taken off in the epilogue, under the adopted w64 peel (U and its offset 64); V the served side, dithered on 8 bits (committing its residue sums' digits changes no served value); the linears and Q K^T as in co32c"
 
 [[linear]]
 step = "smooth"

@@ -423,7 +423,7 @@ def synth():
 
 
 def gemm_vu_tiling(P_):
-    """The proof-unit tiling of the Gemm program: every Input gate its own set, every GemmCoordinate one set."""
+    """The proof-block tiling of the Gemm program: every Input gate its own set, every GemmCoordinate one set."""
     return tiling(whole_body(P_.root, {0: members_k(), 1: members_k(), 2: members_k()}))
 
 

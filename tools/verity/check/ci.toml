@@ -76,6 +76,12 @@ owner = "ci"
 part = "tests"
 group = 6
 after = "lean-build"
+# V*'s stager and its Lean mirror (VStar.In) stay in step: core_vstar's `part_in` difftest holds one to the other.
+merge_requires = ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/ml/flock/python/verity_flock/rec_outer.py",
+                  "verity/ml/flock/python/verity_flock/rec_open.py", "verity/ml/flock/python/verity_flock/rec_residuals.py",
+                  "verity/ml/flock/python/verity_flock/rec_cap.py", "verity/ml/flock/python/verity_flock/circuit.py",
+                  "verity/core/protocols/sampled_proofs/one_stage/registered.py", "verity/core/service/flock/VStar/In.lean",
+                  "verity/core/service/vstar/"]
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the

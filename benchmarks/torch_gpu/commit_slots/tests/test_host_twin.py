@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import weakref
 
 import numpy as np
 import pytest
@@ -79,3 +80,50 @@ def test_the_streaming_call_refuses_what_is_not_the_layouts() -> None:
     assert sc.finish().result() == S.commit(CTX, layout, 0, KEY, out, 2)
     with pytest.raises(ValueError, match="32 bytes"):
         G.StepCommitter(plan, 0, 2, KEY[:31])
+
+
+class _Read:
+    def __init__(self) -> None:
+        self.passed = False
+
+    def query(self) -> bool:
+        return self.passed
+
+
+class _Producer:
+    def __init__(self) -> None:
+        self.waited: list[_Read] = []
+
+    def wait_event(self, read: _Read) -> None:
+        self.waited.append(read)
+
+
+class _Table:
+    pass
+
+
+def test_a_plan_drops_tables_once_read_and_past_the_lag_after_the_producer_waits() -> None:
+    """``Plan.release`` with stand-in events (a CUDA plan's adds hold their tensors so): a held table goes, oldest first,
+    once its read has passed, and with ``keep`` every add's but the last ``keep``, an unread one's only after its producer's
+    stream waits for its read; a later read never lets a table go ahead of an earlier unread one."""
+    plan, producer = G.Plan(CTX, S.edge_layout(), "host"), _Producer()
+    reads, tables = [_Read() for _ in range(4)], [_Table() for _ in range(4)]
+    alive = [weakref.ref(t) for t in tables]
+    for read, t in zip(reads[:3], tables[:3], strict=True):
+        plan.hold(read, producer, [t])
+    t3 = tables[3]
+    del tables, t
+    plan.release(2)
+    assert producer.waited == [reads[0]] and [a() is not None for a in alive[:3]] == [False, True, True]
+    reads[2].passed = True
+    plan.release()
+    assert alive[1]() is not None and alive[2]() is not None
+    reads[1].passed = True
+    plan.release()
+    assert alive[1]() is None and alive[2]() is None and producer.waited == [reads[0]] and not plan._held.entries
+    plan.hold(reads[3], producer, [t3])
+    del t3
+    plan.release(1)
+    assert alive[3]() is not None
+    plan.release(0)
+    assert alive[3]() is None and producer.waited == [reads[0], reads[3]]

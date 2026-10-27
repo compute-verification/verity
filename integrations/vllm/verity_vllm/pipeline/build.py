@@ -1,4 +1,4 @@
-"""DERIVE-VLLM-1 step (4)-(5): export a wrapper around the ACTUAL pinned vLLM model class and derive it with
+"""Export a wrapper around the ACTUAL pinned vLLM model class and derive it with
 `verity_vllm.program.frontend.derive` + the per-op vLLM bindings. Wrappers (`vllm_meta.make_wrapper`): `step` (one engine step, M tokens at
 pos0), `request` (prefill LP + T decode steps, flat), `padded` (the fixed padded rectangle prefill | decode 1..D_MAX with liveness
 values). Writes the derive report (provenance: every rule application), the program's descriptor + digest, a per-spec histogram,
@@ -154,7 +154,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
 
     vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split`, whose keep set depends
     on its split count S.  vLLM picks S from the live sampler batch, so a request's batch-mates would pick its nucleus at top_p < 1
-    (CIR-87: `circuit-check --batch`).  The served engine runs every launch at the registered S instead
+    (as `circuit-check --batch` shows).  The served engine runs every launch at the registered S instead
     (`topp_geometry.registered_splits` = SplitsFor_v1(1, num_SMs), from the target's SM count, never hard-coded; `engine.topp_pin`),
     so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
     holds every launch's S to it."""

@@ -1,11 +1,11 @@
-"""The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct).
+"""The `dither-a` arm: option A of the credit form, the provisional credit form.
 Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every drawn
 unit z_u = A_u B_u^T, proved and committed before the draw, y from the committed z), so the served product may come from
-a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=ASK-71 A
-(provisional) only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits #3018's per-unit
+a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=`forms.FORM_A`
+only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits the per-unit
 z/y records under round s's root before coin s (the receipts need no z of their own); form=beside (unadopted arm) for
 -so's -ab/-abn and -ov arms; form=beside, receipts beside the served GEMM, for the row z tables or no z, and for every
-arm outside the -so order (RT4-INT-12), which this module's arms all are.
+arm outside the statement's order (-so), which this module's arms all are.
 
 Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the window's A slot
