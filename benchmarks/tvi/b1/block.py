@@ -3,8 +3,15 @@ from l_w bits, takes l_in more bits (the tokens of whole rollouts, a few scales,
 boundary l, coded given theta's), and generates the held layers' counted activations, decoded for real and checked bit for
 bit against theta''s own forward. Then beta_x <= (l_w + l_in + a_dec + lambda_x) / n_I.
 
-  python block.py BASE CKPT     Env: OUT, FMT (fp8t | nvfp4), BOUNDARIES ("1,13"), LBS ("1,2,3"), K (2e7), NROLL (48),
-                                MAXNEW (512), SEED (0), DATA (gsm8k_test.jsonl)
+  python block.py BASE CKPT     Env: OUT, FMT (fp8t | nvfp4 | bf16), BOUNDARIES ("1,13"), LBS ("1,2,3"), K (2e7), NROLL (48),
+                                MAXNEW (512), SEED (0), DATA (gsm8k_test.jsonl), FILLS ("substituted,exact,prefix"),
+                                TOKENS (a .pt whose "ids" [B, S] are the block's sequences, in place of rollouts),
+                                RESID (fp32 | bf16: the residual stream rounded to bf16 after each add, as a bf16 step
+                                computes it; the entry is then a bf16 value and codes exactly at bf16)
+
+Per block, beta_e = (l_tok + l_bnd + l_fix) / (distinct entries) is what the block takes per entry (a token's crossing:
+its id, theta''s entering residual given theta's, and the repairs that make its counted activations theta''s), and
+beta_e / d the per-dimension rate.
 
 The computation checked is theta' deployed at FMT: every linear map's weight quantized at FMT with counted.py's scales (from
 theta's weight), every linear map's input quantized at FMT with a per-tensor reference from theta's activations on these
@@ -31,6 +38,9 @@ from quant import encode, FORMATS
 DEV = counted.DEV
 OUT = os.environ.get("OUT", ".")
 FMT = os.environ.get("FMT", "fp8t")
+RESID = os.environ.get("RESID", "fp32")
+NAME = f"block_{FMT}.json" if RESID == "fp32" else f"block_{FMT}-resid-{RESID}.json"
+CODE_DT = torch.int32 if FMT == "bf16" else torch.int16  # bf16's grid indices run past 32767
 SUFFIX = "\nPlease reason step by step, and put your final answer within \\boxed{}."
 STOP_IDS = [151645, 151643]
 LIN = ("q", "k", "v", "o", "gate", "up", "down")
@@ -151,7 +161,7 @@ class Arch:
 def params(sd, i):
     p = f"model.layers.{i}."
     out = {k: sd[p + HF[k] + ".weight"].float() for k in LIN}
-    out.update({k: sd[p + v].float() for k, v in OTHER.items()})
+    out.update({k: sd[p + v].float() for k, v in OTHER.items() if p + v in sd})
     return out
 
 
@@ -166,9 +176,9 @@ def rot(x, cos, sin):
 
 def attention(A, p, x, cs):
     L = x.shape[0]
-    q = (x @ p["q"].T + p["qb"]).view(L, A.nh, A.hd).transpose(0, 1)
-    k = (x @ p["k"].T + p["kb"]).view(L, A.nkv, A.hd).transpose(0, 1)
-    v = (x @ p["v"].T + p["vb"]).view(L, A.nkv, A.hd).transpose(0, 1)
+    q = (x @ p["q"].T + p.get("qb", 0.0)).view(L, A.nh, A.hd).transpose(0, 1)
+    k = (x @ p["k"].T + p.get("kb", 0.0)).view(L, A.nkv, A.hd).transpose(0, 1)
+    v = (x @ p["v"].T + p.get("vb", 0.0)).view(L, A.nkv, A.hd).transpose(0, 1)
     cos, sin = cs
     q, k = rot(q, cos, sin), rot(k, cos, sin)
     k, v = k.repeat_interleave(A.nh // A.nkv, 0), v.repeat_interleave(A.nh // A.nkv, 0)
@@ -176,15 +186,19 @@ def attention(A, p, x, cs):
     return a.transpose(0, 1).reshape(L, A.d)
 
 
+def resid(h):
+    return h.bfloat16().float() if RESID == "bf16" else h
+
+
 def layer(A, p, i, hs, css, fq):
     """one decoder layer over every sequence (each its own call, so the block and theta' run the same shapes); fq(i, name,
     [x per sequence]) quantizes (and captures, or repairs) one product input over all sequences at once"""
     xs = fq(i, "attn", [rms(h, p["ln1"], A.eps) for h in hs])
     xs = fq(i, "o", [attention(A, p, x, cs) for x, cs in zip(xs, css)])
-    hs = [h + a @ p["o"].T for h, a in zip(hs, xs)]
+    hs = [resid(h + a @ p["o"].T) for h, a in zip(hs, xs)]
     xs = fq(i, "mlp", [rms(h, p["ln2"], A.eps) for h in hs])
     xs = fq(i, "down", [Fn.silu(x @ p["gate"].T) * (x @ p["up"].T) for x in xs])
-    return [h + m @ p["down"].T for h, m in zip(hs, xs)]
+    return [resid(h + m @ p["down"].T) for h, m in zip(hs, xs)]
 
 
 def split(X, lens):
@@ -240,12 +254,16 @@ def main():
     model0 = counted.load_base(base).to(DEV)
     model1, meta = counted.load_trained(model0, ckpt)
     model1.to(DEV).eval()
-    rows = [json.loads(x) for x in open(os.environ.get("DATA", "gsm8k_test.jsonl"))]
     nroll, K = int(os.environ.get("NROLL", "48")), float(os.environ.get("K", "2e7"))
     bnds = [int(x) for x in os.environ.get("BOUNDARIES", "1,13").split(",")]
     lbs = [int(x) for x in os.environ.get("LBS", "1,2,3").split(",")]
+    fills = os.environ.get("FILLS", "substituted,exact,prefix").split(",")
     top = max(bnds) + 1 + max(lbs)
-    seqs = rollouts(model1, tok, rows, nroll, int(os.environ.get("MAXNEW", "512")), int(os.environ.get("SEED", "0")))
+    if os.environ.get("TOKENS"):
+        seqs = [s.to(DEV) for s in torch.load(os.environ["TOKENS"])["ids"]]
+    else:
+        rows = [json.loads(x) for x in open(os.environ.get("DATA", "gsm8k_test.jsonl"))]
+        seqs = rollouts(model1, tok, rows, nroll, int(os.environ.get("MAXNEW", "512")), int(os.environ.get("SEED", "0")))
     lens = [len(s) for s in seqs]
     print(f"{len(seqs)} rollouts, {sum(lens)} tokens (mean {sum(lens) / len(lens):.0f}) at {time.time() - t0:.0f}s", flush=True)
     sd0, sd1 = model0.state_dict(), model1.state_dict()
@@ -289,7 +307,7 @@ def main():
         X = torch.cat(xs)
         E = encode(X, FMT, refs[(i, name)])
         if i in held:
-            ref_codes[(i, name)] = (E["code"].to(torch.int16), None if E["scode"] is None else E["scode"].to(torch.int16))
+            ref_codes[(i, name)] = (E["code"].to(CODE_DT), None if E["scode"] is None else E["scode"].to(torch.int16))
         return split(E["deq"], lens)
 
     def fq_plain(i, name, xs):
@@ -334,14 +352,15 @@ def main():
     for i in held:
         items = [(P0[i][k], encode(P1[i][k], FMT, P0[i][k].abs().max()), P0[i][k].abs().max()) for k in LIN]
         bits, sbits, got = code_many(items, FMT)
-        oitems = [(P0[i][k], encode(P1[i][k], "bf16", None), None) for k in OTHER]
+        others = [k for k in OTHER if k in P0[i]]
+        oitems = [(P0[i][k], encode(P1[i][k], "bf16", None), None) for k in others]
         obits, _, ogot = code_many(oitems, "bf16")
         p = {}
         exact = True
         for k, (_, E, ref), (code, scode) in zip(LIN, items, got):
             p[k] = deq_of(code, scode, FMT, ref)
             exact &= bool(torch.equal(p[k], E["deq"])) and bool(torch.equal(p[k], Q1[i][k]))
-        for k, (code, _) in zip(OTHER, ogot):
+        for k, (code, _) in zip(others, ogot):
             p[k] = deq_of(code, None, "bf16", None)
             exact &= bool(torch.equal(p[k], P1[i][k]))
         nw = sum(P0[i][k].numel() for k in LIN)
@@ -355,7 +374,8 @@ def main():
 
     a_dec = 8 * len(gzip.compress(b"".join(open(f, "rb").read() for f in (__file__, quant.__file__)), 9))
     res = {"ckpt": ckpt, "meta": meta, "fmt": FMT, "k": K, "a_dec_bits": a_dec, "n_rollouts": len(seqs), "lens": lens,
-           "nll_token_bits": nll_bits, "layer_weight_bits": lw, "boundaries": {}, "F_compare": fcmp,
+           "nll_token_bits": nll_bits, "layer_weight_bits": lw, "boundaries": {}, "F_compare": fcmp, "d": A.d,
+           "vocab": A.vocab, "tokens": os.environ.get("TOKENS"), "fills": fills, "resid": RESID,
            "code_sha256": hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:16]}
     macs_lin = sum(P0[held[0]][k].numel() for k in LIN)
 
@@ -425,7 +445,9 @@ def main():
         # the decoder's work: theta deployed at FMT up to l, then the held layers, plus ~60 operations per decoded
         # or dequantized symbol (weights, the entering residual, the counted activations)
         syms = sum(lw[i]["n_weights"] for i in hl) + T * A.d + T * lb * (3 * A.d + A.ffn)
-        blk.update({"l_fix": l_fix, "mismatch_naive": mism, "mismatch_naive_frac": mism / (blk["n_I"] or 1),
+        l_entries = blk["l_tok"] + blk["l_bnd"] + l_fix
+        blk.update({"l_entries": l_entries, "beta_e": l_entries / n_u, "beta_e_per_dim": l_entries / n_u / A.d,
+                    "l_fix": l_fix, "mismatch_naive": mism, "mismatch_naive_frac": mism / (blk["n_I"] or 1),
                     "mismatch_after_repair": after, "l_total_substituted": base_bits,
                     "l_total_exact": base_bits + l_fix,
                     "beta_x_bound_substituted": base_bits / blk["n_I"],
@@ -439,14 +461,15 @@ def main():
     for b in bnds:
         rb = hb0[b].abs().max()
         R = res["boundaries"][b] = {"held": [b + 1 + j for j in range(max(lbs))], "blocks": []}
-        for bfmt in (FMT, "bf16"):
+        for bfmt in dict.fromkeys((FMT, "bf16")):
             # the entering residual over every rollout, for the rate that sets Q
             bits_all, _, _ = code_many([(hb0[b], encode(hb1[b], bfmt, rb), rb)], bfmt)
             R[f"F_{bfmt}_all_per_token"] = bits_all / sum(lens)
+            rate = math.log2(A.vocab) + bits_all / sum(lens)
             # Q fills k three times: whole rollouts at the substituted rate (tokens and the entering residual), whole
             # rollouts at the exact block's rate (repairs included, measured on the block before), and whole rollouts
             # then a prefix of the next one (causal, so its attention context is inside the block) at that rate
-            for lb, fill in [(lb, f) for lb in lbs for f in ("substituted", "exact", "prefix")]:
+            for lb, fill in [(lb, f) for lb in lbs for f in fills]:
                 if fill == "substituted":
                     rate = math.log2(A.vocab) + bits_all / sum(lens)
                 hl = [b + 1 + j for j in range(lb)]
@@ -473,12 +496,13 @@ def main():
                 print(f"l={b} L_b={lb} {bfmt} fill {fill}: Q={blk['tokens']} ({m} rollouts + {t}) l_w={blk['l_w']:.4g} "
                       f"l_tok={blk['l_tok']:.4g} l_bnd={blk['l_bnd']:.4g} (F {blk['F_per_token']:.0f}) "
                       f"l_fix={blk['l_fix']:.4g} n_I={blk['n_I']:.4g} total exact {blk['l_total_exact']:.4g} "
-                      f"bound {blk['beta_x_bound_substituted']:.4f} / exact {blk['beta_x_bound_exact']:.4f}; mismatches "
+                      f"bound {blk['beta_x_bound_substituted']:.4f} / exact {blk['beta_x_bound_exact']:.4f}; beta_e "
+                      f"{blk['beta_e']:.1f} bits an entry ({blk['beta_e_per_dim']:.3f} a dimension); mismatches "
                       f"{blk['mismatch_naive']} ({blk['mismatch_naive_frac']:.4f}), after repair "
                       f"{blk['mismatch_after_repair']} at {time.time() - t0:.0f}s", flush=True)
-                json.dump(res, open(os.path.join(OUT, f"block_{FMT}.json"), "w"), indent=1, default=float)
+                json.dump(res, open(os.path.join(OUT, NAME), "w"), indent=1, default=float)
     res["secs"] = time.time() - t0
-    json.dump(res, open(os.path.join(OUT, f"block_{FMT}.json"), "w"), indent=1, default=float)
+    json.dump(res, open(os.path.join(OUT, NAME), "w"), indent=1, default=float)
 
 
 if __name__ == "__main__":
