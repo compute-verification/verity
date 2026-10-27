@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import WORKLOADS, UsageError, option
+from verity_vllm.config import WORKLOADS, UsageError, option, workload_file
 
 from . import score as S
 from .build import build_program
@@ -51,7 +51,7 @@ MECHANISM = "verity_vllm.program.predict: the Program from the row's declared in
 
 def phi_at(row: str, rank: int, config: str) -> Phi:
     """φ of `row` at `rank` from its declared inputs (`score.phi_of`), the checkpoint's `config.json` at `config`."""
-    phi = S.phi_of({"row": row, "workload": json.loads((WORKLOADS / f"{row}.json").read_text())}, config=config)
+    phi = S.phi_of({"row": row, "workload": json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())}, config=config)
     return Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
 
 

@@ -57,14 +57,18 @@ def decoder() -> tuple[Program, list[int]]:
             outs.append(tok)
         return array_of(outs)
 
-    sig = lambda _S: ((("tok0", I32), ("emb", Array(D, Array(V, F32))), ("wk", Array(D, F32))), Array(S, I32))
+    def sig(_S):
+        return ((("tok0", I32), ("emb", Array(D, Array(V, F32))), ("wk", Array(D, F32))), Array(S, I32))
+
     fn = CompositeDefinition("TestDecoder", 1, (), sig, body, register=False)
     return Program(fn, registered=("emb", "wk")), starts
 
 
 def _inputs() -> dict[int, int]:
     """tok0 = 1 (gate 0), the embedding's D·V words (gates 1-8) and the key projection's D weights (gates 9-10)."""
-    f = lambda x: fp32.bits_of(np.float32(x))
+    def f(x):
+        return fp32.bits_of(np.float32(x))
+
     return {0: 1, **{1 + i: f(0.5 + i) for i in range(D * V)}, 9: f(1.5), 10: f(-0.25)}
 
 

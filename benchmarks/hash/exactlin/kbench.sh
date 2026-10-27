@@ -3,7 +3,7 @@
 # minutes; KSCRIPT=kgate.py runs the gate alone, KSCRIPT=ksweep.py the GEMM config sweep.  Extra arguments go to the
 # script (e.g. --reps 15 --shapes decode).
 #   research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/kbench.sh
+#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/exactlin/kbench.sh
 # Runs on node 2 and on vy-dc-h200 / vy-dc-b200 (their venv is /workspace/cp/venv312).
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"

@@ -44,7 +44,7 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
   research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-         PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+         PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
@@ -89,7 +89,9 @@ from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: 
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
 FRESH = "verity/pouw/fp8-served-table-fresh-trials/v1"
@@ -406,7 +408,8 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
-    tile_of = lambda item: item if isinstance(item, int) else item[0]
+    def tile_of(item):
+        return item if isinstance(item, int) else item[0]
     got: dict = {}
     for item in picks:
         t = prior.get(_item_key(item))
@@ -526,7 +529,8 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
     L = math.log(1 / delta)
-    ok = lambda mu: mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
+    def ok(mu):
+        return mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
     lo, hi = x, total
     for _ in range(100):
         mid = (lo + hi) / 2
@@ -669,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         p.error("give --tiles (pooled strata) or --per-input (each input bounded)")
     if a.tiles is not None and len(a.tiles) != len(a.manifests):
         p.error("one --tiles per manifest")
-    out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
+    out_dir = a.out or Path(settings.RESEARCH_RUN_DIR or ".") / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
     opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check, "resumed_only": a.resumed_only,
             "coins": CoinCommitment.from_json(json.loads(a.coins.read_text())) if a.coins else None}

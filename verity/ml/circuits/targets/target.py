@@ -69,15 +69,6 @@ References and the log of disagreements
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
   reference implementation.
 
-Reference inputs
-================
-
-Recorded under ``fixtures/typed-obligation-v0`` with the public values a correct prover produced:
-
-* :data:`K16_VECTOR` -- ``K = 16``, one step, the smallest input; the SP1 baseline proof.
-* :data:`K1536_VECTOR` -- ``K = 1536``, 96 chained steps, one real coordinate of a captured vLLM ``qkv_proj`` decode
-  step; the campaign's realistic size.
-
 Explicitly unresolved (not part of the target)
 ==============================================
 
@@ -93,7 +84,8 @@ Explicitly unresolved (not part of the target)
   (:data:`verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend/integration binding question; the K=1536 vector is one captured case where it did.
+  chain is a frontend/integration binding question; ``fixtures/typed-obligation-v0``'s K = 1536 input is one captured
+  case where it did.
 * **Other dtypes.** FP8 (E4M3) pipelines exist in ``silicon`` and now have *draft* targets below
   (:data:`FP8_HOPPER_WGMMA`, :data:`FP8_ADA_MMA`); nothing about them is frozen.
 
@@ -124,8 +116,7 @@ much hardware stands behind the model the target computes with.
   epilogue as the other two; the registry's ``sm120.mma.m16n8k32.e4m3`` is this pipeline, and trust anchors it here.
 * The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity_sp1.proofs.families.make_tensor_core_gate_set`
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
-  bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
-  replays (``verity/ml/circuits/silicon/captures/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
+  bound to them** and no ``typed-obligation/v0`` lowering has been produced.
 * :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
   25.7M elements / 0 mismatches; the ``wgmma`` BF16 path runs the same pipeline), model
   :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
@@ -180,15 +171,12 @@ __all__ = [
     "FP8_SM120_MMA",
     "FP8_HOPPER_WGMMA",
     "HAWKEYE_PIN",
-    "K16_VECTOR",
-    "K1536_VECTOR",
     "NVFP4_SM120",
     "TARGETS",
     "TC_AMPERE_BF16_NAME",
     "TC_AMPERE_BF16_VERSION",
     "TC_BF16_NAME_PREFIX",
     "TC_BF16_VERSION",
-    "TC_VECTORS",
     "Target",
 ]
 
@@ -211,12 +199,6 @@ DISCREPANCY_LOG = "verity/ml/circuits/silicon/discrepancy_log.json"
 FAMILY = f"{TC_AMPERE_BF16_NAME}@{TC_AMPERE_BF16_VERSION}"
 #: Its manifest digest (``GateSet.digest``); the guest refuses a statement whose family digest differs.
 FAMILY_DIGEST = "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307"
-#: Reference vectors (names under ``fixtures/typed-obligation-v0``).
-K16_VECTOR = "accept--packed-word-row"
-K1536_VECTOR = "stage2--qkv-proj-decode-0-k1536"
-
-#: Where the draft targets' model-replay vectors live (names below are files ``<name>.json`` in this directory).
-TC_VECTORS = "verity/ml/circuits/silicon/captures/vectors"
 #: ``veritor.tensor-core.<pipeline>@2`` manifest digests of the FP8 draft families (``make_tensor_core_gate_set``).
 FP8_HOPPER_FAMILY = "veritor.tensor-core.hopper_e4m3_wgmma_k32@2"
 FP8_HOPPER_FAMILY_DIGEST = "6d90478ba12f63f1171355f343f65bce6665541f1f7d4cca711ed9ea2ae9f777"
@@ -239,8 +221,8 @@ Status = Literal["frozen", "draft"]
 @dataclass(frozen=True, slots=True)
 class Target:
     """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
-    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated
-    and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
+    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated,
+    bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.circuits.silicon.instructions.INSTRUCTIONS``)."""
 
     name: str
@@ -252,7 +234,6 @@ class Target:
     statement_format: int
     domain: str
     epilogue: str
-    reference_vectors: tuple[str, ...]
     #: The conformance device of the instruction: the card the relation was pinned on (module docstring, "Native peak").
     anchor_device: str
     status: Status = "frozen"
@@ -273,7 +254,6 @@ FIRST = Target(
     statement_format=2,
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",
-    reference_vectors=(K16_VECTOR, K1536_VECTOR),
     anchor_device="NVIDIA A100 SXM4 80GB",
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
@@ -297,7 +277,6 @@ BF16_HOPPER = Target(
         "hardware cvt.rn.bf16.f32 word bit for bit (the versions differ only on NaN, which the domain excludes); the "
         "Hopper BF16 store is the same cvt as Ampere's, so nothing pipeline-specific is pinned for the epilogue"
     ),
-    reference_vectors=("bf16-hopper-mma-k16", "bf16-hopper-mma-k1536"),
     anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.mma.m16n8k16.bf16",
@@ -326,7 +305,6 @@ FP8_HOPPER_WGMMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-hopper-wgmma-k32", "fp8-hopper-wgmma-k1536"),
     anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
@@ -346,7 +324,6 @@ FP8_ADA_MMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
     anchor_device="NVIDIA GeForce RTX 4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
@@ -380,7 +357,6 @@ NVFP4_SM120 = Target(
     statement_format=2,
     domain=_NVFP4_DOMAIN,
     epilogue=_NVFP4_EPILOGUE,
-    reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
     anchor_device="NVIDIA GeForce RTX 5090",
     status="draft",
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
@@ -401,7 +377,6 @@ FP8_SM120_MMA = Target(
     statement_format=2,
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
-    reference_vectors=("fp8-sm120-mma-k32", "fp8-sm120-mma-k1536"),
     anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
     status="draft",
     instruction="sm120.mma.m16n8k32.e4m3",

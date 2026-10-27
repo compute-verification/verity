@@ -10,7 +10,7 @@ from __future__ import annotations
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind, primitive
 from verity.ml.circuits.types import Value
 
-import verity.ml.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.ml.circuits.ops.fp32  # registers F32Mul_v2, Bf16Add_v1
 import verity.ml.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
 
 U32, F32, BF16 = Value(32), Value(32), Value(16)

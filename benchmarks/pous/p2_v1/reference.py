@@ -2,7 +2,7 @@
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
 (`vectors.py`) are built on.
 
-v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere (Daniel's ruling of 6 Oct 2026, 15:07Z): the
+v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
 `verity.ml.randomness` is the spec's derivation (`frame`, `derive`) and
 `verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
@@ -50,8 +50,8 @@ K_AUDIT = 105
 """The deployment audit's challenges (spec §5, F6)."""
 DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 354_000
-"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
-2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
+"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, so
+that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
 (`verity.core.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:

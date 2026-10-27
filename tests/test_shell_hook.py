@@ -32,7 +32,7 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
 
 
 @pytest.mark.parametrize("command", [
-    "env | cut -d= -f1",                                  # the leak, five times by 6 Oct
+    "env | cut -d= -f1",                                  # a multi-line value's later lines print as names
     "env",
     "env | sort",
     "env -0 | cut -z -d= -f1 | tr '\\0' '\\n'",
@@ -65,7 +65,7 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "timeout 5 env",
     "env FOO=1 env",
     "xargs -0 env",
-    "ps aux",                                             # a daemon's token in its argv, 6 Oct
+    "ps aux",                                             # a daemon's token in its argv
     "ps auxww | head -50",
     "ps -ef",
     "ps -eF | sort",
@@ -75,12 +75,12 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "ps --everyone --format=pid,cmd",
     "sudo ps aux | tail",
     "ssh n1 'ps -ef'",
-    "ps -o pid,etime,cmd --ppid 4242",                    # a git child's token-bearing URL, 17 Oct (INF-52)
+    "ps -o pid,etime,cmd --ppid 4242",                    # a git child's token-bearing URL
     "ps -f -u research",
     "ps -o args -C git",
     "ps -p 1,2 -o args",
     "cat /proc/*/cmdline",
-    "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # the Nebius key's lines again, 11 Oct
+    "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # a multi-line key's lines
     "tmux show-environment",
     "tmux showenv -t main",
     "tmux show-environment -g NEBIUS_SA_PRIVATE_KEY",
@@ -157,7 +157,7 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
 
 
 def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_it_is_short_of_memory(tmp_path):
-    """Remote by default (every handle, at Daniel's request, 18 Oct): OOM kills on shared agent VMs took down every worker on them.
+    """Remote by default for every handle: OOM kills on shared agent VMs took down every worker on them.
     A broad pytest, `lake build`, cargo, nvcc and `circuit-check --all` are refused here always, pointing to `research run --on
     auto`; a pytest of named files, `lake env`, the suites and `verity check` only under a quarter of the memory available. Through
     `research run`, over ssh, or with AGENT_GUARD_LOCAL_OK=1 any passes, as does work that is neither."""
@@ -200,7 +200,7 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     "research run --on auto --wait --wait-max 3000 -- true", "research run --on auto --wait --wait-max=1201 -- true",
 ])
 def test_a_command_that_plainly_blocks_past_twenty_minutes_is_refused(command):
-    """No tool call may block more than 20 minutes (Daniel, 19 Oct): agents that blocked in one long call looked silent and missed
+    """No tool call may block more than 20 minutes: agents that blocked in one long call looked silent and missed
     their wake-ups."""
     out = answer(command)
     assert out["permission"] == "deny", command
@@ -271,8 +271,7 @@ def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path)
 
 
 def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its_branch_is_refused(tmp_path):
-    """INF-59 (compute accounting, 18 Oct): a worker ran `git checkout <its branch>` in its coordinator's /workspace, and the
-    `research` CLI installed editable from it followed the branch to an 881-commits-old version. A worktree belongs to the first
+    """A worker that switches its coordinator's checkout drags every editable install in it to that branch. A worktree belongs to the first
     agent that runs git in it; another agent may read it and check out files, but not switch its branch, and may not push a
     branch another agent created or holds, until it is handed over."""
     env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
@@ -313,8 +312,8 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
 
 
 def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
-    """INF-110: at 07:49Z 19 Oct a worker whose VM came back from a snapshot with /workspace on main pushed straight onto it,
-    and drive rebuilt every queued PR. INF-105: printing git config values showed part of a GitHub installation token."""
+    """Only drive moves `main` and `next`, so an agent's push to either is refused; and git config values can hold a GitHub
+    installation token, so printing them is refused."""
     env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
     ws, origin = tmp_path / "ws", tmp_path / "origin.git"
     for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
@@ -345,9 +344,10 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
                     "AGENT_GUARD_PUSH_NEXT_OK=x true; git push origin next", "export AGENT_GUARD_PUSH_NEXT_OK=x; git push origin next"):
         assert ask(command)["permission"] == "deny", command
     for command in ("git config --list", "git config -l", "git config --get-regexp http", "git config --show-origin --list",
-                    "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader"):
+                    "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader",
+                    "git config --name-only --list", "git config --name-only --show-origin --list",
+                    "git config --name-only --get-regexp url"):
         out = ask(command)
-        assert out["permission"] == "deny" and "--name-only --list" in out["agent_message"], command
-    for command in ("git config --name-only --list", "git config user.name", "git config user.name t",
-                    "git config --get remote.origin.fetch"):
+        assert out["permission"] == "deny" and "url.*.insteadof's name" in out["agent_message"], command
+    for command in ("git config user.name", "git config user.name t", "git config --get remote.origin.fetch"):
         assert ask(command)["permission"] == "allow", command

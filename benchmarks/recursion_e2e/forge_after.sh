@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# forge-after (forge_after.py) over a firewalled run's sessions, with that run's flock-verify (its out/lean.sha) and this
+# forge-after (forge_after.py) over a firewalled run's releases, with that run's flock-verify (its out/lean.sha) and this
 # tree's (main's Lean sources), built under WORK; nothing under FLOCK_WORK is written. On vy-nebius-1, through a slot:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source -- env CHECK_SLOTS=/workspace/research/locks/leanrec/slots \
 #     python3 tools/verity/check/slot.py --by benchmarks -- bash benchmarks/recursion_e2e/forge_after.sh \
