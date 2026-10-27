@@ -1,4 +1,5 @@
 import Properties.SampledProofs.OneStageZk
+import Proofs.Properties.SampledProofs.OneStageZkPublic
 import Proofs.Properties.SampledProofs
 import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 import Proofs.Flock.Recursive.Witness
@@ -258,7 +259,8 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
 
 theorem acceptMeans : AcceptMeans := by
   intro p c e blobs pub prof h
-  unfold checkBlobs at h
+  replace h := _root_.SampledProofs.OneStageZk.checkProofs_of_accept h
+  unfold checkProofs at h
   split at h
   · cases h
   · next r hrun =>

@@ -43,7 +43,8 @@ theorem roundCoins_of_roundsWhy {p : Params} {c : OneStage.Commitment} {e : Evid
 theorem roundsWhy_of_checkBlobs {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} (h : checkBlobs p c e bs = .accept pub prof) :
     roundsWhy p c e bs = none := by
-  unfold checkBlobs at h
+  replace h := _root_.SampledProofs.OneStageZk.checkProofs_of_accept h
+  unfold checkProofs at h
   repeat' split at h
   all_goals first | assumption | (cases h; done) | (rename_i hn; exact absurd h (hn _ _))
 
