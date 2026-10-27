@@ -23,11 +23,12 @@ from __future__ import annotations
 import ctypes as C
 import functools
 import hashlib
-import os
 from pathlib import Path
 
 import torch
+from verity_config.settings import of
 
+settings = of(__file__)
 HERE = Path(__file__).resolve().parent
 NEG_INF = 0xFF80
 PV_K = 32
@@ -42,7 +43,7 @@ CUDA = {
 
 
 def cubin_path() -> Path:
-    env = os.environ.get("ATTN_REF_CUBIN")
+    env = settings.ATTN_REF_CUBIN
     if env:
         return Path(env)
     beside = HERE / "attn_ref.sm_90a.cubin"
@@ -56,7 +57,7 @@ class Lib:
         self.path = Path(path)
         self.cubin = self.path.read_bytes()
         self.sha256 = hashlib.sha256(self.cubin).hexdigest()
-        self.cu = C.CDLL(os.environ.get("ATTN_REF_LIBCUDA", "libcuda.so.1"))
+        self.cu = C.CDLL(settings.ATTN_REF_LIBCUDA)
         for f, a in CUDA.items():
             getattr(self.cu, f).argtypes, getattr(self.cu, f).restype = a, i32
         torch.cuda.init()

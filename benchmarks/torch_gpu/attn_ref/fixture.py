@@ -36,7 +36,9 @@ import numpy as np
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
+from verity_config.settings import of
 
+settings = of(__file__)
 H, D, LCAP = 256, 64, 32
 KINDS = ("normal", "softmax", "wide", "unit", "tiny", "specials", "cancel_in", "cancel_across", "uniform", "subacc")
 NX = 4 * len(KINDS)
@@ -227,7 +229,7 @@ def sha256(path: str) -> str:
 def main(argv: list[str]) -> int:
     out = argv[1] if len(argv) > 1 else "/tmp/attn-ref-check"
     os.makedirs(out, exist_ok=True)
-    with mp.get_context("spawn").Pool(int(os.environ.get("PROCS", "8"))) as pool:
+    with mp.get_context("spawn").Pool(settings.PROCS) as pool:
         seqs = pool.map(expected, range(NX))
     pool_doc = {k: np.stack([s[k] for s in seqs]) for k in ("Q", "K", "V", "P", "S", "O")}
     pool_doc["kind"] = np.array([s["kind"] for s in seqs])

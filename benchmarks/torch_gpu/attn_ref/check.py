@@ -36,7 +36,9 @@ import torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import attn_ref as A  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 POISON = 0xA5A5
 JUNK = (0x7FC0, 0xFFC1, 0x7F80, 0xFF80, 0x7F7F, 0xFF7F)
 FILL = A.NEG_INF
@@ -54,17 +56,17 @@ def identity() -> dict:
     n = torch.cuda.device_count()
     props = torch.cuda.get_device_properties(0)
     uuid = str(getattr(props, "uuid", "")).lower().removeprefix("gpu-")
-    lease = os.environ.get("GPU_LEASE_UUID", "").lower().removeprefix("gpu-")
+    lease = (settings.GPU_LEASE_UUID or "").lower().removeprefix("gpu-")
     doc = {"devices": n, "name": props.name, "cc": f"{props.major}.{props.minor}", "uuid": uuid, "lease_uuid": lease or None,
            "sms": props.multi_processor_count, "torch": torch.__version__, "cuda": torch.version.cuda,
-           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
-    want = os.environ.get("ATTN_EXPECT", "NVIDIA H200")
+           "cuda_visible_devices": settings.CUDA_VISIBLE_DEVICES}
+    want = settings.ATTN_EXPECT
     problems = []
     if n != 1:
         problems.append(f"{n} visible devices, want 1")
     if (props.major, props.minor) != (9, 0):
         problems.append(f"compute capability {props.major}.{props.minor}, want 9.0 (the cubin is sm_90a)")
-    if not os.environ.get("ATTN_ANY_GPU"):
+    if not settings.ATTN_ANY_GPU:
         if not props.name.startswith(want):
             problems.append(f"{props.name!r} is not {want!r}")
         if lease and uuid != lease:
@@ -223,7 +225,7 @@ def main(argv: list[str]) -> int:
     lib = A.lib()
     emit({"part": "cubin", "path": str(lib.path), "sha256": lib.sha256, "pv_kpv": A.PV_K})
     pool = Pool(os.path.join(check, "pool.npz"), dev)
-    batches = [int(b) for b in os.environ.get("BATCHES", "1,7,128,20480").split(",")]
+    batches = list(settings.BATCHES)
     failures = []
     for B in batches:
         for row in uniform(pool, B, dev):
@@ -244,7 +246,7 @@ def main(argv: list[str]) -> int:
         print("FAILED: " + ", ".join(failures), file=sys.stderr)
         return 4
     print(f"check: 0 mismatches at B {batches}, every KV length 1..{pool.L}, mixed lengths and the odd case", file=sys.stderr)
-    for row in timing(pool, int(os.environ.get("TIME_B", "20480")), dev, int(os.environ.get("REPS", "20"))):
+    for row in timing(pool, settings.TIME_B, dev, settings.REPS):
         emit(row)
         print(f"timing {row['lens']}: " + ", ".join(f"{k} {v:.3f} ms" for k, v in row["median_ms"].items()), file=sys.stderr)
     return 0
