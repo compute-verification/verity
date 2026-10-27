@@ -12,6 +12,7 @@ from verity.ml.circuits import Program
 from verity_vllm.program import workload as W
 from verity.ml.circuits.codec import encode_program
 from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
 from tests.program import test_lifted_mixed as PM
@@ -261,5 +262,5 @@ def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_
             assert L.payload(L.SPLITS_BITS, S_t[t]) == splits_for(want[t], SMS), t
     # one cap for both is refused by name in both directions (9 for B's 4 words, 4 for A's 9): the hook takes the fixed population only
     for one_cap in (CAP, CAP_B):
-        with pytest.raises(ValueError, match="F-pad-19"):
+        with pytest.raises(ValueError, match=EVIDENCE["lifted_per_request_cap"]["finding"]):
             Program(bind(PadrevMixedS2, WL=wl.fn, EOS=EOS, CAPS=(one_cap, one_cap), ARR=arrivals, LAG=lag, H=max(a + one_cap for a in arrivals)))
