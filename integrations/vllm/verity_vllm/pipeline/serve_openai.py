@@ -39,10 +39,7 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
 release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
-``serve.json``'s ``step_rows``). With ``--required-manifest``, the engine schedules as the bench row's workload Program is
-specialized for, not as vLLM defaults: its Build's ``build_workload/workload_program.json`` declares
-``applicability.engine.async_scheduling`` (`row_scheduling`), the engine is built with it, and a server whose engine
-resolved another is refused before it listens (`scheduling_refusal`; ``serve.json``'s ``row_scheduling``).
+``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -109,7 +106,7 @@ from typing import Any
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_remote as SR
+from verity_vllm.pipeline import serve_remote as SR, serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
@@ -590,9 +587,7 @@ class HttpThread(threading.Thread):
 
 # ---------------------------------------------------------------------------------------------------------------- main
 
-def engine_options(opts: Options, row: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """`verity_vllm.LLM`'s keyword arguments for ``opts``, with ``async_scheduling`` the bench row's (`row_scheduling`) when
-    ``row`` is given."""
+def engine_options(opts: Options) -> dict[str, Any]:
     kw: dict[str, Any] = {"max_num_seqs": opts.max_num_seqs, "max_model_len": opts.max_model_len,
                           "max_num_batched_tokens": opts.max_num_batched_tokens, "gpu_memory_utilization": float(opts.gpu_memory_utilization),
                           "enforce_eager": True, "seed": opts.seed, **({"enable_prefix_caching": True} if opts.prefix_caching else {})}
@@ -600,46 +595,7 @@ def engine_options(opts: Options, row: Mapping[str, Any] | None = None) -> dict[
         kw.update(quantization="verity_int8", attention_backend="CUSTOM")
     elif opts.precision == "verity_int8":
         kw.update(quantization="verity_int8")
-    if row is not None:
-        kw["async_scheduling"] = row["async_scheduling"]
     return kw
-
-
-#: where a bench row's Build records the engine its workload Program models (`global_program`'s ``applicability.engine``)
-WORKLOAD_PROGRAM = Path("build_workload", "workload_program.json")
-
-
-def row_scheduling(opts: Options) -> dict[str, Any] | None:
-    """The scheduler the bench row's workload Program is specialized for, ``{"async_scheduling", "source"}``: what its Build's
-    `WORKLOAD_PROGRAM` in the row dir (`serve_seal.programs_root_of`) declares as ``applicability.engine.async_scheduling``,
-    the value a record of the row must attest. None without ``--required-manifest``; `UsageError` naming the file when the
-    row has none or it declares no boolean."""
-    if not opts.required_manifest:
-        return None
-    path = Path(SS.programs_root_of(opts)) / WORKLOAD_PROGRAM
-    try:
-        got = ((json.loads(path.read_text()).get("applicability") or {}).get("engine") or {}).get("async_scheduling")
-    except (OSError, ValueError, AttributeError) as e:
-        raise UsageError(f"--required-manifest {opts.required_manifest}: the row's Build has no workload Program to take the "
-                         f"engine's scheduler from ({type(e).__name__}: {e})") from None
-    if not isinstance(got, bool):
-        raise UsageError(f"{path} declares applicability.engine.async_scheduling {got!r}, not a boolean: the engine has no "
-                         "scheduler of the row's to follow")
-    return {"async_scheduling": got, "source": str(path)}
-
-
-def scheduling_refusal(row: Mapping[str, Any] | None, engine: Any) -> str | None:
-    """Why the built ``engine`` (a ``vllm.LLM``) can't serve the bench row ``row`` (`row_scheduling`): it resolved
-    ``async_scheduling`` (`engine.build.resolved_async_scheduling`) other than the row declares. None without a row."""
-    if row is None:
-        return None
-    from verity_vllm.engine.build import resolved_async_scheduling
-
-    if (got := resolved_async_scheduling(engine)) is row["async_scheduling"]:
-        return None
-    return (f"async_scheduling: the engine resolved {got!r}, and the bench row's workload Program is specialized for "
-            f"{row['async_scheduling']!r} (LAG {int(row['async_scheduling'])}, {row['source']}): its records would attest a "
-            "scheduler the row's Programs don't model")
 
 
 def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | None = None) -> str | None:
@@ -703,9 +659,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`) and, with the Commit on, its committer, sized from the engine's envelope, with a
-    `served_record.SamplerInputsSource` attached; with a remote ``session``, the engine built under it; with the bench row's
-    scheduler ``row`` (`row_scheduling`), the engine scheduling as it does, refused otherwise (`scheduling_refusal`)."""
+    """The engine (`verity_vllm.LLM`), scheduling as the bench ``row`` declares, and with the Commit on, its committer, sized
+    from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
     engine_env.apply_engine(opts.hf_home)
@@ -714,18 +669,12 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    kw = engine_options(opts, row)
-    llm = LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw))
+    kw = engine_options(opts) | RW.engine_args(row)
+    llm = RW.checked(row, LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw)))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
             raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
-    if why := scheduling_refusal(row, llm.vllm):
-        raise RuntimeError(why)
-    from verity_vllm.engine.build import resolved_async_scheduling
-
-    print(f"SERVE-OPENAI engine resolved async_scheduling={resolved_async_scheduling(llm.vllm)}; "
-          + (f"the bench row declares {row['async_scheduling']} ({row['source']})" if row is not None else "no bench row"), flush=True)
     if session is not None:
         session.built(llm)
     if not opts.commit:
@@ -737,9 +686,8 @@ def main(opts: Options) -> int:
     preflight(opts)
     out = Path(opts.out)
     out.mkdir(parents=True, exist_ok=True)
-    row = row_scheduling(opts)
     session = SR.session_of(opts, out)
-    llm, com = build(opts, session, row)
+    llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
     reference = getattr(proto, "base", proto)
