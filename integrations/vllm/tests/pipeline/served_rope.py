@@ -1,4 +1,4 @@
-"""A deferred Commit served on CPU, for the serving rows' tests and the one-stage audit's end-to-end run (`benchmarks/one_stage/a5.py`):
+"""A deferred Commit served on CPU, for the serving rows' tests and the one-stage audit's end-to-end run (`examples/one_stage/a5.py`):
 a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's world (`tests.check.test_sampled_replay`), its members
 committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.

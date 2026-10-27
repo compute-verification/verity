@@ -2,7 +2,7 @@
 # `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM example's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
 # example's row names (its one file in workloads/: `model`, `case` and `engine.revision`; bf16, served as pinned, `--precision pin`):
-#   window   the default: one served window through every subprotocol, benchmarks/one_stage/served_verdicts.sh: the endpoint
+#   window   the default: one served window through every subprotocol, examples/one_stage/served_verdicts.sh: the endpoint
 #            committing under the row's Commit of record, its requests (serve_load.py --varied), every closed window sealed, the
 #            window's sampled proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the bandwidth
 #            audit, PoUS and the network certifier where each has its piece, and one record of every verdict
@@ -25,7 +25,7 @@ import tomllib
 from pathlib import Path
 
 here, run = Path(sys.argv[1]), sys.argv[2]
-script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "examples/vllm/commit.sh", "serve": "examples/vllm/serve.sh"}[run]
+script = {"window": "examples/one_stage/served_verdicts.sh", "commit": "examples/vllm/commit.sh", "serve": "examples/vllm/serve.sh"}[run]
 rows = sorted((here / "workloads").glob("*.json"))
 if len(rows) != 1:
     sys.exit(f"run.sh: examples/vllm/workloads/ holds {len(rows)} row files; the example's row is its one")
