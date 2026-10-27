@@ -1,0 +1,13 @@
+# The lifecycle example (README.md): one monitoring period of the remote composite on a tiny model, every party simulated
+# in one process on CPU, its proofs a labelled stand-in for C-Flock. It runs; nothing about it is proved.
+protocol = "remote"
+workload = "none"              # a 2-layer int8 model of its own, not an integration
+run = "runs"
+proof = "none"
+
+[placement]
+prover = "local"               # the developer: serving, declaring, the stand-in prover
+verifier = "local"
+
+[evidence]
+tests = ["examples/lifecycle/tests/test_lifecycle.py::test_remote_period"]
