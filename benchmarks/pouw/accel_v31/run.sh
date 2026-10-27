@@ -28,10 +28,11 @@
 # gate-up and down at m 16384) beside cuBLASLt and CUTLASS; fill-sample on each shape's sampled tiles; fill-table.
 # VARIANTS here default to "row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row).
 # FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
-# circuit/dither.py). FILL_PROF=1 then runs Nsight Compute's pipe utilization on `v31 fill-once` (OVL_CALLS calls, default 4)
-# for the first variant on each shape and L, and h200_pipes.py's duty of each pipe over the overlapped call (pipes.md).
-# FILL_NSYS=1 then runs Nsight Systems on the same, 2 serial calls and then OVL_CALLS (default 6) overlapped ones, with
-# `v31.py timeline` of each (nsys-*.timeline.md).
+# circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls
+# after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
+# timeline`'s .timeline.md. FILL_PROF=1, after the bench, runs Nsight Compute's pipe utilization on `v31 fill-once`
+# (OVL_CALLS overlapped calls, default 4) for the first variant on each shape and L, and h200_pipes.py's duty of each pipe
+# over the overlapped call (pipes.md).
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -145,6 +146,33 @@ if [ "$MODE" = fill ]; then
     grep -hE '^[a-z].*(ACCEPT|REFUSE)' "$O/fill-gates-ltw$x.log" "$O/fill-dither-ltw$x.log" 2> /dev/null | sed "s/^/ltw$x /" \
       >> "$O/verdicts.txt"
   done
+  if [ "${FILL_NSYS:-0}" = 1 ]; then
+    NSYS=$(command -v nsys || ls /opt/nvidia/nsight-systems/*/bin/nsys 2>/dev/null | head -1)
+    export NSYS OVL_CALLS=${OVL_CALLS:-6}
+    [ -n "$NSYS" ] || echo "nsys rc no-nsys" >> "$O/rc.txt"
+    # shellcheck disable=SC2016
+    $LEASE bash -c '
+      for v in $VARIANTS; do
+        for L in $FILL_LS; do
+          tag=$(tr "," "-" <<< "$v" | tr -d "=")-L$L
+          for s in $FILL_SHAPES; do
+            f="$O/nsys-$tag-${s%%:*}"
+            # shellcheck disable=SC2046
+            env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" "$NSYS" profile -t cuda -s none --cpuctxsw none -f true -o "$f" \
+              "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+            echo "nsys $tag ${s%%:*} rc $?" >> "$O/rc.txt"
+          done
+        done
+      done'
+    echo "lease nsys rc $?" >> "$O/rc.txt"
+    for f in "$O"/nsys-*.nsys-rep; do
+      [ -f "$f" ] || continue
+      "$NSYS" stats -r cuda_gpu_trace -f csv --force-export=true -o "${f%.nsys-rep}" "$f" >> "${f%.nsys-rep}.log" 2>&1
+      $PY $D/v31.py timeline "${f%.nsys-rep}_cuda_gpu_trace.csv" --gemm gemm --from bits_kernel > "${f%.nsys-rep}.timeline.md" \
+        2>> "${f%.nsys-rep}.log"
+      echo "timeline $(basename "${f%.nsys-rep}") rc $?" >> "$O/rc.txt"
+    done
+  fi
   # the bench runs whatever the gate's verdicts (its own checked call is sampled below); cite it only beside a passed gate
   for v in $VARIANTS; do
     for L in $FILL_LS; do
@@ -195,31 +223,6 @@ if [ "$MODE" = fill ]; then
     echo "lease fill prof rc $?" >> "$O/rc.txt"
     $PY $D/h200_pipes.py "$O" > "$O/pipes.md" 2> "$O/pipes.err"
     echo "pipes rc $?" >> "$O/rc.txt"
-  fi
-  if [ "${FILL_NSYS:-0}" = 1 ]; then
-    NSYS=$(command -v nsys || ls /opt/nvidia/nsight-systems/*/bin/nsys /usr/local/cuda/bin/nsys 2>/dev/null | head -1)
-    export NSYS
-    [ -n "$NSYS" ] || echo "fill nsys rc no-nsys" >> "$O/rc.txt"
-    # shellcheck disable=SC2016,SC2086
-    $LEASE bash -c '
-      v=${VARIANTS%% *}
-      tag=$(tr "," "-" <<< "$v" | tr -d "=")
-      n=$(knob "$v" nreg "")
-      for L in $FILL_LS; do
-        for s in $FILL_SHAPES; do
-          f="$O/nsys-$tag-L$L-${s%%:*}"
-          env $(knob_env "$v") V31_ONCE_SERIAL=2 V31_ONCE_OVL="${OVL_CALLS:-6}" "$NSYS" profile -t cuda -s none --cpuctxsw none \
-            -f true -o "$f" "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
-          echo "fill nsys $tag L$L ${s%%:*} rc $?" >> "$O/rc.txt"
-        done
-      done'
-    echo "lease fill nsys rc $?" >> "$O/rc.txt"
-    for f in "$O"/nsys-*.nsys-rep; do
-      [ -f "$f" ] || continue
-      "$NSYS" stats -r cuda_gpu_trace -f csv --force-export=true -o "${f%.nsys-rep}" "$f" >> "${f%.nsys-rep}.log" 2>&1
-      $PY $D/v31.py timeline "${f%.nsys-rep}_cuda_gpu_trace.csv" > "${f%.nsys-rep}.timeline.md" 2>> "${f%.nsys-rep}.log"
-      echo "timeline $(basename "${f%.nsys-rep}") rc $?" >> "$O/rc.txt"
-    done
   fi
   for s in "$W"/fbench/*/samples/*/; do
     [ -d "$s" ] || continue
