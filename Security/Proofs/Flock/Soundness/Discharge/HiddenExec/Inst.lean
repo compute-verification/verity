@@ -80,7 +80,9 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
     (hrows : Hidden.Any.OutRowsP st.c) : WiredDelta (Hidden.unpin st) :=
-  wiredDelta_out (st := Hidden.unpin st) (flat_layout ht h) (flat_unitFacts ht h) hrows rfl
+  have FL := flat_layout ht h
+  have FU := flat_unitFacts ht h
+  wiredDelta_out (st := Hidden.unpin st) FL FU hrows rfl
 
 /-! ## A composite input's value -/
 
