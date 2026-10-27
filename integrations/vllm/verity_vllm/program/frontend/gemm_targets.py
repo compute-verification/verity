@@ -54,12 +54,12 @@ FIXED_CONSTEXPRS: dict[str, Any] = {"GROUP_SIZE_M": 8, "A_LARGE": False, "B_LARG
 #: `(BLOCK_SIZE_M, BLOCK_SIZE_N, num_warps, num_stages)` per M-bucket upper bound, ascending; M above the last bucket takes
 #: the last (the table's own rule).  VERBATIM `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["ada"]` of the pinned vLLM d9105ea80
 #: (`batch_invariant_configs.py` sha256 72ea0d4df0ab5ae288abb7df5c203d2ad5f1709c7295d87ec72da775fddc1b7a), ALL FIVE keys.
-#: Until R15 only the (2048, 2048) row (the one LLAMA32_1B exercised: M=32 -> the 32 bucket, M=1 -> the 1 bucket) was pinned; the
-#: other four are the Qwen3-class dense shapes (hidden 2048, vocab 151936) and vLLM launches them TUNED on sm_89, so a Program
-#: for such a model was refused at its first tabled launch (`constexpr BLOCK_SIZE_M=16 differs from the profile pin 128`:
-#: Qwen3-30B-A3B lm_head at TP1, R15 lane moe GEMM-ADA-TABLE; the (2048, 6144) row has BLOCK_SIZE_K 128).  Read from vLLM on
-#: cp-moe3 (L40S) 2026-09-19; `tests/program/test_gemm_targets.py` checks the copy against vLLM's table wherever vLLM imports.
-#: (moved here from `verity_vllm.observe.fold.profiles.gen_llama_patterns.ADA_TUNED_GEMM`, which re-exports it.)
+#: The (2048, 2048) row is the one LLAMA32_1B exercises (M=32 -> the 32 bucket, M=1 -> the 1 bucket); the
+#: other four are the Qwen3-class dense shapes (hidden 2048, vocab 151936), which vLLM launches TUNED on sm_89, so without
+#: them a Program for such a model is refused at its first tabled launch (`constexpr BLOCK_SIZE_M=16 differs from the
+#: profile pin 128`); the (2048, 6144) row has BLOCK_SIZE_K 128.  Read from vLLM on
+#: an L40S; `tests/program/test_gemm_targets.py` checks the copy against vLLM's table wherever vLLM imports.
+#: (`verity_vllm.observe.fold.profiles.gen_llama_patterns.ADA_TUNED_GEMM` re-exports it.)
 #: APPLICABILITY IDENTITY (global M-0140 (3)): `REGISTERED["ada"].table_sha256()` is the `tuned_gemm_table_sha256` derive_step writes into
 #: every L40S/4090 component's applicability, and GP-01 refuses a workload whose components disagree on it.  The one-key table of
 #: r14-rc3 hashed to ADA_TABLE_SHA256_RC3 below (the value in every L40S artifact Built before the release that carries this file);

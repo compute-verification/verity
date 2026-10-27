@@ -1,4 +1,4 @@
-"""The Commit's ``rows-sha512`` scheme (VLLM-17 step 1): COMMIT-GPU's construction (``benchmarks/pouw/commit_gpu``) over a step's
+"""The Commit's ``rows-sha512`` scheme: COMMIT-GPU's construction (``benchmarks/pouw/commit_gpu``) over a step's
 stream, on the windowed worker (``NativeCollectCommitter``, whose unset scheme it is) and its offline CPU core
 (``NativeHostCommitter.commit_block_offline``, by name).  Every Commit commits under it by default: the single-GPU Commit
 (``pipeline.commit``'s ``--commit-scheme``, on the windowed ``native_collect_v2b``) and every rank of a TP Commit (``pipeline.tp.commit``,

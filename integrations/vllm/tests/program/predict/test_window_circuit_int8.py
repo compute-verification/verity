@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.window_circuit's int8 linears (VLLM-33's G3): an exact-int8 checkpoint served with its linears
+"""verity_vllm.program.predict.window_circuit's int8 linears: an exact-int8 checkpoint served with its linears
 int8 (serve-openai's verity_int8) is the same class circuit with each decoder linear its quantizer unit and s8 GEMM slices,
 pinned on `test_window_circuit`'s TINY class, windows and grain.
 """
