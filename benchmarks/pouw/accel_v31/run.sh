@@ -30,6 +30,8 @@
 # FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_PROF=1 then runs Nsight Compute's pipe utilization on `v31 fill-once` (OVL_CALLS calls, default 4)
 # for the first variant on each shape and L, and h200_pipes.py's duty of each pipe over the overlapped call (pipes.md).
+# FILL_NSYS=1 then runs Nsight Systems on the same, 2 serial calls and then OVL_CALLS (default 6) overlapped ones, with
+# `v31.py timeline` of each (nsys-*.timeline.md).
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -193,6 +195,31 @@ if [ "$MODE" = fill ]; then
     echo "lease fill prof rc $?" >> "$O/rc.txt"
     $PY $D/h200_pipes.py "$O" > "$O/pipes.md" 2> "$O/pipes.err"
     echo "pipes rc $?" >> "$O/rc.txt"
+  fi
+  if [ "${FILL_NSYS:-0}" = 1 ]; then
+    NSYS=$(command -v nsys || ls /opt/nvidia/nsight-systems/*/bin/nsys /usr/local/cuda/bin/nsys 2>/dev/null | head -1)
+    export NSYS
+    [ -n "$NSYS" ] || echo "fill nsys rc no-nsys" >> "$O/rc.txt"
+    # shellcheck disable=SC2016,SC2086
+    $LEASE bash -c '
+      v=${VARIANTS%% *}
+      tag=$(tr "," "-" <<< "$v" | tr -d "=")
+      n=$(knob "$v" nreg "")
+      for L in $FILL_LS; do
+        for s in $FILL_SHAPES; do
+          f="$O/nsys-$tag-L$L-${s%%:*}"
+          env $(knob_env "$v") V31_ONCE_SERIAL=2 V31_ONCE_OVL="${OVL_CALLS:-6}" "$NSYS" profile -t cuda -s none --cpuctxsw none \
+            -f true -o "$f" "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+          echo "fill nsys $tag L$L ${s%%:*} rc $?" >> "$O/rc.txt"
+        done
+      done'
+    echo "lease fill nsys rc $?" >> "$O/rc.txt"
+    for f in "$O"/nsys-*.nsys-rep; do
+      [ -f "$f" ] || continue
+      "$NSYS" stats -r cuda_gpu_trace -f csv --force-export=true -o "${f%.nsys-rep}" "$f" >> "${f%.nsys-rep}.log" 2>&1
+      $PY $D/v31.py timeline "${f%.nsys-rep}_cuda_gpu_trace.csv" > "${f%.nsys-rep}.timeline.md" 2>> "${f%.nsys-rep}.log"
+      echo "timeline $(basename "${f%.nsys-rep}") rc $?" >> "$O/rc.txt"
+    done
   fi
   for s in "$W"/fbench/*/samples/*/; do
     [ -d "$s" ] || continue

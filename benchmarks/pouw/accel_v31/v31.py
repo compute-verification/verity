@@ -1070,7 +1070,8 @@ def cmd_table(a: argparse.Namespace) -> int:
     return 0
 
 
-COMPUTE_KERNELS = ("bits_kernel", "noise_kernel", "perm_kernel", "form_a_kernel", "form_b_kernel", "wrap", "gemm_kernel")
+COMPUTE_KERNELS = ("bits_kernel", "noise_kernel", "perm_kernel", "form_a_kernel", "form_b_kernel", "fill_a_kernel",
+                   "fill_b_kernel", "wrap", "gemm_kernel")
 
 
 def kernel_name(full: str) -> str:
