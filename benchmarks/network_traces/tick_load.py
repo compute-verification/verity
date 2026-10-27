@@ -3,7 +3,7 @@ this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
-        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--agent-port PORT | --client-spin]]
+        [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--agent-port PORT] [--client-spin]]
         [--waker-ms MS]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
@@ -41,8 +41,9 @@ Run it inside one `research run --on auto --cpus N`, so the hog loads only the r
 THIS-HOST:PORT` there, one session a rehearsal, which reaches this host on PORT and PORT + 1 (`warden_serve.py
 rehearse --agent-port`). The stub, the warden, its pacer and the hogs stay here, and the client's offsets are read on
 its clock moved by the offset it measured to this host's. `jitter.json`'s `remote` is the rehearsal's `remote.json`:
-the agent's host, and its clock's offset and round trip before and after. `--client-spin` keeps the receiver here but
-its loop never waits in the kernel, so an offset that its wakeup carries is gone from its readings. `--waker-ms MS`
+the agent's host, whether it spun, and its clock's offset and round trip before and after. `--client-spin` makes the
+receiver's loop never wait in the kernel, here or on the agent's host, so an offset that its wakeup carries is gone
+from its readings. `--waker-ms MS`
 runs, beside the hogs, a writer that wakes a reader over loopback every MS ms, so that at every release this host has
 just carried a write and woken its reader, whether or not the stub wrote just before it.
 """
@@ -483,15 +484,15 @@ def main(argv=None) -> int:
     ap.add_argument("--remote-wait", type=float, default=1800.0,
                     help="with --agent-port: seconds to wait for the agent")
     ap.add_argument("--client-spin", action="store_true",
-                    help="with --warden: the local client's loop never waits in the kernel (warden_serve.py client "
-                         "--spin)")
+                    help="with --warden: the client's loop never waits in the kernel (warden_serve.py client --spin), "
+                         "here or, with --agent-port, on the agent's host")
     ap.add_argument("--waker-ms", type=float,
                     help="beside the hogs, a writer that wakes a reader over loopback every MS ms (WAKER_WRITER)")
     a = ap.parse_args(argv)
     if a.agent_port is not None and not a.warden:
         ap.error("--agent-port: with --warden")
-    if a.client_spin and (a.agent_port is not None or not a.warden):
-        ap.error("--client-spin: with --warden and a local client")
+    if a.client_spin and not a.warden:
+        ap.error("--client-spin: with --warden")
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
     bits = SecretBits(a.out / "rehearsal", os.urandom(64), warden=a.warden) if a.secret_bit else None

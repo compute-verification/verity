@@ -52,7 +52,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]]
-        [--agent-port PORT [--remote-wait 1800] | --client-spin] [schedule]
+        [--agent-port PORT [--remote-wait 1800]] [--client-spin] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, each bucket released by its pacer `--paced-ms`
@@ -90,7 +90,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   this host's address toward the agent, so that the agent's host reaches this one on those two ports alone. The agent
   reads the warden host's wall clock over the connection (`clock_offset`: the shortest of `PINGS` round trips, its
   midpoint), runs `client` on that clock, and returns `client.json`. `remote.json` holds where it ran and its offset
-  and round trip before and after the session. `rehearse --client-spin` keeps the client here, with `client --spin`.
+  and round trip before and after the session. `rehearse --client-spin` runs the client with `client --spin`: here, or
+  with `--agent-port` on the agent's host, which the session asks to spin.
 
 **The load** (`--load-store`, the gate's `load-relay`): the serving session's weights' load, relayed and committed by
 this device and signed by its one signer. `rehearse` first relays the store to the H200's sink
@@ -896,15 +897,17 @@ def clock_offset(sock: socket.socket, clock=time.time) -> dict:
     return {"offset_s": best[1], "rtt_s": best[0]}
 
 
-def remote_client(sock: socket.socket, deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
-    """A session of the client agent at the other end of `sock`: sends it the deployment and the traffic, answers its
-    pings with this host's wall clock, and writes what it returns, `client.json` (its arrivals on this host's clock)
-    and `remote.json` (where it ran, and its clock's offset and round trip before and after the session)."""
-    send_doc(sock, {"deployment": deployment, "traffic": traffic})
+def remote_client(sock: socket.socket, deployment: dict, traffic: list[dict], out: Path, clock=time.time,
+                  spin: bool = False) -> dict:
+    """A session of the client agent at the other end of `sock`: sends it the deployment, the traffic and whether its
+    client spins (`client`'s `spin`), answers its pings with this host's wall clock, and writes what it returns,
+    `client.json` (its arrivals on this host's clock) and `remote.json` (where it ran, whether it spun, and its clock's
+    offset and round trip before and after the session)."""
+    send_doc(sock, {"deployment": deployment, "traffic": traffic, "spin": spin})
     while "ping" in (msg := recv_doc(sock)):
         send_doc(sock, {"pong": clock()})
     (out / "client.json").write_text(json.dumps(msg["client"]))
-    (out / "remote.json").write_text(json.dumps({k: msg[k] for k in ("peer", "clock")}, indent=1))
+    (out / "remote.json").write_text(json.dumps({k: msg[k] for k in ("peer", "spin", "clock")}, indent=1))
     return msg
 
 
@@ -936,7 +939,8 @@ def connect_warden(address: tuple[str, int], wait: float) -> socket.socket:
 def client_agent(warden: tuple[str, int], out: Path, sessions: int, wait: float) -> int:
     """`client-agent`: `client` on this host for `sessions` rehearsals in turn, each over a control connection to
     `rehearse --agent-port` at `warden`, tried for at most `wait` s each. A session reads the warden host's clock
-    (`clock_offset`) and runs `client` on it, so its arrivals are on the warden's clock, and reads it again at its end;
+    (`clock_offset`) and runs `client` on it, spinning if the rehearsal asks, so its arrivals are on the warden's clock,
+    and reads it again at its end;
     session k's `client.json` is also kept under `out`/session-k. A session whose control connection fails is printed
     and counted, and the agent goes on to the next; it returns 1 if any failed."""
     out.mkdir(parents=True, exist_ok=True)
@@ -946,10 +950,10 @@ def client_agent(warden: tuple[str, int], out: Path, sessions: int, wait: float)
             with connect_warden(warden, wait) as sock:
                 session = recv_doc(sock)
                 reserve_fds(len(session["traffic"]) + FD_MARGIN)
-                before = clock_offset(sock)
+                before, spin = clock_offset(sock), session.get("spin") is True
                 doc = asyncio.run(client(session["deployment"], session["traffic"], out / f"session-{k}",
-                                         clock=lambda shift=before["offset_s"]: time.time() + shift))
-                send_doc(sock, {"client": doc, "clock": {"before": before, "after": clock_offset(sock)},
+                                         clock=lambda shift=before["offset_s"]: time.time() + shift, spin=spin))
+                send_doc(sock, {"client": doc, "clock": {"before": before, "after": clock_offset(sock)}, "spin": spin,
                                 "peer": {"agent_host": socket.gethostname(), "agent_address": sock.getsockname()[0]}})
         except (OSError, ValueError) as e:
             failed += 1
@@ -1208,8 +1212,6 @@ def rehearse(args) -> int:
         raise SystemExit("--prompts: id requests' prompts, with --ids")
     if args.window_per_group and args.prompts is None:
         raise SystemExit("--window-per-group: groups of the --prompts")
-    if args.client_spin and args.agent_port is not None:
-        raise SystemExit("--client-spin: the client here, without --agent-port")
     load = args.load_store is not None
     if load and not (args.load_sinks and args.load_program and lr.HEX64.fullmatch(args.load_program)):
         raise SystemExit("--load-store: with --load-sinks and --load-program, the reading program's digest in hex")
@@ -1270,7 +1272,8 @@ def rehearse(args) -> int:
                                                  stdout=clog, stderr=subprocess.STDOUT).returncode
                 else:
                     try:
-                        remote_client(control, json.loads((out / "deployment.json").read_text()), traffic, out)
+                        remote_client(control, json.loads((out / "deployment.json").read_text()), traffic, out,
+                                      spin=args.client_spin)
                         client_exit = 0
                     except (OSError, ValueError) as e:
                         print(f"the client agent: {type(e).__name__}: {e}", file=clog)
@@ -1378,7 +1381,8 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
     c.add_argument("--spin", action="store_true", help="the client's loop never waits in the kernel (client's spin)")
-    r.add_argument("--client-spin", action="store_true", help="the local client with --spin")
+    r.add_argument("--client-spin", action="store_true",
+                   help="the client with --spin, here or (--agent-port) on the agent's host")
     x.add_argument("--run", required=True, type=Path)
     return ap
 

@@ -796,24 +796,25 @@ def test_a_client_agent_reads_the_warden_hosts_clock_and_hands_back_its_session(
             got["session"] = ws.recv_doc(agent_side)
             got["before"] = ws.clock_offset(agent_side, clock=lambda: next(agent_clock))
             ws.send_doc(agent_side, {"client": {"connections": [{"index": 0}]}, "clock": {"before": got["before"]},
-                                     "peer": {"agent_host": "b"}})
+                                     "spin": False, "peer": {"agent_host": "b"}})
 
     thread = threading.Thread(target=agent)
     thread.start()
     with warden_side:
         ws.remote_client(warden_side, {"origin_unix": 1.5}, [{"at": 0.25}], tmp_path, clock=lambda: next(warden_clock))
     thread.join()
-    assert got["session"] == {"deployment": {"origin_unix": 1.5}, "traffic": [{"at": 0.25}]}
+    assert got["session"] == {"deployment": {"origin_unix": 1.5}, "traffic": [{"at": 0.25}], "spin": False}
     assert got["before"] == {"offset_s": 1000.0, "rtt_s": 0.5}
     assert json.loads((tmp_path / "client.json").read_text()) == {"connections": [{"index": 0}]}
-    assert json.loads((tmp_path / "remote.json").read_text()) == {"peer": {"agent_host": "b"},
+    assert json.loads((tmp_path / "remote.json").read_text()) == {"peer": {"agent_host": "b"}, "spin": False,
                                                                    "clock": {"before": got["before"]}}
 
 
 def test_a_client_agent_connects_to_each_rehearsal_in_turn_and_reads_its_cells_at_its_listener(tmp_path):
     """`client-agent --warden` makes one control connection a session, which `rehearse --agent-port` accepts, and runs
-    that session's traffic against its deployment's listener: here two sessions, each one request answered by a cell
-    server, each session's `client.json` back in its rehearsal's directory and kept in the agent's."""
+    that session's traffic against its deployment's listener, spinning when the session asks: here two sessions, the
+    second spinning, each one request answered by a cell server, each session's `client.json` back in its rehearsal's
+    directory and kept in the agent's, and `remote.json` saying whether it spun."""
     import socket
     import threading
 
@@ -839,13 +840,15 @@ def test_a_client_agent_connects_to_each_rehearsal_in_turn_and_reads_its_cells_a
             (tmp_path / f"r{k}").mkdir()
             sock, _ = control.accept()
             with sock:
-                ws.remote_client(sock, deployment, [{"at": 0.0, "body": {"prompt": "x"}}], tmp_path / f"r{k}")
+                ws.remote_client(sock, deployment, [{"at": 0.0, "body": {"prompt": "x"}}], tmp_path / f"r{k}",
+                                 spin=k == 1)
         for thread in threads:
             thread.join()
     assert returned == [0]
     for k in range(2):
         (got,) = json.loads((tmp_path / f"r{k}" / "client.json").read_text())["connections"]
-        peer = json.loads((tmp_path / f"r{k}" / "remote.json").read_text())["peer"]
+        remote = json.loads((tmp_path / f"r{k}" / "remote.json").read_text())
         assert (got["outcome"], got["data_sha256"]) == ("end", ws._sha(response))
-        assert peer == {"agent_host": socket.gethostname(), "agent_address": "127.0.0.1"}
+        assert remote["peer"] == {"agent_host": socket.gethostname(), "agent_address": "127.0.0.1"}
+        assert remote["spin"] is (k == 1)
         assert json.loads((tmp_path / "agent" / f"session-{k}" / "client.json").read_text())["connections"] == [got]
