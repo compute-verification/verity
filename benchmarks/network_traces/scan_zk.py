@@ -1040,6 +1040,17 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             "v2": {x: v2.get(x) for x in ("verdict", "reason")}}
 
 
+def _one_stage_replay():
+    """`benchmarks/one_stage/replay.py`, loaded by its path: this directory's own `replay.py` is first on `sys.path`."""
+    if "one_stage_replay" not in sys.modules:
+        one_stage = HERE.parent / "one_stage"
+        sys.path.append(str(one_stage))
+        spec = importlib.util.spec_from_file_location("one_stage_replay", one_stage / "replay.py")
+        sys.modules["one_stage_replay"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules["one_stage_replay"])
+    return sys.modules["one_stage_replay"]
+
+
 def v2_group(M, a, pg: SimpleNamespace, rec: dict, law: dict, want: dict, leaf_layer: str, result: dict,
              members: list[dict], sdirs: dict[str, Path], sessions: list[str], given: dict) -> dict:
     """One-stage v2's group form on the round (`proofs.check_v2_group`, `SampledProofs.OneStageZk.checkGroup`): v1's
@@ -1048,9 +1059,9 @@ def v2_group(M, a, pg: SimpleNamespace, rec: dict, law: dict, want: dict, leaf_l
     every member in the Program's order with the auditor's circuit (its pin) and the verifier's own registered file, a
     member with no unit drawn its public file alone. -> the outcome line, or a None verdict and why there is none (the
     stream refused or holds the outcome)."""
-    import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
+    RP = _one_stage_replay()
     if "draw" not in result:
         return {"verdict": None, "reason": f"no audit record to check: {result.get('outcome')}"}
     params = RP.params(pg.program, pg.query, law, want, leaf_layer, str(Fraction(a.delta).limit_denominator(10**12)),

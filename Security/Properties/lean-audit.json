@@ -344,7 +344,10 @@
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
-  "Definitions.Pouw.Game.Defs"
+  "Definitions.Pouw.Game.Defs",
+  "NciCheck.Protocol",
+  "PouwCheck.Period",
+  "VStar"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -602,7 +605,9 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): PoUW's check reads its `V`, `canon`, `hexOf` and `Sha512.hash`, the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
-  "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
+  "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)",
+  "CoreProtocol.Blobs": "the interface's blob form (`Core.BlobProtocol`, its `answer`, `checkBlobs` and `on`), read by `Properties.Onsite` and `Properties.Remote`, whose statements are about onsite's and remote's executables as they run on the caller's blobs; the interface's lock declares no spec layer for `CoreProtocol.Blobs`, so its definitions are recorded here as read rather than as a spec",
+  "CoreComposition.Blobs": "the composition's blob form (`Core.Composition.productB` and `registeredB`, `Core.BlobProtocol.onBlobs`, `Core.Protocol.withoutBlobs`), read by `Properties.Onsite` and `Properties.Remote`, whose statements are about onsite's and remote's executables as they run on the caller's blobs; the composition's lock declares no spec layer for `CoreComposition.Blobs`, so its definitions are recorded here as read rather than as a spec"
  },
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
