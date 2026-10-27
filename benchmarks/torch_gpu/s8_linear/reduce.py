@@ -307,22 +307,25 @@ def blocks(m: int, r: int, form: str) -> tuple[int, int]:
 
 
 def derived(row: dict, form: str, r: int) -> dict | None:
-    """The reduction's numbers for one linear, form and r (the faster backend's time), or None where neither launched."""
+    """The reduction's numbers for one linear, form and r (the faster backend's time), or None where neither launched.
+    beside_S: the served linear S with the reduction; diff_S: that minus the linear alone on every SM (wgmma at the
+    config beside ran, for wgc too, or cuBLASLt)."""
     us = row["us"]
     lt, wg = us.get(f"{form}_lt:{r}"), us.get(f"{form}_wg:{r}")
     if lt is None and wg is None:
         return None
     red = min(v for v in (lt, wg) if v is not None)
-    extra = {"bytes4": 0.0, "planes": us["split"], "trunc": us["cut"]}[form]
-    packed, rows = blocks(row["m"], r, form)
-    out = {"red_us": red, "red_lt_us": lt, "red_wg_us": wg, "derive_us": extra, "served_wg_us": row["served_wg"],
-           "served_lt_us": us["served_lt"], "ratio_wg": red / row["served_wg"], "ratio_lt": red / us["served_lt"],
-           "blocks_packed": packed, "blocks_rows": rows, "clock": row["clock"].get(f"{form}_{'lt' if red == lt else 'wg'}:{r}")}
-    if form in BESIDE_FORMS:
-        for s, base in (("wg", f"served_wg:{row['served_cfg']}"), ("wgc", "served_wgc"), ("lt", "served_lt")):
-            b = us.get(f"beside_{s}+{form}:{r}")
-            out[f"beside_{s}_us"], out[f"marginal_{s}_us"] = b, (b - us[base] if b is not None else None)
-            out[f"base_{s}_us"] = us[base]
+    packed, by_row = blocks(row["m"], r, form)
+    alone = {"wg": us[f"served_wg:{row['served_cfg']}"], "lt": us["served_lt"]}
+    out = {"red_us": red, "red_lt_us": lt, "red_wg_us": wg,
+           "derive_us": {"bytes4": 0.0, "planes": us["split"], "trunc": us["cut"]}[form],
+           "served_wg_us": row["served_wg"], "served_lt_us": us["served_lt"], "alone_wg_us": alone["wg"],
+           "alone_lt_us": alone["lt"], "blocks_packed": packed, "blocks_rows": by_row,
+           "clock": row["clock"].get(f"{form}_{'lt' if red == lt else 'wg'}:{r}"),
+           "clock_served": row["clock"].get(f"served_wg:{row['served_cfg']}")}
+    for s, base in (("wg", alone["wg"]), ("wgc", alone["wg"]), ("lt", alone["lt"])):
+        b = us.get(f"beside_{s}+{form}:{r}")
+        out[f"beside_{s}_us"], out[f"diff_{s}_us"] = b, (None if b is None else b - base)
     return out
 
 
@@ -334,23 +337,22 @@ def summarize(rows: list[dict], rs: tuple[int, ...]) -> dict:
         doc = {"linears": [r["name"] for r in mine], "macs": macs,
                "o_per_tmac": sum(r["o_bytes"] / BLOCK for r in mine) / macs * 1e12,
                "served_wg_us": sum(r["served_wg"] for r in mine), "served_lt_us": sum(r["us"]["served_lt"] for r in mine),
-               "read_us": sum(r["us"]["read"] for r in mine), "read_floor_us": sum(r["read_floor_us"] for r in mine),
-               "variants": {}}
+               "served_wgc_us": sum(r["us"]["served_wgc"] for r in mine), "read_us": sum(r["us"]["read"] for r in mine),
+               "read_floor_us": sum(r["read_floor_us"] for r in mine), "variants": {}}
         for form in FORMS:
             for r in rs:
                 ds = [derived(row, form, r) for row in mine]
                 if None in ds:
                     continue
-                v = {key: sum(d[key] for d in ds) for key in ("red_us", "derive_us", "blocks_packed", "blocks_rows")}
+                v = {key: sum(d[key] for d in ds) for key in ("red_us", "derive_us", "served_wg_us", "alone_wg_us",
+                                                             "alone_lt_us", "blocks_packed", "blocks_rows")}
                 v["per_tmac_packed"] = v.pop("blocks_packed") / macs * 1e12
                 v["per_tmac_rows"] = v.pop("blocks_rows") / macs * 1e12
-                v["share_wg"] = v["red_us"] / doc["served_wg_us"]
-                v["share_wg_with_derive"] = (v["red_us"] + v["derive_us"]) / doc["served_wg_us"]
-                if form in BESIDE_FORMS:
-                    for s in ("wg", "wgc", "lt"):
-                        if all(d[f"marginal_{s}_us"] is not None for d in ds):
-                            v[f"marginal_{s}_us"] = sum(d[f"marginal_{s}_us"] for d in ds)
-                            v[f"base_{s}_us"] = sum(d[f"base_{s}_us"] for d in ds)
+                v["ratio_wg"] = v["red_us"] / v["served_wg_us"]
+                v["share_wg"] = v["red_us"] / (v["served_wg_us"] + v["red_us"])
+                for key in (f"{kind}_{s}_us" for s in ("wg", "wgc", "lt") for kind in ("beside", "diff")):
+                    if all(d[key] is not None for d in ds):
+                        v[key] = sum(d[key] for d in ds)
                 doc["variants"][f"{form}:{r}"] = v
         out[model] = doc
     return out
@@ -361,44 +363,52 @@ def per_tmac(x: float) -> str:
 
 
 def table(rows: list[dict], summary: dict, rs: tuple[int, ...], meta: dict) -> str:
-    lines = [f"M = {rows[0]['m']:,}; read {meta['read_gbs']:,.0f} GB/s measured; microseconds a call, medians.", ""]
+    def us(v, key, digits=0):
+        return "-" if v is None or v.get(key) is None else f"{v[key]:,.{digits}f}"
+
+    lines = [f"M = {rows[0]['m']:,}; microseconds a call, medians; DRAM read {meta['read_gbs']:,.0f} GB/s measured.", ""]
     for model, doc in summary.items():
-        lines += [f"### {model}: one layer's linears ({', '.join(doc['linears'])}) summed",
-                  f"served: wgmma {doc['served_wg_us']:,.0f} us, cuBLASLt {doc['served_lt_us']:,.0f} us; reading O once "
-                  f"{doc['read_us']:,.0f} us (floor at the measured rate {doc['read_floor_us']:,.0f}); hashing O itself "
-                  f"{per_tmac(doc['o_per_tmac'])} compressions per T MAC", "",
-                  "| r | variant | reduction us | + derive us | / served wgmma | beside wgmma, marginal us | beside wgmma "
-                  f"on {BESIDE_CTAS} SMs, marginal us | beside cuBLASLt, marginal us | compressions per T MAC (packed; rows) |",
-                  "|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"### {model}: one layer's linears ({', '.join(doc['linears'])}) summed", "",
+                  f"The linear: wgmma {doc['served_wg_us']:,.0f}, cuBLASLt {doc['served_lt_us']:,.0f}, wgmma on "
+                  f"{BESIDE_CTAS} SMs {doc['served_wgc_us']:,.0f}. Reading O once: {doc['read_us']:,.0f} (at the "
+                  f"measured rate {doc['read_floor_us']:,.0f}). Hashing O itself: {per_tmac(doc['o_per_tmac'])} "
+                  "compressions per T MAC.", "",
+                  "| r | variant | reduction | + derive | reduction / linear (wgmma) | share of step | compressions per T MAC "
+                  "(packed; by row) |", "|---|---|---|---|---|---|---|"]
         for r in rs:
             for form, label in FORMS.items():
                 v = doc["variants"].get(f"{form}:{r}")
-                if v is None:
-                    lines.append(f"| {r} | {label} | not launched | | | | | | |")
-                    continue
-
-                def mg(s, v=v):
-                    return f"{v[f'marginal_{s}_us']:,.0f}" if f"marginal_{s}_us" in v else "-"
-                lines.append(f"| {r} | {label} | {v['red_us']:,.0f} | {v['derive_us']:,.0f} | {v['share_wg']:.3f} | "
-                             f"{mg('wg')} | {mg('wgc')} | {mg('lt')} | {per_tmac(v['per_tmac_packed'])}; "
-                             f"{per_tmac(v['per_tmac_rows'])} |")
+                lines.append(f"| {r} | {label} | not launched | | | | |" if v is None else
+                             f"| {r} | {label} | {v['red_us']:,.0f} | {v['derive_us']:,.0f} | {v['ratio_wg']:.3f} | "
+                             f"{v['share_wg']:.3f} | {per_tmac(v['per_tmac_packed'])}; {per_tmac(v['per_tmac_rows'])} |")
+        lines += ["", "Beside the linear (the reduction by cuBLASLt on a second stream, reading the previous call's O): the "
+                  "linear alone, with the reduction, and the difference.", "",
+                  f"| r | variant | wgmma alone | + reduction | difference | wgmma on {BESIDE_CTAS} SMs + reduction | "
+                  "difference | cuBLASLt alone | + reduction | difference |", "|---|---|---|---|---|---|---|---|---|---|"]
+        for r in rs:
+            for form in BESIDE_FORMS:
+                v = doc["variants"].get(f"{form}:{r}")
+                lines.append(f"| {r} | {FORMS[form]} | " + " | ".join(us(v, key) for key in (
+                    "alone_wg_us", "beside_wg_us", "diff_wg_us", "beside_wgc_us", "diff_wgc_us", "alone_lt_us",
+                    "beside_lt_us", "diff_lt_us")) + " |")
         lines.append("")
     lines += ["### per linear", "",
-              "| linear | N x K | r | variant | reduction us (cuBLASLt; wgmma) | served us (wgmma; cuBLASLt) | ratio | "
-              "compressions per T MAC | SM MHz, W |", "|---|---|---|---|---|---|---|---|---|"]
+              "| linear | N x K | r | variant | reduction (cuBLASLt; wgmma) | linear (wgmma; cuBLASLt) | ratio | difference "
+              f"beside wgmma (all SMs; {BESIDE_CTAS}) | compressions per T MAC | SM MHz, W (reduction; linear) |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
     for row in rows:
         for r in rs:
             for form, label in FORMS.items():
                 d = derived(row, form, r)
+                head = f"| {row['model']}:{row['name']} | {row['n']} x {row['k']} | {r} | {label} | "
                 if d is None:
-                    lines.append(f"| {row['model']}:{row['name']} | {row['n']} x {row['k']} | {r} | {label} | not launched |"
-                                 " | | | |")
+                    lines.append(head + "not launched | | | | | |")
                     continue
-                c = d["clock"] or [None, None]
-                lines.append(f"| {row['model']}:{row['name']} | {row['n']} x {row['k']} | {r} | {label} | "
-                             f"{d['red_lt_us'] or 0:,.1f}; {d['red_wg_us'] or 0:,.1f} | {d['served_wg_us']:,.1f}; "
-                             f"{d['served_lt_us']:,.1f} | {d['ratio_wg']:.3f} | "
-                             f"{per_tmac(d['blocks_packed'] / row['macs'] * 1e12)} | {c[0]}, {c[1]} |")
+                clocks = "; ".join("-" if not c or c[0] is None else f"{c[0]:.0f}, {c[1]:.0f}"
+                                   for c in (d["clock"], d["clock_served"]))
+                lines.append(head + f"{us(d, 'red_lt_us', 1)}; {us(d, 'red_wg_us', 1)} | {d['served_wg_us']:,.1f}; "
+                             f"{d['served_lt_us']:,.1f} | {d['red_us'] / d['served_wg_us']:.3f} | {us(d, 'diff_wg_us', 1)}; "
+                             f"{us(d, 'diff_wgc_us', 1)} | {per_tmac(d['blocks_packed'] / row['macs'] * 1e12)} | {clocks} |")
     return "\n".join(lines) + "\n"
 
 
