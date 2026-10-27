@@ -809,10 +809,8 @@ theorem climb_size (d : FrameV3.Domain) (pos : ℕ) (schema : String) (value : B
     rfl
   · intro a h b _
     obtain ⟨dg, cur⟩ := b
-    first
-      | (dsimp only; split <;> exact size_node _ _ _ _ _)
-      | (split <;> exact size_node _ _ _ _ _)
-      | (by_cases hc : cur % 2 = 0 <;> simp [hc, size_node])
+    dsimp only
+    split <;> exact size_node _ _ _ _ _
   · exact size_leaf _ _ _ _ _
 
 /-- A path of `depth count` siblings, each 64 zero bytes. -/
