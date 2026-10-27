@@ -28,11 +28,14 @@ The premises:
 * `FinderAnswers`: where PoUW's finder meets `FinderCR`, an unlogged release or a break is within PoUW's collision term.
 * `ServiceSound`: the proof service's soundness at the drawn tiles (R4′): a drawn tile unbound in the fixed extractor's
   transcript under the commitment's openings.
-* `CreditedPeriodRefines`: the period model's credit bound (`H1J10RCheckedCreditPeriod`) carried into this game along
+* `CreditedPeriodRefines`: the period model's credit bound, on the gates the credited words get right (`Reading.right`), (`H1J10RCheckedCreditPeriod`) carried into this game along
   the refinement of PoUW's compiled acceptance into the model's (`Properties.Pouw.PeriodJ10R.Check.acceptedWindows`,
   #4857). The lucks (`SharedNoiseLucks` at `p = 7/8`, `p0 = 1/2`), `Scope`, `DeadConeDead`, `UnitFixed` and
   `MovedIn ≤ δ_bind` are that guarantee's premises, stated over the model's play. `Properties.Pouw.PeriodJ10R` isn't in
   #4613's tree, so they enter here through this one premise.
+* `ComputedOfRight`: a gate the credited words get right was computed after its window's coin, except with
+  probability `κ`. SAK's slot: right values aren't work (RT-UNITS-3), and WORK-H1's composition with `SAKResidual`
+  discharges it.
 * `PublishedCredit`, `PublishedError`: what the product publishes (ONE-19) at PoUW's floor and error.
 -/
 
@@ -55,7 +58,9 @@ def ComponentBound {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) 
 window the release whose coins are its salt and the release whose coins draw its tiles, as `PouwCheck.Period.protocol`
 decodes them from what the prover sent; each window's registration digest; the tiles published as drawn and the
 service's subset draw (`SampledProofs.Select.select`) at the file's population; the period's live gates in the
-registered file's circuit; and PoUW's break in a play (two openings of one position), which its finder answers for. -/
+registered file's circuit; the gates of the committed circuit whose values the play's credited words get right (the
+period model's credit, in gates); and PoUW's break in a play (two openings of one position), which its finder answers
+for. -/
 structure Reading {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) where
   windows : ByteArray → ℕ
   salt : Sent → ℕ → Option Release
@@ -64,6 +69,7 @@ structure Reading {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) w
   drawn : (F : ByteArray) → Sent → ℕ → Finset (Fin (V.units F))
   select : (F : ByteArray) → List Bool → Finset (Fin (V.units F))
   live : (θ : ByteArray) → Finset (Fin (V.circuitOf (V.registered θ)).N)
+  right : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Outcome → Finset (Fin (V.circuitOf F).N)
   brk : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Outcome → Prop
 
 /-- **PoUW's credit floor in gates**: `(1 − ε)₊` of `live` gates, `ε = Λ·ln(1/δ_s)/n` over `n` windows. -/
@@ -119,8 +125,8 @@ def ServiceSound (δks : ℝ≥0∞) : Prop :=
 /-- **The period model's credit bound, in this game** (`H1J10RCheckedCreditPeriod`, #4541, along the refinement of
 PoUW's compiled acceptance, #4857): at the verdict at the code, with each window's salt and draw releases its check
 read (the draw answering the registration) and its drawn tiles the draw's coins and bound in the extractor's
-transcript, the play computed fewer gates of the committed circuit after their window's coin than the credit floor of
-the live gates with probability at most `δ_s + n·δ_bind`. Discharged by that guarantee at the model run, under its
+transcript, the play's credited words get fewer gates of the committed circuit right than the credit floor of the live
+gates with probability at most `δ_s + n·δ_bind`. Discharged by that guarantee at the model run, under its
 premises: the J10-R lucks (`SharedNoiseLucks`: `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` at `p = 7/8`,
 `p0 = 1/2`), `Scope`, `DeadConeDead`, `UnitFixed` and `MovedIn ≤ δ_bind`. -/
 def CreditedPeriodRefines (Λ δs : ℝ) (δbind : ℝ≥0∞) : Prop :=
@@ -130,9 +136,18 @@ def CreditedPeriodRefines (Λ δs : ℝ) (δbind : ℝ≥0∞) : Prop :=
           ∃ r, R.draw o.sent w = some r ∧ r ∈ V.coinsRead .pouw o.sent ∧ r.answers = R.registration o.sent w ∧
             R.drawn F o.sent w = R.select F r.coins ∧
             ∀ u ∈ R.drawn F o.sent w, u ∉ unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)) ∧
-        ((V.circuitOf F).size (V.computed θ F c σ o) : ℝ) < creditGates Λ δs (R.windows θ) (R.liveSize θ))
+        ((V.circuitOf F).size (R.right θ F c σ o) : ℝ) < creditGates Λ δs (R.windows θ) (R.liveSize θ))
       (V.game θ F c) σ ≤
       ENNReal.ofReal δs + R.windows θ * δbind
+
+/-- **A right gate was computed after its coin** (SAK's slot: WORK-H1's composition with `SAKResidual`): at the verdict
+at the code, the play computed fewer gates of the committed circuit after their window's coin (`Vocab.computed`) than
+its credited words get right, with probability at most `κ` (`n·κ_deg(B)` at `B` bits of state carried into a window).
+Right values alone aren't work (RT-UNITS-3, U1): this is where the credit reads live noise. -/
+def ComputedOfRight (κ : ℝ≥0∞) : Prop :=
+  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+    Game.prob (fun o => R.AtCode θ F c σ o ∧
+        (V.circuitOf F).size (V.computed θ F c σ o) < (V.circuitOf F).size (R.right θ F c σ o)) (V.game θ F c) σ ≤ κ
 
 /-- **PoUW's published certificate is its credit floor** (ONE-19): `W` is at most the credit floor of the registered
 file's live gates. -/
@@ -140,20 +155,20 @@ def PublishedCredit (Λ δs : ℝ) : Prop :=
   ∀ θ, (V.certOf θ).W ≤ creditGates Λ δs (R.windows θ) (R.liveSize θ)
 
 /-- **PoUW's published error covers its bound** (ONE-19): at every count of SHA-512 calls, `δ` is at least
-`δ_s + n·(δ_bind + δ_ks)`. -/
-def PublishedError (δs : ℝ) (δbind δks : ℝ≥0∞) : Prop :=
-  ∀ θ q, ENNReal.ofReal δs + R.windows θ * (δbind + δks) ≤ V.delta θ .pouw q
+`δ_s + n·(δ_bind + δ_ks) + κ`. -/
+def PublishedError (δs : ℝ) (δbind δks κ : ℝ≥0∞) : Prop :=
+  ∀ θ q, ENNReal.ofReal δs + R.windows θ * (δbind + δks) + κ ≤ V.delta θ .pouw q
 
 end Pouw
 
 /-- **PoUW's component bound** (ONE-16, CMP-145): on any device, for any names `V` the subprotocols define and any
 reading `R` of PoUW's compiled check, PoUW's premises give `Pouw.ComponentBound V` (lean's `V.ComponentBound .pouw`):
 where PoUW's finder meets `FinderCR`, PoUW's component accepts while the play computed fewer than `W` gates after their
-window's coin with probability at most `δ_s + n·(δ_bind + δ_ks)` plus PoUW's collision term. -/
+window's coin with probability at most `δ_s + n·(δ_bind + δ_ks) + κ` plus PoUW's collision term. -/
 def PouwComponentBound : Prop :=
-  ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (R : Pouw.Reading V) (Λ δs : ℝ) (δbind δks : ℝ≥0∞),
+  ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (R : Pouw.Reading V) (Λ δs : ℝ) (δbind δks κ : ℝ≥0∞),
     Pouw.SaltIsLiveCoin R → Pouw.RegisteredBeforeDraw R → Pouw.TileDrawIsCoin R → Pouw.FinderAnswers R →
-      Pouw.ServiceSound R δks → Pouw.CreditedPeriodRefines R Λ δs δbind → Pouw.PublishedCredit R Λ δs →
-        Pouw.PublishedError R δs δbind δks → Pouw.ComponentBound V
+      Pouw.ServiceSound R δks → Pouw.CreditedPeriodRefines R Λ δs δbind → Pouw.ComputedOfRight R κ →
+        Pouw.PublishedCredit R Λ δs → Pouw.PublishedError R δs δbind δks κ → Pouw.ComponentBound V
 
 end Verity
