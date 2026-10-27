@@ -115,6 +115,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "Security/Proofs/Accounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
           "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
+          # machine_model and H1's device records read the card files
+          "verity/hardware/__init__.py", "verity/hardware/cards",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",

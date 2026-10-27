@@ -15,4 +15,6 @@ inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/receipts", "benchmarks/pou
           "benchmarks/pouw/machine_model/data", "tools/research/src/research/__init__.py",
           "tools/research/src/research/store", "verity/__init__.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
-          "verity/core/protocols/pouw/serving.py"]
+          "verity/core/protocols/pouw/serving.py",
+          # machine_model and H1's device records read the card files
+          "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards"]
