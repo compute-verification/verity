@@ -17,10 +17,11 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry.b1_tp2 import AllGather
 from verity.ml.windows import interface as IF
+from verity_vllm.check import weights_of_record as WR
 
 from .build import Unexpressible
 
-WEIGHTS = "weights"
+WEIGHTS = WR.PARAM
 
 
 def weight_param(label: str, words: int) -> str:
