@@ -24,9 +24,10 @@ An unlisted hit fails, and so does a canonical that is no longer a hit. A ``KNOW
 longer matches a hit (its declaration went, or became a canonical, a mirror or exempt) is stale, and doesn't fail, so a
 change that removes a duplicate needn't touch this file. `python tests/test_lean_vocabulary.py` lists the stale entries
 under "stale (delete with --prune)", and `python tests/test_lean_vocabulary.py --prune` rewrites ``KNOWN`` without its
-stale lines (a stale ``MIRRORS`` entry is deleted by hand). ``KNOWN`` only shrinks, by count: it holds at most
-``KNOWN_MAX`` lines. A new line needs lean's review and raises ``KNOWN_MAX`` in the same change; lowering it is welcome in
-any change.
+stale lines and sets ``KNOWN_MAX`` to the new count, so no later line takes a freed slot unreviewed (a stale ``MIRRORS``
+entry is deleted by hand). Only lean prunes, so two prunes don't race on ``KNOWN_MAX``. ``KNOWN`` only shrinks, by count:
+it holds at most ``KNOWN_MAX`` lines. A new line needs lean's review and raises ``KNOWN_MAX`` in the same change; lowering
+it is welcome in any change.
 
 The scan reads every tracked `.py` and `.lean` file (`git ls-files`, so `.lake`, `.venv` and build trees are never read)
 except:
@@ -369,8 +370,8 @@ def slots(s: Scan) -> set[str]:
     return {k for path, _field, name, scopes, opens in s.fields if (k := resolve(name, path, scopes, opens, s))}
 
 
-#: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; lower it whenever ``KNOWN`` shrinks.
-KNOWN_MAX = 385
+#: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
+KNOWN_MAX = 387
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -514,6 +515,8 @@ KNOWN: dict[str, str] = {
         "homonym, PoUS's parallel oracle program: rename (memory-accounting)",
     "Security/Definitions/Pous/Model/Audit.lean::Pous.Outcome":
         "homonym, an audit's randomness: rename (memory-accounting)",
+    "Security/Definitions/Pous/Model/StreamedWipeServer.lean::Pous.StreamedWipe.Verdict":
+        "homonym, the wipe's acceptance rule over a prover's answers: rename (memory-accounting)",
     "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean::Pouw.Dimension.Assumptions.Machine":
         "homonym, a cost model of checked words: rename (compute-accounting)",
     "Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean::Pouw.Dimension.Embed.Op":
@@ -591,6 +594,8 @@ KNOWN: dict[str, str] = {
     # Security/Properties/
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
+    "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
+        "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
@@ -1112,15 +1117,17 @@ def stale(found: dict[str, tuple[str, Hit, str]]) -> tuple[list[str], list[str]]
 _ENTRY = re.compile(r'^    "([^"\n]+)":(?: "[^\n]*",| *\n        "[^\n]*",)\n', re.M)
 _EMPTY_HEADING = re.compile(r"^    # [^\n]*\n(?=    # |\Z)", re.M)
 _KNOWN_OPEN, _KNOWN_CLOSE = "\nKNOWN: dict[str, str] = {\n", "\n}\n"
+_KNOWN_MAX = re.compile(r"^KNOWN_MAX = \d+$", re.M)
 
 
 def pruned(source: str, drop: set[str]) -> str:
-    """`source`, this module's text, with the ``KNOWN`` lines of the keys in `drop` deleted, and the headings they leave
-    empty."""
+    """`source`, this module's text, with the ``KNOWN`` lines of the keys in `drop` deleted, the headings they leave empty,
+    and ``KNOWN_MAX`` set to the lines left."""
     head, _, rest = source.partition(_KNOWN_OPEN)
     block, _, tail = rest.partition(_KNOWN_CLOSE)
-    block = _ENTRY.sub(lambda m: "" if m.group(1) in drop else m.group(0), block + "\n")
-    return head + _KNOWN_OPEN + _EMPTY_HEADING.sub("", block) + _KNOWN_CLOSE.lstrip("\n") + tail
+    block = _EMPTY_HEADING.sub("", _ENTRY.sub(lambda m: "" if m.group(1) in drop else m.group(0), block + "\n"))
+    head = _KNOWN_MAX.sub(f"KNOWN_MAX = {len(_ENTRY.findall(block))}", head)
+    return head + _KNOWN_OPEN + block + _KNOWN_CLOSE.lstrip("\n") + tail
 
 
 def _read(concept: str) -> str:
@@ -1265,10 +1272,10 @@ def test_readings_and_slots_are_exempt():
 
 
 def test_prune_deletes_stale_lines():
-    src = ('x = 1\nKNOWN: dict[str, str] = {\n    # a/\n    "a::A": "homonym, a: rename (o)",\n    # b/\n'
+    src = ('KNOWN_MAX = 4\nKNOWN: dict[str, str] = {\n    # a/\n    "a::A": "homonym, a: rename (o)",\n    # b/\n'
            '    "b::B":\n        "homonym, b: rename (o)",\n    "b::C": "homonym, c: rename (o)",\n}\n\ny = 2\n')
-    assert pruned(src, set()) == src
-    assert pruned(src, {"a::A", "b::B"}) == ('x = 1\nKNOWN: dict[str, str] = {\n    # b/\n'
+    assert pruned(src, set()) == src.replace("KNOWN_MAX = 4", "KNOWN_MAX = 3")
+    assert pruned(src, {"a::A", "b::B"}) == ('KNOWN_MAX = 1\nKNOWN: dict[str, str] = {\n    # b/\n'
                                              '    "b::C": "homonym, c: rename (o)",\n}\n\ny = 2\n')
 
 
@@ -1285,8 +1292,8 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--prune"]:
         path = Path(__file__).resolve()
         path.write_text(pruned(path.read_text(encoding="utf-8"), set(known)), encoding="utf-8")
-        print(f"deleted {len(known)} stale KNOWN lines: KNOWN has {len(KNOWN) - len(known)}, KNOWN_MAX is {KNOWN_MAX} "
-              "(lower it to match)" + "".join(f"\nstale MIRRORS entry, delete by hand: {py}" for py in mirrors))
+        print(f"deleted {len(known)} stale KNOWN lines: KNOWN has {len(KNOWN) - len(known)}, and so does KNOWN_MAX"
+              + "".join(f"\nstale MIRRORS entry, delete by hand: {py}" for py in mirrors))
         sys.exit()
     if sys.argv[1:]:
         sys.exit("usage: python tests/test_lean_vocabulary.py [--prune]")
@@ -1294,6 +1301,6 @@ if __name__ == "__main__":
         print(f"{concept:<18} {status:<20} {key}:{h.line}" + (f"  {KNOWN[key]}" if key in KNOWN else ""))
     print(f"\nKNOWN: {len(KNOWN)} lines, KNOWN_MAX {KNOWN_MAX}\nstale (delete with --prune):")
     for k in known:
-        print(f"  {k}: " + ("no longer declared" if k not in found else f"now {found[k][2]}"))
+        print(f"  {k}: " + ("not declared" if k not in found else f"now {found[k][2]}"))
     for py in mirrors:
         print(f"  MIRRORS {py}: no longer a pair of hits (delete by hand)")
