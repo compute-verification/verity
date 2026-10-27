@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
 import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 
 /-!
-# R11 for one-table sessions at the verifier's public inputs
+# The execution refinement for one-table sessions at the verifier's public inputs
 
 `LiveOn.lean` at flock-verify's acceptance at the verifier's public inputs `own` (`AcceptsP I own`) in place of
 `Accepts I`: `LiveAcceptsP`, `DecodesOnP`, `simAuditOnP`, `execRefines_onP` and `Prog.flock_headline_live_onXP`, with
@@ -54,8 +54,8 @@ noncomputable def simAuditOnP (hdec : DecodesOnP H E Lf T I own wr opn dec one f
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 for one-table sessions at `own`** (`execRefines_on`): flock-verify's acceptance at `own` is no likelier than
-the salted audit's acceptance against `simAuditOnP … τ`, with no live event added. -/
+/-- **The execution refinement for one-table sessions at `own`** (`execRefines_on`): flock-verify's acceptance at `own`
+is no likelier than the salted audit's acceptance against `simAuditOnP … τ`, with no live event added. -/
 theorem execRefines_onP (hdec : DecodesOnP H E Lf T I own wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAcceptsP I own) (fun _ => False)
