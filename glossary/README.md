@@ -101,6 +101,9 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
+| "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until DITHER-E2E renames it | Dither |
+| "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
+| `ShaSpeed` and `ServiceSound`, the Lean's names until DITHER-E2E's PR | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 
 The `veritor.*` gate families are grandfathered and the prefix is frozen (circuits, 14 Oct 2026, CIR-12): each existing id
 declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, the `veritor.tc-bf16.*@1` and
@@ -108,6 +111,20 @@ declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, 
 bake it in, and renaming would invalidate every one of them for no semantic gain. No new family is created under
 `veritor.*`: a new family takes a fresh id, and `verity/ml/circuits/tests/test_targets_frozen_families.py` fails on any
 `veritor.*` id outside the grandfathered set.
+
+## The ACCEL model and Dither
+
+Daniel named them on 26 Oct (7:51 PM PDT):
+
+- **The ACCEL model** 𝓜 is the physical model: a period's devices as the Lean's `Accel` reads them
+  (`Security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
+  device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000. Its
+  parameters, θ, are `benchmarks/pouw/machine_model/`'s data.
+- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is
+  experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt is no-fold (CMP-172): each
+  segment's 16-bit noised prefix sums are committed as SHA-512 hiding leaves, hm96 rows of 16 KiB, before the check coin,
+  and the sampled cells are opened after it. The served PoUW moves to it, and `SharedNoiseLucks`, which the served H1
+  and J10-R folds rest on, has no place in it.
 
 ## Narrower senses
 
