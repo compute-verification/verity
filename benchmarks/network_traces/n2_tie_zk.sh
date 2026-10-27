@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The ingress tie in zero knowledge (n2_tie_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
 # C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier
-# built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in a slot of network-accounting's pool:
+# built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots:
 #   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env N2_MEM_GB=56 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/n2_tie_zk.sh

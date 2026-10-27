@@ -775,11 +775,11 @@ def main(argv=None) -> int:
                         "window, Selection All")
     p.add_argument("--challenger", help="with --draw: the period draws on the auditor's challenger's coins (a5_coins, "
                    "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (vy-challenger-1 "
-                   "through infra's gate, with --peer and --challenger-key)")
+                   "through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                   "(infra's challenger-key/v1), never the session's key.json")
+                   "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--delta", type=float, default=None,
