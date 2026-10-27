@@ -944,7 +944,8 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
                    + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else "")
-                   + (f" pm{r['ppm']}" if r.get("ppm") else "") + (" ph0" if r.get("pph") == 0 else ""))
+                   + (f" pm{r['ppm']}" if r.get("ppm") else "") + (" ph0" if r.get("pph") == 0 else "")
+                   + (" lo" if r.get("lord") else ""))
         fused = "-"
         if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
             fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"

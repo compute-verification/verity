@@ -46,7 +46,7 @@
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
-# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0), ppm (0), pph (1)
+# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0), ppm (0), pph (1), lord (0)
 # (v31.cu's Knobs) and nreg (the GEMM's
 # register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS
 # (default 7); Q, the proof blocks a
@@ -82,7 +82,8 @@ knob_env() {
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
     "V31_RP=$(knob "$1" rp 0) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0) V31_WGW=$(knob "$1" wgw 1)" \
-    "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0) V31_PPM=$(knob "$1" ppm 0) V31_PPH=$(knob "$1" pph 1)"
+    "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0) V31_PPM=$(knob "$1" ppm 0) V31_PPH=$(knob "$1" pph 1)" \
+    "V31_LORD=$(knob "$1" lord 0)"
 }
 export -f knob knob_env
 

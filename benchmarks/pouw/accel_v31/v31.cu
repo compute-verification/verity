@@ -1688,6 +1688,50 @@ __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     }
   persist_done(p);
 }
+#ifdef V31_WG
+// A served call's leaf phase in the order its GEMM leaves the rows' chains (V31_LORD 1): every commit tile's wrows word
+// rows first (the GEMM hashes none), then its O rows by the GEMM's raster from its last tile back (gw commit tiles a GEMM
+// tile, lpt - wrows O rows each). leaf_persist's groups are 128 consecutive leaves, so each holds word rows or rows of
+// tiles the GEMM never reached, and a group takes its longest chain however much of the rest the GEMM hashed; in this
+// order a group's leaves have about as many chunks left. A group's leaves are then no longer one group's, so the
+// subtrees fold after them (fold_persist).
+struct LeafOrder {
+  u64 tiles, lpt, wrows;
+  int tiles_m, tiles_n, group, gw;
+  DEV u64 pos(u64 v) const {
+    const u64 nw = tiles * wrows;
+    if (v < nw) return v / wrows * lpt + v % wrows;
+    const u64 lpo = lpt - wrows, per = (u64)gw * lpo, u = v - nw, k = u % per;
+    int tm, tn;
+    wgp::raster((int)(tiles / gw - 1 - u / per), tiles_m, tiles_n / gw, group, tm, tn);
+    return ((u64)tm * tiles_n + (u64)tn * gw + k / lpo) * lpt + wrows + k % lpo;
+  }
+};
+template <class Row, int MINB = SMALL_MINB>
+__global__ void __launch_bounds__(SMALL_THREADS, MINB)
+    leaf_order(Persist p, int dom, Row row, LeafOrder lo, const u64* __restrict__ S, const u64* __restrict__ F, u64 n,
+               u64* levels) {
+  if (persist_claim(p))
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+      const u64 v = (u64)vb * SMALL_THREADS + threadIdx.x;
+      if (v < n) {
+        const u64 pos = lo.pos(v);
+        u64 x[8], out[8];
+        row.digest(pos, x);
+        leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
+        st8(levels + 8 * pos, out);
+      }
+    }
+  persist_done(p);
+}
+// leaf_persist's folds of groups 0 .. nvb - 1, once every leaf is in
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB) fold_persist(Persist p, int dom, u64 width, u64* levels) {
+  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
+  if (persist_claim(p))
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+  persist_done(p);
+}
+#endif
 
 // ---------------------------------------------------------------- synthetic operands
 // v31.py's `llm` operands on the device: rows of Student-t(3) activations or Gaussian weights quantized to +-127 by their
@@ -1940,13 +1984,14 @@ static std::string env_str(const char* name, const char* dflt) {
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
 // but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
-// with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves.
+// with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves;
+// V31_LORD 1, with V31_RP 4, 6 or 7, its leaf phase in the order the GEMM leaves the rows' chains (leaf_order).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
-      ppm = env_int("V31_PPM", 0), pph = env_int("V31_PPH", 1),
+      ppm = env_int("V31_PPM", 0), pph = env_int("V31_PPH", 1), lord = env_int("V31_LORD", 0),
       ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
@@ -1967,6 +2012,10 @@ static void set_carveout(int pct) {
                       (const void*)fill_b_kernel,      (const void*)leaf_small<ServedRow, 0>, (const void*)leaf_persist<ServedRow>,
                       (const void*)serve_rows_kernel,  (const void*)leaf_persist<FusedRow>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
+#ifdef V31_WG
+  for (const void* k : {(const void*)leaf_order<FusedRow, 4>, (const void*)leaf_order<FusedRow>, (const void*)fold_persist})
+    CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
+#endif
 }
 
 // A committer's salt and leaf phases in at most ccta CTAs an SM (salt_persist, leaf_persist; ccta 0: commit_gpu's small
@@ -2015,6 +2064,22 @@ struct Lanes {
     }
     cm.nodes(st);
   }
+#ifdef V31_WG
+  // leaves_nodes with the leaves in lo's order (leaf_order), then their groups' folds
+  template <class Row>
+  void leaves_ordered(Committer& cm, const Row& rows, const LeafOrder& lo, int ccta, cudaStream_t st) {
+    if (!ccta) ccta = 8;
+    const u64 nvb = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
+    if (lminb == 4)
+      leaf_order<Row, 4><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, lo, cm.S, cm.F, cm.n,
+                                                                    cm.levels);
+    else
+      leaf_order<Row><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, lo, cm.S, cm.F, cm.n,
+                                                                 cm.levels);
+    fold_persist<<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.width, cm.levels);
+    cm.nodes(st);
+  }
+#endif
 };
 
 // One shape's prover: every buffer of a call, NB copies of the committed values (words, O) for the overlapped arm.
@@ -2684,6 +2749,13 @@ struct Fill {
                      (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf};
   }
   void leaves_nodes(int b, cudaStream_t st) {
+#ifdef V31_WG
+    if (!nomem && !ltw && o && xd[b] && kn.lord) {
+      const LeafOrder lo{(u64)tiles, (u64)lpt, (u64)Wn * (32768 / row), m / TILE, tiles_n, kn.wgg, kn.rp == 4 ? wbn / TILE : 1};
+      pl.leaves_ordered(cm[b], FusedRow{servedrow(b), xd[b], xf[b], xep[b]}, lo, kn.ccta, st);
+      return;
+    }
+#endif
     if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
     else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
     else if (o && xd[b]) pl.leaves_nodes(cm[b], FusedRow{servedrow(b), xd[b], xf[b], xep[b]}, kn.ccta, st);
@@ -2897,7 +2969,9 @@ static void kernel_attrs(FILE* f) {
                       {"wg_128_pp6_nohash", (const void*)wgp::gemm_pp<6, wgp::NoHash>},
                       {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>},
                       {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>},
-                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>}};
+                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>},
+                      {"leaf_order_fused_m4", (const void*)leaf_order<FusedRow, 4>},
+                      {"fold_persist", (const void*)fold_persist}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));
@@ -3435,13 +3509,14 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"ppm\": %d, \"pph\": %d, "
+           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"ppm\": %d, \"pph\": %d, \"lord\": %d, "
            "\"fused_leaves\": %lld, \"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0,
-           f.kn.lminb, f.kn.sahead ? 1 : 0, f.kn.ppm, f.kn.pph, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull,
+           f.kn.lminb, f.kn.sahead ? 1 : 0, f.kn.ppm, f.kn.pph, f.kn.lord, fused,
+           f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull,
            fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
