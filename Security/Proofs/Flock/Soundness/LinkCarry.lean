@@ -1,23 +1,27 @@
+import Mathlib.Algebra.BigOperators.Field
 import Proofs.Flock.Soundness.LinkFinder
 
 /-!
-# Two trials behind one leaf: the carried-leaf finder
+# Carried state: one hiding leaf read in several sampling blocks
 
-A leaf carried across a wipe is registered in two sessions' public files, and each session's trial reads it. Every
-trial of either session that opens the leaf opens the same commitment, so two readings with different values give a
-collision whichever session each came from. The finder for the pair is `LinkFinder.finderG` on the mixture of the two
-trials (`mixG`: a fair coin picks which one runs), with the two sessions' values embedded in one type `V`.
+Carried state crosses a wipe as a committed value: one hiding leaf, registered in the public file of every sampling
+block that reads it, on both sides of every wipe it crosses. Each of those sampling blocks has its trial
+(`LinkFinder`), and every trial that opens the leaf opens the same commitment, so two readings with different values
+give a collision, whichever sampling blocks they came from. The leaf's finder is `LinkFinder.finderG` on the mixture of
+the sampling blocks' trials (`mixG`: a uniform coin picks which one runs), with their values embedded in one type `V`.
 
-Both sessions read the carried leaf as the mixture's plurality `Xm`, pulled back into each one's values (`pull`), and
-neither pays more than twice the mixture's link mass for it:
+Every sampling block reads the leaf as the mixture's plurality `Xm`, pulled back into its own values (`pull`), and none
+pays more than `m` times the mixture's binding error for it, `m` the number of sampling blocks that share the leaf:
 
-* `massAt_le_two_mix`: each trial's link mass at any `X` is at most twice the mixture's at `X`, where the link mass is
-  `L(X) = s + Σ_{v ≠ X} p v` (`massAt`, `p v` reading `v` alone and `s` reading two values).
-* `carry_massAt`: the same with each trial's readings embedded injectively in `V`, at `pull e_i Xm`; the two pulled
-  values agree in `V` whenever `Xm` is a value of both sessions (`pull_spec`).
-* `outMix_spec`: every success of the mixture's finder outputs a collision, from each session's own collisions and one
-  across the two.
-* `massAt_le_coll`: at the plurality, a trial's link mass is at most the probability that its finder outputs a
+* `errAt`: a trial's binding error at a value `X`, `s + Σ_{v ≠ X} p v`, with `p v` the probability that it reads `v`
+  alone and `s` that it reads two values.
+* `errAt_mixG`: the mixture's binding error is the average of the trials'; so each trial's is at most `m` times the
+  mixture's (`errAt_le_mix`).
+* `carry_errAt`: the same with each sampling block's values embedded injectively in `V`, at `pull e_i Xm`; the pulled
+  values are one value of `V` wherever `Xm` is a value of each sampling block (`pull_spec`).
+* `outMix_spec`: every success of the mixture's finder outputs a collision, given a collision between any two openings
+  of the leaf, from any two of the sampling blocks, whose values differ in `V`.
+* `errAt_le_coll`: at the plurality, a trial's binding error is at most the probability that its finder outputs a
   collision, plus `1/(eM)`: `link_mass_le` without its collision-resistance hypothesis, the break form.
 -/
 
@@ -27,95 +31,89 @@ namespace LinkFinder
 
 open Game Extract
 
-section Mass
+section Err
 
 variable {τ Val : Type} [Fintype Val] [DecidableEq Val] (T : Game τ) (sT : Strategy T) (rd : τ → Finset Val)
 
-/-- **A trial's link mass at `X`**: the probability that it reads two values, or one value other than `X`. -/
-noncomputable def massAt (X : Val) : ℝ := sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd X)
+/-- **A trial's binding error at `X`**: the probability that it reads two values, or one value other than `X`. -/
+noncomputable def errAt (X : Val) : ℝ := sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd X)
 
-theorem massAt_eq (X : Val) : massAt T sT rd X = rRd T sT rd - pRd T sT rd X := by
-  rw [massAt, rRd_eq]
+theorem errAt_eq (X : Val) : errAt T sT rd X = rRd T sT rd - pRd T sT rd X := by
+  rw [errAt, rRd_eq]
   ring
+
+theorem errAt_nonneg (X : Val) : 0 ≤ errAt T sT rd X := by
+  have h := Finset.single_le_sum (fun v _ => pRd_nonneg T sT rd v) (Finset.mem_univ X)
+  have hs := sRd_nonneg T sT rd
+  unfold errAt
+  linarith
 
 /-- **A collision of `Hc` in a finder's output.** -/
 def Coll {Dh : Type} (Hc : List UInt8 → Dh) (o : Option (List UInt8 × List UInt8)) : Prop :=
   ∃ a b, o = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b
 
-/-- **The break form of the link mass**: at the plurality `X`, a trial's link mass is at most the probability that its
-finder outputs a collision, plus `1/(eM)`, when every success of the finder outputs one. -/
-theorem massAt_le_coll {Dh : Type} (Hc : List UInt8 → Dh) (out : τ × List τ → Option (List UInt8 × List UInt8))
+/-- **The break form of the binding error**: at the plurality `X`, a trial's binding error is at most the probability
+that its finder outputs a collision, plus `1/(eM)`, when every success of the finder outputs one. -/
+theorem errAt_le_coll {Dh : Type} (Hc : List UInt8 → Dh) (out : τ × List τ → Option (List UInt8 × List UInt8))
     (M : ℕ) (hM : 1 ≤ M) (hout : ∀ x, Succ rd x → Coll Hc (out x)) {X : Val}
     (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd X) :
-    massAt T sT rd X ≤
+    errAt T sT rd X ≤
       (prob (fun x => Coll Hc (out x)) (finderG T M) (finderStrat T sT M)).toReal + 1 / (Real.exp 1 * M) := by
   have h1 := succ_ge T sT rd hX M hM
   have h2 : expect (ind (Succ rd)) (finderG T M) (finderStrat T sT M) ≤
       (prob (fun x => Coll Hc (out x)) (finderG T M) (finderStrat T sT M)).toReal := by
     rw [prob_toReal]
     exact expect_mono (ind_mono hout) _ _
-  unfold massAt
+  unfold errAt
   linarith
 
-end Mass
+end Err
 
-/-! ## The mixture of two trials -/
+/-! ## The mixture of the trials -/
 
 section Mix
 
-variable {τ₁ τ₂ : Type} (T₁ : Game τ₁) (s₁ : Strategy T₁) (T₂ : Game τ₂) (s₂ : Strategy T₂)
+variable {ι : Type} [Fintype ι] [Nonempty ι] {τ : ι → Type} (T : (i : ι) → Game (τ i))
+  (s : (i : ι) → Strategy (T i))
 
-/-- The mixture's continuation after its coin. -/
-def mixK : Bool → Game (τ₁ ⊕ τ₂)
-  | true => T₁.map Sum.inl
-  | false => T₂.map Sum.inr
+/-- **The mixture of the trials**: a uniform coin `i`, then trial `i`. -/
+def mixG : Game (Σ i, τ i) := Game.coin ι fun i => (T i).map (Sigma.mk i)
 
-/-- **The mixture of two trials**: a fair coin, then the first trial on `true` and the second on `false`. -/
-def mixG : Game (τ₁ ⊕ τ₂) := Game.coin Bool (mixK T₁ T₂)
+/-- The trials' strategies in the mixture. -/
+def mixStrat : Strategy (mixG T) := fun i => Strategy.map (Sigma.mk i) (T i) (s i)
 
-/-- The two trials' strategies in the mixture. -/
-def mixStrat : Strategy (mixG T₁ T₂) := fun b => match b with
-  | true => (Strategy.map Sum.inl T₁ s₁ : Strategy (mixK T₁ T₂ true))
-  | false => (Strategy.map Sum.inr T₂ s₂ : Strategy (mixK T₁ T₂ false))
+theorem expect_mixG (F : (Σ i, τ i) → ℝ) :
+    expect F (mixG T) (mixStrat T s) = (∑ i, expect (fun e => F ⟨i, e⟩) (T i) (s i)) / Fintype.card ι := by
+  show (∑ i, expect F ((T i).map (Sigma.mk i)) (Strategy.map (Sigma.mk i) (T i) (s i))) /
+    (Fintype.card ι : ℝ) = _
+  simp only [expect_map]
 
-theorem expect_mixG (F : τ₁ ⊕ τ₂ → ℝ) :
-    expect F (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) =
-      (expect (fun e => F (.inl e)) T₁ s₁ + expect (fun e => F (.inr e)) T₂ s₂) / 2 := by
-  show (∑ b : Bool, expect F (mixK T₁ T₂ b) (mixStrat T₁ s₁ T₂ s₂ b)) / (Fintype.card Bool : ℝ) = _
-  rw [Fintype.sum_bool, Fintype.card_bool]
-  show (expect F (T₁.map Sum.inl) (Strategy.map Sum.inl T₁ s₁) +
-      expect F (T₂.map Sum.inr) (Strategy.map Sum.inr T₂ s₂)) / ((2 : ℕ) : ℝ) = _
-  rw [expect_map, expect_map]
-  norm_num
+variable {V : Type} [Fintype V] [DecidableEq V] (rd : (i : ι) → τ i → Finset V)
 
-variable {Val : Type} [Fintype Val] (rd₁ : τ₁ → Finset Val) (rd₂ : τ₂ → Finset Val)
+/-- The mixture's readings: trial `i`'s. -/
+def rdΣ : (Σ i, τ i) → Finset V := fun x => rd x.1 x.2
 
-omit [Fintype Val] in
-theorem pRd_mixG (v : Val) :
-    pRd (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) v = (pRd T₁ s₁ rd₁ v + pRd T₂ s₂ rd₂ v) / 2 :=
-  expect_mixG T₁ s₁ T₂ s₂ _
+theorem pRd_mixG (v : V) :
+    pRd (mixG T) (mixStrat T s) (rdΣ rd) v = (∑ i, pRd (T i) (s i) (rd i) v) / Fintype.card ι :=
+  expect_mixG T s _
 
-omit [Fintype Val] in
-theorem sRd_mixG :
-    sRd (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) = (sRd T₁ s₁ rd₁ + sRd T₂ s₂ rd₂) / 2 :=
-  expect_mixG T₁ s₁ T₂ s₂ _
+theorem sRd_mixG : sRd (mixG T) (mixStrat T s) (rdΣ rd) = (∑ i, sRd (T i) (s i) (rd i)) / Fintype.card ι :=
+  expect_mixG T s _
 
-/-- **Each trial's link mass is at most twice the mixture's**, at any `X`. -/
-theorem massAt_le_two_mix (X : Val) :
-    massAt T₁ s₁ rd₁ X ≤ 2 * massAt (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) X ∧
-      massAt T₂ s₂ rd₂ X ≤ 2 * massAt (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) X := by
-  have hs : ∑ v, (pRd T₁ s₁ rd₁ v + pRd T₂ s₂ rd₂ v) / 2 =
-      ((∑ v, pRd T₁ s₁ rd₁ v) + ∑ v, pRd T₂ s₂ rd₂ v) / 2 := by
-    rw [← Finset.sum_add_distrib, div_eq_mul_inv, Finset.sum_mul]
-    simp only [div_eq_mul_inv]
-  have e₁ : pRd T₁ s₁ rd₁ X ≤ ∑ v, pRd T₁ s₁ rd₁ v :=
-    Finset.single_le_sum (fun v _ => pRd_nonneg T₁ s₁ rd₁ v) (Finset.mem_univ X)
-  have e₂ : pRd T₂ s₂ rd₂ X ≤ ∑ v, pRd T₂ s₂ rd₂ v :=
-    Finset.single_le_sum (fun v _ => pRd_nonneg T₂ s₂ rd₂ v) (Finset.mem_univ X)
-  have h₁ := sRd_nonneg T₁ s₁ rd₁
-  have h₂ := sRd_nonneg T₂ s₂ rd₂
-  simp only [massAt, sRd_mixG, pRd_mixG, hs]
-  constructor <;> linarith
+/-- **The mixture's binding error is the average of the trials'**, at any `X`. -/
+theorem errAt_mixG (X : V) :
+    errAt (mixG T) (mixStrat T s) (rdΣ rd) X = (∑ i, errAt (T i) (s i) (rd i) X) / Fintype.card ι := by
+  unfold errAt
+  simp only [sRd_mixG, pRd_mixG]
+  rw [← Finset.sum_div, Finset.sum_comm, Finset.sum_add_distrib, Finset.sum_sub_distrib]
+  ring
+
+/-- **Each trial's binding error is at most `m` times the mixture's**, at any `X`, with `m` the number of trials. -/
+theorem errAt_le_mix (i : ι) (X : V) :
+    errAt (T i) (s i) (rd i) X ≤ Fintype.card ι * errAt (mixG T) (mixStrat T s) (rdΣ rd) X := by
+  have hm : (Fintype.card ι : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  rw [errAt_mixG, mul_div_assoc', mul_comm, mul_div_assoc, div_self hm, mul_one]
+  exact Finset.single_le_sum (fun j _ => errAt_nonneg (T j) (s j) (rd j) X) (Finset.mem_univ i)
 
 end Mix
 
@@ -174,10 +172,10 @@ theorem rRd_image : rRd T sT (fun x => (rd x).image e) = rRd T sT rd := by
   simp only [ind, ← Finset.card_pos, Finset.card_image_of_injective _ he]
 
 include he in
-/-- **The embedded link mass bounds the pulled-back one**: equal at a value of `Val`, and at any other `w` the
-embedded readings never read `w` alone, so their link mass there is everything they read. -/
-theorem massAt_pull_le (w : V) : massAt T sT rd (pull e w) ≤ massAt T sT (fun x => (rd x).image e) w := by
-  rw [massAt_eq, massAt_eq, rRd_image T sT rd he]
+/-- **The embedded binding error bounds the pulled-back one**: equal at a value of `Val`, and at any other `w` the
+embedded readings never read `w` alone, so their binding error there is everything they read. -/
+theorem errAt_pull_le (w : V) : errAt T sT rd (pull e w) ≤ errAt T sT (fun x => (rd x).image e) w := by
+  rw [errAt_eq, errAt_eq, rRd_image T sT rd he]
   by_cases hw : ∃ v, e v = w
   · obtain ⟨v, rfl⟩ := hw
     rw [pull_spec he, pRd_image T sT rd he]
@@ -188,71 +186,46 @@ end Image
 
 section Emb
 
-variable {τ₁ τ₂ Val₁ Val₂ V : Type} [Fintype Val₁] [DecidableEq Val₁] [Inhabited Val₁] [Fintype Val₂]
-  [DecidableEq Val₂] [Inhabited Val₂] [Fintype V] [DecidableEq V] (T₁ : Game τ₁) (s₁ : Strategy T₁) (T₂ : Game τ₂)
-  (s₂ : Strategy T₂) (rd₁ : τ₁ → Finset Val₁) (rd₂ : τ₂ → Finset Val₂) (e₁ : Val₁ → V) (e₂ : Val₂ → V)
+variable {ι : Type} [Fintype ι] [Nonempty ι] {τ : ι → Type} (T : (i : ι) → Game (τ i))
+  (s : (i : ι) → Strategy (T i)) {Val : ι → Type} [∀ i, Fintype (Val i)] [∀ i, DecidableEq (Val i)]
+  [∀ i, Inhabited (Val i)] {V : Type} [Fintype V] [DecidableEq V] (rd : (i : ι) → τ i → Finset (Val i))
+  (e : (i : ι) → Val i → V)
 
 /-- The mixture's readings, each trial's embedded in `V`. -/
-def rdMix : τ₁ ⊕ τ₂ → Finset V := Sum.elim (fun x => (rd₁ x).image e₁) (fun x => (rd₂ x).image e₂)
+def rdMix : (Σ i, τ i) → Finset V := rdΣ fun i x => (rd i x).image (e i)
 
-/-- **The carried leaf's link mass in each session**: read as the pulled-back value `pull e_i Xm`, each trial's link
-mass is at most twice the mixture's at `Xm`. -/
-theorem carry_massAt (he₁ : Function.Injective e₁) (he₂ : Function.Injective e₂) (Xm : V) :
-    massAt T₁ s₁ rd₁ (pull e₁ Xm) ≤ 2 * massAt (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (rdMix rd₁ rd₂ e₁ e₂) Xm ∧
-      massAt T₂ s₂ rd₂ (pull e₂ Xm) ≤ 2 * massAt (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (rdMix rd₁ rd₂ e₁ e₂) Xm := by
-  have h := massAt_le_two_mix T₁ s₁ T₂ s₂ (fun x => (rd₁ x).image e₁) (fun x => (rd₂ x).image e₂) Xm
-  exact ⟨(massAt_pull_le T₁ s₁ rd₁ he₁ Xm).trans h.1, (massAt_pull_le T₂ s₂ rd₂ he₂ Xm).trans h.2⟩
+/-- **The carried leaf's binding error in each sampling block**: read as the pulled-back value `pull e_i Xm`, each
+trial's binding error is at most `m` times the mixture's at `Xm`, with `m` the number of sampling blocks that share
+the leaf. -/
+theorem carry_errAt (he : ∀ i, Function.Injective (e i)) (Xm : V) (i : ι) :
+    errAt (T i) (s i) (rd i) (pull (e i) Xm) ≤ Fintype.card ι * errAt (mixG T) (mixStrat T s) (rdMix rd e) Xm :=
+  (errAt_pull_le (T i) (s i) (rd i) (he i) Xm).trans (errAt_le_mix T s (fun i x => (rd i x).image (e i)) i Xm)
 
 /-! ### The mixture's finder output -/
 
-variable {O₁ O₂ : Type} (op₁ : τ₁ → Val₁ → O₁) (op₂ : τ₂ → Val₂ → O₂)
-  (col₁ : O₁ → O₁ → List UInt8 × List UInt8) (col₂ : O₂ → O₂ → List UInt8 × List UInt8)
-  (col₁₂ : O₁ → O₂ → List UInt8 × List UInt8)
+variable {O : ι → Type} (op : (i : ι) → τ i → Val i → O i) (col : (i j : ι) → O i → O j → List UInt8 × List UInt8)
 
-/-- The mixture's opening of a value: the session's own opening of its preimage. -/
-noncomputable def opMix : τ₁ ⊕ τ₂ → V → O₁ ⊕ O₂
-  | .inl x, w => .inl (op₁ x (pull e₁ w))
-  | .inr x, w => .inr (op₂ x (pull e₂ w))
+/-- The mixture's opening of a value: its sampling block's own opening of the value's preimage. -/
+noncomputable def opMix (x : Σ i, τ i) (w : V) : Σ i, O i := ⟨x.1, op x.1 x.2 (pull (e x.1) w)⟩
 
-/-- The mixture's collision from two openings: each session's own, and the cross one either way round. -/
-def colMix : O₁ ⊕ O₂ → O₁ ⊕ O₂ → List UInt8 × List UInt8
-  | .inl o, .inl o' => col₁ o o'
-  | .inr o, .inr o' => col₂ o o'
-  | .inl o, .inr o' => col₁₂ o o'
-  | .inr o, .inl o' => ((col₁₂ o' o).2, (col₁₂ o' o).1)
+/-- The mixture's collision from two openings, from whichever sampling blocks they came. -/
+def colMix (o o' : Σ i, O i) : List UInt8 × List UInt8 := col o.1 o'.1 o.2 o'.2
 
-omit [DecidableEq Val₁] [DecidableEq Val₂] [Fintype V] in
-/-- **Every success of the mixture's finder outputs a collision**, given each session's openings and collisions and
-the cross collision between openings of the carried leaf whose values differ in `V`. -/
-theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he₁ : Function.Injective e₁) (he₂ : Function.Injective e₂)
-    (G₁ : O₁ → Prop) (G₂ : O₂ → Prop) (val₁ : O₁ → Val₁) (val₂ : O₂ → Val₂)
-    (hop₁ : ∀ x v, v ∈ rd₁ x → G₁ (op₁ x v) ∧ val₁ (op₁ x v) = v)
-    (hop₂ : ∀ x v, v ∈ rd₂ x → G₂ (op₂ x v) ∧ val₂ (op₂ x v) = v)
-    (hcol₁ : ∀ o o', G₁ o → G₁ o' → val₁ o ≠ val₁ o' → (col₁ o o').1 ≠ (col₁ o o').2 ∧ Hc (col₁ o o').1 = Hc (col₁ o o').2)
-    (hcol₂ : ∀ o o', G₂ o → G₂ o' → val₂ o ≠ val₂ o' → (col₂ o o').1 ≠ (col₂ o o').2 ∧ Hc (col₂ o o').1 = Hc (col₂ o o').2)
-    (hcol₁₂ : ∀ o o', G₁ o → G₂ o' → e₁ (val₁ o) ≠ e₂ (val₂ o') →
-      (col₁₂ o o').1 ≠ (col₁₂ o o').2 ∧ Hc (col₁₂ o o').1 = Hc (col₁₂ o o').2)
-    (x : (τ₁ ⊕ τ₂) × List (τ₁ ⊕ τ₂)) (hS : Succ (rdMix rd₁ rd₂ e₁ e₂) x) :
-    Coll Hc (outOf (rdMix rd₁ rd₂ e₁ e₂) (opMix e₁ e₂ op₁ op₂) (colMix col₁ col₂ col₁₂) x) :=
-  outOf_spec (rdMix rd₁ rd₂ e₁ e₂) (opMix e₁ e₂ op₁ op₂) (colMix col₁ col₂ col₁₂)
-    (fun o => Sum.elim G₁ G₂ o) (fun o => Sum.elim (fun o => e₁ (val₁ o)) (fun o => e₂ (val₂ o)) o)
-    (fun x w hw => match x, hw with
-      | .inl x, hw => by
-        obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hw
-        obtain ⟨hg, hval⟩ := hop₁ x v hv
-        exact ⟨by simpa [opMix, pull_spec he₁] using hg, by simp [opMix, pull_spec he₁, hval]⟩
-      | .inr x, hw => by
-        obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hw
-        obtain ⟨hg, hval⟩ := hop₂ x v hv
-        exact ⟨by simpa [opMix, pull_spec he₂] using hg, by simp [opMix, pull_spec he₂, hval]⟩)
-    (fun o o' h h' hv => match o, o', h, h', hv with
-      | .inl o, .inl o', h, h', hv => hcol₁ o o' h h' fun he => hv (congrArg e₁ he)
-      | .inr o, .inr o', h, h', hv => hcol₂ o o' h h' fun he => hv (congrArg e₂ he)
-      | .inl o, .inr o', h, h', hv => hcol₁₂ o o' h h' hv
-      | .inr o, .inl o', h, h', hv => by
-        obtain ⟨hne, heq⟩ := hcol₁₂ o' o h' h (Ne.symm hv)
-        exact ⟨Ne.symm hne, heq.symm⟩)
-    x hS
+/-- **Every success of the mixture's finder outputs a collision**, given each sampling block's openings of its
+readings and a collision between any two openings of the carried leaf whose values differ in `V`. -/
+theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he : ∀ i, Function.Injective (e i))
+    (G : (i : ι) → O i → Prop) (val : (i : ι) → O i → Val i)
+    (hop : ∀ i x v, v ∈ rd i x → G i (op i x v) ∧ val i (op i x v) = v)
+    (hcol : ∀ i j o o', G i o → G j o' → e i (val i o) ≠ e j (val j o') →
+      (col i j o o').1 ≠ (col i j o o').2 ∧ Hc (col i j o o').1 = Hc (col i j o o').2)
+    (x : (Σ i, τ i) × List (Σ i, τ i)) (hS : Succ (rdMix rd e) x) :
+    Coll Hc (outOf (rdMix rd e) (opMix e op) (colMix col) x) :=
+  outOf_spec (rdMix rd e) (opMix e op) (colMix col) (fun o => G o.1 o.2) (fun o => e o.1 (val o.1 o.2))
+    (fun x w hw => by
+      obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hw
+      obtain ⟨hg, hval⟩ := hop x.1 x.2 v hv
+      exact ⟨by simpa [opMix, pull_spec (he x.1)] using hg, by simp [opMix, pull_spec (he x.1), hval]⟩)
+    (fun o o' h h' hv => hcol o.1 o'.1 o.2 o'.2 h h' hv) x hS
 
 end Emb
 
