@@ -54,14 +54,14 @@ TABLE = {
     (256, 1024): (36, FusedStep(FW=0, LT=15)), (256, 2048): (36, FusedStep(FW=0, LT=15)),
     (256, 3072): (36, FusedStep(FW=0, LT=15)),
 }
-#: prefill is HC-SCHED's (fill-v1-phase-att-co2, psched_arm.py's CO_PREFILL_V3): FILL v1's filler co-scheduled at the
+#: prefill is psched's (fill-v1-phase-att-co2, psched_arm.py's CO_PREFILL_V3): FILL v1's filler co-scheduled at the
 #: lowest stream priority in 4-warp blocks of 2^16 MMAs, 1.042 / 0.195 on its three screens
 CO_PREFILL = A.Filler(W=4, NC=4, S=128, chunk_log2=16, noise="chained")
 
 
 @dataclass
 class Fused:
-    """The fused step (flin + attention filler warps) on a per-point split beside FILL v1's pump; HC-SCHED's prefill."""
+    """The fused step (flin + attention filler warps) on a per-point split beside FILL v1's pump; psched's prefill."""
 
     name: str = "fill-fused"
     lineage: dict = field(default_factory=lambda: {
@@ -100,12 +100,12 @@ class Fused:
         return CO_PREFILL if phase == "prefill" else self.filler
 
 
-#: round 3's picks over TABLE (two screens): lm_head through flin at
-#: B <= 64 (+0.003-0.022 of peak, the step no slower: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (+0.005
-#: slowdown at 1.024-1.030 without it, where prefill's 1.043 already sits), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown);
-#: B 1 L 32K its own row, persistent attention and the pump on 100 SMs (the 2K row read 1.045 under the scorer there, this
-#: one 0.999). Not taken: FLIN_LAZY 2/4 (+2-10% slowdown) and flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015
-#: of peak for +2.3-4.5%, the pump's trade is ~4x better).
+#: round 3's picks over TABLE (two screens): lm_head through flin at B <= 64 (+0.003-0.022 of peak, the step no slower:
+#: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (+0.005 slowdown at 1.024-1.030 without it, where prefill's
+#: 1.043 already sits), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown); B 1 L 32K its own row, persistent
+#: attention and the pump on 100 SMs (the 2K row read 1.045 under the scorer there, this one 0.999). Not taken:
+#: FLIN_LAZY 2/4 (+2-10% slowdown) and flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015 of peak for
+#: +2.3-4.5%, the pump's trade is ~4x better).
 TABLE_V2 = {k: (sms, replace(q, LM=1) if k[0] <= 64 and k != (32, 1024) else q) for k, (sms, q) in TABLE.items()}
 TABLE_V2[(1, 32768)] = (100, FusedStep(LM=1))
 
@@ -169,7 +169,7 @@ K_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01", fold="ram")
 
 @dataclass
 class FusedPumpK(FusedPump):
-    """FusedPump's splits with HC-PROVED's pfill-k pumped on the filler SMs (-DPFILL_BITS: fresh {0,1} SHA-512 noise for
+    """FusedPump's splits with pfill-k pumped on the filler SMs (-DPFILL_BITS: fresh {0,1} SHA-512 noise for
     every IMMA, each k32 word into the ram receipt), and pfill-k's prefill (the linears on 184 SMs, the filler on 4):
     a split's slowdown is the split's own, whatever runs on its filler SMs."""
 
@@ -195,7 +195,7 @@ class FusedPumpK(FusedPump):
         return self.filler
 
 
-#: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2), or one of P2-FF r9's at NC 4: XOR-in (13, 19)
+#: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2), or one of the r9 at NC 4: XOR-in (13, 19)
 #: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI). Each takes 1024 fragments a warp a tile: a tile's B hashing and its
 #: barriers then stall a block a quarter as often, 0.772 of peak alone at S 256, 0.795 at 1024
 BU_DUO_FILLER = A.Filler(W=8, NC=2, S=1024, chunk_log2=19, noise="bitsU", fold="duo")
@@ -205,11 +205,11 @@ BU_LI_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="l
 
 @dataclass
 class FusedPumpBU(FusedPumpK):
-    """FusedPumpK's splits with FILL-SEC's pfill-bU pumped (-DPFILL_BU), the tile-reuse filler: a block's tile is the
+    """FusedPumpK's splits with pfill-bU pumped (-DPFILL_BU), the tile-reuse filler: a block's tile is the
     GEMM C = A B with A (128 S x 32) on {0,1} and B (32 x 1024) on U = {±1..±64}, from the coins and the public tile
     id; B sits in shared memory for the block's 8 warps and each A fragment, expanded once, meets all 128 B fragments,
     so the hashing is ~1 issue slot an MMA (dfill_k_warp's ~10). Every k32 word goes into duo's receipt (NC 2, three
-    ops a word), which reads every word where ram's reads a pair only through Q (P2-FF r8)."""
+    ops a word), which reads every word where ram's reads a pair only through Q."""
 
     name: str = "fill-fused-pump-bu"
     lineage: dict = field(default_factory=lambda: {
@@ -237,7 +237,7 @@ def _bu_lineage(receipt: str, hypothesis: str) -> dict:
 
 @dataclass
 class FusedPumpBUXin13(FusedPumpBU):
-    """FusedPumpBU with P2-FF r9's XOR-in (13, 19) for duo (FILL-SEC's drop-in, NC 4 built with -DPFILL_XIN13, three ops
+    """FusedPumpBU with the r9 XOR-in (13, 19) for duo (a drop-in, NC 4 built with -DPFILL_XIN13, three ops
     a pair, keys under pf_key_ok_r9): every word read with no layout premise. It replaces XOR-in (7, 19), whose step
     boundary's ±128 is an int8 ratio. Provisional while r9 is
     refereed."""
@@ -254,9 +254,9 @@ class FusedPumpBUXin13(FusedPumpBU):
 
 @dataclass
 class FusedPumpBULi(FusedPumpBU):
-    """FusedPumpBU with P2-FF r9's LOP3+IMAD for duo (FILL-SEC's drop-in, NC 4 built with -DPFILL_LI, two ops a pair as
+    """FusedPumpBU with the r9 LOP3+IMAD for duo (a drop-in, NC 4 built with -DPFILL_LI, two ops a pair as
     ram's, keys under pf_key_ok_r9), r9's pick for the filler: every word read given (HO), which the pump's hashed rows
-    give. Provisional while RS-E-REF r7 referees r9."""
+    give. Provisional while r9 is under referee."""
 
     name: str = "fill-fused-pump-bu-li"
     lineage: dict = field(default_factory=lambda: _bu_lineage(

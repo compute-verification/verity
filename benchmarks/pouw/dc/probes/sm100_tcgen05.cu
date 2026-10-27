@@ -620,7 +620,7 @@ DC_DEV void lane_beside_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
-// TMA bulk-async copies beside the saturated tcgen05.mma (DC EPS1 r10): one side warp's lane 0 issues cp.async.bulk (SASS
+// TMA bulk-async copies beside the saturated tcgen05.mma: one side warp's lane 0 issues cp.async.bulk (SASS
 // UBLKCP, a move) or cp.reduce.async.bulk.add.u32 (UBLKRED, a combine), 4 KB (1024 words) an op, DC_BULK_R a trip, into
 // the block's own global region, with a group bound so the queue stays full. Warp 0 runs tcgen05.mma flat out (OP_LOOP),
 // the bulk warp only while it does (OP_UNTIL). A TMA bulk op takes uniform operands (addresses from blockIdx and the op's

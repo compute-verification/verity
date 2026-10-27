@@ -16,7 +16,7 @@
   ``--secret-file F`` and ``--commitment HEX`` (``$POUW_CHALLENGER``, ``$POUW_CHALLENGER_SESSION``,
   ``$POUW_CHALLENGER_SECRET_FILE``, ``$POUW_CHALLENGER_COMMITMENT``); an address without its session id, either without
   the other, or a secret or commitment without both, is refused. The hello carries the secret
-  (``RemoteChallenger.connect(address, secret)``, infra's hello secret, RT4-INT-29). The session's layout is the
+  (``RemoteChallenger.connect(address, secret)``, the gate's hello secret). The session's layout is the
   window's live epoch (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the
   client refuses a commitment of any other, or of another root than the gate's open answered.
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its

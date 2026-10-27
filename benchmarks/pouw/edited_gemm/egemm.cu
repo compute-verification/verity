@@ -19,7 +19,7 @@
 //   e_*, d64_*, x_*, x64_*, x13_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
 //                    absorbs interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_1 U^T + S_0 U^T; with
 //                    S_2's atom a 3-atom tail at k > 4096; the rows t_duo32's 4-atom tail reads). Receipts (EL's RK): duo
-//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold every 32 (x_*) and every
+//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), the r9 XOR-in fold every 32 (x_*) and every
 //                    64 (x64_*), r9's XOR-in with rotations (13, 19) (x13_*), and the tensor-byte
 //                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's), and the fold-cost sweep's
 //                    timing variants at r = 1, 1.5, 2, 2.5, 4 ops a word (f10_*, ..., f40_*; FR10's). Interleaving: the absorb of
@@ -61,7 +61,7 @@ using MLW = ML<128, 128, 32, 3>;
 static_assert(EG_ROUNDS >= 1 && EG_ROUNDS <= 64, "EG_ROUNDS in 1..64");
 
 // The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
-// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: P2-FF's XOR-in fold (pfill.cuh's NC 4
+// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: the r9 XOR-in fold (pfill.cuh's NC 4
 // under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
 // accumulator's four words, tile t into chain t % 4. XIN64: XIN on the odd steps' running sums only (as DUO64). XIN and
 // XIN64 are timing references, not receipts: rotl 7 puts a bad merge ratio at ±128, an int8 ratio, at the step boundary.
@@ -71,7 +71,7 @@ static_assert(EG_ROUNDS >= 1 && EG_ROUNDS <= 64, "EG_ROUNDS in 1..64");
 // warp, so pos = (t NCT + ctid) 4 + c). Negative, so fgemm.cu's is_tb is false for them
 constexpr int DUO64 = -1, XIN = -2, XIN64 = -3, XIN13 = -4;
 // XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words
-// mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (P2-FF draws them per tile from a SHA block;
+// mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (the r9 reference draws them per tile from a SHA block;
 // either way two registers); XIN13's the first two that pass key_ok_r9
 __host__ __device__ inline bool xin_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;

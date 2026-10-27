@@ -1,4 +1,4 @@
-"""HC-PROVED's scorer arms (benchmarks/pouw/filler/pfill_arm.py) meet the filler arm contract, and place the filler as
+"""The proved-filler scorer arms (benchmarks/pouw/filler/pfill_arm.py) meet the filler arm contract, and place the filler as
 FILL v1 does at every suite point; pfill_proved.py's readings are the scorer's arithmetic with only the filler's
 certified fraction changed."""
 
@@ -63,7 +63,7 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
 
 @pytest.mark.parametrize("attr, flags, k", [("PFillPowerSplit", "", False), ("PFillK", "-DPFILL_BITS", True)])
 def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, flags, k):
-    """pfill-power-split and pfill-k are pfill-ram's filler (pfill-k's on {0,1} bits) on HC-POWER's table: an exact
+    """pfill-power-split and pfill-k are pfill-ram's filler (pfill-k's on {0,1} bits) on the power-split table: an exact
     entry at every scored decode point, and 4 filler SMs during prefill. Each declares the noise filler-scorer/v3 reads:
     pfill-k bits01, the noise of Theorem K's entry, the ±1 tiles pm1, Theorem E's."""
     A, S = _module("arms"), _module("scoring")
@@ -264,7 +264,7 @@ def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
 
 def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
     """A pfill-k or pfill-bU run keeps every reading of a ±1 run, E's proved 0.225 included, and adds Theorem K's c = 1
-    at φ = 0.9: proved for pfill-k (RS-E-REF r4, with its caveats), projected for pfill-bU (not in the Lean lock yet),
+    at φ = 0.9: proved for pfill-k (with its referee's caveats), projected for pfill-bU (not in the Lean lock yet),
     each at ram's fold share ½; a ±1 run never gets it."""
     S = _module("scoring")
     P = _load_file("pfill_proved")

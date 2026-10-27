@@ -36,30 +36,29 @@ ln(8/7) ≥ 1/8 (`LN_P`) on the sheets and DC-100-ri, and ≥ 2/15 (`LN_P_M`, th
 headline does) on DC-90-ri and its twin (`Family.ln_p_m`). A6's vector classes are CUDA's lane classes and both
 catch-alls (`CATCH_ALLS`), since an instruction no class names counts in its reading's catch-all. The menu's writer
 kinds are every MMA class the reading prices (on a measured vector, the forms it times: an untimed form is its measured
-issue slot alone and off the menu, where NoSum carries its words), and on DC-90-ri fewer still: its joint rows price every tensor form but honest's at the scalar
-coefficient, a lower bound on its issue cost, and no certificate prices them above it, so its menu is honest's form
-and the uniform class, the machine model's, and NoSum carries the rest; the full menu's bound is printed for the
-record. The checks are `lean_headline.instance()`'s: the sheet reproduces every DS coefficient, ♭ is `setup`'s floor
-program, and the bound is at most the family's target. A uniform writer heads 2 words (`UIMAD.WIDE.U32` writes a UR
-pair). The fold menu is the design's fold and its `fold_routes`, every bit-exact checkpoint loop
-(CP_SEG4 and CP_SEG4U; CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8 and CP_XT; CP_RED, CP_RED2 and CP_RED8
-through a generic address, ATOM.E, bit-exact on the H200 and the B200: every global and generic red, red2 and red8 loop
-at 0 mismatches) on
-lanes, and alone on the uniform datapath at the least of their counts. That is the cheater's menu: a design's
-`counted` routes, which no run has built, are on it too, and ♭ folds by the built ones alone (`built_routes`), so ε
-and B_♭ read the same ♭ and the credit (1 − ε)·B_♭ is a program a run has built. Each reading emits ε and B_♭ as one
-pair (`Reading.pair`), the statement's ε literal with the B_♭ it is a fraction of. Each reading declares A2's catch-all
-(`CATCH_ALL`), as sm_120's sheet does: every warp instruction no class of the reading prices counts there, at its issue
-slot, NOROW's DS_issue on a sheet and UNLISTED's measured issue line on DC-90-ri and DC-100-ri, and on DC-90-ri also
-the JI90 lines every timed scalar class carries: LD.E and IMAD.WIDE, the instructions it counts there, were timed
-beside the IGMMA. A class no run has timed is read at its issue slot alone (A2's
-reading), and measured rows replace that once a run times it: on DC-90-ri
-ATOME32 (the generic-address red's ATOM.E), ATOMS32, REDG32, LDS128 and REDUX carry the JI90 lines, while the stores (STS32, STS128, STG32, STG128) and ISETP are still the issue row alone, as
-every memory and control class is on DC-100-ri. Charging an untimed class another class's rows (SHFL's, say)
-asserts lines nobody measured, which inflates ♭'s credit and, where a cheater uses the class, can overstate
-the floor. ♭ folds by `setup`'s mix of them on each vector
-and writes by its split of the words between the tensor route and the design's baseline program (`_flat_shares`), so
-a measured file states its own `flatFold` or `flatWords` where that mix or split is not the sheet's.
+issue slot alone and off the menu, where NoSum carries its words), and on DC-90-ri fewer still: its joint rows price
+every tensor form but honest's at the scalar coefficient, a lower bound on its issue cost, and no certificate prices
+them above it, so its menu is honest's form and the uniform class, the machine model's, and NoSum carries the rest; the
+full menu's bound is printed for the record. The checks are `lean_headline.instance()`'s: the sheet reproduces every DS
+coefficient, ♭ is `setup`'s floor program, and the bound is at most the family's target. A uniform writer heads 2 words
+(`UIMAD.WIDE.U32` writes a UR pair). The fold menu is the design's fold and its `fold_routes`, every bit-exact
+checkpoint loop (CP_SEG4 and CP_SEG4U; CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8 and CP_XT; CP_RED, CP_RED2 and
+CP_RED8 through a generic address, ATOM.E, bit-exact on the H200 and the B200: every global and generic red, red2 and
+red8 loop at 0 mismatches) on lanes, and alone on the uniform datapath at the least of their counts. That is the
+cheater's menu: a design's `counted` routes, which no run has built, are on it too, and ♭ folds by the built ones alone
+(`built_routes`), so ε and B_♭ read the same ♭ and the credit (1 − ε)·B_♭ is a program a run has built. Each reading
+emits ε and B_♭ as one pair (`Reading.pair`), the statement's ε literal with the B_♭ it is a fraction of. Each reading
+declares A2's catch-all (`CATCH_ALL`), as sm_120's sheet does: every warp instruction no class of the reading prices
+counts there, at its issue slot, NOROW's DS_issue on a sheet and UNLISTED's measured issue line on DC-90-ri and
+DC-100-ri, and on DC-90-ri also the JI90 lines every timed scalar class carries: LD.E and IMAD.WIDE, the instructions it
+counts there, were timed beside the IGMMA. A class no run has timed is read at its issue slot alone (A2's reading), and
+measured rows replace that once a run times it: on DC-90-ri ATOME32 (the generic-address red's ATOM.E), ATOMS32, REDG32,
+LDS128 and REDUX carry the JI90 lines, while the stores (STS32, STS128, STG32, STG128) and ISETP are still the issue row
+alone, as every memory and control class is on DC-100-ri. Charging an untimed class another class's rows (SHFL's, say)
+asserts lines nobody measured, which inflates ♭'s credit and, where a cheater uses the class, can overstate the floor. ♭
+folds by `setup`'s mix of them on each vector and writes by its split of the words between the tensor route and the
+design's baseline program (`_flat_shares`), so a measured file states its own `flatFold` or `flatWords` where that mix
+or split is not the sheet's.
 """
 from __future__ import annotations
 

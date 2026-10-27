@@ -2,7 +2,7 @@
 proved without CH. Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
 from the round's coins and the tile id (A_M = B_M = 0), each MMA's output is a whole prefix sum (k32 on IMMA, k64 on the
 e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-k's noise is {0,1} bits instead of ±1,
-and pfill-bu's is bits on A and {±1, ..., ±64} on B (FILL-SEC). The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
+and pfill-bu's is bits on A and {±1, ..., ±64} on B. The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
 (dcap.cu's default filler on this branch); an arm picks the tile's kind at build time through NVCC_APPEND_FLAGS
 (-DPFILL_E2M1, -DPFILL_BITS, -DPFILL_BU or nothing), which score.py's nvcc inherits, since it builds after loading the
 arm. Placement is FILL v1's
@@ -66,8 +66,8 @@ class PFillDuo(PFillRam):
     filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="pm1")
 
 
-#: POWER_SPLIT: the largest split its split-only sweep
-#: with the scorer's gc_split kept at step + filler <= 1.040 at every scored decode point, the split's own cost whatever runs on the filler's SMs.
+#: POWER_SPLIT: the largest split its split-only sweep with the scorer's gc_split kept at step + filler <= 1.040 at
+#: every scored decode point, the split's own cost whatever runs on the filler's SMs.
 POWER_SPLIT = {(1, 2048): 108, (1, 8192): 108, (1, 32768): 108, (32, 1024): 92, (32, 2048): 108, (32, 8192): 124,
                (32, 24576): 132, (48, 16384): 132, (128, 2048): 92, (128, 6144): 108, (132, 5120): 60, (144, 5120): 60,
                (256, 1024): 60, (256, 2048): 60, (256, 3072): 60}
@@ -142,11 +142,12 @@ class PhaseFill:
     tiles: int = 1
 
 
-#: (B, L) -> (split SMs, phase filler or None) from pfill_phase_screen.py's s2 and s4 (8-warp blocks were 1.08-1.30 everywhere, 2-warp 1.12-2.0): at most ~1.04 at every scored point
-#: and at least a tile below each point's cliff (where the phase outlasts attention and o waits on it). The phase pays
-#: at B >= 128; at B 32-48 and 256/1K pfill-k's split alone does as well per slowdown, and 1/32K and 32/8K take lighter
-#: splits for margin (pfill-k's read 1.046 there; 1/32K at 100 read 1.046 again, 92 screened
-#: 1.027). 192/2K (robust, unscored) read 1.054 there with 4 tiles, so it keeps the split alone.
+#: (B, L) -> (split SMs, phase filler or None) from pfill_phase_screen.py's s2 and s4 (8-warp blocks were 1.08-1.30
+#: everywhere, 2-warp 1.12-2.0): at most ~1.04 at every scored point and at least a tile below each point's cliff (where
+#: the phase outlasts attention and o waits on it). The phase pays at B >= 128; at B 32-48 and 256/1K pfill-k's split
+#: alone does as well per slowdown, and 1/32K and 32/8K take lighter splits for margin (pfill-k's read 1.046 there;
+#: 1/32K at 100 read 1.046 again, 92 screened 1.027). 192/2K (robust, unscored) read 1.054 there with 4 tiles, so it
+#: keeps the split alone.
 PHASE_K = {
     (1, 2048): (108, None), (1, 8192): (108, None), (1, 32768): (92, None),
     (8, 16384): (108, None),
@@ -162,7 +163,7 @@ PHASE_K = {
 
 @dataclass
 class PFillKPhase(PFillK):
-    """pfill-k on the leader's placement (HC-SCHED's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
+    """pfill-k on the leader's placement (psched's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
     plus pfill-k's own dfill_p at 4 warps (-DPF_PW=4) forked into each decode layer's attention on the step's SMs, at the
     graph's highest node priority, joined before o. Prefill keeps pfill-k's 4-SM split. Run through psched_score.py:
 
@@ -402,12 +403,12 @@ class PFillBUDuoFPhase3(PFillBUDuoFPhase):
 
 @dataclass
 class PFillBU(PFillPowerSplit):
-    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU): A's entries
-    their SHA-512 bits as s8 0 or 1, B's U = (t & 0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on
-    {±1, ..., ±64}), 512 blocks a tile, on the same s8 IMMA m16n8k32 with C = 0, each s32 word in [-2048, 2048] folded
-    unscaled into the same ram receipt at K = L = 32. Theorem K's setting as refereed: straight-line, cell-pure, int MMAs, unscaled s32 reads,
-    operands affine in their bits (U's weights 1, 2, ..., 32, 65 on the odd parity bits t_0, t_6), every prefix word
-    committed. dgate adds the uniformity check of U and A; -mpopcnt is for the host reference's seven popcounts a word."""
+    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU): A's entries their SHA-512 bits as s8 0 or 1, B's U = (t &
+    0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on {±1, ..., ±64}), 512 blocks a tile, on the
+    same s8 IMMA m16n8k32 with C = 0, each s32 word in [-2048, 2048] folded unscaled into the same ram receipt at K = L
+    = 32. Theorem K's setting as refereed: straight-line, cell-pure, int MMAs, unscaled s32 reads, operands affine in
+    their bits (U's weights 1, 2, ..., 32, 65 on the odd parity bits t_0, t_6), every prefix word committed. dgate adds
+    the uniformity check of U and A; -mpopcnt is for the host reference's seven popcounts a word."""
 
     name: str = "pfill-bu"
     lineage: dict = field(default_factory=lambda: {
@@ -442,7 +443,7 @@ class PFillBUDuo(PFillBU):
 
 @dataclass
 class PFillBULi(PFillBU):
-    """pfill-bU with P2-FF r9's LOP3+IMAD receipts (NC 4 built with -DPFILL_LI, two ops a pair as ram's:
+    """pfill-bU with the r9 LOP3+IMAD receipts (NC 4 built with -DPFILL_LI, two ops a pair as ram's:
     y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3, keys under key_ok_r9).
     It reads every word given (HO), no hand-off sharing a row or column,
     which bU's hashed rows give (pfill_ref.ho_ok). Provisional while r9 is refereed (`fold_status`)."""
@@ -456,7 +457,7 @@ class PFillBULi(PFillBU):
 
 @dataclass
 class PFillBUXin13(PFillBU):
-    """pfill-bU with P2-FF r9's XOR-in (13, 19) receipts (NC 4 built with -DPFILL_XIN13, three ops a pair:
+    """pfill-bU with the r9 XOR-in (13, 19) receipts (NC 4 built with -DPFILL_XIN13, three ops a pair:
     y <- (rotl(y, 13) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3, keys under key_ok_r9): every word read with no
     layout premise, the served GEMM's fold. Provisional while r9 is refereed (`fold_status`)."""
 
@@ -489,8 +490,8 @@ R9_RECEIPTS = ("receipt:li-k32", "receipt:xin13-k32")
 
 
 def fold_status(lineage: dict) -> str | None:
-    """'provisional' for a receipt fold whose argument is under referee: P2-FF r9's LOP3+IMAD and XOR-in (13, 19), until
-    RS-E-REF r7 rules."""
+    """'provisional' for a receipt fold whose argument is under referee: the r9 LOP3+IMAD and XOR-in (13, 19), until
+    its referee rules."""
     return "provisional" if set(lineage.get("mechanism") or []) & set(R9_RECEIPTS) else None
 
 

@@ -1,4 +1,4 @@
-// RT-HOPPER-1 on the H200 (sm_90a), the census's s8-rate forms besides the honest one: IGMMA_S8_N8 to N192,
+// The form escape on the H200 (sm_90a), the census's s8-rate forms besides the honest one: IGMMA_S8_N8 to N192,
 // IMMA16832_S8 and IMMA16816_S8 (mma.sync m16n8k32, m16n8k16) and BMMA168256_B1 (mma.sync m16n8k256 b1). The census
 // prices each on DC-90's joint rows at the lane default, as it does RS, and offering any one but IMMA16816 beside the
 // honest form takes DC-90-ri from 0.615% to 3-29% (`forms_gap.py --menu`). Each runs sm90_rs.cu's four loops at one

@@ -1,4 +1,4 @@
-"""HC-PROVED's screens of pfill-k's phase filler (psched_probe.sh's PROBES, ';'-separated `pscore pscore` rows):
+"""Screens of pfill-k's phase filler (psched_probe.sh's PROBES, ';'-separated `pscore pscore` rows):
 `python3 benchmarks/pouw/filler/pfill_phase_screen.py NAME` prints screen NAME's probes. A row is (B, L, split SMs, phase
 warps, phase S, phase tiles a block a layer); the split pumps pfill-k's arm filler (W 8, NC 4, S 256, 2^19), the phase
 filler is blocks of NC 4 ram tiles of that many warps, which the build fixes: NVCC_APPEND_FLAGS="-DPFILL_BITS -DPF_PW=W"

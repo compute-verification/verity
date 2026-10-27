@@ -1,4 +1,4 @@
-"""RT-ALGO round 2's guard: the credited-word algebra of attention, FP-native design A and the compiled H1 unit's prefix layout.
+"""The round-2 algebra guard: the credited-word algebra of attention, FP-native design A and the compiled H1 unit's prefix layout.
 
 `rt_algo_r2/rt_algo_r2_check.py` checks, bit-exact against main's `h1tile` and `segment`, that the compiled unit's final
 words (T_(KS-1), O', D_d) are order-invariant while T_0 .. T_(KS-2) are not, that the unit's gates checkpoint every set

@@ -10,7 +10,7 @@
 //
 // Receipts (Pi_L): every RS = 32 or 64 steps of k, each accumulator word T_s (the running sum C over the first s columns)
 // is absorbed into a per-thread chain; the chains' finishes are the tile's receipts. phi = duo (3 SASS ops a word,
-// note:20261015T0432Z-draft-receipt-phi: u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
+// u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
 // duo2, the follow-up's margin variant (receipt_phi/phi.cu's DUO2): two duo
 // lanes on each word, keys (a, k) and (b, c), rotations R1 and R2, receipt y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8);
 // 6 ops a word. At each receipt boundary in ascending k, a thread absorbs its words acc[mi][ni][e] in (mi, ni) order (each

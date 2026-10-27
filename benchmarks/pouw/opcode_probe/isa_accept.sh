@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# What ptxas does with each instruction form A7's menu has no verdict for: a one-instruction PTX kernel a form, assembled for one target, and the SASS opcodes it becomes.
-# CPU only; no GPU. One JSON line a form in $OUT/isa_accept.jsonl: accepted or not, ptxas's message, the SASS opcodes.
+# What ptxas does with each instruction form A7's menu has no verdict for: a one-instruction PTX kernel a form, assembled
+# for one target, and the SASS opcodes it becomes. CPU only; no GPU. One JSON line a form in $OUT/isa_accept.jsonl:
+# accepted or not, ptxas's message, the SASS opcodes.
 #
 #   research run --on auto --cwd source -- bash benchmarks/pouw/opcode_probe/isa_accept.sh [sm_120a ...]
 set -uo pipefail

@@ -2,7 +2,7 @@
 filler's rate over its windows, coverage with the proved and provisional certified fractions, SCORE as the time-weighted
 mean, the gates (slowdown, receipts, anti-replay, honesty against the interleaved standalone reference and its positive
 control, DRAM with its counter's control, clocks), the settled power and the arms' placement policies; filler-scorer/v5's
-fold reading, modelled served part and SCORE-TP."""
+fold reading, modelled served part and the TP score."""
 
 from __future__ import annotations
 
@@ -599,7 +599,7 @@ def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
         v = facts(put_body=body)["violations"]
         assert v and all("writes global memory" in x for x in v) and any(why in x for x in v), (body, v)
         assert not S.paths_gate(facts(put_body=body))["ok"]
-    # the put as nvcc places its arguments (HC-COMM's tp_dfill_k_put split of c286d4f81): register-to-register moves
+    # the put as nvcc places its arguments (tpcomm's tp_dfill_k_put split of c286d4f81): register-to-register moves
     # copy an argument, and the self-branch after the last RET never runs
     placed = ["LDCU.64 UR4, c[0x0][0x358]", "MOV R20, R27", "MOV R27, 0x0", "MOV R21, R28", "IMAD.MOV.U32 R5, RZ, RZ, R11",
               "STG.E.64 desc[UR4][R2.64], R20", "STG.E desc[UR4][R4.64], R5", f"RET.REL.NODEC R8 `({SERVE})", ".L_x_9:",
@@ -639,7 +639,7 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     bad = S.program_facts({"fscore": nvd(serving(before=["STG.E desc[UR4][R4.64], R1"]), (WARP, False, WARP_BODY))})
     assert S.credit_fixed([fixed_row()], bad)[1]["credited"] == 0
     assert "no program facts" in S.credit_fixed([fixed_row()], None)[1]["dropped"][0]
-    # filler warps inlined into a serving kernel (FILL r3's form): nothing v4 reads as the filler did that work
+    # filler warps inlined into a serving kernel (the inlined form): nothing v4 reads as the filler did that work
     r3 = S.program_facts({"fscore": nvd((DFILL, True, K_TILE), (SERVE, True, [*CONSUMER, *K_TILE]))})
     assert r3["violations"] == [] and r3["fixed_from"] == {"fscore": 0}
     assert "no function in fscore it can come from" in S.credit_fixed([fixed_row()], r3)[1]["dropped"][0]
@@ -662,7 +662,7 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
 
 def test_record_limits_are_checked_when_the_arm_loads():
     """filler-scorer/v3 refuses, before any build or lease, an arm whose record the ledger or the store would refuse
-    after the run (HC-PROVED's 249-character hypothesis reached `score.record` only after a scored run)."""
+    after the run (a 249-character hypothesis reached `score.record` only after a scored run)."""
     import dataclasses
 
     v1 = A.FillV1()
@@ -709,7 +709,7 @@ def test_arms():
         A.load("no-such-arm")
 
 
-#: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (FILL-SEC c259a89b5): one 16832 IMMA's four
+#: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (c259a89b5): one 16832 IMMA's four
 #: words R28..R31, y in R9, the keys in R20/R21
 IMMA4 = "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ"
 RAM = [IMMA4, "LEA.HI R9, R9, R28, R9, 0x7", "IMAD R9, R9, R20, R29", "LEA.HI R9, R9, R30, R9, 0x13",
@@ -915,7 +915,7 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
 def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
     """The deferred pass's shown share s and displacement come from measurement, TP's s
     and d (lost MACs a ms of the whole pass) fitted by TP, batch and context to rounds 3 (ram) and 6 (duo) jointly
-    (each point's residual reported, the filler's remaining share among them), one GPU's share from STAGE-COST (B 32,
+    (each point's residual reported, the filler's remaining share among them), one GPU's share from stage_cost (B 32,
     held flat) and its displacement u(1 − s), u the larger of TP 2's r3 fit and the MAC-for-MAC rule; read at B and L
     clamped to the points."""
     def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
@@ -938,8 +938,8 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
         assert "u" not in xd and xd["d"] == pytest.approx(xu["u"] * (1 - xu["s"]))
     with pytest.raises(ValueError, match="measured at"):
         S.defer_fit(2048)
-    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # HC-COMM r4: TP 2 alone
-    # one GPU's u: the fit to HC-COMM r3 at T = 4096, every residual reported
+    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # tpcomm: TP 2 alone
+    # one GPU's u: the fit to tpcomm at T = 4096, every residual reported
     fit = S.DEFER_FIT
     assert fit["T"] == 4096 and fit["tps"] == [2, 4] and fit["n"] == 12 and len(fit["points"]) == 12
     assert fit["s"]["batch"] < 0 and fit["s"]["rms"] < 0.15 and fit["u"]["rms"] < 0.15 and fit["slowdown_err_pts_max"] < 2
@@ -984,7 +984,7 @@ def tp_log(rank, tp=2, b=32, l=2048, *, base=40.0, phase=41.0, fill=1e12, served
 
 
 def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
-    """SCORE-TP (HC-COMM r2's suite): each TP point over the slowest rank's step, per GPU, its served MACs at 0.9 with
+    """The TP score (tpcomm's suite): each TP point over the slowest rank's step, per GPU, its served MACs at 0.9 with
     the deferred pass and the filler at the folded fraction, weighted TP × wall time; the slowdown, pf_gate, receipts
     and NCCL gates read every rank."""
     rows = S.tp_rows({0: tp_log(0, phase=41.0), 1: tp_log(1, phase=42.0, fill=2e12)})

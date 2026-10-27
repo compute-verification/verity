@@ -1,4 +1,4 @@
-"""E2E-120's attack library: each attack is a prover that departs from `window.Honest` at one step, played against today's
+"""e2e_120's attack library: each attack is a prover that departs from `window.Honest` at one step, played against today's
 round. `ATTACKS` names each one, how to play it, and whether today's check (`PouwSegCheckDither_v2{S, duo}`, the e2e slice's)
 catches it. benchmarks/pouw/tests/test_e2e_120.py asserts each is rejected, and marks xfail (with a reason) the ones today's
 check doesn't catch.

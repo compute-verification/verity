@@ -1,4 +1,4 @@
-// M1 of EPS1 TENSOR: the joint issue cost of every native sm_120 MMA form.
+// The joint issue cost of every native sm_120 MMA form.
 //
 // JI3e's MMA coefficient (8.115 SMSP-cycles a MMA beside other vector-pipe instructions) was fitted beside IMMA s8
 // m16n8k32 only. The issue form of the tensor theorem is tight only if no other form writes its output slots for less
@@ -577,9 +577,9 @@ __device__ __forceinline__ void init_ops(uint32_t lane, int iters, uint32_t* a, 
 }
 
 // ---- lane ops -------------------------------------------------------------------------------------------------------
-// One pipe alone issues at ~0.5 a SMSP-cycle on sm_120 (IADD3: r20261017-040022-5e4d; ISSUE r1 the same for LOP3, IMAD,
-// HFMA2), so a one-pipe lane stream binds on its pipe beside an MMA and the fit overstates a. The mixed points use
-// LANE_MIX, IADD3 and FFMA alternating (integer ALU and FMA pipes), which can reach one issue a SMSP-cycle.
+// One pipe alone issues at ~0.5 a SMSP-cycle on sm_120 (IADD3, and the issue ceiling's probes find the same for LOP3,
+// IMAD and HFMA2), so a one-pipe lane stream binds on its pipe beside an MMA and the fit overstates a. The mixed points
+// use LANE_MIX, IADD3 and FFMA alternating (integer ALU and FMA pipes), which can reach one issue a SMSP-cycle.
 enum { LANE_IADD3, LANE_FFMA, LANE_MIX };
 struct Lane {
   uint32_t r[8];
@@ -885,7 +885,7 @@ int main() {
   form<ImmaS8k32>();
 #endif
 #elif TK_SM == 100
-  // B200: the legacy mma.sync forms, premise (M′) of SLOT-LEMMA: a shallow shape
+  // B200: the legacy mma.sync forms, premise (M′) of the slot lemma: a shallow shape
   // holds no less of the tensor pipe a slot than its kind's full-depth step. Group 0 is int8 and its 2:4 shapes, the
   // reference first and last; group 1 the other shallow shapes.
 #if TK_IN(0)

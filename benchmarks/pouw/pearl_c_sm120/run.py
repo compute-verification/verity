@@ -71,7 +71,7 @@ LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
 #: B~'s prefetch into L2 ahead of a decode call's chain (`Pipeline.prefetch_b`): prefetch_l2's form (PEARLC_PREFETCH_FORM: 0 a
 #: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread, the default: served b8's whole step at an ITL p50
-#: of 20.61 ms against 21.42 in form 0 and 21.85 without it, r20261024-193651-3ef1), its blocks, and B~'s leading bytes it
+#: of 20.61 ms against 21.42 in form 0 and 21.85 without it), its blocks, and B~'s leading bytes it
 #: takes (PEARLC_PREFETCH_MB, 0 all of them)
 PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "2"))
 PREFETCH_CTAS = int(os.environ.get("PEARLC_PREFETCH_CTAS", "64"))
@@ -342,8 +342,8 @@ PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851,
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
     """The pd variant a decode shape's tiles take (its pd_commit is that without PD_GROUP, `Pipeline.pd_commit`): 979
     (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
-    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128 (runs
-    r20261018-225110-fbef and r20261018-230602-5632); None outside pd_commit's rows and k."""
+    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128; None outside
+    pd_commit's rows and k."""
     if m_real > PD_MAX_ROWS or k > PD_MAX_K:
         return None
     return 979 if n >= 16384 or m_real % TILE == 0 else 851

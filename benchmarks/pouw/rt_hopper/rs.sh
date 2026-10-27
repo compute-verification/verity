@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT-HOPPER-1's and RT-HOPPER-8's H200 job, in two runs so no CPU phase runs on the shared H200 node. From a pushed commit:
+# The H200 job for the form escape and honest's folding loops, in two runs so no CPU phase runs on the shared H200 node. From a pushed commit:
 #
 #   research run --on auto --project verity --campaign eps1 --source <tree> --cwd source -- bash benchmarks/pouw/rt_hopper/rs.sh build
 #       builds sm90_rs.cu (or --env RS_SRC=sm90_forms.cu, the s8-exact siblings) for sm_90a and gates every probe's

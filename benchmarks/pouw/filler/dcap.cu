@@ -15,7 +15,7 @@
 // dgate, dalone, done, dfill B L PLACE FILL_SMS W NC S: the DRAM-free filler (FILL; see "dfill" below): its receipts bit
 // for bit against the host, its rate alone, one chunk for ncu, and the step beside it, on a green split (PLACE split) or
 // co-resident on every SM at the lowest stream priority with the step at the highest (PLACE co). The filler is pfill.cuh's
-// (HC-PROVED: fresh noise for every MMA, ram receipts at k32) unless built with -DDFILL_V1 (FILL v1's chained one).
+// (fresh noise for every MMA, ram receipts at k32) unless built with -DDFILL_V1 (FILL v1's chained one).
 // fgate, flin M FW NC THR, fstep B L FW NC THR AFW [FILL_SMS]: the decode linears as a warp-specialized GEMM whose filler
 // warps run the DRAM-free chain while the consumers wait on memory, and the attention blocks with AFW filler warps each
 // (flin.cuh): outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both, on
@@ -1455,7 +1455,7 @@ static int att_gate(Dev& d, std::mt19937_64& rng, const char* mode, const char* 
   return bs != 0 || bo != 0;
 }
 
-// ---------------------------------------------------------------- pfill: the filler in decode's attention phase (HC-SCHED)
+// ---------------------------------------------------------------- pfill: the filler in decode's attention phase (psched)
 // Decode's attention (qk_dec, pv_dec) runs on the CUDA cores and leaves the tensor pipe idle, and a co-resident filler
 // slows it ≤ 0.2% (FILL); only the linears suffer from a shared tensor pipe. So the step's graph forks a phase filler
 // (dfill_p, the same tile as dfill_k) on decode's own SMs after each layer's qkv, at the graph's highest node priority so

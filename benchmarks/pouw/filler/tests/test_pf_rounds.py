@@ -22,7 +22,7 @@ sys.modules[_spec.name] = R
 _spec.loader.exec_module(R)
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
-#: the NC 4 folds the dial wraps: ram (no flag), and P2-FF r9's LI and XIN13 (each its build flag)
+#: the NC 4 folds the dial wraps: ram (no flag), and the r9 LI and XIN13 (each its build flag)
 FOLD_FLAG = {"ram": [], "li": ["-DPFILL_LI"], "xin13": ["-DPFILL_XIN13"]}
 CASES = [(0, 4), (1000003, 13), ((1 << 62) | 99, 8)]  # (tile, steps)
 

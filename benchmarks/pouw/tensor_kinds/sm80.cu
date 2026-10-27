@@ -1,4 +1,4 @@
-// M1 of EPS1 TENSOR on sm_80 (A100): every native mma.sync form alone and beside a scalar lane, the scalar pipes' rates
+// On sm_80 (A100): every native mma.sync form alone and beside a scalar lane, the scalar pipes' rates
 // alone, in pairs and beside saturated IMMA, the duo fold beside IMMA, and a layout-free check of which forms leave the
 // exact s32 word.
 //
@@ -745,8 +745,7 @@ static void exact() {
   if constexpr (F::EX != 0) exact_int<F>();
 }
 
-// The least bound moves with the loop's length (r20261017-073620-0273: IMMA.16832 at 8 warps 5.16 at R = 32, 4.54 at
-// 48, 5.19 at 64), so R and U each vary, every loop under ~200 instructions.
+// The least bound moves with the loop's length (IMMA.16832 at 8 warps: 5.16 at R = 32, 4.54 at 48, 5.19 at 64), so R and U each vary, every loop under ~200 instructions.
 template <class F, int NW>
 static void sweep() {
   mixu<F, 24, LANE_MIX, NW, 2>(); mixu<F, 24, LANE_MIX, NW, 3>(); mixu<F, 24, LANE_MIX, NW, 4>();
@@ -811,7 +810,7 @@ static void beside() {
   spec<F, 64, lane2(OP_LOP3I, OP_FFMA)>(); spec<F, 64, lane2(OP_IADD3, OP_IMAD)>();
 }
 
-// M1c on sm_80 (the search's second extension, after FACET-BREAK beat sm_120's joint rows with an f16 MMA): each
+// M1c on sm_80 (the search's second extension, after facet_break beat sm_120's joint rows with an f16 MMA): each
 // form that sets a joint coefficient, beside the lane mixes M1 left out (other pipes, register reads, the operand loads),
 // interleaved at three densities and 4, 6 and 8 warps a SMSP, and warp-specialized; M1's IADD3+FFMA least as control.
 template <class F, int X>

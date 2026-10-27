@@ -1,4 +1,4 @@
-// RT-HOPPER-1 on the H200 (sm_90a): does a wgmma form other than the honest's run faster beside the LI fold? The census
+// The form escape on the H200 (sm_90a): does a wgmma form other than the honest's run faster beside the LI fold? The census
 // prices IGMMA_S8_N256_RS (A from registers) and IGMMA_U8S8_N256 on DC-90's joint rows JI90_0/JI90_1 at a lane
 // instruction's default, 64x under the honest SS form's measured lines, so the model lets a cheater run either at the
 // issue bound. These loops are ../dc/probes/sm90_wgmma.cu's, templated on the form: each form alone (wait_group 1), the

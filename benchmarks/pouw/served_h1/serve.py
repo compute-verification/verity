@@ -43,7 +43,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
-  This window has no gated session of its own (compute accounting, 21 Oct): the gated served window of record is vllm's
+  This window has no gated session of its own: the gated served window of record is vllm's
   H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
   table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
@@ -89,7 +89,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
-    $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting \
+    $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at <ISO time> --by LANE \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """
 from __future__ import annotations

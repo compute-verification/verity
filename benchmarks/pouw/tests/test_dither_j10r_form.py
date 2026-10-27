@@ -1,5 +1,5 @@
 """Dither's J10-R units ($DITHER_SO_UNITS=j10r: `benchmarks/hash/dither/j10r_units.py`, the host units the gate holds the
-GPU's receipts to word for word) in RT-ALGO-16's verifier form: a call's first position u0 is credit's (the
+GPU's receipts to word for word) in the verifier's form: a call's first position u0 is credit's (the
 window's earlier calls' units), its unit u = ri (N / 32) + cj at position u0 + u reads its call's seed_c at u0 and the
 blocks core's credit derives for tile t = u at the call's slot M (`core_check.j10r_blocks`), so its public rows are
 credit's `public_table` and its receipt `h1tile.j10r_reference`'s at them; and `forms.form_of` labels such an arm by

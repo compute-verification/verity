@@ -7,7 +7,7 @@
 //
 //   utc_<S>_<K>   bare: warp 0 issues 4 tcgen05.mma i8 128x256x32 a commit group (UTCIMMA, saturating the tensor pipe, as
 //                 tc_i8_m128_n256) and carries K warp-uniform chain instructions a iteration (uchain.cuh). Nothing reads
-//                 the TMEM accumulators inside the loop, so -- the FACET-BREAK finding, as on sm_90 -- ptxas 13.0 lowers
+//                 the TMEM accumulators inside the loop, so -- the facet_break finding, as on sm_90 -- ptxas 13.0 lowers
 //                 the chain to the vector lanes (IMAD/LOP3/IADD3), not the uniform datapath. The gate pins the lane
 //                 counts; the K-slope is the lane cost beside a saturated async tcgen05.mma.
 //   utch_<S>_<K>  honest: as utc, plus the honest step (8 mma.sync + its duo fold) in warp 0's loop, the one thing that

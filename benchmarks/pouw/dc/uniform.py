@@ -1,4 +1,4 @@
-"""uni.sh's run into the uniform datapath's census lines on sm_90 and sm_100 (EPS1 DC r4), and the IMAD forms of duo's
+"""uni.sh's run into the uniform datapath's census lines on sm_90 and sm_100, and the IMAD forms of duo's
 ALU work beside the fold.
 
     python3 uniform.py analyze OUT... [--json F]    the rates, each row's UNI coefficient, the IMAD forms

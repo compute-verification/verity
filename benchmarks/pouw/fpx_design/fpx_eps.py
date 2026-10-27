@@ -1,4 +1,4 @@
-"""FPX-DESIGN's candidate FP designs on the machine model: each a device's int8 record with what an FP route adds.
+"""fpx_design's candidate FP designs on the machine model: each a device's int8 record with what an FP route adds.
 
     uv run --project benchmarks/pouw/machine_model python benchmarks/pouw/fpx_design/fpx_eps.py OUT
 
@@ -20,12 +20,12 @@ stated under (the 1.22 reading rests on Theorem C, unproved). An FP route adds:
 
 The extraction is the honest FP route's and no cheater's: a cheater that writes the words on lanes, or on the int8 MMA,
 never extracts, but the model charges a design's fold to every route and to its floor. So V's own ε is over-credited on
-every device, B300 included, where the cheater puts 81-98% of its words on lanes. Each V with an extraction is therefore also written as `V-x0`, the same design with
-`keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its credit, the floor the words cost with no
-extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's own ε beside the bound
-1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a cheater that doesn't
-extract, at V's L, marked (`CAVEATS`) where that is no witness (operands past s8, or FP4's k64 words).
-`rt_fp/overcredit.py` prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
+every device, B300 included, where the cheater puts 81-98% of its words on lanes. Each V with an extraction is therefore
+also written as `V-x0`, the same design with `keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its
+credit, the floor the words cost with no extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's
+own ε beside the bound 1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a
+cheater that doesn't extract, at V's L, marked (`CAVEATS`) where that is no witness (operands past s8, or FP4's k64
+words). `rt_fp/overcredit.py` prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
 
 g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fair live coin b of 1 and centred:
 R + b - 1/2. The one GEMM of the integers R + b is int8 Dither-2S's on fair coins, folded and served (its rank-one

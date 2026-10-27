@@ -22,7 +22,7 @@ W8 = (0x9E, 0x37, 0x79, 0xB9)  # a committed word's four s32 limbs, at the reduc
 
 
 def test_the_fold_is_faithful():
-    """One round of the proof's fold equals receipt_folds_r9.xorin_step (rotations 13, 19), the pinned P2-FF r9 reference
+    """One round of the proof's fold equals receipt_folds_r9.xorin_step (rotations 13, 19), the pinned r9 reference
     the dial iterates."""
     a0, a1 = np.uint32(0x9E3779B1), np.uint32(0x85EBCA77)
     y = np.arange(64, dtype=np.uint32) * np.uint32(2654435761)

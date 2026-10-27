@@ -20,7 +20,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   replayed under the verifier's length of its request (`LENGTH`, where its params name none), and a REGISTERED or ACCEPT
   of it must now get a reject as not of record (``window-form: no-fixed-length``).
 * **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening`
-  and Lean's.  In a window of the 336-byte entry rows (9 Oct on) an ACCEPT opening must open and a REJECT one must not;
+  and Lean's.  In a window of the 336-byte entry rows an ACCEPT opening must open and a REJECT one must not;
   the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
 * **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
   draw from the challenger's coin commitment, its draw coin's opening, the stream's digest, the receipt and draw.json),

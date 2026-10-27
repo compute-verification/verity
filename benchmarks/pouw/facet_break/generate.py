@@ -565,10 +565,11 @@ def targeted_r4() -> list[dict]:
     return out
 
 
-#: the `rt` batch: the schedule axes the ji, jifine and r4 batches left at a single value on the low-accumulator break (2-3
-#: accumulators, 2 warps a SMSP, where IMMA.16832 and FMUL by an immediate reach every JI3s row's 0.98): na 5, 1 and 3
-#: warps a SMSP, unroll and placement (ji swept them on 8 accumulators only), and the uniform datapath beside the FMA and
-#: ALU pipes at low na (ji timed it on 8 accumulators only, where it traded 1:1 with the FMA pipe instead of co-issuing)
+#: the `rt` batch: the schedule axes the ji, jifine and r4 batches left at a single value on the low-accumulator break
+#: (2-3 accumulators, 2 warps a SMSP, where IMMA.16832 and FMUL by an immediate reach every JI3s row's 0.98): na 5, 1
+#: and 3 warps a SMSP, unroll and placement (ji swept them on 8 accumulators only), and the uniform datapath beside the
+#: FMA and ALU pipes at low na (ji timed it on 8 accumulators only, where it traded 1:1 with the FMA pipe instead of
+#: co-issuing)
 RT_CEIL = ("fmuli", "faddi", "ffmai")
 RT_UNI = (("fmuli", "uaxi"), ("faddi", "uaxi"), ("ffmai", "uaxi"))
 RT_TRI = (("fmuli", "axi", "uaxi"), ("fmuli", "shfi", "uaxi"), ("faddi", "prmti", "uaxi"))
@@ -719,10 +720,10 @@ def targeted_rt6() -> list[dict]:
 
 
 def targeted_rt7() -> list[dict]:
-    """The `rt7` batch: the warp-specialized programs with the lane warps' trip widened. The earlier batches' programs ran 16
-    lane ops a trip, beside the trip's uncounted stop poll, counter and branch; here 64-256 lane ops a trip beside FMUL,
-    on the forms `rt5` and `rt6` beat and IMMA.16832, 1-2 MMA warps a SMSP among 2-4, 4 and 8 accumulators, 32 and 64
-    MMAs a trip."""
+    """The `rt7` batch: the warp-specialized programs with the lane warps' trip widened. The earlier batches' programs
+    ran 16 lane ops a trip, beside the trip's uncounted stop poll, counter and branch; here 64-256 lane ops a trip
+    beside FMUL, on the forms `rt5` and `rt6` beat and IMMA.16832, 1-2 MMA warps a SMSP among 2-4, 4 and 8 accumulators,
+    32 and 64 MMAs a trip."""
     out: list[dict] = []
     for form in ("isp16864", "hsp16832", "qsp16864", "i16832"):
         for mw, w in ((1, 2), (1, 3), (2, 4)):

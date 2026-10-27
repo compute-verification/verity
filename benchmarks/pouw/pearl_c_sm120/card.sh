@@ -7,7 +7,7 @@
 # First the check alone on both variants (OUT/check.jsonl), then the check and the timing at SHAPES on VARIANTS (default
 # sm120, the served one; OUT/run.jsonl); each run's summary in OUT/<name>.txt, and the job's exit code the first failure's.
 # GPUS: the GPUs the lease may take (gpu-lease --on); MAX_MIN the lease (15); GPU_LEASE_TIMED=1 for a row taken inside a
-# booked clean window (gpu-lease --timed). numabind.py is #3395's (benchmarks/hash/dither/numabind.py); without it run.py
+# booked clean window (gpu-lease --timed). numabind.py is benchmarks/hash/dither/numabind.py; without it run.py
 # runs unbound. The node's load (loadavg and the leases) before and after each part is OUT/load.txt. Scratch, the unpacked
 # ship, is one mktemp -d directory.
 set -euo pipefail

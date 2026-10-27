@@ -1,5 +1,5 @@
 """uni.sh's run of probes/sm100_ldtm.cu into the issue price of tcgen05.ld.32x32b.x128 (LDTM.x128, 4096 words a warp
-instruction) on sm_100 (EPS1 DC r7, TMEM-EXTRACT).
+instruction) on sm_100.
 
     python3 ldtm.py analyze OUT... [--json F]   each stream's baseline issue, each density's slowdown a load, the price
     python3 ldtm.py tables GATE_JSON            rewrite sm100_ldtm.cu's table from probe.py gate's JSON

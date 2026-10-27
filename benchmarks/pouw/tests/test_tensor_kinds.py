@@ -111,7 +111,7 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
 
 
 def test_a_program_faster_than_a_joint_row_is_marked_over(tmp_path: Path):
-    # r20261017-040022-5e4d's IMMA.16816 + IADD3 x8 (spec): 17.563 SMSP-cycles a MMA at 9.125 others a MMA, where
+    # a measured IMMA.16816 + IADD3 x8 (spec): 17.563 SMSP-cycles a MMA at 9.125 others a MMA, where
     # JI3e_1 (15.030 + 0.317 a other) asks at least 17.92
     k16 = ["IMMA.16816.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
     lane = ["IADD3 R3, R3, R4, RZ"] * 64 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]

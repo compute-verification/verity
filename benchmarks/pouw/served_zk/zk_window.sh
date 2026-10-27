@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # served_zk's served hm96 path on node 2: GPU 1's ship (build.sh) and hm96_rows.cubin built on the node's CPUs, then
-# window.sh with the served row's switches (r20261005-232920-9a1c: -h2, rows form s, whole step, deferred tile hashing, both
+# window.sh with the served row's switches (-h2, rows form s, whole step, deferred tile hashing, both
 # arms graphed) and STATEMENT, which adds e2e.py's pearlc-zk mode (served_zk/statement.py) and its gate.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=LANE [--env MODE=window] -- bash benchmarks/pouw/served_zk/zk_window.sh

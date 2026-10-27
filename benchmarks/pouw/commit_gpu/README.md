@@ -214,7 +214,7 @@ cost to the stage when the root isn't needed before the GEMM ends.
   10.3 us a level (0.106 ms at depth 11 to 0.164 at depth 16): two serial compressions on one warp, plus the launch. At
   R <= 64 the tree is half or more of the latency. The root on the host saves at most 8 us.
 
-### For a producer's epilogue (STAGE-COST)
+### For a producer's epilogue (stage_cost)
 
 Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)` and
 `salts<true>(nullptr, stream)` (or `salts<false>` with given salts). In the epilogue, for each whole block a CTA holds
@@ -225,7 +225,7 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 `nodes(stream)`. `check` holds the result to the reference: write `levels.bin` and `bc.bin` as `check()` does and run
 `reference.py check`.
 
-### The small path (beside the GEMMs: STAGE-OVL)
+### The small path (beside the GEMMs: stage_ovl)
 
 `init(..., dom, small = true, slots)` puts a committer on kernels that can share an SM with cuBLASLt's GEMM CTAs: every
 CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
@@ -249,13 +249,13 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   16-byte loads touch 32/g lines. `prefetch`: each leaf's next 128-byte block goes into L1 as its compression starts.
 - `nodes`: a launch a level while a level is wider than 256 nodes, then one CTA for the rest. With `fuse_top`, when the
   levels above the CTAs fit one CTA, the leaf kernel's last CTA (an atomic count) folds them and `nodes` launches
-  nothing. STAGE-COST r2's 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
+  nothing. stage_cost's 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
   bought 1.17x on about 5 levels.
 - The domain id is a `Dom` in `CD[dom]` (`COMMIT_GPU_DOMS` slots), so committers of different leaf counts share one
   binary while their `Consts` agree (one Ks, key and row size).
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
-to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in STAGE-OVL's schedule (its cg arms), dumps
+to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in stage_ovl's schedule (its cg arms), dumps
 chunk 0's commitments, and `reference.py verify` checks them.
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between

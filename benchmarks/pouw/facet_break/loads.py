@@ -1,4 +1,4 @@
-"""FACET-BREAK: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
+"""facet_break: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
 
 The standing adversary for the sm_120 data sheet. A facet is a row of the
 machine model (`../machine_model/data/`): row r holds Σ_k c_kr·x_k SMSP-cycles for a program that issues x_k warp
@@ -281,7 +281,7 @@ def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | Non
             "full": "x_issue" in row}
 
 
-#: tensor_kinds (EPS1 TENSOR M1, `cursor/eps1-tensor-ea24`): each form name's census kind, and each mode's lane op split
+#: tensor_kinds: each form name's census kind, and each mode's lane op split
 #: over census classes (spec/mixu: IADD3 and FFMA alternating; *_iadd3: IADD3 alone)
 TK_KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imma_s8_m16n8k32_sat": "IMMA16832",
            "imma_s8_m16n8k16": "IMMA16816", "imma_s8_m8n8k16": "IMMA8816", "imma_sp_s8_m16n8k64": "IMMASP16864",

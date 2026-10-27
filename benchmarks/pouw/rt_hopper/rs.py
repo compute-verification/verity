@@ -1,6 +1,6 @@
 """rs.sh's reading: each loop's wgmma rate over the SS form's alone rate (the tensor fraction, as `../dc/analyze.py` reads
 `wgli_*`), and its cycles a MMA at the plain GEMM's 122.41 SMSP-cycles over that fraction (dc90-licpw-redux-l32's
-measured 204.25 is wgli_redux's). RT-HOPPER-1 is a real escape only if the RS (or U8S8) form beside the same LI fold runs
+measured 204.25 is wgli_redux's). Offering another form is a real escape only if the RS (or U8S8) form beside the same LI fold runs
 more than 2% faster than SS does; otherwise it is a model gap (the joint rows' default), not a hardware one. The
 `wgli_true` loops fold the wgmma's own accumulators after each wait: their cycles a MMA against
 wgli_redux's say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own:

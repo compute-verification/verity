@@ -16,7 +16,7 @@
 // linears and attention execute at 70B's shapes (QK and PV at 64/TP query heads); capacity is 1024 MACs/SM/clk at the SM
 // clock NVML reads during each rep. Clocks are read, never set.
 //
-// The phase filler is pfill-k (HC-PROVED, cursor/hc-proved-ea24@fe2fdb5bf, pfill.cuh built with PFILL_BITS): Theorem K's
+// The phase filler is pfill-k (pfill.cuh built with PFILL_BITS): Theorem K's
 // tile, {0,1} bits on both operands of the s8 IMMA m16n8k32, each k32 s32 word folded unscaled into the ram receipt as
 // it leaves the MMA. It is launched on a side branch of the graph beside each collective, one block of KF_G tile groups
 // (PF_W warps each, pfill's tile loop) on each of SMs - TPC_RESERVE SMs, so that NCCL's blocks find free SMs. Group gid of
@@ -48,9 +48,9 @@
 // break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), provisionally: the binding
 // is proved for runs of one to four words (Lean Pouw.SecurityProofs.Receipt.DuoQuadNoKernel), and five or more words
 // and the served receipt's projected form are open. -DTP_NC=4 is the ram
-// fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF). At NC 4 one
-// of P2-FF r9's XOR-family folds is built with -DPFILL_LI or -DPFILL_XIN13 (pfill.cuh's r9 folds); each is
-// provisional and reads at Theorem K's proved half (0.45) until RS-E-REF r7's select-charging lemma lands. -DPFILL_XIN
+// fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8). At NC 4 one
+// of the r9 XOR-family folds is built with -DPFILL_LI or -DPFILL_XIN13 (pfill.cuh's r9 folds); each is
+// provisional and reads at Theorem K's proved half (0.45) until the select-charging lemma lands. -DPFILL_XIN
 // (rotl 7) is retired (pfill.cuh #errors on it). pf_absorb and pf_fold read NC, so one macro picks the fold for every
 // launch and every host reference.
 #ifndef TP_NC
@@ -760,8 +760,8 @@ static void enqueue_step(Rank& R, const std::vector<Lt>& p, const Lt& lm, int ki
                                                                 R.dp.dtotal);
 }
 
-// the dalone arm: a step's whole deferred quota drained on every SM with no decode and no gaps — the deferred pass's decode cost
-// without the gaps (dtotal[1])
+// the dalone arm: a step's whole deferred quota drained on every SM with no decode and no gaps — the deferred pass's
+// decode cost without the gaps (dtotal[1])
 static void enqueue_dalone(Rank& R) {
   cudaStream_t st = R.d.st;
   dprolog_k<<<1, 32, 0, st>>>(R.dp.dctr);

@@ -1693,7 +1693,7 @@ def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
 
 
 def test_with_graphed_fp8_decode_heads_over_it_and_the_eager_row_is_beside_it():
-    """The root's 21:33Z ruling: decode's headline row is over stock FP8 under CUDA graphs, the eager row beside it at the
+    """Decode's headline row is over stock FP8 under CUDA graphs, the eager row beside it at the
     shape's -eager name, in the same attempt; both behind the same gate, and prefill keeps its one row."""
     PR = load("pearl_c_vllm_panel_rows", KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
     rows = PR.rows(*e2e_result(graphed=True), "panel.py")

@@ -313,7 +313,7 @@ def register_ok(program: str, window: str, population: int, window_root: str) ->
 def known_ok(window: str, population: int) -> dict:
     """The known content of ``window``'s ``ok`` rows as flock-verify's ``--registered`` file names it under a port's
     ``known`` key (`Registered.KNOWN_KEY`, `Flock/RegKnown.lean`): row u the one word 1 (`OK`) and its public `ok_salt`, so
-    the verifier computes ``ok``'s root itself and refuses a file whose ``ok`` root is another (RT4-LOGIC-29a,
+    the verifier computes ``ok``'s root itself and refuses a file whose ``ok`` root is another (
     `Accounting.Guarantees.TS.HeldSessionSound`)."""
     return {"rows": [OK.tolist()] * int(population), "salts": [ok_salt(window, u).hex() for u in range(int(population))]}
 

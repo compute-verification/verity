@@ -496,7 +496,7 @@ __global__ void __launch_bounds__(32 * PF_W, PF_MINB) dfill_k(uint64_t c0, uint6
   pf_tiles<NC, PF_KIND>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
 }
 
-// The phase filler (dcap.cu's PFill, HC-SCHED's placement): the same tile at PF_PW warps under the phase ids PBIT | (base +
+// The phase filler (dcap.cu's PFill, psched's placement): the same tile at PF_PW warps under the phase ids PBIT | (base +
 // slot), a tile a block at a time, so a slot is a block's tile (slot off + blockIdx.x tiles + i) and `steps` is a warp's
 // fragments (any multiple of 4). The stop flag is read once a tile by thread 0 and taken by the whole block, since a tile
 // syncs it. Each slot keeps (tile id, receipt); st[1] counts the tiles done. A block of PF_PW warps holds PF_PW / 8 of the

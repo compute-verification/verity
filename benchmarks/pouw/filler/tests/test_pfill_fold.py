@@ -85,7 +85,7 @@ def test_q_words_are_half_the_information(kind):
 @pytest.mark.parametrize("nc", FOLDS)
 def test_packed_cheat_recovers_every_word_on_pm1_and_bits(host, kind, nc):
     """The packed route, (4 A)(33 B0 + B1) and a table, gets both words of a pair from one product on the ±1 and {0,1}
-    tiles, under every fold: no fold closes it (P2-FF prices it by COINC)."""
+    tiles, under every fold: no fold closes it (the fold analysis prices it by COINC)."""
     assert R.packed_receipt(C0, C1, 3, nc, 8, kind) == host(C0, C1, 3, nc, 8, kind)
 
 

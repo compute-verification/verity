@@ -43,7 +43,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   ``other-leaf-in-tree-lane5`` and ``other-leaf-in-tree``: the other leaf's partial committed at row 5 of this leaf's tree,
   which opens, and lane 5's and the combine's ok are 0 (REJECT). ``lane5-partial-off-tree``: on that tree, lane 5 given
   its honest partial, so its ok is 1, opened in the honest leaf's tree rather than the registered one: the partials are
-  registered reads of every statement, never free rows (RT4-LOGIC-29c), so it opens at no position (REJECT).
+  registered reads of every statement, never free rows, so it opens at no position (REJECT).
   ``receipt-mismatch``: a registered receipt one bit off
   the lanes' XOR, the partials recommitted under its registration: the combine's ok is 0 (REJECT). ``lane3-index4``: lane
   3 whose ``pub`` row holds index 4, which opens no root but lane 4's (REJECT). ``ok-from-public``: the combine whose

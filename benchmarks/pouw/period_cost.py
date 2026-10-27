@@ -204,7 +204,7 @@ def eps(n: int, c: Config) -> float:
 
 
 def windows(c: Config) -> int:
-    """The least n with ε(n) < 1% (INT-PERIOD's n_min)."""
+    """The least n with ε(n) < 1% (the period's n_min)."""
     budget = TARGET - c.eps_flat
     if budget <= 0:
         raise ValueError(f"ε_♭ = {c.eps_flat:.3%} leaves no logical budget under {TARGET:.0%}")
@@ -390,7 +390,7 @@ def near_term(base: Config = TODAY) -> list[Config]:
 
 
 def configurations(base: Config = TODAY) -> list[Config]:
-    """INT-PERIOD's line, `base`, and `route`'s steps, each on the last."""
+    """The period's line, `base`, and `route`'s steps, each on the last."""
     line = Config("INT-PERIOD's line: per-draw rates, W2's tile a draw", rates="int-period", unit_outputs=LANE_OUTPUTS,
                   k=1.0, receipts_per_unit=False)
     return [line, base, *route(base)]

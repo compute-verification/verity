@@ -1,4 +1,4 @@
-"""RT-ALGO: bit-exact check of the algebra of H1 Dither's credited words against `h1tile.reference`.
+"""Bit-exact check of the algebra of H1 Dither's credited words against `h1tile.reference`.
 
 Tests the premise that each credited word needs a fresh write that costs what the honest GEMM costs, by trying the
 algebraic shortcuts (reuse the served AB, low-rank in the coins/noise, U's linear structure, fold-before-multiply,

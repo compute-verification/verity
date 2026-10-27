@@ -1,4 +1,4 @@
-// RT-H200-EMP's combined-route attacks on sm_90a (H200), the cases the single-stream probes leave open. Built by
+// Combined-route attacks on sm_90a (H200), the cases the single-stream probes leave open. Built by
 // ../opcode_probe/probe.py build --arch sm_90a; every probe passes the SASS gate, the poisoned sink and its no-write
 // control before it is timed (probe.cuh). Accumulators stay in registers; A and B come from one shared tile through
 // no-swizzle K-major descriptors (dc.cuh).

@@ -84,7 +84,8 @@ class PhaseSched:
 TABLE_V2 = {**TABLE, (32, 8192): (108, PhaseFill(W=4, tiles=47)), (32, 24576): (108, PhaseFill(tiles=95)),
             (128, 2048): (92, PhaseFill(tiles=28)), (256, 3072): (60, PhaseFill(tiles=98))}
 #: FILL's filler in prefill at the lowest stream priority, in blocks short enough (8 tiles a warp of S 128, ~90 µs) that
-#: the GEMMs' blocks, at the highest, take each SM back within one: it fills their wave tails (1.027, coverage 0.180 against 0.135 alone; 2^16 a chunk 1.083)
+#: the GEMMs' blocks, at the highest, take each SM back within one: it fills their wave tails (1.027, coverage 0.180
+#: against 0.135 alone; 2^16 a chunk 1.083)
 CO_PREFILL = A.Filler(W=8, NC=4, S=128, chunk_log2=15)
 
 

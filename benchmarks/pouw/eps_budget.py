@@ -18,8 +18,8 @@ every served output and everything derived from it free unless a check recompute
 The designs are the registry's (benchmarks/pouw/machine_model/data/designs/, `machine-model designs`): each product is
 noised as its design's `[noise]` names, a leaf of the registry's NOISE, and priced per component in executed int8
 products and honest seconds, with γ (`products`, `parts`, `summary`, `skip_table`, `component_table`). A checked leaf's
-vector work that only the served output needs is priced in CHECKED-STRIP's tensor–scalar model (`TS_EPS`, `pv_ts`), and
-`pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at BC-KERNEL r2's
+vector work that only the served output needs is priced in checked_strip's tensor–scalar model (`TS_EPS`, `pv_ts`), and
+`pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at the checked kernels'
 measured kernel (apv_l7qs): its tail a strip product, its sums and its served epilogue. Under the floor credit
 (Corollary D3, SPEC §2.9; `floor_skip`) ε_skip is the skippable work at its device's issue-model price over the floor
 program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and honest's time above those prices is γ's. A
@@ -31,7 +31,7 @@ Two pieces of served-only work that the cheater skips are not priced as skippabl
 
 - co32c's recombination O = O′ − Σ128^d D_d. `TS_EPS` prices co32c as if O were a checked word, but no check reads it:
   H1's receipts are T, O′ and the D_d.
-- g1's centring correction (FPX-DESIGN's g1 arms), which nothing here prices.
+- g1's centring correction (fpx_design's g1 arms), which nothing here prices.
 
 Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
 either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same
@@ -96,7 +96,7 @@ RATES = {
                          # instructions a 128-cell tile (exact ncu counts), one a SMSP-cycle
     # The floor credit's model prices of the same work, SMSP-cycles (`floor_skip`): honest's latency above
     # them goes to γ, which the measured prices above still feed
-    "c_tail_pv": 1.57 * 21.47 / 4096,   # a strip product: the checked kernels' issue model, 1.57 mainloop MACs at apv's issue
+    "c_tail_pv": 1.57 * 21.47 / 4096,   # a strip product, the checked kernels' model: 1.57 mainloop MACs at apv's issue
                                         # bound (JI3n_0, 21.47 a MMA); a served-checked cheater pays its ¼, the 4th IMMA
     "apv_tail_macs": 1.57,   # the same mainloop MACs a strip product, on a device with no apv kernel at ♭'s price a MAC
     "c_vsum": 35 / 32,       # an entry: vsum's 35 per-thread instructions an entry, a warp's a cycle
@@ -117,8 +117,8 @@ RATES = {
     "bw": 1.41e12,       # B/s, decode attention's measured KV read (dcap)
     "lin_bw_b32": 6.98e9 / 5.9e-3,  # B/s, 32-layer int8 linears at M = 32: 5.64 ms (M = 1) to 6.18 ms (M = 64)
     "step_fixed": 0.293e-3,    # s a decode step, the step model's constant (within 1.7% of 14 steps)
-    "comm_tp2_b32": 5.2e-3,    # s a TP-2 decode step of all-reduces, calibrated to HC-COMM r6's base step at B 32, 2K
-    "decode_commit": 0.012,   # of the decode step, committing its operands (STAGE-COST: 0.9-1.4%)
+    "comm_tp2_b32": 5.2e-3,    # s a TP-2 decode step of all-reduces, calibrated to tpcomm's base step at B 32, 2K
+    "decode_commit": 0.012,   # of the decode step, committing its operands (stage_cost: 0.9-1.4%)
 }
 DECODE_BATCH = 32
 
@@ -154,7 +154,7 @@ CO32C_DIGITS = 3
 
 
 def pv_digits(keys: int) -> int:
-    """m, the base-128 digits of P V's Ycum (CHECKED-STRIP's P3): 2 up to 2K keys, 3 up to 128K."""
+    """m, the base-128 digits of P V's Ycum (checked_strip's P3): 2 up to 2K keys, 3 up to 128K."""
     return 2 if keys <= 2048 else 3
 
 
@@ -163,7 +163,7 @@ def products(leaf: str, comp: str, k: int) -> tuple[float, float, float]:
     runs on two int8 limbs when its operand is a residue sum that leaves int8 (L = 32 classes of k / L terms: the
     one-sided peel), on one when it fits (cohalf: two terms with a 7-bit served side), on checked digit limbs when the
     sums' base-128 digits are committed (co32c; pv, (m + 1)·L for m digits). P's peel frees P V's whole strip: at a
-    one-hot P row its output is a copy (CHECKED-STRIP's Result 3). A product served plain (`clean`) is `parts`'."""
+    one-hot P row its output is a copy (checked_strip's Result 3). A product served plain (`clean`) is `parts`'."""
     if comp == "P·V":
         if leaf == "peel":
             return k, 2 * (L + 1), 2 * (L + 1)
@@ -272,11 +272,11 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
 #: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (checked_strip's
 #: TS_FACETS).
 TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
-#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as the checked kernels measured it
-#: (exact ncu counts): one digit of one Ycum entry, 7 per-thread instructions
-#: (cpv.cu's vdig without z's hashing; checked_strip's PV_DIGIT_OPS), the epilogue's 2.8 a cell over a dequantizing one
-#: (pv_l7qs − pv_plain; PV_SERVE_OPS, warp instructions a tile), and a unit's I2F and FMULs into the float output, 3 a
-#: cell (c_l7qs_v − c_l7qs, less its epilogue's 2.2), which every block of P adds once.
+#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as the checked kernels
+#: measured it (exact ncu counts): one digit of one Ycum entry, 7 per-thread instructions (cpv.cu's vdig without z's
+#: hashing; checked_strip's PV_DIGIT_OPS), the epilogue's 2.8 a cell over a dequantizing one (pv_l7qs − pv_plain;
+#: PV_SERVE_OPS, warp instructions a tile), and a unit's I2F and FMULs into the float output, 3 a cell (c_l7qs_v −
+#: c_l7qs, less its epilogue's 2.2), which every block of P adds once.
 PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 7.0, 11.2, 12.0
 #: A checked leaf's vector work that only the served output needs, in the TS model at the duo fold, as a fraction of its
 #: component's own time, by leaf, model and component, from checked_strip.py @007ee9c54 (`ts_co32c_recombination`,
@@ -300,7 +300,7 @@ def ts_time(mmas: float, ops: float) -> float:
 
 
 def base128_digits(g: int) -> int:
-    """m, the base-128 digits a sum of g int8 terms takes (CHECKED-STRIP's n_digits over g·[−128, 127])."""
+    """m, the base-128 digits a sum of g int8 terms takes (checked_strip's n_digits over g·[−128, 127])."""
     m = 1
     while not (-128 * g >= -(128 ** m) and 127 * g // 128 ** (m - 1) <= 127):
         m += 1
@@ -308,7 +308,7 @@ def base128_digits(g: int) -> int:
 
 
 def pv_unit(k: int, rep: int, fold: float = TS_FOLD, x: float = X_BITSLICED):
-    """One pv unit's tile at depth k keys (its diagonal 32 included), as CHECKED-STRIP's ts_pv prices it plus the unit's
+    """One pv unit's tile at depth k keys (its diagonal 32 included), as checked_strip's ts_pv prices it plus the unit's
     float scaling: (MMAs, folds, free, routes). The cheater does every MMA and fold (each feeds a committed word); free
     is what only the served output needs: the epilogue, the float scaling, and Ycum's and S's adds and Ycum's digits
     (shared by the `rep` query heads of a KV head). Routes are the zero-instance ones, {direction: (dM, dO)}: T at 8x an
@@ -344,7 +344,7 @@ def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_F
           x: float = X_BITSLICED) -> tuple[float, float]:
     """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served
     output free, γ over plain int8), each query block's tile weighed (past 256 every 8th, weighted 8, as
-    CHECKED-STRIP). Each block of P is its own unit (scale, T words, Ycum digits, served output); with `sink` key 0 is
+    checked_strip). Each block of P is its own unit (scale, T words, Ycum digits, served output); with `sink` key 0 is
     one more, priced as a unit of depth 32 (the arms' p_sink)."""
     s = MODELS[name]
     rep = s.heads // s.kv
@@ -416,8 +416,9 @@ def decode_dram(name: str, ctx: int, rates: dict = RATES) -> float:
 #: ♭'s committed words a transcript product, by leaf where it isn't one: cohalf's QKᵀ commits 5 words for every 4
 FLOOR_WORDS = {"cohalf": 1.25}
 #: Adopted P·V's tail stage a 128-cell tile at L = 32 (66 strip products a cell), warp instructions by class, the
-#: checked kernels' exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the served
-#: output needs), the 256·Y1 combine's 4 IMADs and the other 11.5 (LDGs, NOPs, an LDSM, control), priced as ALU's.
+#: checked kernels' exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the
+#: served output needs), the 256·Y1 combine's 4 IMADs and the other 11.5 (LDGs, NOPs, an LDSM, control), priced as
+#: ALU's.
 APV_TAIL = {"IMMA": 4, "IMAD": 4.0, "ALU": 11.5}
 #: The same peel kernels' counts in a device's own SASS, where they exceed sm_120's: the tail by class as APV_TAIL, and
 #: RATES' c_apv_serve and c_vfold, which they replace there. sm_90a's are static counts, not ncu: nvdisasm of apv.cu's
@@ -439,7 +440,7 @@ TS_CHEAT = {"co32c": ts_time(1, 4 * TS_FOLD), "cohalf": ts_time(6, 5 * 4 * TS_FO
 @dataclass(frozen=True)
 class Prices:
     """A design's floor-credit prices on a device's Π, SMSP-cycles: ♭ a 4096-MAC MMA, and adopted P·V's tail a strip
-    product as Π prices BC-KERNEL r2's instruction counts (APV_TAIL, or the device's own in SASS), whole and without
+    product as Π prices the checked kernels' instruction counts (APV_TAIL, or the device's own in SASS), whole and without
     the 4th IMMA."""
     vector: str
     mma: float

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT-H200-EMP (the H200's empirical red team): build sm_90a probes on a CPU node, then time them on the H200 under one
+# The H200's empirical check: build sm_90a probes on a CPU node, then time them on the H200 under one
 # gpu-lease, so no CPU phase runs on the shared H200 node.
 #
 #   research run --on auto --wait -- bash benchmarks/pouw/dc/emp.sh build SRC...

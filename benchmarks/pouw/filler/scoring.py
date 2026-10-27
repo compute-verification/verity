@@ -886,7 +886,7 @@ FOLDS = {
                   "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only; (HO) is the "
                                  "rows' hashing, not a check"},
 }
-#: the lineage tags FILL-SEC's arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32,
+#: the lineage tags the receipt-fold arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32,
 #: receipt:xin-k32; r5's -DPFILL_XIN13 and -DPFILL_LI arms as receipt:xin13-… and receipt:li-…)
 RECEIPT_TAGS = {"ram": "ram", "duo": "duo", "xin": "xor-in", "xin13": "xor-in-13", "li": "lop3-imad"}
 #: what `fold_reading` can't confirm from the SASS, stated with every reading
@@ -1271,7 +1271,7 @@ DEFER_TP = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
     (16384, 2, 256, 2048, 100.1074, 123.2141, None, 2055, 9.239817e+12, 7.506000e+12, 1.01282, 9.252450e+12))]
 #: round 6's deferred pass (d6d0e4e57): the duo fold's put-split filler at
 #: T = 4096 and TPC_DMAXC 1 (r3's), its base, phase, defer and dalone arms in one set, over the slowest rank; its fill
-#: counters are d6d0e4e57's (76c68bcf2's, HC-COMM r5's, kept each collective's last count, 22-35x low)
+#: counters are d6d0e4e57's (76c68bcf2's, tpcomm's, kept each collective's last count, 22-35x low)
 DEFER_TP_RUNS["r6"] = {2: "r20261016-142613-eff2@d6d0e4e57, r20261016-143248-9563@d6d0e4e57",
                        4: "r20261016-142933-e6c4@d6d0e4e57"}
 DEFER_TP_R6 = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
@@ -1292,7 +1292,7 @@ DEFER_B_RANGE, DEFER_L_RANGE = (32, 256), (2048, 8192)
 
 
 def defer_shown_1gpu(T: int = DEFER_T) -> float:
-    """One GPU's shown share at T (STAGE-COST): the b32 step's slowdown over the pass's 32 × LAYERS token-layers at
+    """One GPU's shown share at T (stage_cost): the b32 step's slowdown over the pass's 32 × LAYERS token-layers at
     the model's pass rate (0.648 at T = 4096)."""
     return DEFER_1GPU[T][0] * DEFER_STEP_MS / (DEFER_B * share.LAYERS * DEFER_US_TOKEN_LAYER * 1e-3)
 
@@ -1390,7 +1390,7 @@ def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: di
                 fit_tp: dict = DEFER_FIT_TP) -> dict:
     """The deferred pass's shown share s (in [0, 1]) and displacement d (filler MACs lost a ms of the whole pass, over
     C) at (TP, B, L), T = DEFER_T, read at B and L clamped to the points' range. TP: `DEFER_FIT_TP` (r3 and r6, the d
-    form). One GPU: STAGE-COST's share, measured at B 32 only and held flat in B and L (the TP points' share falls with
+    form). One GPU: stage_cost's share, measured at B 32 only and held flat in B and L (the TP points' share falls with
     B at T = 4096, so this overstates it above B 32); its displacement, which no one-GPU run measured, is u(1 − s) at
     u the larger of TP 2's r3 fit (`DEFER_FIT`, the smallest TP measured) and the MAC-for-MAC rule's DEFER_OF_PEAK (the
     hidden time was the filler's, displaced at the pass's own rate)."""
@@ -1513,7 +1513,7 @@ def score_v5(stats: dict, filler_fraction: float, coins: float = PREFILL_COINS) 
     return out
 
 
-# ---- filler-scorer/v5: SCORE-TP ----------------------------------------------------------------------------------------------
+# ---- filler-scorer/v5: the TP score -------------------------------------------------------------------------------------------
 
 #: The TP suite: Llama-3.1-70B decode under tensor parallelism on
 #: GPUs of one NUMA node, at (TP, B, L); TP 2 can't hold B 128 at 8K (its KV wraps)
@@ -1586,7 +1586,7 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
 
 
 def tp_gates(sets: list[dict], entries: dict, pf: dict | None) -> dict:
-    """SCORE-TP's gates, per rank (HC-COMM's round-2 proposal): the slowdown of the slowest rank's step ≤ LIMIT at every
+    """The TP score's gates, per rank: the slowdown of the slowest rank's step ≤ LIMIT at every
     entry with ≥ TP_REPS reps a record and base and phase interleaved (≥ 2 repeats each); every rank's pre-timing
     pf_gate records ok, of every kind in TP_PF_KINDS (whole tiles against dfill_ref, cut warps against kf_ref_warp);
     every rank's receipts after every phase repeat (checked, none bad, no shape error, no control equal); and every
@@ -1623,9 +1623,9 @@ def tp_gates(sets: list[dict], entries: dict, pf: dict | None) -> dict:
 
 
 def tp_score(entries: list[dict]) -> dict:
-    """SCORE-TP over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time (`tp_entry`'s
+    """The TP score over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time (`tp_entry`'s
     ``time``), in its filler and served parts, beside v4's form (served plain at 0.225, weighted by v4's own wall time,
-    ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and SCORE-TP needs them all."""
+    ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and the TP score needs them all."""
     def mean(es, k):
         w = [e["time_v4" if k == "coverage_v4_form" else "time"] for e in es]
         return sum(e[k] * x for e, x in zip(es, w)) / sum(w) if es else None

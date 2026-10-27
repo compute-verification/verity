@@ -8,7 +8,7 @@
 //
 //   uwg_<S>_<K>   bare: each of 2 warpgroups issues 4 wgmma s8 m64n256k32 a commit group (saturating the tensor pipe, as
 //                 wg_mix), waits, and carries K warp-uniform chain instructions a iteration (uchain.cuh). Nothing reads
-//                 the accumulators inside the loop, so -- the FACET-BREAK finding -- ptxas 13.0 lowers the chain to the
+//                 the accumulators inside the loop, so -- the facet_break finding -- ptxas 13.0 lowers the chain to the
 //                 vector lanes (IMAD/LOP3/IADD3), not the uniform datapath: a co-located uniform chain gets no free ride.
 //                 The gate pins the lane counts; the K-slope is the lane cost beside a saturated async wgmma.
 //   uwgf_<S>_<K>  folded: as uwg, but each iteration folds the 8 leading wgmma accumulators by duo (honest.cuh's fold,

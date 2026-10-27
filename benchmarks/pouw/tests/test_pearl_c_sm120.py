@@ -1,7 +1,7 @@
 """Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for every
 ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a lowered or
 spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal and dry run on
-a CPU stand-in for libcuda (#449's, with fake_tma.c's tensor maps; an RTX PRO 6000's name, SM count, compute capability,
+a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name, SM count, compute capability,
 UUID and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu
 states it, and each mainloop GEMM's operands against the tensor maps encoded for them.  With VERITY_POUW_NVCC naming a
 CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""

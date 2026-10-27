@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M1 of EPS1 TENSOR: every native MMA form alone and beside IADD3, then the fit. TK_ARCH picks the target: 120 (one RTX
+# Every native MMA form alone and beside IADD3, then the fit. TK_ARCH picks the target: 120 (one RTX
 # PRO 6000, the default), 89 (one L40S; its forms build as four groups in parallel and run back to back) or 100 (one
 # B200: the legacy mma.sync forms, premise (M′); group 0, int8, must build, and group 1 is dropped if it doesn't).
 #

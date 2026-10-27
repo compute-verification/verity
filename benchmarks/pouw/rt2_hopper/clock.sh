@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT2-HOPPER's H200 job (sm90_clock.cu), in two runs so no CPU phase runs on the shared H200 node. From a pushed commit:
+# The H200 job (sm90_clock.cu), in two runs so no CPU phase runs on the shared H200 node. From a pushed commit:
 #
 #   research run --on auto --project verity --campaign eps1 --source <tree> --cwd source -- \
 #     bash benchmarks/pouw/rt2_hopper/clock.sh build

@@ -20,7 +20,7 @@ spec.loader.exec_module(H)
 
 
 def test_the_exporter_reads_its_own_trees_machine_model(tmp_path):
-    """RT4-SHEET-26: the readings are this tree's machine-model data, and an interpreter that imported another
+    """The readings are this tree's machine-model data, and an interpreter that imported another
     checkout's verity_machine_model first gets a refusal, not that tree's numbers."""
     assert Path(H.verity_machine_model.__file__).resolve().parents[1] == H.MODEL
     (tmp_path / "verity_machine_model").mkdir()
@@ -73,7 +73,7 @@ def test_the_i3_twin_is_dc_90_ri_at_three_fifths():
 
 
 def test_the_credit_is_what_the_checks_read():
-    """RT-LOGIC-12: the design's fold is honest's, the one PouwWarpCheck recomputes (♭ folds by the cheapest mix of it
+    """The design's fold is honest's, the one PouwWarpCheck recomputes (♭ folds by the cheapest mix of it
     and its checkpoint routes, which the check can't tell apart), and a filler is credited only at p = 1 while no check
     reads it."""
     for fam in H.FAMILIES:
@@ -89,8 +89,7 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 def test_folds_meet_fold_opt_at_pi_star():
     """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
     `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*, and on the H200
-    a premise only about folds off the cheater's menu, which holds every counted fold known (RT4-SHEET-13, -14, -17,
-    -22): at the (I3) twin's π* li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at
+    a premise only about folds off the cheater's menu, which holds every counted fold known: at the (I3) twin's π* li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at
     each π* (the stores carry the JI90 lines measured). ♭'s fold meets it, and so does ♭'s fold
     with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. On the B200 that
     fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked: at 1/20 issue + 19/20 IMAD
@@ -136,14 +135,14 @@ BUILT = ROUTES + ["li-bulk"]
 
 
 def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
-    """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
-    (on the H200, on the B200), with RT4-SHEET-7's L2 XORs through a generic
+    """On both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
+    (on the H200, on the B200), with the L2 XORs through a generic
     address (ATOM.E, bit-exact on the H200 and the B200), and each of
     the four readings' π* at A6's ½ prices each class each of them issues above 0, so no route folds for free at the
-    certificate FOLD-OPT is asked at. On the H200 the counted folds come after them, none built: RT4-SHEET-13's and
-    -14's moves of LI on li and each route, and li-bulk's BT1024 and trimmed W = ∞ members, beside
+    certificate FOLD-OPT is asked at. On the H200 the counted folds come after them, none built: the two
+    moves of LI on li and each route, and li-bulk's BT1024 and trimmed W = ∞ members, beside
     li-bulk itself, built, at its measured cost. Each reading's catch-all is priced at
-    its issue slot: the sheet's at DS_issue alone, the measured reading's on the measured issue row (DC-CENSUS-13) and,
+    its issue slot: the sheet's at DS_issue alone, the measured reading's on the measured issue row and,
     once a run has timed its instructions beside the tensor, the joint-issue lines every timed scalar class carries
     (DC-90-ri: LD.E and IMAD.WIDE)."""
     for fam in H.FAMILIES:
@@ -216,7 +215,7 @@ def test_flat_never_folds_by_a_counted_route(monkeypatch):
 
 
 def test_each_statement_has_its_eps_and_b_flat_as_one_pair(tmp_path):
-    """HB-PROOF's pairing hazard: ε is a fraction of one B_♭, so a reading emits them together (`Reading.pair`): the
+    """The pairing hazard: ε is a fraction of one B_♭, so a reading emits them together (`Reading.pair`): the
     statement's name, its ε (the exact bound rounded up at 10^-5, the literal `1 - N / 100000` the Models file states
     for it), the B_♭ of the same export, exact, its facet, and the credit (1 − ε)·B_♭. `--json` writes each pair whole
     beside its reading, and a reading for the record names no statement."""

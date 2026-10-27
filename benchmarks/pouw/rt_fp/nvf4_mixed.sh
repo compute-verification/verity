@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT-FP candidate 8 on one B200 (sm_100a) or B300 (sm_103a): build nvf4_mixed.cu, dump its SASS and MMA opcodes, then
+# The mxf4nvf4 exactness probe on one B200 (sm_100a) or B300 (sm_103a): build nvf4_mixed.cu, dump its SASS and MMA opcodes, then
 # under one gpu-lease `nvf4_mixed run` (calibration.json, records.jsonl, summary.json).
 #
 #   research run --on vy-dc-b200 --project verity --campaign eps1 --source . --cwd source --env GPU_LEASE_WHO=LANE \

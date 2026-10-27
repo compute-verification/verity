@@ -1,4 +1,4 @@
-"""FPX-G1H-2 and FPX-G1H-1 on the data-centre rows: the served words H1's and Dither-2S's receipts leave unread, priced.
+"""On the data-centre rows: the served words H1's and Dither-2S's receipts leave unread, priced.
 
     uv run --project benchmarks/pouw/machine_model --with python-sat --with-editable benchmarks/pouw/exact_kit \
       python benchmarks/pouw/fpx_design/h1_o_free.py OUT [--lean-headline benchmarks/pouw/lean_headline.py] \

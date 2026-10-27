@@ -2,7 +2,7 @@
 
 The one reference for the folds PoUW's receipts are made with: each fold's step, its key rule, the start states and keys
 of the schedules that run it, and what is proved about it. Every implementation (pfill's filler, EGEMM's kernels, E2E's
-PouwSegCheck statements, P2-FF's twin, the filler scorer's fold table) is held to it by its published vectors.
+PouwSegCheck statements, the r9 twin, the filler scorer's fold table) is held to it by its published vectors.
 
 - `receipt_folds.py`: the reference, stdlib only (its steps also take numpy uint32 arrays).
 - `receipt_folds.cuh`: the same in C++, `__host__ __device__` under nvcc, plain inline under g++. The steps are
@@ -46,9 +46,9 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
   every run of more than 2·4^n words has a kernel, by counting (`Pouw.SecurityProofs.Receipt.DuoLongRunKernel`), so
   the deployed schedules' first kernel lies between five words and 2·4^32 + 1. Still open: five or more words for the
   deployed keys, and the served receipt's form (equal up to one constant) at any length.
-- **(RT) and (G₃).** RS-E-REF Part IX says (RT) is open and that no lemma
+- **(RT) and (G₃).** The referee's Part IX says (RT) is open and that no lemma
   removes it, and that (G₃) suffices for (G₄).
-- **r11's results.** P2-FF r11 finds that pricing can't replace (RT). It
+- **r11's results.** r11 finds that pricing can't replace (RT). It
   proves (G₃) at one MMA under key_ok_r11 (its Theorem 1), and for chains apart from runs of two or more non-XOR δ.
 - **(HO), li's extra premise.** No hand-off joins two words whose rows or columns are equal or complementary
  .

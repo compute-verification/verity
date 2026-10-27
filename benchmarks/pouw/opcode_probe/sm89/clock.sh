@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EPS1's clock and power run on the L40S (sm_89): probes/power.cu built for sm_89 and gated, then under one gpu-lease
+# The clock and power run on the L40S (sm_89): probes/power.cu built for sm_89 and gated, then under one gpu-lease
 # the GPU's clocks reset to the defaults (sudo nvidia-smi -rgc) and every kernel sustained at the power limit as found,
 # then at the board's default power limit (sudo nvidia-smi -pl, the found limit restored on exit). From a pushed commit:
 #

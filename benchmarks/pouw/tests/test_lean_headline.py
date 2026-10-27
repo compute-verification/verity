@@ -160,8 +160,7 @@ def bulk_fold(i, loop: dict) -> dict[str, Fraction]:
 
 
 def test_bulk_folds_meet_fold_opt_at_pi_star():
-    """RT4-SHEET-1: fold_bulk.cu's whole-block folds, fx1's fold with its XOR on the bulk engine (bit-exact on sm_120,
-    r20261019-234605-a812), each cost at least N_w φ* a unit at π*. At DS_issue alone, with each bulk reduction one
+    """fold_bulk.cu's whole-block folds, fx1's fold with its XOR on the bulk engine (bit-exact on sm_120), each cost at least N_w φ* a unit at π*. At DS_issue alone, with each bulk reduction one
     uniform instruction, fbw4096_K4_BT256 cost 15.7656 against the menu's 16, and its full-work run 0.982 of ♭. A5b
     counts its 1024 B of shared-memory source a unit on DS_smem, 32 SMSP-cycles beside STS.128's 4, and π*'s DS_smem
     weight prices it above N_w φ*, and so the full-work run with any of them above `1 − ε` of ♭. The bulk-reduction

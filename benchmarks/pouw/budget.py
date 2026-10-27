@@ -9,26 +9,25 @@ family, with every other resource converted at its price. Its parts:
 - the PoUW transform, γ − 1 (honest over plain int8, the machine model's γ on the family's measured kernel);
 - commitment hashing, receipts and the noise's draws (`commit_gpu`'s measured fractions of plain prefill time);
 - sampling, B_s: proving, staging and verifying the drawn units under the fitted C-Flock cost model (cost-model/v1),
-  as the sampling planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least ε_sample at
-  each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO 6000 workers,
-  so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
+  as the sampling planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least
+  ε_sample at each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO
+  6000 workers, so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
 
-ε is the headline's sum, core plus sampling (ε[Π], with luck in the core). Core is ε_skip (less the share that checking P·V's served output removes) and ε_machine (route +
-cert), the machine model's under the floor credit at q* = 1.22 with operands free, and ε_luck at the
-protocol's rule. Sampling is the planner's ε_sample, the units a plan's draws leave unproved. With a seed a matmul, a
-drawn deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine model's full-checking
-ε_luck (one σ a round) times S over the draws. The cheater's best mix of wrong and deficient units gains
-ε_sample·max(σ_w/(1 − p), 1), which the sum bounds.
+ε is the headline's sum, core plus sampling (ε[Π], with luck in the core). Core is ε_skip (less the share that checking
+P·V's served output removes) and ε_machine (route + cert), the machine model's under the floor credit at q* = 1.22 with
+operands free, and ε_luck at the protocol's rule. Sampling is the planner's ε_sample, the units a plan's draws leave
+unproved. With a seed a matmul, a drawn deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine
+model's full-checking ε_luck (one σ a round) times S over the draws. The cheater's best mix of wrong and deficient units
+gains ε_sample·max(σ_w/(1 − p), 1), which the sum bounds.
 
 The levers the optimum moves are verified filler (extra lane instructions a word, `FILL`; every term is divided by the
-design's own floor program, filler included), the sampling spend B_s (the rest of the budget: ε_sample only falls
-with it) and checking P·V's served output (on, since it costs only an opening and the epilogue in a drawn P·V unit's
-proof). The allocation is reported in cost-model/v1's two regimes: `plain` (fitted, one unit a session) and
-`sessions/256` (multi-round sessions amortize a session's cost 256-fold, the planner's estimate). `levers` reports the rest
-(draws, batching, running sums committed anyway, hashing leaf size, the operand floor, P·V's noise, credited subset, L
-and noise bits) with what each moves. The run prints the allocation at 1×, 2×, 5× and 10× each family's B today and
-every lever's marginal Δε per unit of B there. Every constant carries its source and whether it is measured, modeled or
-assumed.
+design's own floor program, filler included), the sampling spend B_s (the rest of the budget: ε_sample only falls with
+it) and checking P·V's served output (on, since it costs only an opening and the epilogue in a drawn P·V unit's proof).
+The allocation is reported in cost-model/v1's two regimes: `plain` (fitted, one unit a session) and `sessions/256`
+(multi-round sessions amortize a session's cost 256-fold, the planner's estimate). `levers` reports the rest (draws,
+batching, running sums committed anyway, hashing leaf size, the operand floor, P·V's noise, credited subset, L and noise
+bits) with what each moves. The run prints the allocation at 1×, 2×, 5× and 10× each family's B today and every lever's
+marginal Δε per unit of B there. Every constant carries its source and whether it is measured, modeled or assumed.
 """
 
 from __future__ import annotations
@@ -76,7 +75,7 @@ DRAWS = 0.019
 
 
 def hash_leaves(r: int) -> float:
-    """SHA-512 tile-leaf hashing at leaf size R: a + b/R through COMMIT-GPU's two points (modeled past R = 128)."""
+    """SHA-512 tile-leaf hashing at leaf size R: a + b/R through commit_gpu's two points (modeled past R = 128)."""
     b = (HASH_LEAVES[64] - HASH_LEAVES[128]) * 128
     return HASH_LEAVES[128] - b / 128 + b / r
 

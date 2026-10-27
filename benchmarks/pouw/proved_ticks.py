@@ -22,8 +22,8 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the sheet's (`FMAX_MHZ`).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
-  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (#2924's A5b on #2791, not on
-  main yet: receipt luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π* puts 197/3761 on DS_smem so
+  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (with A5b: receipt
+  luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π* puts 197/3761 on DS_smem so
   that a fold on the bulk engine costs at least φ*, which lowers N_w(w* + φ*) to 16.1095 against B_♭.
   main's machine model reads 0.585% at p = ¾ (`machine-model headline`), with no bulk route; the measured reading,
   0.591% on VF3s-16, is at measured rates, not the sheet's.
@@ -68,7 +68,7 @@ from verity_machine_model.model import device
 
 SMSPS = 4                          # SMSPs an SM
 #: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
-#: `Accounting.TS.Headline.Sm120.ds120.fmax`, #2482)
+#: `Accounting.TS.Headline.Sm120.ds120.fmax`)
 FMAX_MHZ = {"sm_120": 2430}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000

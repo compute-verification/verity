@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT-CLOCK: the highest SM clock a prover with root reaches on one GPU (the P1 premise, "the run's clock <= the data
+# The highest SM clock a prover with root reaches on one GPU (the P1 premise, "the run's clock <= the data
 # sheet's f_max"). Builds and gates probes/power.cu outside the lease, then under one gpu-lease (clock_ceiling_lease.sh)
 # tries every clock and power knob the driver offers on the leased GPU only, each followed by host-timed launches
 # (power.cu --calib: clock64 cycles over the host's steady_clock, and over %globaltimer), sustains the clock kernels at

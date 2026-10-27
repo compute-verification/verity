@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EPS1's clock and power run (probes/power.cu): build and gate outside the lease, then under one gpu-lease sustain every
+# The clock and power run (probes/power.cu): build and gate outside the lease, then under one gpu-lease sustain every
 # kernel at the node's clock lock, reset the leased GPU's clocks to the defaults (nvidia-smi -rgc: the application clocks
 # and the 600 W cap), sustain them again, and lock the GPU back to the node's clock on exit. From a pushed commit:
 #

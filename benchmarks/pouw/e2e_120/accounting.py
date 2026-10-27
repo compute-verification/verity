@@ -1,4 +1,4 @@
-"""The served design's compute-accounting headline (ε and γ) for H1 + fx1 on the RTX PRO 6000 (sm_120), from the machine
+"""The served design's accounting headline (ε and γ) for H1 + fx1 on the RTX PRO 6000 (sm_120), from the machine
 model's own API (benchmarks/pouw/machine_model). The audit's verdict surfaces these: ε the fraction of a committed word a
 cheater can skip under 100% checking, γ honest's time a useful MMA over a plain GEMM's.
 
@@ -20,7 +20,7 @@ if str(MM) not in sys.path:
 
 from verity_machine_model import eps as E   # noqa: E402
 
-#: CALC r10 / RT-FACET's census and q* for the sm_120 headline
+#: facet_break's census and q* for the sm_120 headline
 VECTOR = "VF3r-16"
 Q_STAR = 1.22
 
