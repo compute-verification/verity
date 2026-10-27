@@ -19696,6 +19696,7 @@
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
     "Claims.Bits_fails",
     "Claims.Complete_fails",
@@ -19808,6 +19809,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -19815,6 +19817,7 @@
     "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
