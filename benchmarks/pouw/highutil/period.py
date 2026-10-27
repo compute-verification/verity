@@ -52,7 +52,10 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):   # one BLAS thread a pool worker
+    os.environ.setdefault(_v, "1")
+
+import numpy as np  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[2]
@@ -711,7 +714,8 @@ def cmd_diag(a: argparse.Namespace) -> int:
         for tile in (0, int(rng.integers(sh.tiles))):
             d = work / f"{name}-{tile}"
             drv.p.stdin.write(f"dump {li} {tile} {d}\n")
-            drv._line("dumped")
+            got = drv._line("dumped")
+            wraps = {"X_per_row": int(got[6]) / sh.m, "W_per_row": int(got[7]) / sh.n}
             tm, tn = divmod(tile, n // TILE)
             ia, ja = range(tm * TILE, tm * TILE + TILE), range(tn * TILE, tn * TILE + TILE)
             A = np.asarray(operand(cfg, "A", li, g0 % NB)[tm * TILE:(tm + 1) * TILE])
@@ -728,7 +732,7 @@ def cmd_diag(a: argparse.Namespace) -> int:
                       != g[64 * j:64 * j + 64] for j in range(sh.lpt))
             rep.append({"layer": name, "block": g0 % NB, "tile": tile, "A_equal": (d / "A.bin").read_bytes() == A.tobytes(),
                         "B_equal": (d / "B.bin").read_bytes() == B.tobytes(), "words_equal": (d / "words.bin").read_bytes() == words, "O_equal": (d / "O.bin").read_bytes() == obuf,
-                        "leaves": sh.lpt, "leaves_bad": bad})
+                        "leaves": sh.lpt, "leaves_bad": bad, "wraps": wraps})
             print(json.dumps(rep[-1]), flush=True)
     drv.close()
     shutil.rmtree(work, ignore_errors=True)

@@ -18,7 +18,8 @@
 //   paths B PICKS OUT                    PICKS: u32 (step in block, layer, leaf) triples; OUT: each one's siblings,
 //                                        leaves first (64 bytes a level). Answers `paths B COUNT`.
 //   dump LAYER TILE DIR                  the layer's last protocol call's tile: the A and B rows it read, its words, O
-//                                        and leaves (period.py diag). Answers `dumped LAYER TILE call C`.
+//                                        and leaves (period.py diag). Answers `dumped LAYER TILE call C wraps WA WB`
+//                                        (the call's wraps of X and of W').
 //   quit
 // v31.cu's CUTLASS baseline names phc_prepared even when it isn't linked in; its header declares it
 #include "../harness/native/cutlass_api.h"
@@ -192,7 +193,8 @@ int main(int argc, char** argv) {
       f = fopen((dir + "/leaves.bin").c_str(), "wb");
       for (int x = 0; x < c.lpt; x++) put_node(f, l->host + l->lvb * l->last_step + 64 * ((size_t)tile * c.lpt + x));
       fclose(f);
-      printf("dumped %d %d call %llu\n", li, tile, (unsigned long long)l->last_call);
+      printf("dumped %d %d call %llu wraps %llu %llu\n", li, tile, (unsigned long long)l->last_call,
+             (unsigned long long)sum_counts(c.cntA, c.m), (unsigned long long)sum_counts(c.cntB, c.n));
       fflush(stdout);
       continue;
     }
