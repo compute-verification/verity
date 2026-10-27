@@ -58,7 +58,8 @@ served drawn "--draw subset:16" ""
 verify() {   # verify PUBLIC TABLES SESSION...
   local pub=$1 tables=$2; shift 2
   "$LEAN" verify --zk --statement "$STATEMENT" --circuit "$FIX/stage/circuit.txt" --public "$FIX/stage/$pub" \
-    --session-tables "$tables" --session "$@" 2>&1 | grep '^VERDICT ' | cut -c1-300
+    --session-tables "$tables" --session "$@" 2>&1 | grep '^VERDICT ' \
+    | "$PY" -c "import json, sys; [print(v['accepted'], v['why']) for v in (json.loads(l[8:]) for l in sys.stdin)]"
 }
 one() { ls -d "$FIX/sessions/$1"/*/ | head -1; }
 {

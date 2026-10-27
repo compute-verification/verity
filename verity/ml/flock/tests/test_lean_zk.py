@@ -19,12 +19,12 @@ import pytest
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 5c33464c…) with the live build's --zk sessions:
+#: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 d12a2420…) with the live build's --zk sessions:
 #: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
 #: sessions/m26 (one table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all
-#: accepted); its identity's refused_coins name the zerocheck outer coin r_j = 1 (run r20261004-033801-14b6)
-FIXTURE = "art:5542740a"
-STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
+#: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-022105-c4fb)
+FIXTURE = "art:b9cc903c"
+STATEMENT = "verity/flock-circuit+seed-injection"
 #: the refusal of a session without a draw, which `verify` reaches only when every check has passed
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 #: a session verified without the verifier's program, refused once every check has passed (`ProvedScope.NO_PROGRAM`)

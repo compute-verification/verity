@@ -19,8 +19,8 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 #: test_lean_zk.py's: RoPE d64 with hidden outputs and the live build's --zk sessions, under the statement it was staged for
-FIXTURE = "art:5542740a"
-STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
+FIXTURE = "art:b9cc903c"
+STATEMENT = "verity/flock-circuit+seed-injection"
 NONCE = re.compile(r'"nonce":"([0-9a-f]{64})"')
 
 
