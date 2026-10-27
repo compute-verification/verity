@@ -16,7 +16,7 @@
 #
 #   VY_ROW_CLASS=dense tools/research/src/research/pods/nebius/sky/submit.sh config-run cov-k07 \
 #     --env ROW=<row> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
-#   (or VY_BUILD_MEMORY=<GB> VY_GPU_MEMORY=<GB>, e.g. from `verity-vllm sweep plan`'s ram_gb, instead of a class)
+#   (or VY_BUILD_MEMORY=<GB> VY_GPU_MEMORY=<GB> instead of a class)
 #
 # Build memory per class, provisional (the coordinator's table; epoch-run's measured peaks replace it: a 4k-context Build uses
 # 100-127 GiB). The gpu task requests 64 GB below batch 8 (a Commit uses ~6 GiB there); batch 8 and up use ~130 GiB (the pinned
