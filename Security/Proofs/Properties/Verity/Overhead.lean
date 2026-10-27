@@ -132,7 +132,7 @@ theorem prob_le_of_le {E : In → Set Y → List (Window V × Outcome) → Prop}
 theorem prob_eq_zero_of_not {β : Type} {p : β → Prop} (h : ∀ b, ¬ p b) (g : Game β) (s : Game.Strategy g) :
     Game.prob p g s = 0 :=
   le_antisymm ((Game.prob_mono (q := fun _ => False) (fun b hb => h b hb) g s).trans_eq (Game.prob_false g s))
-    (zero_le _)
+    zero_le
 
 theorem prob_eq_zero' {E : In → Set Y → List (Window V × Outcome) → Prop}
     (h : ∀ ω ws, ¬ E (G.draw ω).1 (G.draw ω).2 ws) : prob V G τ E = 0 :=
@@ -178,15 +178,14 @@ variable {V : Vocab d α} {In L Srv ιP Act : Type} [Fintype Srv] {B : ℕ} (D :
 
 theorem inWindow_subset (x : In) (ws : List (Window V × Outcome)) (i : Fin B) :
     D.inWindow x ws i ⊆ (D.prods x ws).J :=
-  Finset.filter_subset _ _
+  fun _ hp => (Finset.mem_filter.1 hp).1
 
 /-- A window that opens at or after its server's busy time ends materializes nothing. -/
 theorem inWindow_eq_empty (x : In) (ws : List (Window V × Outcome)) (i : Fin B)
     (hi : busy (D.run x ws).A (D.X (D.win i).1) ≤ D.ω * (D.win i).2) : D.inWindow x ws i = ∅ := by
   classical
   refine Finset.eq_empty_of_forall_notMem fun p hp => ?_
-  simp only [inWindow, Finset.mem_filter, InWindow] at hp
-  obtain ⟨hpJ, hx, hlo, -⟩ := hp
+  obtain ⟨hpJ, hx, hlo, -⟩ := Finset.mem_filter.1 hp
   have hc : (D.prods x ws).rep p ∈ (D.run x ws).A.computed := by
     simp [Circuit.computed, (D.prods x ws).rep_op p hpJ]
   have hle : (D.run x ws).A.t ((D.prods x ws).rep p) + 1 ≤ busy (D.run x ws).A (D.X (D.win i).1) := by
@@ -282,19 +281,22 @@ def oneStrategy (V : Vocab d α) (w : Window V) : Game.Strategy (windows V 1) :=
 /-- One input, whose acceptable outputs are those with `[true]` at the one position. -/
 def oneTask : Task Unit (Fin 1 → List Bool) := ⟨Unit, fun _ => ((), {y | y 0 = [true]})⟩
 
+/-- One window played is its window's game. -/
+theorem prob_windows_one (V : Vocab d α) (P : List (Window V × Outcome) → Prop) (s : Game.Strategy (windows V 1)) :
+    Game.prob P (windows V 1) s = Game.prob (fun o => P [(s.1, o)]) (V.game s.1.θ s.1.F s.1.c) s.1.σ := by
+  show Game.prob P ((follow (V.game s.1.θ s.1.F s.1.c) s.1.σ).bind
+    fun o => (windows V 0).map ((s.1, o) :: ·)) s.2 = _
+  rw [Game.prob_bind_of_const (fun o => (windows V 0).map ((s.1, o) :: ·)) P (fun o => P [(s.1, o)])
+    (fun _ _ => rfl), prob_follow]
+
 /-- At `oneTask` and one window committed to, the experiment is that window's game. -/
 theorem prob_one (V : Vocab d α) (w : Window V)
     (E : Unit → Set (Fin 1 → List Bool) → List (Window V × Outcome) → Prop) :
     prob V oneTask (fun _ => oneStrategy V w) E =
       Game.prob (fun o => E () {y | y 0 = [true]} [(w, o)]) (V.game w.θ w.F w.c) w.σ := by
-  have h : Game.prob (E () {y | y 0 = [true]}) (windows V 1) (oneStrategy V w) =
-      Game.prob (fun o => E () {y | y 0 = [true]} [(w, o)]) (V.game w.θ w.F w.c) w.σ := by
-    show Game.prob (E () {y | y 0 = [true]})
-      ((follow (V.game w.θ w.F w.c) w.σ).bind fun o => (windows V 0).map ((w, o) :: ·)) _ = _
-    rw [Game.prob_bind_of_const (fun o => (windows V 0).map ((w, o) :: ·)) (E () {y | y 0 = [true]})
-      (fun o => E () {y | y 0 = [true]} [(w, o)]) (fun _ _ => rfl), prob_follow]
   show Game.avg (fun _ : Unit => Game.prob (E () {y | y 0 = [true]}) (windows V 1) (oneStrategy V w)) = _
-  rw [Game.avg_const, h]
+  rw [Game.avg_const, prob_windows_one]
+  rfl
 
 /-- One computed gate of width one, at leaf `()`, cell `0` and tick `0`, whose value is `b`. -/
 def oneCircuit (b : Bool) : Placed Unit where
@@ -319,7 +321,7 @@ def oneRun (b : Bool) : Actual.Run Unit where
   faithful _ _ := rfl
   held _ _ := ∅
   holding := ⟨fun _ _ _ h => by simp at h, fun _ h => absurd h Bool.false_ne_true,
-    fun _ _ h => by simp [oneCircuit] at h⟩
+    fun _ _ h => absurd h (Finset.notMem_empty _)⟩
 
 /-- One counted product, at the gate, when `b`. -/
 def oneProds (b : Bool) : Nci.Ldl.Products (oneRun b).A.toCircuit Unit Unit where
@@ -382,17 +384,12 @@ theorem inWindow_one (V : Vocab d α) (a : Audit) (x : Unit) (ws : List (Window 
     (g : Fin ((oneDeployment V a).run x ws).A.N) :
     InWindow (oneDeployment V a).X (oneDeployment V a).win (oneDeployment V a).ω ((oneDeployment V a).run x ws).A 0
       g := by
-  have hj : (((oneDeployment V a).win 0).2 : ℕ) = 0 := Fin.val_eq_zero (((oneDeployment V a).win 0).2 : Fin 1)
-  have ht : ((oneDeployment V a).run x ws).A.t g = 0 := rfl
-  have hω : (oneDeployment V a).ω = 2 := rfl
-  refine ⟨Finset.mem_univ _, ?_, ?_⟩
-  · simp [hj, ht]
-  · simp [hj, ht, hω]
+  refine ⟨Finset.mem_univ _, ?_, ?_⟩ <;> simp [oneDeployment, oneRun, oneCircuit, Fin.val_eq_zero]
 
 theorem oneServerTime_le (V : Vocab d α) (a : Audit) (x : Unit) (ws : List (Window V × Outcome)) :
     serverTime (oneDeployment V a).X ((oneDeployment V a).run x ws).A ≤ 1 :=
   calc serverTime (oneDeployment V a).X ((oneDeployment V a).run x ws).A ≤ ∑ _s : Unit, 1 :=
-        Finset.sum_le_sum fun _ _ => Finset.sup_le fun _ _ => le_of_eq rfl
+        Finset.sum_le_sum fun _ _ => Finset.sup_le fun _ _ => by simp [oneDeployment, oneRun, oneCircuit]
     _ = 1 := by simp
 
 theorem oneMin (V : Vocab d α) (a : Audit) :
@@ -406,7 +403,7 @@ theorem oneMin (V : Vocab d α) (a : Audit) :
 
 /-- The run succeeds when its gate holds `1`. -/
 theorem oneSucceeds : Succeeds (oneRun true) (fun _ => ((), 0, 0)) {y : Fin 1 → List Bool | y 0 = [true]} :=
-  ⟨fun _ => [true], Set.mem_setOf.2 rfl, fun _ => ⟨⟨0, Nat.one_pos⟩, rfl, by show Actual.bits 1 1 = [true]; decide⟩⟩
+  ⟨fun _ => [true], by show (fun _ : Fin 1 => [true]) 0 = [true]; rfl, fun _ => ⟨⟨0, Nat.one_pos⟩, rfl, by show Actual.bits 1 1 = [true]; decide⟩⟩
 
 /-- And only then. -/
 theorem eq_true_of_succeeds {b : Bool} {pos : Fin 1 → Unit × ℕ × ℕ}
@@ -462,7 +459,7 @@ theorem overheadFor (acc : Sent → Prop) : OverheadFor acc := by
   rw [Game.prob_and_const]
   split_ifs with hle
   · exact (prob_unclean_le V D acc f εWipe hV hW w).trans hle
-  · exact zero_le _
+  · exact zero_le
 
 /-- **The overhead guarantee at the verifier of record.** -/
 theorem overhead : Overhead := overheadFor Accepts
@@ -514,7 +511,7 @@ theorem overhead_nontrivial : Overhead_nontrivial := by
           exact oneSucceeds
         · rw [oneMin V a]
           exact lt_of_le_of_lt (Nat.cast_le_one.2 (oneServerTime_le V a _ _)) one_lt_two
-      · have hmid : ∀ o, ¬ ∃ i : Fin 1, ∃ e, [((⟨θ, F, c, σ⟩ : Window V), o)][(i : ℕ)]? = some e ∧
+      · have hmid : ∀ o : Outcome, ¬ ∃ i : Fin 1, ∃ e, [((⟨θ, F, c, σ⟩ : Window V), o)][(i : ℕ)]? = some e ∧
             ∑ b, V.error b θ F c σ < windowError V (fun _ => 0) e.1 := by
           rintro o ⟨i, e, he, hlt'⟩
           rw [Fin.val_eq_zero, List.getElem?_cons_zero, Option.some.injEq] at he
