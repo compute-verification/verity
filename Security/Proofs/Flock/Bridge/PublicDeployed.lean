@@ -3,8 +3,8 @@ import Proofs.Flock.Bridge.Public
 /-!
 # `SampledKSLivePub`'s error is below 1 at the deployment's parameters
 
-`SampledKSLivePub` bounds a cheating prover's success by `δ + f(K·Pr[B^τ])` (`Bridge.deltaPub`, `Bridge.lossPub`),
-which says something only below 1. At the deployed parameters, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and
+`SampledKSLivePub` bounds a cheating prover's success by `δ + f(J²·K·Pr[B^τ])` (`Bridge.deltaPub`,
+`Bridge.lossPub`), which says something only below 1. At the deployed parameters, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and
 `M = R_w = 2^192`, it is:
 
 * `rateM1_kDep`: `SampledKSLivePub`'s rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
@@ -228,7 +228,7 @@ namespace Flock.Guarantees
 /-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters.** At `k = kDep = ⌈2^24/e⌉`, `ρ = 1/2` and
 `M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `δ + f(p) < 1` at most `2^40` committed wires
 (`W`, `Bridge.ioSum`), a draw of `k_d` of `n` units with `K₀ ≤ n ≤ K₀·k_d`, and `p ≤ 2^-200`: wherever
-`K·Pr[B^τ] ≤ 2^-200`. -/
+`J²·K·Pr[B^τ] ≤ 2^-200`. -/
 def DeltaPubDeployed : Prop :=
   1 ≤ Bridge.kDep ∧ FlockSoundness.Discharge.ZkLink.rateM1 Bridge.kDep ≤ 1 / 2 ∧
     ∀ (n kd K₀ W : ℕ) (p : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ p → p ≤ 1 / 2 ^ 200 →

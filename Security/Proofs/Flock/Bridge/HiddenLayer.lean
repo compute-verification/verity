@@ -19,7 +19,7 @@ over the same tables `planZHJ dj y₀`:
   message would open the negation's commitment to the input's negation, which is not registered.
 * **Nontrivial** (`countPrReg_nontrivial`): the count curve's bound at the deployed parameters is below 1, while the
   event with the verifier that accepts everything holds with probability 1, at every prover whose finder `B^τ` has
-  `K·Pr[B^τ] ≤ 2^-200` (`boundPr_le_pub`).
+  `J²·K·Pr[B^τ] ≤ 2^-200` (`boundPr_le_pub`).
 -/
 
 namespace Flock.Bridge
@@ -119,14 +119,14 @@ open Classical in
 (`planZHJ dj y₀`), the toy instance (`toyBinding`) with a law that draws its one unit, and the deployed parameters
 (`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`), the bound of `ZkLink.zk_flock_countPr_reg` (its knowledge term at
 `ksBoundAccZ`) is below the probability, 1, that the verifier that accepts everything accepts with the unit wrong, at
-every prover whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `K·Pr[B^τ] ≤ 2^-200`. That premise
-only places the prover, as in `sampledKSLiveV2_nontrivial`. -/
+every prover whose finder `B^τ` (at a per-run time `t'` and a verification `v`) has `J²·K·Pr[B^τ] ≤ 2^-200`, `J` the
+plan's tables. That premise only places the prover, as in `sampledKSLiveV2_nontrivial`. -/
 theorem countPrReg_nontrivial {mPts : ℕ} {Reg : Type} {I : Discharge.Exec.Inputs} (dj : Finset (Fin 1) → Lean.Json)
     {S₀ : Finset (Fin 1)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (L : Law 1)
     (hL : ∀ ω, L.draw ω = Finset.univ)
     (σ : Strategy (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)))) (t' v : ℝ)
-    (hB : (Fintype.card (PubIx dj y₀ toyPartition (toyBinding execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512) L
-        (reg σ)) : ℝ) *
+    (hB : (nTab I : ℝ) ^ 2 * Fintype.card (PubIx dj y₀ toyPartition
+        (toyBinding execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512) L) *
       (pubFinder dj y₀ toyPartition (toyBinding execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512) kDep (2 ^ 192)
         (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200) :
     L.miss 1 +
@@ -143,7 +143,7 @@ theorem countPrReg_nontrivial {mPts : ℕ} {Reg : Type} {I : Discharge.Exec.Inpu
     (kd := 1) (K₀ := 1) le_rfl (k := kDep) (Rw := 2 ^ 192) (M := 2 ^ 192) (ρ := 1 / 2) (by norm_num) rateM1_kDep
     (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)
   have hlt := deltaPub_lt_one (n := 1) (kd := 1) (K₀ := 1) (W := ioSum toyPartition) one_pos le_rfl (by norm_num)
-    toy_ioSum_le (mul_nonneg (Nat.cast_nonneg _) (Claims.Pr_nonneg _)) hB
+    toy_ioSum_le (mul_nonneg (mul_nonneg (sq_nonneg _) (Nat.cast_nonneg _)) (Claims.Pr_nonneg _)) hB
   refine lt_of_le_of_lt ?_ (exceeds_of σ (Finset.one_le_card.2
     ⟨0, toy_mem_wrongRegZ execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512 (reg σ) _⟩) hlt)
   rw [L.miss_eq_zero_of_draw_univ hL le_rfl]

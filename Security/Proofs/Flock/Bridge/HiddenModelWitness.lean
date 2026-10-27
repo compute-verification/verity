@@ -32,7 +32,7 @@ theorem endToEndHiddenModel_nontrivial (h : Flock.Assumptions.ToySetupHJ) :
     (kd := 1) (K₀ := 1) le_rfl (k := kDep) (Rw := 2 ^ 192) (M := 2 ^ 192) (ρ := 1 / 2) (by norm_num) rateM1_kDep
     (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)
   have hlt := deltaPub_lt_one (n := 1) (kd := 1) (K₀ := 1) (W := ioSum toyPartition) one_pos le_rfl (by norm_num)
-    toy_ioSum_le (mul_nonneg (Nat.cast_nonneg _) (Claims.Pr_nonneg _)) hB
+    toy_ioSum_le (mul_nonneg (mul_nonneg (sq_nonneg _) (Nat.cast_nonneg _)) (Claims.Pr_nonneg _)) hB
   refine absurd hle (not_le.2 (lt_of_le_of_lt ?_ (exceeds_of σ (Finset.one_le_card.2
     ⟨0, toy_mem_wrongRegZ execArith (planZHJ toyDj y₀) (tabZHJ toyDj y₀) H512 (reg σ) _⟩) hlt)))
   rw [toyLaw.miss_eq_zero_of_draw_univ (fun _ => rfl) le_rfl]
