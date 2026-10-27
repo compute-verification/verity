@@ -1,5 +1,6 @@
 import Proofs.Properties.Verity.SampledDeploy
 import Proofs.Properties.SampledProofs.OneStageZkRun
+import Proofs.Core.Game.Sim
 
 /-!
 # `SampledDeploy.accept_le` from a coupling of the play to the live audit (ONE-8's field, PRF-205)
@@ -25,6 +26,10 @@ probability that flock-verify `--zk` accepts the live audit's transcript at the 
 success. In a play the blobs are the committed file alone (`Outcome.sent`), so the circuit and public files a session
 reads are the file (`get_single`), and `SessionInputs` at `A.I` is a fact about `θ` and `F`. v2 accepts only evidence
 with a session (`session_of_accept`), so `covers` has a session to name.
+
+`PlayCoupling.ofDominated` takes `prob_le` from a reduction that runs the play's strategy against the live audit
+(`Game.Dominated`, built with `Proofs.Core.Game.Sim`'s rules), and `uniform_of_A3` is the rule's premise at the draw:
+the operating system's bytes under A3 keep the uniform law.
 
 `prob_le` holds only where the session's coins are the device's: flock-verify `--zk` takes every coin of a session from
 its record (`Flock.Transcript`: the record's rounds and points), and v2 reads the record from a blob the prover sends
@@ -258,5 +263,28 @@ theorem accept_le_of_couplings {V : Vocab d α} (Fg : LmsForger) (kd : ByteArray
   fun θ F c σ r hr hreg =>
     (Game.prob_mono (fun o ho => ⟨ho.1, fun h => h.elim ho.2.1 ho.2.2⟩) _ σ).trans
       (accept_le_of_coupling (Cp θ F c σ r hr hreg))
+
+/-- **`prob_le` from a reduction**: a play strategy that the live audit dominates (`Game.Dominated`, built node by node
+with `Proofs.Core.Game.Sim`'s rules, in core's image of `G`) gives a coupling at the strategy the reduction builds. -/
+noncomputable def PlayCoupling.ofDominated {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    {Brk : Outcome → Prop} {n : ℕ} {Reg : Type} {I : Exec.Inputs}
+    {G : FlockSoundness.Game (Reg × Finset (Fin n) × Exec.Transcript)} (proj : Outcome → Exec.Transcript)
+    (covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
+      _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
+      SessionInputs p e o.sent.blobs I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o))
+    (h : Game.Dominated (fun o => ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
+      (fun o => ZkExec.LiveAcceptsZK I o) (Pouw.PearlC.FlockTile.toVerity G)) :
+    PlayCoupling V θ F c σ Brk I G (Pouw.PearlC.FlockTile.stratOfVerity G (Classical.choose h)) where
+  proj := proj
+  covers := covers
+  prob_le := by
+    rw [Pouw.PearlC.FlockTile.prob_ofVerity]
+    exact Classical.choose_spec h
+
+/-- **A3 keeps every average**: the live audit's draw, read off the operating system's bytes `t`, is a map of coins
+that keeps the uniform law (`Game.Uniform`), so a reduction may hand the play the draw's bytes for the device's. -/
+theorem uniform_of_A3 {Ω : Type} [Fintype Ω] {m : ℕ} {L : Fin m → ℕ} {t : Ω → (i : Fin m) → Fin (L i) → Fin 256}
+    (h : FlockSoundness.Assumptions.UniformRandomBytes L t) : Game.Uniform t :=
+  Game.uniform_of_prCoin t fun E => h E
 
 end Verity
