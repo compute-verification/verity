@@ -99,6 +99,13 @@ class Repo:
         return self.git("rev-parse", "HEAD")
 
 
+@pytest.fixture(autouse=True)
+def verdict_cache(tmp_path, monkeypatch) -> Path:
+    """each test its own cache of verdicts, so none reads another's"""
+    monkeypatch.setenv("RATCHET_GATE_CACHE", str(tmp_path / "gate-cache"))
+    return tmp_path / "gate-cache"
+
+
 @pytest.fixture
 def repo(tmp_path, monkeypatch) -> Repo:
     r = Repo(tmp_path / "repo")
@@ -306,6 +313,32 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
     assert doc["changes"][2]["commit"] == m3
 
 
+def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
+    """A sync gates each PR on its merge onto `next`, every PR below it included (#4183's gate held drive's tick ~20 min a PR on
+    26 Oct): with the cache, N merges cost N judgments, not N(N+1)/2."""
+    base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
+    heads = []
+    for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
+                               {P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/c.py", "C"))},
+                               {"integrations/vllm/verity_vllm/d.py": "D = 1\n"}]):
+        repo.git("checkout", "-q", "-b", f"b{i}", base)
+        heads.append(repo.commit(f"pr {i}", files))
+    repo.git("checkout", "-q", "-b", "next", base)
+    tops = [repo.queue(i + 1, f"pr {i}", h) for i, h in enumerate(heads)]
+    monkeypatch.setenv("RATCHET_GATE_CACHE", "")
+    fresh = [G.gate("main", t) for t in tops]
+    monkeypatch.setenv("RATCHET_GATE_CACHE", str(verdict_cache))
+    judged, judge = [], G.judge
+    monkeypatch.setattr(G, "judge", lambda c, b: (judged.append(c.hi), judge(c, b))[1])
+    assert [G.gate("main", t) for t in tops] == fresh
+    assert judged == tops
+    assert [G.gate("main", t) for t in tops] == fresh and judged == tops
+    sorted(verdict_cache.glob("*.json"))[0].write_text("{")
+    assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
+    monkeypatch.setattr(G, "SELF", "another gate")
+    assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
+
+
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
     repo.git("checkout", "-q", "-b", "pr")
     moved = "integrations/vllm/tests/lint/moved/allowlists/p01_core.json"
@@ -352,6 +385,45 @@ def test_a_revert_and_a_pure_move_are_exempt(linted):
     linted.git("checkout", "-q", "-b", "next", "main")
     linted.queue(4, 'Revert "x"', "pr")
     assert _verdicts(G.gate("main", "next")) == [("#4", "exempt")]
+
+
+def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, monkeypatch):
+    """26 Oct on drive's pod: `git worktree remove --force` failed ("Directory not empty"), the gate exited 2, and the sync left
+    the PR out of `next`."""
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    run = subprocess.run
+    monkeypatch.setattr(G.subprocess, "run", lambda args, *a, **k: subprocess.CompletedProcess(args, 1)
+                        if list(args[:3]) == ["git", "worktree", "remove"] else run(args, *a, **k))
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+    assert len(linted.git("worktree", "list").splitlines()) == 1
+
+
+def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypatch, tmp_path):
+    """ci's review of #4852: when git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own
+    cleanup raised on 3.12, past `main`'s `GitError`, and the gate exited 1 naming no failure."""
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    run = subprocess.run
+    monkeypatch.setattr(G.subprocess, "run", lambda args, *a, **k: subprocess.CompletedProcess(args, 1)
+                        if list(args[:3]) == ["git", "worktree", "remove"] else run(args, *a, **k))
+
+    def stubborn(path, ignore_errors=False, onerror=None, *, onexc=None, dir_fd=None):
+        """`shutil.rmtree` on a directory a file it can't delete keeps: its error goes to `onexc`, as shutil's does"""
+        try:
+            raise OSError(39, "Directory not empty", str(path))
+        except OSError as e:
+            if onexc is not None:
+                onexc(os.rmdir, str(path), e)
+            elif not ignore_errors:
+                raise
+
+    monkeypatch.setattr(G.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(G.shutil, "rmtree", stubborn)
+    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
 
 
 def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):

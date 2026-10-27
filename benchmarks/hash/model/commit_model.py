@@ -13,7 +13,7 @@ the phase's stock serve time. It assumes hashing does not overlap serving, which
 integer issue slots with the GEMMs; note:circuits-rows-sha512-floor, note:circuits-commit-defaults-overlap). It leaves out
 gathers, staging copies, device-to-host traffic and host work; the baseline note breaks those down per run.
 
-A coarser proof unit keeps a fraction of a step's bytes: the fraction applies to the bytes inside the decoder layers and the
+A coarser proof block keeps a fraction of a step's bytes: the fraction applies to the bytes inside the decoder layers and the
 embedding, and the logits (committed for decode tokens) are kept whole.
 """
 from __future__ import annotations

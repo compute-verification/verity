@@ -119,7 +119,7 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
 6e29d34e7c, with #3972's record; the w212 slice at the class).
 - 10 units of 1,021,302 ANDs (k_log 24). m0's verifier and Lean `verify --zk` accept, and the audit is complete with no
-  wrong unit (δ 2⁻²⁰).
+  faulty proof block (δ 2⁻²⁰).
   - The honest unit's word is 0x3f, and it is accepted.
   - Seven negatives are refused by their words: flip 0x2e, charge 0x37, arrival 0x2f, cleared 0x3e, carry 0x3b,
     cleared-read 0x2d and sixpass 0x2f (twenty-one passes).
@@ -137,7 +137,7 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
 **The sync-class proof is run r20261024-211633-861e** (#3886 at 6e29d34e7c, the w212 and demonstration slices), at
 8eb1's sizes under a sync scheduler (AS = 0).
 - At w212: 10 units of 857,866 ANDs (k_log 23). m0's verifier and Lean `verify --zk` accept, and the audit is complete
-  with no wrong unit (δ 2⁻²⁰).
+  with no faulty proof block (δ 2⁻²⁰).
   - The honest unit's word is 0x3f, and it is accepted.
   - Seven negatives are refused by their words: flip 0x2e, charge 0x37, arrival 0x2f, cleared 0x3e, carry 0x3b,
     cleared-read 0x2d and sixpass 0x2f.

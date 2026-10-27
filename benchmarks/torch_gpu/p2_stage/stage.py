@@ -17,6 +17,10 @@ bytes aren't zero (wider than the payload: a corrupt row or other keys) or a row
 bytes are all 0xFF is compared with p exactly), bit 3 for a tensor's last block nonzero past the tensor's end, and the
 library's own flags (bit 0: a tweak's first candidate at or above p, where the spec draws the next). `decode_matrix` and
 `decode_layer` call it before they return.
+
+With a pass of the remote bandwidth audit attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
+each chunk's blocks lie in from the same rows on the device before the decode reads them (`sketch.py`); the rows then
+hold whole units.
 """
 from __future__ import annotations
 
@@ -86,6 +90,7 @@ class Store:
         self._counts = torch.zeros(3, dtype=torch.int64, device=rows.device)
         self._high: list[tuple[int, Any]] = []
         self.blocks_decoded = 0
+        self.sketch: Any = None
 
     @property
     def blocks(self) -> range:
@@ -96,6 +101,8 @@ class Store:
         if not (self.first <= j0 <= j1 <= self.blocks.stop):
             raise ValueError(f"blocks [{j0}, {j1}) are not all in the store's [{self.first}, {self.blocks.stop})")
         c = self.rows[j0 - self.first:j1 - self.first]
+        if self.sketch is not None:
+            self.sketch.read(self.rows, self.first, j0, j1)
         m = self.kernels.decode(c, j0)
         high = (c[:, :8] == 0xFF).all(dim=1)
         self._counts[:2] += torch.stack(((m[:, :L.LEAD] != 0).any(dim=1).sum(), high.sum()))

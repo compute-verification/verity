@@ -3,7 +3,8 @@
 # M1's family census sizing split units and candidates (`m1_families.py --estimate`, on stand-ins: nothing is lowered),
 # R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.received`), on toy files,
 # a5_warden's transfer-gate window over a warden run's cells, and a5_tp_gates' two TP2 ranks' windows over each other's
-# registered partials, and the proof leg's served shapes (`prove_leg.served`) (nothing is lowered or proved).
+# registered partials, and the proof leg's served shapes (`prove_leg.served`), and served_verdicts' window pick, missing
+# pieces and block record on toy serve dirs (nothing is lowered or proved).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -16,7 +17,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and templates: a8's scan tests import a8, which imports a0.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a warden run its tests drive tick by tick (`test_warden_serve._run`).
+# `benchmarks/all_protocols` and `benchmarks/e2e_demo/verity_e2e_demo`: served_verdicts' rows (`runner.row_of`, the
+# integrity leg's answer) and its block record (`block_record`, its schema).
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
+          "benchmarks/all_protocols/verity_all_protocols", "benchmarks/all_protocols/legs",
+          "benchmarks/e2e_demo/verity_e2e_demo",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",

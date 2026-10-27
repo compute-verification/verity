@@ -10,7 +10,7 @@ link, ingress and the window), whose root the warden's signed head names (`warde
 that root with the challenger (`IngressTie.registration`, on the head `warden_rows.check_registration` reads off the
 warden's signed registration); the rows and their salts are the prover's, which the warden hands it privately, and
 the challenger and the verifier see the root. A registration is one link-window, its `window` provenance
-`{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof units, unit t
+`{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof blocks, unit t
 bucket row t. Selection is `All`.
 
 **The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one gate naming
@@ -130,7 +130,7 @@ def _unit(check) -> CompositeDefinition:
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
-        doc="the proof unit of the ingress tie: one bucket row of the warden's ingress link-window, its "
+        doc="the proof block of the ingress tie: one bucket row of the warden's ingress link-window, its "
             "`io_request.IoTieRequest` on the row the registered read holds to the warden's root and the verifier's "
             "lanes")
 

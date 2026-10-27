@@ -45,7 +45,9 @@ committed row longer than one SHA-512 block.
 - `verity_torch_loop/pouw.py` (`serve.py --pouw h1`): the loop's PoUW window, every linear served as split-K tiles of the
   H1 tile PoUW's verifier pins (`core_check.TILES`, `PouwH1Tile_v1` at K = 64, 4 × 8), whose exact z gives the loop's own
   output; written to `DIR/pouw` under a one-stage registration in PoUW's window form, at all-protocols' PoUW parameters.
-  `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
+  The tiles' A and B rows are committed before the salt as per-window values (PoUW's `operands`), which the
+  registration's ``activations`` names and the tiles' ports read; `serve.py` prints their root X, which the salt is
+  released against. `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
   `core_check` and Lean's `pouw-check`. Its gaps are in `pouw.py`'s docstring.
 - `tests/`: the loop's outputs are the Definition's, unit by unit; its H1 tiles carry its linears and core's PoUW check
   registers its PoUW window; core's registration check passes the written window and
@@ -91,7 +93,7 @@ The window is one request for one decode step. That is N = 256 units: two linear
 the 256 units (q = 1/4).
 
 **Over a monitoring period.** Serve windows like this one through any monitoring period, a week, a month or a year,
-each window on its own live coins. If every window is accepted, the wrong units over the whole period total at most 18
+each window on its own live coins. If every window is accepted, the faulty proof blocks over the whole period total at most 18
 at δ = 1%, and at most 55 at δ = 10⁻⁶. The bound adds Σ (ε_ks + δ_link) over the period's windows to δ.
 - The theorem is `Flock.Guarantees.IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`): the total
   stays below ln(1/δ)/q.
@@ -112,7 +114,7 @@ The per-window figures follow. Each arm is a run of its own, with its own root a
 
 The tampered windows flip bit 0 of every output. The firewall's refusal of each tampered arm reads "FIREWALL-REFUSED:
 circuit: the constraints lincheck final fail on a rep's pads". Per window, beside the period's total, the integrity
-profile's bound for each accepted arm: an accepted transcript has at most 2 wrong units of 256, except with probability
+profile's bound for each accepted arm: an accepted transcript has at most 2 faulty proof blocks of 256, except with probability
 δ = 0.5. r20261025-170501-8a09 ran the
 same four arms at subset:2, and they behaved the same way, but its bound is only 74 of 256.
 

@@ -1565,6 +1565,33 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
         {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top"}]
 
 
+def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
+    """26 Oct 21:05Z: no_step told @top to stop and archive compute-accounting's and network-accounting's coordinators, each
+    working in Slack within two minutes, with no note or push for 6 h. Its agent's `updatedAt` moving is activity to no_step,
+    not to silent; once that stops too, no_step counts from it."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
+    (tmp_path / "notes").mkdir()
+    sweep = w.sweep
+
+    def working(start):
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        sweep(start)
+    w.sweep = working
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 8 * 60)
+    kinds = [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")]
+    assert kinds == ["silent", "silent"], kinds
+    w.sweep = sweep
+    stopped = clock.t
+    sweeps(w, clock, 6 * 60)
+    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
+    assert [(r["agent"], r["hours"], r["owner"]) for r in got] == [(CO, 6, "top")]
+    assert W.epoch(got[0]["since"]) >= stopped - 5 * 60
+
+
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):
     """A coordinator's branches: its runs' `git.branches` and every head ending in its id's last four (`cursor/...-cccc`)."""
     run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0),

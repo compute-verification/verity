@@ -6,7 +6,9 @@ a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the publi
 the unit that wrote it.  A unit whose wired row is not its writer's row is faulty in the wired flattening (its outputs
 are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it draws
 (`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
-drawn units); `check`, every unit's, is the reference."""
+drawn units); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
+``x`` its writer's output, its ``w`` a weight row): it is then a shared-row member, its wired port a table of its units' own
+rows, and a unit's string is the row its ref names (`_strings`), the one its statement reads."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -30,13 +32,14 @@ def _writers(members: Sequence[Any], ws: Sequence[int]) -> list[tuple[Any, np.nd
 
 def validate(members: Sequence[Any]) -> None:
     """Refuse a wiring that is not one row per unit of a reader port, each another member's output row of its words and schema,
-    and each port wired at most once."""
+    and each port wired at most once. A shared-row member's wired port is a table of its units' own rows, one a unit."""
     total = sum(m.n for m in members)
     for m in members:
         if len({p for p, _o, _ws in m.wired}) != len(m.wired):
             raise ValueError(f"{m.key}: ports {[p for p, _o, _ws in m.wired]} are wired more than once")
         for p, o, ws in m.wired:
-            if m.tables or p not in dict(m.rows) or len(ws) != m.n or min(ws) < 0 or max(ws) >= total:
+            if (dict(m.tables).get(p, m.n) != m.n or p not in dict(m.rows) or len(ws) != m.n or min(ws) < 0
+                    or max(ws) >= total):
                 raise ValueError(f"{m.key}: wiring {p!r} is not one writer in [0, {total}) per unit of an input port of its own rows")
             for wm, _mine, _theirs in _writers(members, ws):
                 if dict(wm.out_rows).get(o) != dict(m.rows)[p] or wm.schema(o) != m.schema(p):
@@ -58,11 +61,24 @@ def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, 
 
 
 def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
+    """Each of member ``m``'s units' ``b || c`` of its row ``port``, from its public body (`rows.Committed.public_body`): a
+    shared-row member's, the row of the port's table its ref names, the row its statement reads. None for a body that is
+    not the member's."""
     names = [q for q, _ in m.all_rows]
     body = publics.get(m.key)
-    if body is None or len(body) != m.n * len(names) * BC_BYTES:
+    if body is None:
         return None
-    return np.frombuffer(body, dtype=np.uint8).reshape(m.n, len(names), BC_BYTES)[:, names.index(port)]
+    if not m.tables:
+        if len(body) != m.n * len(names) * BC_BYTES:
+            return None
+        return np.frombuffer(body, dtype=np.uint8).reshape(m.n, len(names), BC_BYTES)[:, names.index(port)]
+    counts = [dict(m.tables).get(q, m.n) for q in names]
+    j, at = names.index(port), BC_BYTES * sum(counts)
+    if len(body) != at + 4 * m.n * len(names):
+        return None
+    table = np.frombuffer(body, dtype=np.uint8, count=counts[j] * BC_BYTES, offset=BC_BYTES * sum(counts[:j]))
+    refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(m.n, len(names))[:, j]
+    return None if (refs >= counts[j]).any() else table.reshape(counts[j], BC_BYTES)[refs]
 
 
 def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str]:
