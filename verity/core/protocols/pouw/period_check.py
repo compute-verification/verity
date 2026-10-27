@@ -4,12 +4,16 @@ PoUW's verifier of record for a period and onsite's work component) is held to b
 Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
 first-parent history and the period it credits. Its commitment is the auditor's ledger (the lines the challenger signed),
 its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log
-and each window's evidence in the close's order (`credit.PROVED_KEYS`). The check first refuses, by name (``form``),
-every window in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not
-an H1 window, a template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than
-``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``,
-or rejects with the first refusal, ``code: why``. Each drawn unit's and each round's proof outcome is the verifier of
-record's verdict, which the evidence carries."""
+and each window's evidence in the close's order (`credit.PROVED_KEYS`), or ``{fills, pins, windows}`` with the filler
+windows of the period's fill period too (`fill`, `fill.FILL_KEYS`). The check first refuses, by name (``form``), every
+window, served or filler, in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit
+that is not an H1 window, a template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other
+than ``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts
+with the period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``, or rejects with the
+first refusal, ``code: why``. With filler windows it is `fill._period_outcomes` too, also all or nothing: the credit
+gains ``fill`` (``{work, k, delta, eps}``) and the profile ``fills``, and a refused fill rejects the period. The served
+credit is the same with or without them. Each drawn unit's and each round's proof outcome is the verifier of record's
+verdict, which the evidence carries."""
 from __future__ import annotations
 
 import hashlib
@@ -17,11 +21,14 @@ from typing import Any
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import fill as F
 
 ID = "verity/pouw/period/v1"
 COMMITMENT_TAG = "verity/pouw/period/ledger/v1"
 PARAMS_KEYS = ("key", "main", "name")
 EVIDENCE_KEYS = ("pins", "windows")
+#: the evidence of a period that presents its filler windows too (`fill`)
+FILL_EVIDENCE_KEYS = ("fills", "pins", "windows")
 
 
 def params(j: Any) -> dict:
@@ -45,7 +52,7 @@ def digest(c: dict) -> bytes:
 
 def evidence(b: bytes) -> dict:
     j = CC.canonical(b)
-    if not isinstance(j, dict) or sorted(j) != list(EVIDENCE_KEYS):
+    if not isinstance(j, dict) or sorted(j) not in (list(EVIDENCE_KEYS), list(FILL_EVIDENCE_KEYS)):
         raise CC.Refused(f"keys are not {', '.join(EVIDENCE_KEYS)}")
     return j
 
@@ -126,11 +133,20 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] |
     period's credit and profile, or the first refusal."""
     if (why := form(p["name"], e["windows"])) is not None:
         return "reject", f"form: {why}", None
+    if "fills" in e and (why := form(F.period_name(p["name"]), e["fills"])) is not None:
+        return "reject", f"form: filler {why}", None
     got, refused = Cr._period_outcomes(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["windows"],
                                        CC.lms_verify)
     if refused is not None:
         return "reject", f"{refused[0]}: {refused[1]}", None
-    return "accept", None, (got, {"period": p["name"], "windows": len(got["windows"])})
+    profile = {"period": p["name"], "windows": len(got["windows"])}
+    if "fills" in e:
+        fill, refused = F._period_outcomes(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["fills"],
+                                           CC.lms_verify)
+        if refused is not None:
+            return "reject", f"{refused[0]}: {refused[1]}", None
+        got, profile = {**got, "fill": fill}, {**profile, "fills": len(fill["work"])}
+    return "accept", None, (got, profile)
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:

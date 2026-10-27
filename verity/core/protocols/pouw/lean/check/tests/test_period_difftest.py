@@ -2,8 +2,10 @@
 (`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
 `of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
-framing broken, and a period in each form the period's guarantee doesn't cover), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`
-names, so agreeing on it holds which rule refused the period."""
+framing broken, a period in each form the period's guarantee doesn't cover, and a period with its filler windows, honest
+or with one mutation aimed at every refusal of `fill._period_outcomes`), compared outcome for outcome, its reason
+included: the reason is the refusal `credit.period_credit` or `fill._period_outcomes` names, so agreeing on it holds which
+rule refused the period."""
 from __future__ import annotations
 
 import json
@@ -16,6 +18,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+import pouw_fill_cases as fill_cases
 import pouw_period_cases as cases
 from verity.core.protocols.pouw import period_check as PC
 from verity.core.protocols.pouw import verifier as V
@@ -60,7 +63,7 @@ def test_pouw_period(server):
     assert set(swept) == {"accept", "reject"}, dict(swept)
     assert {"accept", "reject params", "reject commitment", "reject evidence", "reject form", "reject period",
             "reject window", "reject circuit", "reject missing", "reject order", "reject coin",
-            "reject budget"} <= set(RULES), RULES
+            "reject budget", "reject fill"} <= set(RULES), RULES
 
 
 def test_an_honest_period_is_its_credit():
@@ -88,3 +91,32 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
         assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
         assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
         assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
+
+
+def test_a_fill_is_credited_beside_work():
+    """A period with honest filler windows is accepted with its fill (``{work, k, delta, eps}``) beside the served credit,
+    which is the same period's credit without them: the fill changes nothing `work`'s rule reads."""
+    for seed in range(3):
+        a = PC.case(cases.instance(random.Random(f"fill/{seed}"), "fill"))
+        assert a["verdict"] == "accept", a["reason"]
+        fill = a["public"].pop("fill")
+        assert sorted(fill) == ["delta", "eps", "k", "work"] and a["profile"]["fills"] == len(fill["work"]) > 0
+        assert all(w > 0 for w in fill["work"]) and fill["delta"] == a["public"]["delta"]
+        served = PC.case(cases.instance(random.Random(f"fill/{seed}"), "honest"))
+        assert served["verdict"] == "accept" and served["public"] == a["public"], (served, a)
+
+
+@pytest.mark.parametrize("name", fill_cases.NAMES)
+def test_a_fill_mutation_is_refused_by_its_rule(name):
+    """Each of `pouw_fill_cases`' mutations rejects the whole period with the refusal it aims at (``fill`` naming the
+    refused filler window's own code), and v6 filler units are refused by name as an uncovered form."""
+    for seed in range(2):
+        got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
+        assert got["verdict"] == "reject", (name, got)
+        code, _, why = got["reason"].partition(": ")
+        if name == "fill-v6":
+            assert code == "form" and why.startswith("filler window ") and PC.GUARANTEE in why, (name, got["reason"])
+            continue
+        assert code == fill_cases.AIMS[name], (name, got["reason"])
+        if name in fill_cases.INNER:
+            assert f" the fill earns nothing: {fill_cases.INNER[name]}: " in why, (name, got["reason"])
