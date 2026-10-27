@@ -327,7 +327,7 @@ class Linear:
              "state { name } team { key } project { id name } projectMilestone { id } labels { nodes { name } } "
              "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } attachments { nodes { url sourceType metadata } } "
              f"children(first: {AUDIT_CHILDREN}, orderBy: updatedAt) {{ nodes {{ updatedAt "
-             "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } } } } } } }")
+             "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } } } } } }")
         issues, after = [], None
         while True:
             page = self.gql(q, {"f": f, "after": after})["issues"]

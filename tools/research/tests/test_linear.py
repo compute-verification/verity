@@ -49,6 +49,7 @@ class FakeLinear:
             return {"access_token": f"tok{self.grants}", "token_type": "Bearer", "expires_in": 30 * 86400, "scope": "read write"}
         req = json.loads(data)
         q, v = req["query"], req["variables"]
+        assert q.count("{") == q.count("}") and q.count("(") == q.count(")"), f"Linear would refuse this query's syntax: {q}"
         self.calls.append((q, v, headers))
         if headers["Authorization"] in self.refuse:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
