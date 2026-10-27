@@ -1,10 +1,9 @@
 {
- "about": "Llama-3.2-1B's request Programs as the pinned vLLM traced them on vy-dc-h200 (CPU, on meta, H200 target), and as the served window w0 of r20261027-035845-afe2 holds them (its prefill-only request, out/served/builds): each trace's Program digest, three of its rows' names, and `test_naming.pins` of its Build (names, params, the correspondence record as recorded_names reads it, the record's inputs/weights/rank/body, the cached-prefix layout). source: the research run and the Build dir under it.",
+ "about": "Llama-3.2-1B's request Programs as the pinned vLLM's trace of each names it (on CPU, on meta, under the H200 target): int8 and bf16; greedy, a cached prefix, stochastic, and a served window's shapes, its prefill-only request among them. Each case is test_naming.case_of of a traced Build dir: the Program's digest, three of its rows' names and test_naming.pins of what the Build says beside the Program.",
  "config": "llama32-1b.config.json",
  "cases": [
   {
    "trace": "int8-LP3_T2_greedy",
-   "source": "r20261027-052834-039a:out/traces/build_request_LP3_T2_greedy",
    "model": "verity-int8/Llama-3.2-1B-INT8",
    "revision": "15b0976d400d796ee589e7737d03a919526bf800",
    "target": {
@@ -41,7 +40,6 @@
   },
   {
    "trace": "int8-LP22_T3_greedy",
-   "source": "r20261027-052834-039a:out/traces/build_request_LP22_T3_greedy",
    "model": "verity-int8/Llama-3.2-1B-INT8",
    "revision": "15b0976d400d796ee589e7737d03a919526bf800",
    "target": {
@@ -78,7 +76,6 @@
   },
   {
    "trace": "int8-LP22_T0_greedy",
-   "source": "r20261027-052834-039a:out/served/builds/build_request_LP22_T0_greedy",
    "model": "verity-int8/Llama-3.2-1B-INT8",
    "revision": "15b0976d400d796ee589e7737d03a919526bf800",
    "target": {
@@ -115,7 +112,6 @@
   },
   {
    "trace": "int8-LP17_T1_C16_greedy",
-   "source": "r20261027-052834-039a:out/traces/build_request_LP17_T1_C16_greedy",
    "model": "verity-int8/Llama-3.2-1B-INT8",
    "revision": "15b0976d400d796ee589e7737d03a919526bf800",
    "target": {
@@ -174,7 +170,6 @@
   },
   {
    "trace": "int8-LP3_T1_t0.7-p0.9",
-   "source": "r20261027-052834-039a:out/traces/build_request_LP3_T1_t0.7-p0.9",
    "model": "verity-int8/Llama-3.2-1B-INT8",
    "revision": "15b0976d400d796ee589e7737d03a919526bf800",
    "target": {
@@ -216,7 +211,6 @@
   },
   {
    "trace": "bf16-LP5_T2_greedy",
-   "source": "r20261027-054030-8347:out/traces/build_request_LP5_T2_greedy",
    "model": "unsloth/Llama-3.2-1B",
    "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
    "target": {
@@ -252,7 +246,6 @@
   },
   {
    "trace": "bf16-LP17_T1_C16_greedy",
-   "source": "r20261027-054030-8347:out/traces/build_request_LP17_T1_C16_greedy",
    "model": "unsloth/Llama-3.2-1B",
    "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
    "target": {

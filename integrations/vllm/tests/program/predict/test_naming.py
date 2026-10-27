@@ -17,7 +17,7 @@ import gzip
 import hashlib
 import json
 import sys
-from dataclasses import astuple
+from dataclasses import astuple, fields
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from verity.ml.circuits.types import Record
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
 from verity_vllm.correspondence.runtime import validate_document
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.build import Unexpressible, build_program
@@ -51,6 +52,30 @@ def pins(names: dict[int, str], params: list, doc: dict, prefix: dict | None) ->
             "recorded": _h([[[k, *astuple(v)] for k, v in sorted(called.items())], sorted(tensorless), sorted(rows.items()),
                             sorted([k, *v] for k, v in columns.items())]),
             "record": _h({k: doc.get(k) for k in ("schema", "body", "inputs", "weights", "rank")}), "prefix": prefix}
+
+
+def case_of(d: Path) -> dict:
+    """`naming_traces.json`'s case of a Build dir the pinned vLLM traced (`steps.trace_commands`): its φ and shape from its
+    ``result.json``, three of its rows' names and `pins` of what it says beside its Program; ``python -m
+    tests.program.predict.test_naming DIR...`` (from ``integrations/vllm``) prints each."""
+    r = json.loads((d / "result.json").read_text())
+    inst = read_instances(str(d / "instances.json.gz"), expand=False)
+    names = {int(x["i"]): x["name"] for x in inst["rows"]}
+    with gzip.open(d / "descriptor.json.gz", "rt") as f:
+        ann = json.load(f)["annotations"]
+    assert {int(k): v for k, v in ann["node_hints"].items()} == names, f"{d}: node_hints aren't the instances' names"
+    tf = {f.name for f in fields(TargetProfile)}
+    target = {k: v for k, v in r["target"]["declared"].items() if k in tf and v is not None}
+    s = r["sampling"]
+    pc = d / "prefix_cache.json"
+    attn = next(k for k, v in sorted(names.items()) if "[t=" in v)
+    return {"trace": f"{'int8' if target.get('int8_exact') else 'bf16'}-{d.name.removeprefix('build_request_')}",
+            "model": r["model_pin"]["model"], "revision": r["model_pin"]["revision"], "target": target,
+            "sampling": {"kind": "greedy"} if s["kind"] == "greedy" else {k: s[k] for k in ("kind", "temperature", "top_p", "top_k", "seeded", "splits")},
+            "LP": r["LP"], "T": r["T"], "C": r.get("C") or 0, "digest": r["program"]["digest"],
+            "names": {str(k): names[k] for k in (0, attn, max(names))},
+            "pins": pins(names, inst["params"], ann["correspondence"], json.loads(pc.read_text()) if pc.exists() else None),
+            "slow": s["kind"] != "greedy"}
 
 
 def phi_of(case: dict) -> Phi:
@@ -119,3 +144,8 @@ def test_what_the_naming_does_not_reach_is_refused_by_name(config, fact):
     tiny = Phi.from_json({**_registered().phi.to_json(), "sampling": {"kind": "greedy"}})
     with pytest.raises(Unexpressible, match="^naming: the step wrapper of the .* decoder at TP1"):
         build_program(tiny, "step", M=1, pos0=8, named=True)
+
+
+if __name__ == "__main__":
+    for arg in sys.argv[1:]:
+        print(json.dumps(case_of(Path(arg))))
