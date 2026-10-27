@@ -115,7 +115,7 @@ def test_a_silent_responder_cannot_hang_the_stream(world):
 
 def test_a_slow_answer_is_closed_by_the_clock_and_never_credited(world):
     """Answer 0 is on its way past the hard deadline: the driver expires challenge 0 at the deadline without waiting
-    for it, sends challenge 1 for the same block, and drops answer 0 when it lands, so only answer 1 is credited to
+    for it, sends challenge 1 for the same label, and drops answer 0 when it lands, so only answer 1 is credited to
     challenge 1."""
     blocks, vk = world
     clock = Clock()
@@ -176,7 +176,7 @@ def test_no_challenge_before_the_answer_or_the_hard_deadline(world):
 
 
 def test_a_pipelined_answer_is_refused(world):
-    """An answer to a challenge not yet revealed is refused, even when it is the right block, and records nothing."""
+    """An answer to a challenge not yet revealed is refused, even when it is the right label, and records nothing."""
     blocks, vk = world
     clock = Clock()
     v = _verifier(vk, 3, clock)
@@ -218,7 +218,7 @@ def _same_block_twice(vk):
 
 
 def test_a_stale_answer_is_not_credited_to_the_next_challenge(world):
-    """Challenge 0 expires, challenge 1 asks for the same block, and answer 0 arrives: it is refused, so challenge 0
+    """Challenge 0 expires, challenge 1 asks for the same label, and answer 0 arrives: it is refused, so challenge 0
     stays a miss and challenge 1 waits for its own answer."""
     blocks, vk = world
     clock = Clock()
@@ -250,7 +250,7 @@ def test_a_bare_memory_challenger_would_credit_it(world):
 
 @pytest.mark.parametrize("rtt", [0, 40_000])
 def test_an_answer_past_the_hard_deadline_is_rejected_unchecked(world, monkeypatch, rtt):
-    """At `Δ_late + RTT` a right block is late but counted correct; one nanosecond later it is rejected, and its block
+    """At `Δ_late + RTT` a right label is late but counted correct; one nanosecond later it is rejected, and its label
     is never checked."""
     blocks, vk = world
     clock = Clock()
@@ -520,7 +520,7 @@ def test_the_gaps_between_challenges_count_toward_the_cap(world):
 
 
 def test_an_answer_past_the_cap_is_rejected_unchecked(world, monkeypatch):
-    """Within its hard deadline but received past the cap: rejected without its block checked, the audit aborted; and
+    """Within its hard deadline but received past the cap: rejected without its label checked, the audit aborted; and
     `expire()` closes a challenge at the cap even with no hard deadline."""
     blocks, vk = world
     clock = Clock()
