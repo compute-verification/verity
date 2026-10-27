@@ -38,7 +38,7 @@ SUPERSEDED_BY = "superseded_by"
 POINT_TOOL = "vllm_bench_point"
 
 # Validation comes from result.json alone; rc 0 rules out a run killed after writing it, and a dirty tree ran code its
-# commit doesn't name (jobs.PASS_QUERY's rule, keyed here by spec and point rather than by one commit's identity).
+# commit doesn't name (jobs.StoreCompletion's rule, keyed here by spec and point rather than by one commit's identity).
 PASSING = """
 SELECT a.id, o.artifact, a.source_commit
 FROM attempts a
