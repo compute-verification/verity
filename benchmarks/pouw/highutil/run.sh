@@ -14,7 +14,9 @@
 # main's first-parent line. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS, NEGATIVE: period.py run's; ROW (default 32768); NSYS=1: after the
 # periods, Nsight Systems over one plain and one protocol period (their kernels' share of the GPU's time); LEASE (default
-# gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project --with numpy python).
+# gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project --with numpy python). SWEEP: `;`-separated settings
+# of v31's V31_* knobs (`default`: none), timed by period.py sweep after the diag; PERIODS=0 then skips the periods. A V31_*
+# variable in the run's environment sets that knob for every hu process.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -54,7 +56,7 @@ if [ "$COINS" != local ]; then
   GATE=(--peer "${PEER:?}" --challenger-key "${CHALLENGER_KEY:?}" --gate-key "${GATE_KEY:?}")
 fi
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
-export D PY TORCH_PY CKPT ROW BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0}
+export D PY TORCH_PY CKPT ROW BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0} SWEEP=${SWEEP:-}
 export GATE_ARGS="${GATE[*]}"
 $LEASE bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
@@ -72,8 +74,15 @@ $LEASE bash -c '
   fi
   $PY $D/period.py diag "$W/cfg" "$W/hu" "$O" > "$O/diag.log" 2>&1
   echo "diag rc $?" >> "$O/rc.txt"
-  # shellcheck disable=SC2086
-  $PY $D/period.py run "$W/cfg" "$W/hu" "$O" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks "$BLOCKS" --steps "$STEPS" \
+  if [ -n "$SWEEP" ]; then
+    sets=()
+    IFS=";" read -ra ss <<< "$SWEEP"
+    for s in "${ss[@]}"; do [ "$s" = default ] && s=""; sets+=(--set "$s"); done
+    $PY $D/period.py sweep "$W/cfg" "$W/hu" "$O" "${sets[@]}" > "$O/sweep.log" 2>&1
+    echo "sweep rc $?" >> "$O/rc.txt"
+  fi
+  r=0
+  [ "$PERIODS" = 0 ] || $PY $D/period.py run "$W/cfg" "$W/hu" "$O" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks "$BLOCKS" --steps "$STEPS" \
     --q "$Q" --periods "$PERIODS" --negative "$NEGATIVE" > "$O/period.log" 2>&1
   r=$?
   echo "period rc $r" >> "$O/rc.txt"
@@ -83,7 +92,7 @@ $LEASE bash -c '
         --coins local --main "$MAIN" --blocks 1 --steps 64 --q 64 --periods 1 --negative "" --arms $arm >> "$O/nsys.log" 2>&1
       echo "nsys $arm rc $?" >> "$O/rc.txt"
       nsys stats --report cuda_gpu_kern_sum --format csv -o "$O/nsys-$arm" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
-      nsys export --type sqlite -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
+      nsys export --type sqlite --force-overwrite true -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
       $PY $D/timeline.py "$O/nsys-$arm.sqlite" > "$O/timeline-$arm.json" 2>> "$O/nsys.log"
     done
   fi

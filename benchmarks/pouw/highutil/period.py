@@ -380,9 +380,10 @@ def prove_and_verify(job: dict) -> tuple[int, str | None]:
 class Driver:
     """hu.cu over its stdin and stdout."""
 
-    def __init__(self, hu: str, cfg: Path, row: int, rmax: int, log: Path) -> None:
+    def __init__(self, hu: str, cfg: Path, row: int, rmax: int, log: Path, env: dict[str, str] | None = None) -> None:
         self.p = subprocess.Popen([hu, str(cfg), str(row), str(LP), str(T), str(rmax)], stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=open(log, "ab"), text=True, bufsize=1)
+                                  stdout=subprocess.PIPE, stderr=open(log, "ab"), text=True, bufsize=1,
+                                  env={**os.environ, **(env or {})})
         self.ready = self._line("ready")
 
     def _line(self, head: str) -> list[str]:
@@ -742,6 +743,36 @@ def cmd_diag(a: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_sweep(a: argparse.Namespace) -> int:
+    """v31's knobs (V31_*, one hu process a setting) timed on the period's calls: per setting a warm block, then REPS rounds
+    of a plain and a protocol block of STEPS steps, each block's GPU time and SM clock. Seeds and salt keys are the
+    process's own and nothing is opened: timing only, never of record."""
+    cfg, out = Path(a.cfg), Path(a.out)
+    prep = json.loads((cfg / "prep.json").read_text())
+    configure(prep)
+    row, NL = prep["row"], len(LAYERS)
+    work = Path(tempfile.mkdtemp(prefix="highutil-sweep-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
+    (work / "seeds").write_bytes(os.urandom(384 * NL * a.steps))
+    rep = []
+    for setting in a.set:
+        env = dict(kv.split("=", 1) for kv in setting.split(",") if kv)
+        drv = Driver(a.hu, cfg, row, a.steps, out / "hu-sweep.log", env)
+        drv.block(0, 0, min(4, a.steps), "proto", "none", work / "seeds", work / "roots")
+        arms: dict[str, list[dict]] = {"plain": [], "proto": []}
+        for r in range(a.reps):
+            for arm in ("plain", "proto"):
+                arms[arm].append(drv.block(0, (r * a.steps) % NB, a.steps, arm, "none", work / "seeds", work / "roots"))
+        drv.close()
+        ms = {arm: float(np.median([b["gpu_ms"] for b in bs])) / a.steps for arm, bs in arms.items()}
+        rec = {"set": env, "steps": a.steps, "reps": a.reps, "plain_ms_per_step": ms["plain"], "proto_ms_per_step": ms["proto"],
+               "gamma_gpu": ms["proto"] / ms["plain"], "sm_mhz": [b["sm_mhz"] for bs in arms.values() for b in bs]}
+        rep.append(rec)
+        print(json.dumps(rec), flush=True)
+    shutil.rmtree(work, ignore_errors=True)
+    (out / "sweep.json").write_text(json.dumps(rep, indent=1))
+    return 0
+
+
 def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> dict:
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
     plain = [r for r in results if r["arm"] == "plain"]
@@ -816,6 +847,14 @@ def main(argv: list[str]) -> int:
     p.add_argument("out")
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(fn=cmd_diag)
+    p = sub.add_parser("sweep")
+    p.add_argument("cfg")
+    p.add_argument("hu")
+    p.add_argument("out")
+    p.add_argument("--set", action="append", default=[], help="one setting: K=V[,K=V...] of v31's V31_* knobs (empty: defaults)")
+    p.add_argument("--steps", type=int, default=20)
+    p.add_argument("--reps", type=int, default=2)
+    p.set_defaults(fn=cmd_sweep)
     a = ap.parse_args(argv)
     return a.fn(a)
 
