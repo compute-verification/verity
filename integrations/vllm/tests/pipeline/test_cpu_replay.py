@@ -328,7 +328,7 @@ def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
 
 
 def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
-    """The slim keep is published, and ``Kw`` opens every weights leaf (each tensor's salt key derives from it): no file of a
+    """``Kw`` opens every weights leaf (each tensor's salt key derives from it), and a keep is read by later replays: no file of a
     rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
     bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
     tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
