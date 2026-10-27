@@ -1,9 +1,9 @@
-"""[R17-1 / F-moe-r17-03 (moe M-0283)] the Commit's B>=2 population is placed over each request's EXECUTED PREFIX OF RECORD -- cap on a
+"""The Commit's B>=2 population is placed over each request's EXECUTED PREFIX OF RECORD -- cap on a
 length stop, served + LAG on an EOS stop under the DECLARED lag -- never over the Program's cap shape and never by a lag read from the trace.
 
-The record that found it: OLMoE B2 i32/o32 mixedstop (cp-moe 2026-09-20 18:45Z, lane e32550951): r0 served 11 (EOS 50279 at output index 10)
-/ executed 12 under LAG 1, r1 32 / 32; GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bound 13808/19988,
-composition 'engine step 12 ... missing [r0 x1] (+19 more steps)', linkage 44/64) and failed by name.  Torch-free (the offline committer of
+The record that found it: OLMoE B2 i32/o32 mixedstop: r0 served 11 (EOS 50279 at output index 10) / executed 12 under LAG 1, r1 32 / 32;
+GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bound 13808/19988, composition
+'engine step 12 ... missing [r0 x1] (+19 more steps)', linkage 44/64) and failed by name.  Torch-free (the offline committer of
 test_binding_negatives)."""
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def test_an_early_stop_the_declared_rule_cannot_place_is_refused_by_name_and_kee
 
 
 def test_served_past_the_first_eos_fails_by_name_f_r17_14():
-    """[rev F-r17-14 (M-0540)] the Program's rule stops at the FIRST declared EOS.  served [EOS, x, EOS] (cap 5, LAG 1) is NOT an EOS stop
+    """The Program's rule stops at the FIRST declared EOS.  Served [EOS, x, EOS] (cap 5, LAG 1) is NOT an EOS stop
     at 3 with executed 4 -- it was served past an EOS at index 0 (Continuation_v1 stops there: served [EOS], executed [1, 2]).  FAIL by name;
     the prefix stays the cap (nothing accepted).  The same for an EOS mid-list on a length stop ([x, EOS, y] at the cap) and for an
     EOS-then-more under LAG 0.  An EOS ONLY at the last served index is the EOS stop it always was."""
@@ -111,13 +111,13 @@ def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_sh
     """r1 declared cap 4 stops by EOS after 2 served (LAG 0 -> executed 2), r3 cap 5 after 3; the others run to their caps."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2, "r3": 3}
     bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
-    # the pre-R17-1 placement (every request over its cap): missing = r1's 2 + r3's 2 unexecuted steps, composition fails at step 2
+    # the older placement (every request over its cap): missing = r1's 2 + r3's 2 unexecuted steps, composition fails at step 2
     pop_cap, hdr_cap = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals)
     cov_cap = B.coverage_check(pop_cap, bmap)
     comp_cap = B.composition_check(hdr_cap, bmap)
     assert not cov_cap["ok"] and cov_cap["missing_n"] > 0 and {m["request_id"] for m in cov_cap["missing"]} <= {"r1", "r3"}
     assert not comp_cap["ok"] and comp_cap["problems"][0]["engine_step"] == 2 and "r1 x1" in comp_cap["problems"][0]["missing"]
-    # the R17-1 placement: the requirement is each request's executed prefix; the manifest stays the Program's (cap shape)
+    # the executed-prefix placement: the requirement is each request's executed prefix; the manifest stays the Program's (cap shape)
     pop, hdr = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
     assert hdr["programmed_not_executed_n"] == len(pop_cap) - len(pop) > 0 and hdr["request_steps_of_record"]["r1"] == [0, 1]
     cov = B.coverage_check(pop, bmap)
@@ -127,7 +127,7 @@ def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_sh
     assert EP.rows_past_the_stop(bmap, rsteps)["ok"]
     # every step still has its composition checked (no step was dropped: r2's cap 1 already ended at step 1 in the declaration)
     assert comp["checked_steps"] == max(B8_CAP)
-    # [rel M-0410 (a)] the classification is on the record by family / request / kind, and the manifest of record is untouched (rows_n, digest)
+    # the classification is on the record by family / request / kind, and the manifest of record is untouched (rows_n, digest)
     ne = hdr["not_executed_by_rule"]
     assert ne["n"] == hdr["programmed_not_executed_n"] and sum(ne["by_family"].values()) == ne["n"] and set(ne["by_request"]) == {"r1", "r3"}
     assert ne["by_request"]["r1"] == ne["by_request"]["r3"] and sum(ne["by_request"].values()) == ne["n"]     # 2 unexecuted steps each, every family per step
@@ -142,7 +142,7 @@ def _population_block(epr: dict, by_family: dict[str, int], *, applied: bool = T
 
 
 def test_the_commits_classification_and_the_populations_third_bucket_are_reconciled_identity_count_by_identity_count(tmp_path):
-    """[COORD R17-26/27; rel M-0410 (a)] one mechanism on the record: n_exec per request equal, the count per ROW family equal; a batch-level
+    """One mechanism on the record: n_exec per request equal, the count per ROW family equal; a batch-level
     or named-input family (outside the population split's reach) is named, never a FAIL and never read as equal."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2, "r3": 3}
     bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
@@ -190,7 +190,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     pb3 = {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], fa2_hidden_m1_stream={"N_excluded": 0})}}
     rec = EP.reconcile_not_executed(cc2, pb3, epr)
     assert rec["ok"] and rec["by_family"]["fa2_hidden_m1_stream"]["population"] == 320 and rec["outside_population_reach"] == {}
-    # [revb M-0452 (i)(ii)] with the manifest's engine-step-annotated identities the two families are checked ARITHMETICALLY from the
+    # with the manifest's engine-step-annotated identities the two families are checked ARITHMETICALLY from the
     # population's own n_exec: r1 executed 2 of cap 4 -> its named input at steps 2,3 = 2 cells; a plane row listing (r0, r1) at steps 2,3
     # = 2 (request, plane) cells of r1 while the plane identity itself stays required (r0 executes there): N_excluded 0 is right
     ids = ([{"request_id": "r1", "step": s, "engine_step": s, "family": "input_token_ids", "op_path": "prompt"} for s in range(4)]
@@ -284,7 +284,7 @@ def test_restrictions_of_the_flat_manifest_and_the_linkage_horizon():
 
 
 def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_path):
-    """[r19-int-21, F-r19-int-19] #39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk (F-r19-int-14) while
+    """#39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk while
     the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
     attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
     and reqval's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
@@ -318,7 +318,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
 
 
 def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_only(tmp_path):
-    """[reqval M-0343 / revb M-0349 n2] ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
+    """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
     in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
     eos_declared by F-pm-24, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
@@ -343,7 +343,7 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     f0 = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": nolink}}, {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": None, "declared_lag": None})
     assert f0["r0"]["a_r"] == 11 and f0["r0"]["a_r_source"].startswith("the Commit's OWN served tokens") and f0["r0"]["linked"] is False
     assert f0["r0"]["lag_attested"] is False and f0["r0"]["lag"] == -1
-    # [reqval M-0585 / revb R3] with this run's served list the facts carry `served` + `eos_ids` (the recurrence's inputs); a consumer whose
+    # with this run's served list the facts carry `served` + `eos_ids` (the recurrence's inputs); a consumer whose
     # signature predates them receives the arithmetic's facts only -- never a TypeError on an older tree, never silently dropped on a newer one
     served = _served({"r0": 11, "r1": 32}, {"r0"})
     fs = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, stop, served_tokens=served)
@@ -364,7 +364,7 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     assert EP.facts_accepted_by(lambda rid, **kw: kw, fs) == fs                       # **kwargs: everything passes through
 
 
-# ------------------------------------------------------------------ COORD R17-27 (a)+(b): the prefix is accepted only LINKED to the Match account
+# ------------------------------------------------------------------ (a)+(b): the prefix is accepted only LINKED to the Match account
 U0, U1 = "0f2b6d7e-r0", "5c1a9b3d-r1"
 ORDER = {U0: "r0", U1: "r1"}
 
@@ -398,14 +398,14 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
 
 
 def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_same_attempt(tmp_path):
-    """[R17-27 (a)] the Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
+    """The Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
     e = _mixed_epr()
     acc = EPL.load_match_account(_match_account(tmp_path))
     assert acc["tokens"] is not None and acc["global_match"] is not None and acc["notes"] == []
     L = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1)
     assert L["ok"] and L["required"] and L["reduced_requests"] == ["r0"] and L["problems"] == [], L
     assert L["tokens_equal"] is True and L["tokens_json"]["tokens_equal"] == {"r0": True, "r1": True} and L["tokens_json"]["lag"] == 1
-    # [rev S-r17-23 (c)] with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
+    # with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
     # one interior id different -> not one serving transcript, first differing position named
     same_len = _served({"r0": 11, "r1": 32}, {"r0"}); same_len["r0"] = list(same_len["r0"]); same_len["r0"][4] = 99
     Lf = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
@@ -417,7 +417,7 @@ def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_sa
 
 
 def test_the_committers_own_count_is_never_sufficient_by_itself(tmp_path):
-    """[R17-27 (a)] no Match account beside a REDUCED prefix -> problem by name; the same with no reduction is recorded, not a problem."""
+    """No Match account beside a REDUCED prefix -> problem by name; the same with no reduction is recorded, not a problem."""
     e = _mixed_epr()
     L = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["required"]
@@ -458,10 +458,10 @@ def test_a_transcript_that_is_not_the_matchs_or_an_unattested_lag_breaks_the_lin
 
 
 def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_padding_inside_the_prefix_is_the_prohibited_fallback():
-    """[R17-42 / reqval M-1318 (1)] pad's padded binding map (`padded-binding-map/1`) stamps `activity` on every entry.  A not-executed row's
+    """Pad's padded binding map (`padded-binding-map/1`) stamps `activity` on every entry.  A not-executed row's
     entry is `bot-by-enablement` (the REQUIRED padding: tau(e) = bot by rule) and lies at a step outside the executed prefix BY CONSTRUCTION:
     it is counted, never 'execution past the stop'.  An `active` entry there (or one with no activity field: an unpadded record) IS execution
-    past the stop, exactly as before.  The converse -- padding inside the executed prefix -- is the inactive fallback R17-42 prohibits, named."""
+    past the stop, exactly as before.  The converse -- padding inside the executed prefix -- is the prohibited inactive fallback, named."""
     rsteps = {"r0": [0, 1, 2], "r1": [0, 1, 2, 3, 4, 5]}
     leaf = lambda rid, st, **kw: {"kind": "leaf", "identity": {"family": "instance_outputs", "request_id": rid, "step": st, "op_path": "x", "rank": 0}, **kw}  # noqa: E731
     # an unpadded record: r0 stopped at step 2 (executed 0..2) and committed rows at 3, 4 -> past the stop; nothing padded
@@ -469,7 +469,7 @@ def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_paddin
     past = EP.rows_past_the_stop(unpadded, rsteps)
     assert not past["ok"] and past["requests"] == {"r0": [3, 4]} and past["entries_n"] == 2 and past["padding_entries_n"] == 0
     assert past["padded_record"] is False and "execution past the stop" in past["error"] and "inactive fallback" not in past["error"]
-    # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full cap population, R17-42), r1's are all active
+    # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full cap population), r1's are all active
     padded = {"schema": "padded-binding-map/1",
               "entries": [leaf("r0", s, activity="active") for s in range(3)] + [leaf("r0", s, activity=EP.ACTIVITY_PADDING) for s in range(3, 6)]
               + [leaf("r1", s, activity="active") for s in range(6)] + [{"kind": "leaf", "identity": {"family": "input_token_ids", "request_id": "r0", "step": None}, "activity": "registered-input"}]}
