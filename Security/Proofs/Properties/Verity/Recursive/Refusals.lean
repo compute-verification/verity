@@ -18,7 +18,8 @@ files the parts' statements encode short enough for their length words. Each is 
   the component's inputs (`Names`), the inner statement `x` carries reads as those inputs (`ins_inner`), so the model's
   setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the draw, and
   at one table the session's draw is the draw (`RecDeploy.drawTiedS`). That is the model's `innerOk`.
-* **`plain_statement`.** The parts' statement `verity/flock-circuit` has no plain leaves, by computation.
+* **`plain_of_compiled`.** The parts' statement `verity/flock-circuit` has no plain leaves: each part's verdict refuses
+  them, so an accepted session with a part shows it.
 * **The sizes.** The compiled component refuses a staged public file, inner record, coin server's transcript or staged
   rows file of `2 ^ 56` bytes or more (`fits`), so each file the blobs show is under `2 ^ 64` bytes (`record_of_compiled`,
   `transcript_of_compiled`, `rows_of_compiled`). `x`'s length is no input of the compiled component, since `Names` pins
@@ -80,8 +81,8 @@ theorem fits_lt {b : ByteArray} {w : String} (h : VStar.Recursive.fits b w = .ok
   unfold VStar.Recursive.fits VStar.Recursive.need at h
   by_cases hc : b.size < 2 ^ 56
   · exact hc
-  · have hd : decide (b.size < VStar.Recursive.FIELD_MAX) = false := by
-      simp [VStar.Recursive.FIELD_MAX, hc]
+  · have hd : decide (b.size < VStar.Recursive.FIELD_MAX) = false :=
+      decide_eq_false (by simpa [VStar.Recursive.FIELD_MAX] using hc)
     simp only [hd, Bool.false_eq_true, ↓reduceIte] at h
     exact absurd h (throw_ne_ok _ _)
 
@@ -117,11 +118,18 @@ theorem innerHeld_reads {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
       simp only [htu] at hh
       obtain ⟨_, -, hh⟩ := bind_ok hh
       obtain ⟨_, -, hh⟩ := bind_ok hh
-      obtain ⟨_, -, hh⟩ := bind_ok hh
-      obtain ⟨rowsB, hrw, hh⟩ := bind_ok hh
-      obtain ⟨⟨⟩, hfrw, -⟩ := bind_ok hh
-      exact ⟨cB, pB, dB, recB, trB, rowsB, hc, hp, hd, mapError_ok hok, hr, fits_lt hfr, htr, fits_lt hftr, hrw,
-        fits_lt hfrw⟩
+      cases hjp : Json.parse t with
+      | error err =>
+        simp only [hjp] at hh
+        obtain ⟨_, hl, -⟩ := bind_ok hh
+        exact absurd hl (throw_ne_ok _ _)
+      | ok jt =>
+        simp only [hjp] at hh
+        obtain ⟨_, -, hh⟩ := bind_ok hh
+        obtain ⟨rowsB, hrw, hh⟩ := bind_ok hh
+        obtain ⟨⟨⟩, hfrw, -⟩ := bind_ok hh
+        exact ⟨cB, pB, dB, recB, trB, rowsB, hc, hp, hd, mapError_ok hok, hr, fits_lt hfr, htr, fits_lt hftr, hrw,
+          fits_lt hfrw⟩
 
 /-- **The compiled `innerOk`, step by step**: the draw is UTF-8 JSON `j`, the verifier's partition and program give the
 population `n`, and the inner statement's tags (`verity/flock-circuit+plain-leaves` on the os coins) pass each call
@@ -236,11 +244,13 @@ theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n 
   have hcf : (innerIns cB pB o j n).read.I.circuitFile = cB := rfl
   have hpa : (innerIns cB pB o j n).read.I.partition = some o.partition := rfl
   have hpr : (innerIns cB pB o j n).read.I.program = some o.program := rfl
+  have hci' : Flock.RecSetup.checkInner none none (Except.ok (none, none)) = .ok () := hci
   unfold FlockDeploy.Ins.setup
   simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hci, hset, bind, Except.bind, pure, Except.pure]
   rw [forIn_ok_of_all fun a ha u => by simp only [hreg, (hregs a ha).1, noIdentifier_of_check (hregs a ha).2]]
   simp only [hds, hreg, hdr, hfull, hst, htb, hcf, hpa, hpr, hchecks, hzk, Bool.false_eq_true, eq_self_iff_true,
     ↓reduceIte, hcoins, hpub, Option.isSome_some, htg, hlaw]
+  all_goals simp only [hci']
 
 /-! ## `InnerOkAt` -/
 
@@ -285,13 +295,28 @@ theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.On
 
 /-! ## Plain leaves -/
 
-/-- **`Refusals.plain`: the parts' statement has no plain SHA-512 leaves** (`verity/flock-circuit`, by computation). -/
-theorem plain_statement : ∀ t, Flock.Tags.find? VStar.Recursive.STATEMENT = some t → t.plainLeaves = false := by
+/-- **`Refusals.plain`: the parts' statement has no plain SHA-512 leaves** where the compiled component accepts a
+session with a part: that part's verdict passed `need (!tags0.plainLeaves)`. `plainLeaves` compares `Json` (a
+`partial` `BEq`), so no computation settles it. -/
+theorem plain_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (h0 : 0 < e.proofs.parts.size) :
+    ∀ t, Flock.Tags.find? VStar.Recursive.STATEMENT = some t → t.plainLeaves = false := by
   intro t ht
-  have hc : Flock.Tags.find? VStar.Recursive.STATEMENT = some Flock.Tags.circuit := rfl
-  rw [hc] at ht
+  have htg : Flock.Tags.find? VStar.Recursive.STATEMENT = some Flock.Tags.circuit := rfl
+  rw [htg] at ht
   cases ht
-  first | rfl | decide
+  obtain ⟨h, ss, -, -, -, hsz1, hsz2, hparts, -⟩ := parts_of_accepts hacc
+  have hv := hparts 0 (by omega) h0
+  unfold VStar.Recursive.partVerdict at hv
+  simp only [htg] at hv
+  obtain ⟨⟨⟩, hneed, -⟩ := bind_ok hv
+  cases hp : Flock.Tags.circuit.plainLeaves with
+  | false => rfl
+  | true =>
+    unfold VStar.Recursive.need at hneed
+    simp only [hp, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hneed
+    exact absurd hneed (throw_ne_ok _ _)
 
 /-! ## The sizes -/
 
