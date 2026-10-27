@@ -226,9 +226,8 @@ def test_the_rule_refuses_what_it_cannot_place_and_never_infers_the_lag(tmp_path
 
 
 #: sha256 of the conversion's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=_plain)`, the run directory replaced),
-#: computed with the conversion on the parsed JSON before it read the records, then once more when it took the LAG as G6 does
-#: (`DeclaredStop.declared_lag`): that changed `lag_in_the_stop_rule_only` alone, to `b1_lag1`'s outcome
-OUTCOMES_SHA256 = "95bee0b277c2406645adf4af42d79e01a09e0069bbc35f1b4afaa741c392b3d6"
+#: messages included: a change to what the conversion decides or says changes it
+OUTCOMES_SHA256 = "d8c16b2ebe5b421d31bae5151a1a55d6fec134fd8545f244849081803754fa74"
 RECORDS = Path(__file__).parents[1] / "records" / "data"
 B1 = {"served": {"r0": [5, 6, EOS]}, "lag": 1, "executed_steps": {"r0": [0, 1, 2, 3]}}
 CAP_STOP = {"served": {"r0": [1, 2, 3, 4, 5, 6]}, "lag": 2, "executed_steps": {"r0": list(range(CAP))}}
