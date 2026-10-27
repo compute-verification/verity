@@ -3,17 +3,12 @@ one C-Flock `prove --zk` session behind the Lean firewall, served the bundle's o
 the verifier of record; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
 tampered window's member, whose proof must not be accepted.
 
-    python benchmarks/one_stage/prove_bundle.py make --scratch DIR --out DIR [--k K --lean flock-verify]
     python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
-* **The draw** (`make`): the torch loop's window and its tampered twin written under the fixture's test key, then the
-  bundle. With ``--k K`` the windows register `subset:K` and the draw is live (`live_draw`): the challenger logs its
-  receipt of the window's registration, then draws the registered law's units uniformly over the window's whole
-  partition (every unit of every member) with Lean's `flock-verify draw --registration` on its own coins, which refuses
-  a law or population other than the registered ones. The bundle's ``draw`` is that draw with ``source: live``, the
-  receipt, and the Lean draw of record. Without it the draw is the fixture's hand-chosen `FIXTURE_DRAW`, under the
-  fixture's registered `subset:4`.
+* **The bundle** is what `replay_bundle.build` wrote of the window's drawn units. `prove_bundle.sh` proves the
+  store's `BUNDLE_WINDOW` (a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four drawn units under its
+  registered `subset:4`, a fixture's draw) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since C-Flock's statement is a whole member. Checks: the bundle's own check
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
@@ -37,7 +32,7 @@ tampered window's member, whose proof must not be accepted.
   `verify --zk` must refuse the proof that reaches it).
 
 The weights' rows are bound here by the window's port roots. A window whose member headers name their registered reads
-(``rows.write``'s ``registered``) would be verified with ``--registered`` as well. The torch loop's headers don't name
+(``rows.write``'s ``registered``) would be verified with ``--registered`` as well. The fixture's headers don't name
 them: its program reads the weights as unit inputs, not as registered parameters (`one_stage.registered.reads`).
 """
 from __future__ import annotations
@@ -67,9 +62,6 @@ from verity.ml.windows import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 FORMAT = "verity/prove-bundle/v0"
-#: the torch loop's card binding, the fixture's (`replay_bundle.fixture_bundle`)
-BINDING = "GEMM_SM120_S8"
-CHALLENGER = "prove_bundle.py, the challenger: Lean flock-verify draw on its own coins (IO.getRandomBytes), after its receipt"
 
 
 def free_port() -> int:
@@ -92,29 +84,6 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
     return ok, bad
 
 
-def live_draw(lean: str, wdir: Path, out: Path) -> tuple[dict, dict]:
-    """The challenger's draw of record over the window's whole partition: its receipt of the window's registration, logged
-    before any coin is read, then the registered law's units drawn uniformly by Lean's `flock-verify draw` on its own
-    coins, which `--registration` holds to the law and population the window registered: ``(receipt, draw)``."""
-    rec = json.loads((wdir / "registration.json").read_text())
-    win = json.loads((wdir / "window.json").read_text())
-    if R.digest(rec) != win["registration_digest"]:
-        raise SystemExit("the window's registration is not the one its window.json names")
-    if rec["law"].get("law") != "subset":
-        raise SystemExit(f"the registered law {rec['law']} is not a subset law")
-    out.mkdir(parents=True, exist_ok=True)
-    receipt = R.receipt(rec, CHALLENGER)
-    (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    p = a0.run([lean, "draw", "--population", str(rec["population"]), "--k", str(rec["law"]["k"]),
-                "--registration", str(wdir / "registration.json")], out / "draw.log")
-    line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
-    if p.returncode != 0 or line is None:
-        raise SystemExit(f"flock-verify draw: rc {p.returncode}: {p.stderr[-500:]}")
-    draw = json.loads(line.split(" ", 1)[1])
-    (out / "draw.json").write_text(json.dumps(draw, sort_keys=True))
-    return receipt, draw
-
-
 def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
     """A live draw held to the window (module docstring); ``{}`` for a fixture's. Its law against the registered one is
     also the bundle check's (`replay_bundle.check`)."""
@@ -127,36 +96,6 @@ def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
             "draw:law": d.get("law") == rec["law"],
             "draw:record": D.check_draw(record, rec, rec["law"]).ok,
             "draw:units": record.get("units") == sorted(units)}
-
-
-def make(argv) -> int:
-    ap = argparse.ArgumentParser(prog="prove_bundle.py make", description="The torch loop's windows and the bundle of a draw.")
-    ap.add_argument("--scratch", required=True, help="writes window/ and tampered/ here")
-    ap.add_argument("--out", required=True, help="writes bundle.{json,bin} (and a live draw's receipt and record) here")
-    ap.add_argument("--k", type=int, default=0,
-                    help="the windows register subset:K and the draw is live, K units over the whole partition (else FIXTURE_DRAW)")
-    ap.add_argument("--lean", help="flock-verify, for a live draw")
-    a = ap.parse_args(argv)
-    s, out = Path(a.scratch), Path(a.out)
-    law = f"subset:{a.k}" if a.k else None
-    _, weights, com = RB.torch_loop_window(s / "window", law=law)
-    RB.torch_loop_window(s / "tampered", tamper=True, law=law)
-    rec = json.loads((s / "window" / "registration.json").read_text())
-    if a.k:
-        if not a.lean:
-            raise SystemExit("a live draw needs --lean")
-        receipt, record = live_draw(a.lean, s / "window", out)
-        units, draw = record["units"], {"source": "live", "law": rec["law"], "receipt": receipt, "record": record,
-                                        "coins": CHALLENGER}
-    else:
-        units, draw = list(RB.FIXTURE_DRAW), {"source": "fixture", "law": rec["law"]}
-    doc, pay = RB.build(s / "window", units, commitment=com, locate=RB.torch_loop_locate(128), binding=BINDING,
-                        reads=RB.torch_loop_reads, weights=weights, draw=draw)
-    pj, _ = RB.write(doc, pay, out, "bundle")
-    print("MAKE " + json.dumps({"bundle": str(pj), "source": doc["draw"]["source"], "law": rec["law"],
-                                "units": doc["draw"]["units"], "members": [m["k"] for m in doc["members"]],
-                                "digests": RB.digests(doc, pay)}, sort_keys=True), flush=True)
-    return 0
 
 
 class Staged:
@@ -262,9 +201,6 @@ def flipped(a, mm: dict, honest: Path, out: Path) -> dict[str, dict]:
 
 
 def main(argv=None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["make"]:
-        return make(argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--bundle", required=True, help="the bundle's JSON; its payload is the .bin beside it")
     ap.add_argument("--window", required=True, help="the prover's window: what Window.write wrote, private files included")

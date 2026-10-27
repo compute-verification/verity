@@ -1,0 +1,4 @@
+# pin_glm53.sh's `research keep --expires` for the two paths it records in the node's HF cache.
+[expires]
+base = "2026-11-06T00:00:00Z"   # the FP8-block base (GLM53)
+pin = "2026-11-20T00:00:00Z"    # the int8 pin (GLM53_INT8)

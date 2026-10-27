@@ -36,15 +36,15 @@ of a pinned parameter leave the free inputs where the window's root for it is th
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
 
-A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
-loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
+A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
+loop's activation rows) has them fixed before the draw with the rest of the registration;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
 the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
-the free inputs. Those it reads as ties (the wired loop's activations: an output port writes every row an input port
+the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
 takes, `tied_values`) are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
-(`verity_torch_loop.pouw_audit`) have theirs pinned through ``--registered``, from the window's entries.
+have theirs pinned through ``--registered``, from the window's entries.
 
 The negatives (`negatives` before the draw, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
@@ -83,7 +83,7 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 
 ``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
-party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
@@ -790,11 +790,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, loopback:HOST:PORT or "
-                   "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+                   "gate:USER@HOST (vy-challenger-1 through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                   "(infra's challenger-key/v1), never the session's key.json")
+                   "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "

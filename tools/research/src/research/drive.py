@@ -1,5 +1,5 @@
-"""`research queue drive`: one tick of the landing automation (Daniel, 11 Oct: from an owner's ready mark to `main` moving, no
-agent acts unless the automation refuses).  A loop runs it every few minutes.
+"""`research queue drive`: one tick of the landing automation (from an owner's ready mark to `main` moving, no agent acts
+unless the automation refuses).  A loop runs it every few minutes.
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
 drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
@@ -9,15 +9,14 @@ What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick app
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`; TOP-90 row 23).
 
-Review landing (Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after landing; drive.toml's
-`land = "check"`, which landed trains on their own check, is gone).  A tick syncs `next` (`Queue.sync`: admit and drop PRs,
-rebuild on a moved `main`), then lands its longest prefix whose every member has a land verdict at its head and no hold
+Review landing, the only landing: PRs land on an eyeball review, and the full check runs after landing.  A tick syncs
+`next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `main`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` (`_land`), then `merge.caught_up` (the spec DM,
 node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep.  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
 of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked after
-landing, Daniel 25 Oct 11:19 PM PDT) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
+landing) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
 recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
 the locks on top, and `next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
@@ -674,14 +673,14 @@ class Driver:
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: each member lands on a reviewer's verdict, a Lean change once a Lean check passed, and the full check runs after
-        #: landing (`_review`; Daniel, 24 Oct 06:05Z), reusing no pass with ``after_landing_no_cache`` but circuit-check's
+        #: landing (`_review`), reusing no pass with ``after_landing_no_cache`` but circuit-check's
         #: per-target ones (`--circuit-cache`)
         self.after_landing_no_cache = after_landing_no_cache
         #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
         self.reviews: Callable[[int, str], list] = reviews or (lambda pr, head: StoreLabels(q.store, q.log).reviews(pr, head))
         #: who wrote the ready mark on a PR's head (`StoreLabels.ready_by`), one of those whose verdict doesn't count (`_owners`)
         self.ready_by: Callable[[int, str], str | None] = ready_by or (lambda pr, head: StoreLabels(q.store, q.log).ready_by(pr, head))
-        #: commit the locks a Lean check regenerated onto its commit as it lands (CI-64: Daniel through top, 18 Oct)
+        #: commit the locks a Lean check regenerated onto its commit as it lands
         self.regenerate_locks = regenerate_locks
         #: the after-landing run on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`); an injected `launch` launches it too
