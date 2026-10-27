@@ -255,3 +255,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 
 ## 2026-10-27 03:02Z (coordinator) — more Lean slots
 - vy-nebius-1's 6 build trees are open to proofs' F1 builds until 12:00Z (compute-research 02:25Z): `research run --on vy-nebius-1 …`, no pool needed; nice 19, off the GPU cores, ~360 GB total shared with soundness and compute-research, first come first served, never hold a slot idle. cpu-2 also gets a 3rd tree. Avoid cpu-3 (92% inodes). If a run of yours is still queued 3+ deep elsewhere, move it there and cancel the original.
+
+## 2026-10-27 03:07Z (coordinator) — partbind fix for the assembly
+- RECDEC: partbind-5c1d needs e99675bf84 (PartsVStar.lean:183 `rfl` -> the part's bindings hypothesis `hf`). Your 93e5 at 16a44e3b86 will hit it; merge e99675bf84 (and resp3 b44b6d69fc, kslock 1d0ce8ab97) before relaunching. RECDEC is also fixing recland's own VerdictRowEInner:62 and DeployedCounts:324 and will post SHAs here. Use vy-nebius-1 for the relaunch.
