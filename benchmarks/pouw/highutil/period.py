@@ -990,7 +990,7 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
     gpu_step = lambda r: sum(b["gpu_ms"] for b in r["blocks"]) / 1e3 / r["steps"]  # noqa: E731
     credited = sum(r["credited_macs"] for r in honest)
     wall = sum(r["wall_s"] for r in honest)
-    mhz = [b["sm_mhz"] for r in results for b in r["blocks"] if b["sm_mhz"]]
+    mhz = [b["sm_mhz"] for r in honest for b in r["blocks"] if b["sm_mhz"]]
     out = {
         "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(),
                      "lp": {name: lp_of(k) for name, _, k in LAYERS}, "L": L,
@@ -1034,6 +1034,7 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
         b_wall, b_gpu = med([per_step(r) for r in rs]), med([gpu_step(r) for r in rs])
         out["baselines"][base] = {
             "kernel": BASELINES[base], "plain_s_per_step": b_wall, "plain_gpu_s_per_step": b_gpu,
+            "sm_mhz_median": med([b["sm_mhz"] for r in rs for b in r["blocks"] if b["sm_mhz"]]),
             "gamma_wall": out["proto_s_per_step"] / b_wall if out["proto_s_per_step"] and b_wall else None,
             "gamma_gpu": out.get("proto_gpu_s_per_step") / b_gpu if out.get("proto_gpu_s_per_step") and b_gpu else None,
             "plain_share_of_peak": {key: med([r["macs"] / r["wall_s"] / peak for r in rs])
