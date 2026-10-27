@@ -2,7 +2,7 @@
 
 The records, every one in the window's directory but the advice's opening:
 
-* **the circuit** in proof units with its public layout (``circuit.json``), which the registration binds by SHA-512;
+* **the circuit** in proof blocks with its public layout (``circuit.json``), which the registration binds by SHA-512;
 * **the compiler and the advice**, when the circuit depends on run-time choices: the registration's window names the compiler
   (``compiler``: its name and digest, which carries the public cap on the advice's length, and the commit its code is at)
   and the advice's hiding commitment (``advice``: its root and its length in bits, which is charged); the advice is a bit
@@ -42,12 +42,16 @@ the window's run root (`committed_activations`), and reports their roots. Those 
 the free inputs. Those it reads as ties (the wired loop's activations: an output port writes every row an input port
 takes, `tied_values`) are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
-too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``).
+too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
+(`verity_torch_loop.pouw_audit`) have theirs pinned through ``--registered``, from the window's entries.
+
+The negatives (`negatives` before the draw, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
+them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME ...]
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
@@ -585,7 +589,7 @@ def audit(a: argparse.Namespace) -> int:
                     advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
-    more = negatives(w, held, doc, out / "negatives")
+    more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
@@ -609,7 +613,8 @@ def audit(a: argparse.Namespace) -> int:
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                    "audit", "draw", "draw_counts", "negatives", "coins", "timing", "outputs")}}
+                                    "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
+                                    "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     row["leak"] = (declared_count(doc, bits, resolve, pins, untied)
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
@@ -707,6 +712,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
+    p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
+                   "several audits runs them in its first")
     p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")

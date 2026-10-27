@@ -34,7 +34,7 @@ column's 8-element blocks. Nodes: `H(left || right)` / `compress(left, right)`. 
 ## API
 
 ~~~python
-import sys; sys.path.insert(0, "verity/ml/kernels")          # importable by path
+import sys; sys.path.insert(0, "archive/shared")            # importable by path
 import cupy as cp
 from hash_gpu import merkle
 
@@ -56,15 +56,15 @@ cupy arrays (torch for the torch Poseidon2 backend).
 
 ~~~bash
 # CPU reference tests (seconds, laptop-safe); GPU tests run too where CUDA is present
-uv run --frozen --package verity-numerical python -m pytest verity/ml/kernels/hash_gpu/tests -q
+uv run --frozen --package verity-numerical python -m pytest archive/shared/hash_gpu/tests -q
 
 # the measurement, recorded on the pod (commit first; the snapshot is HEAD)
 uv run --frozen research run --on vy-g2 --project verity --stage hash_gpu.bench --require-result -- \
-  bash -c 'cd kernels && python3 -m hash_gpu.bench --reps 5 --out "$RESEARCH_RUN_DIR/bench.json"'
+  bash -c 'cd archive/shared && python3 -m hash_gpu.bench --reps 5 --out "$RESEARCH_RUN_DIR/bench.json"'
 uv run --frozen research fetch <run-id> --all
 
 # re-price explore.tensor with the fetched rates
-uv run --frozen --package verity-numerical python verity/ml/kernels/hash_gpu/reprice.py \
+uv run --frozen --package verity-numerical python archive/shared/hash_gpu/reprice.py \
   --bench ~/.research/runs/<run-id>/bench.json --run-id <run-id> --out backends/numerical/reports/hash_gpu.json
 ~~~
 
