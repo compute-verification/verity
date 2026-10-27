@@ -196,11 +196,12 @@ theorem not_unitIn_of_rowNet {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.
 past its inputs. -/
 theorem not_unitIn_zero (s₀ : ℕ) : ¬ UnitIn st.c (st.c.unitRange.slot s₀ + st.c.unit.useful) := by
   rintro ⟨s, off, ⟨-, hoff, hx⟩, hlt⟩
-  have hb := built_spec L.unit_built
   have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
   have := (slot_add_inj (r := st.c.unitRange) hz hoff hx).2
-  have h1 := hb.2.1
-  have h2 := hb.2.2.2.1
+  have h1 := F.useful
+  have h2 := L.unit_at.in_le
+  rw [L.unit_at.in_eq] at h2
+  have h3 := L.unit_at.const_le
   omega
 
 /-- **A row net's slot holds its net's rows** in every block of a witness that satisfies every row but the unit input

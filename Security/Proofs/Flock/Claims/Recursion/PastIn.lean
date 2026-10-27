@@ -236,8 +236,8 @@ theorem checkRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {
   rw [hh] at hd'
   simp only [↓reduceIte] at hd'
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
-  obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
-  exact ⟨hcr, (FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1).2.1⟩
+  have C := FlockSoundness.Discharge.Hidden.committed_of_commit s.parse
+  exact ⟨(C.check ht).2.2, (C.outRows ht fun p hp => (hv1 p hp).1).2.1⟩
 
 /-- **`PastIn` holds at every stage**: at a staged part, its circuit holds V\*'s rows and output leaves
 (`checkParsed_ok`, `checkParsed_leavesOut`), names each port once (`staged_names`), has one output row per output
