@@ -43,7 +43,7 @@ and it holds custody of M/18 served windows' values until its draw.
 
 **Levers** (`LEVERS`): one change each, with its owner and a work class (1 a parameter, 2 one module, 3 a new path in one
 component, 4 a new circuit or proof form), applied alone to today's configuration and in sequence along `route`. δ_s is
-Daniel's claim parameter and ε_♭ the machine model's: both are shown (`sensitivity`), neither is a lever here.
+the claim's parameter and ε_♭ the machine model's: both are shown (`sensitivity`), neither is a lever here.
 """
 
 from __future__ import annotations
@@ -360,7 +360,7 @@ def apply(lv: Lever, c: Config) -> Config:
 def route(base: Config = TODAY) -> list[Config]:
     """The fastest route: from `base`, the lever that most shortens the time to the first period, then the next on
     that, while one shortens it by more than 1%. A tuned lever may be applied again later; the spend lever is left
-    out (it is Daniel's)."""
+    out (spend is a budget decision, not a tuning step)."""
     c, left, out = base, [lv for lv in LEVERS if lv.name != SPEND], []
     while left:
         steps = [(apply(lv, c), lv) for lv in left]
@@ -380,7 +380,7 @@ NEAR_TERM = ("u: every row slot of a served step filled", "r → 1: units of equ
 
 def near_term(base: Config = TODAY) -> list[Config]:
     """`NEAR_TERM`'s levers, which need no new receipt kernel, served unit or proof form, in order, each on the last;
-    then the last on eight nodes (Daniel's spend), its draws tuned again."""
+    then the last on eight nodes (the spend lever), its draws tuned again."""
     out, c = [], base
     for name in NEAR_TERM:
         c = apply(lever(name), c)
@@ -447,7 +447,7 @@ def scan(c: Config, field: str, values) -> list[dict]:
 
 
 def sensitivity() -> dict:
-    """Windows to ε < 1% at today's served shape and u = 1, by δ_s (Daniel's) and by ε_♭ (the machine model's)."""
+    """Windows to ε < 1% at today's served shape and u = 1, by δ_s (the claim's) and by ε_♭ (the machine model's)."""
     base = Config("sensitivity", u=1.0)
     return dict(
         delta_s_log2={str(d): windows(replace(base, delta_s_log2=d)) for d in (20, 30, 40, 64, 80)},
