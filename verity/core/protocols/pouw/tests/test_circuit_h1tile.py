@@ -20,7 +20,7 @@ from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 COIN_RULES = C._ports is not None and hasattr(C._ports, "_coin_role") and "position" not in C._ports.KINDS
 compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
 BIT = BL.BIT

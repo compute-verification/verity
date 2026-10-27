@@ -1150,7 +1150,7 @@ useful    U/(α_A·α_B), glue
   itself from it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its
   checked values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is
   two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on
-  crafted stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+  crafted stride rows. A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack applies here too.** `noise` keys every row's E_A by the
   unit's seed_A alone, so the prover knows each row's noise before it chooses the row and can fold every row onto one A′
   row, whose C̃ it computes once per weight row, while every row passes every rule. The fix is Pearl-C's -h3 (above):

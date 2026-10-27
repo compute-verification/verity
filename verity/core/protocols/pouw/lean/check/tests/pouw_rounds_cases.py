@@ -52,7 +52,7 @@ _LEFT = {"early"}
 #: close at the next leaf, the ledger's later entries from the one after
 PARAMS = lms.Params(64, 4, 5)
 RECORD_LEAF = 8
-HOST = "vy-challenger-test"
+HOST = "challenger-test"
 LANE = "pouw"
 #: the verifier's copy of main's first-parent history, newest first
 MAIN = [hashlib.sha1(b"main %d" % i).hexdigest() for i in range(6)]
