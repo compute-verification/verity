@@ -50,7 +50,8 @@ Every other premise is `DampenerRemote`'s: the model's accounting of the four so
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`
 are fixed over the period: nothing here models or rests on re-registration.
 
-The statement is not proved: `DampenerRemotePeriodStated` holds its text for the lock.
+`Nci.SecurityProofs.DampenerRemotePeriod` proves it. `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivial`
+are its witnesses (LEAN-66): its premises hold at a constructed honest developer, and without PoUW's leg it is false.
 -/
 
 namespace Nci.Guarantees
@@ -141,10 +142,112 @@ def DampenerRemotePeriod : Prop :=
                   declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
               hardwareMultiple mfu κ (M ξ) C U)
 
-/-- **The remote dampener over a monitoring period is stated**: `DampenerRemotePeriod`, equal to itself, so the lock
-records its text and every definition it reads until it is proved. -/
-def DampenerRemotePeriodStated : Prop :=
-  let s := DampenerRemotePeriod
-  s = s
+/-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something** (LEAN-66): an instance meets every
+premise with the failure probability `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t` at most `10⁻⁶`, and on every run the
+overhead bound on the hardware multiple (`remoteDampener`'s value) exceeds 1 while the run's own hardware multiple meets
+it. The proof's instance is an honest developer over one window, run by its one identity: its PoUW certificate right,
+no faulty proof block, no declared run, its monitored compute all certified work and its counted multiplications on its
+unmonitored compute at `MFU₀ = 1/2`, at the remote reference's `p = 3 · 2⁻⁴⁰` (`CircuitCredit`'s
+`δ_s + δ_bind + δ_ks`) and `ε' = 2p/δ` at Daniel's pooled `δ = 10⁻⁶` (25 Oct), with every proof block proved
+(`q = 1`, `K = 0`). -/
+def DampenerRemotePeriod_honest : Prop :=
+  ∃ (T : ℕ) (Ω : Fin T → Type) (_ : ∀ t, Fintype (Ω t)) (_ : ∀ t, Nonempty (Ω t))
+    (c : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
+    (β ι : Type) (_ : DecidableEq ι) (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
+    (I : Finset ι) (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (ks : Fin T → ℝ) (K : ℕ)
+    (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
+    (R : Type) (_ : Fintype R) (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
+    (dd e : ℕ),
+    -- PoUW, per window
+    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ c t) ∧ ∑ t, c t ≤ C ∧
+    (∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) ∧
+    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
+    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧
+    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
+      (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) ∧
+    0 ≤ q ∧ q ≤ 1 ∧
+    (∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => ∀ b ∈ bad ξ, win b = t → b ∉ drawn (Function.update ξ t a)) ≤
+        (1 - q) ^ ((bad ξ).filter fun b => win b = t).card) ∧
+    (∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn (Function.update ξ t a)) ∧
+          ∀ b ∈ bad ξ, win b = t → b ∉ detected (Function.update ξ t a)) ≤ ks t) ∧
+    -- the identities and the halt
+    (∀ t t', idW t = idW t' → t < t' → τw t < τw t') ∧ (∀ ξ, ∀ b ∈ bad ξ, idW (win b) ∈ I) ∧
+    0 < H ∧ 0 ≤ Δ ∧ Φ * H ≤ C ∧
+    (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) ∧
+    (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) ∧
+    (∀ b, 0 ≤ w b) ∧ 0 ≤ B ∧ (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) ∧
+    -- NCI: each declared run as a verdict of compliance of the check of record carries it
+    0 < κ ∧ 0 < C ∧ 0 ≤ U ∧ 0 < mfu ∧ mfu ≤ 1 ∧ 0 ≤ α ∧ 0 < b_a ∧ 0 ≤ Λ ∧
+    (∀ i, b_a * (Th i).M.card ≤ α * (Th i).bound (α * Γ) b_w dd e * (d i).D.size (d i).D.computed) ∧
+    (∀ i, (Th i).bound (α * Γ) b_w dd e ≤ Λ) ∧ ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C ∧
+    -- the counted multiplications
+    (∀ ξ, 0 < M ξ) ∧ (∀ ξ, M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Th i).M.card + Mx ξ) ∧
+    (∀ ξ, (Mu ξ : ℝ) ≤ mfu * κ * U / 2) ∧
+    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity c (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
+    (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) ∧
+    p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t ≤ 1 / 10 ^ 6 ∧
+    ∀ ξ, 1 < remoteDampener mfu (unmonitoredShare C U)
+        ((1 - unmonitoredShare C U) *
+            (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
+          declaredShare κ (rhoT α b_a Λ) C U + χ) ∧
+      remoteDampener mfu (unmonitoredShare C U)
+          ((1 - unmonitoredShare C U) *
+              (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
+            declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
+        hardwareMultiple mfu κ (M ξ) C U
+
+/-- **`DampenerRemotePeriod` needs its PoUW leg** (LEAN-66): without PoUW's per-window bound on wrong certificates it is
+false, at a PoUW verifier that accepts every certificate, each window's certificate wrong and accepted on every run. -/
+def DampenerRemotePeriod_nontrivial : Prop :=
+  ¬ ∀ (T : ℕ) (Ω : Fin T → Type) [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
+    (c : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
+    (β ι : Type) [DecidableEq ι] (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
+    (I : Finset ι) (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (ks : Fin T → ℝ) (K : ℕ)
+    (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
+    (R : Type) [Fintype R] (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
+    (dd e : ℕ),
+    -- PoUW's capacities, without its per-window bound
+    0 ≤ p → 0 < ε → (∀ t, 0 ≤ c t) → ∑ t, c t ≤ C →
+    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
+    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) →
+    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
+      (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) →
+    0 ≤ q → q ≤ 1 →
+    (∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => ∀ b ∈ bad ξ, win b = t → b ∉ drawn (Function.update ξ t a)) ≤
+        (1 - q) ^ ((bad ξ).filter fun b => win b = t).card) →
+    (∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn (Function.update ξ t a)) ∧
+          ∀ b ∈ bad ξ, win b = t → b ∉ detected (Function.update ξ t a)) ≤ ks t) →
+    -- the identities and the halt
+    (∀ t t', idW t = idW t' → t < t' → τw t < τw t') → (∀ ξ, ∀ b ∈ bad ξ, idW (win b) ∈ I) →
+    0 < H → 0 ≤ Δ → Φ * H ≤ C →
+    (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) →
+    (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) →
+    (∀ b, 0 ≤ w b) → 0 ≤ B → (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) →
+    -- NCI: each declared run as a verdict of compliance of the check of record carries it
+    0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ α → 0 < b_a → 0 ≤ Λ →
+    (∀ i, b_a * (Th i).M.card ≤ α * (Th i).bound (α * Γ) b_w dd e * (d i).D.size (d i).D.computed) →
+    (∀ i, (Th i).bound (α * Γ) b_w dd e ≤ Λ) → ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C →
+    -- the counted multiplications
+    (∀ ξ, 0 < M ξ) → (∀ ξ, M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Th i).M.card + Mx ξ) →
+    (∀ ξ, (Mu ξ : ℝ) ≤ mfu * κ * U / 2) →
+    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity c (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) →
+    (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) →
+      1 - (p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t) ≤
+        prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) (fun ξ =>
+          efficiency κ (M ξ) C U ≤
+              unmonitoredShare C U +
+                  (1 - unmonitoredShare C U) *
+                    (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
+                declaredShare κ (rhoT α b_a Λ) C U + χ ∧
+            remoteDampener mfu (unmonitoredShare C U)
+                ((1 - unmonitoredShare C U) *
+                    (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
+                  declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
+              hardwareMultiple mfu κ (M ξ) C U)
 
 end Nci.Guarantees
