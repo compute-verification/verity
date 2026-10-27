@@ -13,8 +13,8 @@ dependent chains (`chain.py`) and their gates; the SASS gate again on anything l
 to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
 replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
 gate; after the timed items, each arm's transcript from poisoned buffers and its no-write control (`poison_dump`, for an arm
-with `dump`: panel rule, 11:50Z); the report (`report.py`), whose panel rows carry both sides' reps and clocks
-(08:50Z). Every failure stops what it guards and writes no timing for it.
+with `dump`: a panel rule); the report (`report.py`), whose panel rows carry both sides' reps and clocks. Every failure
+stops what it guards and writes no timing for it.
 
 Exit codes: 0 ok; 2 identity or usage (also a configuration --lt-enumerate-names names that the enumeration didn't take); 3 a
 device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its gate, or it couldn't run); 6 the
@@ -379,7 +379,7 @@ def _flip_control(dev, arm, shape, flags, call, checked: dict):
     return run
 
 
-#: what fills every buffer a transcript reads before the call it dumps (the panel rule, 11:50Z)
+#: what fills every buffer a transcript reads before the call it dumps (the panel rule)
 POISON = 0xA5
 
 
@@ -945,7 +945,7 @@ def chained(args, shape) -> bool:
 
 
 def panel_reps(items: list[dict], arm_key: tuple, base_key: tuple, method: str = "graph") -> dict:
-    """The panel row's two sides, rep by rep (08:50Z): per-call ms, item ms and SM clock of the arm's and the
+    """The panel row's two sides, rep by rep: per-call ms, item ms and SM clock of the arm's and the
     baseline's items, interleaved in the same reps on this die; `panel.py`'s --sm-clock-arm and --sm-clock-base; each side's
     median clock and "clock gap" (medians more than CLOCK_GAP apart)."""
     out: dict = {"reps": {}}

@@ -29,18 +29,16 @@ record digest under the certifier's salt and is all of the head the host's signa
 siblings in N2's tree, and `salt_c`, the 64 bytes the certifier drew for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
-digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2), the leaf N3 opens for the same head
-(`N3HidingRead`). (2) Its fields are the ones the public inputs give (`NetworkHeadFields`): its link's length and name,
+digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give (`NetworkHeadFields`): its link's length and name,
 its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and the grid's parameters digest. (3) When
 COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record
 digest of the head (`NetworkRecordDigest`, `tagged_sha512` of the record tag and the head), salted by `salt_c` is
 `signed`, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte,
 which N2's unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root,
-which N3's design holds the window's frames to on every port-window that recorded frames (a prototype in the clear,
-not a proof-service unit).
+which nothing in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
-certificate binds the head the check opens, and the head leaf stays the head's bytes alone, the leaf N3 reads.
+certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
 32·T − 1 ANDs (19,199 at T = 600), and three ANDs join the four. The opening is SHA-512 of the head's 157 + L + 4T bytes

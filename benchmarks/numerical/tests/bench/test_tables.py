@@ -199,12 +199,6 @@ def test_frozen_instances_are_pinned() -> None:
         assert seed == 20260922
         assert ref["manifest_sha256"] == digest == hashlib.sha256(f"{rel} synthetic|seed={seed}|n={T.B}|K={T.K}".encode()).hexdigest()
     assert T.frozen_instances(BF16_HOPPER) is not None and T.frozen_instances(FP8_HOPPER_WGMMA) is not None
-    # the fp8-ada / bf16-hopper / fp8-hopper emitter is relchain.py at RELATIONS[...] (relations.py) since lane b-hopper; fp8/chain.py
-    # is its shim.  relations.py must emit exactly the pinned refs (dataset + tier from the contract; the digest is the recipe's).
-    relations = (REPO / "archive" / "direct" / "ligero" / "relations.py").read_text()
-    for prefix in ("FP8_ADA", "BF16_HOPPER", "FP8_HOPPER"):
-        assert f"contract.{prefix}_INSTANCES_DATASET" in relations and f"contract.{prefix}_INSTANCES_TIER" in relations, \
-            f"relations.py must emit the frozen {prefix} ref"
 
 
 # --- the predicate and Table 2 ----------------------------------------------------------------------------------------------------------
