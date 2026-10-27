@@ -31,7 +31,9 @@ import j10r_ca as J10
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
+from verity_config.settings import of
 
+settings = of(__file__)
 LABEL = "noise=j10-banded (kernels' reading of SharedNoise.lean; not CA's reference)"
 NOISE = "j10-banded/kernels-reading"
 CA_SHA = "1a4d1de024"
@@ -44,8 +46,8 @@ def ca_tree() -> str | None:
     """The tree of CA's banded reference (at CA_SHA): $J10_CA_TREE, else the run's inputs/banded-CA_SHA.tar.gz
     (`git archive CA_SHA verity | gzip`, sent with `research run --send`) extracted once a process; None without either."""
     if "tree" not in _CA:
-        tree = os.environ.get("J10_CA_TREE")
-        arc = Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "inputs" / f"banded-{CA_SHA}.tar.gz"
+        tree = settings.J10_CA_TREE
+        arc = Path(settings.RESEARCH_RUN_DIR or ".") / "inputs" / f"banded-{CA_SHA}.tar.gz"
         if not tree and arc.is_file():
             tree = tempfile.mkdtemp(prefix="j10ca-")
             with tarfile.open(arc) as t:
